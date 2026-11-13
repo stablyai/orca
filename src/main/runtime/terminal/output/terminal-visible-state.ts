@@ -15,6 +15,10 @@ import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import {
+  providerFrameFitsGrid,
+  type ProviderVisibleRead
+} from '../lifecycle/terminal-view-resources'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
@@ -45,27 +49,15 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     return projection.lines.length > 0 ? buildPreview(projection.lines, '') : preview
   }
 
-  protected async readVisibleTerminalState(
-    ptyId: string
-  ): Promise<RuntimeVisibleTerminalState | null> {
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    const pending = this.providerVisibleStateReadsByPtyId.get(ptyId)
-    if (pending?.generation === generation) {
-      return pending.promise
-    }
-    let entry: { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
-    const promise = this.loadVisibleTerminalState(ptyId).finally(() => {
-      if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
-        this.providerVisibleStateReadsByPtyId.delete(ptyId)
-      }
-    })
-    entry = { generation, promise }
-    this.providerVisibleStateReadsByPtyId.set(ptyId, entry)
-    return promise
+  protected readVisibleTerminalState(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
+    return this.ownProviderVisibleRead(ptyId, false, (entry) =>
+      this.loadVisibleTerminalState(ptyId, entry)
+    )
   }
 
   protected async loadVisibleTerminalState(
-    ptyId: string
+    ptyId: string,
+    entry: ProviderVisibleRead
   ): Promise<RuntimeVisibleTerminalState | null> {
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
@@ -89,37 +81,54 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
             generation
           }
     }
-    return this.captureProviderVisibleState(ptyId)
+    return this.captureProviderVisibleState(ptyId, entry)
   }
 
   /**
    * Public reads of a host-owned binding: the daemon's live scrollback-0 frame at the current
    * sequence. Private screen, input and status services keep reading main's projection.
    */
-  protected async readHostCurrentFrame(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
-    return (
-      this.readCurrentProviderVisibleState(ptyId) ??
-      this.captureProviderVisibleState(ptyId, { currentFrame: true })
+  protected readHostCurrentFrame(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
+    return this.ownProviderVisibleRead(
+      ptyId,
+      true,
+      async (entry) =>
+        this.readCurrentProviderVisibleState(ptyId, true) ??
+        this.captureProviderVisibleState(ptyId, entry)
     )
   }
 
-  /** The provider's last frame while no later output or mode switch has outdated it. */
-  protected readCurrentProviderVisibleState(ptyId: string): RuntimeVisibleTerminalState | null {
+  /** The provider's last frame of this kind while no later output, mode switch or resize has outdated it. */
+  protected readCurrentProviderVisibleState(
+    ptyId: string,
+    currentFrame = false
+  ): RuntimeVisibleTerminalState | null {
     const cached = this.providerVisibleStateByPtyId.get(ptyId)
     const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    return cached?.generation === this.getPtyLifecycleGeneration(ptyId) &&
-      this.getPtyOutputSequence(ptyId) <= cached.sequence &&
-      (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
-      ? cached
+    return cached?.state.generation === this.getPtyLifecycleGeneration(ptyId) &&
+      cached.currentFrame === currentFrame &&
+      this.getPtyOutputSequence(ptyId) <= cached.state.sequence &&
+      (!trackedMode || trackedMode.isAlternateScreen === cached.state.isAlternateScreen) &&
+      providerFrameFitsGrid(this.getTerminalSize(ptyId), undefined, cached.grid)
+      ? cached.state
       : null
   }
 
-  /** Asks the provider for its current frame and caches it; null while it cannot give one now. */
+  /**
+   * Asks the provider for its current frame and caches it; null while it cannot give one now.
+   * Without an owning read entry (a restored-dialog probe) it takes one of its own.
+   */
   protected async captureProviderVisibleState(
     ptyId: string,
-    acquisition: { currentFrame?: boolean } = {}
+    owner?: ProviderVisibleRead
   ): Promise<RuntimeVisibleTerminalState | null> {
-    const generation = this.getPtyLifecycleGeneration(ptyId)
+    if (!owner) {
+      return this.ownProviderVisibleRead(ptyId, false, (entry) =>
+        this.captureProviderVisibleState(ptyId, entry)
+      )
+    }
+    const owns = (): boolean => this.providerVisibleStateReadsByPtyId.get(ptyId) === owner
+    const generation = owner.generation
     if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
       return null
     }
@@ -127,8 +136,14 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
-      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, ...acquisition }
+      {
+        timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        ...(owner.currentFrame ? { currentFrame: true } : {})
+      }
     )
+    if (!owns()) {
+      return null
+    }
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
@@ -141,14 +156,20 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       // Why: the provider frame can predate a mode switch observed while its
       // RPC was pending; the ordered live emulator owns the post-switch grid.
       const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
+      if (!owns()) {
+        return null
+      }
       if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
         return liveState
       }
     }
     const projection = await this.parseVisibleSnapshot(snapshot)
+    const frameGrid = { cols: snapshot.cols, rows: snapshot.rows }
     if (
+      !owns() ||
       this.getPtyLifecycleGeneration(ptyId) !== generation ||
-      this.getPtyOutputSequence(ptyId) > snapshot.seq
+      this.getPtyOutputSequence(ptyId) > snapshot.seq ||
+      !providerFrameFitsGrid(this.getTerminalSize(ptyId), owner.grid, frameGrid)
     ) {
       return null
     }
@@ -158,7 +179,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       sequence: snapshot.seq,
       generation
     }
-    this.providerVisibleStateByPtyId.set(ptyId, visibleState)
+    this.providerVisibleStateByPtyId.set(ptyId, {
+      state: visibleState,
+      grid: frameGrid,
+      currentFrame: owner.currentFrame
+    })
     return visibleState
   }
 

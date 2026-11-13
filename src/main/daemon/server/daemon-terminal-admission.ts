@@ -90,6 +90,8 @@ export class DaemonTerminalAdmission {
     let spawnPreparation: PendingPtySpawnPreparation | null = null
     let prepared: PreparedDaemonReply | undefined
     let attachHistory: ReturnType<typeof openAttachHistory> | undefined
+    // The token the host installed for this request, published to pressure as it is installed.
+    let installed: { sessionId: string; token: symbol } | undefined
     try {
       if (
         payload.agentSessionEnsure !== undefined &&
@@ -165,6 +167,11 @@ export class DaemonTerminalAdmission {
         onSessionResolved: (sessionId) => {
           routedSessionId = sessionId
         },
+        onClientAttached: (sessionId, token) => {
+          installed = { sessionId, token }
+          this.options.attachments.attach(sessionId, clientId, token)
+          this.options.streamDataBatcher.refreshSessionDroppability(sessionId)
+        },
         streamClient: this.createStreamClient(clientId, () => routedSessionId)
       })
       if (attachHistory) {
@@ -174,6 +181,7 @@ export class DaemonTerminalAdmission {
         ))
       }
     } catch (error) {
+      this.releaseInstalled(installed)
       throw attachHistory ? attachHistory.fail(error) : error
     } finally {
       if (spawnPreparation) {
@@ -190,10 +198,11 @@ export class DaemonTerminalAdmission {
       client.streamSocket === null
     ) {
       this.options.host.detach(routedSessionId, result.attachToken)
+      this.releaseInstalled(installed)
       const canceled = new TerminalAttachCanceledError(routedSessionId)
       throw prepared ? withPreparedReply(canceled, { release: prepared.release }) : canceled
     }
-    this.options.attachments.attach(routedSessionId, clientId, result.attachToken)
+    // Ownership was published at install; an exit or detach since then is not undone here.
     this.options.streamDataBatcher.refreshSessionDroppability(routedSessionId)
     if (this.options.transientFactRelay.isBackgrounded(routedSessionId)) {
       this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
@@ -209,6 +218,13 @@ export class DaemonTerminalAdmission {
     })
     const reply = toCreateOrAttachReply(result)
     return prepared ? withPreparedReply(reply, prepared) : reply
+  }
+
+  private releaseInstalled(installed: { sessionId: string; token: symbol } | undefined): void {
+    if (installed) {
+      this.options.attachments.releaseToken(installed.sessionId, installed.token)
+      this.options.streamDataBatcher.refreshSessionDroppability(installed.sessionId)
+    }
   }
 
   private createStreamClient(

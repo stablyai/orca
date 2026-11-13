@@ -227,6 +227,7 @@ export async function spawnAndPublishSession(
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   onPublished(opts.sessionId, session.isAlive)
   const token = session.attachClient(opts.streamClient)
+  opts.onClientAttached?.(opts.sessionId, token)
   attachSessionInputViewer(session, opts.streamClient)
 
   const startupCommandWritten =

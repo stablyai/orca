@@ -4,6 +4,11 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-
 import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-state-records'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
+import {
+  sameProviderFrameGrid,
+  type ProviderVisibleRead
+} from '../lifecycle/terminal-view-resources'
+import type { RuntimeVisibleTerminalState } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   protected abstract captureProviderTerminalBuffer(
@@ -132,6 +137,40 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       : null
   }
 
+  /**
+   * One owned visible read per PTY, joined only by a read of the same generation, grid and kind.
+   * A read displaced by a resize or another kind may not publish or return its frame.
+   */
+  protected ownProviderVisibleRead(
+    ptyId: string,
+    currentFrame: boolean,
+    load: (entry: ProviderVisibleRead) => Promise<RuntimeVisibleTerminalState | null>
+  ): Promise<RuntimeVisibleTerminalState | null> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const grid = this.getTerminalSize(ptyId)
+    const pending = this.providerVisibleStateReadsByPtyId.get(ptyId)
+    if (
+      pending?.generation === generation &&
+      pending.currentFrame === currentFrame &&
+      sameProviderFrameGrid(pending.grid, grid)
+    ) {
+      return pending.promise
+    }
+    const entry: ProviderVisibleRead = {
+      generation,
+      grid,
+      currentFrame,
+      promise: Promise.resolve(null)
+    }
+    this.providerVisibleStateReadsByPtyId.set(ptyId, entry)
+    entry.promise = load(entry).finally(() => {
+      if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
+        this.providerVisibleStateReadsByPtyId.delete(ptyId)
+      }
+    })
+    return entry.promise
+  }
+
   protected async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
@@ -151,17 +190,24 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     const acquisitions = wait.currentFrame
       ? this.providerFrameAcquisitionsByPtyId
       : this.providerBufferAcquisitionsByPtyId
+    // A current frame joins only one taken for the PTY's present grid.
+    const grid = wait.currentFrame ? this.getTerminalSize(ptyId) : undefined
     let acquisition = acquisitions.get(ptyId)
-    if (acquisition?.generation === generation && acquisition.timedOut) {
+    const current =
+      acquisition?.generation === generation &&
+      (!wait.currentFrame || sameProviderFrameGrid(acquisition.grid ?? null, grid ?? null))
+    if (current && acquisition?.timedOut) {
       return { snapshot: null, late: acquisition.promise }
     }
-    if (
-      !acquisition ||
-      acquisition.generation !== generation ||
-      acquisition.scrollbackRows < scrollbackRows
-    ) {
+    if (!acquisition || !current || acquisition.scrollbackRows < scrollbackRows) {
       const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
-      acquisition = { generation, scrollbackRows, promise, timedOut: false }
+      acquisition = {
+        generation,
+        scrollbackRows,
+        promise,
+        timedOut: false,
+        ...(grid !== undefined ? { grid } : {})
+      }
       acquisitions.set(ptyId, acquisition)
       void promise.finally(() => {
         if (acquisitions.get(ptyId) === acquisition) {

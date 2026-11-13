@@ -21,6 +21,36 @@ import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-su
 import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
+/** The PTY grid a provider frame was taken for; null while the PTY's size is unknown. */
+export type ProviderFrameGrid = { cols: number; rows: number } | null
+
+export function sameProviderFrameGrid(a: ProviderFrameGrid, b: ProviderFrameGrid): boolean {
+  return a === b || (a !== null && b !== null && a.cols === b.cols && a.rows === b.rows)
+}
+
+/**
+ * A frame fits while the PTY is still on the grid its read captured (when one did) and the frame
+ * was drawn for that grid. Unknown size keeps today's geometry-blind behavior.
+ */
+export function providerFrameFitsGrid(
+  current: ProviderFrameGrid,
+  captured: ProviderFrameGrid | undefined,
+  frame: ProviderFrameGrid
+): boolean {
+  return (
+    (captured === undefined || sameProviderFrameGrid(current, captured)) &&
+    (current === null || sameProviderFrameGrid(current, frame))
+  )
+}
+
+/** One owned provider-frame read: its result may publish only while it is still this entry. */
+export type ProviderVisibleRead = {
+  generation: number
+  grid: ProviderFrameGrid
+  currentFrame: boolean
+  promise: Promise<RuntimeVisibleTerminalState | null>
+}
+
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
   protected readonly terminalIdentity = new TerminalIdentitySource(this.crewChanges.notify)
   protected readonly ptysById = this.terminalIdentity.ptys
@@ -112,17 +142,24 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     Set<TerminalKittyKeyboardModeTracker>
   >()
 
-  protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
+  protected providerBufferAcquisitionsByPtyId = new Map<
+    string,
+    ProviderBufferAcquisition & { grid?: ProviderFrameGrid }
+  >()
 
   // Current-frame reads never join or inherit a deep or timed-out history acquisition.
-  protected providerFrameAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
-
-  protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
-
-  protected providerVisibleStateReadsByPtyId = new Map<
+  protected providerFrameAcquisitionsByPtyId = new Map<
     string,
-    { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
+    ProviderBufferAcquisition & { grid?: ProviderFrameGrid }
   >()
+
+  // Each frame keeps the grid it was drawn for and the kind of read that took it.
+  protected providerVisibleStateByPtyId = new Map<
+    string,
+    { state: RuntimeVisibleTerminalState; grid: ProviderFrameGrid; currentFrame: boolean }
+  >()
+
+  protected providerVisibleStateReadsByPtyId = new Map<string, ProviderVisibleRead>()
 
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()
 
@@ -137,6 +174,13 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     this.providerFrameAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.restoredAgentDialogRuledOutPtys.delete(ptyId)
+  }
+
+  /** A grid change outdates every frame taken, or being taken, for the old grid. */
+  protected forgetProviderFramesForGrid(ptyId: string): void {
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerFrameAcquisitionsByPtyId.delete(ptyId)
+    this.providerVisibleStateReadsByPtyId.delete(ptyId)
   }
 
   protected ptyLifecycleGenerationById = new Map<string, number>()

@@ -98,6 +98,7 @@ export async function createOrAttachTerminalSession(
         }
         attachedSession.detachAllClients()
         const token = attachedSession.attachClient(opts.streamClient)
+        opts.onClientAttached?.(opts.sessionId, token)
         attachSessionInputViewer(attachedSession, opts.streamClient)
         return { ...result, attachToken: token }
       } catch (error) {

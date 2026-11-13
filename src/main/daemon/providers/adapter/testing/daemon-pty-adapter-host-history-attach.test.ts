@@ -1,5 +1,6 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Socket } from 'node:net'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Terminal } from '@xterm/headless'
@@ -13,6 +14,21 @@ import {
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
+import type * as SocketConnectModule from '../../../transport/client/daemon-client-socket-connect'
+
+// Every client socket in connect order, so a test can stop one stream from draining.
+const clientSockets = vi.hoisted((): Socket[] => [])
+vi.mock('../../../transport/client/daemon-client-socket-connect', async (importOriginal) => {
+  const actual = await importOriginal<typeof SocketConnectModule>()
+  return {
+    ...actual,
+    connectDaemonSocket: async (...args: Parameters<typeof actual.connectDaemonSocket>) => {
+      const socket = await actual.connectDaemonSocket(...args)
+      clientSockets.push(socket)
+      return socket
+    }
+  }
+})
 
 let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 const adapters: DaemonPtyAdapter[] = []
@@ -95,6 +111,52 @@ function observe(terminal: Terminal) {
 }
 
 describe('host-owned attach replies', () => {
+  // GH1255: an attach's queued output counted toward its session's pause only after cold replay.
+  it('pauses the producer for an attach that stops draining before its cold replay finishes', async () => {
+    const child = createMockSubprocess()
+    const { open } = await startHostHistory(() => child)
+    const sessionId = 'attach-pressure'
+    const owner = open()
+    let ownerData = ''
+    owner.onData(({ data }) => (ownerData += data))
+    await owner.spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
+    child._simulateData('BASE_ROW\r\n')
+    await waitFor(() => ownerData.includes('BASE_ROW'))
+    const reconstruction = gateReconstruction(
+      harness!.server.host.historyJournals!.live(sessionId)!
+    )
+    const attacher = open()
+    await attacher.listProcesses()
+    // The attacher's stream socket, connected after its control socket.
+    const stream = clientSockets.at(-1)!
+    stream.pause()
+    try {
+      let settled = false
+      const attaching = attacher
+        .spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
+        .finally(() => (settled = true))
+      await waitFor(() => reconstruction.calls.mock.calls.length > 0)
+      // Held bulk counts two bytes a char: over the 4 MiB global and 64 KiB session marks.
+      const chunk = `${'x'.repeat(78)}\r\n`.repeat(820)
+      for (let index = 0; index < 40; index += 1) {
+        child._simulateData(chunk)
+      }
+
+      await waitFor(() => child.pause.mock.calls.length > 0)
+      expect(settled).toBe(false)
+      expect(ownerData).not.toContain('xxxx')
+      reconstruction.open()
+      await attaching
+      // The displaced owner's late close leaves the attacher's ownership and its pause;
+      // queued and in-flight bytes stay charged until the stream really drains.
+      await owner.disconnectOnly()
+      expect(child.resume).not.toHaveBeenCalled()
+    } finally {
+      stream.resume()
+    }
+    await waitFor(() => child.resume.mock.calls.length > 0, 20_000)
+  }, 30_000)
+
   // N1: a cached or joined adopted attach used to send its reply without the claim result.
   it('reports the adopted claim on cached and joined attaches without killing the agent', async () => {
     const child = createMockSubprocess()

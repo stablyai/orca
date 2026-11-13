@@ -60,6 +60,8 @@ export type CreateOrAttachOptions = {
   }
   /** Resolve the adopted owner’s canonical ID before stream callbacks can emit output. */
   onSessionResolved?: (sessionId: string) => void
+  /** The exact token just installed, in the same turn, before any await or output delivery. */
+  onClientAttached?: (sessionId: string, token: symbol) => void
 }
 
 export type CreateOrAttachResult = {

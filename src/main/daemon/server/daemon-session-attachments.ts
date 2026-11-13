@@ -29,6 +29,15 @@ export class DaemonSessionAttachments {
     this.lastInputAtBySessionId.delete(sessionId)
   }
 
+  /** Forgets this attachment only while it is still the session's current one. */
+  releaseToken(sessionId: string, token: symbol): void {
+    if (this.tokenBySessionId.get(sessionId) !== token) {
+      return
+    }
+    this.clientIdBySessionId.delete(sessionId)
+    this.tokenBySessionId.delete(sessionId)
+  }
+
   release(sessionId: string): void {
     this.clientIdBySessionId.delete(sessionId)
     this.tokenBySessionId.delete(sessionId)

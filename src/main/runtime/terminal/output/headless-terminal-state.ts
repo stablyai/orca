@@ -201,6 +201,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
   }
 
   protected resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
+    // Before the model check: a host-owned frame with no main model is outdated too.
+    this.forgetProviderFramesForGrid(ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return

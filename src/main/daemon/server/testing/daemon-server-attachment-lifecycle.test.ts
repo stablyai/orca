@@ -50,13 +50,15 @@ type DaemonAttachmentPrivate = {
 
 describe('DaemonServer attachment lifecycle', () => {
   let directory: string
+  let socketPath: string
+  let tokenPath: string
   let server: DaemonServer
   let client: DaemonClient
 
   beforeEach(async () => {
     directory = mkdtempSync(join(tmpdir(), 'daemon-attachment-lifecycle-'))
-    const socketPath = getDaemonSocketPath(directory)
-    const tokenPath = join(directory, 'daemon.token')
+    socketPath = getDaemonSocketPath(directory)
+    tokenPath = join(directory, 'daemon.token')
     server = new DaemonServer({
       socketPath,
       tokenPath,
@@ -118,7 +120,8 @@ describe('DaemonServer attachment lifecycle', () => {
 
     client.disconnect()
     await vi.waitFor(() => expect(daemon.connections.clients.size).toBe(0))
-    expect(daemon.host.sessions.get('close-race-session')?.hasAttachedClients).toBe(true)
+    // The attachment was published as it was installed, so the close already parked it.
+    expect(daemon.host.sessions.get('close-race-session')?.hasAttachedClients).toBe(false)
     finishRequest()
 
     await request
@@ -127,5 +130,49 @@ describe('DaemonServer attachment lifecycle', () => {
     )
     expect(daemon.attachments.clientIdBySessionId.has('close-race-session')).toBe(false)
     expect(daemon.attachments.tokenBySessionId.has('close-race-session')).toBe(false)
+  })
+
+  // GH1255: a displaced attach's late close or failure never removes its successor's attachment.
+  it('keeps a successor attachment through an earlier close and a late attach failure', async () => {
+    const sessionId = 'successor-session'
+    await createSession(sessionId)
+    const daemon = server as unknown as DaemonAttachmentPrivate
+    const originalCreateOrAttach = daemon.host.createOrAttach.bind(daemon.host)
+    const installed = Promise.withResolvers<void>()
+    const finishDisplaced = Promise.withResolvers<void>()
+    vi.spyOn(daemon.host, 'createOrAttach').mockImplementationOnce(async (options) => {
+      const result = await originalCreateOrAttach(options)
+      installed.resolve()
+      await finishDisplaced.promise
+      return result
+    })
+    const displaced = new DaemonClient({ socketPath, tokenPath })
+    const successor = new DaemonClient({ socketPath, tokenPath })
+    try {
+      await displaced.ensureConnected()
+      const failed = displaced.request('createOrAttach', { sessionId, cols: 80, rows: 24 }).then(
+        () => false,
+        () => true
+      )
+      await installed.promise
+      await successor.ensureConnected()
+      await successor.request('createOrAttach', { sessionId, cols: 80, rows: 24 })
+
+      client.disconnect()
+      displaced.disconnect()
+      await vi.waitFor(() => expect(daemon.connections.clients.size).toBe(1))
+      finishDisplaced.resolve()
+      expect(await failed).toBe(true)
+      expect(daemon.host.sessions.get(sessionId)?.hasAttachedClients).toBe(true)
+
+      // Still the registered owner: its own close parks the session.
+      successor.disconnect()
+      await vi.waitFor(() =>
+        expect(daemon.host.sessions.get(sessionId)?.hasAttachedClients).toBe(false)
+      )
+    } finally {
+      displaced.disconnect()
+      successor.disconnect()
+    }
   })
 })
