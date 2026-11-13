@@ -124,6 +124,10 @@ describe('the paired cloud workspace surface', () => {
     const { container } = render(<OrcaCloudWorkspaceSurface worktreeId={ID} />)
     await flush()
     expect(container.querySelector('[data-cloud-cover="waking"]')).not.toBeNull()
+    // PAIRED-WAKE-TYPE-THROUGH: while it wakes the pane underneath stays typeable, like owned.
+    expect(container.querySelector('[data-cloud-cover="waking"]')?.className).toContain(
+      'pointer-events-none'
+    )
     act(() =>
       seedPaired('sleeping', {
         wake: {
@@ -143,6 +147,10 @@ describe('the paired cloud workspace surface', () => {
       /Try again/.test(b.textContent ?? '')
     )
     expect(retry).toBeDefined()
+    // A failed wake covers the pane again: nothing typed there would reach a terminal.
+    expect(container.querySelector('[data-cloud-cover="waking"]')?.className).not.toContain(
+      'pointer-events-none'
+    )
     fireEvent.click(retry!)
     expect(wakePaired).toHaveBeenCalledWith(ID)
   })

@@ -1,7 +1,7 @@
-// One action set per cloud workspace, the same on every surface (JA-14): the Home list's ⋯ menu and
-// the sidebar's context menu both render these groups, in this order: Open, Share, Lifecycle,
-// Danger. Each surface leaves out only what it already shows elsewhere (the sidebar row *is* the
-// open workspace; Home has no local-only items) and never invents its own.
+// One action set per cloud workspace, the same on every surface (JA-14): the "Open cloud
+// workspace…" list's ⋯ menu and the sidebar's context menu both render these groups, in this order:
+// Open, Share, Lifecycle, Danger. Each surface leaves out only what it already shows elsewhere (the
+// sidebar row *is* the open workspace; the list has no local-only items) and never invents its own.
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 export type CloudWorkspaceAction =
@@ -13,7 +13,6 @@ export type CloudWorkspaceAction =
   | 'share'
   | 'makePrivate'
   | 'reassignOwner'
-  | 'moveToSection'
   | 'restart'
   | 'sleep'
   | 'archive'
@@ -29,27 +28,27 @@ export type CloudWorkspaceActionInput = Pick<
   CloudWorkspace,
   'status' | 'archivedAt' | 'visibility'
 > & {
-  surface: 'home' | 'sidebar'
+  surface: 'list' | 'sidebar'
   canOpen: boolean
   canManage: boolean
-  /** Asleep and readable without waking (Home reads the saved copy). */
+  /** Asleep and readable without waking (the list reads the saved copy). */
   readableAsleep: boolean
   /** Restart needs this desktop's own runtime for it. */
   canRestart: boolean
-  /** Teammates to hand it to (Home only). */
+  /** Teammates to hand it to (the list only). */
   hasMembers?: boolean
 }
 
 export function cloudWorkspaceActionGroups(
   input: CloudWorkspaceActionInput
 ): CloudWorkspaceActionGroup[] {
-  const home = input.surface === 'home'
+  const list = input.surface === 'list'
   const archived = input.archivedAt !== null
   const open: CloudWorkspaceAction[] = []
-  if (home && input.canOpen) {
+  if (list && input.canOpen) {
     open.push(...(input.readableAsleep ? (['read', 'wake'] as const) : (['open'] as const)))
   }
-  if (home) {
+  if (list) {
     open.push('copyLink')
   }
   open.push('copyWorkspaceLink')
@@ -57,11 +56,8 @@ export function cloudWorkspaceActionGroups(
   const share: CloudWorkspaceAction[] = []
   if (input.canManage) {
     share.push(input.visibility === 'private' ? 'share' : 'makePrivate')
-    if (home && input.hasMembers) {
+    if (list && input.hasMembers) {
       share.push('reassignOwner')
-    }
-    if (home) {
-      share.push('moveToSection')
     }
   }
 

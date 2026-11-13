@@ -53,6 +53,33 @@ describe('Orca Cloud settings group', () => {
     expect(new Set(sections.map((section) => section.group))).toEqual(new Set(['orca-cloud']))
   })
 
+  it('adds Enterprise after Team for a team owner or admin only', () => {
+    const ids = (patch: Parameters<typeof options>[0]) =>
+      buildOrcaCloudSettingsSections(options(patch)).map((section) => section.id)
+    expect(ids({})).not.toContain('cloud-enterprise')
+    expect(ids({ isOrcaTeamAdmin: false })).not.toContain('cloud-enterprise')
+    const admin = ids({ isOrcaTeamAdmin: true })
+    expect(admin.slice(0, 4)).toEqual([
+      'cloud-billing',
+      'cloud-team',
+      'cloud-enterprise',
+      'cloud-secrets'
+    ])
+    const section = buildOrcaCloudSettingsSections(options({ isOrcaTeamAdmin: true })).find(
+      (entry) => entry.id === 'cloud-enterprise'
+    )!
+    expect(section).toMatchObject({ title: 'Enterprise', group: 'orca-cloud' })
+    // The audit log is found by searching for it; it no longer lives under Orca API keys.
+    const keywords = (id: string) =>
+      buildOrcaCloudSettingsSections(options({ isOrcaTeamAdmin: true }))
+        .find((entry) => entry.id === id)!
+        .searchEntries.flatMap((entry) => entry.keywords ?? [])
+    expect(keywords('cloud-enterprise')).toContain('audit log')
+    expect(keywords('cloud-api-keys')).not.toContain('audit log')
+    // Never without a control plane, whatever the role.
+    expect(ids({ isOrcaTeamAdmin: true, isOrcaCloudApiAvailable: false })).toEqual([])
+  })
+
   it('is absent without a control plane and on the web client', () => {
     expect(buildOrcaCloudSettingsSections(options({ isOrcaCloudApiAvailable: false }))).toEqual([])
     expect(buildOrcaCloudSettingsSections(options({ isWebClient: true }))).toEqual([])

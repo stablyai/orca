@@ -48,7 +48,7 @@ nudge_once() {
   local mark="${ORCA_GIT_NUDGE_DIR:-/dev/shm}/orca-git-nudge-$(id -u)"
   [ -e "$mark" ] && return 0
   : >"$mark" 2>/dev/null || return 0
-  printf '%s\n' "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings › Account to use yours." >&2
+  printf '%s\n' "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings → Account to use yours." >&2
 }
 # PUSH-RAW-PROMPT: a push, pull or fetch to github.com that no credential covers (neither the person's
 # connected GitHub nor the App installation) must never fall through to git's own "Username for
@@ -91,7 +91,7 @@ github_remote_slug() {
 no_access_line() {
   local owner="${github_slug%%/*}" verb='push to'
   [ "$sub" = push ] || verb='read'
-  printf '%s\n' "orca: Orca Cloud can't $verb $github_slug. Install the Orca GitHub App on $owner, or connect your GitHub in Settings › Account." >&2
+  printf '%s\n' "orca: Orca Cloud can't $verb $github_slug. Install the Orca GitHub App on $owner, or connect your GitHub in Settings → Account." >&2
 }
 # GitHub's "not found" is a typo'd name or a private repo it won't confirm: say which half fits whom.
 not_found_line() {

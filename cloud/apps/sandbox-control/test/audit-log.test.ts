@@ -8,6 +8,7 @@ import { createHarness } from './harness'
 const KEK = Buffer.alloc(32, 7).toString('base64')
 const AUTH_TOKEN = 'a'.repeat(40)
 const OPERATOR = 'o'.repeat(40)
+const BILLING_TOKEN = 'b'.repeat(40)
 // Fake values only; none may appear in the log, in any format.
 const SECRET_VALUES = ['sk-ant-api03-AUDIT-fake-0000-wxyz', 'audit-env-value-two-9876']
 
@@ -22,7 +23,7 @@ type Event = {
 }
 
 async function setup(options: { entitled?: boolean } = {}) {
-  const h = await createHarness({ SECRETS_KEK: KEK, MEMBER_REMOVED_TOKEN: AUTH_TOKEN, OPERATOR_TOKEN: OPERATOR, PUBLIC_API_URL: 'https://api.test' })
+  const h = await createHarness({ SECRETS_KEK: KEK, MEMBER_REMOVED_TOKEN: AUTH_TOKEN, OPERATOR_TOKEN: OPERATOR, CONTROL_PLANE_TOKEN: BILLING_TOKEN, PUBLIC_API_URL: 'https://api.test' })
   h.billing.features = { auditLog: options.entitled ?? true }
   const owner = await h.token('olga', 'acme', 'sandbox', { org_role: 'owner', name: 'Olga Owner' })
   const admin = await h.token('alice', 'acme', 'sandbox', { org_role: 'admin', name: 'Alice Admin' })
@@ -361,6 +362,47 @@ describe('events from other services (POST /v1/internal/audit-events)', () => {
     expect((await s.internal('/v1/internal/audit-events', body, s.owner)).status).toBe(404)
     // Auth's token still opens none of the operator routes.
     expect((await s.h.call('GET', '/v1/internal/status', { bearer: AUTH_TOKEN })).status).toBe(404)
+  })
+
+  it("billing's bearer writes billing events and nothing else; auth's writes none of billing's", async () => {
+    const s = await setup()
+    const plan = { eventId: 'billing_0000000001', action: 'billing.seats_changed', target: { type: 'plan' }, detail: { seats: 5, previousSeats: 2 } }
+    const overage = { eventId: 'billing_0000000002', action: 'billing.overage_enabled', actorUserId: 'olga', target: { type: 'plan' } }
+    await s.h.call('GET', '/v1/me', { bearer: s.owner })
+    expect((await s.internal('/v1/internal/audit-events', { accountId: 'org:acme', events: [plan, overage] }, BILLING_TOKEN)).body).toEqual({ recorded: 2, duplicates: 0 })
+    const events: Event[] = (await s.log(s.owner, 'category=billing')).body.events
+    expect(events.map((event) => [event.action, event.actor.kind, event.actor.name, event.target?.type, event.detail])).toEqual(
+      expect.arrayContaining([
+        ['billing.seats_changed', 'system', null, 'plan', { seats: 5, previousSeats: 2 }],
+        ['billing.overage_enabled', 'person', 'Olga Owner', 'plan', null]
+      ])
+    )
+    expect(events).toHaveLength(2)
+    // One sender cannot write another's events.
+    const forged = await s.internal('/v1/internal/audit-events', { accountId: 'org:acme', events: [invite] }, BILLING_TOKEN)
+    expect([forged.status, forged.body.reason]).toEqual([400, 'action_not_allowed_for_sender:member.invited'])
+    const crossed = await s.internal('/v1/internal/audit-events', { accountId: 'org:acme', events: [{ ...plan, eventId: 'billing_0000000003' }] })
+    expect([crossed.status, crossed.body.reason]).toEqual([400, 'action_not_allowed_for_sender:billing.seats_changed'])
+    // The operator may write either.
+    expect((await s.internal('/v1/internal/audit-events', { accountId: 'org:acme', events: [{ ...plan, eventId: 'billing_0000000004' }, invite] }, OPERATOR)).status).toBe(200)
+    // Billing's bearer opens nothing else under /v1/internal.
+    expect((await s.h.call('GET', '/v1/internal/status', { bearer: BILLING_TOKEN })).status).toBe(404)
+    expect((await s.internal('/v1/internal/org-members/removed', { accountId: 'org:acme', userId: 'bob' }, BILLING_TOKEN)).status).toBe(404)
+    expect((await s.internal('/v1/internal/members/role-changed', { accountId: 'org:acme', userId: 'bob', role: 'owner' }, BILLING_TOKEN)).status).toBe(404)
+  })
+
+  it('accepts the team and join events auth sends', async () => {
+    const s = await setup()
+    const events = [
+      { eventId: 'member_0000000001', action: 'member.joined', actorUserId: 'erin', target: { type: 'member', id: 'erin' }, detail: { source: 'sign-in', role: 'member' } },
+      { eventId: 'member_0000000002', action: 'member.invite_revoked', actorUserId: 'olga', target: { type: 'invite', label: 'x@acme.dev' } },
+      { eventId: 'team_0000000001', action: 'team.renamed', actorUserId: 'olga', target: { type: 'team', label: 'Acme Labs' }, detail: { via: 'cloud-setup', previousName: 'Acme' } },
+      { eventId: 'team_0000000002', action: 'team.deleted', actorUserId: 'olga', target: { type: 'team', label: 'Acme Labs' }, detail: { members: 3 } }
+    ]
+    expect((await s.internal('/v1/internal/audit-events', { accountId: 'org:acme', events })).body).toEqual({ recorded: 4, duplicates: 0 })
+    const members: Event[] = (await s.log(s.owner, 'category=members')).body.events
+    expect(members.map((event) => event.action).sort()).toEqual(['member.invite_revoked', 'member.joined', 'team.deleted', 'team.renamed'])
+    expect(members.find((event) => event.action === 'team.renamed')).toMatchObject({ target: { type: 'team', label: 'Acme Labs' }, detail: { previousName: 'Acme' } })
   })
 
   it('refuses anything that could pass for another kind of change, hold a credential, or post-date the log', async () => {

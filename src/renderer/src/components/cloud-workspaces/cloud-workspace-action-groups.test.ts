@@ -5,7 +5,7 @@ import {
 } from './cloud-workspace-action-groups'
 
 const base: CloudWorkspaceActionInput = {
-  surface: 'home',
+  surface: 'list',
   status: 'running',
   archivedAt: null,
   visibility: 'private',
@@ -20,16 +20,16 @@ const flat = (input: Partial<CloudWorkspaceActionInput>) =>
   cloudWorkspaceActionGroups({ ...base, ...input }).map((g) => `${g.id}:${g.actions.join(',')}`)
 
 describe('one action list for every surface (JA-14)', () => {
-  it('Home: Open, Share, Lifecycle, Danger in that order, with Restart', () => {
+  it('the list: Open, Share, Lifecycle, Danger in that order, with Restart', () => {
     expect(flat({})).toEqual([
       'open:open,copyLink,copyWorkspaceLink',
-      'share:share,reassignOwner,moveToSection',
+      'share:share,reassignOwner',
       'lifecycle:restart,sleep,archive',
       'danger:delete'
     ])
   })
 
-  it('the sidebar gets the same Share and Lifecycle actions, minus Home-only arrangement', () => {
+  it('the sidebar gets the same Share and Lifecycle actions, minus list-only items', () => {
     expect(flat({ surface: 'sidebar', visibility: 'team' })).toEqual([
       'open:copyWorkspaceLink',
       'share:makePrivate',
@@ -42,7 +42,7 @@ describe('one action list for every surface (JA-14)', () => {
     expect(flat({ archivedAt: 1, status: 'suspended' })).toContain('lifecycle:unarchive')
   })
 
-  it('asleep on Home reads the saved copy, and Wake is its own action', () => {
+  it('asleep in the list reads the saved copy, and Wake is its own action', () => {
     expect(flat({ status: 'suspended', readableAsleep: true, canRestart: false })[0]).toBe(
       'open:read,wake,copyLink,copyWorkspaceLink'
     )

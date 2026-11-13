@@ -89,8 +89,7 @@ const base: TeamPageViewProps = {
   onSeePlans: noop,
   onManageBilling: noop,
   onCreateWorkspace: noop,
-  onDismissArrival: noop,
-  onContactSales: noop
+  onDismissArrival: noop
 }
 
 function Page(props: Partial<TeamPageViewProps>): React.JSX.Element {

@@ -9,6 +9,7 @@ import { refreshSessionEnv } from './sandbox-vm-commands'
 import { normalizeRepo, type SecretChange } from './secrets'
 import { forgetProviderEnv, sessionSecretEnv } from './session-env'
 import { transition, type SandboxRow } from './store'
+import { secretLog } from './secret-log'
 
 /** Running sandboxes whose sessions read secrets of this owner. */
 export async function sandboxesForSecretOwner(db: D1Database, change: SecretChange): Promise<SandboxRow[]> {
@@ -50,7 +51,7 @@ export async function envChangedSinceBoot(deps: LifecycleDeps, row: SandboxRow, 
   const { env } = await sessionSecretEnv(deps, row)
   const same = Object.keys(env).length === Object.keys(bootEnv).length && Object.entries(env).every(([k, v]) => bootEnv[k] === v)
   if (!same) {
-    console.log(JSON.stringify({ event: 'session_env_changed_during_boot', sandboxId: row.id }))
+    secretLog('session_env_changed_during_boot', { sandboxId: row.id })
   }
   return !same
 }
@@ -89,11 +90,11 @@ export async function refreshSandboxEnv(deps: LifecycleDeps, row: SandboxRow): P
   try {
     const applied = await refreshSessionEnv(deps.provider, current.session_id!, secrets.env, generation)
     // Counts only.
-    console.log(JSON.stringify({ event: 'session_env_refreshed', sandboxId: row.id, applied, names: Object.keys(secrets.env).length }))
+    secretLog('session_env_refreshed', { sandboxId: row.id, applied, names: Object.keys(secrets.env).length })
     return applied
   } catch (error) {
     if (error instanceof ProviderError) {
-      console.log(JSON.stringify({ event: 'session_env_refresh_failed', sandboxId: row.id, code: error.code }))
+      secretLog('session_env_refresh_failed', { sandboxId: row.id, code: error.code })
       return false
     }
     throw error
@@ -119,7 +120,7 @@ export async function refreshAfterSecretChange(deps: LifecycleDeps, changes: rea
           refreshed++
         }
       } catch {
-        console.log(JSON.stringify({ event: 'session_env_refresh_failed', sandboxId: row.id }))
+        secretLog('session_env_refresh_failed', { sandboxId: row.id })
       }
     }
   }

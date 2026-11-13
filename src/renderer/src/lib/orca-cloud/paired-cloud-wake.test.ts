@@ -13,6 +13,8 @@ vi.mock('@/lib/worktree-sleep-view', () => ({ isWorktreeSleepViewHeld: () => fal
 
 import { isPredictiveWakeCandidate } from './install-cloud-predictive-wake'
 import {
+  PAIRED_WAKE_MAX_WAIT_MS,
+  PAIRED_WAKE_POLL_MS,
   notePairedCloudSlept,
   wakePairedCloudWorkspace,
   wakePairedCloudWorkspaceIfAsleep
@@ -39,7 +41,14 @@ beforeEach(() => {
     status: { [ROW]: statusEntry },
     idsLoaded: true
   })
-  wake = vi.fn(async () => ({ ok: true, value: undefined }))
+  // The control plane accepts the wake; the VM then reports running (what the overlay waits for).
+  wake = vi.fn(async () => {
+    window.api.orcaCloudWorkspace.getStatus = async () => ({
+      ok: true as const,
+      value: { ...asleep, state: 'ready' as const }
+    })
+    return { ok: true, value: undefined }
+  })
   vi.stubGlobal('window', {
     api: {
       cloudWorkspaces: {
@@ -178,5 +187,47 @@ describe('the first open right after Sleep (n38 GATE: it sat in "Reconnecting…
     })
     expect(await wakePairedCloudWorkspaceIfAsleep('other-row')).toEqual({ ok: true })
     expect(wake).not.toHaveBeenCalled()
+  })
+})
+
+describe('the waking overlay for a paired wake (PAIRED-WAKING-OVERLAY)', () => {
+  it('stays "waking"/"connecting" until the VM reports running, then ready (not when the request returns)', async () => {
+    let polls = 0
+    wake.mockImplementationOnce(async () => {
+      // Accepted, but the VM takes a moment: asleep on the first read, running on the next.
+      window.api.orcaCloudWorkspace.getStatus = async () => {
+        polls += 1
+        return {
+          ok: true as const,
+          value: { ...asleep, state: polls > 1 ? ('ready' as const) : ('sleeping' as const) }
+        }
+      }
+      return { ok: true, value: undefined }
+    })
+    vi.useFakeTimers()
+    try {
+      const pending = wakePairedCloudWorkspace(ROW)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(getCloudWorkspaceSnapshot().wake[ROW]?.phase).toBe('connecting')
+      await vi.advanceTimersByTimeAsync(PAIRED_WAKE_POLL_MS)
+      expect(await pending).toEqual({ ok: true })
+      // (The store re-reads once more on "ready".)
+      expect(polls).toBeGreaterThanOrEqual(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a VM that never reports running fails the wake (the overlay says so) instead of claiming ready', async () => {
+    wake.mockImplementationOnce(async () => ({ ok: true, value: undefined }))
+    vi.useFakeTimers()
+    try {
+      const pending = wakePairedCloudWorkspace(ROW)
+      await vi.advanceTimersByTimeAsync(PAIRED_WAKE_MAX_WAIT_MS + PAIRED_WAKE_POLL_MS)
+      await pending
+      expect(getCloudWorkspaceSnapshot().wake[ROW]?.phase).toBe('failed')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

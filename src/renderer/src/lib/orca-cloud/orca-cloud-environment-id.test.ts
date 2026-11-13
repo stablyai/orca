@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
+
+const crumbs = vi.hoisted(() => {
+  const value: { recorded: { name: string; data: unknown }[] } = { recorded: [] }
+  return value
+})
+vi.mock('@/diagnostics/crash-reporting/crash-breadcrumb-recorder', () => ({
+  recordRendererCrashBreadcrumb: (name: string, data: unknown) =>
+    crumbs.recorded.push({ name, data })
+}))
 import {
   isOrcaCloudEnvironmentForLaunch,
   isOrcaCloudExecutionHostId
@@ -60,5 +69,25 @@ describe('isOrcaCloudEnvironmentForLaunch (FAIL-CLOSED, #568)', () => {
     expect(await isOrcaCloudEnvironmentForLaunch('env-flagged')).toBe(true)
     expect(main).not.toHaveBeenCalled()
     expect(await isOrcaCloudEnvironmentForLaunch('env-server')).toBe(false)
+  })
+})
+
+describe('isOrcaCloudEnvironmentForLaunch when main cannot answer', () => {
+  it('a thrown confirm warns, leaves a breadcrumb, and returns false (kept open, logged)', async () => {
+    useAppStore.setState({ runtimeEnvironments: [] })
+    stubMain(async () => {
+      throw new Error('ipc gone')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    crumbs.recorded = []
+    expect(await isOrcaCloudEnvironmentForLaunch('env-x')).toBe(false)
+    expect(warn).toHaveBeenCalledWith(
+      '[orca-cloud] cloud-host confirm failed; launching unheld',
+      expect.any(Error)
+    )
+    expect(crumbs.recorded).toEqual([
+      { name: 'cloud-host confirm failed; launching unheld', data: { environmentId: 'env-x' } }
+    ])
+    warn.mockRestore()
   })
 })

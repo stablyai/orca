@@ -5,6 +5,7 @@
 // metering immediately. The item is removed once it has nothing left to invoice (no meter report
 // this Stripe period): at once if none was sent, otherwise at a sync after the period rolls over,
 // so usage already reported is still invoiced and no $0 overage line is left on later invoices.
+import { pushBillingAudit, type BillingAuditEvent } from './audit-push'
 import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import { OPEN_STATUSES } from './checkout'
@@ -36,7 +37,8 @@ export async function updateOverage(
   stripe: StripeClient,
   caller: BillingCaller,
   request: z.infer<typeof OverageRequestSchema>,
-  now: number
+  now: number,
+  fetchImpl: typeof fetch = fetch
 ): Promise<OverageOutcome> {
   if (!caller.canManage) {
     return { ok: false, status: 403, error: 'billing_admin_required' }
@@ -56,11 +58,25 @@ export async function updateOverage(
     }
   }
   // An omitted cap keeps the current one; null restores the plan default.
-  const spendCapCents =
-    request.spendCapCents === undefined
-      ? (await accountSettings(env.BILLING_DB, caller.accountId)).spend_cap_cents
-      : request.spendCapCents
+  const previous = await accountSettings(env.BILLING_DB, caller.accountId)
+  const spendCapCents = request.spendCapCents === undefined ? previous.spend_cap_cents : request.spendCapCents
   await setOverageSettings(env.BILLING_DB, caller.accountId, { optIn: request.enabled, spendCapCents }, now)
+  // The team's audit log: who turned overage on or off, or changed the cap. Only real changes.
+  const wasEnabled = previous.overage_opt_in === 1
+  const audit: BillingAuditEvent[] = []
+  if (wasEnabled !== request.enabled) {
+    audit.push({ action: request.enabled ? 'billing.overage_enabled' : 'billing.overage_disabled', at: now, actorUserId: caller.userId })
+  }
+  if (previous.spend_cap_cents !== spendCapCents) {
+    audit.push({
+      action: 'billing.spend_cap_changed',
+      at: now,
+      actorUserId: caller.userId,
+      // null is the plan's default cap.
+      detail: { spendCapCents, previousSpendCapCents: previous.spend_cap_cents }
+    })
+  }
+  await pushBillingAudit(env, caller.accountId, audit, fetchImpl)
   if (!request.enabled) {
     // Best effort: the opt-out already stops metering; a failed removal is retried by the next sync.
     await retireOverageItem(env, stripe, subscription, now).catch((error: unknown) => {
