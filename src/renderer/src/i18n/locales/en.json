@@ -21080,7 +21080,8 @@
         "ran_other": "Ran {{count}} subagents",
         "open": "Open subagent",
         "backToMain": "Back to main agent",
-        "mainAgent": "Main agent"
+        "mainAgent": "Main agent",
+        "promptFromMain": "Prompt from main agent"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",

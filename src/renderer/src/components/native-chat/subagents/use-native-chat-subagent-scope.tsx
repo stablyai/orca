@@ -24,11 +24,42 @@ import {
   nativeChatSubagentRowsInOrder
 } from './native-chat-subagent-scope'
 import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
+import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
+import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
 
 const NO_MESSAGES: readonly NativeChatMessage[] = []
 const NO_SUBAGENT_ROWS: readonly NativeChatSubagentRow[] = []
 const NO_TURN_KEYS: readonly (string | undefined)[] = []
 const NO_ENTRIES: ReadonlyMap<string, NativeChatSubagentEntry> = new Map()
+
+function words(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/** Codex's last own message is its reply; a clipped copy of it counts as the same. */
+function nativeChatRowsEndWith(rows: readonly NativeChatMessage[], reply: string): boolean {
+  const last = rows.findLast((row) => row.role === 'assistant')
+  const said = words(
+    last?.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n') ?? ''
+  )
+  const replied = words(reply)
+  return said.length > 0 && (said.startsWith(replied) || replied.startsWith(said))
+}
+
+/** A settled subagent's reply, drawn as its last message. */
+function subagentReplyMessage(
+  agentId: string,
+  reply: string,
+  settledAt: number | undefined
+): NativeChatMessage {
+  return {
+    id: `subagent-reply:${agentId}`,
+    role: 'assistant',
+    blocks: [{ type: 'text', text: reply }],
+    timestamp: settledAt ?? null,
+    source: 'transcript'
+  }
+}
 
 /** What a transcript draws: the conversation in its turns, or one subagent's own rows with none. */
 export function useNativeChatSubagentScope({
@@ -59,13 +90,25 @@ export function useNativeChatSubagentScope({
         : nativeChatSubagentEntries(conversation, subagentRows, roster),
     [agentId, conversation, roster, subagentRows]
   )
-  const messages = useMemo(
+  const entry = agentId === null ? undefined : entries.get(agentId)
+  const settled = entry !== undefined && normalizeSubagentState(entry.state) !== 'working'
+  const handoff = useMemo(
     () =>
       agentId === null
-        ? conversation
-        : (subagentRows.get(agentId) ?? NO_SUBAGENT_ROWS).map(({ message }) => message),
-    [agentId, conversation, subagentRows]
+        ? null
+        : nativeChatSubagentHandoff({ agentId, journalItems, conversation, subagentRows }),
+    [agentId, conversation, journalItems, subagentRows]
   )
+  const reply = settled ? (handoff?.reply ?? entry.lastMessage ?? null) : null
+  const messages = useMemo(() => {
+    if (agentId === null) {
+      return conversation
+    }
+    const own = (subagentRows.get(agentId) ?? NO_SUBAGENT_ROWS).map(({ message }) => message)
+    return reply === null || nativeChatRowsEndWith(own, reply)
+      ? own
+      : [...own, subagentReplyMessage(agentId, reply, entry?.settledAt)]
+  }, [agentId, conversation, entry?.settledAt, reply, subagentRows])
   const heads = useMemo(
     () => nativeChatSubagentHeads(messages, subagentRows, entries, agentId),
     [agentId, entries, messages, subagentRows]
@@ -101,11 +144,15 @@ export function useNativeChatSubagentScope({
       }) === 'page',
     [agentId, conversation, journalItems, roster, subagentRows]
   )
-  const entry = agentId === null ? undefined : entries.get(agentId)
   const open = view?.open
   return {
     agentId,
     open,
+    /** Leads a subagent's transcript: what the main agent asked of it. */
+    lead:
+      agentId !== null && handoff?.prompt ? (
+        <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
+      ) : null,
     /** Drawn above a subagent's own transcript. */
     bar:
       agentId !== null && open ? (
