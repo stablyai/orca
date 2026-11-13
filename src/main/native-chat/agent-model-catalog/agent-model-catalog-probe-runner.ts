@@ -129,6 +129,8 @@ export async function runAgentModelCatalogListing(
       child.on('error', (error) => {
         if (child.pid === undefined) {
           fail(`${launch.command} could not start: ${error.message}`, 'spawn')
+        } else {
+          fail(`${launch.command} output could not be completed: ${error.message}`, 'exit')
         }
       })
       // close follows stdout drainage; exit may arrive before the final bytes.

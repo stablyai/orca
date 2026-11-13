@@ -1,6 +1,7 @@
 import type * as ProcessTable from '../../shared/libproc-process-table'
 import type * as ProcessHost from '@orca/process-host'
 import type * as OwnerChannels from './provider-owner-channels'
+import type { PassThrough } from 'node:stream'
 import { spawnProviderProcess, installProviderProcessHost } from './provider-process-spawn'
 import { afterEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
@@ -13,6 +14,11 @@ import { runCodexProcessWithHomeLock } from '../text-generation/source-control-l
 import { discoverModelsLocal } from '../text-generation/commit-message-model-discovery'
 import type { HostedProviderOutcome } from '../daemon/protocol/daemon-provider-process-protocol'
 import type { SpawnSourceControlAgent } from '../text-generation/source-control-text-generation-types'
+import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+
+const { owners } = vi.hoisted(() => ({
+  owners: [] as { duplex: PassThrough; stderr: PassThrough; control: PassThrough }[]
+}))
 
 vi.mock('@orca/process-host', async (original) => ({
   ...(await original<typeof ProcessHost>()),
@@ -36,7 +42,11 @@ vi.mock('./provider-owner-channels', async (original) => {
       }
       ready = Promise.resolve(this.channels)
       constructor() {
+        owners.push(this.channels)
         vi.spyOn(this.channels.control, 'write').mockReturnValue(true)
+      }
+      get outputChannels() {
+        return this.channels
       }
       async listen() {
         return '/fake/owner.sock'
@@ -87,14 +97,73 @@ function pendingChild() {
     }
   )
   child.on('error', () => {})
+  const channels = owners.at(-1)!
   return {
     child,
     client,
     spec,
+    channels,
     disconnect: () => disconnected(),
-    exit: () => exit({ pid: 42, code: 1, signal: null, processless: false })
+    exit: (code = 1) => {
+      channels.duplex.end()
+      channels.stderr.end()
+      exit({ pid: 42, code, signal: null, processless: false })
+    }
   }
 }
+
+it('keeps a paused final answer until it is read, independently of dead transport cleanup', async () => {
+  vi.useFakeTimers()
+  const handle = pendingChild()
+  const closed = vi.fn()
+  handle.child.on('close', closed)
+  handle.child.stdout.pause()
+  await handle.child.ready
+  handle.channels.duplex.write('final-answer')
+  handle.exit(0)
+  await vi.advanceTimersByTimeAsync(1_100)
+  expect(handle.child.rootAbsent).toBe(true)
+  expect(handle.channels.duplex.destroyed).toBe(true)
+  expect(closed).not.toHaveBeenCalled()
+  let output = ''
+  handle.child.stdout.on('data', (chunk) => (output += chunk.toString()))
+  handle.child.stdout.resume()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(output).toBe('final-answer')
+  expect(closed).toHaveBeenCalledWith(0, null)
+})
+
+it('rejects a broken catalog transfer and closes even after an earlier once-error consumer detached', async () => {
+  const handle = pendingChild()
+  handle.child.removeAllListeners('error')
+  const earlierError = vi.fn()
+  handle.child.once('error', earlierError)
+  handle.child.emit('error', new Error('Earlier unproven connection failure'))
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  handle.child.on('error', () => {
+    throw new Error('Detached consumer failed')
+  })
+  const closed = new Promise<void>((resolve) => handle.child.once('close', () => resolve()))
+  const listing = runAgentModelCatalogListing(
+    { command: 'codex', args: [] },
+    {
+      site: 'hosted-catalog-transfer',
+      platform: 'win32',
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The test supplies the same pending provider surface used by production catalog collection.
+      spawnImpl: () => handle.child as never
+    }
+  )
+  const rejected = expect(listing).rejects.toMatchObject({ reason: 'exit' })
+  await handle.child.ready
+  handle.channels.duplex.write('partial-catalog')
+  handle.channels.duplex.destroy()
+  handle.exit(0)
+  await rejected
+  await closed
+  expect(earlierError).toHaveBeenCalledTimes(1)
+  expect(handle.child.rootAbsent).toBe(true)
+  expect(handle.child.exitCode).toBe(0)
+})
 
 it.each([10, 100])(
   'observes %i lost roots without process-table reads or fabricated close',

@@ -1,4 +1,4 @@
-import type { PassThrough } from 'node:stream'
+import { retainProviderOutput } from './provider-output-handoff'
 import { observeHostedProviderExit } from './hosted-provider-exit-observer'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
@@ -205,37 +205,38 @@ export class HostedProviderChild extends ProviderChildHandle {
     this.exitCode = outcome.code
     this.signalCode = outcome.signal
     this.rejectReady(new Error('Provider exited before startup completed'))
+    const channels = this.listener.outputChannels
+    const retained = outcome.processless
+      ? Promise.resolve()
+      : channels
+        ? Promise.all([
+            retainProviderOutput(channels.duplex, this.stdout),
+            retainProviderOutput(channels.stderr, this.stderr)
+          ])
+        : Promise.reject(new Error('Agent output connection ended before delivery'))
+    const complete = (failure?: Error): void => {
+      void this.listener.close().catch(() => {})
+      this.finishClose(outcome.code, outcome.signal, failure)
+    }
+    void retained.then(
+      () => complete(),
+      (error: Error) => complete(error)
+    )
+    this.removeEvents()
+    this.removeDisconnect()
     if (outcome.processless) {
-      this.emit(
+      this.notifyTerminal(
         'error',
         Object.assign(new Error('Provider supervisor could not start'), {
           code: outcome.spawnErrorCode
         })
       )
     } else {
-      this.emit('exit', outcome.code, outcome.signal)
+      this.notifyTerminal('exit', outcome.code, outcome.signal)
     }
     void this.client
       ?.request('queryProvider', { nonce: this.listener.nonce, acknowledge: true }, RPC_TIMEOUT_MS)
       .catch(() => {})
-    this.removeEvents()
-    this.removeDisconnect()
-    // The real exit may arrive before the kernel delivers the final pipe bytes.
-    let timer: NodeJS.Timeout | undefined
-    const end = (stream: PassThrough): Promise<void> =>
-      stream.writableFinished
-        ? Promise.resolve()
-        : new Promise((resolve) => stream.once('finish', resolve))
-    void Promise.race([
-      Promise.all([end(this.stdout), end(this.stderr)]),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, 1_000)
-      })
-    ]).then(() => {
-      clearTimeout(timer)
-      void this.listener.close()
-      this.finishClose(outcome.code, outcome.signal)
-    })
   }
 
   private async observeLostHost(): Promise<void> {

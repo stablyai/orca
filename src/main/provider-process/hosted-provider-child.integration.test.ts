@@ -4,6 +4,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
+import { spawn } from 'node:child_process'
 import { DaemonServer } from '../daemon/server/daemon-server'
 import { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { HostedProviderChild } from './hosted-provider-child'
@@ -11,6 +12,7 @@ import { createProviderSpawnSpec } from './provider-process-supervisor'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import type { HostedProviderState } from '../daemon/protocol/daemon-provider-process-protocol'
 import { ProviderOwnerListener } from './provider-owner-channels'
+import { createSupervisorOutputGate } from './provider-supervisor-output-gate.test-support'
 
 describe.skipIf(process.platform === 'win32')('hosted provider production transport', () => {
   let directory: string
@@ -46,7 +48,12 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     await rm(directory, { recursive: true, force: true })
   })
 
-  function launch(source: string, lifetime: 'session' | 'one-shot' = 'one-shot', cwd?: string) {
+  function launch(
+    source: string,
+    lifetime: 'session' | 'one-shot' = 'one-shot',
+    cwd?: string,
+    instrument?: (source: string) => string
+  ) {
     const spec = createProviderSpawnSpec(
       {
         command: process.execPath,
@@ -57,6 +64,9 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
       process.platform,
       { lifetime }
     )
+    if (instrument) {
+      spec.args[1] = instrument(spec.args[1])
+    }
     const child = new HostedProviderChild(
       spec,
       async () => client,
@@ -69,6 +79,112 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     guardSupervisedProviderGroup(child, { site: 'hosted-provider-fixture', supervised: true })
     return child
   }
+
+  it('waits for real final writes after source EOF without expiring a live owner', async () => {
+    const gate = await createSupervisorOutputGate(directory)
+    try {
+      const child = launch(
+        "process.stdout.write('stdout-final'); process.stderr.write('stderr-final')",
+        'one-shot',
+        undefined,
+        gate.instrument
+      )
+      let stdout = ''
+      let stderr = ''
+      child.stdout.on('data', (chunk) => (stdout += chunk.toString()))
+      child.stderr.on('data', (chunk) => (stderr += chunk.toString()))
+      const closed = once(child, 'close')
+      child.stdin.end()
+      await gate.pending
+      await new Promise((resolve) => setTimeout(resolve, 1_100))
+      expect(child.exitCode).toBeNull()
+      gate.release()
+      expect(await closed).toEqual([0, null])
+      expect(stdout).toBe('stdout-final')
+      expect(stderr).toBe('stderr-final')
+    } finally {
+      await gate.close()
+    }
+  })
+
+  it('still stops a supervisor whose provider exited while final writes are held', async () => {
+    const gate = await createSupervisorOutputGate(directory)
+    try {
+      const child = launch(
+        "process.stdout.write('stdout-final'); process.stderr.write('stderr-final')",
+        'one-shot',
+        undefined,
+        gate.instrument
+      )
+      child.stdout.resume()
+      child.stderr.resume()
+      child.stdin.end()
+      await gate.pending
+      const closed = once(child, 'close')
+      expect(await child.signalRoot!('SIGTERM')).toBe(true)
+      expect(await closed).toEqual([null, 'SIGTERM'])
+      expect(child.rootAbsent).toBe(true)
+    } finally {
+      await gate.close()
+    }
+  })
+
+  it('delivers a paused final response before close after the real supervisor exits', async () => {
+    const child = launch("process.stdout.write('complete-response')")
+    child.stdout.pause()
+    const exited = once(child, 'exit')
+    let closed = false
+    const completion = new Promise<void>((resolve) =>
+      child.once('close', () => {
+        closed = true
+        resolve()
+      })
+    )
+    await exited
+    await new Promise((resolve) => setTimeout(resolve, 1_100))
+    expect(closed).toBe(false)
+    let output = ''
+    child.stdout.on('data', (chunk) => (output += chunk.toString()))
+    child.stdout.resume()
+    await completion
+    expect(output).toBe('complete-response')
+    expect(child.exitCode).toBe(0)
+  })
+
+  it('also drains the public output of a direct-adoption wrapper before close', async () => {
+    const rawClosed = Promise.withResolvers<void>()
+    const spec = createProviderSpawnSpec(
+      { command: process.execPath, args: [] },
+      {},
+      process.platform
+    )
+    const child = new HostedProviderChild(
+      spec,
+      async () => null,
+      () => {
+        const direct = spawn(process.execPath, ['-e', "process.stdout.write('direct-response')"], {
+          stdio: 'pipe'
+        })
+        direct.once('close', () => rawClosed.resolve())
+        return direct
+      }
+    )
+    child.stdout.pause()
+    let closed = false
+    const completion = new Promise<void>((resolve) =>
+      child.once('close', () => {
+        closed = true
+        resolve()
+      })
+    )
+    await rawClosed.promise
+    expect(closed).toBe(false)
+    let output = ''
+    child.stdout.on('data', (chunk) => (output += chunk.toString()))
+    child.stdout.resume()
+    await completion
+    expect(output).toBe('direct-response')
+  })
 
   it('keeps real identity, GUI env/cwd, one-shot EOF and backpressured output intact', async () => {
     const child = launch(`

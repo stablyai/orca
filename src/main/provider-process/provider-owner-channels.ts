@@ -53,6 +53,14 @@ export class ProviderOwnerListener {
     this.settleReady()
   }
 
+  get outputChannels(): Pick<ProviderOwnerChannels, 'duplex' | 'stderr'> | null {
+    const duplex = this.channels.get('duplex')
+    const stderr = this.channels.get('stderr')
+    return duplex?.pid === this.expectedPid && stderr?.pid === this.expectedPid
+      ? { duplex: duplex.socket, stderr: stderr.socket }
+      : null
+  }
+
   async close(): Promise<void> {
     this.stopped = true
     this.rejectReady(new Error('Provider owner connection closed'))

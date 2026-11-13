@@ -11,7 +11,7 @@ export const PROVIDER_BRIEF_SIGTERM_GRACE_MS = 1_000
 export const PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL = 'SIGUSR2'
 /** Bound kernel kill completion; a process stuck on a hung drive must not hang close/recovery forever. */
 export const PROVIDER_GROUP_REAP_TIMEOUT_MS = 1_500
-/** Longest a supervisor waits, after its provider exits, to relay output still in the pipes. */
+/** Direct stdio drain budget; hosted output instead remains bound to its live owner. */
 export const PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS = 1_000
 /** Wrapper stop budget; killing it before both graces and reap finish can orphan the group. */
 export const PROVIDER_SUPERVISOR_MAX_STOP_MS =
@@ -84,6 +84,7 @@ let ownerShutdownTimer
 let settling = false
 let sigtermGraceCut = false
 let providerExited = false
+let abortOutputDrain
 const providerGroupExists = () => {
   if (!child.pid) return false
   try {
@@ -109,6 +110,8 @@ const reapOwnedProviderGroup = async () => {
   return waitForProviderGroupExit(${PROVIDER_GROUP_REAP_TIMEOUT_MS})
 }
 const finishWithProviderOutcome = (code, signal) => {
+  clearInterval(timer)
+  if (ownerShutdownTimer) clearTimeout(ownerShutdownTimer)
   if (!signal) return process.exit(code ?? 1)
   // Re-raise with the default action; this supervisor's own handler would swallow it.
   process.removeAllListeners(signal)
@@ -117,7 +120,10 @@ const finishWithProviderOutcome = (code, signal) => {
 // Every stop is the same: SIGTERM the group, SIGKILL it after its grace (or once asked to reap now), and exit
 // only once it is gone. Whoever stops this pid judges the provider by it, so a dead supervisor means a dead group.
 const stopProviderGroup = (receivedSignal) => {
-  if (settling) return
+  if (settling) {
+    if (abortOutputDrain) abortOutputDrain(receivedSignal)
+    return
+  }
   settling = true
   clearInterval(timer)
   if (ownerShutdownTimer) clearTimeout(ownerShutdownTimer)
@@ -154,7 +160,14 @@ if (child.pid) {
   }
 }
 // Exit can land before the provider's last output is relayed; a one-shot's answer is that output.
-const drainProviderOutput = () => {
+const drainProviderOutput = (signal) => {
+  if (bridge) {
+    const { finished } = require('node:stream/promises')
+    return Promise.all([
+      ...[child.stdout, child.stderr].map(stream => finished(stream, { writable: false, cleanup: true, signal })),
+      ...[output, errorOutput].map(stream => finished(stream, { readable: false, cleanup: true, signal }))
+    ])
+  }
   const ended = (stream) => stream.readableEnded || stream.destroyed ? null : new Promise((resolve) => {
     stream.once('end', resolve)
     stream.once('close', resolve)
@@ -167,13 +180,24 @@ const drainProviderOutput = () => {
 const reapProviderExit = async (code, signal) => {
   if (settling) return
   settling = true
-  clearInterval(timer)
+  const controller = bridge ? new AbortController() : null
+  if (controller) abortOutputDrain = (signal) => controller.abort(signal)
+  else clearInterval(timer)
   if (ownerShutdownTimer) clearTimeout(ownerShutdownTimer)
   if (!(await reapOwnedProviderGroup())) return process.exit(1)
-  await drainProviderOutput()
+  try {
+    if (bridge && (ownerGone() || bridge.control.readableEnded || bridge.control.destroyed)) {
+      controller.abort(null)
+    }
+    await drainProviderOutput(controller?.signal)
+  } catch {
+    controller?.abort()
+    return finishWithProviderOutcome(1, typeof controller?.signal.reason === 'string' ? controller.signal.reason : null)
+  }
   finishWithProviderOutcome(code, signal)
 }
 const closeForOwnerDeath = () => {
+  if (settling && abortOutputDrain) return abortOutputDrain(null)
   input.unpipe(child.stdin)
   try { child.stdin.end() } catch {}
   if (spec.lifetime === 'one-shot' || spec.closeRequest !== 'stdin-end') return stopProviderGroup(null)
