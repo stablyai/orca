@@ -32,7 +32,7 @@ export function cloudApiErrorCopy(
     case 'plan-required':
       return t(
         'auto.components.settings.cloudApi.error.planRequired',
-        'Your team’s plan does not include this.'
+        'Your team’s plan doesn’t include this.'
       )
     case 'forbidden':
       return t(

@@ -2,11 +2,28 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CloudAuditEvent } from '../../../../../shared/cloud-api/cloud-api-types'
-import { EnterpriseSettingsView } from './EnterpriseSettingsView'
+import {
+  EnterpriseSettingsView as RawView,
+  type EnterpriseSettingsViewProps
+} from './EnterpriseSettingsView'
 import { FIXTURE_EVENTS, FIXTURE_NOW, fixtureAuditProps } from './enterprise-fixture-data'
 import { auditCategoryLabel, auditEventSentence, isKnownAuditAction } from './enterprise-audit-copy'
 
 afterEach(cleanup)
+
+/** The view as the pane feeds it: the audit log's answer says which side of the plan the team is on. */
+function EnterpriseSettingsView(
+  props: Omit<EnterpriseSettingsViewProps, 'ssoIncluded'> & { ssoIncluded?: boolean | null }
+): React.JSX.Element {
+  const status = props.audit.log.status
+  const derived = status === 'ok' ? true : status === 'upsell' ? false : null
+  return (
+    <RawView
+      {...props}
+      ssoIncluded={props.ssoIncluded === undefined ? derived : props.ssoIncluded}
+    />
+  )
+}
 
 const EMPTY = {
   status: 'ok' as const,
@@ -33,7 +50,7 @@ describe('audit log', () => {
       'Started workspace “nightly-evals” | Workspaces | Grace Hopper via API key | 5 hours ago',
       'Removed Linus Park from the team | Members | You | yesterday',
       'Turned off a routine | Routines | Orca | yesterday',
-      'Created API key “GitHub Actions deploy” | API keys | Linus Park · Former teammate | 2 days ago',
+      'Created API key “GitHub Actions deploy” | API keys | Linus Park · Former member | 2 days ago',
       'Added secret ANTHROPIC_API_KEY | Secrets | You | 3 days ago',
       'Changed agent access | Settings | You | 6 days ago',
       'Connected an app | Connected apps | Grace Hopper via MCP | 9 days ago'
@@ -185,24 +202,42 @@ describe('audit log', () => {
 })
 
 describe('without the Enterprise plan', () => {
-  it('shows the upsell with Contact sales and no log, filters or export', () => {
+  it('a team with neither gets ONE Contact sales, in a banner, and a plain line in each block', () => {
     const onContactSales = vi.fn()
     const { container } = render(
       <EnterpriseSettingsView
         audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [], onContactSales })}
       />
     )
-    expect(screen.getByText('Audit log is part of Enterprise')).toBeTruthy()
+    expect(screen.getByText('Single sign-on and the audit log are part of Enterprise')).toBeTruthy()
+    // The blocks keep their titles and say what they are, without a second button.
+    expect(screen.getByText('Single sign-on and provisioning')).toBeTruthy()
+    expect(screen.getByText('Audit log')).toBeTruthy()
+    expect(container.textContent).toContain('so your full history is here from the day you upgrade')
+    expect(screen.queryByText('Audit log is part of Enterprise')).toBeNull()
     expect(rows(container)).toEqual([])
     expect(screen.queryByRole('combobox')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Export CSV' })).toBeNull()
     const contact = screen.getAllByRole('button', { name: 'Contact sales' })
-    // One for single sign-on, one for the audit log.
-    expect(contact).toHaveLength(2)
-    fireEvent.click(contact[1]!)
+    expect(contact).toHaveLength(1)
+    fireEvent.click(contact[0]!)
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
-    // The Copy link chevron sits beside each (the open-in-browser rule).
-    expect(screen.getAllByRole('button', { name: 'More link options' })).toHaveLength(2)
+    // The Copy link chevron sits beside it (the open-in-browser rule).
+    expect(screen.getAllByRole('button', { name: 'More link options' })).toHaveLength(1)
+  })
+
+  it('a team missing only the audit log keeps the button on that block, with no banner', () => {
+    const onContactSales = vi.fn()
+    render(
+      <EnterpriseSettingsView
+        ssoIncluded
+        audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [], onContactSales })}
+      />
+    )
+    expect(screen.queryByText('Single sign-on and the audit log are part of Enterprise')).toBeNull()
+    expect(screen.getByText('Audit log is part of Enterprise')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Contact sales' }))
+    expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
   })
 
   it("uses billing's own plan name and contact page", () => {
@@ -216,10 +251,33 @@ describe('without the Enterprise plan', () => {
         })}
       />
     )
-    expect(screen.getByText('Audit log is part of Scale')).toBeTruthy()
-    expect(screen.getByText('Single sign-on is part of Scale')).toBeTruthy()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Contact sales' })[0]!)
+    expect(screen.getByText('Single sign-on and the audit log are part of Scale')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Contact sales' }))
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/scale')
+  })
+})
+
+describe('on the Enterprise plan', () => {
+  it('never sends the team to sales: single sign-on is set up with us, with Contact us', () => {
+    const onContactSales = vi.fn()
+    const { container } = render(
+      <EnterpriseSettingsView audit={fixtureAuditProps({ onContactSales })} />
+    )
+    expect(container.textContent).not.toMatch(/part of Enterprise|Contact sales/)
+    expect(screen.getByText('Single sign-on is set up with us')).toBeTruthy()
+    expect(screen.getByText('To set up or change single sign-on, contact us.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Contact us' }))
+    expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
+  })
+
+  it('says nothing about single sign-on until the plan is known', () => {
+    const { container } = render(
+      <EnterpriseSettingsView
+        audit={fixtureAuditProps({ log: { status: 'loading' }, actors: [] })}
+      />
+    )
+    expect(container.textContent).not.toMatch(/Single sign-on|Contact/)
+    expect(screen.getByText('Audit log')).toBeTruthy()
   })
 })
 
@@ -232,7 +290,7 @@ describe('slots', () => {
         policies={<section data-testid="mfa">Require MFA</section>}
       />
     )
-    expect(screen.queryByText('Single sign-on is part of Enterprise')).toBeNull()
+    expect(screen.queryByText('Single sign-on is set up with us')).toBeNull()
     const order = [...container.querySelectorAll('[id^="cloud-enterprise-"]')].map(
       (node) => node.id
     )

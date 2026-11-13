@@ -1486,8 +1486,7 @@
           "youViaAgent": "Your agent",
           "personViaAgent": "<person></person>’s agent",
           "youViaRoutine": "Your routine",
-          "personViaRoutine": "<person></person>’s routine",
-          "former": "Former teammate"
+          "personViaRoutine": "<person></person>’s routine"
         },
         "filter": {
           "categoryLabel": "Filter by activity",
@@ -1499,7 +1498,7 @@
         "description": "Member, key, secret, workspace and settings changes across your team. Only owners and admins can see it.",
         "export": "Export CSV",
         "upsellTitle": "Audit log is part of {{plan}}",
-        "upsellBody": "Orca records your team’s changes on every plan, so your history is here from the day you upgrade.",
+        "upsellBody": "Orca records your team’s changes on every plan, so your full history is here from the day you upgrade.",
         "loading": "Loading the audit log",
         "exportTruncated": "The file has the newest 5,000 events. Filter by activity or person to export the rest.",
         "emptyFilteredTitle": "Nothing matches",
@@ -1581,7 +1580,9 @@
       },
       "sso": {
         "upsellTitle": "Single sign-on is part of {{plan}}",
-        "upsellBody": "Sign in with your identity provider over SAML, and add or remove teammates with SCIM."
+        "upsellBody": "Sign in with your identity provider over SAML, and add or remove teammates with SCIM.",
+        "managedTitle": "Single sign-on is set up with us",
+        "managedBody": "To set up or change single sign-on, contact us."
       },
       "title": "Enterprise",
       "searchDescription": "Single sign-on and directory sync, and the audit log of changes across your team.",
@@ -1591,7 +1592,10 @@
       "keywordSaml": "saml",
       "keywordScim": "scim",
       "keywordCompliance": "compliance",
-      "description": "Single sign-on, sign-in policies and the audit log for your team."
+      "description": "Single sign-on, sign-in policies and the audit log for your team.",
+      "bannerTitle": "Single sign-on and the audit log are part of {{plan}}",
+      "bannerBody": "Talk to us about moving your team to {{plan}}.",
+      "contactUs": "Contact us"
     }
   },
   "menu": {
@@ -9225,7 +9229,7 @@
             "network": "Couldn’t reach Orca Cloud. Check your connection and try again.",
             "invalidResponse": "Orca Cloud sent an answer this version of Orca does not understand. Update Orca and try again.",
             "server": "Orca Cloud had a problem and nothing was changed. Try again in a moment.",
-            "planRequired": "Your team’s plan does not include this."
+            "planRequired": "Your team’s plan doesn’t include this."
           },
           "scope": {
             "workspacesRead": "List and inspect workspaces",

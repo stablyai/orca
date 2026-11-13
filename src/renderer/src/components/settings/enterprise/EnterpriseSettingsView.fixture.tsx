@@ -7,7 +7,13 @@ import type { EnterpriseAuditLogProps } from './EnterpriseAuditLog'
 const BARE_BODY = 'rounded-none border-0 bg-transparent p-0 shadow-none'
 
 /** The pane as Settings draws it: page title and description over the bare body. */
-function Page({ audit }: { audit: EnterpriseAuditLogProps }): React.JSX.Element {
+function Page({
+  audit,
+  ssoIncluded
+}: {
+  audit: EnterpriseAuditLogProps
+  ssoIncluded?: boolean | null
+}): React.JSX.Element {
   return (
     <div className="bg-background px-8 py-6">
       <SettingsSection
@@ -17,19 +23,30 @@ function Page({ audit }: { audit: EnterpriseAuditLogProps }): React.JSX.Element 
         forceVisible
         bodyClassName={BARE_BODY}
       >
-        <EnterpriseSettingsView audit={audit} />
+        <EnterpriseSettingsView
+          audit={audit}
+          ssoIncluded={
+            ssoIncluded !== undefined
+              ? ssoIncluded
+              : audit.log.status === 'ok'
+                ? true
+                : audit.log.status === 'upsell'
+                  ? false
+                  : null
+          }
+        />
       </SettingsSection>
     </div>
   )
 }
 
-/** An Enterprise team's owner: the merged log, filters and export. */
+/** An Enterprise team's owner: the merged log, filters and export; single sign-on is theirs, so no upsell. */
 export const auditLog = defineFixture({
   width: 860,
   render: () => <Page audit={fixtureAuditProps()} />
 })
 
-/** A team whose plan does not include the audit log (the control plane answered plan-required). */
+/** A team on neither: one banner with the page's only Contact sales, and a plain line per block. */
 export const upsell = defineFixture({
   width: 860,
   render: () => <Page audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [] })} />
@@ -100,5 +117,13 @@ export const exportTruncated = defineFixture({
   width: 860,
   render: () => (
     <Page audit={fixtureAuditProps({ exportState: { status: 'done', truncated: true } })} />
+  )
+})
+
+/** Only the audit log is missing (single sign-on is included): that block keeps its own button. */
+export const upsellAuditOnly = defineFixture({
+  width: 860,
+  render: () => (
+    <Page audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [] })} ssoIncluded />
   )
 })

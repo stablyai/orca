@@ -26,7 +26,7 @@ import {
   CloudApiSkeletonRows
 } from '../cloud-api/cloud-api-parts'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { EnterpriseUpsell, type EnterpriseContact } from './EnterpriseUpsell'
+import { EnterpriseUpsell, EnterpriseUpsellLine, type EnterpriseContact } from './EnterpriseUpsell'
 import { auditCategoryLabel, auditEventSentence } from './enterprise-audit-copy'
 
 export type AuditLogFilters = { category: CloudAuditCategory | null; actor: string | null }
@@ -69,6 +69,8 @@ export type EnterpriseAuditLogProps = {
   onRetry: () => void
   onExport: () => void
   onContactSales: (url: string) => void
+  /** False when the page banner already carries Contact sales: the upsell is then a plain line. */
+  upsellButton?: boolean
 }
 
 const ALL = '__all__'
@@ -117,7 +119,7 @@ function ActorCell({
       {actor.kind === 'former_member' && actor.name ? (
         <span className="text-muted-foreground">
           {' · '}
-          {t('settings.enterprise.audit.actor.former', 'Former teammate')}
+          {t('auto.components.settings.cloudApi.formerMember', 'Former member')}
         </span>
       ) : null}
     </>
@@ -133,7 +135,7 @@ function actorOptionLabel(actor: CloudAuditActor, viewerUserId: string | null, t
       <PersonName name={actor.name} id={actor.userId ?? ''} />
       {actor.kind === 'former_member' && actor.name ? (
         <span className="ml-1.5 text-muted-foreground">
-          {t('settings.enterprise.audit.actor.former', 'Former teammate')}
+          {t('auto.components.settings.cloudApi.formerMember', 'Former member')}
         </span>
       ) : null}
     </>
@@ -244,14 +246,21 @@ export function EnterpriseAuditLog(props: EnterpriseAuditLogProps): React.JSX.El
         ) : undefined
       }
     >
-      {log.status === 'upsell' ? (
+      {log.status === 'upsell' && props.upsellButton === false ? (
+        <EnterpriseUpsellLine>
+          {t(
+            'settings.enterprise.audit.upsellBody',
+            'Orca records your team’s changes on every plan, so your full history is here from the day you upgrade.'
+          )}
+        </EnterpriseUpsellLine>
+      ) : log.status === 'upsell' ? (
         <EnterpriseUpsell
           title={t('settings.enterprise.audit.upsellTitle', 'Audit log is part of {{plan}}', {
             plan: props.contact.planName
           })}
           body={t(
             'settings.enterprise.audit.upsellBody',
-            'Orca records your team’s changes on every plan, so your history is here from the day you upgrade.'
+            'Orca records your team’s changes on every plan, so your full history is here from the day you upgrade.'
           )}
           contact={props.contact}
           onContactSales={props.onContactSales}

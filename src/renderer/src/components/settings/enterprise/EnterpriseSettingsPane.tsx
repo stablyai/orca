@@ -43,6 +43,9 @@ function EnterpriseSettingsPaneBody(): React.JSX.Element | null {
   }
   return (
     <EnterpriseSettingsView
+      // Enterprise's features come together in one plan version, so the audit log's answer says
+      // which side of the plan the team is on. Unknown while it loads or fails: the block waits.
+      ssoIncluded={audit.log.status === 'ok' ? true : audit.log.status === 'upsell' ? false : null}
       audit={{
         log: audit.log,
         filters: audit.filters,

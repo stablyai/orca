@@ -41,3 +41,16 @@ export function EnterpriseUpsell({
     </div>
   )
 }
+
+/** The locked state without a button, for a block under the page banner that carries Contact sales. */
+export function EnterpriseUpsellLine({
+  children
+}: {
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <p data-settings-row="" className="py-4 text-xs text-muted-foreground text-pretty">
+      {children}
+    </p>
+  )
+}
