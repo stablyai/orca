@@ -17,18 +17,12 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
 function pauseCommit(authority: ProfileStateWorkerAuthority) {
   const started = maintenanceBarrier()
   const finish = maintenanceBarrier()
-  let held = false
-  for (const name of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
-    const original = authority[name].bind(authority)
-    vi.spyOn(authority, name).mockImplementation(async (replacements) => {
-      if (!held) {
-        held = true
-        started.resolve()
-        await finish.promise
-      }
-      await original(replacements)
-    })
-  }
+  const original = authority.writePreparedState.bind(authority)
+  vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async (write) => {
+    started.resolve()
+    await finish.promise
+    await original(write)
+  })
   return { started: started.promise, release: finish.resolve }
 }
 

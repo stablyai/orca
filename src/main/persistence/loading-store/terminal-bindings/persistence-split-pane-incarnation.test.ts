@@ -202,12 +202,11 @@ describe('Store', () => {
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
     })
     store.flushOrThrow()
-    vi.spyOn(
-      ProfileStateSqliteAuthority.prototype,
-      'writeSerializedDomains'
-    ).mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
+    vi.spyOn(ProfileStateSqliteAuthority.prototype, 'writePreparedState').mockImplementationOnce(
+      () => {
+        throw new Error('disk full')
+      }
+    )
 
     await expect(
       store.persistPtyBinding({

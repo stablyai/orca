@@ -18,7 +18,8 @@ import {
 export function preparePatchedProfileStateDomains(
   db: Database.Database,
   patches: readonly PreparedProfileStateDomainPatch[],
-  actualRevision: number
+  actualRevision: number,
+  readLegacyDocument: (domain: string) => unknown
 ): PreparedProfileStateMutation[] {
   const mutations: PreparedProfileStateMutation[] = []
   for (const patch of patches) {
@@ -44,12 +45,7 @@ export function preparePatchedProfileStateDomains(
       }
       base = JSON.parse(document.payload)
     } else {
-      const row = db
-        .prepare(
-          `SELECT domain, payload, domain_version, revision, updated_at, content_hash
-           FROM profile_state_documents WHERE domain = ?`
-        )
-        .get(patch.domain)
+      const row = readLegacyDocument(patch.domain)
       if (row !== undefined) {
         const document = validateProfileStateDocumentRow(row, { retainParsedValue: true })
         assertProfileStateDocumentRevision(document.revision, actualRevision, patch.domain)

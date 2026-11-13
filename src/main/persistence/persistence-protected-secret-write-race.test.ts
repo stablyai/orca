@@ -40,7 +40,7 @@ describe('protected-secret async write retention', () => {
     const release = maintenanceBarrier()
     const writeDomains = authority.writeSerializedDomains.bind(authority)
     const pendingWrite = vi
-      .spyOn(authority, 'writeSerializedDomains')
+      .spyOn(authority, 'writePreparedState')
       .mockImplementationOnce(async () => {
         entered.resolve()
         await release.promise

@@ -84,14 +84,14 @@ describe('live profile authority admission', () => {
     first.store.setWorkspaceSession({ ...first.store.getWorkspaceSession(), activeTabId: 'first' })
     await first.store.flushPendingOrThrowAsync()
     first.store.getWorkspaceSession().activeTabId = 'getter-only-final'
-    await first.store.freezeWritesAsync()
+    await first.store.flushFinalOrThrowAsync()
     const reopened = await open(input)
     expect(reopened.store.getWorkspaceSession().activeTabId).toBe('getter-only-final')
     reopened.store.setWorkspaceSession({
       ...reopened.store.getWorkspaceSession(),
       activeTabId: 'after-restart'
     })
-    await reopened.store.freezeWritesAsync()
+    await reopened.store.flushFinalOrThrowAsync()
     expect(readState(input).workspaceSession.activeTabId).toBe('after-restart')
   })
 

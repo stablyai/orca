@@ -7,15 +7,13 @@ import {
 } from '../../profile-state/documents/profile-state-domain-patches'
 
 const unsupported = Symbol('native domain serialization required')
-const lookupGetter = Object.prototype.__lookupGetter__
-const lookupSetter = Object.prototype.__lookupSetter__
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function admitObject(value: object): void {
-  if (types.isProxy(value)) {
+function admitObject(value: unknown): asserts value is Record<string, unknown> | unknown[] {
+  if (types.isProxy(value) || (!record(value) && !Array.isArray(value))) {
     throw unsupported
   }
   const prototype: unknown = Object.getPrototypeOf(value)
@@ -32,12 +30,10 @@ function admitObject(value: object): void {
   }
 }
 
-function admitToJson(value: object): void {
-  if (Object.hasOwn(value, 'toJSON')) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, 'toJSON')!
-    if (!('value' in descriptor) || typeof descriptor.value === 'function') {
-      throw unsupported
-    }
+function admitToJson(value: unknown): void {
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'toJSON')
+  if (descriptor && (!('value' in descriptor) || typeof descriptor.value === 'function')) {
+    throw unsupported
   }
 }
 
@@ -52,19 +48,18 @@ function admitPrototypes(): void {
   admitToJson(Array.prototype)
 }
 
-function readDataProperty(value: object, key: string): unknown {
-  if (lookupGetter.call(value, key) || lookupSetter.call(value, key)) {
+function readDataProperty(value: unknown, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key)
+  if (!descriptor || !('value' in descriptor)) {
     throw unsupported
   }
-  const entry: unknown = Reflect.get(value, key)
-  // Empty accessors also read undefined; ordinary optional undefined data remains eligible.
-  if (entry === undefined && !('value' in Object.getOwnPropertyDescriptor(value, key)!)) {
-    throw unsupported
-  }
-  return entry
+  return descriptor.value
 }
 
-function enter(value: object, ancestors: Set<object>): void {
+function enter(
+  value: unknown,
+  ancestors: Set<object>
+): asserts value is Record<string, unknown> | unknown[] {
   admitObject(value)
   if (ancestors.has(value)) {
     throw unsupported
@@ -85,7 +80,10 @@ function equalJson(value: unknown, previous: unknown, ancestors: Set<object>): b
       return (Number.isFinite(value) ? value : null) === previous
     case 'object':
       break
-    default:
+    case 'bigint':
+    case 'function':
+    case 'symbol':
+    case 'undefined':
       throw unsupported
   }
   enter(value, ancestors)

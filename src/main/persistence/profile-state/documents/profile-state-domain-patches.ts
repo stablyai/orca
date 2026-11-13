@@ -30,7 +30,10 @@ export function prepareProfileStateDomainPatches(
   }
   const domains = new Set<string>()
   return patches.map((patch) => {
-    const depth = isRecord(patch) ? PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(patch.domain) : undefined
+    const depth =
+      isRecord(patch) && typeof patch.domain === 'string'
+        ? PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(patch.domain)
+        : undefined
     if (depth === undefined || domains.has(patch.domain) || !Array.isArray(patch.operations)) {
       throw new Error('Profile state patch domain is invalid or repeated')
     }
@@ -42,7 +45,7 @@ export function prepareProfileStateDomainPatches(
         !Array.isArray(operation.path) ||
         operation.path.length > depth ||
         !operation.path.every((key: unknown) => typeof key === 'string') ||
-        !['set', 'remove', 'order'].includes(operation.kind)
+        (operation.kind !== 'set' && operation.kind !== 'remove' && operation.kind !== 'order')
       ) {
         throw new Error('Profile state patch operation is invalid')
       }

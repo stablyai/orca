@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ProfileStateSplitSnapshots } from './profile-state-split-snapshots'
 import { capturePreparedProfileStateWrite } from './profile-state-prepared-write'
 import {
@@ -34,7 +34,7 @@ describe('profile state split capture', () => {
   it('preserves native JSON meaning, own keys and order through logical patches', () => {
     const snapshots = new ProfileStateSplitSnapshots()
     snapshots.seed({ workspaceSession: { tabsByWorktree: { a: [], b: [] }, keep: null } })
-    const current: unknown = JSON.parse(
+    const current: Record<string, unknown> = JSON.parse(
       '{"tabsByWorktree":{"b":[],"__proto__":[{"title":"own"}],"a":[]},"keep":{}}'
     )
     const captured = snapshots.capture('workspaceSession', current)!
@@ -49,7 +49,7 @@ describe('profile state split capture', () => {
     snapshots.acknowledge(new Map([['workspaceSession', captured.value]]))
     expect(
       snapshots.capture('workspaceSession', {
-        ...(current as Record<string, unknown>),
+        ...current,
         optional: undefined
       })!.patch.operations
     ).toEqual([])
@@ -107,7 +107,23 @@ describe('profile state split capture', () => {
     const snapshots = new ProfileStateSplitSnapshots()
     snapshots.seed({ workspaceSession: { tabsByWorktree } })
     tabsByWorktree.w0[0].title = 'changed'
-    const captured = snapshots.capture('workspaceSession', { tabsByWorktree })!
+    const nativeStringify = JSON.stringify
+    const serialized: string[] = []
+    const stringify = vi.spyOn(JSON, 'stringify').mockImplementation((value) => {
+      const payload = nativeStringify(value)
+      if (payload !== undefined) {
+        serialized.push(payload)
+      }
+      return payload
+    })
+    const captured = (() => {
+      try {
+        return snapshots.capture('workspaceSession', { tabsByWorktree })!
+      } finally {
+        stringify.mockRestore()
+      }
+    })()
+    expect(serialized).toEqual(['[{"title":"changed"}]'])
     // One title update needs one small leaf; unrelated row payloads and full key vectors are unnecessary.
     expect(captured.patch).toEqual({
       domain: 'workspaceSession',

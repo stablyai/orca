@@ -104,9 +104,16 @@ export function writeProfileStateDomains(
     if (actualRevision !== transaction.expectedRevision) {
       throw new ProfileStateRevisionConflictError(transaction.expectedRevision, actualRevision)
     }
+    const readLegacyDocument = (domain: string): unknown =>
+      db
+        .prepare(
+          `SELECT domain, payload, domain_version, revision, updated_at, content_hash
+           FROM profile_state_documents WHERE domain = ?`
+        )
+        .get(domain)
     const mutations = [
       ...prepared,
-      ...preparePatchedProfileStateDomains(db, patches, actualRevision)
+      ...preparePatchedProfileStateDomains(db, patches, actualRevision, readLegacyDocument)
     ]
     if (transaction.complete) {
       const present = [
@@ -153,12 +160,7 @@ export function writeProfileStateDomains(
         }
         return
       }
-      const existing = db
-        .prepare(
-          `SELECT domain, payload, domain_version, revision, updated_at, content_hash
-           FROM profile_state_documents WHERE domain = ?`
-        )
-        .get(mutation.domain)
+      const existing = readLegacyDocument(mutation.domain)
       const existingRow =
         existing === undefined
           ? undefined

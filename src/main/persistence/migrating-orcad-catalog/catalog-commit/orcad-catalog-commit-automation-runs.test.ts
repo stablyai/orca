@@ -31,7 +31,7 @@ describe('catalog commit and automation run saves', () => {
 
     const started = maintenanceBarrier()
     const finish = maintenanceBarrier()
-    vi.spyOn(authority, 'writeSerializedAutomationRuns').mockImplementationOnce(async () => {
+    vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async () => {
       started.resolve()
       await finish.promise
       throw new ProfileStateWriterError('disk-refused', 'disk refused', 'known-failure')
