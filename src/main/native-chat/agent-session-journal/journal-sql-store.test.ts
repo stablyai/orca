@@ -11,6 +11,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
 import { journalDatabasePath } from './database/journal-host-database'
+import { journalDomainDatabasePath } from './database/journal-domain-database'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import type { JournalSqlStoreOperation } from './journal-sql-store'
@@ -488,7 +489,8 @@ it('drops a revoked history invocation after worker dispatch and preserves dedup
       return answer
     })
   })
-  const lock = new Database(journalDatabasePath(root))
+  // The writer commits to the domain database, so only its lock holds the dispatched write.
+  const lock = new Database(journalDomainDatabasePath(root))
   let pending: ReturnType<typeof journal.appendSteps> | undefined
   lock.exec('BEGIN IMMEDIATE')
   try {
