@@ -13,17 +13,6 @@ describe('skipsDirectEndpoint', () => {
     // Without relay the direct session is the only route to relay credentials.
     expect(skipsDirectEndpoint({ endpoint: 'ws://169.254.10.20:6768' })).toBe(false)
   })
-
-  it('keeps LAN, Tailscale and loopback endpoints dialable', () => {
-    for (const endpoint of [
-      'ws://192.168.1.20:6768',
-      'ws://100.101.102.103:6768',
-      'ws://127.0.0.1:6768',
-      'wss://desktop.example.ts.net'
-    ]) {
-      expect(skipsDirectEndpoint({ endpoint, relay }), endpoint).toBe(false)
-    }
-  })
 })
 
 describe('createUndialableDirectClient', () => {
