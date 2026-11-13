@@ -21707,7 +21707,8 @@
         "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
-        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again."
+        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
+        "sharedPersonalSecretsNote": "Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -28210,9 +28211,9 @@
     },
     "setUpAgent": "Set up an agent",
     "personal": {
-      "description": "Only you get these, in every Orca Cloud workspace you start.",
       "emptyTitle": "No personal secrets yet",
-      "emptyDetail": "Add one or paste a .env file. New terminals and agents in your cloud workspaces get them as environment variables."
+      "emptyDetail": "Add one or paste a .env file. New terminals and agents in your cloud workspaces get them as environment variables.",
+      "descriptionUnshared": "Only you get these, in cloud workspaces you haven’t shared. Shared workspaces don’t get them."
     },
     "org": {
       "description": "Everyone on your team gets these in their Orca Cloud workspaces.",
