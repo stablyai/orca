@@ -11,7 +11,11 @@ import { startGitCommonWatch } from '../git/worktree-git-common-watch'
 
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 
-export type WorktreeBaseSubscription = { unsubscribe: () => Promise<void> }
+export type WorktreeBaseSubscription = {
+  unsubscribe: () => Promise<void>
+  /** Git-common watches only: whether listing and head changes currently produce events. */
+  coversCatalog?: () => boolean
+}
 
 export type WorktreePollerWindowVisibility = {
   isWindowVisible: () => boolean

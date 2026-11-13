@@ -54,12 +54,13 @@ export async function startGitCommonWatch(
       )
     ])
     return {
+      coversCatalog: () => narrowWatch.coversCatalog?.() === true,
       unsubscribe: async () => {
         await Promise.all([narrowWatch.unsubscribe(), primaryWatch.unsubscribe()])
       }
     }
   }
-  return startGitCommonPolling(
+  const polling = await startGitCommonPolling(
     target.path,
     onEvents,
     pollIntervalMs,
@@ -68,4 +69,5 @@ export async function startGitCommonWatch(
     true,
     getStatusRefPaths
   )
+  return { ...polling, coversCatalog: () => true }
 }

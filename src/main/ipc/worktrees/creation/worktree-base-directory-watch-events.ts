@@ -12,11 +12,14 @@ import {
 } from '../git/worktree-git-status-ref-watch'
 import type { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 import { runWorktreeChangeInvalidators } from '../listing/worktree-change-invalidators'
+import { nextWorktreeCatalogWatchEpoch } from '../listing/worktree-catalog-watch-epoch'
+import type { WorktreeBaseSubscription } from './worktree-base-directory-poller'
 
 export type ActiveWatch = WorktreeBaseNotificationWatch & {
-  subscription: { unsubscribe: () => Promise<void> }
+  subscription: WorktreeBaseSubscription
   gitStatusRefPaths: Set<string>
   watcherFailureRefresh: WorktreeWatcherFailureRefreshCooldown
+  catalogEpoch: number
 }
 
 export function handleLocalWatchEvents(
@@ -30,6 +33,7 @@ export function handleLocalWatchEvents(
   }
   if (error) {
     console.warn(`[worktree-base-watcher] watcher failed for ${watch.path}:`, error)
+    watch.catalogEpoch = nextWorktreeCatalogWatchEpoch()
     invalidateActiveGitStatusRefResolution(watch, getActiveWatches)
     // Events were lost: no reader may reuse rows observed before the gap, even while notification is paced.
     for (const repoId of watch.repos.keys()) {
@@ -53,6 +57,9 @@ export function handleLocalWatchEvents(
     getActiveWatches
   )
   const changes = collectLocalWorktreeBaseChanges(watch, events)
+  if (changes.structureRepoIds.length > 0 || changes.headIdentityRepoIds.length > 0) {
+    watch.catalogEpoch = nextWorktreeCatalogWatchEpoch()
+  }
   if (hasCollectedWorktreeBaseChanges(changes)) {
     scheduleWorktreeBaseNotification(watch, changes)
   }
@@ -66,6 +73,7 @@ export function handleWatchOverflow(
   if (watch.disposed || watch.mainWindow.isDestroyed()) {
     return
   }
+  watch.catalogEpoch = nextWorktreeCatalogWatchEpoch()
   invalidateActiveGitStatusRefResolution(watch, getActiveWatches)
   for (const repoId of watch.repos.keys()) {
     runWorktreeChangeInvalidators(repoId)

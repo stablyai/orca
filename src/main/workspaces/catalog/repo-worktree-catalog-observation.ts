@@ -30,6 +30,8 @@ export type WorktreeCatalogObservation = {
   witness: WorktreeCatalogWitness | undefined
   /** Scan start, or the latest verifier answer that let a runtime reader reuse these rows. */
   confirmedAt: number
+  /** Catalog watch epoch read before the scan or the latest proving probe; null when no live watch covered the repo. */
+  catalogWatchEpoch: number | null
 }
 
 export type WorktreeCatalogFlightPlan = {
@@ -45,6 +47,8 @@ export type WorktreeCatalogVerifier = {
   probe: () => Promise<string | null> | 'in-flight'
   timeoutMs: number
   onUnknown?: (reason: string) => void
+  /** A live watch's change counter, null without one: rows stamped with the current epoch need no probe until the ceiling. */
+  watchEpoch?: () => number | null
 }
 
 export type WorktreeCatalogReaderKind = 'desktop' | 'runtime'
