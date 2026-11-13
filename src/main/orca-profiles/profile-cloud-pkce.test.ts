@@ -5,9 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { isPackaged: false }, shell: { openExternal: vi.fn() } }))
 
+import { shell } from 'electron'
 import type { OrcaCloudAuthConfig } from './cloud-auth/profile-cloud-auth-config'
 import {
   beginOrcaCloudPkceFlow,
+  connectCurrentArgsFromUnknown,
+  pkceSignInOptions,
   ORCA_CLOUD_SIGN_IN_TIMEOUT_MS,
   orcaCloudSignInTimeoutMs
 } from './cloud-auth/profile-cloud-pkce'
@@ -128,6 +131,26 @@ describe('PKCE loopback cancel and timeout', () => {
     expect(onAuthorizeUrl).not.toHaveBeenCalled()
   })
 
+  it('COPY-LINK-FIRST-CLICK: openBrowser false publishes the link with the listener up, opening nothing', async () => {
+    delete process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE
+    vi.mocked(shell.openExternal).mockClear()
+    const abort = new AbortController()
+    let authorize = ''
+    const flow = beginOrcaCloudPkceFlow(config, 'profile-1', {
+      signal: abort.signal,
+      openBrowser: false,
+      onAuthorizeUrl: (url) => (authorize = url)
+    })
+    flow.catch(() => undefined)
+    await vi.waitFor(() => expect(authorize).not.toBe(''))
+    expect(shell.openExternal).not.toHaveBeenCalled()
+    // The same loopback listener a click would have: a pasted link completes against it.
+    const redirect = new URL(new URL(authorize).searchParams.get('redirect_uri')!)
+    expect((await fetch(new URL('/auth/callback?state=wrong', redirect))).status).toBe(400)
+    abort.abort()
+    await expect(flow).rejects.toThrow('orca_cloud_auth_cancelled')
+  })
+
   it('times out a sign-in the browser never finishes', async () => {
     process.env.ORCA_CLOUD_SIGN_IN_TIMEOUT_MS = '1000'
     const { flow, redirect } = await start()
@@ -142,5 +165,20 @@ describe('PKCE loopback cancel and timeout', () => {
     expect(orcaCloudSignInTimeoutMs({ ORCA_CLOUD_SIGN_IN_TIMEOUT_MS: '60000' }, true)).toBe(300_000)
     expect(orcaCloudSignInTimeoutMs({ ORCA_CLOUD_SIGN_IN_TIMEOUT_MS: '10' }, false)).toBe(300_000)
     expect(orcaCloudSignInTimeoutMs({ ORCA_CLOUD_SIGN_IN_TIMEOUT_MS: 'x' }, false)).toBe(300_000)
+  })
+})
+
+describe('COPY-LINK-FIRST-CLICK options', () => {
+  it('only an explicit openBrowser false (from the renderer) skips the browser', () => {
+    expect(connectCurrentArgsFromUnknown({ openBrowser: false })).toEqual({ openBrowser: false })
+    expect(connectCurrentArgsFromUnknown({ openBrowser: 'false' })).toEqual({})
+    expect(connectCurrentArgsFromUnknown(undefined)).toEqual({})
+    expect(pkceSignInOptions(undefined)).toEqual({ openBrowser: true })
+    expect(pkceSignInOptions({ openBrowser: false })).toEqual({ openBrowser: false })
+    expect(pkceSignInOptions({ authorizeParams: { setup: '1' }, openBrowser: false })).toEqual({
+      openBrowser: false,
+      authorizeParams: { setup: '1' },
+      holdBrowser: true
+    })
   })
 })

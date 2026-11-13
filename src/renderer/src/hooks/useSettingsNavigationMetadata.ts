@@ -15,6 +15,7 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { isActiveTeamAdmin } from '@/lib/orca-cloud/active-team-role'
 import { useAppStore } from '@/store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
@@ -62,6 +63,7 @@ export function buildSettingsNavigationMetadata(
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
     isOrcaCloudApiAvailable = false,
+    isOrcaTeamAdmin = false,
     repos,
     projectGrouping
   }: {
@@ -77,6 +79,7 @@ export function buildSettingsNavigationMetadata(
     isDev?: boolean
     isLinearConnected?: boolean
     isOrcaCloudApiAvailable?: boolean
+    isOrcaTeamAdmin?: boolean
     repos: readonly Repo[]
     projectGrouping?: ProjectGroupingModel
   },
@@ -112,6 +115,7 @@ export function buildSettingsNavigationMetadata(
     isDev,
     isLinearConnected,
     isOrcaCloudApiAvailable,
+    isOrcaTeamAdmin,
     repos,
     projectGrouping
   }
@@ -153,6 +157,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
   const isOrcaCloudApiAvailable = useOrcaCloudApiAvailable()
+  const isOrcaTeamAdmin = useAppStore((state) => isActiveTeamAdmin(state.orcaProfileAuthStatus))
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -197,6 +202,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           isDev: import.meta.env.DEV,
           isLinearConnected,
           isOrcaCloudApiAvailable,
+          isOrcaTeamAdmin,
           repos,
           projectGrouping: {
             projects: projectHostSetupProjection.projects,
@@ -218,6 +224,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       mobileEmulatorCreationEnabled,
       isLinearConnected,
       isOrcaCloudApiAvailable,
+      isOrcaTeamAdmin,
       repos,
       projectHostSetupProjection,
       languageRevision,

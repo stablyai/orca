@@ -1,3 +1,4 @@
+import { useTeamMfaGate } from '@/components/team-mfa/TeamMfaGate'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -37,6 +38,7 @@ export function TeamPageBody({
   const cloud = authStatus?.cloud
   const orgId = cloud?.activeOrgId ?? null
   const roster = useOrgRoster(orgId)
+  const mfa = useTeamMfaGate()
   const billing = useOrcaBillingStatus(true)
   const [userRefreshing, setUserRefreshing] = useState(false)
   const [billingBusy, setBillingBusy] = useState(false)
@@ -174,6 +176,7 @@ export function TeamPageBody({
     <>
       <TeamPageView
         org={org}
+        mfaNotice={mfa.blocked ?? mfa.banner}
         viewerUserId={cloud?.userId ?? null}
         roster={rosterResult}
         billing={billing.result}
@@ -231,7 +234,6 @@ export function TeamPageBody({
           openTeammateProfile(userId)
         }}
         onDismissArrival={clearTeamPageArrival}
-        onContactSales={(url) => void window.api.shell.openUrl(url)}
         inline={inline}
         dangerZone={
           org && teamDelete.check ? (

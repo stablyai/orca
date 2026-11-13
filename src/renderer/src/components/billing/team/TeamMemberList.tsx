@@ -29,6 +29,7 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaOrgMember, OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import { PersonAvatar } from './TeamAvatar'
 import { invitedAsCopy, memberStatusLabel, roleDescription } from './team-copy'
+import { memberMfaLabel, showMfaColumn } from './team-member-mfa'
 import { assignableRoles, roleLabel } from './team-roles'
 import type { TeamRow } from './team-roster-rows'
 
@@ -243,6 +244,7 @@ function RowMenu({
 export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
+  const mfaColumn = showMfaColumn(props.rows, props.viewerRole)
   return (
     <ul
       className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border"
@@ -314,6 +316,21 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                 ) : null}
               </div>
               {state.busy ? <LoadingSpinner className="size-3.5 shrink-0" /> : null}
+              {mfaColumn ? (
+                // Rendered for every row, invites included, so the role column stays aligned.
+                <span
+                  data-team-mfa={row.kind === 'member' ? (row.member.mfa ?? '') : ''}
+                  className="flex w-28 shrink-0"
+                >
+                  {/* Only for members who have signed in: someone still pending has no account
+                      state yet, so "off" would mislead. */}
+                  {row.kind === 'member' &&
+                  row.status === 'active' &&
+                  memberMfaLabel(row.member, locale, t) ? (
+                    <Badge variant="tag">{memberMfaLabel(row.member, locale, t)}</Badge>
+                  ) : null}
+                </span>
+              ) : null}
               {row.kind === 'member' ? (
                 <RoleControl
                   row={row}

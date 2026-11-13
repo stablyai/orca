@@ -1,7 +1,6 @@
-import { useEffect, useId, useRef } from 'react'
-import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
@@ -27,6 +26,8 @@ import type { TeamPageArrival } from './team-page-store'
 export type TeamPageViewProps = {
   /** The active team, or null on a personal account. */
   org: { orgId: string; name: string } | null
+  /** The team's MFA requirement for this person: the countdown banner or the setup screen. */
+  mfaNotice?: React.ReactNode
   viewerUserId: string | null
   roster: OrcaProfileOrgMembersListResult | null
   billing: OrcaBillingStatusResult | null
@@ -52,8 +53,6 @@ export type TeamPageViewProps = {
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
-  /** Opens the Enterprise page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
-  onContactSales: (url: string) => void
   /** Settings → Team renders the page inline: seats and invoices stay on Plan & billing (linked). */
   inline?: { onOpenPlanBilling: () => void }
   /** Owners in Settings › Team: "Delete <team>", after "Leave <team>" (TEAM-DELETE). */
@@ -83,7 +82,6 @@ function SkeletonRows(): React.JSX.Element {
 export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
   const t = useTranslate()
   const inviteInput = useRef<HTMLInputElement>(null)
-  const ssoTitleId = useId()
   const hasRoster = props.roster !== null
   const inline = props.inline ?? null
   useEffect(() => {
@@ -109,7 +107,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   const roster = props.roster?.status === 'ok' ? props.roster.roster : null
   const entitlement = props.billing?.status === 'ok' ? props.billing.entitlement : null
-  const enterprise = entitlement?.offers?.enterprise ?? null
   const rows = roster ? teamRows(roster, props.viewerUserId) : []
   const selfRow = rows.find((row) => row.self)
   const viewerRole = roster?.viewerRole ?? 'member'
@@ -119,6 +116,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      {props.mfaNotice ?? null}
       <header className="flex items-center gap-3">
         <TeamMark name={props.org.name} />
         <div className="min-w-0 flex-1">
@@ -146,20 +144,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                 : t('auto.components.billing.team.loadFailedTitle', 'Couldn’t load team')}
           </p>
         </div>
-        {!inline && entitlement?.canManageBilling ? (
-          // Seats, prices and invoices live in Plan & billing; one quiet way there from here.
-          // mr-6 clears the dialog's close button, which sits in this corner.
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="mr-6 shrink-0"
-            onClick={props.onSeePlans}
-          >
-            <CreditCard />
-            {t('auto.components.billing.team.planBillingLink', 'Plan & billing')}
-          </Button>
-        ) : null}
       </header>
 
       {props.arrival?.kind === 'checkout-success' && entitlement ? (
@@ -218,10 +202,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
       {roster?.canManageMembers ? (
         <TeamInviteComposer
           viewerRole={viewerRole}
-          entitlement={entitlement}
-          members={roster.members.length}
-          pendingInvites={roster.pendingInvites.length}
-          now={props.now}
           onInvite={props.onInvite}
           inputRef={inviteInput}
         />
@@ -298,24 +278,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {(roster?.canManageMembers && enterprise) || props.dangerZone ? (
+      {props.dangerZone ? (
         <div className="divide-y divide-border/60 rounded-xl border border-border">
-          {roster?.canManageMembers && enterprise ? (
-            <section aria-labelledby={ssoTitleId} className="flex flex-wrap items-center gap-3 p-4">
-              <h3 id={ssoTitleId} className="min-w-[14rem] flex-1 text-sm font-medium">
-                {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
-              </h3>
-              <OpenExternalSplitButton
-                variant="outline"
-                size="sm"
-                link={enterprise.contactUrl}
-                onClick={() => props.onContactSales(enterprise.contactUrl)}
-              >
-                {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
-                <ExternalLink />
-              </OpenExternalSplitButton>
-            </section>
-          ) : null}
           {props.dangerZone}
         </div>
       ) : null}

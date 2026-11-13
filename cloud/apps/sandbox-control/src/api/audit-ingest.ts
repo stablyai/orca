@@ -4,14 +4,20 @@
 //   POST /v1/internal/audit-events {accountId, events: [{eventId, action, at?, actorUserId?, target?, detail?}]}
 //     -> {recorded, duplicates}
 //
-// Auth's token (MEMBER_REMOVED_TOKEN) or the operator token. The route only appends: it can't
-// read, change or delete a row. `eventId` makes a retry a no-op. Actions are limited to the
+// Auth's token (MEMBER_REMOVED_TOKEN) writes member, team, sso, scim and mfa events; billing's
+// (CONTROL_PLANE_TOKEN) writes billing events and nothing else; the operator token writes any.
+// The route only appends: it can't read, change or delete a row. `eventId` makes a retry a no-op. Actions are limited to the
 // families those services own, so a pushed event can never pass for an API key or secret change.
 // Member removal and role changes are not sent here: they have their own pushes, which also do
 // the cleanup, and record the event themselves (actorUserId on those bodies).
 import { z } from 'zod'
 
 const EVENT_FAMILIES = ['member', 'team', 'sso', 'scim', 'mfa', 'billing'] as const
+export type AuditEventFamily = (typeof EVENT_FAMILIES)[number]
+/** What each sender may write, so one service's bearer can't forge another's events. */
+export const AUTH_EVENT_FAMILIES: readonly AuditEventFamily[] = ['member', 'team', 'sso', 'scim', 'mfa']
+export const BILLING_EVENT_FAMILIES: readonly AuditEventFamily[] = ['billing']
+export const ALL_EVENT_FAMILIES: readonly AuditEventFamily[] = EVENT_FAMILIES
 const ACTION = new RegExp(`^(${EVENT_FAMILIES.join('|')})\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)?$`)
 /** Recorded by this service from the member pushes; a second copy from outside would double them. */
 const OWNED_HERE = new Set(['member.removed', 'member.left', 'member.role_changed', 'member.role_synced'])
@@ -53,9 +59,17 @@ export type AuditIngestBody = z.infer<typeof AuditIngestSchema>
 export class AuditIngestError extends Error {}
 
 /** Appends the events; one that was already recorded (same eventId) is skipped. */
-export async function ingestAuditEvents(db: D1Database, body: AuditIngestBody, now: number): Promise<{ recorded: number; duplicates: number }> {
+export async function ingestAuditEvents(
+  db: D1Database,
+  body: AuditIngestBody,
+  now: number,
+  families: readonly AuditEventFamily[] = ALL_EVENT_FAMILIES
+): Promise<{ recorded: number; duplicates: number }> {
   const statements: D1PreparedStatement[] = []
   for (const event of body.events) {
+    if (!(families as readonly string[]).includes(event.action.split('.')[0]!)) {
+      throw new AuditIngestError(`action_not_allowed_for_sender:${event.action}`)
+    }
     if (OWNED_HERE.has(event.action)) {
       throw new AuditIngestError(`action_recorded_by_control_plane:${event.action}`)
     }

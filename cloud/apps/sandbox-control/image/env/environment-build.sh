@@ -6,8 +6,10 @@
 #
 # Env from the control plane (validated there): ORCA_BUILD_REPOS (`<url>|<branch or empty>|<dir>|
 # <git auth header or empty>` lines: each private repo gets its own placeholder the egress swaps), ORCA_INSTALL_SCRIPT_B64, ORCA_LOCKFILES (space list), optional ORCA_GIT_EXTRAHEADER and ORCA_CLONE_FILTER, plus
-# the org secrets the environment names. `::orca-step:: <name>` lines mark progress.
-# Exit codes: 10 clone, 20 install script, 30 recording the result.
+# ORCA_BUILD_SECRET_NAMES (space list of the team secrets the environment names; each value rides in
+# the variable of that name) and ORCA_BUILD_WITHHELD_SECRETS (names it lists that builds never get).
+# `::orca-step:: <name>` lines mark progress.
+# Exit codes: 10 clone, 20 install script, 30 recording the result, 40 a secret's value left on disk.
 set -uo pipefail
 umask 022
 # One stream: the provider replays stdout and stderr separately after the fact, so a failed build's
@@ -16,6 +18,81 @@ exec 2>&1
 OUT=/tmp/orca-build
 ROOT=/vercel/sandbox/repos
 mkdir -p "$OUT" "$ROOT"
+
+# SEC-2: the snapshot of this VM is the team's saved environment, booted by every member's workspace,
+# so a secret's value must never be in it. Secrets are for the install script alone: take_secrets
+# moves them out of this script's environment (clones and Orca's own steps never see them), the
+# install step hands them to that one child, and scan_secrets searches the disk before the build
+# may succeed.
+secret_names=()
+secret_values=()
+take_secrets() {
+  local name
+  for name in ${ORCA_BUILD_SECRET_NAMES:-}; do
+    case "$name" in '' | *[!A-Z0-9_]* | [0-9]* | ORCA_* | PATH | HOME | LD_* | DYLD_*) continue ;; esac
+    [ -n "${!name:-}" ] || continue
+    secret_names+=("$name")
+    secret_values+=("${!name}")
+    unset "$name"
+  done
+  unset ORCA_BUILD_SECRET_NAMES
+  # Only a file that changes after this marker can hold a value: the base image never saw one.
+  : >"$OUT/.scan-since"
+}
+
+# Fails (non-zero) when a secret's value is in a file the build created or changed, anywhere on the
+# disk the snapshot captures. Plain text only: a value the script encoded, encrypted or compressed is
+# not found, and neither is one shorter than 8 characters (it would match ordinary text). A search
+# that cannot run fails too. Prints names and paths, never a value.
+# ORCA_SCAN_ROOT: tests only (a scratch tree); the control plane never sets it.
+scan_secrets() {
+  [ "${#secret_names[@]}" -gt 0 ] || return 0
+  local root="${ORCA_SCAN_ROOT:-/}" i line pattern hit named=0
+  local names=() patterns=() args=() newer=() sudo=()
+  for i in "${!secret_names[@]}"; do
+    # grep -F reads a newline as "or": a multi-line value (a PEM key) is searched by its longest line.
+    pattern=""
+    while IFS= read -r line; do
+      case "$line" in -----*) continue ;; esac
+      if [ "${#line}" -gt "${#pattern}" ]; then pattern="$line"; fi
+    done < <(printf '%s\n' "${secret_values[$i]}") # a pipe, not a here-string temp file
+    [ "${#pattern}" -ge 8 ] || continue
+    names+=("${secret_names[$i]}")
+    patterns+=("$pattern")
+    args+=(-e "$pattern")
+  done
+  [ "${#patterns[@]}" -gt 0 ] || return 0
+  if ! command -v find >/dev/null 2>&1 || ! command -v grep >/dev/null 2>&1 || ! command -v xargs >/dev/null 2>&1; then
+    echo "::orca-error:: Orca couldn’t check the build for secrets, so the environment wasn’t saved."
+    return 1
+  fi
+  # Root-owned files count too (`sudo npm config set` writes /root/.npmrc).
+  if sudo -n true 2>/dev/null; then sudo=(sudo -n); fi
+  # A missing marker (the install script removed it) means every file is searched.
+  if [ -f "$OUT/.scan-since" ]; then newer=(-cnewer "$OUT/.scan-since"); fi
+  changed_files() {
+    ${sudo[@]+"${sudo[@]}"} find "$root" \( -path /proc -o -path /sys -o -path /dev -o -path /run \) -prune \
+      -o -type f ${newer[@]+"${newer[@]}"} -print0 2>/dev/null
+  }
+  # One pass for every value; the per-secret passes only run on a build that is about to fail.
+  if [ -z "$(changed_files | ${sudo[@]+"${sudo[@]}"} xargs -0 grep -lsF "${args[@]}" -- 2>/dev/null | head -n 1)" ]; then
+    return 0
+  fi
+  for i in "${!names[@]}"; do
+    while IFS= read -r hit; do
+      [ -n "$hit" ] || continue
+      named=1
+      echo "::orca-error:: ${names[$i]} was left in $hit. Saved environments are shared with your team, so remove it before the install script ends."
+    done < <(changed_files | ${sudo[@]+"${sudo[@]}"} xargs -0 grep -lsF -e "${patterns[$i]}" -- 2>/dev/null | head -n 5)
+  done
+  if [ "$named" -eq 0 ]; then
+    # The file moved between the two passes: still a build that held a value on disk.
+    echo "::orca-error:: The install script left a secret on disk, so the environment wasn’t saved. Remove it before the script ends, then save again."
+  fi
+  return 1
+}
+
+take_secrets
 step() { printf '\n::orca-step:: %s\n' "$1"; }
 started=$(date +%s)
 export PATH="/opt/orca/tools/bin:/opt/orca/bin:$PATH"
@@ -61,7 +138,16 @@ step install
 printf '%s' "${ORCA_INSTALL_SCRIPT_B64:-}" | base64 -d >"$OUT/install.sh"
 if [ -s "$OUT/install.sh" ]; then
   echo "Running the install script in ${first:-$ROOT}"
-  (cd "${first:-$ROOT}" && exec bash -euo pipefail "$OUT/install.sh") </dev/null
+  for name in ${ORCA_BUILD_WITHHELD_SECRETS:-}; do
+    echo "$name is a model key, so environment builds don’t get it. Agents in workspaces still do."
+  done
+  (
+    cd "${first:-$ROOT}" || exit 1
+    if [ "${#secret_names[@]}" -gt 0 ]; then
+      for i in "${!secret_names[@]}"; do export "${secret_names[$i]}=${secret_values[$i]}"; done
+    fi
+    exec bash -euo pipefail "$OUT/install.sh"
+  ) </dev/null
   rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "::orca-error:: The install script exited with status $rc." 
@@ -72,6 +158,8 @@ else
 fi
 
 step record
+scan_secrets || exit 40
+secret_values=()
 # New workspaces are linked worktrees of these checkouts: list the dependency folders the install
 # produced and add a post-checkout hook that hard-links them into each new worktree.
 # Python virtualenvs are left out on purpose: their scripts and editable installs embed the primary
@@ -121,5 +209,5 @@ done < <(repos)
     "$(df -B1 --output=used / | tail -n 1 | tr -d ' ')" "$(df -B1 --output=size / | tail -n 1 | tr -d ' ')"
 } >"$OUT/result.json" || exit 30
 # Nothing from this VM's own session belongs in the image, only what the script installed.
-rm -rf -- "$OUT/install.sh" "$HOME/.bash_history" "$HOME/.orcad-data" "$HOME/.orca-sandbox"
+rm -rf -- "$OUT/install.sh" "$OUT/.scan-since" "$HOME/.bash_history" "$HOME/.orcad-data" "$HOME/.orca-sandbox"
 echo "Disk used: $(df -h --output=used / | tail -n 1 | tr -d ' ') of $(df -h --output=size / | tail -n 1 | tr -d ' ')"

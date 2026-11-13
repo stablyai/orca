@@ -1,3 +1,4 @@
+import type { OrcaOrgMemberMfaFields } from './orca-account-mfa'
 import './constants'
 import { ORCA_BROWSER_PARTITION } from './browser/browser-session-partition'
 import type { ExecutionHostId } from './execution-host'
@@ -250,7 +251,8 @@ export type RefreshCurrentOrcaProfileAuthResult =
 // Mirror the server’s fixed role enum so UI options cannot drift from accepted API values.
 export type OrcaOrgRole = 'owner' | 'admin' | 'member'
 
-export type OrcaOrgMember = {
+// Two-factor state (owners and admins only) lives in OrcaOrgMemberMfaFields.
+export type OrcaOrgMember = OrcaOrgMemberMfaFields & {
   // Provisioned teammates without sign-in have no userId; disable mutations requiring that key.
   userId: string | null
   email: string

@@ -13,6 +13,9 @@ import {
   type ActiveOrcaProfileState
 } from '../orca-profiles/profile-index-store'
 import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
+import { getOrcaCloudTokenEpoch } from '../orca-profiles/cloud-token-epoch'
+import { createOrgCheckedFetch, ORCA_ORG_HEADER_PERSONAL } from './hosted-sandbox-org-fetch'
+import { isNotAMember, orgSwitchError, readTokenOrg } from './hosted-sandbox-token-org'
 import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 
 export type HostedSandboxConfig = {
@@ -20,6 +23,29 @@ export type HostedSandboxConfig = {
   getAccessToken: (signal?: AbortSignal) => Promise<string>
   /** Drops the cached token so the next call mints one (the control plane said it predates a role change). */
   invalidateAccessToken?: () => void
+  /**
+   * fetch for control-plane calls: adds `x-orca-org` (the team the desktop shows, or `user`), and
+   * on a 409 org_mismatch or a stale_token refusal re-mints once and retries.
+   */
+  fetch?: typeof fetch
+}
+
+/** `reason` on the provider error when the team's MFA policy refused the token. */
+export const MFA_REQUIRED_REASON = 'mfa_required'
+
+/** Reads a copy of the body, so the caller can still read the response. */
+export async function isMfaRequiredRefusal(response: Response): Promise<boolean> {
+  try {
+    const body: unknown = await response.clone().json()
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      body.error === MFA_REQUIRED_REASON
+    )
+  } catch {
+    return false
+  }
 }
 
 const SandboxTokenBody = z.object({
@@ -45,7 +71,11 @@ type CachedSandboxToken = {
   identity: string
   /** Profile index generation the identity was last confirmed at. */
   generation: number
+  /** Team-switch / membership / role epoch the token was minted under; any change drops it. */
+  epoch: number
 }
+
+type MintedSandboxToken = { token: string; expiresAt: number }
 
 /** Sandbox tokens are minted per call by Orca Cloud auth; cached until a minute before expiry. */
 export function getHostedSandboxConfig(
@@ -62,68 +92,108 @@ export function getHostedSandboxConfig(
     ? env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE?.trim()
     : undefined
   let cached: CachedSandboxToken | null = null
+  const explicitOrg: ExplicitOrgSupport = { unsupportedUntil: 0 }
   let inflight: {
     identity: string
-    promise: Promise<{ token: string; expiresAt: number }>
+    epoch: number
+    promise: Promise<MintedSandboxToken>
   } | null = null
   const fresh = (entry: CachedSandboxToken | null): entry is CachedSandboxToken =>
-    entry !== null && entry.expiresAt - Date.now() > 60_000
+    entry !== null &&
+    entry.expiresAt - Date.now() > 60_000 &&
+    entry.epoch === getOrcaCloudTokenEpoch()
   const mint = (active: ActiveOrcaProfileState) =>
     devKeyFile
       ? mintDevSandboxToken(devKeyFile, active.profile.cloud, env)
-      : mintSandboxToken(userDataPath, active, env, packaged, fetchImpl)
-  return {
-    controlPlaneUrl,
-    getAccessToken: async () => {
-      // Why: sign-in, sign-out and team or profile switches all rewrite the profile index. A token
-      // minted for the previous identity would create sandboxes the new one can't see or delete.
-      if (fresh(cached) && cached.generation === getOrcaProfileIndexGeneration()) {
+      : mintSandboxToken(userDataPath, active, env, packaged, fetchImpl, explicitOrg)
+  // Concurrent callers for the same identity and epoch share one mint.
+  const sharedMint = (active: ActiveOrcaProfileState, identity: string, epoch: number) => {
+    if (inflight?.identity === identity && inflight.epoch === epoch) {
+      return inflight.promise
+    }
+    const entry = { identity, epoch, promise: mint(active) }
+    inflight = entry
+    void entry.promise
+      .catch(() => undefined)
+      .finally(() => {
+        if (inflight === entry) {
+          inflight = null
+        }
+      })
+    return entry.promise
+  }
+  const getAccessToken = async (): Promise<string> => {
+    // Why: sign-in, sign-out and team or profile switches all rewrite the profile index. A token
+    // minted for the previous identity would create sandboxes the new one can't see or delete.
+    if (fresh(cached) && cached.generation === getOrcaProfileIndexGeneration()) {
+      return cached.token
+    }
+    let orgMismatches = 0
+    for (let attempt = 0; ; attempt++) {
+      const generation = getOrcaProfileIndexGeneration()
+      const epoch = getOrcaCloudTokenEpoch()
+      const active = ensureActiveOrcaProfile(userDataPath)
+      const identity = sandboxIdentity(active)
+      if (fresh(cached) && cached.identity === identity) {
+        cached = { ...cached, generation }
         return cached.token
       }
-      for (let attempt = 0; ; attempt++) {
-        const generation = getOrcaProfileIndexGeneration()
-        const active = ensureActiveOrcaProfile(userDataPath)
-        const identity = sandboxIdentity(active)
-        if (fresh(cached) && cached.identity === identity) {
-          cached = { ...cached, generation }
-          return cached.token
-        }
-        // Concurrent callers for the same identity share one mint.
-        let shared = inflight?.identity === identity ? inflight : null
-        if (!shared) {
-          const entry = { identity, promise: mint(active) }
-          shared = entry
-          inflight = entry
-          void entry.promise
-            .catch(() => undefined)
-            .finally(() => {
-              if (inflight === entry) {
-                inflight = null
-              }
-            })
-        }
-        const minted = await shared.promise
-        // An identity change while minting must not hand the old identity's token to the caller.
-        if (
-          generation !== getOrcaProfileIndexGeneration() &&
-          sandboxIdentity(ensureActiveOrcaProfile(userDataPath)) !== identity
-        ) {
-          if (attempt >= 2) {
-            throw new EnvironmentProviderError(
-              'unavailable',
-              'Your Orca account changed while signing in to Orca Cloud. Try again.'
-            )
-          }
-          continue
-        }
-        cached = { ...minted, identity, generation }
-        return minted.token
-      }
-    },
-    invalidateAccessToken: () => {
-      // A fresh mint on the next call; one already in flight is fresh anyway.
+      // Only one identity is ever cached: a switch drops every other team's token.
       cached = null
+      const pending = sharedMint(active, identity, epoch)
+      const minted = await pending
+      // An identity, team or role change while minting must not hand the old token to the caller.
+      const identityMoved =
+        generation !== getOrcaProfileIndexGeneration() &&
+        sandboxIdentity(ensureActiveOrcaProfile(userDataPath)) !== identity
+      if (identityMoved || epoch !== getOrcaCloudTokenEpoch()) {
+        if (attempt >= 2) {
+          throw new EnvironmentProviderError(
+            'unavailable',
+            'Your Orca account changed while signing in to Orca Cloud. Try again.'
+          )
+        }
+        continue
+      }
+      // Why: auth may still pick the team from session state (the old team mid-switch). Never
+      // cache or use a token for any team other than the one this identity asked for.
+      const requestedOrg = active.profile.cloud?.activeOrgId ?? null
+      const tokenOrg = readTokenOrg(minted.token)
+      if (tokenOrg !== requestedOrg) {
+        console.warn(
+          `[orca-cloud] sandbox token org mismatch: requested=${requestedOrg ?? 'user'} got=${tokenOrg ?? 'user'}`
+        )
+        orgMismatches++
+        // The re-mint must ask auth again, not share the refused answer.
+        if (inflight?.promise === pending) {
+          inflight = null
+        }
+        if (orgMismatches >= 2) {
+          throw orgSwitchError(active)
+        }
+        continue
+      }
+      cached = { ...minted, identity, generation, epoch }
+      return minted.token
     }
+  }
+  const invalidateAccessToken = (): void => {
+    // A fresh mint on the next call; one already in flight is fresh anyway.
+    cached = null
+  }
+  return {
+    controlPlaneUrl,
+    getAccessToken,
+    invalidateAccessToken,
+    fetch: createOrgCheckedFetch({
+      fetchImpl,
+      orgHeader: () =>
+        ensureActiveOrcaProfile(userDataPath).profile.cloud?.activeOrgId ??
+        ORCA_ORG_HEADER_PERSONAL,
+      getAccessToken,
+      invalidateAccessToken,
+      orgSwitchError: () => orgSwitchError(ensureActiveOrcaProfile(userDataPath))
+    })
   }
 }
 
@@ -132,17 +202,23 @@ function sandboxIdentity(active: ActiveOrcaProfileState): string {
   return JSON.stringify([active.profile.id, cloud?.userId ?? null, cloud?.activeOrgId ?? null])
 }
 
+/** Auth older than the explicit-org mint body answers 400; skip the body for a while after one. */
+type ExplicitOrgSupport = { unsupportedUntil: number }
+const EXPLICIT_ORG_RETRY_MS = 10 * 60_000
+
 async function mintSandboxToken(
   userDataPath: string,
   active: ActiveOrcaProfileState,
   env: NodeJS.ProcessEnv,
   packaged: boolean,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  explicitOrg: ExplicitOrgSupport
 ): Promise<{ token: string; expiresAt: number }> {
   const auth = getOrcaCloudAuthConfig(env, packaged)
   if (!auth.configured || !active.profile.cloud) {
     throw new EnvironmentProviderError('unauthorized', 'Sign in to Orca to use Orca Cloud.')
   }
+  const requestedOrg = active.profile.cloud.activeOrgId ?? null
   const endpoint =
     cleanCloudServiceUrl(env.ORCA_CLOUD_SANDBOX_TOKEN_URL, !packaged) ??
     new URL('/v1/desktop/auth/sandbox-token', `${auth.config.apiBaseUrl}/`).toString()
@@ -151,16 +227,38 @@ async function mintSandboxToken(
     active,
     userDataPath,
     async (session) => {
-      const response = await fetchImpl(endpoint, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${session.accessToken}`
-        },
-        body: '{}',
-        redirect: 'error',
-        signal: AbortSignal.timeout(15_000)
-      })
+      const post = (body: string) =>
+        fetchImpl(endpoint, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${session.accessToken}`
+          },
+          body,
+          redirect: 'error',
+          signal: AbortSignal.timeout(15_000)
+        })
+      // Ask for the team explicitly; auth must not pick it from session state mid-switch.
+      const explicit = Date.now() >= explicitOrg.unsupportedUntil
+      let response = await post(explicit ? JSON.stringify({ orgId: requestedOrg }) : '{}')
+      if (explicit && response.status === 400) {
+        // Auth older than the explicit-org contract rejects any body. The caller's org-claim check
+        // still refuses a token for the wrong team.
+        explicitOrg.unsupportedUntil = Date.now() + EXPLICIT_ORG_RETRY_MS
+        response = await post('{}')
+      }
+      if (response.status === 403 && requestedOrg && (await isNotAMember(response))) {
+        throw orgSwitchError(active)
+      }
+      if (response.status === 403 && (await isMfaRequiredRefusal(response))) {
+        // The team requires MFA and this person has none past the deadline. Signing in again
+        // would not help, so this is not a session error: the reason lets the UI show setup.
+        throw new EnvironmentProviderError(
+          'unauthorized',
+          'Your team requires two-factor authentication. Set it up to use its cloud workspaces.',
+          MFA_REQUIRED_REASON
+        )
+      }
       if (response.status === 401 || response.status === 403) {
         throw new OrcaCloudRequestError(response.status)
       }

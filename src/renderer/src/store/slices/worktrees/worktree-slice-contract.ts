@@ -186,6 +186,7 @@ export type WorktreeSlice = {
       pausedMs?: number
       resumedAt?: number
       vmEnvironmentId?: string
+      pairingHostId?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
       heldChatMessage?: string

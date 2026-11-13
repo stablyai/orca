@@ -1,18 +1,8 @@
-// "Copy link" for the GitHub handoffs: the same single-use page Connect GitHub (App install) and
-// Connect your GitHub (OAuth) open, minted the same way in main but returned instead of opened.
+// "Copy link" for connecting your GitHub identity (OAuth sign-in): the same single-use page Connect
+// your GitHub opens, minted the same way in main but returned instead of opened. Copy link is for
+// sign-in pages only; the GitHub App install keeps a plain button.
 import { requireLink, type ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
-
-/** The GitHub App install page; with a repository, GitHub preselects it (and a setup session returns). */
-export function gitHubInstallLinkSource(args?: {
-  repoUrl?: string
-  setupSessionId?: string
-}): ExternalLinkSource {
-  return async () => {
-    const result = await cloudWorkspaceApi()?.gitHubInstallLink(args)
-    return requireLink(result?.ok ? result.value : null)
-  }
-}
 
 /** GitHub's OAuth page for connecting the person's own GitHub identity. */
 export function gitHubUserConnectLinkSource(): ExternalLinkSource {

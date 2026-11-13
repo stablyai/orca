@@ -44,6 +44,23 @@ async function optedInTeam() {
   return { h, auth, subscription, overage, prices, use, stored }
 }
 
+describe('overage on, off and on again (the settings card)', () => {
+  it('reads back off after turning off, and on with a cap after turning on again', async () => {
+    const { h, auth, overage } = await optedInTeam()
+    const read = async () => (await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body.overage
+    expect((await overage({ enabled: true, spendCapCents: 4000 })).status).toBe(200)
+    expect(await read()).toMatchObject({ optedIn: true, spendCapCents: 4000 })
+    expect((await overage({ enabled: false })).status).toBe(200)
+    // Off keeps the cap the admin chose, so turning on again without one restores it.
+    expect(await read()).toMatchObject({ optedIn: false, active: false, spendCapCents: 4000 })
+    expect((await overage({ enabled: true, spendCapCents: 2500 })).status).toBe(200)
+    expect(await read()).toMatchObject({ optedIn: true, spendCapCents: 2500 })
+    expect((await overage({ enabled: false })).status).toBe(200)
+    expect((await overage({ enabled: true })).status).toBe(200)
+    expect(await read()).toMatchObject({ optedIn: true, spendCapCents: 2500 })
+  })
+})
+
 describe('overage opt-out', () => {
   it('removes the unused metered item at once, and opting back in adds it again', async () => {
     const { h, overage, prices, use, stored } = await optedInTeam()

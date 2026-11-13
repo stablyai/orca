@@ -91,11 +91,11 @@ it('keeps a pending Connect GitHub focusable and ignores repeat clicks', () => {
   expect(document.activeElement).toBe(button)
 })
 
-it('offers an owner See plans then Try again on no plan', () => {
+it('offers an owner Compare plans then Try again on no plan', () => {
   const handlers = actions()
   render(<Sheet failure={{ kind: 'plan' }} handlers={handlers} />)
   const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
-  expect(buttons.slice(0, 2)).toEqual(['See plans', 'Try again'])
+  expect(buttons.slice(0, 2)).toEqual(['Compare plans', 'Try again'])
   fireEvent.click(screen.getByRole('button', { name: /Try again/ }))
   expect(handlers.onRetry).toHaveBeenCalledOnce()
 })
@@ -106,7 +106,7 @@ it.each(['plan', 'hoursUsed', 'spendCap', 'payment'] as const)(
     const handlers = actions()
     render(<Sheet failure={{ kind }} canManageBilling={false} handlers={handlers} />)
     expect(
-      screen.queryByRole('button', { name: /See plans|Raise spend cap|Turn on overage/ })
+      screen.queryByRole('button', { name: /Compare plans|Raise spend cap|Turn on overage/ })
     ).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Use this computer instead/ }))
     expect(handlers.onCreateLocally).toHaveBeenCalledOnce()

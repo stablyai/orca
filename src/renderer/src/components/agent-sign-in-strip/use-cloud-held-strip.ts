@@ -69,27 +69,32 @@ export function useCloudHeldStrip(
   // V3-01: a restored hold waiting for Start shares the setup hold's actions (Start, cancel).
   const setupHold = hold?.reason === 'notSetUp' || awaiting !== null
   const setup = accounts.setups[agent]
-  const model = awaiting
-    ? cloudAgentAwaitingStartStripModel({
-        agent,
-        awaiting,
-        queuedPrompt: Boolean(hold?.prompt),
-        t
-      })
-    : setupHold
-      ? cloudAgentSetupStripModel({
-          agent,
-          setup,
-          ready: accounts.load.kind === 'ready' && cloudAgentHoldReason(agent, accounts) === null,
-          t
-        })
-      : cloudAgentStripModel({
-          agent,
-          reason,
-          view: hold ? null : (cloudGate?.view ?? null),
-          hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
-          t
-        })
+  // HELD-STALE-COVERED: the setup just finished here: "is set up · Start" (the account, read fresh).
+  const model =
+    awaiting === 'setUp'
+      ? cloudAgentSetupStripModel({ agent, setup: accounts.setups[agent], ready: true, t })
+      : awaiting
+        ? cloudAgentAwaitingStartStripModel({
+            agent,
+            awaiting,
+            queuedPrompt: Boolean(hold?.prompt),
+            t
+          })
+        : setupHold
+          ? cloudAgentSetupStripModel({
+              agent,
+              setup,
+              ready:
+                accounts.load.kind === 'ready' && cloudAgentHoldReason(agent, accounts) === null,
+              t
+            })
+          : cloudAgentStripModel({
+              agent,
+              reason,
+              view: hold ? null : (cloudGate?.view ?? null),
+              hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
+              t
+            })
   const setupRunning = setup.phase !== 'idle' && setup.phase !== 'saved' && setup.phase !== 'failed'
   const holdActions: CloudStripActions | null = setupHold
     ? cloudSetupStripActions({

@@ -24,7 +24,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./cloud-auth/profile-cloud-pkce', () => ({
-  beginOrcaCloudPkceFlow: beginOrcaCloudPkceFlowMock
+  beginOrcaCloudPkceFlow: beginOrcaCloudPkceFlowMock,
+  pkceSignInOptions: () => ({})
 }))
 
 vi.mock('./cloud-auth/profile-cloud-client', () => ({
@@ -34,7 +35,10 @@ vi.mock('./cloud-auth/profile-cloud-client', () => ({
   selectOrcaCloudOrg: vi.fn()
 }))
 
-import { connectCurrentOrcaProfile, getCurrentOrcaProfileAuthStatus } from './cloud-auth/profile-cloud-service'
+import {
+  connectCurrentOrcaProfile,
+  getCurrentOrcaProfileAuthStatus
+} from './cloud-auth/profile-cloud-service'
 import {
   cancelOrcaCloudSignIn,
   getOrcaCloudSignInProgress,

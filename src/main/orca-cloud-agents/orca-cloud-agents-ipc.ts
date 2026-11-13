@@ -105,7 +105,8 @@ function serviceFor(userDataPath: string): OrcaCloudAgentsService {
     client: config
       ? createAgentCredentialsClient({
           baseUrl: config.controlPlaneUrl,
-          getAccessToken: config.getAccessToken
+          getAccessToken: config.getAccessToken,
+          fetch: config.fetch
         })
       : null,
     spawnSetupToken: spawnClaudeSetupTokenPty,

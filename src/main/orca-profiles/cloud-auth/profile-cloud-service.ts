@@ -25,7 +25,7 @@ import {
   exchangeOrcaCloudAuthCode,
   revokeOrcaCloudSession
 } from './profile-cloud-client'
-import { beginOrcaCloudPkceFlow } from './profile-cloud-pkce'
+import { beginOrcaCloudPkceFlow, pkceSignInOptions } from './profile-cloud-pkce'
 import {
   createCloudLinkedOrcaProfileRecord,
   linkOrcaProfileToCloud,
@@ -65,7 +65,8 @@ export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfi
 
 export async function connectCurrentOrcaProfile(
   userDataPath: string,
-  setup?: OrcaCloudSetupSignIn
+  /** Cloud setup's sign-in, or (COPY-LINK-FIRST-CLICK) a plain one that may skip the browser. */
+  setup?: OrcaCloudSetupSignIn | { openBrowser?: boolean }
 ): Promise<ConnectCurrentOrcaProfileResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (isOrcaCloudDevAuthEnabled()) {
@@ -101,7 +102,7 @@ export async function connectCurrentOrcaProfile(
     const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id, {
       signal: attemptAbort.signal,
       onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link),
-      ...(setup ? { authorizeParams: setup.authorizeParams, holdBrowser: true } : {})
+      ...pkceSignInOptions(setup)
     })
     finishBrowser = code.finishBrowser
     // The callback listener has closed, so its browser link is dead.
@@ -123,7 +124,7 @@ export async function connectCurrentOrcaProfile(
     signInCloudSession(active.profile.id, userDataPath, exchange)
     const list = linkOrcaProfileToCloud(active.profile.id, exchange.cloud, userDataPath)
     linkedCloudConnectAttempt = attempt
-    if (setup && finishBrowser) {
+    if (setup && 'afterSignIn' in setup && finishBrowser) {
       const next = await setup.afterSignIn().catch(() => null)
       finishBrowser(next)
       finishBrowser = undefined

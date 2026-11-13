@@ -4,7 +4,7 @@
 import { z } from 'zod'
 import {
   CloudApiApprovalSchema,
-  CloudApiAuditPageSchema,
+  CloudAuditLogPageSchema,
   CloudApiCreatedKeySchema,
   CloudApiGrantListSchema,
   CloudApiInstallationListSchema,
@@ -20,6 +20,8 @@ import {
   RoutineUpdatedSchema,
   RoutineWebhookSchema,
   type CloudApiErrorCode,
+  type CloudAuditLogExport,
+  type CloudAuditLogQuery,
   type CreateCloudApiApprovalInput,
   type CreateCloudApiKeyInput,
   type RoutineInput,
@@ -29,6 +31,8 @@ import {
 
 const REQUEST_TIMEOUT_MS = 20_000
 const MAX_DETAIL_CHARS = 200
+// 5000 events is about 1.5 MB; anything far past that is not the export this client asked for.
+const MAX_EXPORT_CHARS = 16 * 1024 * 1024
 
 export class CloudApiError extends Error {
   constructor(
@@ -80,6 +84,9 @@ export function classifyCloudApiResponse(
     return { code: 'signed-out' }
   }
   if (status === 403) {
+    if (error === 'entitlement_denied') {
+      return { code: 'plan-required', ...(reason ? { detail: reason } : {}) }
+    }
     if (reason === 'admin_required' || reason?.startsWith('admin_scope:')) {
       return { code: 'admin-required' }
     }
@@ -100,21 +107,31 @@ export function classifyCloudApiResponse(
   return { code: 'server', detail: error ?? `HTTP ${status}` }
 }
 
+/** The "Couldn't switch to {team}" message, when the token could not be minted for the team. */
+function orgSwitchDetail(error: unknown): string | undefined {
+  return error instanceof Error && 'reason' in error && error.reason === 'org_mismatch'
+    ? error.message
+    : undefined
+}
+
 export function createCloudApiClient(deps: CloudApiClientDeps) {
   const fetchImpl = deps.fetchImpl ?? fetch
   const base = `${deps.controlPlaneUrl.replace(/\/+$/, '')}/`
 
-  async function request<S extends z.ZodType>(
+  /** The authenticated call: a 2xx response, or a CloudApiError worded from the answer. */
+  async function send(
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     path: string,
-    schema: S,
     options: RequestOptions = {}
-  ): Promise<z.infer<S>> {
+  ): Promise<Response> {
     let token: string
     try {
       token = await deps.getAccessToken()
     } catch (error) {
-      throw new CloudApiError(deps.classifyTokenError?.(error) ?? 'signed-out')
+      throw new CloudApiError(
+        deps.classifyTokenError?.(error) ?? 'signed-out',
+        orgSwitchDetail(error)
+      )
     }
     const url = new URL(path.replace(/^\//, ''), base)
     for (const [name, value] of Object.entries(options.query ?? {})) {
@@ -135,11 +152,12 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
         redirect: 'error',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       })
-    } catch {
-      throw new CloudApiError('network')
+    } catch (error) {
+      // The control-plane fetch throws when a re-minted token still names another team.
+      throw new CloudApiError('network', orgSwitchDetail(error))
     }
-    const body: unknown = await response.json().catch(() => null)
     if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null)
       const { code, detail } = classifyCloudApiResponse(response.status, body, options)
       const retryAfter = Number(response.headers.get('retry-after'))
       throw new CloudApiError(
@@ -150,6 +168,17 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
           : undefined
       )
     }
+    return response
+  }
+
+  async function request<S extends z.ZodType>(
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+    path: string,
+    schema: S,
+    options: RequestOptions = {}
+  ): Promise<z.infer<S>> {
+    const response = await send(method, path, options)
+    const body: unknown = await response.json().catch(() => null)
     const parsed = schema.safeParse(body)
     if (!parsed.success) {
       throw new CloudApiError('invalid-response')
@@ -183,8 +212,24 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
     getSettings: () => request('GET', 'v1/settings', CloudApiSettingsSchema),
     putSettings: (settings: { vmCliEnabled: boolean }) =>
       request('PUT', 'v1/settings', CloudApiSettingsSchema, { body: settings }),
-    listAudit: (query: { limit?: number; before?: number } = {}) =>
-      request('GET', 'v1/audit', CloudApiAuditPageSchema, { query }),
+    listAuditLog: (query: CloudAuditLogQuery = {}) =>
+      request('GET', 'v1/audit-log', CloudAuditLogPageSchema, {
+        query,
+        notFoundMeansUnavailable: true
+      }),
+    exportAuditLogCsv: async (
+      query: Pick<CloudAuditLogQuery, 'category' | 'actor'> = {}
+    ): Promise<CloudAuditLogExport> => {
+      const response = await send('GET', 'v1/audit-log', {
+        query: { ...query, format: 'csv' },
+        notFoundMeansUnavailable: true
+      })
+      const csv = await response.text().catch(() => null)
+      if (csv === null || csv.length > MAX_EXPORT_CHARS) {
+        throw new CloudApiError('invalid-response')
+      }
+      return { csv, truncated: response.headers.get('x-orca-audit-truncated') === 'true' }
+    },
     listProjects: () => request('GET', 'v1/projects', CloudApiProjectListSchema),
     listInstallations: () =>
       request('GET', 'v1/github/installations', CloudApiInstallationListSchema, {

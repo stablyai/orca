@@ -2,7 +2,6 @@ import { useEffect, useId, useRef } from 'react'
 import { AlertCircle, Check, ExternalLink, Lock, RotateCcw, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openFailureCopy } from '../plan-billing-copy'
@@ -21,8 +20,6 @@ export type CheckoutPanelProps = {
   /** When the order was placed; the renewal date counts from it. */
   now: number
   onReopen: () => void
-  /** "Copy link" on Reopen / Try again: a fresh Checkout URL for this order (absent: no chevron). */
-  reopenLink?: () => Promise<string | null>
   onKeepWaiting: () => void
   onBack: () => void
   /** Where "Contact us" goes when billing can't sell the plan (the plan's supportUrl, else Enterprise's contact). */
@@ -220,26 +217,17 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
           : t('auto.components.billing.checkout.openFailed', 'Checkout didn’t open')
       body =
         openFailureCopy(phase.result, t) ??
-        t('auto.components.billing.openFailed', 'Could not reach billing. Try again.')
+        t('auto.components.billing.openFailed', 'Couldn’t reach billing. Try again.')
       break
   }
 
-  const reopenLabel = (
-    <>
+  const reopen = (
+    <Button type="button" onClick={props.onReopen}>
       {phase.kind === 'canceled' || phase.kind === 'open-failed' ? <RotateCcw /> : null}
       {phase.kind === 'canceled' || phase.kind === 'open-failed'
         ? t('auto.components.billing.checkout.tryAgain', 'Try again')
         : t('auto.components.billing.checkout.reopen', 'Reopen checkout')}
       {phase.kind === 'canceled' || phase.kind === 'open-failed' ? null : <ExternalLink />}
-    </>
-  )
-  const reopen = props.reopenLink ? (
-    <OpenExternalSplitButton link={props.reopenLink} onClick={props.onReopen}>
-      {reopenLabel}
-    </OpenExternalSplitButton>
-  ) : (
-    <Button type="button" onClick={props.onReopen}>
-      {reopenLabel}
     </Button>
   )
   const back = (
@@ -287,14 +275,14 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
           phase.result.status === 'plan-unavailable' &&
           props.contactUrl &&
           props.onContact ? (
-            <OpenExternalSplitButton
+            <Button
+              type="button"
               variant="outline"
-              link={props.contactUrl}
               onClick={() => props.contactUrl && props.onContact?.(props.contactUrl)}
             >
               {t('auto.components.billing.checkout.contactUs', 'Contact us')}
               <ExternalLink />
-            </OpenExternalSplitButton>
+            </Button>
           ) : null}
           {phase.kind === 'timed-out' ? (
             <Button type="button" variant="outline" onClick={props.onKeepWaiting}>

@@ -13,13 +13,15 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import { CloudAgentHeldMark } from './CloudAgentHeldMark'
 
-function accountsNotSetUp(): OrcaCloudAgentAccountsState {
+function accountsNotSetUp(
+  claude: 'none' | 'active' | 'revoked' = 'none'
+): OrcaCloudAgentAccountsState {
   return {
     load: {
       kind: 'ready',
       status: {
         credentials: {
-          claude: { state: 'none' },
+          claude: { state: claude },
           codex: { state: 'none' },
           providerEnabled: { claude: true, codex: true }
         },
@@ -82,5 +84,27 @@ describe('sidebar mark for a held cloud agent (N-03)', () => {
     expect(queryByRole('img')).not.toBeNull()
     act(() => releaseCloudAgentHold('tab:web-terminal-1', 'proceed'))
     expect(queryByRole('img')).toBeNull()
+  })
+
+  it('HELD-STALE-COVERED: the mark follows the hold: key while not set up, muted once set up, key on a revoke', async () => {
+    await act(async () => {
+      void holdCloudAgentLaunch({
+        decided: true,
+        paneKey: 'tab:web-terminal-1',
+        agent: 'claude',
+        prompt: null
+      })
+    })
+    const { getByRole } = renderMark('wt1')
+    expect(getByRole('img').getAttribute('data-cloud-agent-held')).toBe('notSetUp')
+    await act(async () => setOrcaCloudAgentAccountsStateForTest(accountsNotSetUp('active')))
+    expect(getByRole('img').getAttribute('data-cloud-agent-held')).toBe('awaitingStart')
+    expect(getByRole('img').getAttribute('class')).toContain('text-muted-foreground')
+    expect(getByRole('img').getAttribute('aria-label')).toBe(
+      'Claude is set up. Open the workspace to start it.'
+    )
+    await act(async () => setOrcaCloudAgentAccountsStateForTest(accountsNotSetUp('revoked')))
+    expect(getByRole('img').getAttribute('data-cloud-agent-held')).toBe('accountExpired')
+    expect(getByRole('img').getAttribute('aria-label')).toBe('Claude sign-in expired')
   })
 })
