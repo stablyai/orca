@@ -25,22 +25,31 @@ import { translate } from '@/i18n/i18n'
 import { pluginCommandKeybindingActionId } from '../../../../../shared/plugins/contributions/plugin-command-actions'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 
-export function pluginCommandKeybindingDefinition(
-  command: ActivePluginCommand
-): KeybindingDefinition {
+function pluginCommandBindingDefinition(command: ActivePluginCommand): KeybindingDefinition {
   const defaults = command.keybindings.map((keybinding) => keybinding.key)
   return {
     id: pluginCommandKeybindingActionId(command.pluginKey, command.id),
+    title: '',
+    group: '',
+    scope: 'global',
+    searchKeywords: [],
+    defaultBindings: { darwin: defaults, linux: defaults, win32: defaults }
+  }
+}
+
+export function pluginCommandKeybindingDefinition(
+  command: ActivePluginCommand
+): KeybindingDefinition {
+  return {
+    ...pluginCommandBindingDefinition(command),
     title: `${command.title} — ${command.pluginName}`,
     group: translate('auto.lib.pluginCommandKeybindings.group', 'Plugins'),
-    scope: 'global',
     searchKeywords: [
       'plugin',
       'shortcut',
       command.title.toLowerCase(),
       command.pluginName.toLowerCase()
-    ],
-    defaultBindings: { darwin: defaults, linux: defaults, win32: defaults }
+    ]
   }
 }
 
@@ -62,7 +71,7 @@ export function findPluginCommandForKeybinding(
     if (isWorkspaceScopedPluginContext(command.context) && !hasActiveWorktree) {
       continue
     }
-    const definition = pluginCommandKeybindingDefinition(command)
+    const definition = pluginCommandBindingDefinition(command)
     // Why: plugin chords obey the terminal shortcut policy exactly as Orca's own app shortcuts do (#15642).
     if (!keybindingIsActiveInContext(definition, options)) {
       continue
