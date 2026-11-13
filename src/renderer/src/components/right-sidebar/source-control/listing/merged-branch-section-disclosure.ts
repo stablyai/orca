@@ -1,5 +1,10 @@
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { getAuthoritativelyRemovedWorktreeIds } from '@/store/slices/worktrees/listing/authoritative-worktree-removal-memory'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
@@ -47,12 +52,15 @@ function normalizeOid(oid: string | null | undefined): string | null {
   return normalized.length > 0 ? normalized : null
 }
 
-/** A missing review or HEAD read keeps the last proof unless a known HEAD has moved past it. */
+/** A known non-merged review clears the proof; a missing review or HEAD keeps it unless HEAD has moved. */
 export function resolveMergedBranchProof(
   last: MergedBranchProof | null,
   review: MergedBranchSectionReview | null,
   statusHeadOid: string | null
 ): MergedBranchProof | null {
+  if (review && review.state !== 'merged') {
+    return null
+  }
   const head = normalizeOid(statusHeadOid)
   if (!head) {
     return last
@@ -67,9 +75,6 @@ export function resolveMergedBranchProof(
       ? last
       : { provider: review.provider, number: review.number, headOid: head }
   }
-  if (review) {
-    return null
-  }
   return last?.headOid === head ? last : null
 }
 
@@ -79,20 +84,21 @@ export function stepMergedBranchSection(
   observation: MergedBranchSectionObservation
 ): { record: MergedBranchSectionRecord; action: 'collapse' | 'expand' | null } {
   const head = normalizeOid(observation.statusHeadOid)
-  if (!head) {
+  // A positively resolved open or closed review outranks an unknown HEAD.
+  const reviewNotMerged = observation.review !== null && observation.review.state !== 'merged'
+  if (!head && !reviewNotMerged) {
     return { record, action: null }
   }
   const merged = resolveMergedBranchProof(record.merged, observation.review, head)
   let disclosure = record.disclosure
   let action: 'collapse' | 'expand' | null = null
   if (disclosure.kind === 'auto-collapsed') {
-    const reviewNoLongerMerged =
-      observation.review !== null && observation.review.state !== 'merged'
-    if (head !== disclosure.headOid || reviewNoLongerMerged) {
+    if (reviewNotMerged || (head !== null && head !== disclosure.headOid)) {
       disclosure = { kind: 'auto-released' }
       action = 'expand'
     }
   } else if (
+    head !== null &&
     disclosure.kind === 'untouched' &&
     !observation.isMainWorktree &&
     resolveMergedReviewWorkspaceReadiness({
@@ -122,32 +128,56 @@ export function mergedBranchSectionOwnerKey(owner: MergedBranchSectionOwner): st
   return JSON.stringify([getWorktreeHostIdentity(owner), owner.instanceId ?? null])
 }
 
-// Session-only: a restart starts fresh. Records are dropped only for workspaces that no longer exist,
-// so a count cap can never forget a live workspace's choice and collapse it again.
+// Session-only: a restart starts fresh. Records are dropped only on positive proof that their checkout
+// is gone, so neither a count cap nor a disconnected host can forget a choice and collapse again.
 const MIN_PRUNE_THRESHOLD = 512
 let pruneThreshold = MIN_PRUNE_THRESHOLD
-const recordsByOwner = new Map<string, MergedBranchSectionRecord>()
+const recordsByOwner = new Map<
+  string,
+  { owner: MergedBranchSectionOwner; record: MergedBranchSectionRecord }
+>()
 
-function pruneRecordsOfRemovedWorkspaces(keep: string): void {
-  const live = new Set<string>()
+function isCheckoutPositivelyGone(
+  owner: MergedBranchSectionOwner,
+  liveInstancesByHostIdentity: ReadonlyMap<string, ReadonlySet<string | null>>
+): boolean {
+  const liveInstances = liveInstancesByHostIdentity.get(getWorktreeHostIdentity(owner))
+  if (liveInstances) {
+    // The host reports this workspace under another checkout, so this one was recreated.
+    return !liveInstances.has(owner.instanceId ?? null)
+  }
+  if (owner.hostId === LOCAL_EXECUTION_HOST_ID) {
+    return true
+  }
+  // Remote rows vanish while their host is disconnected; only an authoritative removal proves deletion.
+  return owner.hostId !== undefined && parseExecutionHostId(owner.hostId)?.kind === 'ssh'
+    ? (getAuthoritativelyRemovedWorktreeIds(owner.hostId)?.has(owner.id) ?? false)
+    : false
+}
+
+function pruneRecordsOfRemovedCheckouts(keep: string): void {
+  const liveInstancesByHostIdentity = new Map<string, Set<string | null>>()
   for (const worktrees of Object.values(selectWorktreesByRepo(useAppStore.getState()) ?? {})) {
     for (const worktree of worktrees) {
-      live.add(mergedBranchSectionOwnerKey(worktree))
+      const hostIdentity = getWorktreeHostIdentity(worktree)
+      const instances = liveInstancesByHostIdentity.get(hostIdentity) ?? new Set<string | null>()
+      instances.add(worktree.instanceId ?? null)
+      liveInstancesByHostIdentity.set(hostIdentity, instances)
     }
   }
-  for (const key of recordsByOwner.keys()) {
-    if (key !== keep && !live.has(key)) {
+  for (const [key, entry] of recordsByOwner) {
+    if (key !== keep && isCheckoutPositivelyGone(entry.owner, liveInstancesByHostIdentity)) {
       recordsByOwner.delete(key)
     }
   }
-  // Doubling the bar keeps scans amortized O(1) per write when most records belong to live workspaces.
+  // Doubling the bar keeps scans amortized O(1) per write when most records must stay.
   pruneThreshold = Math.max(MIN_PRUNE_THRESHOLD, recordsByOwner.size * 2)
 }
 
 export function readMergedBranchSectionRecord(
   owner: MergedBranchSectionOwner
 ): MergedBranchSectionRecord {
-  return recordsByOwner.get(mergedBranchSectionOwnerKey(owner)) ?? UNTOUCHED_RECORD
+  return recordsByOwner.get(mergedBranchSectionOwnerKey(owner))?.record ?? UNTOUCHED_RECORD
 }
 
 export function writeMergedBranchSectionRecord(
@@ -159,9 +189,12 @@ export function writeMergedBranchSectionRecord(
     recordsByOwner.delete(key)
     return
   }
-  recordsByOwner.set(key, record)
+  recordsByOwner.set(key, {
+    owner: { id: owner.id, hostId: owner.hostId, instanceId: owner.instanceId },
+    record
+  })
   if (recordsByOwner.size > pruneThreshold) {
-    pruneRecordsOfRemovedWorkspaces(key)
+    pruneRecordsOfRemovedCheckouts(key)
   }
 }
 

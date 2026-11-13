@@ -13,7 +13,11 @@ import type {
   GitBranchCompareSummary
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
-import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
+import {
+  buildActiveOpenFileSignature,
+  buildActiveOpenRowKeys,
+  isBranchDiffActiveEditor
+} from './active-open-file-keys'
 import type { FlatEntry } from './use-selection'
 import {
   isSourceControlSplitOpenModifier,
@@ -96,21 +100,11 @@ export function useSourceControlRowOpening({
     () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
     [activeOpenAvailableRowKeys, activeOpenFileSignature]
   )
-  // Read the editor itself: open-row keys drop collapsed, filtered and older-compare rows.
-  const isBranchDiffEditorActive = useSourceControlState((s) => {
-    if (
-      !activeWorktreeId ||
-      s.activeTabTypeByWorktree?.[placementId ?? activeWorktreeId] !== 'editor'
-    ) {
-      return false
-    }
-    const activeFileId = s.activeFileIdByWorktree?.[placementId ?? activeWorktreeId]
-    const activeFile = activeFileId ? openFileIndex(s.openFiles).get(activeFileId) : undefined
-    return (
-      activeFile?.worktreeId === activeWorktreeId &&
-      (activeFile.diffSource === 'branch' || activeFile.diffSource === 'combined-branch')
-    )
-  })
+  const isBranchDiffEditorActive = useSourceControlState((s) =>
+    activeWorktreeId
+      ? isBranchDiffActiveEditor(s, placementId ?? activeWorktreeId, activeWorktreeId)
+      : false
+  )
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => {

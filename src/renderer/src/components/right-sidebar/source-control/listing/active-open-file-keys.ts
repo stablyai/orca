@@ -4,6 +4,8 @@ import type {
 } from '../../../../../../shared/editor-tab-view-types'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { getCompareVersion } from '@/store/slices/editor/git/git-status-reconciliation'
+import { openFileIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
+import type { AppState } from '@/store/types'
 
 const EMPTY_OPEN_ROW_KEYS: ReadonlySet<string> = new Set()
 
@@ -77,4 +79,21 @@ function filterAvailableRowKeys(
   }
   const keys = candidates.filter((key) => availableRowKeys.has(key))
   return keys.length > 0 ? new Set(keys) : EMPTY_OPEN_ROW_KEYS
+}
+
+/** Reads the active editor itself: open-row keys drop collapsed, filtered and older-compare rows. */
+export function isBranchDiffActiveEditor(
+  state: Pick<AppState, 'activeTabTypeByWorktree' | 'activeFileIdByWorktree' | 'openFiles'>,
+  placementId: string,
+  worktreeId: string
+): boolean {
+  if (state.activeTabTypeByWorktree?.[placementId] !== 'editor') {
+    return false
+  }
+  const activeFileId = state.activeFileIdByWorktree?.[placementId]
+  const activeFile = activeFileId ? openFileIndex(state.openFiles).get(activeFileId) : undefined
+  return (
+    activeFile?.worktreeId === worktreeId &&
+    (activeFile.diffSource === 'branch' || activeFile.diffSource === 'combined-branch')
+  )
 }
