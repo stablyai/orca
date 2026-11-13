@@ -1,7 +1,7 @@
 import type {
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal
-} from '../../../../native-chat/transcript-opencode-sqlite-query'
+} from '../../../../native-chat/transcript-history/opencode/transcript-opencode-sqlite-query'
 import type {
   AiVaultScanIssue,
   AiVaultSession

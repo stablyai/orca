@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import type { NativeChatInputContent } from '../../shared/native-chat/transcript/native-chat-input-content'
-import { asRecord } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
 
 /** Only source readers originate this evidence, before display filtering or trimming. */
 export function transcriptInputContent(

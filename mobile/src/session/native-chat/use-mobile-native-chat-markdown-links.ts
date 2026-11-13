@@ -4,8 +4,8 @@ import { relativePathInsideRoot } from '../../../../src/shared/cross-platform-pa
 import {
   githubReferenceRepo,
   type GitHubRepoReference
-} from '../../../../src/shared/github/github-reference-links'
-import { githubRepoIdentityKey } from '../../../../src/shared/github/repository-identity-key'
+} from '../../../../src/shared/github/markdown/github-reference-links'
+import { githubRepoIdentityKey } from '../../../../src/shared/github/repositories/repository-identity-key'
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence
@@ -21,7 +21,7 @@ import {
   type MobileMarkdownLinks
 } from '../../components/mobile-markdown-links-context'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
 import { isFilePathCodeSpan } from '../../components/markdown-file-path-detection'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
@@ -42,7 +42,7 @@ const chatPathsExistRead = bindDeferredRpcOperation(
 
 /** Paths in a chat's text, checked in batches against the chat's workspace on its host. */
 export function createMobileNativeChatFileLinkExistence(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   worktreePath: string
 ): NativeChatFileLinkExistence {

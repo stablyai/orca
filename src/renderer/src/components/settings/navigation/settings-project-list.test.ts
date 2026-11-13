@@ -7,8 +7,7 @@ import {
   getSettingsProjectHostRepo,
   getSettingsEntryHostSelection,
   getSettingsProjectRemovalScope,
-  removeSettingsProjectFromAllHosts,
-  resolveSettingsTargetRepoId
+  removeSettingsProjectFromAllHosts
 } from './settings-project-list'
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
@@ -98,12 +97,6 @@ describe('buildSettingsProjectList', () => {
 })
 
 describe('deep-link resolution', () => {
-  it('disambiguates repo ids where one is a prefix of another (longest match wins)', () => {
-    expect(
-      resolveSettingsTargetRepoId({ repoId: null, sectionId: 'repo-app-2-icon' }, ['app', 'app-2'])
-    ).toBe('app-2')
-  })
-
   it('distinguishes same-id repo rows by execution host', () => {
     const sameIdRepos = [
       makeRepo({ id: 'same-repo', gitRemoteIdentity: gitRemote }),

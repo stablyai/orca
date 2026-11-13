@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AddWslHostFormPanel, canAddWslDistro, wslHostAddRequest } from './AddWslHostFormPanel'
 import { useWslDistroList } from './use-wsl-distro-list'
 import { useWslHostServerFilesMissing } from '../../use-wsl-hosts-enabled'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { wslHostAddRefusalMessage } from '../../wsl-host-failure-text'
 import { addWslHostDistro } from './add-wsl-host-distro'
 

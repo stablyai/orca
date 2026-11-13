@@ -1,6 +1,6 @@
 import { resolveComposerAttachmentTarget } from './composer-attachment-target'
-import { getAttachmentLabel } from '@/lib/new-workspace'
-import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
+import { getAttachmentLabel } from '@/lib/workspace/creation/new-workspace'
+import { getQuickComposerCreateDisabled } from '@/lib/workspace/creation/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
 import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
@@ -9,6 +9,7 @@ import '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
+import { composerPickerRepos } from './composer-picker-repos'
 
 export function buildComposerCardProps(state: ComposerModel) {
   const attachmentTarget = resolveComposerAttachmentTarget(state)
@@ -144,7 +145,9 @@ export function buildComposerCardProps(state: ComposerModel) {
   })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
   const cardProps: ComposerCardSourceProps & ComposerCardActionProps = {
-    eligibleRepos: isProjectGroupTarget ? folderSourceRepos : eligibleRepos,
+    eligibleRepos: isProjectGroupTarget
+      ? folderSourceRepos
+      : composerPickerRepos(eligibleRepos, repoId),
     selectedRepo: isProjectGroupTarget
       ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
       : (selectedRepo ?? null),

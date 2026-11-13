@@ -11,7 +11,7 @@ import {
   mobileNativeChatPendingAsMessages,
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
-} from './mobile-native-chat-pending-echo'
+} from './transcript/mobile-native-chat-pending-echo'
 
 it('retains a landed echo through an empty read until a reply advances it', () => {
   const pending = [{ id: 'send', text: 'hello', sentAt: 100, afterMessageId: null }]

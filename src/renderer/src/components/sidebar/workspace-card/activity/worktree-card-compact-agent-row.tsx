@@ -5,7 +5,7 @@ import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
@@ -16,7 +16,7 @@ import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presen
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
 import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'
@@ -159,13 +159,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
   const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
-  const { leadingText, trailingText } = getCompactAgentLineOrder(
-    agent,
-    dotState,
-    primary,
-    secondary,
-    t
-  )
+  const { leadingText, trailingText } = getCompactAgentLineOrder(agent, primary, secondary, t)
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)

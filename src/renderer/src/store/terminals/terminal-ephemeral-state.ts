@@ -1,5 +1,5 @@
 import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
-import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
+import { recordTerminalInputActivity } from '@/lib/terminal/input/terminal-input-activity-coalescing'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 

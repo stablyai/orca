@@ -1,4 +1,4 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
@@ -118,7 +118,7 @@ export function buildWorkspaceCleanupFacets(
     identity: hostIdentity,
     repoId: candidate.repoId,
     repoName: candidate.repoName,
-    displayName: candidate.displayName,
+    displayName: candidate.displayName ?? '',
     path: candidate.path,
     branch,
     hostId: worktree?.hostId ?? getWorkspaceCleanupCandidateHostId(candidate),

@@ -242,6 +242,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   agentStart?: true
   /** On a creation fact: the agent was launched on its own, not started as a supervised worker. */
   agentHandoff?: true
+  /** On a worker's creation fact: a message continued a finished worker, in its reopened conversation or a fresh one. */
+  agentFollowUp?: 'reopened' | 'fresh'
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Client-only terminal echo placement relative to the current streaming reply. */

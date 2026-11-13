@@ -1,10 +1,11 @@
 import type { NativeChatPendingSend } from './native-chat-pending-sends'
+import { isImageRefBlock } from '../native-chat-types'
+import { normalizedNativeChatUserMessageText } from './native-chat-image-transcript-markers'
 import {
   nativeChatReceiptWindow,
-  nativeChatSourceReceiptKey,
   type NativeChatReceiptSnapshot,
   type NativeChatReceiptRow,
-  type NativeChatReceiptDependency
+  liveNativeChatReceiptDependencies
 } from './native-chat-source-receipts'
 import {
   nativeChatSourceMessageKey,
@@ -13,6 +14,7 @@ import {
 import {
   nativeChatPendingContentKey,
   nativeChatPendingMatchKey,
+  normalizeNativeChatPendingText,
   nativeChatUserMessageContentKey,
   selectPendingIndicesRepresentedByUserRows
 } from './native-chat-pending-occurrence'
@@ -34,56 +36,6 @@ export type NativeChatPendingWitness = {
 
 export function pendingReceiptBit(index: number, count: number): number {
   return 1 << (count - index - 1)
-}
-
-export function nativeChatReceiptDependencyKey(dependency: NativeChatReceiptDependency): string {
-  return JSON.stringify([
-    nativeChatSourceReceiptKey(dependency.receipt),
-    dependency.proof,
-    dependency.members
-  ])
-}
-
-export function liveNativeChatReceiptDependencies(
-  pending: readonly NativeChatPendingSend[]
-): NativeChatReceiptDependency[] {
-  const byId = new Map(pending.map((entry) => [entry.id, entry]))
-  const dependencies = new Map<string, NativeChatReceiptDependency>()
-  for (const entry of pending) {
-    for (const dependency of entry.receiptDependencies ?? []) {
-      if (
-        dependency.members.every((id) => {
-          const member = byId.get(id)
-          return (
-            member &&
-            member.sourceReceipt?.sessionId !== dependency.receipt.sessionId &&
-            (dependency.proof === 'source'
-              ? !!member.sourceAgent
-              : !member.sourceAgent || member.evidenceModePending)
-          )
-        })
-      ) {
-        dependencies.set(nativeChatReceiptDependencyKey(dependency), dependency)
-      }
-    }
-  }
-  return [...dependencies.values()]
-}
-
-export function releaseNativeChatReceiptDependencies<T extends NativeChatPendingSend>(
-  pending: T[]
-): T[] {
-  const live = new Set(liveNativeChatReceiptDependencies(pending))
-  let changed = false
-  const next = pending.map((entry) => {
-    if (!entry.receiptDependencies?.some((dependency) => !live.has(dependency))) {
-      return entry
-    }
-    changed = true
-    const dependencies = entry.receiptDependencies.filter((dependency) => live.has(dependency))
-    return { ...entry, receiptDependencies: dependencies.length ? dependencies : undefined }
-  })
-  return changed ? next : pending
 }
 
 /** Existing proof predicates produce alternatives; they never reserve a row before allocation. */
@@ -195,10 +147,25 @@ export function nativeChatPendingWitnesses(
     if (!entry.sourceAgent) {
       ranks.set(key, Math.max(rank, ranks.get(key) ?? 0))
     }
+    const imageCount = entry.sourceAgent ? 0 : (entry.imagePaths?.filter(Boolean).length ?? 0)
+    const pathlessImageCount =
+      imageCount > 0 &&
+      entry.delivery === undefined &&
+      entry.writeUnconfirmedAt === undefined &&
+      (typeof entry.afterMessageId === 'string' || entry.afterEmptyTranscriptSessionId) &&
+      !normalizeNativeChatPendingText(entry.text)
+        ? imageCount
+        : 0
     let occurrence = 0
     for (const row of snapshot.rows) {
       if (row.message.role !== 'user' || !windows[index](row)) {
         continue
+      }
+      if (pathlessImageCount && !normalizedNativeChatUserMessageText(row.message)) {
+        const images = row.message.blocks.filter(isImageRefBlock)
+        if (images.length === pathlessImageCount && images.every((image) => !image.path)) {
+          offer(row, [index], 'legacy')
+        }
       }
       if (
         entry.sourceAgent &&

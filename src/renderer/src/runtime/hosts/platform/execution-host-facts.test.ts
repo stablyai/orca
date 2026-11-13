@@ -6,7 +6,7 @@ import {
 } from './execution-host-facts'
 import { getDefaultSettings } from '../../../../../shared/constants'
 
-vi.mock('../../../lib/new-workspace', async (importOriginal) => ({
+vi.mock('../../../lib/workspace/creation/new-workspace', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CLIENT_PLATFORM: 'win32'
 }))

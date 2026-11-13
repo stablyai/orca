@@ -1,12 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import crypto from 'node:crypto'
-import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import { decodeClaudeTurnLifecycle } from './transcript-turn-lifecycle'
+import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeClaudeTurnLifecycle } from './transcript-decoding/transcript-turn-lifecycle'
 import { sanitizeNativeChatRpcMessage } from '../runtime/rpc/methods/native-chat/native-chat-rpc-block-sanitize'
 import * as glue from '../../shared/native-chat/transcript/native-chat-pending-glue'
 import * as imageText from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import * as scanner from '../ai-vault/session-scanner-values'
-import { opencodeMessages } from './transcript-opencode-part-blocks'
+import * as scanner from '../ai-vault/parsing/session-json-object'
+import { opencodeMessages } from './transcript-history/opencode/transcript-opencode-part-blocks'
 import { boundWorkerTranscriptMessages } from '../runtime/orchestration/workers/transcripts/worker-transcript-payload'
 import { transcriptInputContent } from './transcript-input-content'
 import { nativeChatRpcAppendBatches } from '../runtime/rpc/methods/native-chat/native-chat-rpc-page-bounds'
@@ -140,36 +140,61 @@ it.each([5, 50])('does not evaluate receipt evidence in %i worker transcript row
   expect(hash).toHaveBeenCalledTimes(size)
 })
 
-it.each([1000, 10000])('does no glue work on %i rows preceding live legacy boundaries', (size) => {
-  const history = Array.from({ length: size }, (_, index) => user(`old-${index}`, `old-${index}`))
-  const boundary = {
-    ...user('boundary', 'boundary'),
-    role: 'assistant' as const,
-    inputContent: undefined
+it.each([
+  { size: 1000, image: false },
+  { size: 10000, image: false },
+  { size: 1000, image: true },
+  { size: 10000, image: true }
+])(
+  'gates legacy proof work before live boundaries: $size rows, image $image',
+  ({ size, image }) => {
+    const history = Array.from({ length: size }, (_, index) => user(`old-${index}`, `old-${index}`))
+    const boundary = {
+      ...user('boundary', 'boundary'),
+      role: 'assistant' as const,
+      inputContent: undefined
+    }
+    const appended: NativeChatMessage = image
+      ? {
+          ...user('', 'append'),
+          inputContent: undefined,
+          blocks: [{ type: 'image-ref', url: 'data:image/png;base64,iVBORw0K' }]
+        }
+      : user('unrelated', 'append')
+    for (const count of [1, 8]) {
+      const pending: NativeChatPendingSend[] = Array.from({ length: count }, (_, index) => ({
+        id: `p${index}`,
+        text: image ? '' : `piece-${index}`,
+        imagePaths: image ? [`/tmp/p${index}.png`] : undefined,
+        sentAt: 1,
+        afterMessageId: 'boundary'
+      }))
+      const normalize = vi.spyOn(imageText, 'normalizedNativeChatUserMessageText')
+      const prepare = vi.spyOn(imageText, 'normalizeNativeChatUserText')
+      const match = vi.spyOn(glue, 'selectPendingIndicesRepresentedByUserRows')
+      const messages = [...history, boundary, appended]
+      const kept = prunePendingSends(pending, messages)
+      if (image) {
+        expect(kept.map((entry) => entry.id)).toEqual(
+          count === 1 ? ['p0'] : ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
+        )
+        expect(kept[0].sourceReceipt).toEqual({ sessionId: '', id: 'append' })
+      } else {
+        expect(kept).toBe(pending)
+      }
+      // Only the appended row reaches exact and optional pathless shape proof; glue reads it once.
+      expect(normalize.mock.calls.length).toBeLessThanOrEqual(
+        image ? 2 * count + 1 : count + (count === 1 ? 0 : 1)
+      )
+      // Keys/pieces/eligibility cost at most four per send, image row checks two, plus the suffix.
+      expect(prepare.mock.calls.length).toBeLessThanOrEqual((image ? 6 : 4) * count + 2)
+      expect(match.mock.calls.length).toBeLessThanOrEqual(count === 1 ? 0 : 255)
+      normalize.mockRestore()
+      prepare.mockRestore()
+      match.mockRestore()
+    }
   }
-  const unrelated = user('unrelated', 'append')
-  for (const count of [1, 8]) {
-    const pending: NativeChatPendingSend[] = Array.from({ length: count }, (_, index) => ({
-      id: `p${index}`,
-      text: `piece-${index}`,
-      sentAt: 1,
-      afterMessageId: 'boundary'
-    }))
-    const normalize = vi.spyOn(imageText, 'normalizedNativeChatUserMessageText')
-    const prepare = vi.spyOn(imageText, 'normalizeNativeChatUserText')
-    const match = vi.spyOn(glue, 'selectPendingIndicesRepresentedByUserRows')
-    const kept = prunePendingSends(pending, [...history, boundary, unrelated])
-    expect(kept).toBe(pending)
-    // One eligible appended user row, regardless of history; a lone ordinary input needs no glue.
-    expect(normalize.mock.calls.length).toBeLessThanOrEqual(count + (count === 1 ? 0 : 1))
-    // Content/match keys, prepared pieces and this suffix need bounded text work per obligation.
-    expect(prepare.mock.calls.length).toBeLessThanOrEqual(4 * count + 2)
-    expect(match.mock.calls.length).toBeLessThanOrEqual(count === 1 ? 0 : 255)
-    normalize.mockRestore()
-    prepare.mockRestore()
-    match.mockRestore()
-  }
-})
+)
 
 it.each([
   [8, 'continue', false],

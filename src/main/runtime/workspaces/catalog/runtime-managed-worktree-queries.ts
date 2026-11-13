@@ -1,3 +1,4 @@
+import { readRuntimeListingMetadata, readRuntimeWorktreeMetadata } from './runtime-listing-metadata'
 import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-worktree-query-dependencies'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
@@ -18,7 +19,6 @@ import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-workt
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
-import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import {
@@ -64,10 +64,6 @@ export class RuntimeManagedWorktreeQueries {
     const scopedRepo = repoSelector ? await this.deps.resolveRepo(repoSelector) : null
     const repos = this.deps.getStore()?.getRepos() ?? []
     const repoLookup = createRepoRowExecutionHostLookup(repos)
-    const repoOwnerCounts = new Map<string, number>()
-    for (const repo of repos) {
-      repoOwnerCounts.set(repo.id, (repoOwnerCounts.get(repo.id) ?? 0) + 1)
-    }
     const matchers = buildRuntimeWorktreeVisibilityMatchers(
       repos,
       resolved,
@@ -95,7 +91,7 @@ export class RuntimeManagedWorktreeQueries {
         defaultsSupported,
         undefined,
         undefined,
-        repoOwnerCounts.get(routing.repo.id)
+        repoLookup.rowsFor(routing.repo.id).length
       ).visible
     })
     // Scoped reads must name requested hosts even without rows; hidden retained repos must never reenter scope.
@@ -137,8 +133,7 @@ export class RuntimeManagedWorktreeQueries {
     const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
     if (isFolderRepo(repo)) {
       const worktrees = listRuntimeFolderWorkspaces(store, repo)
-      const metaById = store.getAllWorktreeMeta()
-      const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+      const listed = readRuntimeListingMetadata(store, repo)
       const matcher = createWorktreeVisibilitySourceMatcher(
         [repo.path, ...worktrees.map((worktree) => worktree.path)],
         resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
@@ -151,7 +146,7 @@ export class RuntimeManagedWorktreeQueries {
           matcher,
           defaultsSupported,
           visibilitySettings,
-          getRepoOwnedWorktreeMeta(repo, worktree.id, metaById, repoOwnerCount) ?? null
+          listed.ownedMeta(worktree.id) ?? null
         )
       )
       return {
@@ -159,14 +154,13 @@ export class RuntimeManagedWorktreeQueries {
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        workspaceMetadata: listed.workspaceMetadata,
         worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
       }
     }
-    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
-      this.deps.scanRepo(target)
-    )
+    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, this.deps.scanRepo)
     // Publish overtaken scans as non-authoritative: throwing would drop client rows. Prune nothing; the overtaking mutation's event requests a fresh listing.
-    if (scan.ok && !scan.superseded) {
+    if (scan.ok && !scan.superseded && scan.authorityCurrent()) {
       // Headless hosts lack ipcMain listings; runtime must sweep its own metadata too (#17776).
       if (scan.metadataPruneExpectation && canPruneAuthoritativeLocalMetadata(store)) {
         await pruneMetadataMissingFromAuthoritativeLocalScan({
@@ -174,10 +168,13 @@ export class RuntimeManagedWorktreeQueries {
           repo,
           gitWorktrees: scan.worktrees,
           scan: scan.metadataPruneExpectation,
-          scanGeneration: scan.scanGeneration
+          scanGeneration: scan.scanGeneration,
+          isCallerCurrent: scan.authorityCurrent
         })
       }
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
+      if (scan.lineagePrune && scan.authorityCurrent()) {
+        pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, scan.lineagePrune)
+      }
     }
     const matcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
@@ -185,13 +182,11 @@ export class RuntimeManagedWorktreeQueries {
       resolveConfiguredWorktreeBasePaths(repo)
     )
     const expectedHostId = getRepoExecutionHostId(repo)
-    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-    const metaById = store.getAllWorktreeMeta()
+    const listed = readRuntimeListingMetadata(store, repo)
+    const repoOwnerCount = listed.repoOwnerCount
     const detected = scan.worktrees.map((gitWorktree) => {
       const id = `${repo.id}::${gitWorktree.path}`
-      const meta =
-        readWorktreeMetaForHost(store, id, expectedHostId) ??
-        getRepoOwnedWorktreeMeta(repo, id, metaById, repoOwnerCount)
+      const meta = readWorktreeMetaForHost(store, id, expectedHostId) ?? listed.ownedMeta(id)
       const worktree = {
         ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
         hostId: repoOwnerCount === 1 ? (meta?.hostId ?? expectedHostId) : expectedHostId
@@ -208,8 +203,9 @@ export class RuntimeManagedWorktreeQueries {
     })
     return {
       repoId: repo.id,
-      authoritative: scan.ok && !scan.superseded,
+      authoritative: scan.ok && !scan.superseded && scan.authorityCurrent(),
       source: scan.ok ? 'git' : 'metadata-fallback',
+      workspaceMetadata: listed.workspaceMetadata,
       // Stamp the scan's starting generation: that is the catalog its rows describe.
       catalogVersion: localWorktreeCatalogVersionAt(scan.scanGeneration),
       worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
@@ -220,12 +216,21 @@ export class RuntimeManagedWorktreeQueries {
     worktree: Worktree,
     matcher?: WorktreeVisibilitySourceMatcher,
     defaultsSupported = true,
-    settingsOverride?: ReturnType<RuntimeStore['getSettings']>
+    settingsOverride?: ReturnType<RuntimeStore['getSettings']>,
+    repoLookup = createRepoRowExecutionHostLookup(this.deps.getStore()?.getRepos() ?? [])
   ): boolean {
-    const routing = resolveWorktreeHostRouting(this.deps.getStore()?.getRepos() ?? [], worktree)
+    const routing = resolveWorktreeHostRouting<Repo>([], worktree, repoLookup)
     const repo = routing.kind === 'resolved' ? routing.repo : undefined
     return repo
-      ? this.toDetected(repo, worktree, matcher, defaultsSupported, settingsOverride).visible
+      ? this.toDetected(
+          repo,
+          worktree,
+          matcher,
+          defaultsSupported,
+          settingsOverride,
+          undefined,
+          repoLookup.rowsFor(repo.id).length
+        ).visible
       : true
   }
 
@@ -267,13 +272,7 @@ export class RuntimeManagedWorktreeQueries {
       meta:
         providedMeta === undefined
           ? store
-            ? (readWorktreeMetaForHost(store, worktree.id, getRepoExecutionHostId(repo)) ??
-              getRepoOwnedWorktreeMeta(
-                repo,
-                worktree.id,
-                store.getAllWorktreeMeta(),
-                repoOwnerCount ?? store.getRepos().filter((row) => row.id === repo.id).length
-              ))
+            ? readRuntimeWorktreeMetadata(store, repo, worktree.id, repoOwnerCount)
             : undefined
           : (providedMeta ?? undefined),
       settings: { ...settings, worktreeVisibilityDefaults: visibilityDefaults },

@@ -2,7 +2,7 @@ import { Home, Power, RotateCw, Smartphone } from 'lucide-react'
 import { EmulatorDevicePicker } from './emulator-device-picker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 import { useTranslate } from '@/i18n/use-translate'
 

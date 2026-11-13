@@ -26,7 +26,8 @@ type StoreId = (typeof WSL_MOVE_RENDERER_REWRITE_STORE_IDS)[number]
 // Loaded only when a conversion is pending, so a profile without one never pays for these modules.
 const STORE_REWRITES: Record<StoreId, (keys: WslDriveUncRendererKeys) => Promise<void>> = {
   'quick-open-history': async (keys) => {
-    const { copyQuickOpenHistoryScopes } = await import('../../quick-open-file-history')
+    const { copyQuickOpenHistoryScopes } =
+      await import('../../files/search/quick-open-file-history')
     copyQuickOpenHistoryScopes((scope) => convertedQuickOpenHistoryScope(scope, keys))
   },
   'file-view-preferences': async (keys) => {
@@ -34,7 +35,7 @@ const STORE_REWRITES: Record<StoreId, (keys: WslDriveUncRendererKeys) => Promise
       await Promise.all([
         import('../../../components/editor/file-view-preference-storage'),
         import('../../../components/editor/pdf-scale-preference-storage'),
-        import('../../../components/editor/csv/csv-column-width-preferences')
+        import('../../../components/editor/csv/grid/columns/csv-column-width-preferences')
       ])
     copyFileViewPreferences(PDF_SCALE_PREFERENCES_STORAGE_KEY, (key) =>
       convertedFileViewPreferenceKey(key, keys)

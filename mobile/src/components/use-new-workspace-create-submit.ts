@@ -3,28 +3,37 @@ import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { folderCreateBusyMessage, uncertainCreateMessage } from './new-workspace-create-copy'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import { createBlankWorkspace } from '../tasks/blank-workspace-create'
-import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
+import type { WorktreeCreateParent } from '../new-workspace/creation/worktree-create-retry'
+import { createBlankWorkspace } from '../new-workspace/creation/blank-workspace-create'
+import { isMobileTuiAgentEnabled } from '../agents/mobile-tui-agents'
 import {
   isSetupHookTrusted,
   persistSetupHookTrustApproval,
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
-} from '../tasks/setup-hook-trust'
-import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
-import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
-import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
-import type { AgentLaunchSupport } from '../tasks/agent-launch-request'
-import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
-import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import type { WorktreeCreateIdempotencySupport } from '../tasks/worktree-create-idempotency-policy'
+} from '../new-workspace/creation/setup-hook-trust'
+import { createWorkspaceFromComposerSource } from '../new-workspace/creation/source-workspace-create'
+import { normalizeWorkspaceAgent } from '../new-workspace/creation/workspace-agent-selection'
+import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../src/shared/worktree/create-types'
+import type { AgentLaunchSupport } from '../session/agent-launch/agent-launch-request'
+import type { WorkspaceSshGate } from '../new-workspace/creation/workspace-ssh-gate'
+import type { useMobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
+import type { WorktreeCreateIdempotencySupport } from '../new-workspace/creation/worktree-create-idempotency-policy'
 import {
   pickPreferredNewWorktreeAgent,
   type NewWorktreeAgentOption,
   type NewWorktreeRuntimeSettings
 } from './new-worktree-agent-selection'
-import type { MobileWorkspaceRepo, SetupRunPolicy } from './new-worktree-modal-types'
+import type {
+  MobileWorkspaceRepo,
+  NewWorktreeFolderSubmission,
+  NewWorktreeFolderSubmit,
+  SetupRunPolicy
+} from './new-worktree-modal-types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import type { OrcaHookTrustPrompt } from './OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
@@ -65,6 +74,11 @@ export function useNewWorkspaceCreateSubmit(args: {
   setError: Dispatch<SetStateAction<string>>
   onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void
+  /** Opened from a folder: creates on that folder's host, attached to it, owned by the folder screen. */
+  folderLaunch?: NewWorktreeFolderSubmit & {
+    executionHostId: ExecutionHostId
+    parent: WorktreeCreateParent
+  }
 }): {
   creating: boolean
   setupTrustPrompt: OrcaHookTrustPrompt | null
@@ -86,7 +100,20 @@ export function useNewWorkspaceCreateSubmit(args: {
     createInFlightRef.current = true
     setCreating(true)
     args.setError('')
+    const folder = args.folderLaunch
+    // Admitted for the repo actually picked, before anything is sent; the folder screen owns it until it settles.
+    const admission = folder
+      ? getRepoExecutionHostId(selectedRepo) === folder.executionHostId
+        ? folder.begin(selectedRepo)
+        : null
+      : undefined
+    const presenting = (): boolean => folder?.presenting() ?? true
+    let outcome: Parameters<NewWorktreeFolderSubmission['settle']>[0] = 'cancelled'
     try {
+      if (admission === null) {
+        args.setError(folderCreateBusyMessage())
+        return
+      }
       if (args.sshGate.requiresConnection) {
         args.setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
@@ -178,7 +205,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             agentLaunchSupported: args.getAgentLaunchSupport(),
             branchIntentSupported: args.getBranchIntentSupport(
               selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
-            )
+            ),
+            parent: folder?.parent
           })
         : await createBlankWorkspace({
             client,
@@ -189,20 +217,43 @@ export function useNewWorkspaceCreateSubmit(args: {
             comment: trimmedNote,
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
-            agentLaunchSupported: args.getAgentLaunchSupport()
+            agentLaunchSupported: args.getAgentLaunchSupport(),
+            parent: folder?.parent
           })
       if ('error' in result) {
-        triggerError()
+        // Refused on a resend after a lost reply: the first send may have created it.
+        outcome = result.replayed ? 'uncertain' : 'failed'
+        if (outcome === 'uncertain') {
+          // Not a failure to retry: creating again could make a second one.
+          args.setError(uncertainCreateMessage(folder !== undefined))
+          return
+        }
+        if (presenting()) {
+          triggerError()
+        }
         args.setError(result.error)
         return
       }
-      triggerSuccess()
+      outcome = 'created'
+      if (presenting()) {
+        triggerSuccess()
+      }
       args.onClose()
       args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
-      triggerError()
+      // A lost reply may still have created it.
+      outcome = isRpcDeliveryUnknown(error) ? 'uncertain' : 'failed'
+      if (folder && outcome === 'uncertain') {
+        // The folder screen refreshes and holds it until its list shows it; sending again could create a second one.
+        args.setError(uncertainCreateMessage(true))
+        return
+      }
+      if (presenting()) {
+        triggerError()
+      }
       args.setError(error instanceof Error ? error.message : 'Failed to create workspace')
     } finally {
+      admission?.settle(outcome)
       createInFlightRef.current = false
       setCreating(false)
     }

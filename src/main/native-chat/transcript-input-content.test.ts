@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
-import { opencodeMessages } from './transcript-opencode-part-blocks'
-import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import { decodeOmpTranscriptLine } from './transcript-line-decoders-omp'
-import { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
+import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
+import { opencodeMessages } from './transcript-history/opencode/transcript-opencode-part-blocks'
+import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
+import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 import { prepareNativeChatMessages } from '../../shared/native-chat/transcript/native-chat-message-preparation'
 import {
   prunePendingSends,

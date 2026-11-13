@@ -13,7 +13,7 @@ import {
   mobileRelayCredentialNeedsRotation,
   rotateMobileRelayCredential
 } from '../relay/mobile-relay-credential-rotation'
-import type { MobileRelayCredentialBundle } from '../hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { MobileRelayDirectGraceTimer } from '../relay/mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from '../relay/mobile-relay-session-establisher'

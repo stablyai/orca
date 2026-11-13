@@ -17,9 +17,9 @@ import {
   type ConfirmationDialogContextValue,
   type ConfirmationDialogOptions
 } from '@/components/confirmation-dialog-context'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type ConfirmationDialogRequest = {
   id: number

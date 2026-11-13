@@ -1,9 +1,9 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
-import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-requests/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
 import {

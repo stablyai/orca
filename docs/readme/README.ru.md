@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://onOrca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
+  <a href="https://orca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
 </h1>
 
 <p align="center">
@@ -20,7 +20,7 @@
   Запускайте Codex, ClaudeCode, OpenCode или Pi параллельно — каждый в своём рабочем дереве, все под контролем в одном месте.
 </p>
 
-<h3 align="center"><a href="https://onorca.dev/download"><ins>Скачать Orca</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Скачать Orca</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="Настольное приложение Orca с агентами в параллельных рабочих деревьях и мобильным приложением Orca в углу" width="960" />
@@ -36,11 +36,11 @@
 
 Следите за агентами и направляйте их работу с телефона — получайте уведомления о завершении задач и отправляйте дополнительные указания откуда угодно.
 
-[App Store для iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK для Android](https://www.onorca.dev/download/android) · [Документация →](https://www.onorca.dev/docs/mobile)
+[App Store для iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK для Android](https://orca.dev/download/android) · [Документация →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Настольное и мобильное приложения Orca" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Настольное и мобильное приложения Orca" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -50,11 +50,11 @@
 
 Отправьте один запрос пяти агентам, каждый из которых работает в своём изолированном рабочем дереве Git, — сравните результаты и слейте лучший вариант.
 
-[Документация →](https://www.onorca.dev/docs/model/worktrees)
+[Документация →](https://orca.dev/docs/model/worktrees)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="../site/public/docs/tab-split.gif" type="image/gif"><img src="../site/public/docs/posters/tab-split.jpg" alt="Управление параллельными рабочими деревьями" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/model/worktrees"><picture><source srcset="../site/public/docs/tab-split.gif" type="image/gif"><img src="../site/public/docs/posters/tab-split.jpg" alt="Управление параллельными рабочими деревьями" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -64,11 +64,11 @@
 
 Терминалы уровня Ghostty с отрисовкой через WebGL, неограниченным разделением на панели и историей вывода, которая сохраняется после перезапуска.
 
-[Документация →](https://www.onorca.dev/docs/terminal)
+[Документация →](https://orca.dev/docs/terminal)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="../../resources/onboarding/feature-wall/tile-02.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-02.poster.jpg" alt="Разделение терминала на панели" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/terminal"><picture><source srcset="../../resources/onboarding/feature-wall/tile-02.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-02.poster.jpg" alt="Разделение терминала на панели" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -78,11 +78,11 @@
 
 Нажмите на любой элемент интерфейса в настоящем окне Chromium, чтобы отправить его HTML, CSS и снимок соответствующей области экрана прямо в запрос агенту.
 
-[Документация →](https://www.onorca.dev/docs/browser/design-mode)
+[Документация →](https://orca.dev/docs/browser/design-mode)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="../site/public/docs/orca-design-mode.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-05.poster.jpg" alt="Встроенный браузер и режим дизайна" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/browser/design-mode"><picture><source srcset="../site/public/docs/orca-design-mode.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-05.poster.jpg" alt="Встроенный браузер и режим дизайна" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -92,11 +92,11 @@
 
 Просматривайте пул-реквесты, задачи и доски проектов прямо в приложении — открывайте рабочее дерево из любой задачи и проверяйте код, не переключая контекст.
 
-[Документация →](https://www.onorca.dev/docs/review/linear)
+[Документация →](https://orca.dev/docs/review/linear)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="../../resources/onboarding/feature-wall/tile-03.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-03.poster.jpg" alt="Работа с задачами GitHub и Linear в Orca" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/review/linear"><picture><source srcset="../../resources/onboarding/feature-wall/tile-03.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-03.poster.jpg" alt="Работа с задачами GitHub и Linear в Orca" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -106,11 +106,11 @@
 
 Запускайте агентов на мощном удалённом сервере с полноценным редактированием файлов, работой с Git и терминалами — автоматическое переподключение и перенаправление портов уже предусмотрены.
 
-[Документация →](https://www.onorca.dev/docs/ssh)
+[Документация →](https://orca.dev/docs/ssh)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="../../resources/onboarding/feature-wall/tile-06.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-06.poster.jpg" alt="Удалённые рабочие деревья по SSH" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/ssh"><picture><source srcset="../../resources/onboarding/feature-wall/tile-06.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-06.poster.jpg" alt="Удалённые рабочие деревья по SSH" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -120,11 +120,11 @@
 
 Оставляйте комментарии к любой строке в сравнении и отправляйте их агенту — проверяйте и редактируйте код, создавайте коммиты, не выходя из Orca.
 
-[Документация →](https://www.onorca.dev/docs/review/annotate-ai-diff)
+[Документация →](https://orca.dev/docs/review/annotate-ai-diff)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="../site/public/docs/annotate-ai-diff.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-08.poster.jpg" alt="Комментирование изменений, созданных ИИ" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/review/annotate-ai-diff"><picture><source srcset="../site/public/docs/annotate-ai-diff.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-08.poster.jpg" alt="Комментирование изменений, созданных ИИ" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -134,11 +134,11 @@
 
 Редактор VS Code с автоматическим сохранением всех изменений — перетаскивайте файлы или изображения прямо в запрос агенту.
 
-[Документация →](https://www.onorca.dev/docs/editing/file-explorer)
+[Документация →](https://orca.dev/docs/editing/file-explorer)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="../../resources/onboarding/feature-wall/tile-07.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-07.poster.jpg" alt="Перетаскивание файлов и изображений в запрос агенту" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/editing/file-explorer"><picture><source srcset="../../resources/onboarding/feature-wall/tile-07.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-07.poster.jpg" alt="Перетаскивание файлов и изображений в запрос агенту" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -148,22 +148,22 @@
 
 Агенты тоже управляют Orca — автоматизируйте любые рабочие процессы с помощью `orca worktree create`, `snapshot`, `click` и `fill`.
 
-[Документация →](https://www.onorca.dev/docs/cli/overview)
+[Документация →](https://orca.dev/docs/cli/overview)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="../../resources/onboarding/feature-wall/tile-09.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-09.poster.jpg" alt="Автоматизация Orca через CLI" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/cli/overview"><picture><source srcset="../../resources/onboarding/feature-wall/tile-09.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-09.poster.jpg" alt="Автоматизация Orca через CLI" width="100%" /></picture></a>
 </td>
 </tr>
 </table>
 
 **А ещё:**
 
-- **[Быстрое открытие](https://www.onorca.dev/docs/model/quick-open)** — Ищите рабочие деревья, файлы, агентов, команды и контекст репозитория, не прерывая работу.
-- **[Переключение учётных записей и учёт использования](https://www.onorca.dev/docs/agents/usage-tracking)** — Следите за использованием Claude и Codex и временем сброса лимитов, переключайтесь между учётными записями без повторного входа.
-- **[Предпросмотр содержимого репозитория](https://www.onorca.dev/docs/editing/markdown)** — Просматривайте Markdown, изображения, PDF и документацию репозитория прямо в рабочем пространстве.
-- **[Управление компьютером](https://www.onorca.dev/docs/cli/computer-use)** — Позвольте агентам управлять настольными приложениями и видимым интерфейсом, когда задача требует непосредственного взаимодействия.
-- **[Уведомления и статус прочтения](https://www.onorca.dev/docs/notifications)** — Узнавайте, когда агент завершил работу или требует внимания, и отмечайте обсуждения как непрочитанные, чтобы вернуться к ним позже.
+- **[Быстрое открытие](https://orca.dev/docs/model/quick-open)** — Ищите рабочие деревья, файлы, агентов, команды и контекст репозитория, не прерывая работу.
+- **[Переключение учётных записей и учёт использования](https://orca.dev/docs/agents/usage-tracking)** — Следите за использованием Claude и Codex и временем сброса лимитов, переключайтесь между учётными записями без повторного входа.
+- **[Предпросмотр содержимого репозитория](https://orca.dev/docs/editing/markdown)** — Просматривайте Markdown, изображения, PDF и документацию репозитория прямо в рабочем пространстве.
+- **[Управление компьютером](https://orca.dev/docs/cli/computer-use)** — Позвольте агентам управлять настольными приложениями и видимым интерфейсом, когда задача требует непосредственного взаимодействия.
+- **[Уведомления и статус прочтения](https://orca.dev/docs/notifications)** — Узнавайте, когда агент завершил работу или требует внимания, и отмечайте обсуждения как непрочитанные, чтобы вернуться к ним позже.
 - **И многое, многое другое** — мы выпускаем обновления каждый день, поэтому этот список постоянно отстаёт. Актуальный список возможностей — в [журнале изменений](https://github.com/stablyai/orca/releases).
 
 ---
@@ -216,7 +216,7 @@
 
 ### Настольное приложение — macOS, Windows, Linux
 
-- **[Скачать с onOrca.dev](https://onorca.dev/download)**
+- **[Скачать с orca.dev](https://orca.dev/download)**
 - Или скачайте сборку напрямую: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [Все сборки](https://github.com/stablyai/orca/releases/latest)
 
 _Или через менеджер пакетов:_
@@ -237,7 +237,7 @@ yay -S stably-orca-bin
 Подключите его к настольному приложению, чтобы следить за агентами и направлять их работу с телефона.
 
 - **iOS:** [Скачать в App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Скачать APK](https://www.onorca.dev/download/android) · [Руководство по установке](https://www.onorca.dev/docs/android-apk)
+- **Android:** [Скачать APK](https://orca.dev/download/android) · [Руководство по установке](https://orca.dev/docs/android-apk)
 
 ---
 
@@ -245,14 +245,12 @@ yay -S stably-orca-bin
 
 - **Discord:** Присоединяйтесь к сообществу в **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Подпишитесь на **[@orca_build](https://x.com/orca_build)**, чтобы узнавать об обновлениях и анонсах.
-- **WeChat:** Отсканируйте QR-код, чтобы присоединиться к группе сообщества Orca в WeChat. Если одна группа заполнена, присоединяйтесь к другой.
+- **WeChat:** Отсканируйте QR-код, чтобы присоединиться к группе сообщества Orca в WeChat.
 
-  <img src="../assets/wechat-qr-group14.jpg" alt="QR-код группы сообщества Orca в WeChat" width="160" />
-  <img src="../assets/wechat-qr-group15.jpg" alt="QR-код группы сообщества Orca в WeChat" width="160" />
-  <img src="../assets/wechat-qr-group16.jpg" alt="QR-код группы сообщества Orca в WeChat" width="160" />
+  <img src="../assets/wechat-qr.jpg" alt="QR-код группы сообщества Orca в WeChat" width="160" />
 
 - **Отзывы и идеи:** Мы быстро выпускаем обновления. Чего-то не хватает? [Предложите новую возможность](https://github.com/stablyai/orca/issues).
-- **Конфиденциальность:** В [документации о конфиденциальности и телеметрии](https://www.onorca.dev/docs/telemetry) описано, какие анонимные данные об использовании собирает Orca и как отказаться от их сбора.
+- **Конфиденциальность:** В [документации о конфиденциальности и телеметрии](https://orca.dev/docs/telemetry) описано, какие анонимные данные об использовании собирает Orca и как отказаться от их сбора.
 - **Поддержите проект:** Отметьте этот репозиторий [звездой](https://github.com/stablyai/orca), чтобы следить за нашими ежедневными выпусками.
 
 ---

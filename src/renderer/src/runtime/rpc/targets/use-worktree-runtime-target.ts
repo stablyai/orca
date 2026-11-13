@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../../store/index'
 import { getExecutionHostIdForWorktree } from '../../../lib/workspace/ownership/worktree-runtime-owner'
-import { getRuntimeTargetForFileOwner } from '../../../lib/file-owner-runtime-target'
-import { getActiveWorkspaceOwnerTarget } from '../../../lib/resolved-worktree-execution-host'
+import { getRuntimeTargetForFileOwner } from '../../../lib/files/access/file-owner-runtime-target'
+import { getActiveWorkspaceOwnerTarget } from '../../../lib/workspace/ownership/resolved-worktree-execution-host'
 import {
   runtimeRpcTargetForAuthorityKey,
   runtimeTargetForOwnerEnvironment,

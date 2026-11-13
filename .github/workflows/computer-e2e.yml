@@ -48,12 +48,14 @@ on:
       - 'src/cli/**'
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
-      - 'src/main/runtime/rpc/errors.ts'
+      - 'src/main/runtime/rpc/responses/rpc-response.ts'
       - 'src/main/runtime/rpc/methods/computer/computer*.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
       - 'tests/e2e/computer-windows-store.e2e.ts'
+      - 'tests/e2e/computer-windows-background.e2e.ts'
+      - 'tests/e2e/helpers/windows-semantic-controls-fixture.*'
       - 'tests/e2e/helpers/computer-cli-driver.ts'
       - 'tests/e2e/helpers/computer-driver.ts'
       - 'tests/e2e/vitest.config.ts'
@@ -93,19 +95,12 @@ jobs:
           pnpm vitest run --config config/vitest.config.ts
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
-          src/main/computer/sidecar-client.test.ts
-          src/main/computer/macos-native-provider-client.test.ts
-          src/main/computer/macos-native-provider-socket.test.ts
-          src/main/computer/macos-computer-use-permissions.test.ts
-          src/main/computer/macos-computer-use-permission-status.test.ts
+          src/main/computer/sidecar-transport/sidecar-client.test.ts
+          src/main/computer/macos-native/macos-native-provider-client.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
-          src/main/computer/desktop-script-provider-actions.test.ts
-          src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
-          src/main/computer/desktop-script-provider-errors.test.ts
-          src/main/computer/desktop-script-provider-action-errors.test.ts
-          src/cli/format.test.ts
-          src/cli/handlers/computer-action-validation.test.ts
-          src/cli/handlers/computer-state-formatting.test.ts
+          src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts
+          src/cli/output/command-result-output.test.ts
+          src/cli/computer/computer-state-formatting.test.ts
           src/cli/index.test.ts
           src/cli/runtime/envelope-schema.test.ts
           src/shared/remote-runtime/remote-runtime-client.test.ts
@@ -158,4 +153,4 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts tests/e2e/computer-windows-background.e2e.ts

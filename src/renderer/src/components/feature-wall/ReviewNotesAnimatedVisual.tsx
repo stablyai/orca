@@ -14,7 +14,7 @@ import { ReviewNotesVisualStyles } from './review-animated-visual-notes-styles'
 import { ReviewDiffRows } from './review-notes-diff-rows'
 import { resetTerminal, runTerminalPhase } from './review-notes-terminal-phase'
 import { useTranslate } from '@/i18n/use-translate'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 // The animation owns timed DOM mutations to avoid React overwriting intermediate beats.
 export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {

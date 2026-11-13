@@ -132,3 +132,53 @@ function receiptWindowAfter(
       : message.timestamp > timestamp
   }
 }
+
+export function nativeChatReceiptDependencyKey(dependency: NativeChatReceiptDependency): string {
+  return JSON.stringify([
+    nativeChatSourceReceiptKey(dependency.receipt),
+    dependency.proof,
+    dependency.members
+  ])
+}
+
+export function liveNativeChatReceiptDependencies(
+  pending: readonly NativeChatPendingSend[]
+): NativeChatReceiptDependency[] {
+  const byId = new Map(pending.map((entry) => [entry.id, entry]))
+  const dependencies = new Map<string, NativeChatReceiptDependency>()
+  for (const entry of pending) {
+    for (const dependency of entry.receiptDependencies ?? []) {
+      if (
+        dependency.members.every((id) => {
+          const member = byId.get(id)
+          return (
+            member &&
+            member.sourceReceipt?.sessionId !== dependency.receipt.sessionId &&
+            (dependency.proof === 'source'
+              ? !!member.sourceAgent
+              : !member.sourceAgent || member.evidenceModePending)
+          )
+        })
+      ) {
+        dependencies.set(nativeChatReceiptDependencyKey(dependency), dependency)
+      }
+    }
+  }
+  return [...dependencies.values()]
+}
+
+export function releaseNativeChatReceiptDependencies<T extends NativeChatPendingSend>(
+  pending: T[]
+): T[] {
+  const live = new Set(liveNativeChatReceiptDependencies(pending))
+  let changed = false
+  const next = pending.map((entry) => {
+    if (!entry.receiptDependencies?.some((dependency) => !live.has(dependency))) {
+      return entry
+    }
+    changed = true
+    const dependencies = entry.receiptDependencies.filter((dependency) => live.has(dependency))
+    return { ...entry, receiptDependencies: dependencies.length ? dependencies : undefined }
+  })
+  return changed ? next : pending
+}

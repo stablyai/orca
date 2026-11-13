@@ -5,9 +5,9 @@ import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
   openMobileNativeChatSendBudget,
   readMobileNativeChatInputClear
-} from '../mobile-native-chat-send'
+} from './mobile-native-chat-send'
 import { nativeChatTerminalWrite } from '../../../terminal/session/mobile-session-terminal-operations'
-import type { MobileNativeChatRpcSender } from '../mobile-native-chat-send'
+import type { MobileNativeChatRpcSender } from './mobile-native-chat-send'
 
 // Wait for the TUI to register bracketed image attachments before text/Enter arrives.
 export const MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS = 300

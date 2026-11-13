@@ -3,16 +3,16 @@ import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from '../acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import { directoryAccountBinding } from './acp-account-binding'
-import { openCodeAcpAccountBinding } from '../../opencode/opencode-structured-account-home'
-import { scrubOpenCodeAcpEnvironment } from '../../opencode/opencode-acp-environment'
+import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
+import { scrubOpenCodeAcpEnvironment } from '../../opencode/acp/opencode-acp-environment'
 import { compareAppVersions } from '../../../shared/app-version'
 import { readGrokModelCatalog } from '../acp-dialects/grok-model-catalog'
 import {
   OPENCODE_MODEL_LISTING_ARGS,
   parseOpenCodeModelListing
-} from '../../opencode/opencode-model-catalog-listing'
+} from '../../opencode/model-launch/opencode-model-catalog-listing'
 
-import { agentSessionSignInFor } from '../../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
@@ -21,12 +21,14 @@ import {
 
 import { GROK_SESSION_HISTORY } from '../../grok/grok-session-history'
 import { GROK_TRANSCRIPT_IMPORT } from '../../grok/grok-transcript-import'
-import { OPENCODE_SESSION_HISTORY } from '../../opencode/opencode-session-history'
-import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/opencode-transcript-import'
+import { OPENCODE_SESSION_HISTORY } from '../../opencode/transcripts/opencode-session-history'
+import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/transcripts/opencode-transcript-import'
 import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/opencode-launch-command'
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
+import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
+import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
@@ -41,7 +43,7 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   env: {},
   dialect: GROK_ACP_DIALECT,
   historyCatchUp: 'prompt-id',
-  loginCommand: agentSessionSignInFor('grok')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('grok')?.loginCommand ?? [],
   // Prefer the launch environment's API key, then cached sign-in; never prompt interactively.
   authMethod: ({ advertised, env }) =>
     env.XAI_API_KEY?.trim() && advertised.includes('xai.api_key')
@@ -79,7 +81,7 @@ function openCodeLaunchSpec(
     scrubEnvironment: scrubOpenCodeAcpEnvironment,
     dialect: OPENCODE_ACP_DIALECT,
     historyCatchUp: 'user-message-id',
-    loginCommand: agentSessionSignInFor(row.agent)?.loginCommand ?? [],
+    loginCommand: agentSessionSetupFor(row.agent)?.loginCommand ?? [],
     account: openCodeAcpAccountBinding(),
     installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
     visualsSkill: loadOpenCodeVisualsSkill,
@@ -129,7 +131,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   // overlay ACP cannot draw and fail; OMP's own headless modes set this too.
   env: { PI_NO_PTY: '1' },
   dialect: OMP_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('omp')?.loginCommand ?? [],
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>
     join(homePath, '.omp', 'agent')
   ),
@@ -154,7 +156,9 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
-  ANTIGRAVITY_LAUNCH_SPEC
+  ANTIGRAVITY_LAUNCH_SPEC,
+  COPILOT_LAUNCH_SPEC,
+  KIMI_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

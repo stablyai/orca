@@ -1,13 +1,13 @@
-import type { PRCheckContract } from '@/lib/pr-check-observation-contract'
+import type { PRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import {
   acceptPRCheckObservation,
   completePRCheckOwnerScope
-} from '../../../../../shared/github/complete-pr-check-owner'
+} from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { applyCachedChecksStatus } from '../checks/pr-check-status-cache'
 import type { LinkedReviewClearScope } from './linked-review-clear'
 import type { AppState } from '../../types'
-import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
 import type { GitHubPRFallbackSource } from '../cache/cache-model'

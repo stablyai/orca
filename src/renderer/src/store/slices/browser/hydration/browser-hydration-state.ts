@@ -6,7 +6,11 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import '../../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
-import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
+import type {
+  PersistedBrowserPage,
+  WorkspaceSessionState
+} from '../../../../../../shared/workspace-session/workspace-session-state-types'
+import type { BrowserPageAnnotation } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { normalizeBrowserHistoryEntries } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../../shared/workspace-session/workspace-doc-history'
 import type { AppState } from '../../../types'
@@ -37,6 +41,7 @@ export function projectHydratedBrowserSession(
   const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
   const browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
   const browserPagesByWorkspace: Record<string, BrowserPage[]> = {}
+  const browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]> = {}
 
   for (const [worktreeId, tabs] of Object.entries(persistedTabsByWorktree)) {
     if (!validWorktreeIds.has(worktreeId)) {
@@ -46,7 +51,7 @@ export function projectHydratedBrowserSession(
     for (const tab of tabs) {
       // Salvage can leave an empty page array; hydrate it like a missing array.
       const storedPages = persistedPagesByWorkspace[tab.id]
-      const persistedPages = storedPages?.length
+      const persistedPages: PersistedBrowserPage[] = storedPages?.length
         ? storedPages
         : [
             {
@@ -70,10 +75,14 @@ export function projectHydratedBrowserSession(
           ]
       const nextPages = persistedPages.map((page) => {
         // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
-        const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =
-          page as typeof page & {
-            allowWindowClose?: boolean
-          }
+        const { allowWindowClose: _legacyAllowWindowClose, ...savedPage } = page as typeof page & {
+          allowWindowClose?: boolean
+        }
+        // The store keeps a page's unsent notes beside its record, not on it.
+        const { annotations, ...persistedPage } = savedPage
+        if (annotations?.length) {
+          browserAnnotationsByPageId[page.id] = annotations
+        }
         return {
           ...persistedPage,
           workspaceId: tab.id,
@@ -179,7 +188,7 @@ export function projectHydratedBrowserSession(
     remoteBrowserPageHandlesByPageId:
       buildRestoredRemoteBrowserPageHandles(browserPagesByWorkspace),
     browserCertificateFailuresByPageId: {},
-    browserAnnotationsByPageId: {},
+    browserAnnotationsByPageId,
     browserAnnotationMarkerIdsByPageId: {},
     browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? []),
     workspaceDocHistory: normalizeWorkspaceDocHistoryEntries(session.workspaceDocHistory ?? []),

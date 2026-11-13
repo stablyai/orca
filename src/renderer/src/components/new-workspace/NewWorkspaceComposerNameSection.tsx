@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { shouldShowComposerBaseRefPicker } from './base-ref-picker-visibility'
 import { ComposerBaseRefPicker } from './ComposerBaseRefPicker'

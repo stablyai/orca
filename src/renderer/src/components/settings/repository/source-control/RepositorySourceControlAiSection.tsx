@@ -84,8 +84,8 @@ export function RepositorySourceControlAiSection({
     >
       <SettingsGroup
         title={t(
-          'auto.components.settings.RepositorySourceControlAiSection.71b003b62b',
-          'Source Control AI'
+          'auto.components.settings.RepositorySourceControlAiSection.112f3b934f',
+          'Source control AI'
         )}
         description={
           <>

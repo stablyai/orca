@@ -11,6 +11,7 @@ import {
   finishedWorktreeRemovals,
   pendingWorktreeRemovals,
   persistWorktreeRemovalRecords,
+  recordedWorktreeRemovals,
   worktreeCheckoutExists
 } from './worktree-removal-table'
 
@@ -42,7 +43,9 @@ export async function withUnregisteredRemovalCheckouts(
     droppedFailure = true
     return row
   })
-  const unlisted = [...pendingWorktreeRemovals.values(), ...failedWorktreeRemovals.values()].filter(
+  const unlisted = [
+    ...new Map([...pendingWorktreeRemovals, ...failedWorktreeRemovals]).values()
+  ].filter(
     (record) =>
       record.repoId === repoId &&
       !gitWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))
@@ -51,8 +54,8 @@ export async function withUnregisteredRemovalCheckouts(
   for (const record of unlisted) {
     const failed = failedWorktreeRemovals.get(record.worktreeId) === record
     if (
-      (await worktreeCheckoutExists(record.worktreePath)) &&
-      (!failed || (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath)))
+      (!failed && (await worktreeCheckoutExists(record.worktreePath))) ||
+      (failed && (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath)))
     ) {
       leftovers.push({
         path: record.worktreePath,
@@ -80,24 +83,44 @@ export function snapshotPendingWorktreeRemovals(): PendingWorktreeRemovals {
 
 /** Older clients cannot read removing markers; omit pending rows they already dropped on acceptance. */
 export function projectPendingWorktreeRemovals<
-  T extends { hostId?: ExecutionHostId; removing?: true }
+  T extends {
+    hostId?: ExecutionHostId
+    removing?: true
+    removalRecorded?: true
+    removalError?: string
+  }
 >(
   rows: T[],
   idOf: (row: T) => string,
   clientReadsMarker: boolean,
   pendingAtScan: PendingWorktreeRemovals
 ): T[] {
-  if (pendingWorktreeRemovals.size === 0 && pendingAtScan.size === 0) {
+  if (
+    pendingWorktreeRemovals.size === 0 &&
+    pendingAtScan.size === 0 &&
+    failedWorktreeRemovals.size === 0
+  ) {
     return rows
   }
   const projected: T[] = []
   for (const row of rows) {
     const id = idOf(row)
     const local = row.hostId === undefined || row.hostId === LOCAL_EXECUTION_HOST_ID
-    if (local && pendingWorktreeRemovals.has(id)) {
+    const pending = local ? pendingWorktreeRemovals.get(id) : undefined
+    if (pending && recordedWorktreeRemovals.has(pending)) {
       if (clientReadsMarker) {
-        projected.push({ ...row, removing: true })
+        projected.push({ ...row, removing: true, removalRecorded: true })
       }
+      continue
+    }
+    const failed = local ? failedWorktreeRemovals.get(id) : undefined
+    if (failed) {
+      projected.push({
+        ...row,
+        removing: undefined,
+        removalRecorded: undefined,
+        removalError: failed.failure?.message
+      })
       continue
     }
     const scanned = local ? pendingAtScan.get(id) : undefined
@@ -107,4 +130,26 @@ export function projectPendingWorktreeRemovals<
     }
   }
   return projected
+}
+
+export type WorktreeRemovalWitnessScan = {
+  removals?: PendingWorktreeRemovals
+  projectedRemovals?: PendingWorktreeRemovals
+}
+
+/** Reuse repo-local witnesses across metadata joins; replace them only when reservations change. */
+export function projectCachedWorktreeRemovals<T extends { hostId?: ExecutionHostId }>(
+  repoId: string,
+  scan: WorktreeRemovalWitnessScan,
+  rows: T[],
+  idOf: (row: T) => string
+): T[] {
+  const current = pendingWorktreeRemovals.snapshotForRepo(repoId)
+  if (scan.projectedRemovals !== current) {
+    if (current.size > 0) {
+      scan.removals = new Map([...(scan.removals ?? []), ...current])
+    }
+    scan.projectedRemovals = current
+  }
+  return projectPendingWorktreeRemovals(rows, idOf, true, scan.removals ?? current)
 }

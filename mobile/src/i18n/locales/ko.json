@@ -356,8 +356,7 @@
       "pausedState": "일시 중지됨",
       "queuedState": "대기 중",
       "resume": "재개",
-      "resumeSending": "대기 중인 메시지 전송 재개",
-      "title": "대기 중인 메시지"
+      "resumeSending": "대기 중인 메시지 전송 재개"
     },
     "offlineQueue": {
       "failed": "보내지 못했습니다 — 보내기를 탭해 다시 시도하세요",
@@ -1345,6 +1344,7 @@
       "movedTo": "이 휴대폰의 받아쓰기가 멈췄습니다. {{computer}}에서 계속합니다.",
       "movedToComputer": "이 휴대폰의 받아쓰기가 멈췄습니다. 컴퓨터에서 계속합니다.",
       "stoppedKept": "받아쓰기가 중지되었습니다. {{reason}}. 녹음은 보관됩니다.",
+      "stoppedKeptGeneric": "받아쓰기가 중지되었습니다. 녹음은 보관됩니다.",
       "stillListening": "계속 듣는 중입니다."
     },
     "pill": {
@@ -2316,20 +2316,16 @@
       "loadFailed": "PR을 로드할 수 없습니다."
     },
     "queuedCardText": {
-      "showLess": "접기",
       "showLessHint": "메시지의 일부만 표시합니다.",
-      "showMore": "더 보기",
       "showMoreHint": "메시지 전체를 표시합니다."
     },
     "queuedMessageCardRow": {
-      "deleteHint": "대기 중인 메시지 삭제",
       "images_one": "이미지 {{count}}개",
       "images_other": "이미지 {{count}}개",
       "moreActions": "추가 작업",
       "send": "보내기",
       "sendAgainHint": "이 메시지 다시 보내기",
       "sendHint": "이 메시지 보내기",
-      "showLessHint": "메시지의 일부만 표시합니다.",
       "steer": "지금 보내기",
       "steerHint": "모델을 중단하지 않고 보냅니다"
     },
@@ -2449,8 +2445,7 @@
     "tabStrip": {
       "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
       "newTab": "새 탭",
-      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다.",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다."
     },
     "terminalActionSheetActions": {
       "clearTerminal": "터미널 지우기",
@@ -2493,6 +2488,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "첨부 실패 (다시 연결 중)"
+    },
+    "useCloseActions": {
+      "closeFailed": "탭을 닫지 못했습니다. 다시 시도하세요.",
+      "closeFailedDesktopNotReady": "탭을 닫지 못했습니다. 컴퓨터에서 Orca를 아직 불러오는 중입니다. 잠시 후 다시 시도하세요."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "브라우저 명령 실행에 실패했습니다.",
@@ -2563,8 +2562,8 @@
       "insertFailed": "받아쓰기 내용을 삽입하지 못했습니다.",
       "insertFailedCopied": "받아쓰기 내용을 삽입하지 못해 클립보드에 복사했습니다.",
       "inserted": "받아쓰기 내용 삽입됨",
-      "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다.",
-      "stoppedAtCloudLimit": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다."
+      "stoppedAtCloudLimit": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
+      "stoppedAfterSilenceSeconds": "{{seconds}}초 동안 조용해서 중지했습니다"
     },
     "useNativeChatStop": {
       "stopNotSent": "중지 요청 전송 안 됨",
@@ -3359,6 +3358,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitHubSquash": "PR #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitHubRebase": "PR #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
+      "confirmGitLabMerge": "병합 요청 #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitLabSquash": "병합 요청 #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitLabRebase": "병합 요청 #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
+      "merged": "병합됨",
+      "closed": "닫힘",
+      "conflicts": "충돌",
+      "behind": "뒤처짐",
+      "blocked": "차단됨",
+      "checksPending": "검사 대기 중",
+      "ableToMerge": "병합 가능",
+      "unknown": "알 수 없음"
+    },
+    "pagination": {
+      "pageUnreachable": "{{page}}페이지는 GitHub 검색에서 반환할 수 있는 범위를 벗어났습니다.",
+      "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다.",
+      "noMoreResults": "{{page}}페이지에 더 이상 결과가 없습니다."
+    },
     "composerSource": {
       "baseFailed": "기본 브랜치를 확인하지 못했습니다.",
       "forkPushWarning": "이 PR에서 \"유지 관리자의 수정 허용\"이 꺼져 있어 GitHub에서 포크로의 푸시를 거부할 수 있습니다."

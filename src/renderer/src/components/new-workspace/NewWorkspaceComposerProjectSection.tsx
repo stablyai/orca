@@ -1,12 +1,18 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
+import type { AddRemoteHostMode } from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
+import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
+import { AddProjectMenu } from '@/components/sidebar/project-admission/menu/AddProjectMenu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
+import ProjectCombobox, {
+  type ProjectComboboxAddProjectMenu
+} from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/new-workspace-project-options'
+import { cn } from '@/lib/class-names'
+import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/workspace/creation/new-workspace-project-options'
+import { resolveComposerAddProjectDefaultHostId } from './composer-add-project-default-host'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
@@ -37,6 +43,8 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   disabled?: boolean
   projectDescriptionId: string
   onAddProject: () => void
+  onAddProjectEntryRequest?: (request: AddRepoDialogEntryRequest) => void
+  handleOpenRemoteHostDialog?: (mode: AddRemoteHostMode) => void
   focusNameInput: () => void
   shouldShowRunTargetPicker: boolean
   projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
@@ -63,6 +71,8 @@ export function NewWorkspaceComposerProjectSection({
   emptyProjectMessage,
   projectDescriptionId,
   onAddProject,
+  onAddProjectEntryRequest,
+  handleOpenRemoteHostDialog,
   focusNameInput,
   shouldShowRunTargetPicker,
   projectHostSetupOptions,
@@ -86,6 +96,35 @@ export function NewWorkspaceComposerProjectSection({
   selectedProjectName
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const addProjectLabel = t('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')
+  const defaultAddProjectHostId = useMemo(
+    () =>
+      resolveComposerAddProjectDefaultHostId({
+        projectHostSetupOptions,
+        selectedProjectHostSetupId,
+        selectedRepoExecutionHostId,
+        selectedEphemeralVmRecipeId
+      }),
+    [
+      projectHostSetupOptions,
+      selectedEphemeralVmRecipeId,
+      selectedProjectHostSetupId,
+      selectedRepoExecutionHostId
+    ]
+  )
+  // Why: the combobox cascade lives inside a popover that closes before a remote-host dialog
+  // could open, so it needs the caller-owned dialog; otherwise fall back to the plain row.
+  const comboboxAddProjectMenu = useMemo<ProjectComboboxAddProjectMenu | undefined>(
+    () =>
+      onAddProjectEntryRequest && handleOpenRemoteHostDialog
+        ? {
+            defaultHostId: defaultAddProjectHostId,
+            onOpenEntryRequest: onAddProjectEntryRequest,
+            onOpenRemoteHostDialog: handleOpenRemoteHostDialog
+          }
+        : undefined,
+    [defaultAddProjectHostId, handleOpenRemoteHostDialog, onAddProjectEntryRequest]
+  )
   return (
     <fieldset disabled={disabled} className="space-y-1">
       <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
@@ -95,26 +134,45 @@ export function NewWorkspaceComposerProjectSection({
               {projectLabel ?? t('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
             </label>
             {showAddProjectButton ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
+              onAddProjectEntryRequest ? (
+                <AddProjectMenu
+                  side="bottom"
+                  align="end"
+                  tooltipLabel={addProjectLabel}
+                  tooltipSide="top"
+                  defaultHostId={defaultAddProjectHostId}
+                  onOpenEntryRequest={onAddProjectEntryRequest}
+                  onOpenRemoteHostDialog={handleOpenRemoteHostDialog}
+                >
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    onClick={onAddProject}
                     className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                    aria-label={t(
-                      'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
-                      'Add project'
-                    )}
+                    aria-label={addProjectLabel}
                   >
                     <FolderPlus className="size-3" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>
-                  {t('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
-                </TooltipContent>
-              </Tooltip>
+                </AddProjectMenu>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={onAddProject}
+                      className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                      aria-label={addProjectLabel}
+                    >
+                      <FolderPlus className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6}>
+                    {addProjectLabel}
+                  </TooltipContent>
+                </Tooltip>
+              )
             ) : null}
           </div>
           <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
@@ -128,7 +186,8 @@ export function NewWorkspaceComposerProjectSection({
               )}
               onValueChange={onProjectChange}
               onValueSelected={focusNameInput}
-              onAddProject={onAddProject}
+              onAddProject={comboboxAddProjectMenu ? undefined : onAddProject}
+              addProjectMenu={comboboxAddProjectMenu}
               placeholder={
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')

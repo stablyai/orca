@@ -9,14 +9,14 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContext, useSyncExternalStore } from 'react'
 import { NativeChatForkedFromContext } from '../actions/native-chat-fork-context'
-import { NativeChatPullRequestEventLine } from '../../NativeChatPullRequestEventLine'
+import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
   type AgentSessionHostStatusPresentation
@@ -35,7 +35,7 @@ import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
 } from '../diagnostics/NativeChatProviderDetails'
-import { NativeChatSignInButton } from '../../host-access/NativeChatSignInButton'
+import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -321,7 +321,9 @@ export function NativeChatNoticeRow({
         ) : usageLimitContinue ? (
           <UsageLimitContinueNow
             resetsAt={
-              failure?.kind === 'usageLimitReached' ? failure.usageLimit?.resetsAt : undefined
+              failure?.kind === 'usageLimitReached'
+                ? (orcaStopView.usageLimitContinueAt ?? failure.usageLimit?.resetsAt)
+                : undefined
             }
           />
         ) : null}
@@ -330,7 +332,7 @@ export function NativeChatNoticeRow({
       {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
         <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
       ) : null}
-      <NativeChatSignInButton failureKind={block.failure?.kind} />
+      <NativeChatSetupButton failureKind={block.failure?.kind} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

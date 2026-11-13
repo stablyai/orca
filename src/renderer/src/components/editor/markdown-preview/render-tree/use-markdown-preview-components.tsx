@@ -22,9 +22,9 @@ import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-
 import type { MarkdownPreviewReviewActions } from '../review/use-markdown-preview-review-actions'
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { useLocalImageSrc } from '../../document-images/useLocalImageSrc'
-import { documentResourceAccess } from '@/lib/local-file-access'
+import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
-import { readGitHubCalloutKind } from '../../../../../../shared/github/github-callouts'
+import { readGitHubCalloutKind } from '../../../../../../shared/github/markdown/github-callouts'
 import { translate } from '@/i18n/i18n'
 
 function hasMermaidCodeClass(value: unknown): boolean {

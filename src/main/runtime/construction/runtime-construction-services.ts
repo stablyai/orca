@@ -210,7 +210,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options?: { claimsHygiene?: boolean }
   ): Promise<RuntimeWorktreeScanResult>
   protected abstract listKnownExecutionHostIds(
     additionalHostIds?: Iterable<ExecutionHostId>,
@@ -277,6 +278,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract readonly getAgentStatusSnapshotForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
+  protected abstract readonly publicPaneStatusFn?: (paneKey: string) => AgentStatusIpcPayload[]
   abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]

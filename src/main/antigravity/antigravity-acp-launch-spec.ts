@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
-import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
+import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import {
   AntigravityChatAuthConfigSchema,
   resolveAntigravityChatAuthConfig
 } from '../../shared/antigravity-chat-auth-config'
-import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
 import {
@@ -49,7 +49,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('antigravity')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
   authMethodUnavailableMessage:

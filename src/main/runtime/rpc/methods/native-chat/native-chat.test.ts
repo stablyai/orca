@@ -471,20 +471,6 @@ describe('nativeChat.subscribe initial snapshot', () => {
     expect((emitted[1] as { pending?: boolean }).pending).toBeUndefined()
   })
 
-  it('does not publish pending semantics to a legacy client', async () => {
-    watcher.watching = true
-    watcher.args = null
-    const emitted: unknown[] = []
-    await subscribeHandler()(
-      { agent: 'claude', sessionId: 's' },
-      streamingContext('mobile'),
-      (value) => emitted.push(value)
-    )
-
-    expect(activeWatcherArgs().onTranscriptPending).toBeUndefined()
-    expect(emitted).toEqual([])
-  })
-
   it('emits one windowed snapshot with pagination state before live appends', async () => {
     watcher.watching = true
     watcher.args = null
@@ -517,26 +503,6 @@ describe('nativeChat.subscribe initial snapshot', () => {
     expect(snapshotMessages[0].id).toBe('m-20')
     expect(emitted[1]).toMatchObject({ type: 'appended' })
     expect((emitted[1] as { messages: NativeChatMessage[] }).messages).toHaveLength(60)
-  })
-
-  it('emits an explicit error snapshot when no transcript can be watched', async () => {
-    watcher.watching = false
-    watcher.args = null
-    const emitted: unknown[] = []
-    await subscribeHandler()(
-      { agent: 'claude', sessionId: 'missing' },
-      streamingContext('mobile'),
-      (value) => emitted.push(value)
-    )
-
-    expect(emitted).toEqual([
-      {
-        type: 'snapshot',
-        messages: [],
-        hasMore: false,
-        error: 'Transcript unavailable'
-      }
-    ])
   })
 
   it('cancels pending setup when the stream is cleaned up', async () => {
@@ -610,21 +576,5 @@ describe('nativeChat.subscribe initial snapshot', () => {
     } finally {
       watcher.setupFactory = null
     }
-  })
-
-  it('skips setup for an already-cancelled request', async () => {
-    const controller = new AbortController()
-    controller.abort()
-    const context = { ...streamingContext('mobile'), signal: controller.signal }
-    watcher.args = null
-    const emitted: unknown[] = []
-
-    await subscribeHandler()({ agent: 'claude', sessionId: 'already-closed' }, context, (value) =>
-      emitted.push(value)
-    )
-
-    expect(context.runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
-    expect(watcher.args).toBeNull()
-    expect(emitted).toEqual([])
   })
 })

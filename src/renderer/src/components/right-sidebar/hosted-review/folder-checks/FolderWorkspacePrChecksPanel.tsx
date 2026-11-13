@@ -7,10 +7,13 @@ import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
 import { getAttachedWorktreesForFolderWorkspace } from '../../folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
 import type { ParentPrChecksRefreshOutcome, ParentPrChecksRow } from './parent-pr-checks-row-types'

@@ -20,7 +20,7 @@ import { MobileImageBase64Accumulator } from '../files/attachments/mobile-image-
 
 export type NativeMediaFileHandle = {
   offset: number | null
-  readBytes: (length: number) => Uint8Array
+  readBytesSync: (length: number) => Uint8Array
   close: () => void
 }
 
@@ -205,7 +205,7 @@ export function createNativeMediaVerbServer(
       const accumulator = new MobileImageBase64Accumulator()
       let read = start
       while (read < end) {
-        const bytes = handle.readBytes(Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, end - read))
+        const bytes = handle.readBytesSync(Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, end - read))
         if (bytes.byteLength === 0) {
           break
         }

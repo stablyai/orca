@@ -1,5 +1,5 @@
 import type { NativeChatPtyDispatchScope } from '../../session/terminal/send/native-chat-pty-send-queue'
-import { chatWorkspaceByTabId } from '@/lib/structured-chat-tab-index'
+import { chatWorkspaceByTabId } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { sendNativeChatHostPrompt } from '../../session/terminal/send/native-chat-host-prompt'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'

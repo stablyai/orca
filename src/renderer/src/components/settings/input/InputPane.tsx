@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/usePrimarySelectionPaste'
+import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/clipboard/primary-selection/usePrimarySelectionPaste'
 import { useTranslate } from '@/i18n/use-translate'
 
 type InputPaneProps = {
@@ -20,8 +20,8 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
     <section className="space-y-4">
       <SearchableSetting
         title={t(
-          'auto.components.settings.InputPane.ad31c3c5fb',
-          'Middle-click Paste from Selection'
+          'auto.components.settings.InputPane.dc26974909',
+          'Middle-click paste from selection'
         )}
         description={t(
           'auto.components.settings.InputPane.db15068196',
@@ -45,8 +45,8 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
         <div className="space-y-0.5">
           <Label>
             {t(
-              'auto.components.settings.InputPane.ad31c3c5fb',
-              'Middle-click Paste from Selection'
+              'auto.components.settings.InputPane.dc26974909',
+              'Middle-click paste from selection'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
@@ -58,8 +58,8 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
         </div>
         <Switch
           aria-label={t(
-            'auto.components.settings.InputPane.ad31c3c5fb',
-            'Middle-click Paste from Selection'
+            'auto.components.settings.InputPane.dc26974909',
+            'Middle-click paste from selection'
           )}
           checked={enabled}
           onCheckedChange={(checked) =>

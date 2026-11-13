@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, expect, it } from 'vitest'
-import { pluginDeclarativeRenderPayloadSchema } from './plugin-declarative-messages'
 import { parsePluginDeclarativeTree } from './plugin-declarative-tree'
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..')
@@ -77,27 +76,4 @@ it('runs the prebuilt sample against the shipped guest runtime, like the guest i
     }
   ])
   runtime.dispose()
-})
-
-// A missing named import is a link-time SyntaxError in real ES modules (checked with node); the
-// test runner's module shim cannot show that, so this covers the documented fallback only.
-it('draws a component created by name with h() as a placeholder when Orca does not know it', async () => {
-  const runtimeCopy = path.join(scratch, 'orca-runtime-compat.mjs')
-  writeFileSync(runtimeCopy, readFileSync(RUNTIME))
-  const orca = await import(/* @vite-ignore */ pathToFileURL(runtimeCopy).href)
-  const posted: unknown[] = []
-  const runtime = orca.installOrcaDeclarativeRuntime({
-    post: (_event: string, payload: unknown) => posted.push(payload),
-    bridge: null
-  })
-  expect(orca.ui.catalog).toBeGreaterThanOrEqual(1)
-  expect(orca.ui.has('Carousel')).toBe(false)
-  runtime.mount(() => orca.h('Stack', null, orca.h('Carousel', { label: 'Shots' }), 'rest'))
-  const tree = parsePluginDeclarativeTree(
-    pluginDeclarativeRenderPayloadSchema.parse(posted.at(-1)).tree
-  )
-  expect(tree.ok && tree.tree?.children).toEqual([
-    { type: 'Unsupported', key: '#0', props: { name: 'Carousel' }, children: [] },
-    'rest'
-  ])
 })

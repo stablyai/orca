@@ -47,6 +47,11 @@ public class OrcaMobileWebShellModule: Module {
       MobileWebShellSparePool.shared.discardAll()
     }.runOnQueue(.main)
 
+    // The generation store's root as a file URL, created and excluded from backups.
+    Function("generationStoreDirectory") { (name: String) throws -> String in
+      try MobileWebShellGenerationStoreDirectory.prepare(name: name)
+    }
+
     // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
     Function("warmUp") {
       // A second's delay keeps the warm-up off the launch's first frames.

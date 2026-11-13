@@ -7,7 +7,7 @@ import {
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import {
   cancelRuntimeGeneratePullRequestFields,
   generateRuntimePullRequestFields
@@ -15,7 +15,7 @@ import {
 import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { PullRequestGenerationOutcome } from '../../hosted-review/creation/create-pull-request-dialog-field-model'
 import { settlePullRequestGenerationRequest } from '../../hosted-review/creation/pull-request-generation-request-outcome'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,

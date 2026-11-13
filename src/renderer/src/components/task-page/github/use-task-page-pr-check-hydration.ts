@@ -11,21 +11,24 @@ import {
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useAppStore } from '@/store'
-import { capturePRCheckContract, type PRCheckContract } from '@/lib/pr-check-observation-contract'
-import { getGitHubSourceRuntimeTarget } from '@/lib/github-source-runtime-context'
+import {
+  capturePRCheckContract,
+  type PRCheckContract
+} from '@/lib/source-control/checks/pr-check-observation-contract'
+import { getGitHubSourceRuntimeTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
   acceptPRCheckObservation,
   projectPRCheckOwner,
   completePRCheckOwnerScope
-} from '../../../../../shared/github/complete-pr-check-owner'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/checks/complete-pr-check-owner'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
 import { PR_CHECKS_EAGER_PREFETCH_LIMIT } from '../task-page-source-context'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
 import { recomputeOn } from '@/lib/recompute-on'
 export function useTaskPagePRCheckHydration(

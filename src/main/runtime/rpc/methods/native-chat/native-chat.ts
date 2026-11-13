@@ -10,8 +10,8 @@ import { readNativeChatTranscriptTail } from '../../../../native-chat/transcript
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
-} from '../../../../native-chat/transcript-watch-contract'
-import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/ssh-transcript-path'
+} from '../../../../native-chat/transcript-watching/transcript-watch-contract'
+import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/transcript-filesystem/ssh-transcript-path'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import { sanitizeNativeChatRpcMessage } from './native-chat-rpc-block-sanitize'
 import {

@@ -4,11 +4,11 @@ import {
   nativeChatReceiptSnapshot,
   nativeChatReceiptWindow,
   nativeChatSourceReceiptKey,
+  liveNativeChatReceiptDependencies,
+  nativeChatReceiptDependencyKey,
   type NativeChatReceiptDependency
 } from './native-chat-source-receipts'
 import {
-  liveNativeChatReceiptDependencies,
-  nativeChatReceiptDependencyKey,
   nativeChatPendingWitnesses,
   pendingReceiptBit,
   type NativeChatPendingWitness

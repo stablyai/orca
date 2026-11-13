@@ -1,6 +1,6 @@
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { IncrementalChatAssembler } from '../assembly/native-chat-incremental-assembler'
-import { releaseNativeChatReceiptDependencies } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-witnesses'
+import { releaseNativeChatReceiptDependencies } from '../../../../../../../shared/native-chat/transcript/native-chat-source-receipts'
 import {
   nativeChatSourcePosition,
   type NativeChatSourceBoundary

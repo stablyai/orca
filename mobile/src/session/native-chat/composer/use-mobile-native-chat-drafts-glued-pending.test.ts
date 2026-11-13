@@ -1,22 +1,26 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { buildMobileNativeChatTransientData } from '../mobile-native-chat-render-data'
+
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
-  resetMobileNativeChatDraftStoreForTests,
+  closeMobileNativeChatTabDraft,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
+
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
+
+vi.mock('@react-native-async-storage/async-storage', async () => {
+  const { createInMemoryAsyncStorage } =
+    await import('../../../test-support/in-memory-async-storage')
+  return { default: createInMemoryAsyncStorage() }
+})
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 type TestRenderer = {
   unmount(): void
   update(element: ReturnType<typeof createElement>): void
-}
-
-function userTurn(id: string, text: string, timestamp: number): NativeChatMessage {
-  return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
 }
 
 function assistantTurn(id: string, text: string, timestamp: number): NativeChatMessage {
@@ -39,27 +43,25 @@ function imageTurn(id: string, path: string, timestamp: number): NativeChatMessa
   }
 }
 
-function renderedPendingTexts(
-  messages: NativeChatMessage[],
-  state: DraftState | null
-): (string | undefined)[] {
-  const { data } = buildMobileNativeChatTransientData({
-    folded: messages,
-    streaming: null,
-    pending: state?.pending ?? []
-  })
-  return data
-    .filter((message) => !messages.some((existing) => existing.id === message.id))
-    .map((message) => message.blocks.find((block) => block.type === 'text')?.text)
+function userTextMessage(id: string, text: string): NativeChatMessage {
+  return {
+    id,
+    role: 'user',
+    blocks: [{ type: 'text', text }],
+    timestamp: null,
+    source: 'transcript'
+  }
 }
 
 describe('useMobileNativeChatDrafts glued pending sends', () => {
   let renderer: TestRenderer | null = null
   let state: DraftState | null = null
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
-    resetMobileNativeChatDraftStoreForTests()
+    await loadMobileNativeChatDrafts('host', 'worktree')
+    closeMobileNativeChatTabDraft('host\0worktree\0tab')
+    await loadMobileNativeChatDrafts('host', 'worktree')
     renderer = null
     state = null
   })
@@ -67,17 +69,19 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
   function Harness({
     messages,
     transcriptLoading = false,
-    transcriptSettled = !transcriptLoading
+    transcriptSettled = !transcriptLoading,
+    sessionId = 'session'
   }: {
     messages: NativeChatMessage[]
     transcriptLoading?: boolean
     transcriptSettled?: boolean
+    sessionId?: string | null
   }): null {
     const drafts = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId: 'tab',
-      sessionId: 'session',
+      sessionId,
       messages,
       transcriptLoading,
       transcriptSettled
@@ -99,32 +103,18 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
   async function update(
     messages: NativeChatMessage[],
     transcriptLoading = false,
-    transcriptSettled = !transcriptLoading
+    transcriptSettled = !transcriptLoading,
+    sessionId: string | null = 'session'
   ): Promise<void> {
     await act(async () =>
-      renderer?.update(createElement(Harness, { messages, transcriptLoading, transcriptSettled }))
+      renderer?.update(
+        createElement(Harness, { messages, transcriptLoading, transcriptSettled, sessionId })
+      )
     )
   }
 
   // Between the older history rows and the rows that land after a send, on the host's clock.
   const SENT_AT = 3000
-
-  function send(text: string): void {
-    const origin = state?.captureSendOrigin(text, SENT_AT)
-    if (origin) {
-      state?.acceptSend(origin, text)
-    }
-  }
-
-  function rapidSend(first: string, second: string): void {
-    act(() => {
-      send(first)
-      send(second)
-    })
-  }
-
-  const pendingTexts = (): (string | undefined)[] | undefined =>
-    state?.pending.map((item) => item.text)
 
   // Hydrating rows give no boundary, so these sends match only rows newer than their send time.
   describe('sends issued while the transcript is still hydrating', () => {
@@ -146,18 +136,55 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
   })
 
   // Failed-read emptiness is unknown history, not an empty conversation; old rows must not claim sends against it.
-  describe('sends issued before any read settled', () => {
-    it('keeps both bubbles when the late read carries only an older glue-alike', async () => {
-      await mount([], false, false)
-      rapidSend('fix the', 'bug')
-
-      const olderIdentical = [
-        userTurn('m1', 'fix the bug', 1000),
-        assistantTurn('m2', 'fixed', 1100)
-      ]
-      await update(olderIdentical)
-      expect(pendingTexts()).toEqual(['fix the', 'bug'])
-      expect(renderedPendingTexts(olderIdentical, state)).toEqual(['fix the', 'bug'])
+  it('preserves the full waiting-image union across repeated session rebinding', async () => {
+    await mount([])
+    act(() => {
+      for (let index = 0; index < 8; index++) {
+        const text = `phone-${index}`
+        const origin = state!.captureSendOrigin(text)
+        state!.acceptSend(origin!, text)
+      }
     })
+    const captions = Array.from({ length: 8 }, (_, index) => `phone-${index}`)
+    for (const batch of [1, 8]) {
+      await update([], false, true, null)
+      act(() => {
+        for (let index = 0; index < batch; index++) {
+          const next = captions.length
+          const text = `photo-${next}`
+          const origin = state!.captureSendOrigin(text)
+          state!.acceptSend(origin!, text, [`file:///photo-${next}.png`])
+          captions.push(text)
+        }
+      })
+      await update([])
+      expect(state?.pending.map((entry) => entry.text)).toEqual(captions)
+    }
+    expect(state?.pending).toHaveLength(17)
+    expect(new Set(state?.pending.map((entry) => entry.id)).size).toBe(17)
+    const messages = captions.flatMap((text, index) =>
+      index < 8
+        ? [userTextMessage(`prompt-${index}`, text)]
+        : [
+            userTextMessage(`source-${index}`, `[Image: source: /tmp/photo-${index}.png]`),
+            userTextMessage(`prompt-${index}`, `[Image #1] ${text}`)
+          ]
+    )
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          messages: [...messages, assistantTurn('reply', 'finished', 10000)]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual(
+      Object.fromEntries(
+        Array.from({ length: 9 }, (_, index) => [
+          `prompt-${index + 8}`,
+          [`file:///photo-${index + 8}.png`]
+        ])
+      )
+    )
   })
 })
