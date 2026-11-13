@@ -140,8 +140,11 @@ it('shows setup-only shared configuration through the group Advanced disclosure'
     await waitFor(() =>
       expect(checkRuntimeGroupHooks).toHaveBeenCalledWith('local', group.id, { background: true })
     )
-    const advanced = view.container.querySelector('details')!
-    fireEvent.click(advanced.querySelector('summary')!)
+    const advancedSummary = within(view.container)
+      .getByText('Advanced', { selector: 'h5' })
+      .closest('summary')!
+    const advanced = advancedSummary.closest('details')!
+    fireEvent.click(advancedSummary)
     if (state !== 'invalid') {
       const disclosure = await within(advanced).findByRole('button', {
         name: state === 'loaded' ? /^orca.yaml detected$/ : /^No orca.yaml detected$/
