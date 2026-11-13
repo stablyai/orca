@@ -316,6 +316,7 @@
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 8 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
+3 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
