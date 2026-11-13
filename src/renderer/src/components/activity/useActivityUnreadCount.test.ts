@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { countActivityUnread } from './useActivityUnreadCount'
+import { countActivityUnread, countActivityUnreadChats } from './useActivityUnreadCount'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 
@@ -155,5 +155,29 @@ describe('countActivityUnread working turns', () => {
     expect(countActivityUnread(makeSource(entry), expiredAt)).toBe(0)
     expect(countActivityUnread(makeSource({ ...entry, updatedAt: expiredAt }), expiredAt)).toBe(1)
     expect(countActivityUnread(makeSource({ ...entry, restoredUnconfirmed: true }), 2_000)).toBe(0)
+  })
+})
+
+describe('countActivityUnreadChats', () => {
+  it('counts each chat with unread turns once and skips running chats', () => {
+    const twoTurns = 'tab-1:22222222-2222-4222-8222-222222222222'
+    const oneTurn = 'tab-1:33333333-3333-4333-8333-333333333333'
+    const running = 'tab-1:44444444-4444-4444-8444-444444444444'
+    const source = {
+      acknowledgedAgentsByPaneKey: {},
+      agentStatusByPaneKey: {
+        [twoTurns]: makeEntry({
+          paneKey: twoTurns,
+          stateHistory: [{ state: 'done', prompt: '', startedAt: 1_000 }]
+        }),
+        [oneTurn]: makeEntry({ paneKey: oneTurn, state: 'waiting' }),
+        [running]: makeEntry({ paneKey: running, state: 'working' })
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(countActivityUnreadChats(source, 2_000)).toBe(2)
+    expect(countActivityUnread(source, 2_000)).toBe(4)
   })
 })
