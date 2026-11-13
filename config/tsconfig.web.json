@@ -12,7 +12,8 @@
   ],
   "exclude": [
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
-    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
+    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
+    "../src/renderer/src/store/github/pull-requests/github-pr-hosted-receipt-loop.test.ts"
   ],
   "compilerOptions": {
     "composite": true,
