@@ -85,7 +85,7 @@ export function cloudSetupNoticeLine(
         ),
         description: t(
           'orcaCloud.setupNotices.environmentHeldMeaning',
-          'The environment is updating for a security fix. New workspaces will have it in a few minutes.'
+          'The environment is rebuilding for a security update. New workspaces get its setup again in a few minutes.'
         ),
         action: {
           label: t('orcaCloud.setupNotices.runSetupNow', 'Run setup now'),
