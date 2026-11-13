@@ -36,11 +36,23 @@ const readinessGraceSchema = (defaultMs: number) =>
     z.coerce.number().int().min(0).max(RELAY_MAX_READINESS_GRACE_MS).default(defaultMs)
   )
 
+// Comma-separated list: split, trimmed, empty entries dropped.
+function splitIssuerList(value: string): string[] {
+  return value.split(',').map((entry) => entry.trim()).filter((entry) => entry !== '')
+}
+
+const IssuerUrlSchema = z.string().url()
+
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
   ORCA_RELAY_PUBLIC_URL: z.string().url(),
   ORCA_RELAY_CELL_URL: z.string().url(),
-  ORCA_RELAY_AUTH_ISSUER: z.string().url(),
+  // Trusted token issuers, comma-separated (e.g. two during an issuer rotation); each must be a URL.
+  ORCA_RELAY_AUTH_ISSUER: z.string().superRefine((value, ctx) => {
+    const entries = splitIssuerList(value)
+    const invalid = entries.length === 0 || entries.some((entry) => !IssuerUrlSchema.safeParse(entry).success)
+    if (invalid) ctx.addIssue({ code: 'custom', message: 'Invalid URL' })
+  }),
   ORCA_RELAY_AUTH_AUDIENCE: z.literal('orca-relay').default('orca-relay'),
   ORCA_RELAY_JWKS_URL: z.string().url(),
   ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: z.string().min(32),
@@ -221,7 +233,8 @@ export type RelayConfig = {
   port: number
   publicUrl: string
   cellUrl: string
-  authIssuer: string
+  // One trusted issuer as a string, or several (any of them is accepted).
+  authIssuer: string | string[]
   authAudience: 'orca-relay'
   jwksUrl: string
   assignmentSigningKey: Uint8Array
@@ -281,6 +294,11 @@ function canonicalOrigin(value: string, name: string): string {
     throw new Error(`${name} must use HTTPS outside loopback development`)
   }
   return value
+}
+
+function canonicalIssuers(value: string): string | string[] {
+  const issuers = splitIssuerList(value).map((entry) => canonicalOrigin(entry, 'ORCA_RELAY_AUTH_ISSUER'))
+  return issuers.length === 1 ? issuers[0]! : issuers
 }
 
 export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConfig {
@@ -378,7 +396,7 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     port: parsed.PORT,
     publicUrl,
     cellUrl: ownCell.url,
-    authIssuer: canonicalOrigin(parsed.ORCA_RELAY_AUTH_ISSUER, 'ORCA_RELAY_AUTH_ISSUER'),
+    authIssuer: canonicalIssuers(parsed.ORCA_RELAY_AUTH_ISSUER),
     authAudience: parsed.ORCA_RELAY_AUTH_AUDIENCE,
     jwksUrl: parsed.ORCA_RELAY_JWKS_URL,
     assignmentSigningKey: new TextEncoder().encode(parsed.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY),

@@ -7,7 +7,7 @@ import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTVerifyGetKey 
 import { z } from 'zod'
 import { createStaleIfErrorJWKSet } from '../../relay/src/authentication/stale-if-error-jwks'
 import { KeysUnavailableError, persistingFetch, withPersistedFallback } from './jwks-persist'
-import type { EdgeClaims, Env } from './env'
+import { relayAuthIssuers, type EdgeClaims, type Env } from './env'
 
 export const HOST_ID = /^[A-Za-z0-9_-]{16}$/
 
@@ -39,11 +39,13 @@ function keysFor(env: Env): JWTVerifyGetKey {
 export type RelayJwtResult = { ok: true; claims: EdgeClaims } | { ok: false; reason: 'invalid' | 'keys_unavailable' }
 
 export async function verifyRelayJwt(env: Env, token: string): Promise<RelayJwtResult> {
+  // A token is accepted if its `iss` matches any trusted issuer.
+  const issuers = relayAuthIssuers(env)
   try {
     const { payload } = await jwtVerify(token, keysFor(env), {
       audience: env.RELAY_JWT_AUDIENCE,
       algorithms: ['ES256'],
-      ...(env.RELAY_AUTH_ISSUER ? { issuer: env.RELAY_AUTH_ISSUER } : {})
+      ...(issuers.length > 0 ? { issuer: issuers } : {})
     })
     const claims = ClaimsSchema.parse(payload)
     return {
