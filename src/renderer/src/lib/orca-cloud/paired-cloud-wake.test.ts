@@ -107,6 +107,9 @@ describe('waking a paired workspace', () => {
     const waking = wakePairedCloudWorkspace(ROW)
     // Still reading the bindings: the first keys typed now are held, not sent to the asleep server.
     expect(isWorkspaceWaking(ROW)).toBe(true)
+    // ...and it already shows as waking, so the surface lets typing through instead of covering the
+    // pane asleep (inert) until the read answers: keys typed in that first second were lost (n49/n51).
+    expect(getCloudWorkspaceSnapshot().wake[ROW]?.phase).toBe('waking')
     expect(
       captureWakeInput(
         ROW,

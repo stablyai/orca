@@ -5,7 +5,6 @@ import { translate } from '@/i18n/i18n'
 import type { CloudWakeSource } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { resolveCloudRowSandboxId } from './cloud-host-rows'
-import { beginWorkspaceWake } from '@/components/terminal-pane/input/wake-input-buffer'
 import {
   getCloudWorkspaceSnapshot,
   isCloudWorkspaceArchived,
@@ -97,18 +96,6 @@ export async function wakePairedCloudWorkspace(
     return notPaired(workspaceId, options.quiet)
   }
   const startedAt = Date.now()
-  if (!options.quiet) {
-    // PAIRED-WAKE-TYPE-THROUGH: hold typing from the press. Waiting for the 'waking' report (after
-    // the bindings read below) let the first keys reach the asleep server's dead connection.
-    beginWorkspaceWake(workspaceId, startedAt)
-  }
-  const sandboxId = await resolveCloudRowSandboxId({
-    id: workspaceId,
-    hostId: toRuntimeExecutionHostId(environmentId)
-  })
-  if (!sandboxId) {
-    return notPaired(workspaceId, options.quiet)
-  }
   const source = options.source ?? 'open'
   const report = (
     phase: 'waking' | 'connecting' | 'ready' | 'failed',
@@ -129,7 +116,18 @@ export async function wakePairedCloudWorkspace(
       })
     }
   }
+  // PAIRED-WAKE-TYPE-THROUGH: waking from the press, before the bindings read below. The waking
+  // layer is what lets typing through to the pane (the asleep cover makes it inert) and holds it;
+  // reporting only after that read lost the keys typed in its first second (n49/n51).
   report('waking')
+  const sandboxId = await resolveCloudRowSandboxId({
+    id: workspaceId,
+    hostId: toRuntimeExecutionHostId(environmentId)
+  })
+  if (!sandboxId) {
+    // Its card says it is no longer linked (Open cloud workspace…), ending this wake's hold too.
+    return notPaired(workspaceId, options.quiet)
+  }
   const result = await window.api.cloudWorkspaces.wake(sandboxId).catch((error: unknown) => ({
     ok: false as const,
     error: error instanceof Error ? error.message : String(error),
