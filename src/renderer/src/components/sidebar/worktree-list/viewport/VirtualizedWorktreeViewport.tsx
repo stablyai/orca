@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
+import { WorktreeSidebarIndentGuides } from './WorktreeSidebarIndentGuides'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
 import { buildRenderableRows } from '../listing/renderable-rows'
@@ -352,7 +353,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     measureVirtualRowElement,
     settings,
     projectActions,
-    newCardStyle,
     projectGroups,
     session,
     runtime,
@@ -411,6 +411,14 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >
+          <WorktreeSidebarIndentGuides
+            renderRows={renderRows}
+            groupBy={groupBy}
+            virtualItems={virtualItems}
+            activeWorktreeId={rowProps.activeWorktreeId}
+            activeWorkspaceExecutionHostId={rowProps.activeWorkspaceExecutionHostId ?? null}
+            hidden={runtime.worktreeDragState.draggingWorktreeId !== null}
+          />
           {renderWorktreeSidebarDropIndicators({
             headerDrag,
             worktreeDragState: runtime.worktreeDragState

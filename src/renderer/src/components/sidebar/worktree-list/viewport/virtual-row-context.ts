@@ -28,7 +28,6 @@ type BuildArgs = {
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   settings: AppState['settings']
   projectActions: RepoHeaderProjectActions
-  newCardStyle: boolean
   session: WorktreeDragSession
   runtime: WorktreeDragRuntime
   primaryActive: ReturnType<typeof usePrimaryActiveWorktreeRow>
@@ -123,7 +122,6 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     },
     folderWorkspace: {
       groupBy: props.groupBy,
-      newCardStyle: args.newCardStyle,
       settings: args.settings,
       activeWorktreeId: props.activeWorktreeId,
       activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,

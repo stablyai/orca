@@ -19,8 +19,11 @@ const GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET = 3
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 // Why: shared with project headers so titles don't shift when grouping mode changes.
 export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
-export const PROJECT_GROUP_HEADER_INDENT = 10
+// Why: a full tree step leaves room for the parent level's indent guide left of each card edge.
+export const PROJECT_GROUP_HEADER_INDENT = SIDEBAR_TREE_INDENT
 export const MAX_PROJECT_GROUP_HEADER_DEPTH = 6
+// Matches the header icon slot (`size-4`) so a level's guide drops from the center of its icon.
+const PROJECT_GROUP_HEADER_ICON_SIZE = 16
 
 function clampDepth(depth: number): number {
   return Math.max(0, Math.floor(Number.isFinite(depth) ? depth : 0))
@@ -31,6 +34,10 @@ export function getProjectGroupHeaderPaddingLeft(depth: number): number {
     PROJECT_GROUP_HEADER_BASE_PADDING +
     Math.min(clampDepth(depth), MAX_PROJECT_GROUP_HEADER_DEPTH) * PROJECT_GROUP_HEADER_INDENT
   )
+}
+
+export function getIndentGuideOffset(level: number): number {
+  return getProjectGroupHeaderPaddingLeft(level) + PROJECT_GROUP_HEADER_ICON_SIZE / 2
 }
 
 export function getWorktreeCardContentIndent(args: {
@@ -46,28 +53,15 @@ export function getWorktreeCardContentIndent(args: {
     : lineageIndent
 }
 
-export function getFolderWorkspaceCardContentIndent(args: { groupDepth: number }): number {
-  const parentGroupDepth = Math.max(0, clampDepth(args.groupDepth) - 1)
-  // Why: folder workspaces are direct children of their folder group, so they align to its label.
-  return getProjectGroupHeaderPaddingLeft(parentGroupDepth) + GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET
-}
-
-export function getFolderWorkspaceCardSurfaceInset(args: {
-  isGrouped: boolean
+/** Rows in a project tree sit one level below their header, so their surface clears its guide. */
+export function getProjectTreeCardDepth(args: {
+  isProjectTree: boolean
   groupDepth: number
 }): number {
-  const contentAnchor = getFolderWorkspaceCardContentIndent({ groupDepth: args.groupDepth })
-  const genericSurfaceInset = getWorktreeCardSurfaceInset(args)
-  const maxSurfaceInset =
-    contentAnchor - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
-
-  // Why: caps deep surfaces so flush-card margin plus minimum padding keep the anchor compact.
-  return Math.min(genericSurfaceInset, Math.max(0, maxSurfaceInset))
+  return args.isProjectTree ? clampDepth(args.groupDepth) + 1 : args.groupDepth
 }
 
-export function getFolderWorkspaceRowGeometry(args: {
-  experimentalNewWorktreeCardStyle: boolean
-  isFolderBackedWorkspaceChild: boolean
+export function getWorktreeCardGeometry(args: {
   isGrouped: boolean
   groupDepth: number
   lineageDepth: number
@@ -75,45 +69,8 @@ export function getFolderWorkspaceRowGeometry(args: {
   surfaceInset: number
   cardContentIndent: number
 } {
-  if (args.experimentalNewWorktreeCardStyle && args.isFolderBackedWorkspaceChild) {
-    // Why: standalone rows get no lineage wrapper offset, so align to the grouped repo-card anchor.
-    const parentGroupDepth = Math.max(0, clampDepth(args.groupDepth) - 1)
-    const contentAnchor = getWorktreeCardContentIndent({
-      isGrouped: true,
-      groupDepth: parentGroupDepth,
-      lineageDepth: 0
-    })
-    const surfaceInset = getWorktreeCardSurfaceInset({
-      isGrouped: true,
-      groupDepth: parentGroupDepth
-    })
-
-    return {
-      surfaceInset,
-      cardContentIndent: Math.max(0, contentAnchor - surfaceInset)
-    }
-  }
-
-  const contentIndent = args.isFolderBackedWorkspaceChild
-    ? getFolderWorkspaceCardContentIndent({
-        groupDepth: args.groupDepth
-      })
-    : getWorktreeCardContentIndent({
-        isGrouped: args.isGrouped,
-        groupDepth: args.groupDepth,
-        lineageDepth: args.lineageDepth
-      })
-  // Why: legacy folder-scanned workspaces keep the compact anchor; other rows use the normal path.
-  const surfaceInset = args.isFolderBackedWorkspaceChild
-    ? getFolderWorkspaceCardSurfaceInset({
-        isGrouped: true,
-        groupDepth: args.groupDepth
-      })
-    : getWorktreeCardSurfaceInset({
-        isGrouped: args.isGrouped,
-        groupDepth: args.groupDepth
-      })
-
+  const contentIndent = getWorktreeCardContentIndent(args)
+  const surfaceInset = getWorktreeCardSurfaceInset(args)
   return {
     surfaceInset,
     cardContentIndent: Math.max(0, contentIndent - surfaceInset)
