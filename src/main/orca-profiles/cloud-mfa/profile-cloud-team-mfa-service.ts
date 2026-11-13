@@ -19,7 +19,10 @@ import {
   orgMembersUrl,
   requestInit
 } from '../cloud-org/profile-cloud-org-members-client'
-import { runOrgMemberCall, type OrgCallResult } from '../cloud-org/profile-cloud-org-members-service'
+import {
+  runOrgMemberCall,
+  type OrgCallResult
+} from '../cloud-org/profile-cloud-org-members-service'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
 
 const SELF_STATES: readonly OrcaTeamMfaSelfState[] = ['on', 'off', 'pending', 'blocked', 'unknown']
@@ -113,7 +116,15 @@ async function request(url: string, init: RequestInit): Promise<unknown> {
 
 type Unavailable = Extract<
   OrcaTeamMfaPolicyResult,
-  { status: 'unconfigured' | 'reconnect-required' | 'unsupported' | 'forbidden' | 'rate-limited' | 'failed' }
+  {
+    status:
+      | 'unconfigured'
+      | 'reconnect-required'
+      | 'unsupported'
+      | 'forbidden'
+      | 'rate-limited'
+      | 'failed'
+  }
 >
 
 function unavailable(result: Exclude<OrgCallResult<unknown>, { status: 'ok' }>): Unavailable {
@@ -141,7 +152,7 @@ async function call<T>(
   userDataPath: string,
   run: (apiBaseUrl: string, accessToken: string, url: (path: string) => string) => Promise<T>,
   orgId: string
-): Promise<OrgCallResult<T> | { status: 'unconfigured' | 'unsupported' }> {
+): Promise<OrgCallResult<T> | { status: 'unconfigured' } | { status: 'unsupported' }> {
   const active = ensureActiveOrcaProfile(userDataPath)
   // Local dev auth has no server, so no policy.
   if (isOrcaCloudDevAuthEnabled()) {
