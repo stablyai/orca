@@ -182,6 +182,20 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
           )
         ]
       },
+      community: {
+        title: translate('community.setting', 'Community previews'),
+        description: translate(
+          'community.settingDescription',
+          'Explore unmerged Orca proposals and manage Custom additions.'
+        ),
+        keywords: [
+          ...translateSearchKeyword('community.searchKeywords.community', 'community'),
+          ...translateSearchKeyword('community.searchKeywords.proposals', 'proposals'),
+          ...translateSearchKeyword('community.searchKeywords.pullRequests', 'pull requests'),
+          ...translateSearchKeyword('community.searchKeywords.custom', 'custom'),
+          ...translateSearchKeyword('community.searchKeywords.experimental', 'experimental')
+        ]
+      },
       newWorktreeCardStyle: getNewWorktreeCardStyleSearchEntry(),
       ephemeralVms: getEphemeralVmsSearchEntry()
     }) satisfies Record<string, SettingsSearchEntry>

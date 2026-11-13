@@ -10,6 +10,7 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   space: true,
   skills: true,
   artifacts: true,
+  community: true,
   mobile: true
 }
 

@@ -1,3 +1,4 @@
+import { CustomBuildBadge } from './CustomBuildBadge'
 import { ArrowLeft, ArrowRight, MoreHorizontal, PanelLeft } from 'lucide-react'
 import logo from '../../../../resources/logo.svg'
 import { useTranslate } from '@/i18n/use-translate'
@@ -80,6 +81,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
             </ContextMenuContent>
           </ContextMenu>
         )}
+        <CustomBuildBadge />
         {layout.showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>

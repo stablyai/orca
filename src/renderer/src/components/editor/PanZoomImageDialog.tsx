@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,9 @@ type PanZoomImageDialogProps = Omit<
   background?: string
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
+  gallery?: { id: string; src?: string; title: string }[]
+  selectedIndex?: number
+  onSelectImage?: (index: number) => void
   toolbarActions?: React.ReactNode
 }
 
@@ -82,15 +85,36 @@ export function PanZoomImageDialog({
   background,
   fallback,
   toolbarActions,
+  gallery,
+  selectedIndex = 0,
+  onSelectImage,
   onCloseAutoFocus,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const openerRef = useRef<Element | null>(null)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         aria-describedby={undefined}
         {...contentProps}
+        onKeyDown={(event) => {
+          contentProps.onKeyDown?.(event)
+          if (event.defaultPrevented || !gallery || gallery.length < 2 || !onSelectImage) {
+            return
+          }
+          if (event.altKey || event.ctrlKey || event.metaKey) {
+            return
+          }
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault()
+            event.stopPropagation()
+            onSelectImage(
+              (selectedIndex + (event.key === 'ArrowLeft' ? -1 : 1) + gallery.length) %
+                gallery.length
+            )
+          }
+        }}
         showCloseButton={false}
         className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
         onOpenAutoFocus={(event) => {
@@ -121,16 +145,84 @@ export function PanZoomImageDialog({
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content so each opening starts fitted. */}
-        <PanZoomImageCanvas
-          src={src}
-          size={size}
-          title={title}
-          showTitle={showTitle}
-          background={background}
-          fallback={fallback}
-          toolbarActions={toolbarActions}
-          onClose={() => onOpenChange(false)}
-        />
+        <div className="absolute inset-0 flex flex-col">
+          <div className="relative min-h-0 flex-1">
+            <PanZoomImageCanvas
+              key={src}
+              src={src}
+              size={size}
+              title={title}
+              showTitle={showTitle}
+              background={background}
+              fallback={fallback}
+              toolbarActions={toolbarActions}
+              onClose={() => onOpenChange(false)}
+            />
+            {gallery && gallery.length > 1 && onSelectImage ? (
+              <div className="pointer-events-none absolute inset-x-3 top-1/2 flex justify-between">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="pointer-events-auto"
+                  aria-label={t('components.imageGallery.previous', 'Previous image')}
+                  onClick={() =>
+                    onSelectImage((selectedIndex - 1 + gallery.length) % gallery.length)
+                  }
+                >
+                  <ChevronLeft />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="pointer-events-auto"
+                  aria-label={t('components.imageGallery.next', 'Next image')}
+                  onClick={() => onSelectImage((selectedIndex + 1) % gallery.length)}
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {gallery && gallery.length > 1 && onSelectImage ? (
+            <div
+              className="scrollbar-sleek flex shrink-0 gap-2 overflow-x-auto border-t border-border bg-background p-3"
+              aria-label={t('components.imageGallery.images', 'Images')}
+            >
+              <span
+                className="self-center whitespace-nowrap text-xs text-muted-foreground"
+                aria-live="polite"
+              >
+                {t('components.imageGallery.position', '{{current}} of {{total}}', {
+                  current: selectedIndex + 1,
+                  total: gallery.length
+                })}
+              </span>
+              <div className="mx-auto flex gap-2">
+                {gallery.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    aria-label={image.title}
+                    aria-pressed={index === selectedIndex}
+                    ref={(element) => {
+                      if (index === selectedIndex) {
+                        element?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+                      }
+                    }}
+                    onClick={() => onSelectImage(index)}
+                    className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-muted-foreground opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:opacity-100 aria-pressed:ring-2 aria-pressed:ring-ring"
+                  >
+                    {image.src ? (
+                      <img src={image.src} alt={image.title} className="size-full object-contain" />
+                    ) : (
+                      <span className="truncate text-xs">{image.title}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
   )

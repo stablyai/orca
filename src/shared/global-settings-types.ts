@@ -442,6 +442,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Name this runtime reports to paired clients; empty uses the host's detected name. */
   machineName: string
   /** Opt-in animated pet overlay; off unmounts it and renderer toggles apply immediately. */
+  experimentalCommunity?: boolean
   experimentalPet: boolean
   /** Legacy persisted key from before the sidekick -> pet rename; read only during migration, new writes use experimentalPet. */
   experimentalSidekick?: boolean

@@ -1,3 +1,5 @@
+import { useNativeChatImageGallery } from './native-chat-image-gallery-context'
+import { useNativeChatMarkdownImageSource } from './use-native-chat-markdown-image-source'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { FileText } from 'lucide-react'
@@ -6,10 +8,7 @@ import {
   GitHubUserAttachmentImage,
   isGitHubUserAttachmentUrl
 } from '@/components/sidebar/comment-markdown-github-attachment-media'
-import {
-  getLocalImageCacheKey,
-  useLocalImageSrc
-} from '@/components/editor/document-images/useLocalImageSrc'
+import { getLocalImageCacheKey } from '@/components/editor/document-images/useLocalImageSrc'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -19,23 +18,15 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
-import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
-import { jiraImageReference } from '../../../../../../shared/jira/jira-attachment-image'
-import { filesystemPathToFileUri } from '../../../../../../shared/file-links/file-uri-path'
-import {
-  createNativeChatFileHref,
-  routeNativeChatHref
-} from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import { resolveNativeChatFileLink } from '../../links/actions/native-chat-file-link'
 import { useNativeChatFileLinkClick } from '../../links/actions/use-native-chat-file-link-click'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
-import { useNativeChatMediaHref } from './use-native-chat-media-href'
 import { useNativeChatLinkClick } from '../../links/actions/native-chat-link-click-context'
 
 export const NativeChatMarkdownImageLinkContext = createContext<string | undefined>(undefined)
@@ -48,6 +39,7 @@ type MarkdownImageProps = {
 
 export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.Element | null {
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
+  const openGallery = useNativeChatImageGallery(props.src, props.alt ?? 'Image')
   if (!props.src) {
     return props.alt ? <span>{props.alt}</span> : null
   }
@@ -56,7 +48,7 @@ export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.El
       ? `${window.location.protocol}${props.src}`
       : props.src
   if (isGitHubUserAttachmentUrl(props.src)) {
-    return <GitHubUserAttachmentImage src={props.src} alt={props.alt} />
+    return <GitHubUserAttachmentImage src={props.src} alt={props.alt} onPreview={openGallery} />
   }
   const identity = owner?.runtimeContext
     ? getLocalImageCacheKey(
@@ -89,48 +81,11 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
   const [menuOpen, setMenuOpen] = useState(false)
   const [failedSrc, setFailedSrc] = useState<string>()
   const handingOff = useRef(false)
-  const runtimeContext = owner?.runtimeContext ?? null
-  const fileLinkContext =
-    runtimeContext?.worktreePath && owner?.fileLinkContext
-      ? {
-          ...owner.fileLinkContext,
-          worktreeId: runtimeContext.worktreeId ?? owner.fileLinkContext.worktreeId,
-          worktreePath: runtimeContext.worktreePath,
-          runtimeEnvironmentId: runtimeTargetEnvironmentId(runtimeContext.target)
-        }
-      : null
-  const route = routeNativeChatHref(src)
-  const originalImageHref =
-    route.kind === 'file' ? createNativeChatFileHref(route.pathText, 'literal') : src
-  const external = Boolean(src && /^(?:https?|data|blob):/i.test(src))
-  const attachment = src ? jiraImageReference(src) !== null : false
   const visible = owner?.isVisible ?? true
   const leaseActive = visible && (near || open)
-  const media = useNativeChatMediaHref({
-    href: originalImageHref,
-    runtimeContext,
-    tabId: fileLinkContext?.sourceTabId,
-    sessionId: owner?.sessionId,
-    active: leaseActive,
-    retryKey
-  })
-  const imageHref = media.href
-  const imageRuntimeContext =
-    runtimeContext && media.expectedEnvironmentPairingRevision !== undefined
-      ? {
-          ...runtimeContext,
-          expectedEnvironmentPairingRevision: media.expectedEnvironmentPairingRevision
-        }
-      : runtimeContext
-  const target = resolveNativeChatFileLink(imageHref, fileLinkContext)
-  const localSrc =
-    !external && !attachment && target ? filesystemPathToFileUri(target.absolutePath) : undefined
-  const loadedSrc = useLocalImageSrc(
-    leaseActive ? localSrc : undefined,
-    target?.absolutePath ?? '',
-    runtimeContext?.connectionId,
-    imageRuntimeContext,
-    IMAGE_ACCESS,
+  const { imageSrc, fileLinkContext, route, imageHref, target } = useNativeChatMarkdownImageSource(
+    src,
+    leaseActive,
     retryKey
   )
   useEffect(() => {
@@ -148,13 +103,13 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
       setNear(nextNear)
     })
   }, [])
-  const imageSrc = external || attachment ? src : leaseActive ? loadedSrc : undefined
   const displaySrc = imageSrc === failedSrc ? undefined : imageSrc
   const onFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
   const title =
     alt?.trim() ||
     (target ? basename(target.absolutePath) : '') ||
     t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
+  const openGallery = useNativeChatImageGallery(src, title, displaySrc)
   if (!visible && (open || menuOpen)) {
     setOpen(false)
     setMenuOpen(false)
@@ -193,6 +148,10 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
         if (nextOpen) {
           handingOff.current = false
           setRetryKey((key) => key + 1)
+        }
+        if (nextOpen && openGallery) {
+          openGallery()
+          return
         }
         setOpen(nextOpen)
         if (!nextOpen) {

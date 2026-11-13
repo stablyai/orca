@@ -182,6 +182,18 @@ import {
   SaveImageAsTempFile,
   StartImageUpload
 } from './clipboard-params'
+import {
+  CommunityAccountParams,
+  CommunityCandidateDispatchParams,
+  CommunityCandidateHistoryParams,
+  CommunityCandidateIdParams,
+  CommunityDetailParams,
+  CommunityEvidenceParams,
+  CommunityFeatureActionParams,
+  CommunityHistoryParams,
+  CommunityNumberParams,
+  CommunityQueryParams
+} from './community-params'
 import { ComputerCapabilitiesParams, ComputerPermissionsStatusParams } from './computer-params'
 import {
   Click,
@@ -1019,6 +1031,25 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.commitImageUpload': CommitImageUpload,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
+  'community.account': CommunityAccountParams,
+  'community.accounts': null,
+  'community.activity': null,
+  'community.cancel': null,
+  'community.candidateHistory': CommunityCandidateHistoryParams,
+  'community.candidateStatus': CommunityCandidateIdParams,
+  'community.detail': CommunityDetailParams,
+  'community.dispatchCandidate': CommunityCandidateDispatchParams,
+  'community.evidence': CommunityEvidenceParams,
+  'community.features': null,
+  'community.history': CommunityHistoryParams,
+  'community.list': CommunityQueryParams,
+  'community.mutate': CommunityFeatureActionParams,
+  'community.prepareCandidate': null,
+  'community.refresh': null,
+  'community.releases': null,
+  'community.stageArtifact': CommunityCandidateIdParams,
+  'community.status': null,
+  'community.verifyRelease': CommunityNumberParams,
   'computer.capabilities': ComputerCapabilitiesParams,
   'computer.click': Click,
   'computer.drag': DragOfComputerSchemasParams,

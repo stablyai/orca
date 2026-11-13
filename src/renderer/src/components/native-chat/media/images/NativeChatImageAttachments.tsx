@@ -1,3 +1,5 @@
+import { useNativeChatImageGallery } from './native-chat-image-gallery-context'
+import { useNativeChatReferenceImageSource } from './use-native-chat-reference-image-source'
 import { useEffect, useRef, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
 import { cn } from '../../../../lib/class-names'
@@ -5,15 +7,11 @@ import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { PanZoomImageDialog } from '../../../editor/PanZoomImageDialog'
-import {
-  getLocalImageCacheKey,
-  useLocalImageSrc
-} from '../../../editor/document-images/useLocalImageSrc'
+import { getLocalImageCacheKey } from '../../../editor/document-images/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '../../../../runtime/files/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
-import { chatImageAccess } from '../../../../lib/files/access/local-file-access'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
 
 function renderableImageSource(source: string | undefined): boolean {
@@ -39,7 +37,6 @@ function transcriptImageIdentity(
 }
 
 // Roles do not prove who chose an auto-loaded path; main must validate local images by real file type.
-const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
 function TranscriptImagePreview({
   block,
@@ -54,19 +51,12 @@ function TranscriptImagePreview({
   const [thumbnailErrorSrc, setThumbnailErrorSrc] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const source = block.url?.trim() || block.path
-  const filePath = block.path ?? source ?? ''
   const external = renderableImageSource(source)
   const leaseActive = near || open
-  const localSrc = useLocalImageSrc(
-    leaseActive && !external && runtimeContext !== undefined ? source : undefined,
-    filePath,
-    runtimeContext?.connectionId,
-    runtimeContext,
-    TRANSCRIPT_IMAGE_ACCESS
-  )
-  const displaySrc = external && leaseActive ? source : localSrc
+  const displaySrc = useNativeChatReferenceImageSource(block, runtimeContext, leaseActive)
   const copySrc = copyableNativeChatImageSrc(displaySrc)
   const label = nativeChatImageLabel(block)
+  const openGallery = useNativeChatImageGallery(source, label, displaySrc)
   const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
   const fallback = (
     <div
@@ -113,7 +103,7 @@ function TranscriptImagePreview({
         aria-label={`${viewImageLabel}: ${label}`}
         title={label}
         data-native-chat-copy-image-src={copySrc}
-        onClick={() => setOpen(true)}
+        onClick={() => (openGallery ? openGallery() : setOpen(true))}
         className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <img

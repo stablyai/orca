@@ -1,3 +1,4 @@
+import { COMMUNITY_METHODS } from './community/community'
 import { STATUS_METHODS } from './host-management/status'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
@@ -92,6 +93,7 @@ export const ALL_RPC_METHODS = [
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
+  ...COMMUNITY_METHODS,
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,

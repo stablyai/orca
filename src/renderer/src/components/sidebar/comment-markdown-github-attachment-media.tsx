@@ -81,23 +81,35 @@ export function GitHubUserAttachmentVideo({
 
 export function GitHubUserAttachmentImage({
   src,
-  alt
+  alt,
+  onPreview
 }: {
   src: string
   alt: string | undefined
+  onPreview?: (source: string) => void
 }): React.ReactElement {
   const imageUrls = React.useContext(GitHubBodyImageUrlsContext)
-  return <AttachmentImage key={src} src={src} candidate={imageUrls?.[src] ?? src} alt={alt} />
+  return (
+    <AttachmentImage
+      key={src}
+      src={src}
+      candidate={imageUrls?.[src] ?? src}
+      alt={alt}
+      onPreview={onPreview}
+    />
+  )
 }
 
 function AttachmentImage({
   src,
   candidate,
-  alt
+  alt,
+  onPreview
 }: {
   src: string
   candidate: string
   alt: string | undefined
+  onPreview?: (source: string) => void
 }): React.ReactElement {
   const [loadedSource, setLoadedSource] = React.useState<string | null>(null)
   const [failedSource, setFailedSource] = React.useState<string | null>(null)
@@ -118,7 +130,13 @@ function AttachmentImage({
       target="_blank"
       rel="noreferrer"
       className="inline-block max-w-full"
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (onPreview && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+          e.preventDefault()
+          onPreview(displaySrc)
+        }
+      }}
     >
       <img
         key={displaySrc}
