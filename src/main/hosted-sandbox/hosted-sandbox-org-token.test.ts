@@ -28,6 +28,8 @@ installFakeAppEnvironment({ getPath: () => state.dir })
 
 const MINT_URL = 'http://127.0.0.1:9/v1/desktop/auth/sandbox-token'
 const CONTROL_PLANE = 'https://sandbox.cloud.test'
+// Fixed expiry (2100-01-01) so minted tokens stay fresh without reading the wall clock.
+const FAR_FUTURE_MS = 4_102_444_800_000
 
 /** Unsigned token-shaped test value; only the claims matter to the desktop. */
 function fakeToken(org: string | null, serial: number): string {
@@ -84,7 +86,7 @@ function harness(options: {
       if (pending) {
         await pending
       }
-      return Response.json({ sandboxToken: fakeToken(org, call), expiresAt: Date.now() + 300_000 })
+      return Response.json({ sandboxToken: fakeToken(org, call), expiresAt: FAR_FUTURE_MS })
     }
     const headers = new Headers(init?.headers)
     controlCalls.push(headers)
