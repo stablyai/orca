@@ -145,8 +145,8 @@ export function TeamWorkspacesSettings({ orgId }: { orgId: string | null }): Rea
               <col />
               <col className="w-16" />
               <col className="w-36" />
-              <col className="w-24" />
-              <col className="w-24" />
+              <col className="w-32" />
+              <col className="w-20" />
               <col className="w-20" />
               <col className="w-10" />
             </colgroup>

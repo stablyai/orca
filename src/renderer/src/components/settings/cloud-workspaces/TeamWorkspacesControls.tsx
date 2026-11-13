@@ -100,8 +100,8 @@ export function Filters({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-40 flex-1">
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <div className="relative min-w-56 flex-1">
         <Search
           className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
           aria-hidden
@@ -114,7 +114,7 @@ export function Filters({
           aria-label={t('settings.teamWorkspaces.search', 'Search workspaces')}
           placeholder={t(
             'settings.teamWorkspaces.searchPlaceholder',
-            'Search by name, repository, person or W-number…'
+            'Search name, repository, person, W-number…'
           )}
           onChange={(event) => onChange({ search: event.target.value })}
         />
