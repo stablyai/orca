@@ -24,6 +24,8 @@ type NativeChatLeftAt = {
   position: AgentJournalPosition
   /** A growing reply counts as missed from the position immediately before it. */
   writing: { key: string; size: number; before: AgentJournalPosition } | null
+  /** A turn was running, whether or not it had drawn a reply yet. */
+  running: boolean
   /** The reader's prompts there were, by row key: a key stays the same from send to journal. */
   prompts: ReadonlySet<string>
   /** Those the host held in its queue, to hand to the agent later. */
@@ -64,7 +66,9 @@ function nativeChatLeftAt(
       }
     }
   }
-  return { position: newestRowPosition(all), writing, prompts, queuedPrompts }
+  // The prompt that opened a turn is in it, so a turn that has drawn no reply yet still counts.
+  const running = slots.some((slot) => slot.kind === 'message' && slot.activeTurnIsWorking)
+  return { position: newestRowPosition(all), writing, prompts, queuedPrompts, running }
 }
 
 /** The first row that came while the reader was away, and the journal stretch it came in. */
@@ -134,11 +138,12 @@ function nativeChatPromptRanWhileAway(
   if (!left.prompts.has(key)) {
     return true
   }
-  // A queued send ran behind a turn that was running, or behind work the reader missed. The host also
-  // holds a chat's first send while the chat opens; that one runs first, its reply the answer awaited.
+  // A queued send ran behind a turn that was running (with or without a reply drawn yet), or behind
+  // work the reader missed. The host also holds a chat's first send while the chat opens; no turn
+  // runs then, so that one runs first, its reply the answer awaited.
   return (
     left.queuedPrompts.has(key) &&
-    (left.writing !== null ||
+    (left.running ||
       (firstMissedAt !== undefined && compareAgentJournalPositions(at, firstMissedAt) > 0))
   )
 }

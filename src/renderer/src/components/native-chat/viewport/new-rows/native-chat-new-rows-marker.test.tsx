@@ -349,6 +349,34 @@ describe('useNativeChatNewRowsMarker', () => {
       expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
     })
 
+    it('draws when a queued send ran behind a turn that had drawn no reply when the reader left', () => {
+      const asked = [row('prompt', 1, 'user')]
+      const queued: NativeChatMessage = { ...row('held', 2, 'user'), queued: true }
+      const view = chat(asked, { working: true })
+      view.rerender({ messages: asked, showing: true, waiting: [queued] })
+      view.rerender({ messages: asked, showing: false, waiting: [queued] })
+      // The running turn settles with nothing to show; the held send runs and gets a short answer.
+      view.rerender({
+        messages: [...asked, row('held', 3, 'user'), row('answer', 4)],
+        showing: true,
+        turn: { worked: 3 }
+      })
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
+    })
+
+    it('weighs by height a short reply to a turn that had drawn no reply when the reader left', () => {
+      const asked = [row('prompt', 1, 'user')]
+      const view = chat(asked, { working: true })
+      view.rerender({ messages: asked, showing: false })
+      view.rerender({
+        messages: [...asked, row('answer', 2)],
+        showing: true,
+        turn: { worked: 3 }
+      })
+      // Drawn above the turn bar that parts the answer from the reader's prompt.
+      expect(view.result.current.marker).toMatchObject({ key: 'prompt', look: 'measure' })
+    })
+
     it('draws when a prompt this pane never sent ran, such as an auto-continue', () => {
       const view = leaveAndReturn(SEEN, [...SEEN, row('continue', 3, 'user'), row('answer', 4)])
       expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
