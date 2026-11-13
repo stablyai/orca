@@ -96,6 +96,7 @@ function noChildSyncFailure(result: unknown): boolean {
   if (result === null || typeof result !== 'object') {
     return false
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Every read is compared with an exact value or passed to the unknown-value error guard.
   const value = result as {
     pid?: number
     status?: number | null

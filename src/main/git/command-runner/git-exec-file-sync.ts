@@ -29,6 +29,7 @@ export function gitExecFileSync(
     // Host Git only: a WSL path would make this a synchronous wsl.exe that can boot the distro.
     throw new Error('Synchronous Git cannot run in a WSL folder. Use asynchronous Git for it.')
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: A BufferEncoding is always supplied, so execFileSync returns text.
   return execNativeFileSync(
     resolved.binary,
     resolved.args,
