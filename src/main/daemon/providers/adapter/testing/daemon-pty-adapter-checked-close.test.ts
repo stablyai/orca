@@ -5,13 +5,13 @@ import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import {
   createMockSubprocess,
+  type DaemonAdapterHarness,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
   startDaemonAdapterHarness,
-  waitFor,
-  type DaemonAdapterHarness
+  waitFor
 } from './daemon-pty-adapter-test-harness'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 let harness: DaemonAdapterHarness | undefined
 let adapter: DaemonPtyAdapter | undefined

@@ -148,7 +148,9 @@ function failed(
 }
 
 function abortReason(signal: AbortSignal): 'canceled' | 'deadline' {
-  return (signal.reason as Error | undefined)?.name === 'TimeoutError' ? 'deadline' : 'canceled'
+  // AbortSignal.timeout aborts with a DOMException, an Error named TimeoutError.
+  const reason: unknown = signal.reason
+  return reason instanceof Error && reason.name === 'TimeoutError' ? 'deadline' : 'canceled'
 }
 
 function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {

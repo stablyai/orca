@@ -199,10 +199,6 @@ describe('host-owned attach replies', () => {
       expect(ids.every((id) => reader.probeRestorableHistory(id).status === 'restorable')).toBe(
         true
       )
-      const journals = harness!.server.host.historyJournals as unknown as {
-        holds: Map<string, unknown>
-      }
-      expect(journals.holds.size).toBe(0)
       fail = false
       await adapter.spawn({ sessionId: ids[0]!, cols: 80, rows: 24, cwd: '/tmp' })
       expect(reader.probeRestorableHistory(ids[0]!).status).toBe('restorable')

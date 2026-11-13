@@ -11,8 +11,11 @@ import { HistoryManager } from '../../../history/storage/history-manager'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import { HistoryReader } from '../../../history/restoration/history-reader'
 import { readTerminalHistoryCheckpoint } from '../../../history/restoration/terminal-history-checkpoint-reader'
-import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
+import {
+  createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
+  startDaemonAdapterHarness
+} from './daemon-pty-adapter-test-harness'
 
 const DEAD_TUI_MODES = ['\x1b[?1049h', '\x1b[?1003h', '\x1b[?1006h']
 

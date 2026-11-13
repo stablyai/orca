@@ -89,6 +89,7 @@ describe('deep-history read ownership', () => {
     expect(await readDeep(reads, journal)).toContain('NEW_58_')
   }, 60_000)
 
+  // Replays a multi-megabyte pending source in slices on real files.
   it('severs a source at a replay yield and frees its charge before the parser resumes', async () => {
     const { reads, openJournal, record, prime } = openReads()
     const journal = openJournal('own-yield')

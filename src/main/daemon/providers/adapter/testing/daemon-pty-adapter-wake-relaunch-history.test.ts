@@ -7,10 +7,13 @@ import { parsePtySessionId } from '../../../../../shared/terminal/pty/lifecycle/
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import type { DaemonServer } from '../../../server/daemon-server'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
-import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
+import {
+  createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
+  startDaemonAdapterHarness
+} from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({

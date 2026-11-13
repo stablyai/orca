@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { HistoryReader } from '../../../history/restoration/history-reader'
+import type * as CheckpointReaderModule from '../../../history/restoration/terminal-history-checkpoint-reader'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import {
   createMockSubprocess,
@@ -21,6 +22,25 @@ vi.mock('../daemon-live-sleep-cwd', () => ({
   }
 }))
 
+// Another writer may touch a session's files while a cold read is acquiring them.
+const sourceChange = vi.hoisted(() => ({ during: (): void => {} }))
+vi.mock(
+  '../../../history/restoration/terminal-history-checkpoint-reader',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof CheckpointReaderModule>()
+    return {
+      ...actual,
+      readTerminalHistoryCheckpoint: async (
+        ...args: Parameters<typeof actual.readTerminalHistoryCheckpoint>
+      ) => {
+        const read = await actual.readTerminalHistoryCheckpoint(...args)
+        sourceChange.during()
+        return read
+      }
+    }
+  }
+)
+
 type MockChild = ReturnType<typeof createMockSubprocess>
 let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 const adapters: DaemonPtyAdapter[] = []
@@ -30,6 +50,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   probe.cwd = null
   probe.during = () => {}
+  sourceChange.during = () => {}
   for (const adapter of adapters.splice(0)) {
     adapter.dispose()
   }
@@ -82,6 +103,7 @@ function exitAfterOutput(child: MockChild, output: string, delayMs = 5): void {
 const request = (sessionId: string) => ({ sessionId, cols: 100, rows: 30, cwd: '/tmp' })
 
 describe('host Sleep through disk-only Wake', () => {
+  // Two real Sleep and disk-only Wake cycles through the daemon, its files and replay.
   it('wakes the probed folder, retained rows and geometry, then sleeps and wakes again', async () => {
     const { open, child, spawnCwds } = await startHost()
     const sessionId = 'sleep-wake'
@@ -110,6 +132,7 @@ describe('host Sleep through disk-only Wake', () => {
     expect(spawnCwds.at(-1)).toBe(second)
   }, 30_000)
 
+  // A real daemon teardown runs to its settled, refused end before the assertions.
   it('leaves the terminal running when its root signal is refused', async () => {
     const { open, child, historyPath } = await startHost()
     const sessionId = 'sleep-refused'
@@ -129,6 +152,7 @@ describe('host Sleep through disk-only Wake', () => {
     await waitFor(() => JSON.parse(readFileSync(metaPath, 'utf8')).endedAt !== null, 10_000)
   }, 30_000)
 
+  // A real daemon Sleep request runs through its probe, admission and refusal.
   it('kills nothing when the process exits on its own before Sleep authorizes', async () => {
     const { open, child } = await startHost()
     const sessionId = 'sleep-natural-exit'
@@ -140,6 +164,7 @@ describe('host Sleep through disk-only Wake', () => {
     expect(child().kill).not.toHaveBeenCalled()
   }, 30_000)
 
+  // The final cut is published after a delayed physical exit and a successor start.
   it('finishes the final cut after its caller gives up, and touches no successor', async () => {
     const { open, child } = await startHost()
     const sessionId = 'sleep-late-caller'
@@ -149,7 +174,11 @@ describe('host Sleep through disk-only Wake', () => {
     exitAfterOutput(child(), 'LATE_EXIT\r\n', 400)
 
     await expect(
-      adapter.shutdown(sessionId, { keepHistory: true, deadlineMs: Date.now() + 150 })
+      adapter.shutdown(sessionId, {
+        keepHistory: true,
+        // ast-grep-ignore: test-no-wall-clock -- Sleep's deadline is an absolute epoch the real daemon compares against.
+        deadlineMs: Date.now() + 150
+      })
     ).rejects.toThrow()
     await waitFor(() => harness!.server.host.listSessions().length === 0, 10_000)
     await harness!.server.host.historyJournals!.settleAll()
@@ -174,19 +203,11 @@ describe('host Sleep through disk-only Wake', () => {
       readdirSync(dir).map((name) => [name, readFileSync(join(dir, name), 'utf8')])
     )
     const historyEntries = readdirSync(historyPath).sort()
-    const reader = HistoryReader.prototype as unknown as {
-      detectColdRestoreOnce: (...args: unknown[]) => Promise<unknown>
+    let touches = 0
+    sourceChange.during = () => {
+      touches += 1
+      utimesSync(join(dir, 'meta.json'), touches, touches)
     }
-    const read = reader.detectColdRestoreOnce
-    const changing = vi.spyOn(reader, 'detectColdRestoreOnce').mockImplementation(async function (
-      this: HistoryReader,
-      ...args: unknown[]
-    ) {
-      const result = await read.apply(this, args)
-      // Another writer touches the files during every acquisition.
-      utimesSync(join(dir, 'meta.json'), new Date(), new Date(Date.now() + 60_000))
-      return result
-    })
     const waking = open()
 
     await expect(waking.spawn(request(sessionId))).rejects.toThrow('terminal_history_unavailable')
@@ -196,13 +217,14 @@ describe('host Sleep through disk-only Wake', () => {
       expect(readFileSync(join(dir, name), 'utf8')).toBe(content)
     }
 
-    changing.mockRestore()
+    sourceChange.during = () => {}
     const retried = await waking.spawn(request(sessionId))
     expect(retried.coldRestore?.scrollback).toContain('SAVED_ROW')
   }, 30_000)
 })
 
 describe('quit commits every captured host session', () => {
+  // Real quit commits through the daemon socket and file publication.
   it('makes recent output durable before the daemon could be lost, within one budget', async () => {
     const { open, children, historyPath } = await startHost()
     const adapter = open()
@@ -211,7 +233,7 @@ describe('quit commits every captured host session', () => {
     children[0]._simulateData('RECENT_ROW\r\n')
     children[1]._simulateData('QUIET_ROW\r\n')
 
-    await adapter.disconnectOnly({ deadlineMs: Date.now() + 5_000 })
+    await adapter.disconnectOnly()
     // Read the files at once: nothing waits for the ordinary one-second append window.
     const reader = new HistoryReader(historyPath)
     for (const [sessionId, row] of [
@@ -240,7 +262,7 @@ describe('quit commits every captured host session', () => {
     await expect(relaunched.shutdown(sessionId, { keepHistory: true })).rejects.toThrow()
     child()._simulateData('UNMOUNTED_ROW\r\n')
 
-    await relaunched.disconnectOnly({ deadlineMs: Date.now() + 5_000 })
+    await relaunched.disconnectOnly()
     const restored = await new HistoryReader(historyPath).detectColdRestore(sessionId, {
       ignoreCleanEnd: true
     })

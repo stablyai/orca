@@ -16,6 +16,7 @@ const frameCharge = (data: string): number => Buffer.byteLength(data, 'utf8') + 
 
 // N2: frozen records still shared with the writer's queue are one copy, not two.
 describe('frozen read backing', () => {
+  // Queues about 8 MiB of real records and replays them through the parser.
   it('admits a read of 127 full records just under the session bound', async () => {
     const { reads, openJournal, record, prime } = openReads()
     const journal = openJournal('backing-near-cap')
@@ -40,6 +41,7 @@ describe('frozen read backing', () => {
     await journal.flush()
   }, 60_000)
 
+  // Queues and replays 10,000 real records through the parser.
   it('admits a read of exactly 10,000 queued records', async () => {
     const { reads, openJournal, record, prime } = openReads()
     const journal = openJournal('backing-record-cap')
@@ -97,6 +99,7 @@ describe('frozen read backing', () => {
     expect(later.split('TAIL_C_ROW')).toHaveLength(2)
   })
 
+  // Fills the record bound with real writes, then replays the survivor from files.
   it('revokes an already-replaced tail before later writes exhaust the reader and writer together', async () => {
     const { reads, openJournal, record, prime } = openReads()
     const journal = openJournal('backing-replaced-tail-pressure')

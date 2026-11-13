@@ -1,5 +1,5 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
@@ -9,6 +9,7 @@ import { decodeLogHeader } from '../../../history/storage/terminal-history-log'
 import { HistoryReader } from '../../../history/restoration/history-reader'
 import {
   createMockSubprocess,
+  ReplyHoldingAdapter,
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
@@ -126,6 +127,7 @@ describe('daemon-owned terminal history', () => {
     expect(harness!.server.host.historyJournals?.live(id)?.outcome(0).kind).toBe('fold')
   }, 30_000)
 
+  // Replays thousands of retained rows through a real daemon and its files.
   it('keeps custom tab stops for every retained row under the log budget', async () => {
     const { child } = await startHostHistory()
     const { id } = await adapter!.spawn({
@@ -229,30 +231,19 @@ describe('daemon-owned terminal history', () => {
         hostHistory: true
       }
     )
-    adapter = new DaemonPtyAdapter({
+    const holding = new ReplyHoldingAdapter({
       socketPath: harness.socketPath,
       tokenPath: harness.tokenPath,
       historyPath: join(harness.dir, 'history')
     })
+    adapter = holding
     const request = { sessionId: 'host-history-rebound', cols: 80, rows: 24, cwd: '/tmp' }
     await adapter.spawn(request)
     child._simulateData('OLD_INCARNATION\r\n')
-    const client = (adapter as unknown as { client: { request: (...args: never[]) => unknown } })
-      .client
-    const send = client.request.bind(client)
-    const answered = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
-    vi.spyOn(client, 'request').mockImplementation(async (...args) => {
-      const result = await send(...args)
-      if (args[0] === 'getSnapshot') {
-        answered.resolve()
-        await release.promise
-      }
-      return result
-    })
+    const answered = holding.holdNextReply('getSnapshot', release.promise)
     const deep = adapter.getBufferSnapshot(request.sessionId, { scrollbackRows: 5000 })
-    await answered.promise
-    vi.mocked(client.request).mockRestore()
+    await answered
     child._simulateExit(0)
     await waitFor(() => harness!.server.host.historyJournals?.live(request.sessionId) === undefined)
     // A same-ID start reads the predecessor's history once its final writes have landed.
@@ -338,10 +329,12 @@ describe('daemon-owned terminal history', () => {
 
     child._simulateExit(0)
     await waitFor(() => harness!.server.host.historyJournals?.live(id) === undefined, 10_000)
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Its final writes have landed, and still no clean end.
+    await harness!.server.host.historyJournals!.settleAll()
     expect(JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8')).endedAt).toBeNull()
   }, 30_000)
 
+  // A real Sleep, physical exit, final publication and app restart through the daemon.
   it('sleeps after a verified capture and wakes the same history after an app restart', async () => {
     let child = createMockSubprocess()
     harness = await startDaemonAdapterHarness(

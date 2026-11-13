@@ -286,6 +286,7 @@ describe('note lifetime across folds and refused saves', () => {
     expect(restored?.snapshotAnsi).toContain('A_ROW')
   }, 30_000)
 
+  // Writes past the 5 MiB log cap so a real fold runs on files; slower than the default.
   it('publishes a note admitted after a fold captured its source, at the same boundary', async () => {
     const { openJournal, record, prime } = openReads()
     const journal = openJournal('note-after-capture')
@@ -314,6 +315,7 @@ describe('note lifetime across folds and refused saves', () => {
     expect(restored?.snapshotAnsi).toContain('A_ROW')
   }, 30_000)
 
+  // Writes past the 5 MiB log cap so a real fold runs on files; slower than the default.
   it('keeps the acknowledged folder when a later one cannot be saved, through a read and a fold', async () => {
     const { openJournal, record, prime } = openReads()
     const journal = openJournal('note-refused')
@@ -438,6 +440,7 @@ describe('Sleep preflight and final cut', () => {
     expect(JSON.parse(readFileSync(join(journal.dir, 'meta.json'), 'utf8')).endedAt).toBeNull()
   })
 
+  // Writes past the 5 MiB log cap so a real fold runs on files; slower than the default.
   it('keeps the readable prefix when no strict image of the retained window fits', async () => {
     const { openJournal, record, prime } = openReads()
     const journal = openJournal('fold-exhausted')

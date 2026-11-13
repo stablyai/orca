@@ -16,14 +16,19 @@ export function isTerminalHistoryCwdObservation(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
-  const note = value as Partial<TerminalHistoryCwdObservation>
+  if (!('cwd' in value) || !('generation' in value) || !('logBytes' in value)) {
+    return false
+  }
+  const { cwd, generation, logBytes } = value
   return (
-    typeof note.cwd === 'string' &&
-    note.cwd.length > 0 &&
-    Number.isSafeInteger(note.generation) &&
-    note.generation! >= 0 &&
-    Number.isSafeInteger(note.logBytes) &&
-    note.logBytes! >= LOG_HEADER_BYTES
+    typeof cwd === 'string' &&
+    cwd.length > 0 &&
+    typeof generation === 'number' &&
+    Number.isSafeInteger(generation) &&
+    generation >= 0 &&
+    typeof logBytes === 'number' &&
+    Number.isSafeInteger(logBytes) &&
+    logBytes >= LOG_HEADER_BYTES
   )
 }
 

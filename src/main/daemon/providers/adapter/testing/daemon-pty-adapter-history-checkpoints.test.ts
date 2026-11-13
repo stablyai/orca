@@ -2,19 +2,19 @@ import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
-import { HistoryReader } from '../../../history/restoration/history-reader'
+import type * as CheckpointReaderModule from '../../../history/restoration/terminal-history-checkpoint-reader'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import type { DaemonServer } from '../../../server/daemon-server'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import {
   createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
 import * as startupCwdProbe from '../../../../ipc/pty/host-env/startup-cwd-directory-exists'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -42,6 +42,32 @@ vi.mock('../../../permissions/daemon-tcc-attribution', async (importOriginal) =>
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
   }
 })
+
+// Another writer may touch a session's files while a cold read is acquiring them.
+const sourceChange = vi.hoisted(() => ({ during: (): void => {} }))
+vi.mock(
+  '../../../history/restoration/terminal-history-checkpoint-reader',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof CheckpointReaderModule>()
+    return {
+      ...actual,
+      readTerminalHistoryCheckpoint: async (
+        ...args: Parameters<typeof actual.readTerminalHistoryCheckpoint>
+      ) => {
+        const read = await actual.readTerminalHistoryCheckpoint(...args)
+        sourceChange.during()
+        return read
+      }
+    }
+  }
+)
+
+/** The adapter's own periodic checkpoint pass, which has no public trigger. */
+class CheckpointingAdapter extends DaemonPtyAdapter {
+  checkpointNow(ids: string[]): Promise<unknown> {
+    return this.checkpointSessions(ids, { final: false })
+  }
+}
 
 describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let dir: string
@@ -81,6 +107,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   afterEach(async () => {
+    sourceChange.during = () => {}
     adapter?.dispose()
     await server?.shutdown()
     rmSync(dir, { recursive: true, force: true })
@@ -174,6 +201,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       })
       const appendIncrements = vi.fn(async () => 'ok' as const)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this legacy fixture swaps the adapter's private client and manager to drive the periodic checkpoint cap.
       const internals = historyAdapter as unknown as {
         client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
         historyManager: {
@@ -272,44 +300,35 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     // A rebuild runs after its records left the daemon; a changing source must not publish shallowly.
     it('writes no checkpoint while the saved source keeps changing, then saves it all', async () => {
-      historyAdapter = new DaemonPtyAdapter({
+      const checkpointing = new CheckpointingAdapter({
         protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath,
         tokenPath,
         historyPath: historyDir
       })
+      historyAdapter = checkpointing
       const { id } = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
         cwd: '/home/user',
         sessionId: 'changing-source'
       })
-      const checkpoints = historyAdapter as unknown as {
-        checkpointSessions(ids: string[], opts: { final: boolean }): Promise<unknown>
-      }
       lastSubprocess._simulateData('SAVED_EARLIER\r\n')
-      await checkpoints.checkpointSessions([id], { final: false })
+      await checkpointing.checkpointNow([id])
       lastSubprocess._simulateData('DRAINED_DURING_CHANGE\r\n')
       const sessionDir = join(historyDir, getHistorySessionDirName(id))
-      const reader = HistoryReader.prototype as unknown as {
-        detectColdRestoreOnce: (...args: unknown[]) => Promise<unknown>
+      let touches = 0
+      sourceChange.during = () => {
+        touches += 1
+        utimesSync(join(sessionDir, 'meta.json'), touches, touches)
       }
-      const read = reader.detectColdRestoreOnce
-      const changing = vi.spyOn(reader, 'detectColdRestoreOnce').mockImplementation(async function (
-        this: HistoryReader,
-        ...args: unknown[]
-      ) {
-        const result = await read.apply(this, args)
-        utimesSync(join(sessionDir, 'meta.json'), new Date(), new Date(Date.now() + 60_000))
-        return result
-      })
       const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
 
       await expect(historyAdapter.shutdown(id, { keepHistory: true })).rejects.toThrow()
       expect(checkpointSpy).not.toHaveBeenCalled()
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
 
-      changing.mockRestore()
+      sourceChange.during = () => {}
       await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
       const restored = await historyAdapter.spawn({
         cols: 80,

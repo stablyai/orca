@@ -12,10 +12,10 @@ import { getDaemonPidPath, serializeDaemonPidFile } from '../../../launch/daemon
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import {
   createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { newerHold } = vi.hoisted(() => ({ newerHold: { held: false } }))
 vi.mock('../../routing/daemon-newer-protocol-hold', async (importOriginal) => ({

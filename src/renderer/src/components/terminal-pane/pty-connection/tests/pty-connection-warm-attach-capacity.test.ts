@@ -1,9 +1,8 @@
 import '../../../../../../main/daemon/pty-subprocess/testing/mock-descendant-sweep'
-import { EventEmitter } from 'node:events'
-import type { Socket } from 'node:net'
+import { Socket } from 'node:net'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import {
   LEAF_2,
@@ -77,28 +76,28 @@ afterEach(async () => {
   await restoreTerminalTestGlobals()
 })
 
-/** The real IPC transport, created with the options connect-pane-pty passes it. */
-async function realIpcTransport(): Promise<MockTransport> {
-  const actual = await vi.importActual<typeof PtyTransportModule>(
+// The real IPC transport module, loaded once outside any test's timeout.
+let actualTransport: typeof PtyTransportModule
+beforeAll(async () => {
+  actualTransport = await vi.importActual<typeof PtyTransportModule>(
     '../../pty-transport/ipc/pty-transport'
   )
-  let real: Record<string | symbol, unknown> | undefined
-  const target = () =>
-    (real ??= actual.createIpcPtyTransport(transportOptions.at(-1) ?? {}) as unknown as Record<
-      string | symbol,
-      unknown
-    >)
+})
+
+/** The real IPC transport, created with the options connect-pane-pty passes it. */
+function realIpcTransport(): { transport: MockTransport; live: () => LiveTransport } {
+  let real: LiveTransport | undefined
+  const live = (): LiveTransport =>
+    (real ??= actualTransport.createIpcPtyTransport(transportOptions.at(-1) ?? {}))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every member to the real transport.
-  return new Proxy({} as MockTransport, {
+  const transport = new Proxy({} as MockTransport, {
     get: (_, key) => {
-      const value = target()[key]
-      return typeof value === 'function' ? value.bind(target()) : value
+      const value: unknown = Reflect.get(live(), key)
+      return typeof value === 'function' ? value.bind(live()) : value
     },
-    set: (_, key, value) => {
-      target()[key] = value
-      return true
-    }
+    set: (_, key, value) => Reflect.set(live(), key, value)
   })
+  return { transport, live }
 }
 
 /** Lets real socket I/O and the client's responsive deadlines advance under fake timers. */
@@ -133,13 +132,12 @@ describe('warm attach while deep-history capacity is full', () => {
 
     // Fill every deep consumer with a reply whose write never settles.
     const held: (() => void)[] = []
-    const socket = Object.assign(new EventEmitter(), {
-      destroyed: false,
+    const socket = Object.assign(new Socket(), {
       write: (_line: string, settle: () => void) => {
         held.push(settle)
         return false
       }
-    }) as unknown as Socket
+    })
     for (let index = 0; index < HISTORY_READ_CONSUMERS; index += 1) {
       const request: GetSnapshotRequest = {
         id: `held-${index}`,
@@ -157,7 +155,7 @@ describe('warm attach while deep-history capacity is full', () => {
 
     // Main's IPC: renderer spawn reaches the provider; its errors arrive as Electron wraps them.
     const attaches: (PtySpawnResult | Error)[] = []
-    window.api.pty.spawn = vi.fn(
+    window.api.pty.spawn = vi.fn<typeof window.api.pty.spawn>(
       async (args: { sessionId?: string; cols: number; rows: number }) => {
         try {
           const result = await provider!.spawn({
@@ -169,13 +167,12 @@ describe('warm attach while deep-history capacity is full', () => {
           attaches.push(result)
           return result
         } catch (error) {
-          attaches.push(error as Error)
-          throw new Error(
-            `Error invoking remote method 'pty:spawn': Error: ${(error as Error).message}`
-          )
+          const failure = error instanceof Error ? error : new Error(String(error))
+          attaches.push(failure)
+          throw new Error(`Error invoking remote method 'pty:spawn': Error: ${failure.message}`)
         }
       }
-    ) as unknown as typeof window.api.pty.spawn
+    )
     window.api.pty.write = vi.fn((id: string, data: string) => provider!.write(id, data))
     Object.assign(window.api.pty, {
       onData: vi.fn(() => () => {}),
@@ -197,12 +194,12 @@ describe('warm attach while deep-history capacity is full', () => {
           ptyIdsByLeafId: { [LEAF_2]: SAVED_PTY }
         }
       }
-    } as StoreState
+    }
     const deps = buildPaneConnectionDeps(() => mockStoreState, {
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: SAVED_PTY }
     })
-    const transport = await realIpcTransport()
+    const { transport, live } = realIpcTransport()
     transportQueue.push(transport)
     const { connectPanePty } = await import('../connect-pane-pty')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
@@ -237,15 +234,17 @@ describe('warm attach while deep-history capacity is full', () => {
 
     // Capacity returns; the existing Retry reattaches the same terminal.
     held.shift()!()
-    const live = transport as unknown as LiveTransport
-    expect(live.retryRecovery?.()).toBe(true)
+    expect(live().retryRecovery?.()).toBe(true)
     await advanceUntil(() => attaches.length === 2)
-    const retried = attaches[1] as PtySpawnResult
+    const retried = attaches[1]
+    if (!retried || retried instanceof Error) {
+      throw new Error(`Retry did not attach: ${String(retried)}`)
+    }
     expect(retried.id).toBe(SAVED_PTY)
     expect(retried.incarnationId).toBe(original.incarnationId)
     expect(JSON.stringify(retried.snapshot)).toContain('WARM_ROW')
     expect(spawned).toBe(1)
-    live.sendInput('typed-once', 'driving')
+    live().sendInput('typed-once', 'driving')
     await advanceUntil(() => child.write.mock.calls.some(([data]) => data === 'typed-once'))
     expect(child.write.mock.calls.filter(([data]) => data === 'typed-once')).toHaveLength(1)
     expect(child.kill).not.toHaveBeenCalled()

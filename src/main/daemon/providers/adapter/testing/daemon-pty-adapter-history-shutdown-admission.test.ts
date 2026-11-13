@@ -3,10 +3,13 @@ import { expect, it, vi } from 'vitest'
 import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
-import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
+import {
+  createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
+  startDaemonAdapterHarness
+} from './daemon-pty-adapter-test-harness'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 vi.mock('../../../health/daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()

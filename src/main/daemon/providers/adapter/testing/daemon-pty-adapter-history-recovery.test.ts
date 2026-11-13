@@ -16,7 +16,12 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { createMockSubprocess, waitFor } from './daemon-pty-adapter-test-harness'
+import {
+  createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
+  ReplyHoldingAdapter,
+  waitFor
+} from './daemon-pty-adapter-test-harness'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { DaemonServer } from '../../../server/daemon-server'
 import { HistoryManager } from '../../../history/storage/history-manager'
@@ -34,7 +39,6 @@ import type { HistoryReader } from '../../../history/restoration/history-reader'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -697,22 +701,11 @@ describe('DaemonPtyAdapter history recovery', () => {
         tokenPath,
         historyPath: historyDir
       }
-      const retired = new DaemonPtyAdapter(options)
-      const client = (retired as unknown as { client: { request: (...args: never[]) => unknown } })
-        .client
-      const request = client.request.bind(client)
+      const retired = new ReplyHoldingAdapter(options)
       const listing = Promise.withResolvers<void>()
-      const listed = Promise.withResolvers<void>()
-      vi.spyOn(client, 'request').mockImplementation(async (...args) => {
-        const result = await request(...args)
-        if (args[0] === 'listSessions') {
-          listed.resolve()
-          await listing.promise
-        }
-        return result
-      })
+      const listed = retired.holdNextReply('listSessions', listing.promise)
       const late = retired.reconcileOnStartup(new Set([worktreeId])).catch(() => null)
-      await listed.promise
+      await listed
       retired.dispose()
 
       historyAdapter = new DaemonPtyAdapter(options)

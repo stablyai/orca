@@ -1,4 +1,5 @@
 import { unlinkSync } from 'node:fs'
+import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
 import { join } from 'node:path'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as RETAINED_HISTORY_ROWS } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
@@ -154,7 +155,7 @@ export function openTerminalJournalOrigin(
     try {
       unlinkSync(join(dir, name))
     } catch (error) {
-      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+      if (errnoCodeOrUnknown(error) !== 'ENOENT') {
         throw new Error('terminal_history_origin_reset_failed')
       }
     }

@@ -59,7 +59,13 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       : (type === 'getSnapshot' || type === 'flushHistory') &&
           payload !== null &&
           typeof payload === 'object'
-        ? { ...payload, remainingBudgetMs: remainingBudget(payload, opts.timeoutMs) }
+        ? {
+            ...payload,
+            remainingBudgetMs: remainingBudget(
+              'remainingBudgetMs' in payload ? payload.remainingBudgetMs : undefined,
+              opts.timeoutMs
+            )
+          }
         : payload
   const encoded = encodeNdjson({
     id: opts.id,
@@ -187,8 +193,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
 }
 
 /** The caller's own remaining budget, never longer than this request may wait for its reply. */
-function remainingBudget(payload: object, timeoutMs: number): number {
-  const requested = (payload as { remainingBudgetMs?: unknown }).remainingBudgetMs
+function remainingBudget(requested: unknown, timeoutMs: number): number {
   return typeof requested === 'number' && Number.isFinite(requested)
     ? Math.min(requested, timeoutMs)
     : timeoutMs

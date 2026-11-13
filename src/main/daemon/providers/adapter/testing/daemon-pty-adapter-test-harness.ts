@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
+import type { DaemonClient } from '../../../transport/client/daemon-client'
 import type { DaemonPtyAdapterOptions } from '../daemon-pty-adapter-options'
 import { DaemonServer } from '../../../server/daemon-server'
 import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
@@ -125,4 +126,26 @@ export async function startDaemonAdapterHarness(
   await server.start()
   const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, ...adapterOptions })
   return { dir, socketPath, tokenPath, server, adapter, daemonLog, daemonLogEvents }
+}
+
+/** An adapter whose next reply of one request type a test can hold until it chooses. */
+export class ReplyHoldingAdapter extends DaemonPtyAdapter {
+  /** Resolves once that reply has arrived; the caller then sees it only after `release`. */
+  holdNextReply(type: string, release: Promise<void>): Promise<void> {
+    const client: DaemonClient = this.client
+    const send = client.request.bind(client)
+    const arrived = Promise.withResolvers<void>()
+    const spy = vi.spyOn(client, 'request').mockImplementation(async function <T>(
+      ...args: Parameters<typeof send>
+    ): Promise<T> {
+      const result = await send<T>(...args)
+      if (args[0] === type) {
+        spy.mockRestore()
+        arrived.resolve()
+        await release
+      }
+      return result
+    })
+    return arrived.promise
+  }
 }

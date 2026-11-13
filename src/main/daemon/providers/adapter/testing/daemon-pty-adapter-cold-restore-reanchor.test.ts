@@ -9,13 +9,13 @@ import { HeadlessEmulator } from '../../../emulation/headless-emulator'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import {
   createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
 import type { TerminalSnapshot } from '../../../protocol/terminal-snapshot'
-import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
