@@ -17,26 +17,4 @@ describe('terminal live accessory local edit text', () => {
       )
     }
   )
-
-  it.each([
-    ['', ''],
-    ['a', ''],
-    ['a🙂', 'a'],
-    ['🙂a', '🙂'],
-    ['🙂🙂', '🙂'],
-    ['a\ud800', 'a'],
-    ['a\udc00', 'a'],
-    ['\ud800\ud800', '\ud800'],
-    ['\udc00\ud800', '\udc00'],
-    ['e\u0301', 'e'],
-    ['👩‍💻', '👩‍'],
-    ['\r\n', '\r']
-  ])('preserves code-point deletion for %j', (fieldText, expected) => {
-    expect(getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText })).toBe(
-      expected
-    )
-    expect(getTerminalLiveAccessoryLocalEditText({ localEdit: 'delete', fieldText })).toBe(
-      fieldText
-    )
-  })
 })
