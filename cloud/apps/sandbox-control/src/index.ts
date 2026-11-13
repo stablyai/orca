@@ -160,6 +160,7 @@ import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
+import { createTransferNotifier, dismissNotice, listNotices, notifyPreviousOwner, type TransferNotifier } from './owner-transfer-notices'
 import { createTeamMembershipCheck, type TeamMembershipCheck } from './team-membership'
 import { audit, auditSession } from './api/audit'
 import { ALL_EVENT_FAMILIES, AUTH_EVENT_FAMILIES, AuditIngestError, AuditIngestSchema, BILLING_EVENT_FAMILIES, ingestAuditEvents } from './api/audit-ingest'
@@ -272,6 +273,8 @@ export type Deps = {
   shareFetch?: typeof fetch
   /** Is this person in this team now? Default: auth's live answer (team-membership.ts). Tests inject it. */
   teamMembership?: TeamMembershipCheck
+  /** Asks auth to email the previous owner after a hand-off (owner-transfer-notices.ts). Tests inject it. */
+  transferNotifier?: TransferNotifier
   /** Billing setup-session notices (tests collect them). */
   setupNotifier?: SetupNotifier
   /** Billing trial abuse-key notices after a bind (tests collect them). */
@@ -1770,7 +1773,9 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       url.pathname === '/v1/team/org' ||
       url.pathname.startsWith('/v1/team/members/') ||
       url.pathname === '/v1/team/pokes' ||
-      url.pathname.startsWith('/v1/team/pokes/')
+      url.pathname.startsWith('/v1/team/pokes/') ||
+      url.pathname === '/v1/team/notices' ||
+      url.pathname.startsWith('/v1/team/notices/')
     ) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -2230,6 +2235,16 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     }
     return fail('not_found', 404)
   }
+  if (url.pathname === '/v1/team/notices') {
+    return request.method === 'GET' ? json(await listNotices(db, caller)) : fail('not_found', 404)
+  }
+  const noticeDismiss = /^\/v1\/team\/notices\/([A-Za-z0-9_]{1,64})\/dismiss$/.exec(url.pathname)
+  if (noticeDismiss) {
+    if (request.method !== 'POST') {
+      return fail('not_found', 404)
+    }
+    return (await dismissNotice(db, caller, noticeDismiss[1]!, now)) ? json({ dismissed: true }) : fail('not_found', 404)
+  }
   if (url.pathname === '/v1/team/workspaces') {
     return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
   }
@@ -2340,6 +2355,18 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         await revokeSandboxShares(env.SANDBOX_DB, row.id, now)
         await revokeWorkspaceTokens(env.SANDBOX_DB, row.id, now)
       }
+      // Tell the previous owner: a notice in Orca, an email asked of auth, and an audit row saying
+      // whether anything reached them. After the hand-off, and never able to fail or undo it.
+      const told = transferred
+        ? await notifyPreviousOwner(
+            db,
+            { before: current, after: patched.row, actorUserId: caller.userId, now },
+            { email: deps.transferNotifier ?? createTransferNotifier(env), membership: deps.teamMembership ?? createTeamMembershipCheck(env) }
+          ).catch((error: unknown) => {
+            console.log(JSON.stringify({ event: 'owner_transfer_notify_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
+            return null
+          })
+        : null
       // Who can open a workspace decides who its agents act as and whose secrets it gets, so both
       // directions of a share, and a change of owner, go in the team's audit log.
       if (patched.row.visibility !== current.visibility) {
@@ -2362,6 +2389,18 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
           { action: 'workspace.owner_changed', targetType: 'workspace', targetId: row.id, detail: { fromUserId: current.user_id, toUserId: patched.row.user_id } },
           now
         )
+        // Recorded as Orca's doing, a millisecond later so it reads after the change it follows.
+        await audit(
+          db,
+          { accountId: current.account_id, type: 'system', id: 'control-plane', userId: null },
+          {
+            action: 'workspace.owner_notified',
+            targetType: 'workspace',
+            targetId: row.id,
+            detail: { toUserId: current.user_id, reached: told?.reached ?? false, inApp: told?.inApp ?? false, emailed: told?.email.emailed ?? false, emailMode: told?.email.mode ?? null }
+          },
+          now + 1
+        ).catch(() => undefined)
       }
       if (archivedNow && patched.revoke === 'none') {
         // Archiving disconnects teammates' devices, as before.
@@ -2383,7 +2422,12 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
           await work
         }
       }
-      return json({ workspace: await view(patched.row), ...(revoked ? { revoked } : {}) })
+      return json({
+        workspace: await view(patched.row),
+        ...(revoked ? { revoked } : {}),
+        // For the person who made the change: whether the previous owner will hear about it.
+        ...(transferred ? { previousOwner: { userId: current.user_id, notified: told?.reached ?? false, inApp: told?.inApp ?? false, emailed: told?.email.emailed ?? false } } : {})
+      })
     }
     case 'POST wake': {
       if (!canOpen(caller, row)) {

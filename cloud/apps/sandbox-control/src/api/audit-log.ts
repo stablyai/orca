@@ -167,9 +167,12 @@ function newOwnerId(detail: Record<string, unknown> | null): string | null {
   return typeof detail?.toUserId === 'string' ? detail.toUserId : null
 }
 
+/** Rows whose detail names a person by `toUserId`: the new owner, or the previous owner who was told. */
+const NAMES_TO_USER = new Set(['workspace.owner_changed', 'workspace.owner_notified'])
+
 function eventView(row: MergedRow, labels: Labels): AuditEvent {
   let detail = safeDetail(row.detail)
-  if (row.action === 'workspace.owner_changed') {
+  if (NAMES_TO_USER.has(row.action)) {
     // Named as of now, like every other person in the log: a new owner who has since left reads
     // as a former member, and one nobody can name is left as an id for the caller to word.
     const owner = newOwnerId(detail)
@@ -230,7 +233,7 @@ async function labelsFor(db: D1Database, accountId: string, rows: readonly Merge
     if (row.target_id && (row.target_type === 'workspace' || row.target_type === 'sandbox')) {
       workspaceIds.add(row.target_id)
     }
-    if (row.action === 'workspace.owner_changed') {
+    if (NAMES_TO_USER.has(row.action)) {
       const owner = newOwnerId(safeDetail(row.detail))
       if (owner) {
         people.add(owner)

@@ -512,3 +512,162 @@ describe('everything else is unchanged', () => {
     expect((await getSandbox(t.h.env.SANDBOX_DB, second.body.sandbox.id))!.ownership_transferred_at).toBeNull()
   })
 })
+
+describe('telling the previous owner', () => {
+  const emails = () => {
+    const sent: unknown[] = []
+    return { sent, transferNotifier: async (request: unknown) => (sent.push(request), { emailed: false, mode: 'log', reason: 'logged' }) }
+  }
+  const notices = (h: Harness, bearer: string) => h.call('GET', '/v1/team/notices', { bearer })
+  const auditRows = (h: Harness) =>
+    (h.raw.prepare("SELECT actor_type, user_id, target_id, detail FROM audit_log WHERE action = 'workspace.owner_notified'").all() as Array<{ actor_type: string; user_id: string | null; target_id: string; detail: string }>).map((row) => ({
+      ...row,
+      detail: JSON.parse(row.detail) as Record<string, unknown>
+    }))
+
+  it('an admin takes a workspace: the owner gets a notice in Orca, an email is asked for, and the audit log says what reached them', async () => {
+    const e = emails()
+    const t = await setup({ transferNotifier: e.transferNotifier })
+    await t.h.call('PATCH', `/v1/team/workspaces/${t.id}`, { bearer: t.mallory, body: { title: 'checkout' } })
+    const moved = await t.transfer(t.admin, 'mia')
+    expect(moved.status).toBe(200)
+    // For the admin's result: the previous owner will see a notice (still in the team); no email was delivered.
+    expect(moved.body.previousOwner).toEqual({ userId: 'mallory', notified: true, inApp: true, emailed: false })
+    const row = await t.row()
+    expect(e.sent).toEqual([
+      { accountId: 'org:acme', eventId: `wst_${t.id}_${row.ownership_transferred_at}`, previousOwnerUserId: 'mallory', actorUserId: 'ada', newOwnerUserId: 'mia', workspaceName: 'checkout', workspaceNumber: row.number }
+    ])
+    const mine = await notices(t.h, t.mallory)
+    expect(mine.status).toBe(200)
+    expect(mine.body.notices).toEqual([
+      { id: expect.stringMatching(/^otn_/), kind: 'workspace_owner_changed', workspace: { id: t.id, name: 'checkout', number: row.number }, actor: { userId: 'ada', name: null }, newOwner: { userId: 'mia', name: null }, at: row.ownership_transferred_at }
+    ])
+    // Nobody else sees it: not the new owner, not the admin who did it.
+    expect((await notices(t.h, t.mia)).body.notices).toEqual([])
+    expect((await notices(t.h, t.admin)).body.notices).toEqual([])
+    expect(auditRows(t.h)).toEqual([{ actor_type: 'system', user_id: null, target_id: t.id, detail: { toUserId: 'mallory', reached: true, inApp: true, emailed: false, emailMode: 'log' } }])
+    // No secret, and no value of anyone's, in the notice, the audit row or the email request.
+    for (const value of [...MIA_VALUES, MAL_VALUE, TEAM_KEY]) {
+      expect(JSON.stringify([mine.body, auditRows(t.h), e.sent])).not.toContain(value)
+    }
+  })
+
+  it('only the person it is for can dismiss it, once', async () => {
+    const t = await setup()
+    await t.transfer(t.admin, 'mia')
+    const id: string = (await notices(t.h, t.mallory)).body.notices[0].id
+    expect((await t.h.call('POST', `/v1/team/notices/${id}/dismiss`, { bearer: t.mia })).status).toBe(404)
+    expect((await t.h.call('POST', `/v1/team/notices/${id}/dismiss`, { bearer: t.admin })).status).toBe(404)
+    expect((await notices(t.h, t.mallory)).body.notices).toHaveLength(1)
+    expect((await t.h.call('POST', `/v1/team/notices/${id}/dismiss`, { bearer: t.mallory })).body).toEqual({ dismissed: true })
+    expect((await notices(t.h, t.mallory)).body.notices).toEqual([])
+    expect((await t.h.call('POST', `/v1/team/notices/${id}/dismiss`, { bearer: t.mallory })).status).toBe(404)
+    expect((await t.h.call('GET', '/v1/team/notices', { bearer: 'not-a-token' })).status).toBe(401)
+  })
+
+  it('a previous owner who has left the team cannot be reached: said so to the admin and in the audit log', async () => {
+    // Auth: Mia (the new owner) is in the team; Mallory (the previous owner) no longer is.
+    const t = await setup({ teamMembership: async (_account, userId) => ({ member: userId !== 'mallory' }) })
+    const moved = await t.transfer(t.admin, 'mia')
+    expect(moved.status).toBe(200)
+    expect(moved.body.previousOwner).toEqual({ userId: 'mallory', notified: false, inApp: false, emailed: false })
+    expect(auditRows(t.h)[0]!.detail).toMatchObject({ toUserId: 'mallory', reached: false, inApp: false, emailed: false })
+  })
+
+  it('an email only counts when it was really delivered, never when it was just recorded', async () => {
+    const left = { teamMembership: async (_account: string, userId: string) => ({ member: userId !== 'mallory' }) }
+    const logged = await setup({ ...left, transferNotifier: async () => ({ emailed: false, mode: 'log', reason: 'logged' }) })
+    expect((await logged.transfer(logged.admin, 'mia')).body.previousOwner.notified).toBe(false)
+    const delivered = await setup({ ...left, transferNotifier: async () => ({ emailed: true, mode: 'live', reason: null }) })
+    expect((await delivered.transfer(delivered.admin, 'mia')).body.previousOwner).toEqual({ userId: 'mallory', notified: true, inApp: false, emailed: true })
+  })
+
+  it('handing it over yourself still leaves you a notice, with no membership question about you', async () => {
+    const asked: string[] = []
+    const t = await setup({ teamMembership: async (_account, userId) => (asked.push(userId), { member: true }) })
+    const moved = await t.transfer(t.mallory, 'mia')
+    expect(moved.body.previousOwner).toMatchObject({ userId: 'mallory', notified: true, inApp: true })
+    // Auth was asked about the new owner only.
+    expect(asked).toEqual(['mia'])
+    expect((await notices(t.h, t.mallory)).body.notices[0]).toMatchObject({ actor: { userId: 'mallory' }, newOwner: { userId: 'mia' } })
+  })
+
+  it('a failing notifier, or auth being unable to say, never fails or undoes the hand-off', async () => {
+    let calls = 0
+    const t = await setup({
+      transferNotifier: async () => {
+        throw new Error('auth down')
+      },
+      // Yes for the new owner; cannot say for the previous one.
+      teamMembership: async () => (calls++ === 0 ? { member: true } : { unavailable: 'auth_502' })
+    })
+    const moved = await t.transfer(t.admin, 'mia')
+    expect(moved.status).toBe(200)
+    expect(await t.row()).toMatchObject({ user_id: 'mia', status: 'suspended' })
+    expect(moved.body.previousOwner).toEqual({ userId: 'mallory', notified: false, inApp: false, emailed: false })
+    // The notice is stored all the same: they see it if they can still sign in to the team.
+    expect((await notices(t.h, t.mallory)).body.notices).toHaveLength(1)
+  })
+
+  it('a refused hand-off tells nobody anything', async () => {
+    const e = emails()
+    const t = await setup({ transferNotifier: e.transferNotifier, teamMembership: async () => ({ member: false }) })
+    expect((await t.transfer(t.admin, 'usr_outsider')).status).toBe(403)
+    expect(e.sent).toEqual([])
+    expect((await notices(t.h, t.mallory)).body.notices).toEqual([])
+    expect(auditRows(t.h)).toEqual([])
+  })
+
+  it('asks auth for the email with its own derived key, and reads only a real delivery as sent', async () => {
+    const calls: Array<{ url: string; authorization: string | null; body: unknown }> = []
+    let respond: () => Response = () => Response.json({ sent: false, mode: 'log', reason: 'logged' })
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(input), authorization: new Headers(init?.headers).get('authorization'), body: JSON.parse(String(init?.body)) })
+      return respond()
+    }) as typeof fetch
+    const { createTransferNotifier, NOTIFY_KEY_PURPOSE } = await import('../src/owner-transfer-notices')
+    const { derivedAuthKey } = await import('../src/team-membership')
+    const env = { AUTH_INTERNAL_ORIGIN: 'https://auth.test', MEMBER_REMOVED_TOKEN: AUTH_TOKEN }
+    const request = { accountId: 'org:acme', eventId: 'wst_sbx_1_5', previousOwnerUserId: 'usr_a', actorUserId: 'usr_b', newOwnerUserId: 'usr_c', workspaceName: 'x'.repeat(2000), workspaceNumber: 7 }
+    expect(await createTransferNotifier(env, fetchImpl)(request)).toEqual({ emailed: false, mode: 'log', reason: 'logged' })
+    const key = await derivedAuthKey(AUTH_TOKEN, NOTIFY_KEY_PURPOSE)
+    expect(NOTIFY_KEY_PURPOSE).toBe('orca-cloud:control-plane-to-auth:notify-workspace-transferred:v1')
+    expect(calls[0]).toEqual({
+      url: 'https://auth.test/v1/internal/notify/workspace-transferred',
+      authorization: `Bearer ${key}`,
+      body: { eventId: 'wst_sbx_1_5', orgId: 'acme', previousOwnerUserId: 'usr_a', actorUserId: 'usr_b', newOwnerUserId: 'usr_c', workspaceName: 'x'.repeat(1024), workspaceNumber: 7 }
+    })
+    // Neither key works for the other route.
+    expect(key).not.toBe(await membershipKey(AUTH_TOKEN))
+    respond = () => Response.json({ sent: true, mode: 'log' })
+    expect((await createTransferNotifier(env, fetchImpl)(request)).emailed).toBe(false)
+    respond = () => Response.json({ sent: true })
+    expect((await createTransferNotifier(env, fetchImpl)(request)).emailed).toBe(false)
+    respond = () => Response.json({ sent: true, mode: 'test-inbox' })
+    expect((await createTransferNotifier(env, fetchImpl)(request)).emailed).toBe(true)
+    for (const [answer, reason] of [
+      [() => Response.json({ error: 'unauthorized' }, { status: 401 }), 'auth_401'],
+      [() => Response.json({ error: 'rate_limited' }, { status: 429 }), 'auth_429'],
+      [() => new Response('nope', { status: 200 }), 'unreadable_answer']
+    ] as Array<[() => Response, string]>) {
+      respond = answer
+      expect(await createTransferNotifier(env, fetchImpl)(request)).toEqual({ emailed: false, mode: null, reason })
+    }
+    const before = calls.length
+    expect(await createTransferNotifier({ MEMBER_REMOVED_TOKEN: AUTH_TOKEN }, fetchImpl)(request)).toEqual({ emailed: false, mode: null, reason: 'not_configured' })
+    expect(await createTransferNotifier(env, fetchImpl)({ ...request, accountId: 'dev:org:x' })).toEqual({ emailed: false, mode: null, reason: 'not_configured' })
+    expect(calls.length).toBe(before)
+  })
+
+  it('the workspace views carry the mark, so a client can show that the owner changed', async () => {
+    const t = await setup()
+    const before = await t.h.call('GET', `/v1/workspaces/${t.id}`, { bearer: t.mallory })
+    expect(before.body.workspace.ownershipTransferredAt).toBeNull()
+    await t.transfer(t.mallory, 'mia')
+    const mark = (await t.row()).ownership_transferred_at
+    const after = await t.h.call('GET', `/v1/workspaces/${t.id}`, { bearer: t.mia })
+    expect(after.body.workspace.ownershipTransferredAt).toBe(mark)
+    const listed = await t.h.call('GET', '/v1/team/workspaces?scope=mine', { bearer: t.mia })
+    expect(listed.body.workspaces.find((w: { id: string }) => w.id === t.id).ownershipTransferredAt).toBe(mark)
+  })
+})

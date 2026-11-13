@@ -66,7 +66,7 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
   // No live github.com from tests: repos count as public unless a test says otherwise.
   // Hand-offs ask auth whether the new owner is in the team; tests answer yes unless they say otherwise
   // (pass `teamMembership: undefined` to get the real check, which refuses when unconfigured).
-  const deps: Deps = { provider: vercel, entitlements, now: clock, publicRepoCheck: async () => true, teamMembership: async () => ({ member: true }), ...extraDeps }
+  const deps: Deps = { provider: vercel, entitlements, now: clock, publicRepoCheck: async () => true, teamMembership: async () => ({ member: true }), transferNotifier: async () => ({ emailed: false, mode: 'log', reason: 'logged' }), ...extraDeps }
 
   async function token(sub: string, org?: string, purpose = 'sandbox', extra: Record<string, string> = {}) {
     // Like Orca auth (service-tokens.ts): iat backdated 30 s for clock skew, exp 5 min from minting.

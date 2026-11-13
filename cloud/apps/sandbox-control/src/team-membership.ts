@@ -33,10 +33,18 @@ function base64Url(bytes: Uint8Array): string {
   return btoa(text).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 }
 
-/** The bearer for auth's membership route, from the shared control-plane token. */
-export async function membershipKey(sharedToken: string): Promise<string> {
+/**
+ * A bearer for one of auth's internal routes, from the shared control-plane token: each route has
+ * its own purpose string, so a key for one is refused on every other.
+ */
+export async function derivedAuthKey(sharedToken: string, purpose: string): Promise<string> {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(sharedToken.trim()), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return base64Url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(MEMBERSHIP_KEY_PURPOSE))))
+  return base64Url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(purpose))))
+}
+
+/** The bearer for auth's membership route. */
+export function membershipKey(sharedToken: string): Promise<string> {
+  return derivedAuthKey(sharedToken, MEMBERSHIP_KEY_PURPOSE)
 }
 
 /**
