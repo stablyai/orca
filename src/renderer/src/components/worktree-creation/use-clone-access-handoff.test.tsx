@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   install: vi.fn(),
-  installLink: vi.fn(),
   clipboard: vi.fn()
 }))
 vi.mock('@/lib/orca-cloud/use-orca-cloud-repo-access', () => ({
@@ -14,9 +13,6 @@ vi.mock('@/lib/orca-cloud/use-orca-cloud-repo-access', () => ({
 }))
 vi.mock('@/lib/orca-cloud/cloud-setup-notice-actions', () => ({
   openOrcaGitHubAppInstall: mocks.install
-}))
-vi.mock('@/lib/orca-cloud/orca-cloud-workspace-store', () => ({
-  cloudWorkspaceApi: () => ({ gitHubInstallLink: mocks.installLink })
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
@@ -126,9 +122,11 @@ describe('CLONE-ACCESS-ERROR: a clone GitHub refused', () => {
   })
 
   it('the request for an owner carries the install link that preselects the repository', async () => {
-    mocks.installLink.mockResolvedValue({ ok: true, value: 'https://github.com/apps/orca/install' })
+    mocks.access.mockResolvedValue({
+      ...answer('requested'),
+      installUrl: 'https://github.com/apps/orca/install'
+    })
     await copyOwnerRequest(REPO, githubRepoUrlFor(REPO))
-    expect(mocks.installLink).toHaveBeenCalledWith({ repoUrl: `https://github.com/${REPO}` })
     const [text] = mocks.clipboard.mock.calls[0] ?? []
     expect(text).toContain(REPO)
     expect(text).toContain('https://github.com/apps/orca/install')

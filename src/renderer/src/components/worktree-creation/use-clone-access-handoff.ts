@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { openOrcaGitHubAppInstall } from '@/lib/orca-cloud/cloud-setup-notice-actions'
-import { cloudWorkspaceApi } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { fetchOrcaCloudRepoAccess } from '@/lib/orca-cloud/use-orca-cloud-repo-access'
 
 /**
@@ -169,12 +168,8 @@ export function useCloneAccessHandoff({
 
 /** A message for an owner of the repository's org, with the install link that preselects it. */
 export async function copyOwnerRequest(repoName: string, repoUrl: string | null): Promise<boolean> {
-  const link = repoUrl
-    ? await cloudWorkspaceApi()
-        ?.gitHubInstallLink({ repoUrl })
-        .then((result) => (result.ok ? result.value : null))
-        .catch(() => null)
-    : null
+  // The repo-access answer carries GitHub's install page with this repository preselected.
+  const link = repoUrl ? ((await fetchOrcaCloudRepoAccess(repoUrl))?.installUrl ?? null) : null
   const message = translate(
     'worktreeCreation.cloneAccess.requestMessage',
     'Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.',
