@@ -1,5 +1,5 @@
 import type { TerminalSplitLayout } from '../../storage/preferences'
-import type { TerminalFrame } from '../terminal-webview-messages'
+import type { TerminalFrame } from '../webview/terminal-webview-messages'
 
 export type TerminalPaneViewport = {
   terminalFrameRef: { current: TerminalFrame | null }

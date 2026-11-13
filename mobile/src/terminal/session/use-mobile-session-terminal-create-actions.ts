@@ -3,7 +3,7 @@ import { sessionTabCreateTerminal } from '../../session/tabs/mobile-session-tab-
 import { triggerSuccess, triggerError } from '../../platform/haptics/haptics'
 import { terminalCreateCopy } from './mobile-session-terminal-create-copy'
 import { createMobileSessionTerminalCreateFeedback } from './mobile-session-terminal-create-feedback'
-import { buildTerminalSendParams } from '../terminal-send-request'
+import { buildTerminalSendParams } from '../input-delivery/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from '../../session/agent-launch/mobile-new-tab-agent-options'
 import { formatAgentTypeLabel } from '../../../../src/shared/agent-status/presentation/agent-type-label'

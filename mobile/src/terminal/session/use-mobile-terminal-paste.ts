@@ -5,9 +5,9 @@ import {
 } from '../../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import { useCallback, type RefObject } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
-import { terminalInputSend } from '../mobile-terminal-operations'
+import { terminalInputSend } from '../host-operations/mobile-terminal-operations'
 import { useClipboardReader } from '../../platform/clipboard/clipboard'
-import type { TerminalModes } from '../terminal-webview-contract'
+import type { TerminalModes } from '../webview/terminal-webview-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import {

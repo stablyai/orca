@@ -1,6 +1,6 @@
 import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { hostOs } from '../../platform/host-os'
-import { computeActiveTerminalKeyboardLift } from '../terminal-keyboard-avoidance-lift'
+import { computeActiveTerminalKeyboardLift } from '../keyboard/terminal-keyboard-avoidance-lift'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'
 
 // Read where the layout moves, so a keyboard change re-renders those views and not the whole session.

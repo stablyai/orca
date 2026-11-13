@@ -7,7 +7,7 @@ import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
-import { getQuickCommandDisplayPreview } from '../quick-commands'
+import { getQuickCommandDisplayPreview } from './quick-commands'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand as isAgentQuickCommand

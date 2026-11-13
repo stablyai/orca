@@ -1,4 +1,4 @@
-import type { MobileQuickCommandLaunch } from '../quick-commands'
+import type { MobileQuickCommandLaunch } from '../quick-commands/quick-commands'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileNewTabAgentOption } from '../../session/agent-launch/mobile-new-tab-agent-options'
 import { sessionTabCreateTerminal } from '../../session/tabs/mobile-session-tab-write-operations'

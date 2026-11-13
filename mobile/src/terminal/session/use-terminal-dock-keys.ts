@@ -1,9 +1,9 @@
 import { useRef, useState, type RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
-import type { TerminalShortcutModifier } from '../terminal-accessory-keys'
-import { createTerminalKeyChordInput } from '../terminal-key-chord-input'
-import type { TerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
-import { writeTerminalLiveInputText } from '../terminal-live-input-text-write'
+import type { TerminalShortcutModifier } from '../key-input/terminal-accessory-keys'
+import { createTerminalKeyChordInput } from '../key-input/terminal-key-chord-input'
+import type { TerminalLiveAccessoryInput } from '../live-input/terminal-live-accessory-input'
+import { writeTerminalLiveInputText } from '../live-input/terminal-live-input-text-write'
 import {
   appendedCharacter,
   consumeStickyModifiers,
@@ -12,7 +12,7 @@ import {
   STICKY_MODIFIER_DOUBLE_TAP_MS,
   tapStickyModifier,
   type StickyModifiers
-} from '../terminal-sticky-modifiers'
+} from '../key-input/terminal-sticky-modifiers'
 
 type UseTerminalDockKeysOptions = {
   readonly activeHandle: string | null

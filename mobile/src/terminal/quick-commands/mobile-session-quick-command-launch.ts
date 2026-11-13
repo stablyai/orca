@@ -1,4 +1,4 @@
-import { buildMobileQuickCommandLaunch, type MobileQuickCommandLaunch } from '../quick-commands'
+import { buildMobileQuickCommandLaunch, type MobileQuickCommandLaunch } from './quick-commands'
 
 import { triggerError } from '../../platform/haptics/haptics'
 import { translate } from '../../i18n/mobile-i18n'

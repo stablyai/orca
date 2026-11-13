@@ -1,6 +1,6 @@
 // Bound nonconverging viewport refits to avoid stream churn, broken gestures and battery drain.
 
-import type { TerminalFrame } from '../terminal-webview-messages'
+import type { TerminalFrame } from '../webview/terminal-webview-messages'
 import { translate } from '../../i18n/mobile-i18n'
 import type { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 

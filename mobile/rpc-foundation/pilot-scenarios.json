@@ -16381,7 +16381,7 @@
       "id": "terminal-query-reply-accepted",
       "operation": "terminal.query-reply",
       "family": "terminal.query-reply",
-      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
+      "sites": ["mobile/src/terminal/host-operations/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16418,7 +16418,7 @@
       "id": "terminal-query-reply-unsubscribed",
       "operation": "terminal.query-reply",
       "family": "terminal.query-reply",
-      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
+      "sites": ["mobile/src/terminal/host-operations/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16437,7 +16437,7 @@
       "id": "terminal-raw-input-reported",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
+      "sites": ["mobile/src/terminal/live-input/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16473,7 +16473,7 @@
       "id": "terminal-raw-input-refused",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
+      "sites": ["mobile/src/terminal/live-input/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16509,7 +16509,7 @@
       "id": "terminal-viewport-refit-applied",
       "operation": "terminal.viewport-refit",
       "family": "terminal.viewport-refit",
-      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
+      "sites": ["mobile/src/terminal/viewport/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16553,7 +16553,7 @@
       "id": "terminal-viewport-refit-legacy-desktop",
       "operation": "terminal.viewport-refit",
       "family": "terminal.viewport-refit",
-      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
+      "sites": ["mobile/src/terminal/viewport/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {

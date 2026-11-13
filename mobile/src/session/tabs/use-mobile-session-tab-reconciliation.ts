@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { startRuntimeCapabilityProbe } from '../../transport/connection/runtime-capability-probe'
-import { supportsMobileQuickCommands } from '../../terminal/quick-commands'
+import { supportsMobileQuickCommands } from '../../terminal/quick-commands/quick-commands'
 import { terminalQuickCommandAgentPromptMaxLength } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../../agent-history/agent-history-capability'
 import '../../../../src/shared/protocol-version'

@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../../terminal/terminal-reply-schema'
+import '../../terminal/host-operations/terminal-reply-schema'
 import { workspaceFilePathsSchema } from './workspace-file-paths-reply-schema'
 
 // Skip refusals to retain suggestions; inspect method_not_found first to fall back from search to inventory.
