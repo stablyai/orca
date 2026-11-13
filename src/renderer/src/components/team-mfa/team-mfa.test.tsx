@@ -225,7 +225,12 @@ describe('banner after the deadline', () => {
         setupUrl={setupUrl}
         onSetUp={() => {}}
         blocked
+        variant="sidebar"
       />
+    )
+    // An alert once blocked; a quiet status while there is still time.
+    expect(container.querySelector('[data-team-mfa-banner="blocked"]')?.getAttribute('role')).toBe(
+      'alert'
     )
     expect(container.textContent).toContain('Acme requires two-factor authentication')
     expect(container.textContent).toContain('until you set it up')

@@ -1,4 +1,6 @@
+import { ShieldAlert } from 'lucide-react'
 import { InlineError } from '@/components/ui/inline-error'
+import { cn } from '@/lib/class-names'
 import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { mfaCountdownLabel, mfaDeadlineDate } from './team-mfa-copy'
@@ -12,6 +14,8 @@ export type TeamMfaBannerProps = {
   onSetUp: () => void
   /** The deadline has passed and the team is closed to this person until they set MFA up. */
   blocked?: boolean
+  /** `sidebar`: the narrow stacked layout of the sidebar's banner stack. */
+  variant?: 'inline' | 'sidebar'
   className?: string
 }
 
@@ -26,44 +30,74 @@ export function TeamMfaBanner({
   setupUrl,
   onSetUp,
   blocked = false,
+  variant = 'inline',
   className
 }: TeamMfaBannerProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
+  const title = blocked
+    ? t(
+        'auto.components.teamMfa.bannerBlockedTitle',
+        '{{value0}} requires two-factor authentication',
+        { value0: teamName }
+      )
+    : t(
+        'auto.components.teamMfa.bannerTitle',
+        '{{value0}} requires two-factor authentication. {{value1}}.',
+        { value0: teamName, value1: mfaCountdownLabel(enforceAt, now, t) }
+      )
+  const detail = blocked
+    ? t(
+        'auto.components.teamMfa.bannerBlockedBody',
+        'You can’t use this team’s workspaces until you set it up. Your personal account is not affected.'
+      )
+    : t(
+        'auto.components.teamMfa.bannerBody',
+        'Set it up by {{value0}}. After that you can’t use this team’s workspaces until you do.',
+        { value0: mfaDeadlineDate(enforceAt, locale) }
+      )
+  const action = (
+    <OpenExternalSplitButton variant="outline" size="xs" link={setupUrl} onClick={onSetUp}>
+      {t('auto.components.teamMfa.setUp', 'Set up MFA')}
+    </OpenExternalSplitButton>
+  )
+  if (variant === 'sidebar') {
+    // Same shape as the other banners in the sidebar stack (StalledTerminalDaemonBanner): the
+    // column is narrow, so the action sits under the text.
+    return (
+      <section
+        role={blocked ? 'alert' : 'status'}
+        data-team-mfa-banner={blocked ? 'blocked' : 'pending'}
+        className={cn(
+          'mx-2 mb-2 shrink-0 rounded-md border bg-worktree-sidebar-accent/40 p-2.5 text-worktree-sidebar-foreground',
+          blocked ? 'border-destructive/50' : 'border-border',
+          className
+        )}
+      >
+        <div className="flex items-start gap-2">
+          <ShieldAlert
+            className={cn(
+              'mt-px size-3.5 shrink-0',
+              blocked ? 'text-destructive' : 'text-muted-foreground'
+            )}
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <p className="text-xs font-semibold leading-snug">{title}</p>
+            <p className="text-xs leading-snug text-muted-foreground">{detail}</p>
+            {action}
+          </div>
+        </div>
+      </section>
+    )
+  }
   return (
     <InlineError
       className={className}
       tone={blocked ? 'error' : 'neutral'}
-      title={
-        blocked
-          ? t(
-              'auto.components.teamMfa.bannerBlockedTitle',
-              '{{value0}} requires two-factor authentication',
-              { value0: teamName }
-            )
-          : t(
-              'auto.components.teamMfa.bannerTitle',
-              '{{value0}} requires two-factor authentication. {{value1}}.',
-              { value0: teamName, value1: mfaCountdownLabel(enforceAt, now, t) }
-            )
-      }
-      detail={
-        blocked
-          ? t(
-              'auto.components.teamMfa.bannerBlockedBody',
-              'You can’t use this team’s workspaces until you set it up. Your personal account is not affected.'
-            )
-          : t(
-              'auto.components.teamMfa.bannerBody',
-              'Set it up by {{value0}}. After that you can’t use this team’s workspaces until you do.',
-              { value0: mfaDeadlineDate(enforceAt, locale) }
-            )
-      }
-      action={
-        <OpenExternalSplitButton variant="outline" size="xs" link={setupUrl} onClick={onSetUp}>
-          {t('auto.components.teamMfa.setUp', 'Set up MFA')}
-        </OpenExternalSplitButton>
-      }
+      title={title}
+      detail={detail}
+      action={action}
     />
   )
 }

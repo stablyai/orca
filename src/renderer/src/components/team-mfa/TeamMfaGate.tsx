@@ -19,8 +19,8 @@ import { useTeamMfaPolicy } from './use-team-mfa-policy'
 export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   banner: React.JSX.Element | null
   blocked: React.JSX.Element | null
-  /** One line for the app-level notice: the countdown, or "no access" once blocked. */
-  appBanner: React.JSX.Element | null
+  /** The sidebar notice: the countdown, or "no access" once blocked. */
+  sidebarBanner: React.JSX.Element | null
 } {
   const cloud = useAppStore((state) => state.orcaProfileAuthStatus?.cloud)
   const selectOrg = useAppStore((state) => state.selectOrcaProfileOrg)
@@ -31,7 +31,7 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   const [stillMissing, setStillMissing] = useState(false)
 
   if (!orgId || !policy?.policy) {
-    return { banner: null, blocked: null, appBanner: null }
+    return { banner: null, blocked: null, sidebarBanner: null }
   }
   const surface = teamMfaSurface(policy)
   const openSetup = (): void => {
@@ -41,8 +41,9 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   // The server's refusal wins over a policy read that has not caught up, unless that read now
   // says the member has MFA (they just set it up; the next request will go through).
   const isBlocked = surface === 'blocked' || (options.forceBlocked === true && policy.self !== 'on')
-  const line = (blocked: boolean): React.JSX.Element => (
+  const line = (blocked: boolean, variant: 'inline' | 'sidebar' = 'inline'): React.JSX.Element => (
     <TeamMfaBanner
+      variant={variant}
       teamName={teamName}
       enforceAt={policy.policy?.enforceAt ?? now}
       now={now}
@@ -54,7 +55,7 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   if (isBlocked) {
     return {
       banner: null,
-      appBanner: line(true),
+      sidebarBanner: line(true, 'sidebar'),
       blocked: (
         <TeamMfaBlockedScreen
           teamName={teamName}
@@ -74,6 +75,10 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
       )
     }
   }
-  const banner = surface === 'banner' ? line(false) : null
-  return { banner, appBanner: banner, blocked: null }
+  const pending = surface === 'banner'
+  return {
+    banner: pending ? line(false) : null,
+    sidebarBanner: pending ? line(false, 'sidebar') : null,
+    blocked: null
+  }
 }

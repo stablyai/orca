@@ -37,17 +37,32 @@ const banner = (daysLeft: number, frameWidth = width) =>
 export const bannerTwoWeeks = banner(14)
 export const bannerOneDay = banner(1)
 export const bannerNarrow = banner(6, 420)
-/** The app-level line once the deadline has passed. */
-export const bannerBlocked = frame(
-  <TeamMfaBanner
-    teamName="Acme Engineering"
-    enforceAt={NOW - 2 * DAY}
-    now={NOW}
-    setupUrl={setupUrl}
-    onSetUp={noop}
-    blocked
-  />
-)
+// ---- Sidebar banner stack: the app-level reminder, at sidebar widths ----
+
+const sidebar = (daysLeft: number, sidebarWidth: number) =>
+  defineFixture({
+    width: sidebarWidth,
+    render: () => (
+      <div className="bg-worktree-sidebar py-2">
+        <TeamMfaBanner
+          variant="sidebar"
+          teamName="Acme Engineering"
+          enforceAt={NOW + daysLeft * DAY}
+          now={NOW}
+          setupUrl={setupUrl}
+          onSetUp={noop}
+          blocked={daysLeft < 0}
+        />
+      </div>
+    )
+  })
+
+export const sidebarTwoWeeks = sidebar(14, 280)
+export const sidebarOneDay = sidebar(1, 280)
+/** After the deadline: no access until set up. */
+export const sidebarBlocked = sidebar(-2, 280)
+/** The narrowest sidebar. */
+export const sidebarBlockedNarrow = sidebar(-2, 220)
 
 // ---- Blocked screen: after the deadline ----
 
