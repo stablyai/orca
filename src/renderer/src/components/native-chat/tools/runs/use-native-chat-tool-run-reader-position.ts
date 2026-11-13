@@ -8,7 +8,7 @@ import type { NativeChatToolRunVirtualizer } from './use-native-chat-tool-run-wi
 const REVEAL_EVENT = 'native-chat-tool-run-reveal'
 // A card can reveal in the same commit that mounts its run, before the run listens for it.
 const unclaimedReveals = new WeakSet<Element>()
-// Corrections a landing may make before it waits for the next real change instead of a frame.
+// Confirmation frames a landing may spend per real change before it waits for the next one.
 const MAX_LANDING_FRAMES = 12
 
 /** A card has just scrolled itself to the top of its run: that is now the reader's place. */
@@ -20,7 +20,12 @@ export function claimNativeChatToolRunReveal(scroller: HTMLElement): void {
 /** A thought with no words draws nothing, so it can never be anyone's place. */
 const drawsSomething = (row: NativeChatToolRunRow): boolean => row.kind !== 'aside' || row.focusable
 
-type Landing = { target: NativeChatRunPosition; frames: number }
+// `seen` is the size and row list the frame budget was granted for; a real change grants a new budget.
+type Landing = {
+  target: NativeChatRunPosition
+  frames: number
+  seen?: { totalSize: number; rowIndexByKey: ReadonlyMap<string, number> }
+}
 
 /** The run's one record of where its reader is, and the one landing that may move the box back there. */
 export function useNativeChatToolRunReaderPosition({
@@ -162,6 +167,10 @@ export function useNativeChatToolRunReaderPosition({
     if (!landing || !scroller || !isVisible) {
       return
     }
+    if (landing.seen?.totalSize !== totalSize || landing.seen.rowIndexByKey !== rowIndexByKey) {
+      landing.seen = { totalSize, rowIndexByKey }
+      landing.frames = 0
+    }
     const found = rowIndexByKey.get(landing.target.key)
     const index = found === undefined ? -1 : (nextDrawing[found] ?? -1)
     const row = rows[index]
@@ -217,19 +226,23 @@ export function useNativeChatToolRunReaderPosition({
     virtualizer
   ])
 
-  /** The held row reported a real size: a waiting landing tries again. */
+  /** The held row reported a real size: a waiting landing tries again, with a fresh confirmation budget. */
   const onRowMeasured = useCallback((key: string) => {
-    if (landingRef.current?.target.key === key) {
+    const landing = landingRef.current
+    if (landing?.target.key === key) {
+      landing.frames = 0
       setLandingWake((count) => count + 1)
     }
   }, [])
+  /** A landing is still moving the box: its own writes are not the reader arriving at the end. */
+  const landingPending = useCallback((): boolean => landingRef.current !== null, [])
   /** What the run keeps when it leaves: a pending landing's target is still the reader's place. */
   const current = useCallback(
     (): NativeChatRunPosition | null => landingRef.current?.target ?? positionRef.current,
     []
   )
   return useMemo(
-    () => ({ onScrolled, onRowMeasured, current }),
-    [current, onRowMeasured, onScrolled]
+    () => ({ onScrolled, onRowMeasured, current, landingPending }),
+    [current, landingPending, onRowMeasured, onScrolled]
   )
 }

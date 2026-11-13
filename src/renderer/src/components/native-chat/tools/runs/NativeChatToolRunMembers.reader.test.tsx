@@ -106,12 +106,25 @@ function layOutRunBox(): void {
   vi.spyOn(Element.prototype, 'scrollTop', 'get').mockImplementation(function (this: Element) {
     return scrollTops.get(this) ?? 0
   })
+  // A browser reports a changed offset with one scroll event on the next frame, as the window's observer expects.
+  const reporting = new WeakSet<Element>()
   vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation(function (
     this: Element,
     value: number
   ) {
     const max = this instanceof HTMLElement ? Math.max(0, this.scrollHeight - this.clientHeight) : 0
-    scrollTops.set(this, Math.min(Math.max(0, value), max))
+    const next = Math.min(Math.max(0, value), max)
+    if (next === (scrollTops.get(this) ?? 0)) {
+      return
+    }
+    scrollTops.set(this, next)
+    if (!reporting.has(this)) {
+      reporting.add(this)
+      requestAnimationFrame(() => {
+        reporting.delete(this)
+        this.dispatchEvent(new Event('scroll'))
+      })
+    }
   })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const scroller = box(this)
@@ -385,6 +398,17 @@ describe('NativeChatToolRun opened-run reader', () => {
     rerender(<Transcript blocks={blocks} revealedDiff={{ ...reveal, requestId: 2 }} />)
     await settle()
     expect(topRow(container).key).toBe('edit:apply_patch:400')
+
+    // That revealed place is what the run keeps: hidden, evicted and back, it returns there.
+    pane.hidden = true
+    rerender(
+      <Transcript blocks={blocks} visible={false} revealedDiff={{ ...reveal, requestId: 2 }} />
+    )
+    rerender(<Transcript blocks={blocks} visible={false} mounted={false} />)
+    pane.hidden = false
+    rerender(<Transcript blocks={blocks} />)
+    await settle()
+    expect(topRow(container).key).toBe('edit:apply_patch:400')
   })
 
   it('stops following when the reader scrolls before new work has settled', async () => {
@@ -578,6 +602,28 @@ describe('NativeChatToolRun opened-run reader', () => {
       document.dispatchEvent(new Event('selectionchange'))
     })
     await settle()
+    expect(topRow(container)).toEqual(before)
+  })
+
+  it("lands on the reader's row once a pane shown before its layout finally lays out", async () => {
+    const { container, rerender } = render(<Transcript blocks={calls(1_000)} find />)
+    await settle()
+    await scrollBox(container, 9_013)
+    const before = topRow(container)
+
+    pane.hidden = true
+    rerender(<Transcript blocks={calls(1_000)} find visible={false} />)
+    membersBox(container).scrollTop = 0
+    // Shown, but its box has no geometry for longer than any landing waits on frames alone.
+    rerender(<Transcript blocks={calls(1_000)} find />)
+    await settle()
+    await settle()
+    // Layout arrives; the held row reports a size that changes nothing.
+    pane.hidden = false
+    await growRow(container, before.key ?? '', 40)
+    expect(topRow(container)).toEqual(before)
+
+    await growRow(container, 'call:call-900', 300)
     expect(topRow(container)).toEqual(before)
   })
 

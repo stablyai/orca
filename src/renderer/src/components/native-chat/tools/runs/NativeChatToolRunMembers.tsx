@@ -300,14 +300,14 @@ export function NativeChatToolRunMembers({
       return
     }
     const fromEnd = distanceFromBottom(scroller)
-    followsEndRef.current = fromEnd <= NATIVE_CHAT_FOLLOW_REARM_PX
+    followsEndRef.current = !reader.landingPending() && fromEnd <= NATIVE_CHAT_FOLLOW_REARM_PX
     const top = scroller.scrollTop > 1
     const bottom = fromEnd > 1
     setFades((current) =>
       current.top === top && current.bottom === bottom ? current : { top, bottom }
     )
     remember()
-  }, [remember])
+  }, [reader, remember])
 
   const onScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
