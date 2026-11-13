@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# docker for Orca Cloud workspaces (first on orcad's PATH; PARITY-DOCKER). The image ships Docker, but
+# dockerd is not started at boot (it would cost every workspace memory and a little boot time): the
+# first docker command starts it, as root inside this workspace's own VM, then everything is plain
+# docker. Running containers stop when the workspace sleeps; images stay.
+# The control plane can turn Docker off (SANDBOX_DOCKER=off): orca-sandbox-start then leaves
+# ~/.orca-sandbox/docker.off and this refuses with a plain message instead of starting the daemon.
+real="${ORCA_REAL_DOCKER:-/usr/bin/docker}"
+state="${HOME:-/nonexistent}/.orca-sandbox"
+
+if [ -f "$state/docker.off" ]; then
+  printf '%s\n' "orca: Docker is turned off for Orca Cloud workspaces right now." >&2
+  exit 1
+fi
+# The control plane installs this script into workspaces booted from an older image too, which have
+# no Docker: say so instead of waiting on a daemon that isn't there.
+if [ ! -x "$real" ]; then
+  printf '%s\n' "orca: This workspace was created before Orca Cloud had Docker. New workspaces have it." >&2
+  exit 127
+fi
+
+# Only commands that need the daemon start it; `docker --version`, `docker help` and the like don't.
+needs_daemon=1
+case "${1:-}" in '' | -v | --version | help | -h | --help) needs_daemon=0 ;; esac
+# A DOCKER_HOST or context pointing elsewhere is the user's choice: never start a local daemon for it.
+[ -n "${DOCKER_HOST:-}" ] && needs_daemon=0
+
+if [ "$needs_daemon" = 1 ] && ! "$real" info >/dev/null 2>&1; then
+  dockerd_bin="${ORCA_DOCKERD:-/usr/bin/dockerd}"
+  log="${ORCA_DOCKERD_LOG:-/tmp/orca-dockerd.log}"
+  # Two first commands at once must not start two daemons.
+  exec 8>"${ORCA_DOCKER_LOCK:-/tmp/orca-dockerd.lock}"
+  flock -w 30 8 || true
+  if ! "$real" info >/dev/null 2>&1; then
+    ${ORCA_DOCKER_SUDO-sudo -n} "$dockerd_bin" >>"$log" 2>&1 8>&- </dev/null &
+    disown 2>/dev/null || true
+    ticks=0
+    until "$real" info >/dev/null 2>&1; do
+      if [ "$ticks" -ge "${ORCA_DOCKER_WAIT_TICKS:-150}" ]; then
+        printf '%s\n' "orca: Docker didn't start in this workspace. Its log is $log." >&2
+        exit 1
+      fi
+      sleep 0.1
+      ticks=$((ticks + 1))
+    done
+    # Said once per daemon start, where agents and people see it: the two things that differ from a laptop.
+    printf '%s\n' \
+      "orca: Docker started in this workspace. Running containers stop when the workspace sleeps (images stay)." \
+      "orca: A container calling github.com or an agent's API through Orca's credential swap must trust the workspace's proxy certificate: -v /etc/pki/ca-trust/source/anchors/vercel-proxy-ca.pem:/usr/local/share/ca-certificates/orca-proxy.crt:ro, then update-ca-certificates (or NODE_EXTRA_CA_CERTS / SSL_CERT_FILE)." >&2
+  fi
+  exec 8>&-
+fi
+exec "$real" "$@"

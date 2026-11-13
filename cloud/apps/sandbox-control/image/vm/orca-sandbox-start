@@ -3,7 +3,8 @@
 # {"schemaVersion":1,"pairingCode":"orca://pair?...","projectRoot":"/vercel/sandbox/project"}
 # Env from the control plane: ORCA_SANDBOX_ID, ORCA_PUBLIC_WSS, optional ORCA_REPO_URL/ORCA_REPO_REF,
 # ORCA_GITHUB_PLACEHOLDER, ORCA_SECRET_ENV (`NAME=<base64>` lines: org/personal/repo secrets for
-# orcad and its agents), ORCA_SHARE_PROXY_KEY (this session's share-link proxy key, port 6769).
+# orcad and its agents), ORCA_SHARE_PROXY_KEY (this session's share-link proxy key, port 6769),
+# ORCA_DOCKER (on|off: the control plane's Docker switch for the `docker` shim).
 # Never prints anything else on stdout's last line.
 # With ORCA_READY_VIA=file it prints {"schemaVersion":1,"readyFile":"<path>"} instead and the control
 # plane reads the offer with the files API: the provider keeps command stdout as logs, not files.
@@ -101,6 +102,12 @@ if [ "${ORCA_GIT_SETUP:-}" = pending ]; then
   rm -f "$STATE/git-setup.ready" "$STATE/git-setup.failed"
   date +%s >"$STATE/git-setup.pending"
 fi
+# PARITY-DOCKER: the control plane's Docker switch (SANDBOX_DOCKER) for the `docker` shim. Only a
+# start that says so changes it; a retried or repair start (no ORCA_DOCKER) keeps the last answer.
+case "${ORCA_DOCKER:-}" in
+  off) : >"$STATE/docker.off" ;;
+  on) rm -f "$STATE/docker.off" ;;
+esac
 start_share_proxy
 unset ORCA_SHARE_PROXY_KEY
 if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" = "$boot_id" ] && [ -s "$STATE/ready.json" ] \

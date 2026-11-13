@@ -898,6 +898,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       pool: poolConfigFromEnv(env),
       shareLinkSecret: shareSecret(env),
       extraEgressHosts: extraEgressHostsFor(env),
+      dockerEnabled: env.SANDBOX_DOCKER?.trim().toLowerCase() !== 'off',
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1

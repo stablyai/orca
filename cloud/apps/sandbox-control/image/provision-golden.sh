@@ -84,6 +84,26 @@ if [ -n "${CHROME_VERSION:-}" ] && command -v apt-get >/dev/null; then
   google-chrome --headless=new --no-sandbox --disable-gpu --dump-dom 'data:text/html,<p>ok</p>' 2>/dev/null | grep -q '<p>ok</p>'
 fi
 
+if [ -n "${DOCKER_APT_PACKAGES:-}" ] && command -v apt-get >/dev/null; then
+  # PARITY-DOCKER: rootful dockerd inside this VM (the microVM is the boundary; agents already have
+  # sudo here). Never started at boot: /opt/orca/bin/docker starts it on first use.
+  log "docker ($DOCKER_APT_PACKAGES)"
+  # shellcheck disable=SC2086 # word splitting is the pinned package list
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $DOCKER_APT_PACKAGES >/dev/null
+  sudo install -d -m 0755 /etc/docker
+  # The registry mirror spares Docker Hub's anonymous pull limit (sandboxes share egress IPs); dockerd
+  # falls back to Docker Hub itself when the mirror misses.
+  printf '%s\n' '{"storage-driver":"overlay2","log-driver":"local","log-opts":{"max-size":"10m","max-file":"3"},"registry-mirrors":["https://mirror.gcr.io"]}' \
+    | sudo tee /etc/docker/daemon.json >/dev/null
+  sudo usermod -aG docker "$(id -un)"
+  # No init system starts these here, but keep any unit from claiming the socket on a future base.
+  sudo systemctl disable docker.service docker.socket containerd.service >/dev/null 2>&1 || true
+  sudo dockerd --validate --config-file /etc/docker/daemon.json >/dev/null
+  docker --version >/dev/null
+  docker compose version >/dev/null
+  docker buildx version >/dev/null
+fi
+
 log 'agent CLIs'
 # The image's system npm installs them; agents later run on whatever node orcad puts on PATH.
 # shellcheck disable=SC2086 # word splitting is the package list
@@ -210,7 +230,7 @@ if [ -n "${NOVNC_VERSION:-}" ]; then
 fi
 
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-env orca-egress-probe orca-image-wipe orca-agent-signout orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-sandbox-read-snapshot orca-read-snapshot.cjs orca-git-as orca-git-identity orcad-boot git; do
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-env orca-egress-probe orca-image-wipe orca-agent-signout orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-sandbox-read-snapshot orca-read-snapshot.cjs orca-git-as orca-git-identity orcad-boot git docker; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"

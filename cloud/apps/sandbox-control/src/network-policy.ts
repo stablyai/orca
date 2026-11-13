@@ -41,6 +41,20 @@ export const EDITOR_REMOTE_SERVER_HOSTS: readonly string[] = [
   'openvsxorg.blob.core.windows.net'
 ]
 
+/**
+ * PARITY-DOCKER: container image pulls (`docker pull`, compose). dockerd tries the mirror first
+ * (Docker Hub's anonymous limit is per IP, and sandboxes share egress IPs), then Docker Hub itself.
+ * Pull-only hosts: no credential is ever routed here.
+ */
+export const CONTAINER_REGISTRY_HOSTS: readonly string[] = [
+  'mirror.gcr.io',
+  'registry-1.docker.io',
+  'auth.docker.io',
+  'production.cloudflare.docker.com',
+  'ghcr.io',
+  'pkg-containers.githubusercontent.com'
+]
+
 /** Registries, git hosting and agent model/sign-in hosts a coding VM needs. */
 export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'registry.npmjs.org',
@@ -96,7 +110,8 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'api.githubcopilot.com',
   '*.githubcopilot.com',
   '*.onorca.dev',
-  ...EDITOR_REMOTE_SERVER_HOSTS
+  ...EDITOR_REMOTE_SERVER_HOSTS,
+  ...CONTAINER_REGISTRY_HOSTS
 ]
 
 export type CredentialRoute = {

@@ -35,5 +35,10 @@
       "version": "0.13.0",
       "sha256": "b6413e364efd04f3c92ec8c17747e3c4adc20157c2ef1c5d019a26d944a46df8"
     }
+  },
+  "docker": {
+    "docker.io": "29.1.3-0ubuntu4.1",
+    "docker-compose-v2": "2.40.3+ds1-0ubuntu1",
+    "docker-buildx": "0.30.1-0ubuntu1"
   }
 }
