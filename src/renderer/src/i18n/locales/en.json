@@ -12219,7 +12219,7 @@
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
-          "change_host": "Open Remote Servers"
+          "change_host": "Remote server settings"
         },
         "computerUseSummary": {
           "checkingTitle": "Checking Computer Use access.",

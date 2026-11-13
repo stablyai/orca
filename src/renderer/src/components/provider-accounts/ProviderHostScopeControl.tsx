@@ -48,7 +48,7 @@ export function ProviderHostScopeControl({
           <ServerCog className="size-3.5" />
           {t(
             'auto.components.settings.ProviderHostScopeControl.change_host',
-            'Open Remote Servers'
+            'Remote server settings'
           )}
         </Button>
       </div>
