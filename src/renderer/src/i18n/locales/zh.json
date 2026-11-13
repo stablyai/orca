@@ -22355,7 +22355,8 @@
       "done": "完成",
       "inactive": "未生效",
       "permission": "需要授权",
-      "unreadLabel": "{{status}} · 未读"
+      "unreadLabel": "{{status}} · 未读",
+      "hiddenUnread_other": "{{count}} 个未读"
     },
     "reviewStatus": {
       "checksFailed": "{{review}} 检查：失败",

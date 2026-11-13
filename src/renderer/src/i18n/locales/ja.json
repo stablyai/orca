@@ -22015,7 +22015,8 @@
       "done": "完了",
       "inactive": "非アクティブ",
       "permission": "許可が必要",
-      "unreadLabel": "{{status}} · 未読"
+      "unreadLabel": "{{status}} · 未読",
+      "hiddenUnread_other": "未読 {{count}} 件"
     },
     "reviewStatus": {
       "checksFailed": "{{review}} のチェック: 失敗",

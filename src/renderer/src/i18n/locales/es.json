@@ -22733,7 +22733,10 @@
       "done": "Listo",
       "inactive": "Inactivo",
       "permission": "Necesita permiso",
-      "unreadLabel": "{{status}} · Sin leer"
+      "unreadLabel": "{{status}} · Sin leer",
+      "hiddenUnread_one": "{{count}} sin leer",
+      "hiddenUnread_many": "{{count}} sin leer",
+      "hiddenUnread_other": "{{count}} sin leer"
     },
     "reviewStatus": {
       "checksFailed": "Checks de {{review}}: Fallidos",

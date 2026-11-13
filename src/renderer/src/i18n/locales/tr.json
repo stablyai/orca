@@ -22228,6 +22228,8 @@
       "permission": "İzin gerekiyor",
       "unconfirmed": "Doğrulanamadı",
       "unreadLabel": "{{status}} · Okunmadı",
+      "hiddenUnread_one": "{{count}} okunmamış",
+      "hiddenUnread_other": "{{count}} okunmamış",
       "working": "Çalışıyor"
     },
     "reviewStatus": {

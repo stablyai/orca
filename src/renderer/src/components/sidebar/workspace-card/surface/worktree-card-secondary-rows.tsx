@@ -24,6 +24,7 @@ export function WorktreeCardSecondaryRows({
     isActive,
     lineageCollapsed,
     lineageChildWorktreeIds,
+    lineageHiddenUnreadCount,
     onLineageToggle,
     remoteBranchConflict,
     showInlineAgentList,
@@ -71,6 +72,7 @@ export function WorktreeCardSecondaryRows({
       {showLineageChildChip && (
         <WorktreeLineageToggle
           childWorktreeIds={lineageChildWorktreeIds}
+          hiddenUnreadCount={lineageHiddenUnreadCount}
           collapsed={lineageCollapsed}
           ariaLabel={lineageChildAriaLabel}
           label={childWorkspaceShortLabel}

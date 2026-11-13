@@ -22756,7 +22756,10 @@
       "done": "Terminé",
       "inactive": "Inactif",
       "permission": "Autorisation requise",
-      "unreadLabel": "{{status}} · Non lu"
+      "unreadLabel": "{{status}} · Non lu",
+      "hiddenUnread_one": "{{count}} non lu",
+      "hiddenUnread_many": "{{count}} non lus",
+      "hiddenUnread_other": "{{count}} non lus"
     },
     "reviewStatus": {
       "checksFailed": "{{review}} : vérifications en échec",

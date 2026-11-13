@@ -100,6 +100,7 @@
   --color-dialog-surface: var(--dialog-surface);
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
+  --color-worktree-unread: var(--worktree-unread);
   --color-agent-question-text: var(--agent-question-text);
   --color-question-card-border: var(--question-card-border);
   --color-question-option-border: var(--question-option-border);
@@ -263,6 +264,8 @@
   --agent-question: var(--color-orange-600);
   /* The working-state yellow every agent working/monitoring glyph paints. */
   --agent-working: var(--color-yellow-500);
+  /* The unread workspace dot, on cards and on the collapsed child chip; one hue in both themes. */
+  --worktree-unread: var(--color-amber-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
   /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */

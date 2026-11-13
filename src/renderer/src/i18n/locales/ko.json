@@ -22007,7 +22007,8 @@
       "done": "완료",
       "inactive": "비활성",
       "permission": "권한 필요",
-      "unreadLabel": "{{status}} · 읽지 않음"
+      "unreadLabel": "{{status}} · 읽지 않음",
+      "hiddenUnread_other": "읽지 않음 {{count}}개"
     },
     "reviewStatus": {
       "checksFailed": "{{review}} 체크: 실패",

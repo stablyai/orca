@@ -10,6 +10,7 @@ import StatusIndicator from '../surface/StatusIndicator'
 import { useWorktreeActivityStatuses } from '../activity/use-worktree-activity-statuses'
 
 const EMPTY_CHILD_IDS: readonly string[] = []
+// Agent states only: 'active' (a tab is open) shares Done's dot and would read as a second Done.
 const STATUS_ORDER: readonly WorktreeStatus[] = [
   'permission',
   'failed',
@@ -17,12 +18,12 @@ const STATUS_ORDER: readonly WorktreeStatus[] = [
   'monitoring',
   'unconfirmed',
   'interrupted',
-  'done',
-  'active'
+  'done'
 ]
 
 export function WorktreeLineageToggle({
   childWorktreeIds = EMPTY_CHILD_IDS,
+  hiddenUnreadCount = 0,
   collapsed,
   ariaLabel,
   label,
@@ -30,6 +31,8 @@ export function WorktreeLineageToggle({
   onToggle
 }: {
   childWorktreeIds?: readonly string[]
+  /** Unread workspaces hidden under this collapsed lineage, grandchildren included. */
+  hiddenUnreadCount?: number
   collapsed: boolean
   ariaLabel: string
   label: string
@@ -44,9 +47,19 @@ export function WorktreeLineageToggle({
     counts.set(status, (counts.get(status) ?? 0) + 1)
   }
   const summary = STATUS_ORDER.filter((status) => counts.has(status))
-  const description = summary
-    .map((status) => `${counts.get(status)} ${getWorktreeStatusLabel(status)}`)
-    .join(', ')
+  // Expanded children show their own unread dots.
+  const unreadCount = collapsed ? hiddenUnreadCount : 0
+  const description = [
+    summary.map((status) => `${counts.get(status)} ${getWorktreeStatusLabel(status)}`).join(', '),
+    unreadCount > 0
+      ? t('workspace.activity.hiddenUnread', '{{count}} unread', {
+          count: unreadCount,
+          defaultValue_one: '{{count}} unread'
+        })
+      : ''
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="@container relative mt-1 flex min-w-0 justify-start">
@@ -64,7 +77,16 @@ export function WorktreeLineageToggle({
           >
             <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-x-1 gap-y-0.5 py-0.5">
               <span className="inline-flex shrink-0 items-center gap-1">
-                <Workflow className="size-2.5" />
+                <span className="relative inline-flex shrink-0">
+                  <Workflow className="size-2.5" />
+                  {unreadCount > 0 ? (
+                    <span
+                      data-lineage-hidden-unread=""
+                      className="pointer-events-none absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-worktree-unread ring-1 ring-background"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </span>
                 <span
                   className={cn('tabular-nums', summary.length > 0 && 'hidden @min-[13rem]:inline')}
                 >

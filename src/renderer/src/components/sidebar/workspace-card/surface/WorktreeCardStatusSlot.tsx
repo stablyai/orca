@@ -63,7 +63,7 @@ const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} 
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
 // Overlay unread without widening the status lane; ring-sidebar separates the dot from busy glyphs.
 const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-worktree-unread ring-2 ring-sidebar'
 
 function overlayNewCardUnreadStatus(
   status: React.JSX.Element,

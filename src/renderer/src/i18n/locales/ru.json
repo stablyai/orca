@@ -22971,6 +22971,10 @@
       "permission": "Требуется разрешение",
       "unconfirmed": "Не удалось подтвердить",
       "unreadLabel": "{{status}} · Непрочитанное",
+      "hiddenUnread_one": "Непрочитанных: {{count}}",
+      "hiddenUnread_few": "Непрочитанных: {{count}}",
+      "hiddenUnread_many": "Непрочитанных: {{count}}",
+      "hiddenUnread_other": "Непрочитанных: {{count}}",
       "working": "В работе"
     },
     "reviewStatus": {

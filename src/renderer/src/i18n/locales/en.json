@@ -23805,7 +23805,9 @@
       "unconfirmed": "Couldn’t confirm",
       "done": "Done",
       "inactive": "Inactive",
-      "unreadLabel": "{{status}} · Unread"
+      "unreadLabel": "{{status}} · Unread",
+      "hiddenUnread_one": "{{count}} unread",
+      "hiddenUnread_other": "{{count}} unread"
     },
     "reviewStatus": {
       "merged": "{{review}}: Merged",

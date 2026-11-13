@@ -2755,6 +2755,10 @@
     }
   },
   "workspace": {
+    "activity": {
+      "hiddenUnread_one": "{{count}} unread",
+      "hiddenUnread_other": "{{count}} unread"
+    },
     "links": {
       "linkedCount_one": "{{count}} linked",
       "linkedCount_other": "{{count}} linked",

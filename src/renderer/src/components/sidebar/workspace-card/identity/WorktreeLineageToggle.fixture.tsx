@@ -84,6 +84,9 @@ function Preview({
         nativeDragEnabled={false}
         lineageChildWorktreeIds={childWorktrees.map((child) => child.id)}
         lineageChildCount={childWorktrees.length}
+        lineageHiddenUnreadCount={
+          collapsed ? childWorktrees.filter((child) => child.isUnread).length : undefined
+        }
         lineageCollapsed={collapsed}
         onLineageToggle={(event) => {
           event.stopPropagation()
@@ -162,4 +165,34 @@ export const inactive = defineFixture({
   width: 288,
   store: { ...store, agentStatusEpoch: 3, unifiedTabsByWorktree: {}, agentStatusByPaneKey: {} },
   render: () => <Preview />
+})
+
+// Three finished children, two of them unread, and one with only an open chat (Active).
+const unreadChildren = children.map((child, index) =>
+  index < 2 ? { ...child, isUnread: true } : child
+)
+const openChatTab: Tab = {
+  ...tabs[0],
+  id: 'chat-idle',
+  entityId: '11111111-1111-4111-8111-111111111119',
+  worktreeId: 'idle'
+}
+const unreadStore = {
+  ...store,
+  agentStatusEpoch: 5,
+  worktreesByRepo: { [repo.id]: [parent, ...unreadChildren] },
+  unifiedTabsByWorktree: { ...store.unifiedTabsByWorktree, idle: [openChatTab] },
+  agentStatusByPaneKey: Object.fromEntries(
+    entries.map((entry) => [entry.paneKey, { ...entry, state: 'done' as const }])
+  )
+}
+export const unread = defineFixture({
+  width: 288,
+  store: unreadStore,
+  render: () => <Preview childWorktrees={unreadChildren} />
+})
+export const unreadExpanded = defineFixture({
+  width: 288,
+  store: unreadStore,
+  render: () => <Preview expanded childWorktrees={unreadChildren} />
 })

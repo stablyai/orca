@@ -23245,7 +23245,10 @@
       "done": "Concluído",
       "inactive": "Inativo",
       "permission": "Precisa de permissão",
-      "unreadLabel": "{{status}} · Não lido"
+      "unreadLabel": "{{status}} · Não lido",
+      "hiddenUnread_one": "{{count}} não lido",
+      "hiddenUnread_many": "{{count}} não lidos",
+      "hiddenUnread_other": "{{count}} não lidos"
     },
     "reviewStatus": {
       "checksFailed": "Verificações do {{review}}: com falha",

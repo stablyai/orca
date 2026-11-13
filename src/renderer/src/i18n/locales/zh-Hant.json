@@ -21928,6 +21928,7 @@
       "permission": "需要權限",
       "unconfirmed": "無法確認",
       "unreadLabel": "{{status}} · 未讀",
+      "hiddenUnread_other": "{{count}} 個未讀",
       "working": "執行中"
     },
     "reviewStatus": {
