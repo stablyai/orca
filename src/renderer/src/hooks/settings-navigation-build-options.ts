@@ -15,6 +15,8 @@ export type SettingsNavigationBuildOptions = {
   isLinearConnected: boolean
   /** Orca Cloud programmatic access (API keys, routines): only builds with a control plane. */
   isOrcaCloudApiAvailable?: boolean
+  /** Owner or admin of the active Orca team: Settings › Enterprise is theirs alone. */
+  isOrcaTeamAdmin?: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
-  CloudApiAuditPage,
   CloudApiGrant,
   CloudApiKeyList,
   CloudApiMe,
@@ -29,7 +28,6 @@ function CloudApiKeysPaneBody(): React.JSX.Element | null {
   const [keys, setKeys] = useState<CloudLoadState<CloudApiKeyList>>({ status: 'loading' })
   const [settings, setSettings] = useState<CloudLoadState<CloudApiSettings>>({ status: 'loading' })
   const [grants, setGrants] = useState<CloudLoadState<CloudApiGrant[]>>({ status: 'loading' })
-  const [audit, setAudit] = useState<CloudLoadState<CloudApiAuditPage>>({ status: 'loading' })
   const [now, setNow] = useState(() => Date.now())
   const begin = useRequestGeneration()
   const [refreshing, setRefreshing] = useState(false)
@@ -85,19 +83,6 @@ function CloudApiKeysPaneBody(): React.JSX.Element | null {
     setNow(Date.now())
   }, [api, begin, word])
 
-  const loadAudit = useCallback(async (): Promise<void> => {
-    if (!api) {
-      return
-    }
-    const isCurrent = begin('audit')
-    setAudit({ status: 'loading' })
-    const result = await api.listAudit({ limit: 25 })
-    if (isCurrent()) {
-      setAudit(toCloudLoadState(result, word))
-      setNow(Date.now())
-    }
-  }, [api, begin, word])
-
   useEffect(() => {
     if (availability?.status === 'ready') {
       void load()
@@ -116,9 +101,6 @@ function CloudApiKeysPaneBody(): React.JSX.Element | null {
       viewer={viewer}
       keys={keys}
       settings={settings}
-      audit={
-        viewer && viewer.role !== 'member' && viewer.scopes.includes('audit:read') ? audit : null
-      }
       now={now}
       onRefresh={() => void load()}
       refreshing={refreshing}
@@ -158,7 +140,6 @@ function CloudApiKeysPaneBody(): React.JSX.Element | null {
         setSettings({ status: 'ok', data: result.data })
         return null
       }}
-      onLoadAudit={() => void loadAudit()}
       onCreateApproval={(input) => api.createApproval(input)}
       grants={grants}
       onRefreshGrants={() => {

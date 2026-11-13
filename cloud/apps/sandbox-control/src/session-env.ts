@@ -9,6 +9,7 @@ import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provid
 import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
+import { SecretsKmsError } from './secrets-kms'
 import type { SandboxRow } from './store'
 import { secretLog } from './secret-log'
 
@@ -80,9 +81,12 @@ function egressSwapOn(deps: Pick<LifecycleDeps, 'secrets' | 'config'>, row: Pick
 export type { AgentMode }
 
 export async function sessionSecretEnv(
-  deps: Pick<LifecycleDeps, 'db' | 'secrets' | 'config'>,
+  deps: Pick<LifecycleDeps, 'db' | 'secrets' | 'secretsUnavailable' | 'config'>,
   row: SandboxRow
 ): Promise<SessionSecrets> {
+  if (deps.secretsUnavailable) {
+    throw new SecretsKmsError(deps.secretsUnavailable)
+  }
   if (!deps.secrets) {
     return EMPTY
   }

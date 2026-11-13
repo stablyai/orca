@@ -63,7 +63,7 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
     expect(err).not.toContain("Username for 'https://github.com'")
     expect(err).not.toContain('could not read Username')
     expect(err).toContain(
-      "orca: Orca Cloud can't push to octocat/Hello-World. Install the Orca GitHub App on octocat, or connect your GitHub in Settings › Account."
+      "orca: Orca Cloud can't push to octocat/Hello-World. Install the Orca GitHub App on octocat, or connect your GitHub in Settings → Account."
     )
   })
 

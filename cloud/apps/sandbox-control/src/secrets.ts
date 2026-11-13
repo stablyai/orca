@@ -9,7 +9,8 @@
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import type { Env } from './env'
-import { createKeyring, type Keyring, type SecretBinding } from './secrets-crypto'
+import { createKeyring, type Keyring, type SealFormat, type SecretBinding } from './secrets-crypto'
+import { createKekUnwrapper, SecretsKmsError } from './secrets-kms'
 import { AUTH_IAT_BACKDATE_MS } from './member-changes'
 import { BASE_URL_NAMES, baseUrlHost } from './provider-env'
 import type { SandboxRow } from './store'
@@ -458,21 +459,80 @@ export async function effectiveSecrets(db: D1Database, caller: SandboxCaller, re
     })
 }
 
-let cachedKeyring: { source: string; keyring: Promise<Keyring> } | null = null
+let cachedKeyring: { source: string; keyring: Promise<Keyring>; failedAt?: number } | null = null
+/** How long a failed KMS unwrap is remembered, so an outage is not one KMS round trip per request. */
+export const KMS_RETRY_AFTER_MS = 10_000
 
-/** The Worker's keyring, or null when SECRETS_KEK is not configured. */
-export function keyringFor(env: Env): Promise<Keyring> | null {
+function parseKeyMap(json: string | undefined): Record<string, string> {
+  return json ? (JSON.parse(json) as Record<string, string>) : {}
+}
+
+/**
+ * SECRETS_KEK_SOURCE=kms: every KEK comes out of Cloud KMS (src/secrets-kms.ts), once per isolate.
+ * SECRETS_KEK is never read on this path, so a KMS failure cannot fall back to a plaintext key.
+ */
+function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | undefined): Promise<Keyring> {
+  const activeId = env.SECRETS_KEK_ID ?? 'k1'
+  const source = `kms\n${activeId}\n${env.SECRETS_KMS_KEY ?? ''}\n${env.SECRETS_KEK_WRAPPED ?? ''}\n${env.SECRETS_KEK_RETIRED_WRAPPED ?? ''}\n${sealFormat}`
+  const cached = cachedKeyring
+  if (cached?.source === source && (cached.failedAt === undefined || Date.now() - cached.failedAt < KMS_RETRY_AFTER_MS)) {
+    return cached.keyring
+  }
+  const load = async (): Promise<Keyring> => {
+    if (!env.SECRETS_KMS_KEY || !env.SECRETS_KMS_SERVICE_ACCOUNT || !env.SECRETS_KEK_WRAPPED) {
+      throw new SecretsKmsError('config')
+    }
+    let retiredWrapped: Record<string, string>
+    try {
+      retiredWrapped = parseKeyMap(env.SECRETS_KEK_RETIRED_WRAPPED)
+    } catch {
+      throw new SecretsKmsError('config')
+    }
+    const unwrap = createKekUnwrapper({ keyName: env.SECRETS_KMS_KEY, serviceAccountJson: env.SECRETS_KMS_SERVICE_ACCOUNT, fetch: fetcher })
+    const active = await unwrap(env.SECRETS_KEK_WRAPPED, activeId)
+    const retired: Record<string, string> = {}
+    for (const [id, wrapped] of Object.entries(retiredWrapped)) {
+      if (typeof wrapped !== 'string') {
+        throw new SecretsKmsError('config')
+      }
+      retired[id] = await unwrap(wrapped, id)
+    }
+    try {
+      return await createKeyring({ id: activeId, key: active }, retired, { sealFormat })
+    } catch {
+      // KMS returned something that is not a 32-byte key, or an id is malformed.
+      throw new SecretsKmsError('invalid')
+    }
+  }
+  const entry: NonNullable<typeof cachedKeyring> = { source, keyring: load() }
+  entry.keyring.catch((error: unknown) => {
+    entry.failedAt = Date.now()
+    const kms = error instanceof SecretsKmsError ? error : null
+    // Reason and HTTP status only: never a response body, a token or a key.
+    secretLog('secrets_kms_unavailable', { reason: kms?.reason ?? 'error', ...(kms?.status ? { status: kms.status } : {}) })
+  })
+  cachedKeyring = entry
+  return entry.keyring
+}
+
+/**
+ * The Worker's keyring, or null when the secret store is not configured. With SECRETS_KEK_SOURCE=kms
+ * the promise rejects with SecretsKmsError while KMS cannot hand over the keys.
+ */
+export function keyringFor(env: Env, fetcher?: typeof fetch): Promise<Keyring> | null {
+  // Anything but the exact opt-in stays v1, the format every deployed version reads.
+  const sealFormat = env.SECRETS_SEAL_FORMAT === 'v2' ? 'v2' : 'v1'
+  if (env.SECRETS_KEK_SOURCE === 'kms') {
+    return kmsKeyring(env, sealFormat, fetcher)
+  }
   if (!env.SECRETS_KEK) {
     return null
   }
-  // Anything but the exact opt-in stays v1, the format every deployed version reads.
-  const sealFormat = env.SECRETS_SEAL_FORMAT === 'v2' ? 'v2' : 'v1'
   const source = `${env.SECRETS_KEK_ID ?? 'k1'}\n${env.SECRETS_KEK}\n${env.SECRETS_KEK_RETIRED ?? ''}\n${sealFormat}`
   if (cachedKeyring?.source !== source) {
-    const retired = env.SECRETS_KEK_RETIRED ? (JSON.parse(env.SECRETS_KEK_RETIRED) as Record<string, string>) : {}
     cachedKeyring = {
       source,
-      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, retired, { sealFormat })
+      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, parseKeyMap(env.SECRETS_KEK_RETIRED), { sealFormat })
     }
   }
   return cachedKeyring.keyring

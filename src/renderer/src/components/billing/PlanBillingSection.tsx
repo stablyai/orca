@@ -280,7 +280,7 @@ export function PlanBillingView({
       <div className="flex flex-wrap gap-2">
         {hasPlan || onTrial ? null : (
           <Button type="button" size="sm" onClick={onSeePlans}>
-            {t('auto.components.billing.upgrade.cta', 'See plans')}
+            {t('auto.components.billing.comparePlans', 'Compare plans')}
           </Button>
         )}
         {hasPlan && entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (

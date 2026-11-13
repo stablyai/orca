@@ -1,7 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type {
   CloudApiApproval,
-  CloudApiAuditPage,
   CloudApiAvailability,
   CloudApiCreatedKey,
   CloudApiGrant,
@@ -11,6 +10,9 @@ import type {
   CloudApiProject,
   CloudApiResult,
   CloudApiSettings,
+  CloudAuditLogExport,
+  CloudAuditLogPage,
+  CloudAuditLogQuery,
   CreateCloudApiApprovalInput,
   CreateCloudApiKeyInput,
   Routine,
@@ -23,7 +25,7 @@ import type {
   RoutineUpdated
 } from '../../shared/cloud-api/cloud-api-types'
 
-/** Desktop only: Orca Cloud API keys, org settings, audit and routines. The session token stays in main. */
+/** Desktop only: Orca Cloud API keys, org settings, the team audit log and routines. The session token stays in main. */
 export type CloudApiBridge = {
   availability: () => Promise<CloudApiAvailability>
   /** The desktop workspace running on this Orca Cloud sandbox, if this computer has it. */
@@ -37,10 +39,11 @@ export type CloudApiBridge = {
   revokeGrant: (id: string) => Promise<CloudApiResult<unknown>>
   getSettings: () => Promise<CloudApiResult<CloudApiSettings>>
   putSettings: (input: { vmCliEnabled: boolean }) => Promise<CloudApiResult<CloudApiSettings>>
-  listAudit: (query?: {
-    limit?: number
-    before?: number
-  }) => Promise<CloudApiResult<CloudApiAuditPage>>
+  /** The team audit log: owners and admins of a team whose plan includes it (else `plan-required`). */
+  listAuditLog: (query?: CloudAuditLogQuery) => Promise<CloudApiResult<CloudAuditLogPage>>
+  exportAuditLogCsv: (
+    query?: Pick<CloudAuditLogQuery, 'category' | 'actor'>
+  ) => Promise<CloudApiResult<CloudAuditLogExport>>
   listProjects: () => Promise<CloudApiResult<{ projects: CloudApiProject[] }>>
   listInstallations: () => Promise<CloudApiResult<{ installations: CloudApiInstallation[] }>>
   listRoutines: () => Promise<CloudApiResult<{ routines: Routine[] }>>
@@ -69,7 +72,8 @@ export const cloudApiBridge: CloudApiBridge = {
   revokeGrant: invoke('cloudApi:revokeGrant'),
   getSettings: invoke('cloudApi:getSettings'),
   putSettings: invoke('cloudApi:putSettings'),
-  listAudit: invoke('cloudApi:listAudit'),
+  listAuditLog: invoke('cloudApi:listAuditLog'),
+  exportAuditLogCsv: invoke('cloudApi:exportAuditLogCsv'),
   listProjects: invoke('cloudApi:listProjects'),
   listInstallations: invoke('cloudApi:listInstallations'),
   listRoutines: invoke('cloudApi:listRoutines'),

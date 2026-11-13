@@ -27,6 +27,8 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { coveredPaneHadFocus, useInertSiblings } from './cloud-cover-focus'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
 import { useWakeOverlay } from './use-wake-overlay'
+import { useWakeInput, useWakeInputNotices } from './use-wake-input'
+import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
 import { useConfirmedRestart } from './use-cloud-panel-actions'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useSleepCopyProgress } from './offline/CloudSleepCopyState'
@@ -114,10 +116,15 @@ export function PairedCloudWorkspaceSurface({
   const view = useCloudWorkspaceView(workspaceId, { pairedRows: true })
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
   const now = useNow(1_000, view.wake !== undefined)
+  // PAIRED-WAKE-TYPE-THROUGH: typing is held while it wakes and delivered to the woken terminal,
+  // exactly as for an owned workspace (the store begins and ends the hold on wake progress).
+  const wakeInput = useWakeInput(workspaceId)
+  useWakeInputNotices(workspaceId)
   const overlay = useWakeOverlay(
     view.wake,
     Math.max(now, view.wake?.at ?? 0),
-    t('orcaCloudWorkspace.overlay.stalled', 'Orca Cloud stopped responding while waking.')
+    t('orcaCloudWorkspace.overlay.stalled', 'Orca Cloud stopped responding while waking.'),
+    wakeInput.pending > 0
   )
   const copySaveEntry = useSleepCopySave(workspaceId)
   const wakeInFlight = Boolean(
@@ -141,10 +148,12 @@ export function PairedCloudWorkspaceSurface({
   const slowNow = useNow(30_000, layer === 'asleep')
   const restart = useConfirmedRestart(workspaceId)
 
+  // While it wakes the pane stays typeable under the overlay (a failed wake covers it again).
+  const typeThrough = layer === 'waking' && overlay.wake?.phase !== 'failed'
   const coverRef = useRef<HTMLDivElement | null>(null)
   const headingRef = useRef<HTMLHeadingElement | null>(null)
   const [takeFocus, setTakeFocus] = useState(false)
-  useInertSiblings(coverRef, layer !== null && !overlay.leaving)
+  useInertSiblings(coverRef, layer !== null && !typeThrough && !overlay.leaving)
   useLayoutEffect(() => {
     setTakeFocus(layer !== null && coveredPaneHadFocus(coverRef.current))
   }, [layer])
@@ -175,7 +184,13 @@ export function PairedCloudWorkspaceSurface({
       {layer ? (
         <div
           ref={coverRef}
-          className={layer === 'asleep' ? 'absolute inset-0 z-20' : 'absolute inset-0 z-30'}
+          className={
+            typeThrough
+              ? 'pointer-events-none absolute inset-0 z-30'
+              : layer === 'asleep'
+                ? 'absolute inset-0 z-20'
+                : 'absolute inset-0 z-30'
+          }
           data-cloud-cover={layer}
           data-cloud-paired=""
         >
@@ -185,6 +200,9 @@ export function PairedCloudWorkspaceSurface({
               workspaceName={name}
               leaving={overlay.leaving}
               autoFocus={takeFocus}
+              typeThrough={typeThrough}
+              pendingInput={wakeInput.pending}
+              onClearPending={() => clearWakeInput(workspaceId)}
               onRetry={() => void wakePairedCloudWorkspace(workspaceId)}
               onRestart={restart}
               onDismiss={() => dismissCloudWake(workspaceId)}
