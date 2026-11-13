@@ -27,7 +27,7 @@ export type ProviderEnv = { env: Record<string, string>; scopes: Record<string, 
 export async function resolvedProviderEnv(
   db: D1Database,
   keyring: Keyring,
-  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url'>
+  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility'>
 ): Promise<ProviderEnv> {
   const { env: stored, scopes } = await resolveSandboxSecrets(db, keyring, row)
   // The proxy only needs the keys; dropping those of agents not on 'keep' happens at request time
@@ -43,7 +43,8 @@ const PROVIDER_ENV_CACHE_MS = 60_000
 const providerEnvCache = new Map<string, { at: number; value: Promise<ProviderEnv> }>()
 
 export function cachedProviderEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now: number): Promise<ProviderEnv> {
-  const key = `${row.id}:${row.session_id ?? ''}`
+  // Visibility is part of the key: sharing a workspace stops its owner's personal keys at once (SEC-5).
+  const key = `${row.id}:${row.session_id ?? ''}:${row.visibility}`
   const hit = providerEnvCache.get(key)
   if (hit && now - hit.at < PROVIDER_ENV_CACHE_MS) {
     return hit.value

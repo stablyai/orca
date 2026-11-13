@@ -178,14 +178,25 @@ async function setVisibility(
     )
     return
   }
-  toast.success(
-    visibility === 'team'
-      ? t('auto.components.cloudWorkspaces.sharedWithYourTeam', 'Shared with your team')
-      : t(
-          'auto.components.cloudWorkspaces.nowPrivate',
-          'Now private. Teammates’ devices were disconnected.'
+  if (visibility === 'team') {
+    // SEC-5: the owner's personal secrets stop being injected once teammates can open it.
+    toast.success(
+      t('auto.components.cloudWorkspaces.sharedWithYourTeam', 'Shared with your team'),
+      {
+        description: t(
+          'auto.components.cloudWorkspaces.sharedPersonalSecretsNote',
+          'Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are.'
         )
-  )
+      }
+    )
+  } else {
+    toast.success(
+      t(
+        'auto.components.cloudWorkspaces.nowPrivate',
+        'Now private. Teammates’ devices were disconnected.'
+      )
+    )
+  }
   reload()
 }
 
