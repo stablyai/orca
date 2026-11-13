@@ -1,3 +1,4 @@
+import { PlatformHostSuffixesConfigError } from './network-policy'
 // Cron pass: the control plane, not the desktop, guarantees metering, the session deadline and cleanup,
 // so a closed laptop or a crash mid-call can never leave a sandbox billed-but-untracked.
 import { STOP_RUNNING_REASONS } from './entitlements'
@@ -142,9 +143,17 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
     }
   }
   if (row.github_token_expires_at !== null && row.session_id && row.github_token_expires_at - now < 15 * 60_000) {
-    const git = await refreshGitCredentials(deps, row, row.session_id)
-    const refreshed = await transition(deps.db, row, { github_token_expires_at: git?.expiresAt ?? null }, now)
-    row = refreshed ?? row
+    // A malformed ORCA_PLATFORM_HOST_SUFFIXES leaves the live policy as it is; usage still settles below.
+    const git = await refreshGitCredentials(deps, row, row.session_id).catch((error: unknown) => {
+      if (error instanceof PlatformHostSuffixesConfigError) {
+        return 'skipped' as const
+      }
+      throw error
+    })
+    if (git !== 'skipped') {
+      const refreshed = await transition(deps.db, row, { github_token_expires_at: git?.expiresAt ?? null }, now)
+      row = refreshed ?? row
+    }
   }
   const settled = await queueUsage(deps.db, row, now)
   const current = settled === row.usage_settled_at ? row : await transition(deps.db, row, { usage_settled_at: settled }, now)

@@ -39,6 +39,8 @@ export type GoldenImageDeps = {
     fetch?: typeof fetch
     /** ENV-STALE: where git-source builds publish their orcad bundle (runtime-bundles.ts). */
     runtimeBundle?: { baseUrl: string; secret: string }
+    /** The workspace base allowlist (ORCA_PLATFORM_HOST_SUFFIXES included), so the smoke boots like a workspace. */
+    egressAllowlist?: readonly string[]
   }
 }
 
@@ -453,7 +455,7 @@ async function stepSmoke(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
       region: row.region,
       timeoutMs: 10 * 60_000,
       ports: [ORCAD_PORT],
-      networkPolicy: compileNetworkPolicy({ mode: 'allowlist' }),
+      networkPolicy: compileNetworkPolicy({ mode: 'allowlist', allowlist: deps.config.egressAllowlist }),
       tags: { orcaGoldenSmoke: row.id, orcaEnv: deps.config.environment },
       snapshotExpirationMs: 86_400_000
     })

@@ -4,8 +4,10 @@ import {
   DEFAULT_EGRESS_PRESET,
   EDITOR_REMOTE_SERVER_HOSTS,
   compileNetworkPolicy,
+  PlatformHostSuffixesConfigError,
   egressAllowlistFor,
   gitBasicAuthorization,
+  platformHostSuffixesFrom,
   parseEgressPreset
 } from '../src/network-policy'
 
@@ -152,5 +154,15 @@ describe('ORCA_PLATFORM_HOST_SUFFIXES', () => {
     const { allow } = compileNetworkPolicy({ mode: 'allowlist', allowlist })
     expect(allow['*.onorca.dev']).toEqual([])
     expect(allow['*.example.dev']).toEqual([])
+  })
+
+  it('rejects a malformed suffix up front, naming every bad entry', () => {
+    expect(() => egressAllowlistFor('*.orca.dev,orca dev,https://x.dev')).toThrow(PlatformHostSuffixesConfigError)
+    try {
+      platformHostSuffixesFrom('*.orca.dev,orca dev,https://x.dev')
+    } catch (error) {
+      expect((error as PlatformHostSuffixesConfigError).invalid).toEqual(['orca dev', 'https://x.dev'])
+    }
+    expect(platformHostSuffixesFrom(' *.Orca.dev ')).toEqual(['*.orca.dev'])
   })
 })

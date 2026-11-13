@@ -202,7 +202,7 @@ import {
   userAuthorizeUrl
 } from './github-user-tokens'
 import { MEMBER_GIT_WINDOW_MS, memberGitRoutes, memberSentWithin, recordMemberSend } from './member-git'
-import { egressAllowlistFor } from './network-policy'
+import { egressAllowlistSetting, PlatformHostSuffixesConfigError } from './network-policy'
 import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
 import { getOrgSlug, putOrgSlug } from './org-slugs'
 import {
@@ -948,7 +948,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
     config: {
       pool: poolConfigFromEnv(env),
       shareLinkSecret: shareSecret(env),
-      egressAllowlist: egressAllowlistFor(env.ORCA_PLATFORM_HOST_SUFFIXES),
+      ...platformAllowlistConfig(env),
       extraEgressHosts: extraEgressHostsFor(env),
       dockerEnabled: env.SANDBOX_DOCKER?.trim().toLowerCase() !== 'off',
       egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
@@ -1036,7 +1036,9 @@ function buildDeps(life: LifecycleDeps, deps: Deps, env?: Env): BuildDeps {
       goldenSnapshotId: life.config.goldenSnapshotId,
       goldenSnapshots: life.config.goldenSnapshots,
       region: life.config.defaultRegion,
-      guardrails: life.config.guardrails
+      guardrails: life.config.guardrails,
+      egressAllowlist: life.config.egressAllowlist,
+      egressAllowlistError: life.config.egressAllowlistError
     }
   }
 }
@@ -1067,6 +1069,12 @@ async function githubRepoIsPublic(repoUrl: string): Promise<boolean> {
  * before expiry, rebuild on a new release or VM-touching commit. Regions advance independently.
  */
 async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
+  const platform = egressAllowlistSetting(env.ORCA_PLATFORM_HOST_SUFFIXES)
+  if (platform.error) {
+    // The smoke boots under this list: no rotation until it is fixed (the active image keeps serving).
+    console.error(JSON.stringify({ event: 'config_error', variable: 'ORCA_PLATFORM_HOST_SUFFIXES', invalid: platform.error.invalid, skipped: 'golden_images' }))
+    return
+  }
   if (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
     return
   }
@@ -1094,7 +1102,8 @@ async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
             github,
             seedSnapshotId: region === seeded ? env.GOLDEN_SNAPSHOT_ID : undefined,
             refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined,
-            runtimeBundle: runtimeBundleConfig(env)
+            runtimeBundle: runtimeBundleConfig(env),
+            egressAllowlist: platform.allowlist
           }
         })
         if (tick !== 'idle') {
@@ -1229,12 +1238,28 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
   try {
     return await routeRequest(request, env, deps)
   } catch (error) {
+    if (error instanceof PlatformHostSuffixesConfigError) {
+      return platformHostsMisconfigured(error)
+    }
     // A stale-org token anywhere in routing (ORG-TOKEN-STALE): the desktop re-mints once and retries.
     if (error instanceof OrgMismatchError) {
       return orgMismatchResponse()
     }
     throw error
   }
+}
+
+/** The lifecycle's base allowlist, or the config error that refuses limited-mode policy compiles. */
+function platformAllowlistConfig(env: Env): { egressAllowlist?: readonly string[]; egressAllowlistError?: PlatformHostSuffixesConfigError } {
+  const { allowlist, error } = egressAllowlistSetting(env.ORCA_PLATFORM_HOST_SUFFIXES)
+  return error ? { egressAllowlistError: error } : { egressAllowlist: allowlist }
+}
+
+/** 503 for whatever needs the platform host list (creates, wakes, builds, health), naming the bad entries. */
+function platformHostsMisconfigured(error: PlatformHostSuffixesConfigError): Response {
+  console.error(JSON.stringify({ event: 'config_error', variable: 'ORCA_PLATFORM_HOST_SUFFIXES', invalid: error.invalid }))
+  // Code only: /v1/health is public, so the bad entries stay in the log line above.
+  return json({ error: 'platform_hosts_misconfigured' }, 503)
 }
 
 function orgMismatchResponse(): Response {
@@ -1397,6 +1422,11 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
           keyring: () => keyringFor(env)
         })) ?? fail('not_found', 404)
       )
+    }
+    if (url.pathname === '/v1/health' && request.method === 'GET') {
+      // Post-deploy smoke: no auth, no DB. 503 names a config error a deploy must not ship.
+      const platform = egressAllowlistSetting(env.ORCA_PLATFORM_HOST_SUFFIXES)
+      return platform.error ? platformHostsMisconfigured(platform.error) : json({ ok: true }, 200)
     }
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
@@ -2463,6 +2493,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)
+  }
+  if (error instanceof PlatformHostSuffixesConfigError) {
+    return platformHostsMisconfigured(error)
   }
   if (error instanceof SecretsKmsError) {
     return secretsUnavailableResponse()

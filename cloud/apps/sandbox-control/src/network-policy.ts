@@ -103,13 +103,48 @@ const BASE_EGRESS_HOSTS: readonly string[] = [
   '*.githubcopilot.com'
 ]
 
+const HOST = /^(\*\.)?([a-z0-9-]+\.)+[a-z]{2,63}$/
+
+/** ORCA_PLATFORM_HOST_SUFFIXES names an entry no egress policy can hold; `invalid` quotes them (hosts, not secrets). */
+export class PlatformHostSuffixesConfigError extends Error {
+  constructor(readonly invalid: readonly string[]) {
+    super(`ORCA_PLATFORM_HOST_SUFFIXES has invalid hosts: ${invalid.join(', ')} (expected e.g. *.onorca.dev)`)
+    this.name = 'PlatformHostSuffixesConfigError'
+  }
+}
+
 /**
- * The default allowlist with Orca's platform hosts from ORCA_PLATFORM_HOST_SUFFIXES (comma list, e.g.
- * `*.onorca.dev`). Unset, blank or only commas: DEFAULT_PLATFORM_HOST_SUFFIXES.
+ * Orca's platform hosts from ORCA_PLATFORM_HOST_SUFFIXES (comma list, e.g. `*.onorca.dev`). Unset, blank
+ * or only commas: DEFAULT_PLATFORM_HOST_SUFFIXES. Throws PlatformHostSuffixesConfigError on a malformed
+ * entry, naming it, instead of an opaque failure in each limited-mode policy compile.
  */
+export function platformHostSuffixesFrom(platformHostSuffixes?: string): readonly string[] {
+  const configured = (platformHostSuffixes ?? '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean)
+  const invalid = configured.filter((host) => !HOST.test(host))
+  if (invalid.length > 0) {
+    throw new PlatformHostSuffixesConfigError(invalid)
+  }
+  return configured.length > 0 ? configured : DEFAULT_PLATFORM_HOST_SUFFIXES
+}
+
+/**
+ * The base allowlist, or the config error when ORCA_PLATFORM_HOST_SUFFIXES is malformed. Only what
+ * compiles an allowlist policy refuses on the error; reads, stops and the reconcile cron keep working.
+ */
+export function egressAllowlistSetting(platformHostSuffixes?: string): { allowlist?: readonly string[]; error?: PlatformHostSuffixesConfigError } {
+  try {
+    return { allowlist: egressAllowlistFor(platformHostSuffixes) }
+  } catch (error) {
+    if (error instanceof PlatformHostSuffixesConfigError) {
+      return { error }
+    }
+    throw error
+  }
+}
+
+/** The default allowlist with Orca's platform hosts (platformHostSuffixesFrom). */
 export function egressAllowlistFor(platformHostSuffixes?: string): readonly string[] {
-  const configured = (platformHostSuffixes ?? '').split(',').map((host) => host.trim()).filter(Boolean)
-  const platform = configured.length > 0 ? configured : DEFAULT_PLATFORM_HOST_SUFFIXES
+  const platform = platformHostSuffixesFrom(platformHostSuffixes)
   return [...new Set([...BASE_EGRESS_HOSTS, ...platform, ...EDITOR_REMOTE_SERVER_HOSTS])]
 }
 
@@ -155,7 +190,6 @@ export type EgressPolicyInput = {
   denyUnclaimed?: boolean
 }
 
-const HOST = /^(\*\.)?([a-z0-9-]+\.)+[a-z]{2,63}$/
 
 export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
   const allow: Record<string, NetworkPolicyRule[]> = {}
