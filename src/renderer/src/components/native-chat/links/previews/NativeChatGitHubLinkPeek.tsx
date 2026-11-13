@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -12,10 +13,14 @@ import {
 } from '../../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import type { HostAuthorityKey } from '../../../../../../shared/host-authority'
 import {
   githubLinkPreviewKey,
   loadGitHubLinkPreview,
-  readCachedGitHubLinkPreview
+  loadRoutedGitHubLinkPreview,
+  readCachedGitHubLinkPreview,
+  readCachedRoutedGitHubLinkPreview,
+  routedGitHubLinkPreviewKey
 } from './native-chat-github-link-preview'
 import {
   githubLinkBelongsToRepo,
@@ -69,24 +74,63 @@ function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
   )
 }
 
+/** Which lookup answers a card: the chat repo's, or one routed through another repo on the chat's host. */
+export type GitHubPeekSource =
+  | { kind: 'repo'; repo: Repo }
+  | { kind: 'routed'; authorityKey: HostAuthorityKey }
+
+function peekLookup(source: GitHubPeekSource, link: GitHubIssueOrPRLink) {
+  return source.kind === 'repo'
+    ? {
+        key: githubLinkPreviewKey(source.repo, link),
+        read: () => readCachedGitHubLinkPreview(source.repo, link),
+        load: () => loadGitHubLinkPreview(source.repo, link)
+      }
+    : {
+        key: routedGitHubLinkPreviewKey(source.authorityKey, link),
+        read: () => readCachedRoutedGitHubLinkPreview(source.authorityKey, link),
+        load: () => loadRoutedGitHubLinkPreview(source.authorityKey, link)
+      }
+}
+
 export function NativeChatGitHubPeekBody({
-  repo,
+  source,
   link,
   otherRepoFallback
 }: {
-  repo: Repo
+  source: GitHubPeekSource
   link: GitHubIssueOrPRLink
   /** For a link to another repo, which an older host or a repo the sign-in can't read leaves
    *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
 }): ReactNode {
-  const t = useTranslate()
-  const { state, retry } = useNativeChatHoverPreview(
-    githubLinkPreviewKey(repo, link),
-    () => readCachedGitHubLinkPreview(repo, link),
-    () => loadGitHubLinkPreview(repo, link)
+  const key = useAppStore((state) =>
+    source.kind === 'repo'
+      ? githubLinkPreviewKey(source.repo, link)
+      : routedGitHubLinkPreviewKey(source.authorityKey, link, state.repos)
   )
+  return (
+    <GitHubPeekContent
+      key={key}
+      lookup={peekLookup(source, link)}
+      link={link}
+      otherRepoFallback={otherRepoFallback}
+    />
+  )
+}
+
+function GitHubPeekContent({
+  lookup,
+  link,
+  otherRepoFallback
+}: {
+  lookup: ReturnType<typeof peekLookup>
+  link: GitHubIssueOrPRLink
+  otherRepoFallback?: ReactNode
+}): ReactNode {
+  const t = useTranslate()
+  const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
   if (otherRepoFallback && state.status !== 'ready') {
     return otherRepoFallback
   }

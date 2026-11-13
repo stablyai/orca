@@ -9301,16 +9301,12 @@
           "5426ecbdcb": "Local scripts will not run",
           "95a0411b3e": "template",
           "175daba180": "Example",
-          "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
-          "56f9a4a1d0": "Using `orca.yaml`",
           "623e0c9f31": "`orca.yaml` could not be parsed",
-          "5a67e4793d": "No `orca.yaml` detected",
           "07ba35bc68": "Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.",
           "787ca433ef": "Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.",
           "ecc73d9125": "Compare your file against the working template below and copy that shape if needed.",
           "0cc712b823": "The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.",
           "aba825233f": "The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.",
-          "ca424ff135": "Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.",
           "8bfe65fc60": "Use local commands",
           "8d6c56bff8": "Run both",
           "0fa21e19ec": "Name of the workspace, usually based on the branch name.",
@@ -9353,7 +9349,11 @@
           "da00f141c2": "Custom GitHub issue command",
           "88c6d1e54a": "Command source",
           "01bdba296f": "Worktree hooks",
-          "1ecf0b115a": "Setup script"
+          "1ecf0b115a": "Setup script",
+          "yamlDetected": "<yaml>orca.yaml</yaml> detected",
+          "yamlNotDetected": "No <yaml>orca.yaml</yaml> detected",
+          "yamlNotDetectedDescription": "Add one to share scripts with your team.",
+          "copyTemplate": "Copy template"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -21294,6 +21294,9 @@
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
       },
+      "signIn": {
+        "title": "Sign in to {{agent}} to start chatting"
+      },
       "claudeSignIn": {
         "signingIn": "Signing in…"
       },
@@ -21925,7 +21928,11 @@
       "TerminalContextMenu": {
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
-        "copySessionIdError": "Unable to copy session ID"
+        "copySessionIdError": "Unable to copy session ID",
+        "copyAgentId": "Copy Agent ID",
+        "copyAgentIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
+        "copyAgentIdSuccess": "Agent ID copied",
+        "copyAgentIdError": "Unable to copy agent ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
@@ -23463,6 +23470,7 @@
       "location": "Location",
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
+      "signInEllipsis": "Sign in…",
       "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
       "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
       "loadFailed": "Couldn't load agy accounts",
