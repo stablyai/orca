@@ -96,6 +96,8 @@ export type WorkspaceCardFacts = {
     style: WorkspaceCardStyle
     show: WorkspaceCardShowOptions
     agentRows: 'full' | 'compact'
+    /** Whether a compact card opens its properties hover card. */
+    compactHover: boolean
   }
   env: { projectGroups: boolean }
 }

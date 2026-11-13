@@ -23,6 +23,7 @@ import {
   retainOriginalWebChatSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
+import { RUNTIME_CARD_LAYOUT_KEYS } from './web-runtime-card-settings'
 import { followHostVoiceSettings } from './web-speech-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
@@ -134,7 +135,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         : null
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
     }
-    for (const key of ['experimentalNewWorktreeCardStyle', 'compactWorktreeCards'] as const) {
+    for (const key of RUNTIME_CARD_LAYOUT_KEYS) {
       if (typeof result.settings[key] === 'boolean') {
         runtimeSettings[key] = result.settings[key]
       }
@@ -205,11 +206,10 @@ export async function syncRuntimeBackedSettings(
     if (visibilityDefaults) {
       runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
     }
-    if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
-      runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
-    }
-    if (typeof updates.compactWorktreeCards === 'boolean') {
-      runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
+    for (const key of RUNTIME_CARD_LAYOUT_KEYS) {
+      if (typeof updates[key] === 'boolean') {
+        runtimeUpdates[key] = updates[key]
+      }
     }
     if (typeof updates.minimaxGroupId === 'string') {
       runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
