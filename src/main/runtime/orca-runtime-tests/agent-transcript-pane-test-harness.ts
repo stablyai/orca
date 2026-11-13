@@ -6,6 +6,7 @@ import type { TerminalProcessInspection as PtyProcessInspection } from '../../..
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
 
 const TRANSCRIPT_PANE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const TRANSCRIPT_PANE_TAB_ID = 'tab-1'
@@ -33,6 +34,7 @@ export type TranscriptPaneOptions = {
   paneRootPid?: number
   onShellForegroundProof?: () => void
   onWrite?: (data: string) => void
+  writeWithSettlement?: RuntimePtyController['writeWithSettlement']
 }
 
 function transcriptLayoutStore(): RuntimeStore {
@@ -93,6 +95,7 @@ export async function createTranscriptPane(
       options.onWrite?.(data)
       return true
     },
+    ...(options.writeWithSettlement ? { writeWithSettlement: options.writeWithSettlement } : {}),
     kill: () => true,
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {

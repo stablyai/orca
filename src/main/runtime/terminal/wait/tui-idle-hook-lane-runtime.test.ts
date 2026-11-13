@@ -18,6 +18,7 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/cont
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { settledWriteStub } from '../../../providers/testing/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -63,7 +64,10 @@ describe('Hermes captured hook readiness', () => {
           launchAgent: 'hermes',
           size,
           data: captured,
-          onWrite: (data) => writes.push(data)
+          onWrite: (data) => writes.push(data),
+          writeWithSettlement: settledWriteStub((_id, data) => {
+            writes.push(data)
+          })
         })
         await runtime.serializeMainTerminalBuffer(TRANSCRIPT_PANE_PTY_ID)
         writes.length = 0
