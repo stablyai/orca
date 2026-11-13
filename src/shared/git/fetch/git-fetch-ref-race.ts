@@ -8,6 +8,7 @@ const REMOTE_REF_CAS_ERROR =
   /^(?:error|fatal): (?:fetching ref refs\/remotes\/[^\s]+ failed: incorrect old value provided|cannot lock ref 'refs\/remotes\/[^'\s]+': is at (?:[0-9a-f]{40}|[0-9a-f]{64}) but expected (?:[0-9a-f]{40}|[0-9a-f]{64}))$/i
 const OTHER_GIT_ERROR =
   /\b(?:error|fatal):|^remote:.*\b(?:error|fatal)\b|^Errors during submodule fetch:/i
+const REJECTED_REF_STATUS = /^!\s+\[(?:rejected|remote rejected|forced[- ]update[- ]failed)\]/i
 
 function remoteRefRaceStderr(error: unknown): string | null {
   if (!(error instanceof Error) || isExecKilledError(error)) {
@@ -34,7 +35,7 @@ function remoteRefRaceStderr(error: unknown): string | null {
   for (const line of stderr.split(/[\r\n]+/)) {
     if (REMOTE_REF_CAS_ERROR.test(line.trim())) {
       matched = true
-    } else if (OTHER_GIT_ERROR.test(line.trim())) {
+    } else if (OTHER_GIT_ERROR.test(line.trim()) || REJECTED_REF_STATUS.test(line.trim())) {
       return null
     }
   }
@@ -47,7 +48,8 @@ export async function retryGitFetchRefRace<T>(
   initialError: unknown,
   attempt: () => Promise<T>,
   terminated: () => Promise<void> | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  canStart?: () => boolean
 ): Promise<T> {
   if (args[findGitSubcommandIndex(args)] !== 'fetch') {
     throw initialError
@@ -75,6 +77,9 @@ export async function retryGitFetchRefRace<T>(
     await waitForPromiseWithSignal(terminated() ?? Promise.resolve(), signal)
     await delay(50 + retry * 100 + Math.floor(Math.random() * 50), undefined, { signal })
     throwIfSignalAborted(signal)
+    if (canStart?.() === false) {
+      throw error
+    }
     try {
       return await attempt()
     } catch (nextError) {

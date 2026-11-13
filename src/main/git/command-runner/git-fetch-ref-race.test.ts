@@ -40,6 +40,7 @@ afterEach(() => vi.useRealTimers())
 describe('standalone fetch ref-update recovery', () => {
   it.each([
     CAS_DIAGNOSTIC,
+    `${CAS_DIAGNOSTIC}\n ! aaaaaaa..bbbbbbb main -> origin/main (unable to update local ref)`,
     "error: cannot lock ref 'refs/remotes/upstream/main': is at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa but expected bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   ])('recovers a failed fetch after %s', async (diagnostic) => {
     answerWith(failure(diagnostic), 'fresh refs')
@@ -88,6 +89,8 @@ describe('standalone fetch ref-update recovery', () => {
     failure(`${CAS_DIAGNOSTIC}\nremote: error: access denied`),
     failure(`${CAS_DIAGNOSTIC}\nremote: ERROR access denied`),
     failure(`${CAS_DIAGNOSTIC}\nErrors during submodule fetch:\n\tsub`),
+    failure(`${CAS_DIAGNOSTIC}\n ! [rejected] v1 -> v1 (would clobber existing tag)`),
+    failure(`${CAS_DIAGNOSTIC}\n ! [forced-update-failed] main -> origin/main`),
     failure(`${CAS_DIAGNOSTIC}\nfatal: bad object HEAD`),
     failure(
       "error: cannot lock ref 'refs/heads/main': is at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa but expected bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -125,6 +128,24 @@ describe('standalone fetch ref-update recovery', () => {
     answerWith(failure(CAS_DIAGNOSTIC), terminal, 'failure was hidden')
     const result = gitExecFileAsync(['fetch', 'origin'], options)
     const rejection = expect(result).rejects.toBe(terminal)
+    await vi.runAllTimersAsync()
+    await rejection
+  })
+
+  it('preserves the fetch failure when its owner loses eligibility before retry', async () => {
+    const original = failure(CAS_DIAGNOSTIC)
+    let eligible = true
+    capture.mockImplementationOnce((_command, _args, captureOptions) => {
+      captureOptions.onChildTerminated()
+      eligible = false
+      return Promise.reject(original)
+    })
+    answerWith('failure was hidden')
+    const result = gitExecFileAsync(['fetch', 'origin'], {
+      ...options,
+      canStart: () => eligible
+    })
+    const rejection = expect(result).rejects.toBe(original)
     await vi.runAllTimersAsync()
     await rejection
   })

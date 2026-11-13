@@ -170,7 +170,8 @@ async function gitExecFileAsyncUnlocked(
           error,
           runCapturedCommand,
           () => terminationState.current,
-          options.signal
+          options.signal,
+          options.canStart
         )
       } finally {
         const termination = terminationState.current
