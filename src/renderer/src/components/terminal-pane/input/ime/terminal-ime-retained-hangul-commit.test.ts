@@ -79,4 +79,49 @@ describe('#9738 plain-committed jamo rebuilt in place', () => {
 
     expect(pane.emitted.join('')).toBe('ㅇ\x7f')
   })
+
+  it('does not erase for an edit whose replacement never reaches the PTY', () => {
+    keydown(pane.textarea, 'ㅇ', 'KeyD', 68)
+    plainCommit(pane.textarea, 'ㅇ')
+
+    pane.textarea.setSelectionRange(0, 1)
+    pane.textarea.dispatchEvent(
+      new InputEvent('beforeinput', { inputType: 'insertReplacementText', bubbles: true })
+    )
+
+    expect(pane.emitted.join('')).toBe('ㅇ')
+  })
+
+  it('does not erase once an ordinary composition has begun after the jamo', () => {
+    keydown(pane.textarea, 'ㅇ', 'KeyD', 68)
+    plainCommit(pane.textarea, 'ㅇ')
+
+    pane.textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    pane.textarea.setSelectionRange(0, 1)
+    pane.textarea.dispatchEvent(
+      new InputEvent('beforeinput', { inputType: 'insertCompositionText', bubbles: true })
+    )
+
+    expect(pane.emitted.join('')).toBe('ㅇ')
+  })
+
+  it('removes the jamo from the field on Ctrl+C the pane handles ahead of the forwarder', () => {
+    pane.terminal.attachCustomKeyEventHandler(
+      (event) => !event.ctrlKey && !pane.forwarder.claimKeyEvent(event)
+    )
+    keydown(pane.textarea, 'ㅇ', 'KeyD', 68)
+    plainCommit(pane.textarea, 'ㅇ')
+
+    pane.textarea.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'c',
+        code: 'KeyC',
+        keyCode: 67,
+        ctrlKey: true,
+        bubbles: true
+      })
+    )
+
+    expect(pane.textarea.value).toBe('')
+  })
 })

@@ -215,7 +215,6 @@ export function installTerminalImeNativeTextForwarder(args: {
         }
       }
       if (!isNativeTextKeydown(event, args.isComposing())) {
-        retainedHangulCommit.observeUnclaimedKeydown(event)
         return false
       }
       pendingCommit = {
