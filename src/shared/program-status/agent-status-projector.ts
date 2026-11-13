@@ -289,7 +289,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
             break
         }
         const ended = event.type !== 'report'
-        if (ended) {
+        if (ended || !records.root()) {
           rootReadinessCurrent = false
         } else if (event.report.id === null) {
           rootReadinessCurrent = event.report.state !== 'clear' && event.offset >= readinessBoundary
@@ -320,13 +320,9 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
             payloads.push({ payload, offset: event.offset })
           }
         }
-        if (ended || (event.type === 'report' && event.report.id === null)) {
-          readiness = {
-            payload: rootReadinessCurrent ? latestProjection : null,
-            offset: event.offset
-          }
-        } else if (rootReadinessCurrent) {
-          readiness = { payload: latestProjection, offset: event.offset }
+        readiness = {
+          payload: rootReadinessCurrent ? latestProjection : null,
+          offset: event.offset
         }
         // After the ending event's own projection, so only the next report opens a new invocation.
         if (endsInvocation) {

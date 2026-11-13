@@ -125,6 +125,50 @@ describe('mailbox delivery with current adopted agent evidence', () => {
     }
   )
 
+  it('keeps wait and mail pending when child pressure evicts a working root', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-evicted-root-')
+    const { runtime } = createRuntime(db, { launchAgent: null })
+    const write = vi.fn<(id: string, data: string) => boolean>(() => true)
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'zsh'
+    })
+    const run = createBoundRun(db, 'root eviction')
+    await runtime.listTerminals()
+    runtime.terminalRunFacts.recordSpawnCommit({ id: PTY_ID })
+    const ingest = (data: string) => runtime.onPtyData(PTY_ID, data, Date.now())
+    try {
+      ingest('\x1b]133;C\x07\x1b]0;claude\x07\x1b]7501;state=working:app=claude-code\x07')
+      const settled = vi.fn()
+      const wait = runtime.waitForTerminal(TERMINAL_HANDLE, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+      wait.then(settled, () => {})
+      insertDirectRunMessage(db, run.id, 'Wait for current root')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      for (let child = 0; child < 256; child++) {
+        ingest(`\x1b]7501;state=working:id=job${child}\x07`)
+      }
+      await vi.advanceTimersByTimeAsync(12_000)
+      expect(settled).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+      // Clear the still-working children, then let the actual root report readiness.
+      ingest('\x1b]7501;state=clear\x07\x1b]7501;state=idle:app=claude-code\x07')
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(wait).resolves.toMatchObject({ satisfied: true })
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+    } finally {
+      db.close()
+    }
+  })
+
   it('delivers working-turn mail only after an adopted wrapper has current composer evidence', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-adopted-working-mail-')

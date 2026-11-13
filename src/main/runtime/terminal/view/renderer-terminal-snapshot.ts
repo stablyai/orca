@@ -129,7 +129,8 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
       this.resizeHeadlessTerminal(ptyId, ptyGrid.cols, ptyGrid.rows)
     }
     for (const chunk of trailingOutput) {
-      this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq)
+      // Replayed bytes already passed live ingestion; restoring their screen cannot renew action evidence.
+      this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq, false, () => false)
     }
     // The seed's write chain owns subsequent live bytes; suppress on-data hydration from replacing this known-good seed.
     this.headlessHydrationState.set(ptyId, 'done')
