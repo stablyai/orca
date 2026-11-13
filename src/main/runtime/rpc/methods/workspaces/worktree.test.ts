@@ -4,6 +4,7 @@ import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
 import { createAutomationDispatchToken } from '../../../../automations/dispatch-tokens'
+import { rpcContext, runtimeStub } from '../agent-launch/agent-launch.test-fixture'
 
 const repo = {
   id: 'repo-1',
@@ -26,17 +27,18 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
 describe('worktree RPC methods', () => {
   it('refuses creation when startup-agent resolution outlives the caller approval', async () => {
     let approved = true
-    const runtime = {
+    const runtime = Object.assign(runtimeStub(), {
       getRuntimeId: () => 'test-runtime',
-      dedupeWorktreeCreate: passthroughDedupe,
-      showRepo: async () => repo,
       resolveStartupDraftAgent: async () => {
         approved = false
         return 'claude'
-      },
-      createManagedWorktree: async () => ({ worktree: { id: 'wt-1' } })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+      }
+    })
+    runtime.showRepo.mockResolvedValue(repo)
+    const dispatcher = new RpcDispatcher({
+      runtime: rpcContext(runtime, {}).runtime,
+      methods: WORKTREE_METHODS
+    })
 
     const response = await dispatcher.dispatch(
       makeRequest('worktree.create', {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import type { HandlerContext } from '../../dispatch/dispatch'
 import type { RuntimeClient } from '../../runtime/client'
 import { RuntimeRpcFailureError } from '../../runtime/types'
 import { createPluginFromTemplate } from '../authoring/plugin-create'
+import type * as PluginPanelCheckModule from '../authoring/plugin-panel-check'
 import { PLUGIN_VIEW_HANDLERS, type PluginShotReply } from './plugin-view'
 
 const check = vi.hoisted(() => ({
@@ -17,6 +18,9 @@ const check = vi.hoisted(() => ({
   formatPluginPanelCheck: vi.fn(() => ['  src/panel.tsx: boom'])
 }))
 vi.mock('../authoring/plugin-panel-check', () => check)
+const panelCheckModule = vi.importActual<typeof PluginPanelCheckModule>(
+  '../authoring/plugin-panel-check'
+)
 
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
@@ -92,31 +96,54 @@ const run = (argv: string[], call: ReturnType<typeof vi.fn>, remote = false) =>
 const printed = () => JSON.parse(stdout.join('')).result
 
 describe('orca plugin shot --scenario', () => {
-  it('renders the scenario here and sends only its tree to plugins.shotReplay', async () => {
-    const call = vi.fn(async () => ({ result: replayReply() }))
-    await run(['plugin', 'shot', dir, '--scenario', 'counted', '--theme', 'dark'], call)
-    expect(check.checkPluginPanels).toHaveBeenCalledWith(dir, {
-      panel: panelId,
-      scenario: 'counted',
-      drawnTree: true
+  it('renders source scenarios from the same unreleased manifest only with explicit opt-in', async () => {
+    const manifestPath = join(dir, 'orca-plugin.json')
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    manifest.contributes.panels.push({
+      id: 'connection',
+      title: 'Connection',
+      entry: 'src/settings.tsx',
+      ui: 'components',
+      location: 'settings'
     })
-    expect(call.mock.calls).toEqual([
+    manifest.capabilities.push({ kind: 'settings:own' })
+    await writeFile(manifestPath, JSON.stringify(manifest))
+    await writeFile(join(dir, 'src', 'settings.tsx'), 'export { default } from "./panel"')
+    await writeFile(
+      join(dir, 'src', 'panel.tsx'),
       [
-        'plugins.shotReplay',
-        {
-          pluginKey,
-          panelId,
-          title: expect.any(String),
-          scenario: 'counted',
-          tree: TREE,
-          colorScheme: 'dark'
-        },
-        { timeoutMs: expect.any(Number) }
-      ]
+        "import { atom, plugin, read, set, Text } from 'orca'",
+        'const total = atom(0)',
+        'export function setup() {',
+        "  void plugin.request('counter.get').then((answer) => set(total, answer.total))",
+        '}',
+        'export default function Panel() { return <Text>{read(total)}</Text> }'
+      ].join('\n')
+    )
+    const actualPanelCheck = await panelCheckModule
+    let rendered: PluginPanelCheckModule.PluginPanelCheck[] = []
+    check.readPluginCheckScenarioNames.mockImplementation(
+      actualPanelCheck.readPluginCheckScenarioNames
+    )
+    check.checkPluginPanels.mockImplementation(
+      async (...args: Parameters<typeof actualPanelCheck.checkPluginPanels>) => {
+        rendered = await actualPanelCheck.checkPluginPanels(...args)
+        return rendered
+      }
+    )
+    const call = vi.fn(async () => ({ result: replayReply() }))
+    await expect(run(['plugin', 'shot', dir, '--scenario', 'counted'], call)).rejects.toMatchObject(
+      { code: 'plugin_invalid' }
+    )
+    await run(
+      ['plugin', 'shot', dir, '--scenario', 'counted', '--theme', 'dark', '--allow-unreleased'],
+      call
+    )
+    expect(rendered).toMatchObject([
+      { scenario: 'counted', drawnTree: { type: 'Text', children: ['41'] }, issues: [] }
     ])
     const result = printed()
     expect(result).toMatchObject({ replay: true, scenario: 'counted', errors: [] })
-    expect(result.notes[0]).toMatch(/host-owned control values start from the tree's props/)
     expect(result.path).toBe(join(dir, '.orca', 'shots', `${pluginKey}-${panelId}.counted.png`))
     expect((await readFile(result.path)).toString('base64')).toBe(PNG_BASE64)
   })

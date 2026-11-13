@@ -235,6 +235,7 @@ async function scenarioShot(ctx: HandlerContext, scenario: string): Promise<void
   const shot = await takePluginScenarioShot(ctx, {
     target,
     scenario,
+    allowUnreleased: ctx.flags.get('allow-unreleased') === true,
     ...(panelId === undefined ? {} : { panelId }),
     ...(colorScheme === undefined ? {} : { colorScheme }),
     ...(width === undefined ? {} : { width }),
