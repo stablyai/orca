@@ -6,6 +6,7 @@ import { agentModesFor, withoutSignInCredentials, type AgentMode } from './agent
 import { accountProvider } from './account-providers'
 import type { CredentialAgent } from './agent-credential-names'
 import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provider-env'
+import { egressProxyMissing } from './network-policy'
 import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
@@ -70,13 +71,33 @@ export function forgetProviderEnv(sandboxId: string): void {
   }
 }
 
-function egressSwapOn(deps: Pick<LifecycleDeps, 'secrets' | 'config'>, row: Pick<SandboxRow, 'account_id'>): boolean {
+/** Placeholders are switched on for this account (SECRETS_EGRESS_PLACEHOLDERS, minus the per-team kill switch). */
+function egressSwapWanted(deps: Pick<LifecycleDeps, 'secrets'>, row: Pick<SandboxRow, 'account_id'>): boolean {
   const placeholders = deps.secrets?.egressPlaceholders
   return (
     !deps.secrets?.egressPlaceholdersOff?.has(row.account_id) &&
-    (placeholders === true || (placeholders instanceof Set && placeholders.has(row.account_id))) &&
-    Boolean(deps.config.egressProxyUrl)
+    (placeholders === true || (placeholders instanceof Set && placeholders.has(row.account_id)))
   )
+}
+
+function egressSwapOn(deps: Pick<LifecycleDeps, 'secrets' | 'config'>, row: Pick<SandboxRow, 'account_id'>): boolean {
+  return egressSwapWanted(deps, row) && Boolean(deps.config.egressProxyUrl)
+}
+
+// One log line per session, not per env read (boot, refresh and the proxy's cache all land here). The boot read
+// happens before the session exists, so its mark carries over to the session it starts.
+const withheldLogged = new Set<string>()
+function firstWithheldReadThisSession(row: Pick<SandboxRow, 'id' | 'session_id'>): boolean {
+  const pending = `${row.id}:pending`
+  if (!row.session_id) {
+    return withheldLogged.has(pending) ? false : (withheldLogged.add(pending), true)
+  }
+  const key = `${row.id}:${row.session_id}`
+  if (withheldLogged.has(key)) {
+    return false
+  }
+  withheldLogged.add(key)
+  return !withheldLogged.delete(pending)
 }
 
 export type { AgentMode }
@@ -93,11 +114,15 @@ export async function sessionSecretEnv(
   }
   const { env: stored, scopes: storedScopes, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
   const swap = egressSwapOn(deps, row)
+  // EGRESS-SWAP-FAIL-CLOSED: a deployed env without the egress proxy can't swap keys at egress. Rather than
+  // fall back to real keys in the VM, keys become placeholders that the firewall answers with a plain error,
+  // and an Orca-account sign-in gets its placeholder answered the same way (the real token never leaves us).
+  const withhold = !swap && egressSwapWanted(deps, row) && egressProxyMissing(deps.config)
   const derived = deriveProviderEnv(stored)
   // D10: per agent, the owner's account (placeholder), the kill-switch fallback, or the keys.
   const modes = await agentModesFor(deps.db, row, derived, {
     providerEnabled: deps.secrets.accountProviders ?? { claude: false, codex: false },
-    accountsUsable: swap,
+    accountsUsable: swap || withhold,
     now: Date.now(),
     // Usable means decryptable now, not just stored: a token we can't open must not hold the session in account mode.
     readable: async (agent) => {
@@ -111,6 +136,23 @@ export async function sessionSecretEnv(
   const egressAllowHosts = providerHosts(env).join(',') || null
   // Counts only.
   secretLog('session_secrets', { sandboxId: row.id, injected: Object.keys(env).length, skipped })
+  if (withhold) {
+    if (firstWithheldReadThisSession(row)) {
+      secretLog('egress_swap_off_no_proxy', { sandboxId: row.id, environment: deps.config.environment })
+    }
+    const withheld = applySecretPlaceholders(row, env, scopes)
+    const accountEnv: Record<string, string> = {}
+    const accountRoutes: string[] = []
+    for (const agent of Object.keys(modes) as CredentialAgent[]) {
+      const provider = modes[agent] === 'account' ? accountProvider(agent) : undefined
+      if (provider) {
+        Object.assign(accountEnv, provider.sessionEnv(row))
+        accountRoutes.push(...provider.hosts.map((host) => encodeAccountRoute(agent, row.user_id, host)))
+      }
+    }
+    const hosts = [encodeEgressSecretHosts(withheld.targets), ...accountRoutes].filter(Boolean).join(',') || null
+    return { env: { ...withheld.env, ...accountEnv }, egressSecretHosts: hosts, egressAllowHosts }
+  }
   if (!swap) {
     return { env, egressSecretHosts: null, egressAllowHosts }
   }

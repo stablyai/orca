@@ -146,7 +146,7 @@ import {
   runningSandboxesForDefault
 } from './agent-sources'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
-import { gitBasicAuthorization, parseEgressPreset } from './network-policy'
+import { egressProxyMissing, gitBasicAuthorization, parseEgressPreset } from './network-policy'
 import { cachedProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
@@ -1435,7 +1435,15 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
     if (url.pathname === '/v1/health' && request.method === 'GET') {
       // Post-deploy smoke: no auth, no DB. 503 names a config error a deploy must not ship.
       const platform = egressAllowlistSetting(env.ORCA_PLATFORM_HOST_SUFFIXES)
-      return platform.error ? platformHostsMisconfigured(platform.error) : json({ ok: true }, 200)
+      if (platform.error) {
+        return platformHostsMisconfigured(platform.error)
+      }
+      // EGRESS-SWAP-FAIL-CLOSED: without the proxy no key reaches an agent and open egress is off.
+      if (egressProxyMissing({ egressProxyUrl: env.EGRESS_PROXY_URL, environment: env.SANDBOX_ENV })) {
+        console.error(JSON.stringify({ event: 'config_error', variable: 'EGRESS_PROXY_URL', environment: env.SANDBOX_ENV }))
+        return json({ error: 'egress_proxy_missing' }, 503)
+      }
+      return json({ ok: true }, 200)
     }
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
