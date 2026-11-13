@@ -6,7 +6,7 @@ import type {
   SmartStampFields,
   SmartTier,
   SortStamps
-} from '../../../../shared/sidebar-list/sort-stamps'
+} from '../../../../shared/sidebar-list/sorting/sort-stamps'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Repo } from '../../../../shared/repo-types'
 import {

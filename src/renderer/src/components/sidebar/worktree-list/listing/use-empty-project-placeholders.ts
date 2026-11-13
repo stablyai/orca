@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
+import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/catalog/empty-project-placeholder-repos'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {

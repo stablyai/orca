@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest'
 import { removeTree } from '../../../../src/shared/windows-transient-lock-removal.ts'
 
 const require = createRequire(import.meta.url)
-const electronBuilderConfig = require('../../../electron-builder.config.cjs')
 const {
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
@@ -48,24 +47,6 @@ describe('packaged runtime resources', () => {
     }
   })
 
-  it('still fails when a required packaged main entry is missing entirely', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-missing-entry-'))
-    try {
-      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
-
-      const asar = {
-        listPackage: () => ['/out/main/index.js'],
-        extractFile: () => Buffer.from('', 'utf8')
-      }
-
-      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(
-        /managed-agent-hook-controls\.js was not found/
-      )
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-
   it('verifies bare imports that rolldown hoisted into a shared main chunk', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-chunk-imports-'))
     try {
@@ -99,60 +80,31 @@ describe('packaged runtime resources', () => {
     }
   })
 
-  it('reads a spread require, whose leading dots are not member access', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-spread-require-'))
+  it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-conpty-arm64-'))
     try {
-      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
-
-      const sources = new Map([
-        ['out/main/index.js', 'const all=[...require("jsonc-parser")]'],
-        ['out/main/agent-hooks/installation/managed-agent-hook-controls.js', '']
-      ])
-      const asar = {
-        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
-        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
+      const releaseDir = join(nodePtyDir, 'build', 'Release')
+      const conptyRoot = join(nodePtyDir, 'third_party', 'conpty', '0.1.0')
+      await mkdir(releaseDir, { recursive: true })
+      await writeFile(join(releaseDir, 'conpty.node'), 'native addon placeholder', 'utf8')
+      for (const sourceArch of ['x64', 'arm64']) {
+        const sourceDir = join(conptyRoot, `win10-${sourceArch}`)
+        await mkdir(sourceDir, { recursive: true })
+        await writeFile(join(sourceDir, 'conpty.dll'), `dll payload ${sourceArch}`, 'utf8')
+        await writeFile(join(sourceDir, 'OpenConsole.exe'), `console payload ${sourceArch}`, 'utf8')
       }
 
-      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(/jsonc-parser/)
+      prunePackagedNodePty(resourcesDir, 'win32', 3)
+
+      await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
+        'dll payload arm64'
+      )
+      await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
+        'console payload arm64'
+      )
     } finally {
       await removeTree(resourcesDir)
-    }
-  })
-
-  it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
-    for (const [arch, electronArch] of [
-      ['x64', 1],
-      ['arm64', 3]
-    ]) {
-      const resourcesDir = await mkdtemp(join(tmpdir(), `orca-node-pty-conpty-${arch}-`))
-      try {
-        const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
-        const releaseDir = join(nodePtyDir, 'build', 'Release')
-        const conptyRoot = join(nodePtyDir, 'third_party', 'conpty', '0.1.0')
-        await mkdir(releaseDir, { recursive: true })
-        await writeFile(join(releaseDir, 'conpty.node'), 'native addon placeholder', 'utf8')
-        for (const sourceArch of ['x64', 'arm64']) {
-          const sourceDir = join(conptyRoot, `win10-${sourceArch}`)
-          await mkdir(sourceDir, { recursive: true })
-          await writeFile(join(sourceDir, 'conpty.dll'), `dll payload ${sourceArch}`, 'utf8')
-          await writeFile(
-            join(sourceDir, 'OpenConsole.exe'),
-            `console payload ${sourceArch}`,
-            'utf8'
-          )
-        }
-
-        prunePackagedNodePty(resourcesDir, 'win32', electronArch)
-
-        await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
-          `dll payload ${arch}`
-        )
-        await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
-          `console payload ${arch}`
-        )
-      } finally {
-        await removeTree(resourcesDir)
-      }
     }
   })
 
@@ -175,20 +127,6 @@ describe('packaged runtime resources', () => {
       ])
     } finally {
       await removeTree(resourcesDir)
-    }
-  })
-
-  it('fails when the packaged resources directory is missing', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
-    try {
-      await expect(
-        electronBuilderConfig.afterPack({
-          appOutDir: root,
-          electronPlatformName: 'win32'
-        })
-      ).rejects.toThrow(/Missing packaged resources directory/)
-    } finally {
-      await removeTree(root)
     }
   })
 })

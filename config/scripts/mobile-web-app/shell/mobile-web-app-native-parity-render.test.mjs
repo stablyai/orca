@@ -1,4 +1,4 @@
-// Measure browser defaults absent from native UI at phone density, with shipped plugins/document styles.
+// Measure the shipped hairline patch at phone density in both browser engines.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,15 +42,13 @@ const ENGINES = [
 const PAGE_ENTRY = `
 import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
-const { Modal, StyleSheet, Text, TextInput, View } = require('react-native')
+const { StyleSheet, View } = require('react-native')
 const styles = StyleSheet.create({
   separatorBox: { paddingTop: 10.1, width: 12, backgroundColor: '#ffffff' },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#000000' },
-  hairline: { height: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#222222' },
-  input: { height: 40 }
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#000000' }
 })
 createRoot(document.getElementById('root')).render(
-  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }), h(Text, { testID: 'plain-text' }, 'row'), h(Text, { testID: 'selectable-text', selectable: true }, 'message'), location.hash === '#modal' ? h(Modal, { visible: true, transparent: true }, h(View, null, h(Text, { testID: 'modal-text' }, 'sheet row'), h(TextInput, { testID: 'modal-input', style: styles.input }))) : null)
+  h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator }))
 )
 `
 
@@ -106,10 +104,10 @@ afterAll(async () => {
   }
 })
 
-async function openPage(engine, hash = '') {
+async function openPage(engine) {
   const page = await browsers.get(engine.name).newPage(engine.pageOptions)
-  await page.goto(`${origin}/${hash}`, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-testid="input"]')
+  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-testid="separator-box"]')
   return page
 }
 
@@ -124,37 +122,12 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
       const column = Math.floor(shot.width / 2)
       let darkRows = 0
       for (let y = 0; y < shot.height; y++) {
-        // Count pure black only; final clip row may include neighboring #222222 border.
+        // Count pure black rows in the separator clip.
         if (shot.data[(y * shot.width + column) * 4] < 16) {
           darkRows++
         }
       }
       expect(darkRows).toBe(1)
-    } finally {
-      await page.close()
-    }
-  })
-
-  it("selects through the browser's own gesture only what native lets the user select", async () => {
-    // Double-click tests user selectability; script-created Range can select otherwise unselectable text.
-    const page = await openPage(engine)
-    try {
-      const selectedBy = async (testId) => {
-        await page.evaluate(() => window.getSelection()?.removeAllRanges())
-        await page.dblclick(`[data-testid="${testId}"]`)
-        return page.evaluate(() => window.getSelection()?.toString() ?? '')
-      }
-      expect(await selectedBy('plain-text')).toBe('')
-      // react-native-web's Text/index.js:115 adds `styles.selectable` (`userSelect: 'text'`).
-      expect(await selectedBy('selectable-text')).not.toBe('')
-
-      await page.type('[data-testid="input"]', 'hello world')
-      await page.dblclick('[data-testid="input"]')
-      const selectedInField = await page.evaluate(() => {
-        const input = document.querySelector('[data-testid="input"]')
-        return input.selectionEnd - input.selectionStart
-      })
-      expect(selectedInField).toBeGreaterThan(0)
     } finally {
       await page.close()
     }

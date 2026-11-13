@@ -7,7 +7,7 @@ import type { ComposerState, ReviewScreenState } from './mobile-diff-review-scre
 import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheets'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
-import { sourceFileDiffOpenRun } from '../mobile-source-file-open-operations'
+import { sourceFileDiffOpenRun } from '../../files/session-documents/mobile-source-file-open-operations'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'

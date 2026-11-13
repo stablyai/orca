@@ -7,7 +7,8 @@ import {
   getHiddenImportableExternalWorktrees,
   getNewExternalWorktreeInboxWorktrees
 } from './external-worktree-inbox'
-import { EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT } from './worktree/ownership'
+import './worktree/visibility/ownership'
+import { EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT } from './external-worktree-visibility'
 
 const repo: Repo = {
   id: 'repo-1',

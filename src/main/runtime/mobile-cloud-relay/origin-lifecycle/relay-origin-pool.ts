@@ -11,6 +11,18 @@ import {
   type RelayAssignment
 } from '../director/relay-http-client'
 import { RelayControlRotation } from './relay-control-rotation'
+import { RelayRecoveryEpisode } from './relay-recovery-episode'
+
+// Data-path recovery re-asks the director at most once a minute per host, whichever origin asks,
+// and keeps the old origin for a minute so phones mid-session on it are not cut off.
+const DATA_PATH_RECOVERY_INTERVAL_MS = 60_000
+const DATA_PATH_DRAIN_GRACE_MS = 60_000
+
+// The director answered and only a cell it newly named failed: retry that once sooner. Director
+// failures, and any cell failing again in the same episode (even alternating A, B, A), keep the
+// full backoff: every retry re-asks the director, so a short cap on dead cells would multiply
+// director load for every host on them.
+const CELL_CONNECT_RETRY_MAX_MS = 60_000
 
 export class RelayOriginPool {
   private activeOrigin: RelayControlOrigin | null = null
@@ -25,10 +37,14 @@ export class RelayOriginPool {
   private readonly basisOrigins = this.retirement.basis
   private assignment: RelayAssignment | null = null
   private deferredAssignment: RelayAssignment | null = null
+  // Cells that failed since the last success: each gets the short cap once.
+  private readonly failedCells = new Set<string>()
   private relayJwt: string | null = null
   private readonly rotation: RelayControlRotation
   private rotationPromise: Promise<void> | null = null
   private readonly drainRetry: RelayRetrySchedule
+  private readonly recovery = new RelayRecoveryEpisode()
+  private lastDataPathRecoveryAt: number | null = null
   private closed = false
 
   constructor(private readonly options: RelayOriginPoolOptions) {
@@ -57,6 +73,11 @@ export class RelayOriginPool {
 
   hasLiveControl(): boolean {
     return this.activeOrigin?.hasLiveControl() ?? false
+  }
+
+  isRecovering(): boolean {
+    const retrying = Boolean(this.rotationPromise || this.drainRetry.pending)
+    return this.isCurrent() && retrying && this.recovery.trusted
   }
 
   applyAssignmentMetadata(assignment: RelayAssignment): boolean {
@@ -131,6 +152,7 @@ export class RelayOriginPool {
         this.retirement.maybeClose(origin)
       },
       onDrain: (origin, message) => this.handleDrain(origin, message),
+      onDataPathUnhealthy: (origin) => this.handleDataPathUnhealthy(origin),
       onPendingChanged: (origin) => this.retirement.maybeClose(origin),
       onClose: (origin) => {
         if (origin === this.activeOrigin && this.isCurrent()) {
@@ -145,6 +167,23 @@ export class RelayOriginPool {
     })
   }
 
+  private handleDataPathUnhealthy(origin: RelayControlOrigin): void {
+    const now = Date.now()
+    const recent =
+      this.lastDataPathRecoveryAt !== null &&
+      now - this.lastDataPathRecoveryAt < DATA_PATH_RECOVERY_INTERVAL_MS
+    if (origin !== this.activeOrigin || recent) {
+      return
+    }
+    this.lastDataPathRecoveryAt = now
+    console.warn(`[relay] data attaches failing; asking director again cell=${origin.cellUrl}`)
+    this.handleDrain(origin, {
+      type: 'drain',
+      graceMs: DATA_PATH_DRAIN_GRACE_MS,
+      recovery: 'resolve-director'
+    })
+  }
+
   private handleDrain(origin: RelayControlOrigin, message: RelayDrainMessage): void {
     if (!this.isCurrent() || !this.origins.has(origin)) {
       return
@@ -154,6 +193,7 @@ export class RelayOriginPool {
     }
     this.options.onStatus('draining')
     if (!this.rotationPromise && !this.drainRetry.pending) {
+      this.recovery.begin()
       this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
         this.rotationPromise = null
       })
@@ -164,6 +204,7 @@ export class RelayOriginPool {
     origin: RelayControlOrigin,
     message: RelayDrainMessage
   ): Promise<void> {
+    let answeredCellUrl: string | null = null
     try {
       if (!this.relayJwt) {
         throw new Error('relay_authorization_unavailable')
@@ -188,6 +229,7 @@ export class RelayOriginPool {
         assignment = this.deferredAssignment
       }
       this.deferredAssignment = null
+      answeredCellUrl = assignment.cellUrl
       if (assignment.cellUrl === origin.cellUrl) {
         let rebound = false
         try {
@@ -207,6 +249,7 @@ export class RelayOriginPool {
         await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
       }
       this.options.onStatus('registered')
+      this.recovery.succeeded()
       this.drainRetry.reset()
       this.rotation.schedule()
     } catch (error) {
@@ -216,8 +259,15 @@ export class RelayOriginPool {
           '[relay] control recovery attempt failed:',
           error instanceof Error ? error.message : String(error)
         )
+        this.recovery.failed(error)
         const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
-        this.drainRetry.schedule(retryAfterMs, () => this.handleDrain(origin, message))
+        this.drainRetry.schedule(
+          retryAfterMs,
+          () => this.handleDrain(origin, message),
+          answeredCellUrl && this.isNewCellFailure(answeredCellUrl)
+            ? CELL_CONNECT_RETRY_MAX_MS
+            : undefined
+        )
       }
     }
   }
@@ -243,6 +293,16 @@ export class RelayOriginPool {
     this.retirement.schedule(origin, graceMs)
     this.retirement.maybeClose(origin)
   }
+  // attempts is 0 only right after a success, which starts a new episode.
+  private isNewCellFailure(cellUrl: string): boolean {
+    if (this.drainRetry.attempts === 0) {
+      this.failedCells.clear()
+    }
+    const repeated = this.failedCells.has(cellUrl)
+    this.failedCells.add(cellUrl)
+    return !repeated
+  }
+
   private assertCurrent(): void {
     if (!this.isCurrent()) {
       throw new Error('stale_relay_origin_pool')

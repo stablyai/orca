@@ -1,4 +1,4 @@
-import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault-params'
+import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault/ai-vault-params'
 import { prepareStructuredChatCliFork } from '../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { ipcMain } from 'electron'
 import type {

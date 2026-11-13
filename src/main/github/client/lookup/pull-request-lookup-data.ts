@@ -12,7 +12,7 @@ import type {
 } from '../../../../shared/github/pull-requests/pull-request-types'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { mapPRState } from '../../api/github-read-response'
 import type { MergedReviewCommitMembership as MergedPRCommitMembership } from '../../../source-control/merged-review-membership-memo'

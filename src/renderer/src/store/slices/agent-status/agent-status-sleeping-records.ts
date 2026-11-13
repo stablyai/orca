@@ -1,5 +1,5 @@
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
-import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '../../terminals/sleep/sleeping-agent-record-index'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'

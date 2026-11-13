@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../agent-session-message-source'
 import '../journal/agent-session-journal-submission-schema'
-import { SendParams } from '../../rpc-contract/structured-agent-session-params'
+import { SendParams } from '../../rpc-contract/structured-agent-session/structured-agent-session-params'
 import { structuredAgentSessionPayloadFingerprint } from '../lifecycle/structured-agent-session-mutation'
 import {
   agentSessionSendBodyFingerprint,

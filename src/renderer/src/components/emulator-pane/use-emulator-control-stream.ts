@@ -7,7 +7,7 @@ import {
   encodeServeSimTouchFrame,
   type ServeSimTouchFrame
 } from '../../../../shared/emulator-touch-frame'
-import { RotateOrientation } from '../../../../shared/rpc-contract/emulator-params'
+import { RotateOrientation } from '../../../../shared/rpc-contract/emulator/emulator-params'
 import type { EmulatorStreamOrientation } from './emulator-device-frame-layout'
 
 const RECONNECT_DELAY_MS = 750

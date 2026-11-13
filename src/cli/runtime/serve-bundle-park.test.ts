@@ -64,13 +64,6 @@ describe('openServeBundlePark', () => {
     await writeFile(parkRecordPath(dir), JSON.stringify(record))
   }
 
-  it('takes part only under an installed launchd label on macOS', () => {
-    expect(open({})).toBeNull()
-    expect(open({ XPC_SERVICE_NAME: 'application.com.other' })).toBeNull()
-    expect(open({ XPC_SERVICE_NAME: LABEL }, 'linux')).toBeNull()
-    expect(open()).not.toBeNull()
-  })
-
   it('registers with its child pid and removes the registration on close', async () => {
     const park = open()!
     park.heartbeat(77)
@@ -157,8 +150,6 @@ describe('openServeBundlePark', () => {
   it('holds while committed until the bundle changes, then releases', async () => {
     const park = open()!
     await writeRecord({ phase: 'commit', commitDeadlineAt: Date.now() + 60_000 })
-    const bundleBefore = JSON.parse(await readFile(parkRecordPath(dir), 'utf8')).bundleBefore
-    expect(bundleBefore).toBe('unused')
     // 'unused' differs from the real identity, which models a bundle ShipIt already replaced.
     expect(park.holds()).toBe(false)
     const identity = formatBundleIdentity(

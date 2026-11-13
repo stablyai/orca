@@ -15,10 +15,6 @@ import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/nati
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
-import type {
-  NativeChatSubagentDisclosure,
-  NativeChatSubagentRosterState
-} from '../../subagents/native-chat-subagent-sections'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useNativeChatRowNavigation } from '../actions/use-native-chat-row-navigation'
@@ -65,11 +61,8 @@ export type MessageRowProps = {
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   deliveryNotice?: NativeChatDeliveryNotice
-  /** On a roster row: its list's state and the subagents whose rows open below it. */
-  subagentRoster?: NativeChatSubagentRosterState
-  subagentDisclosure?: NativeChatSubagentDisclosure
-  /** Inside a subagent's section, whose border has to reach past the row's controls. */
-  inSubagentSection?: boolean
+  /** On a roster row: opens one of its subagents in its own view. */
+  onOpenSubagent?: (agentId: string) => void
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */

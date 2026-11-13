@@ -1,5 +1,5 @@
 import type { DictationTerm } from './dictation-dictionary'
-import type { SmartTier } from './sidebar-list/sort-stamps'
+import type { SmartTier } from './sidebar-list/sorting/sort-stamps'
 import type {
   AgentStatusState,
   AgentType,

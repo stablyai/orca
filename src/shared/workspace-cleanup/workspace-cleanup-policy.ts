@@ -49,7 +49,7 @@ export function hasEnabledWorkspaceCleanupRule(rules: WorkspaceCleanupRules): bo
 }
 
 // Flip when workspace archiving exists.
-const WORKSPACE_ARCHIVE_SUPPORTED = false
+export const WORKSPACE_ARCHIVE_SUPPORTED = false
 
 export function getDefaultWorkspaceCleanupRules(): WorkspaceCleanupRules {
   return {

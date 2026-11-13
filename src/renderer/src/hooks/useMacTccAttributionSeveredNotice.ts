@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import type {
   PtyManagementFolderAccessMismatch,
   PtyManagementMacTccAttributionHealth
-} from '../../../preload/api/pty-management-api'
+} from '../../../preload/api/terminal/pty-management-api'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { useAppStore } from '@/store/index'
 import {

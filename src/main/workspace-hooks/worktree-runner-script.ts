@@ -31,8 +31,8 @@ import { ignoreFolderSetupRunners, newFolderSetupRunnerPath } from './folder-set
 import { isFolderRepo } from '../../shared/repo-kind'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner-script-text'
 
-import type { Repo } from '../../shared/repo-types'
-import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
+import type { WorktreeSetupLaunch } from '../../shared/worktree/creation/launch-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 
@@ -55,7 +55,7 @@ async function getGitPath(cwd: string, relativePath: string): Promise<string> {
 }
 
 export async function createSetupRunnerScript(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   worktreePath: string,
   script: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
@@ -79,7 +79,7 @@ export async function createSetupRunnerScript(
 }
 
 async function createWorktreeRunnerScript(args: {
-  repo: Repo
+  repo: WorkspaceHookOwner
   worktreePath: string
   script: string
   runnerBaseName: 'setup-runner'
@@ -110,7 +110,7 @@ async function createWorktreeRunnerScript(args: {
   // Report the typing shell, not the runner format: cmd /c typed through Git Bash triggers MSYS path rewriting.
   const launchShell: SetupRunnerShell | undefined = nativeWindowsWorktree
     ? (setupShell ?? { family: 'cmd' })
-    : process.platform === 'win32' && runtimeTarget?.wslDistro
+    : process.platform === 'win32' && wslWorktree
       ? { family: 'posix', executable: 'wsl.exe' }
       : undefined
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'

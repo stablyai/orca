@@ -1,4 +1,4 @@
-import { WorkspaceCleanupScanParams } from '../../../../../shared/rpc-contract/workspace-cleanup-scan-params'
+import { WorkspaceCleanupScanParams } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-scan-params'
 import { scanWorkspaceCleanup } from '../../../../ipc/workspace-cleanup/workspace-cleanup-scan'
 import { defineMethod } from '../../core'
 

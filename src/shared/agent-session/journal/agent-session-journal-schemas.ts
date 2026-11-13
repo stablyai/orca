@@ -10,6 +10,7 @@ import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-s
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
+import { SubagentEntry } from './agent-session-journal-subagent-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -42,16 +43,6 @@ const ToolMetadata = {
 const ProviderCallId = z
   .string()
   .refine((value) => value.trim().length > 0, 'callId must contain a non-whitespace character')
-
-/** Keep lifecycle strings open so newer states do not make persisted rows malformed. */
-const SubagentEntry = z.object({
-  id: z.string(),
-  label: z.string(),
-  state: z.string().min(1),
-  tokens: z.number().optional(),
-  startedAt: z.number().optional(),
-  settledAt: z.number().optional()
-})
 
 /** Skip unknown block types, but reject malformed payloads of known types. */
 const Block = openDiscriminatedUnion(

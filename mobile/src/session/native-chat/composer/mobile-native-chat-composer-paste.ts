@@ -4,8 +4,8 @@ import {
   type ClipboardEventDataLike
 } from '../../../../../src/shared/native-chat/input/native-chat-clipboard-event'
 import { isNativeChatLongPaste } from '../../../../../src/shared/native-chat/input/native-chat-long-paste'
-import type { ClipboardReader } from '../../../platform/clipboard'
-import type { PickedMobileImage } from '../../../platform/media-picker-contract'
+import type { ClipboardReader } from '../../../platform/clipboard/clipboard'
+import type { PickedMobileImage } from '../../../platform/media-picking/media-picker-contract'
 import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'
 
 /** One paste's image: the event's file, or null when WebKit left the bytes out and the shell clipboard holds them. */

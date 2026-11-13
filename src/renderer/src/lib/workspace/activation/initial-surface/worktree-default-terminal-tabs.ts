@@ -1,7 +1,7 @@
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../../../../shared/worktree/launch-types'
+} from '../../../../../../shared/worktree/creation/launch-types'
 import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { useAppStore } from '@/store/index'

@@ -870,20 +870,26 @@ body[data-modal-overlay-open]
   }
 }
 
-@utility control-interaction {
+/* Outline interaction cues are scoped to dialog footer actions only. #41870 applied them to
+   every Button/Toggle/SelectTrigger, which read as noise on dense toolbar icon buttons.
+   Unlayered on purpose so it beats the Button's `outline-none` utility. Uses :focus (not
+   :focus-visible) so a dialog's auto-focused default action is visibly marked on open, and
+   clears the Button's focus-visible ring so the two cues don't stack. */
+[data-slot='dialog-footer'] [data-slot='button']:not(:disabled, [aria-disabled='true']) {
   @media (hover: hover) {
-    &:not(:disabled, [aria-disabled='true']):hover {
+    &:hover {
       outline: 1px solid var(--ring);
       outline-offset: 1px;
     }
   }
 
-  &:not(:disabled, [aria-disabled='true']):focus {
+  &:focus {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+    --tw-ring-shadow: 0 0 #0000;
   }
 
-  &:not(:disabled, [aria-disabled='true']):active {
+  &:active {
     outline: 2px solid var(--ring);
     outline-offset: 0;
   }

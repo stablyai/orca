@@ -8,7 +8,7 @@ import type { z } from 'zod'
 import {
   MAX_SKILL_REFS,
   type SendBody
-} from '../../rpc-contract/structured-agent-session-message-params'
+} from '../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { structuredAgentSessionPayloadFingerprint } from '../lifecycle/structured-agent-session-mutation'
 
 /** Control fields affect the operation fingerprint, never the body hash used for provider echoes. */

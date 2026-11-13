@@ -3,7 +3,7 @@ import { chatTextAttachmentName } from '../../../../../src/shared/native-chat-te
 import {
   MobileFileTooLargeError,
   type PickedMobileFile
-} from '../../../platform/media-picker-contract'
+} from '../../../platform/media-picking/media-picker-contract'
 import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session/agent-session-attachments'
 
 export type PendingNativeChatFile = {

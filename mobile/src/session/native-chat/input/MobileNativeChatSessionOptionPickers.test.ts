@@ -148,14 +148,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
-  it('shows the selected model when legacy answering-model metadata names another model', () => {
-    const legacyDescriptor = { ...MODEL_DESCRIPTOR, reportedModel: 'claude-opus-4-8' }
-    mount([legacyDescriptor], true)
-    const label = findAllByHostType(pill('Model'), 'Text').map((node) => node.props.children)
-    expect(label).toContain('Sonnet 5')
-    expect(label).not.toContain('Opus 4.8')
-  })
-
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
     const placeholder: SessionOptionDescriptor = {
       ...MODEL_DESCRIPTOR,

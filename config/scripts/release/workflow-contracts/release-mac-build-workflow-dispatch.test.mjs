@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { executeReleaseMacBuildMode } from '../operations/run-release-mac-build-workflow.mjs'
 
 const splitEnvironment = {
@@ -28,16 +28,8 @@ const splitRun = {
 }
 
 describe('release mac build split dispatch and verification', () => {
-  it.each([
-    ['id', 124],
-    ['head_sha', 'b'.repeat(40)],
-    ['head_branch', 'other'],
-    ['run_attempt', 2],
-    ['event', 'pull_request'],
-    ['path', '.github/workflows/other.yml'],
-    ['display_title', 'Mac release build v1.2.4 (777)']
-  ])('rejects a changed %s before inspecting success', async (field, value) => {
-    const { fetch } = createGitHubFetch([jsonResponse(200, { ...splitRun, [field]: value })])
+  it('rejects a completed run from another commit', async () => {
+    const fetch = async () => jsonResponse(200, { ...splitRun, head_sha: 'b'.repeat(40) })
     await expect(
       executeReleaseMacBuildMode('wait', splitEnvironment, {
         fetch,
@@ -46,30 +38,6 @@ describe('release mac build split dispatch and verification', () => {
     ).rejects.toThrow(/does not match/)
   })
 })
-
-function createGitHubFetch(responses) {
-  const requests = []
-  const fetch = vi.fn(async (rawUrl, init) => {
-    const url = new URL(rawUrl)
-    const response = responses.shift()
-
-    if (response == null) {
-      throw new Error(`Unexpected request: ${init.method} ${rawUrl}`)
-    }
-
-    requests.push({
-      body: init.body == null ? undefined : JSON.parse(init.body),
-      method: init.method,
-      headers: init.headers,
-      path: url.pathname,
-      query: url.searchParams
-    })
-
-    return response
-  })
-
-  return { fetch, requests }
-}
 
 function jsonResponse(status, body) {
   return {

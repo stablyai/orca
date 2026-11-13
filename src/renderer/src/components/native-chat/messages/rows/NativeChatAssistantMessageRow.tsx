@@ -54,7 +54,6 @@ export function NativeChatAssistantMessageRow({
     endsResponse,
     latestResponse = true,
     actionsHang = false,
-    inSubagentSection = false,
     runtimeContext,
     fork
   } = props
@@ -76,7 +75,6 @@ export function NativeChatAssistantMessageRow({
     message.role === 'assistant' &&
     message.source === 'transcript' &&
     !message.agentStart &&
-    !inSubagentSection &&
     isRootAgentJournalItem(message)
 
   return (
@@ -157,8 +155,7 @@ function toolRunProps(
     revealedDiff: run ? run.revealedDiff : props.revealedDiff,
     onRevealDiff: props.onScrollMessageToTop,
     subagentGroups: content.subagentGroups,
-    subagentRoster: props.subagentRoster,
-    subagentDisclosure: props.subagentDisclosure,
+    onOpenSubagent: props.onOpenSubagent,
     backgroundTasks: content.backgroundTasks,
     followsProse: content.markdown.length > 0 || content.hasImages,
     expandSignal: props.expandSignal,

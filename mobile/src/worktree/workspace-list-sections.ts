@@ -1,6 +1,6 @@
-import { orderMainWorktreeFirst } from '../../../src/shared/sidebar-list/section-order'
+import { orderMainWorktreeFirst } from '../../../src/shared/sidebar-list/sections/section-order'
 import { withFolderWorkspacesLast } from './folder-workspace-lane-order'
-import { prGroupOfPsLinkedPR } from '../../../src/shared/sidebar-list/workspace-review-facts'
+import { prGroupOfPsLinkedPR } from '../../../src/shared/sidebar-list/feed-facts/workspace-review-facts'
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection

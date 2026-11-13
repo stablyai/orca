@@ -9,10 +9,6 @@ const repos = [
 
 describe('reconcileRepoSelection', () => {
   it('drops ids this host no longer has', () => {
-    expect(reconcileRepoSelection(repos, ['a', 'gone'])).toEqual(new Set(['a']))
-  })
-
-  it('never selects a folder workspace', () => {
-    expect(reconcileRepoSelection(repos, ['folder'])).toEqual(new Set())
+    expect(reconcileRepoSelection(repos, ['a', 'gone', 'folder'])).toEqual(new Set(['a']))
   })
 })

@@ -122,11 +122,14 @@ export function getLocalCommandSourcePolicyNotice(
       }
 }
 
-export function renderYamlScriptPreview(hooks: OrcaHooks | null): string {
+export function renderYamlScriptPreview(hooks: OrcaHooks | null, setupOnly = false): string {
   const formatScript = (key: string, command?: string): string =>
     command ? `\n  ${key}: |\n${command.replace(/^/gm, '    ')}` : ''
-  const issueCommand = hooks?.issueCommand
-    ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
-    : ''
-  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${formatScript('archive', hooks?.scripts.archive)}${issueCommand}`
+  const issueCommand =
+    !setupOnly && hooks?.issueCommand
+      ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
+      : ''
+  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${setupOnly ? '' : formatScript('archive', hooks?.scripts.archive)}${issueCommand}`
 }
+
+export const GROUP_SETUP_HOOKS_TEMPLATE = 'scripts:\n  setup: |\n    echo "Setting up workspace"'

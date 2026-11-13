@@ -61,35 +61,13 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */
-  transaction<T>(
-    run: (db: Database.Database) => T,
-    streamed = false,
-    committed?: (result: T) => void
-  ): T {
+  transaction<T>(run: (db: Database.Database) => T, committed?: (result: T) => void): T {
     const db = this.db
     this.transactionNumber += 1
-    if (!streamed) {
-      const result = runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
-      committed?.(result)
-      this.checkpoint?.afterCommit()
-      return result
-    }
-    // Synchronous level changes require no transaction; stranded recovery restores FULL first.
-    db.pragma('synchronous = NORMAL')
-    let result: T
-    try {
-      result = runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
-      committed?.(result)
-    } finally {
-      if (!db.isTransaction) {
-        db.pragma('synchronous = FULL')
-      }
-    }
+    const result = runJournalTransaction(db, run, () => {
+      this.stranded = true
+    })
+    committed?.(result)
     this.checkpoint?.afterCommit()
     return result
   }
@@ -128,7 +106,6 @@ export class JournalHostDatabase {
         throw journalOpenRefusalError(error)
       }
     }
-    connection.pragma('synchronous = FULL')
     this.stranded = false
   }
 }

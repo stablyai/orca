@@ -16,6 +16,7 @@ import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-g
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { recoverPendingSkillTransactions } from '../skills/transaction-state/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
@@ -113,10 +114,23 @@ export function initializeMainProcessObservers(): void {
   })
   state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
   if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
-    })
+    const marker = state.hangDetection
+    const report = (details: NativeHangTelemetry): void => {
+      track('main_thread_hang_detected', {
+        unresponsive_ms: Math.round(marker.unresponsiveMs),
+        self_recovered: marker.selfRecovered,
+        ...details
+      })
+    }
+    if (process.platform === 'darwin') {
+      void import('../hang-watchdog/previous-native-hang-telemetry')
+        .then(({ readPreviousNativeHangTelemetry }) =>
+          readPreviousNativeHangTelemetry(getCanonicalUserDataPath(), marker)
+        )
+        .then(report, () => report({}))
+    } else {
+      report({})
+    }
   }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')

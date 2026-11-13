@@ -13,7 +13,7 @@ import type {
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/model-launch/opencode-model-startup-plan'
 
@@ -123,10 +123,7 @@ export type AgentLaunchWorkspaceFactory = {
   }>
   /** Leave a usable workspace when chat creation has an indeterminate outcome. */
   createRecoveryShell?: (worktreeId: string) => Promise<void>
-  /** Folders have no startup terminal; the executor launches their agent after creation. */
-  createFolderWorkspace?(args: {
-    create: Readonly<Record<string, unknown>>
-  }): Promise<{ worktreeId: string; workspacePath?: string; connectionId: string | null }>
+  createFolderWorkspace?: AgentLaunchWorkspaceFactory['createWorktree']
 }
 
 /** The options a terminal leg starts with: a caller's saved chat choice applies to it too. */

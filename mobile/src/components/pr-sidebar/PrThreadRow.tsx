@@ -26,7 +26,7 @@ import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mo
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { canEditComment, isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'

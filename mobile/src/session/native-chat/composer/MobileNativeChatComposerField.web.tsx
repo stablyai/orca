@@ -7,10 +7,10 @@ import {
   useWindowDimensions,
   type TextInputInstance
 } from 'react-native'
-import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
-import { primaryModifierKey } from '../../../platform/primary-modifier-key'
-import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
-import { useTextInputSelectionReveal } from '../../../platform/text-input-selection-reveal.web'
+import { useKeyboardOcclusion } from '../../../platform/keyboard/keyboard-occlusion'
+import { primaryModifierKey } from '../../../platform/keyboard/primary-modifier-key'
+import { useTextInputContentHeight } from '../../../platform/text-input/text-input-content-height'
+import { useTextInputSelectionReveal } from '../../../platform/text-input/text-input-selection-reveal.web'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {

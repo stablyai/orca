@@ -19,7 +19,7 @@ import {
 import { workspaceMarkerTabIds } from './workspace-live-markers'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
-import { getTerminalTabOwnerWorktreeId } from '../../terminals/terminal-tab-owner-index'
+import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
 import { hasUnreadAgentSessionTab } from '@/components/terminal-pane/notifications/unread-agent-session-membership'
 
 const emptyTerminalTabs: AppState['tabsByWorktree'] = {}

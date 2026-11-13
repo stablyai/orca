@@ -7,6 +7,7 @@ import {
   type NativeChatSubagentGroupSay
 } from '../../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 import type { CopyValues } from '../../../../../shared/counted-copy-english'
+import type { NativeChatSubagentState } from '../../../../../shared/native-chat/native-chat-types'
 
 const PIECES: Record<NativeChatSubagentGroupCopyId, (values?: CopyValues) => string> = {
   stateCompleted: () =>
@@ -66,3 +67,24 @@ const PIECES: Record<NativeChatSubagentGroupCopyId, (values?: CopyValues) => str
 
 export const sayNativeChatSubagentGroupTranslated: NativeChatSubagentGroupSay = (id, values) =>
   PIECES[id](values)
+
+/** A single subagent's state where it leads a line: "Completed · 7s". */
+export function sayNativeChatSubagentStateHeading(state: NativeChatSubagentState): string {
+  switch (state) {
+    case 'completed':
+      return translate('components.native-chat.subagents.stateHeading.completed', 'Completed')
+    case 'working':
+      return translate('components.native-chat.subagents.stateHeading.working', 'Working')
+    case 'idle':
+      return translate('components.native-chat.subagents.stateHeading.idle', 'Idle')
+    case 'failed':
+      return translate('components.native-chat.subagents.stateHeading.failed', 'Failed')
+    case 'stopped':
+      return translate('components.native-chat.subagents.stateHeading.stopped', 'Stopped')
+    case 'unverifiable':
+      return translate(
+        'components.native-chat.subagents.stateHeading.unverifiable',
+        'Status unavailable'
+      )
+  }
+}

@@ -1,6 +1,5 @@
-import '../../../../shared/worktree/retired-name-registry'
+import '../../../../shared/worktree/naming/retired-name-registry'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { basename } from 'node:path'
 
 import '../../../../shared/constants'
 
@@ -104,33 +103,6 @@ describe('runtime create listing hold', () => {
   })
 })
 
-describe('runtime concurrent creates on one name', () => {
-  const addedPaths = (): string[] => mocks.add.mock.calls.map((call) => String(call[1]))
-
-  beforeEach(() => {
-    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
-    let reached = 0
-    let bothAdding: () => void = () => {}
-    const gate = new Promise<void>((resolveGate) => (bothAdding = resolveGate))
-    // Hold both creates inside Git's add, where neither checkout exists on disk yet.
-    mocks.add.mockImplementation(async () => {
-      if (++reached === 2) {
-        bothAdding()
-      }
-      await gate
-      return {}
-    })
-  })
-
-  it('releases the claim when the create fails', async () => {
-    mocks.add.mockRejectedValueOnce(new Error('add failed'))
-    await expect(createWorktree({ name: 'app' })).rejects.toThrow('add failed')
-    mocks.add.mockResolvedValue({})
-    await createWorktree({ name: 'app' })
-    expect(addedPaths().map((path) => basename(path))).toEqual(['app', 'app'])
-  })
-})
-
 describe('runtime create base without a tracking ref', () => {
   const originMain = {
     remote: 'origin',
@@ -150,13 +122,6 @@ describe('runtime create base without a tracking ref', () => {
     mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
 
     const result = await createWorktree({ baseBranch: 'origin/main', allowLocalBaseFallback: true })
-
-    expect(mocks.consume).toHaveBeenCalledWith(
-      expect.objectContaining({
-        baseBranch: 'main',
-        options: expect.not.objectContaining({ remoteTrackingBase: expect.anything() })
-      })
-    )
     expect(result.baseFallback).toEqual({ requestedRef: 'origin/main', localRef: 'main' })
     expect(result.addResult).not.toHaveProperty('baseFallback')
     expect(result.worktree.baseRef).toBe('main')

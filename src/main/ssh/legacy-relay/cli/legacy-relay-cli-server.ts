@@ -28,7 +28,7 @@ import {
   stringFlag
 } from './legacy-relay-cli-args'
 import type { LegacyRelayCliServer } from '../bridge/legacy-relay-client'
-import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../../shared/rpc-contract/connector-params'
+import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../../shared/rpc-contract/connectors/connector-params'
 import {
   cappedInboxLimit,
   cappedWait,

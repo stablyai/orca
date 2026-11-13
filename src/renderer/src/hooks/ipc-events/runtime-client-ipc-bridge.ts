@@ -3,7 +3,7 @@ import {
   refreshDefaultLinkedLinearIssue
 } from './linear-linked-issue-refresh'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
-import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
+import { emitRuntimeClientWindowEvent } from './runtime-client-window-events'
 import { applyHostWorkspaceRowEvent } from './worktree-metadata-set-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
@@ -137,13 +137,7 @@ export function registerRuntimeClientIpcBridge(
       requestProjectRefresh(environmentId)
       return
     }
-    if (event.type === 'automationsChanged') {
-      // Why: without the environment the subscriber cannot attribute the changed authority.
-      emitAutomationsChangedWindowEvent({
-        environmentId,
-        ...(event.selector ? { selector: event.selector } : {}),
-        ...(event.reason ? { reason: event.reason } : {})
-      })
+    if (emitRuntimeClientWindowEvent(environmentId, event)) {
       return
     }
     if (event.type === 'browserProfilesChanged') {

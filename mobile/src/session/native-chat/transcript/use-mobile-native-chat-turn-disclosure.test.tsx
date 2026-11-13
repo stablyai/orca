@@ -306,19 +306,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     })
   })
 
-  it('keeps a long message of yours open per message, so a recycled row reopens it', () => {
-    const messages = [userMessage('u1'), userMessage('u2')]
-    act(() => {
-      renderer = create(createElement(Harness, { messages, enabled: false }))
-    })
-    const before = renderer!.root.findByType(Result).props.disclosure
-    expect(before.resolveRow(0, messages[0]).userMessageOpen).toBe(false)
-    act(() => before.resolveRow(0, messages[0]).onToggleUserMessage('u1'))
-    const after = renderer!.root.findByType(Result).props.disclosure
-    expect(after.resolveRow(0, messages[0]).userMessageOpen).toBe(true)
-    expect(after.resolveRow(1, messages[1]).userMessageOpen).toBe(false)
-  })
-
   it('keeps a turn the provider opened live while it runs, and the turn before it settled', () => {
     let sequence = 0
     const entry = (

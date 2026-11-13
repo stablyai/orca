@@ -1,5 +1,5 @@
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../../shared/worktree/hosted-review-links'
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../../shared/worktree/hosted-review/hosted-review-links'
 import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear

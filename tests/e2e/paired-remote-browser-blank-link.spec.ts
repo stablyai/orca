@@ -58,7 +58,9 @@ test('a target=_blank click in a streamed server page opens a new Orca tab', asy
     const created = (
       await host.client.call<{ browserPageId: string }>('browser.tabCreate', {
         worktree: `id:${worktreeId}`,
-        url: `${origin}/`
+        url: `${origin}/`,
+        // Unplaced, this create would go to the paired desktop; the test drives a streamed page.
+        placement: { kind: 'server' }
       })
     ).result
     await focusMaterializedRemoteBrowserPane(page, {

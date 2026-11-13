@@ -13,7 +13,7 @@ import {
   type HostInstance
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

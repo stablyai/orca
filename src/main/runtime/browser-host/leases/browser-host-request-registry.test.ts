@@ -78,3 +78,44 @@ describe('BrowserHostRequestRegistry with two paired desktops', () => {
     expect(older.asked).toHaveLength(0)
   })
 })
+
+describe('BrowserHostRequestRegistry with a sleeping desktop', () => {
+  it('fails at once on a desktop that missed its last ask, until it answers again', async () => {
+    vi.useFakeTimers()
+    const requests = new BrowserHostRequestRegistry({ desktopTimeoutMs: 1_000 })
+    const sleeping = desktop(requests, 'device-a')
+
+    const timedOut = expect(requests.request()).rejects.toThrow('browser_host_unavailable')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await timedOut
+
+    const again = requests.request()
+    expect(sleeping.asked).toHaveLength(1)
+    await expect(again).rejects.toThrow('browser_host_unavailable')
+
+    // Its late answer to the missed ask shows it is awake.
+    expect(sleeping.answer()).toBe(false)
+    const hosted = requests.request()
+    expect(sleeping.asked).toHaveLength(2)
+    sleeping.answer('host-a')
+    await expect(hosted).resolves.toEqual({
+      browserHostClientId: 'host-a',
+      pairedDeviceId: 'device-a'
+    })
+  })
+
+  it('hands a pending ask to the subscription a waking desktop opens', async () => {
+    const requests = new BrowserHostRequestRegistry()
+    const halfOpen = desktop(requests, 'device-a')
+    const hosted = requests.request()
+    expect(halfOpen.asked).toHaveLength(1)
+
+    const reconnected = desktop(requests, 'device-a')
+    expect(reconnected.answer('host-a')).toBe(true)
+
+    await expect(hosted).resolves.toEqual({
+      browserHostClientId: 'host-a',
+      pairedDeviceId: 'device-a'
+    })
+  })
+})

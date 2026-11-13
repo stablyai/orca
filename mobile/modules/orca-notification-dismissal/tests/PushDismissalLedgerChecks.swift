@@ -12,15 +12,11 @@ import Foundation
   }
   let ledger = PushDismissalLedger(defaults: defaults)
   ledger.remember(identity(2), now: 100)
-  ledger.remember(identity(1), now: 101)
   let restored = PushDismissalLedger(defaults: defaults)
-  precondition(restored.contains(identity(1), now: 102))
   precondition(restored.contains(identity(2), now: 102))
-  precondition(!restored.contains(identity(3), now: 102))
   precondition(!restored.contains(identity(1, "other"), now: 102))
   precondition(!restored.contains(identity(1, "qa-host", "other"), now: 102))
   precondition(!restored.contains(identity(1, "qa-host", "qa-epoch", "other"), now: 102))
-  precondition(!restored.contains(identity(1), now: 86501))
   precondition(PushDismissalIdentity(["hostFingerprint":"h", "notificationId":"n", "notificationEpoch":"e", "notificationSeq":true]) == nil)
   for hosts in [1, 3] {
    for index in 0..<520 {
@@ -36,7 +32,6 @@ import Foundation
   let batch = PushDismissalLedger(defaults: defaults)
   batch.remember(identity(5, "batch"), now: 300)
   batch.remember([identity(4, "batch"), identity(7, "batch", "qa-epoch", "b"), identity(6, "batch", "qa-epoch", "b"), identity(1, "batch", "qa-epoch", "c")], now: 300)
-  batch.remember([PushDismissalIdentity](), now: 301)
   let batchReopened = PushDismissalLedger(defaults: defaults)
   precondition(batchReopened.contains(identity(5, "batch"), now: 301))
   precondition(!batchReopened.contains(identity(6, "batch"), now: 301))

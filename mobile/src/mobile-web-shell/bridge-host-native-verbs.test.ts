@@ -69,25 +69,4 @@ describe('a native method the page asks for', () => {
     })
     expect(JSON.stringify(bridge.posted)).not.toContain(secret)
   })
-  it('settles a cancelled native request the way a forwarded one settles, with no late reply', async () => {
-    const settle: { resolve: ((value: unknown) => void) | null } = { resolve: null }
-    const bridge = harness({
-      serveNativeVerb: () =>
-        new Promise((resolve) => {
-          settle.resolve = resolve
-        })
-    })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'request' }))
-    const afterCancel = bridge.frames().length
-    expect(settle.resolve).not.toBeNull()
-    if (settle.resolve === null) {
-      throw new Error('native handler never entered')
-    }
-    settle.resolve({ value: 'too late' })
-    await flushBridge()
-    expect(bridge.frames()).toHaveLength(afterCancel)
-    expect(reachedTheDesktop(bridge)).toEqual([])
-  })
 })

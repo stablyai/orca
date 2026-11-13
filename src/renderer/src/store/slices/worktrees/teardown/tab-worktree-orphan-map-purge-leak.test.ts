@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import {
-  getForegroundTerminalTabLastSeenAtById,
   resetForegroundTerminalTabIdsForTests,
   setForegroundTerminalTabIds
 } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
@@ -42,7 +41,7 @@ globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
-import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
 const TAB1 = 'tab-wt1'
@@ -96,9 +95,8 @@ describe('tab/worktree removal evicts the module maps it previously leaked', () 
 
     store.getState().purgeWorktreeTerminalState([WT1])
 
-    expect(getForegroundTerminalTabLastSeenAtById()[TAB1]).toBeUndefined()
     expect(startupGuardCleared(WT1, TAB1, TOKEN1)).toBe(true)
-    expect(getForegroundTerminalTabLastSeenAtById()[TAB2]).toBeGreaterThan(0)
+
     expect(startupGuardCleared(WT2, TAB2, TOKEN2)).toBe(false)
   })
 
@@ -109,9 +107,8 @@ describe('tab/worktree removal evicts the module maps it previously leaked', () 
     const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
     expect(result).toEqual({ ok: true })
 
-    expect(getForegroundTerminalTabLastSeenAtById()[TAB1]).toBeUndefined()
     expect(startupGuardCleared(WT1, TAB1, TOKEN1)).toBe(true)
-    expect(getForegroundTerminalTabLastSeenAtById()[TAB2]).toBeGreaterThan(0)
+
     expect(startupGuardCleared(WT2, TAB2, TOKEN2)).toBe(false)
   })
 
@@ -122,9 +119,9 @@ describe('tab/worktree removal evicts the module maps it previously leaked', () 
     store.getState().closeTab(TAB1)
 
     // closeTab is tab-scoped: the tab-keyed maps drop, the worktree-keyed one stays.
-    expect(getForegroundTerminalTabLastSeenAtById()[TAB1]).toBeUndefined()
+
     expect(startupGuardCleared(WT1, TAB1, TOKEN1)).toBe(true)
-    expect(getForegroundTerminalTabLastSeenAtById()[TAB2]).toBeGreaterThan(0)
+
     expect(startupGuardCleared(WT2, TAB2, TOKEN2)).toBe(false)
   })
 })

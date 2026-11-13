@@ -17,8 +17,8 @@ import { GITHUB_PULL_REQUEST_METHODS } from '../../runtime/rpc/methods/source-co
 import { registerGitHubWorkItemHandlers } from '../../ipc/source-control/github-work-item-handlers'
 import { registerGitHubIssueMutationHandlers } from '../../ipc/source-control/github-issue-mutation-handlers'
 import { registerGitHubPRReviewHandlers } from '../../ipc/source-control/github-pr-review-handlers'
-import { ghPullRequestsAndWorkItemsApi } from '../../../preload/api/gh-bridge-pull-requests-and-work-items'
-import { ghMutationsAndProjectsApi } from '../../../preload/api/gh-bridge-mutations-and-projects'
+import { ghPullRequestsAndWorkItemsApi } from '../../../preload/api/github/gh-bridge-pull-requests-and-work-items'
+import { ghMutationsAndProjectsApi } from '../../../preload/api/github/gh-bridge-mutations-and-projects'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { RPC_PARAMS_BY_METHOD } from '../../../shared/rpc-contract/rpc-params-catalog.generated'
 

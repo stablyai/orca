@@ -2,7 +2,7 @@ import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contr
 import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
 
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import {
   prepareAgentCreationCard,
   startedAgentSender

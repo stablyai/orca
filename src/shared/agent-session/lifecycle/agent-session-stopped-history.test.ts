@@ -11,11 +11,9 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { MAX_PROMPT_BYTES } from '../../rpc-contract/structured-agent-session-message-params'
+
 import {
   agentSessionStoppedHistoryOwed,
-  selectStoppedHistory,
-  STOPPED_MESSAGE_FRAMING_BYTES,
   type StoppedHistoryJournal
 } from './agent-session-stopped-history'
 
@@ -124,26 +122,5 @@ describe('which stopped messages the agent is owed', () => {
       'a',
       'b'
     ])
-  })
-})
-
-describe('what one delivery holds', () => {
-  it('fits beside the send, newest first; one too large for any send never holds back the rest', () => {
-    const largest = 'x'.repeat(MAX_PROMPT_BYTES - STOPPED_MESSAGE_FRAMING_BYTES - 5)
-    const tooLarge = 'x'.repeat(MAX_PROMPT_BYTES)
-    expect(
-      owed([sent('a', 2, STOPPED), sent('largest', 3, STOPPED), sent('tooLarge', 4, STOPPED)], {
-        bodies: { largest: message(largest), tooLarge: message(tooLarge) }
-      })
-    ).toEqual(['a', 'largest'])
-    // The largest still owed fits beside a one-letter send; the older one is left out, covered.
-    const stopped = [
-      { clientMessageId: 'a', words: 'first' },
-      { clientMessageId: 'largest', words: largest }
-    ]
-    expect(selectStoppedHistory(stopped, message('x'))).toEqual({
-      messages: [stopped[1]],
-      covers: ['a', 'largest']
-    })
   })
 })

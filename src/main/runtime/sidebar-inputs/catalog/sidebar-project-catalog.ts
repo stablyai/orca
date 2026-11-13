@@ -3,7 +3,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import {
   buildSidebarProjectCatalog,
   type PairedServerCatalog
-} from '../../../../shared/sidebar-list/sidebar-project-catalog'
+} from '../../../../shared/sidebar-list/catalog/sidebar-project-catalog'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   runtimeVisibleProjectGroups,

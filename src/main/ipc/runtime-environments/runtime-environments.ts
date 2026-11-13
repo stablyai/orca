@@ -1,55 +1,55 @@
 import { createAiVaultAssociationObserver } from '../ai-vault/ai-vault-projection-dependency'
 import { invalidateAiVaultHostLegCache } from '../ai-vault/ai-vault-host-leg-cache'
-import {
-  registerRuntimeEnvironmentSubscriptionHandlers,
-  type RetainedRemoteRuntimeSubscription,
-  type PendingRuntimeSubscription
-} from './runtime-environment-subscription-handlers'
+import { registerRuntimeEnvironmentSubscriptionHandlers } from './subscriptions/runtime-environment-subscription-handlers'
+import type {
+  RetainedRemoteRuntimeSubscription,
+  PendingRuntimeSubscription
+} from './subscriptions/runtime-environment-subscription-setup'
 import { ipcMain } from 'electron'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './catalog/runtime-environment-registry-root'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Store } from '../../persistence/loading-store/store'
 import { recordRemoteLayoutFrame } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
 import { recordHostRepoCatalogAnswer } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import {
-  isRuntimeEnvironmentManuallyDisconnected,
   registerRuntimeEnvironmentConnectivityHandlers,
   registerRuntimeEnvironmentPassiveHandlers
-} from './runtime-environment-connectivity-handlers'
+} from './connectivity/runtime-environment-connectivity-handlers'
+import { isRuntimeEnvironmentManuallyDisconnected } from './connectivity/runtime-environment-manual-disconnect'
 import {
   closeRemoteRuntimeRequestConnection,
   getRuntimeEnvironmentStatusOwner
-} from './runtime-environment-request-connections'
-import { setRefusedPairingHandlers } from './runtime-environment-pairing-refusal-registry'
+} from './connections/runtime-environment-request-connections'
+import { setRefusedPairingHandlers } from './pairing/runtime-environment-pairing-refusal-registry'
 import {
   handleManagedSharedControlRefusal,
   recoverRefusedManagedPairing
-} from './runtime-environment-managed-pairing-refusal'
+} from './pairing/runtime-environment-managed-pairing-refusal'
 import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lifecycle/orcad-managed-pairing-repaired-listener'
 import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
-import { registerRuntimeEnvironmentRepairHandler } from './runtime-environment-repair-handler'
+import { registerRuntimeEnvironmentRecoveryHandler } from './connectivity/runtime-environment-recovery-handler'
+import { registerRuntimeEnvironmentRepairHandler } from './pairing/runtime-environment-repair-handler'
 import {
   advanceRuntimeEnvironmentTransportGeneration,
   onRuntimeEnvironmentTransportGenerationRetired
-} from './runtime-environment-transport-generation'
-import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
+} from './connections/runtime-environment-transport-generation'
+import { resetSharedControlSupport } from './connections/runtime-environment-shared-control-support'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
-import { registerOrcadRuntimeLifecycleHandlers } from './orcad-runtime-lifecycle-handlers'
-import { registerOrcadRuntimeConversionHandlers } from './orcad-runtime-conversion-handlers'
-import { registerOrcadDeltaMoveHandlers } from './orcad-delta-move-handlers'
-import { registerOrcadLeaveBehindHandlers } from './orcad-leave-behind-handlers'
-import { registerOrcadRuntimeMaintenanceHandlers } from './orcad-runtime-maintenance-handlers'
+import { registerOrcadRuntimeLifecycleHandlers } from './managed-orcad/orcad-runtime-lifecycle-handlers'
+import { registerOrcadRuntimeConversionHandlers } from './managed-orcad/orcad-runtime-conversion-handlers'
+import { registerOrcadDeltaMoveHandlers } from './managed-orcad/orcad-delta-move-handlers'
+import { registerOrcadLeaveBehindHandlers } from './managed-orcad/orcad-leave-behind-handlers'
+import { registerOrcadRuntimeMaintenanceHandlers } from './managed-orcad/orcad-runtime-maintenance-handlers'
 import { clearPublishedManagedServer } from '../ssh/ssh-renderer-broadcast'
-import { clearManagedServerNotes } from './runtime-environment-managed-tunnel'
-import { reconcileOrphanedRuntimeSessions } from './runtime-environment-session-reconcile'
+import { clearManagedServerNotes } from './managed-orcad/runtime-environment-managed-tunnel'
+import { reconcileOrphanedRuntimeSessions } from './catalog/runtime-environment-session-reconcile'
 import { registerRuntimeSshAccessHandlers } from '../runtime-ssh-access-handlers'
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
-import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
-import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
-import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
-import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
-import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
+import { registerRuntimeEnvironmentBrowserClientHostHandler } from './browser-hosting/runtime-environment-browser-client-host-handler'
+import { advanceRuntimeEnvironmentCapabilityIncarnation } from './connections/runtime-environment-capability-evidence'
+import { retireMobileDesktopRelayEnvironment } from './mobile-relay/runtime-environment-mobile-relay-hosts'
+import { watchRuntimeEnvironmentPreference } from './catalog/runtime-environment-preference'
+import { publishRuntimeEnvironmentCatalogChanged } from './catalog/runtime-environment-catalog-broadcast'
 import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { resetDesktopBrowserBridgeEnvironment } from '../browser/desktop-browser-bridge-reconcile'
 

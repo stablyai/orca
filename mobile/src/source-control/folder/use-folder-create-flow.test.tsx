@@ -38,11 +38,11 @@ vi.mock('../../components/TransientToast', () => ({
     showToast: (text: string) => seen.toasts.push(text)
   })
 }))
-vi.mock('../../platform/haptics', () => ({
+vi.mock('../../platform/haptics/haptics', () => ({
   triggerSuccess: () => (seen.haptics += 1),
   triggerError: () => (seen.haptics += 1)
 }))
-vi.mock('../../platform/external-link', () => ({ openExternalLink: () => {} }))
+vi.mock('../../platform/external-links/external-link', () => ({ openExternalLink: () => {} }))
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'connected' })
 }))

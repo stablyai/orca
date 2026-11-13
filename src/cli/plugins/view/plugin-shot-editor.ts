@@ -15,7 +15,7 @@ import {
   PLUGIN_SHOT_MAX_WIDTH,
   PLUGIN_SHOT_MIN_HEIGHT,
   PLUGIN_SHOT_MIN_WIDTH
-} from '../../../shared/rpc-contract/plugins-params'
+} from '../../../shared/rpc-contract/plugins/plugins-params'
 import { callPlugins, resolveHostPluginPath, stringFlag } from '../plugin-runtime'
 import { readPluginFolderKey } from './plugin-shot-scenario'
 

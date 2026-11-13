@@ -19,7 +19,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { OverlayActivityOwner } from '@/components/ui/use-overlay-focus-scope'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/row-display/git-identity-display'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { SourceControlPanel } from './source-control/panel/panel'
 import {

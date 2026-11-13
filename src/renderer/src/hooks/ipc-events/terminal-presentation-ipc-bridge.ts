@@ -8,7 +8,7 @@ import {
   queueTerminalPaneSplitRequest
 } from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
-import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { verifyTerminalRevealIdentity } from '@/lib/workspace/tabs/terminal-reveal-identity'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'

@@ -7,8 +7,8 @@ import {
   MOBILE_DIFF_REVIEW_GIT_MUTATIONS,
   reviewGitBulkUnstage
 } from './mobile-diff-review-git-operations'
-import { getUnstageablePaths } from '../mobile-git-status'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { getUnstageablePaths } from '../changes/mobile-git-status'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
 

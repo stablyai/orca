@@ -6,7 +6,10 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { MobileDiffLine } from '../source-control/review/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../files/session-documents/mobile-file-syntax'
-import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../source-control/mobile-diff-format'
+import {
+  mobileDiffLineNumber,
+  mobileDiffLinePrefix
+} from '../source-control/review/mobile-diff-format'
 import { colors, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

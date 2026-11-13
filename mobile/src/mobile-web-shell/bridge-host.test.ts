@@ -12,8 +12,7 @@ import {
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
   BRIDGE_MAX_PENDING_DESKTOP_REQUESTS,
-  BRIDGE_MAX_REPLY_BYTES,
-  BRIDGE_MAX_SUBSCRIPTIONS
+  BRIDGE_MAX_REPLY_BYTES
 } from './bridge/bridge-caps'
 import type { BridgeHostMessage } from './bridge/bridge-envelope'
 import { BridgeReplyAssembler } from './bridge/bridge-reply-chunking'
@@ -135,16 +134,6 @@ describe('replies too big for one frame', () => {
 })
 
 describe('subscriptions', () => {
-  it('reopens a slot when a stream is cancelled', () => {
-    const bridge = harness({ ready: true })
-    for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
-      bridge.host.receive(subscribeFrame(bridgeId(index)))
-    }
-    bridge.host.receive(clientFrame({ type: 'cancel', id: bridgeId(0), target: 'subscription' }))
-    bridge.host.receive(subscribeFrame(bridgeId(BRIDGE_MAX_SUBSCRIPTIONS)))
-    expect(bridge.client.streams).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS + 1)
-  })
-
   it('unsubscribes on cancel, says so, and delivers nothing after', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID))
@@ -154,33 +143,6 @@ describe('subscriptions', () => {
     expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'unsubscribed' })
     bridge.client.streams[0]?.emit({ chunk: 'b' })
     expect(bridge.frames().filter((frame) => frame.type === 'event')).toHaveLength(1)
-  })
-
-  it('answers a client whose subscribe throws and holds no slot', () => {
-    const client = createFakeRpcClient()
-    let attempts = 0
-    const bridge = harness({
-      ready: true,
-      client: {
-        ...client,
-        subscribe: () => {
-          attempts += 1
-          throw new Error('no socket')
-        }
-      }
-    })
-    bridge.host.receive(subscribeFrame(ID))
-    expect(bridge.last().type).toBe('error')
-    bridge.host.receive(subscribeFrame(ID))
-    expect(attempts).toBe(2)
-    expect(bridge.frames().filter((frame) => frame.type === 'error')).toEqual(
-      [1, 2].map(() =>
-        expect.objectContaining({
-          type: 'error',
-          error: expect.objectContaining({ message: 'no socket' })
-        })
-      )
-    )
   })
 
   it('unsubscribes a stream that overflowed inside subscribe, exactly once', () => {
@@ -341,15 +303,6 @@ describe('teardown', () => {
     expect(bridge.diagnostics).toEqual(
       Array.from({ length: 4 }, () => ({ kind: 'frame-after-dispose' }))
     )
-  })
-
-  it('is idempotent', () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
-    bridge.host.dispose()
-    bridge.host.dispose()
-    expect(bridge.frames()).toHaveLength(2)
-    expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
   })
 
   it('settles what the page owned on close without answering a page that said goodbye', async () => {

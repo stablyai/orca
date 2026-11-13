@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { LocalProjectGhExecOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { OrcaRuntimeWithPreservedBranchCleanup } from './runtime-host-services'
 import { createRuntimeFileWatcherRemoval } from '../workspaces/removal/runtime-file-watcher-removal'

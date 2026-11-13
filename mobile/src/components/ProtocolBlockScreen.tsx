@@ -1,5 +1,5 @@
 import { useWallAppUpdate } from '../app-update/use-wall-app-update'
-import { openExternalLink } from '../platform/external-link'
+import { openExternalLink } from '../platform/external-links/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'

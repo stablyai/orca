@@ -20430,7 +20430,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Abrir com (quando o foco não estiver em um campo editável)"
+            "openWith": "Abrir com (exceto ao digitar em um campo de texto do Orca)"
           }
         },
         "pluginInstallCount": {
@@ -21009,8 +21009,7 @@
         "stateIdleCount_many": "Parado: {{value0}}",
         "stateUnverifiableCount_one": "Status indisponível: {{value0}}",
         "stateUnverifiableCount_other": "Status indisponível: {{value0}}",
-        "stateUnverifiableCount_many": "Status indisponível: {{value0}}",
-        "showAgent": "Mostrar {{value0}} na conversa"
+        "stateUnverifiableCount_many": "Status indisponível: {{value0}}"
       },
       "jumpToLatest": "Ir para o mais recente",
       "toggle": {

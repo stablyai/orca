@@ -24,8 +24,8 @@ import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
-import { useKeyboardPersistingTaps } from '../../../platform/keyboard-persisting-taps'
-import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
+import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
+import { useKeyboardOcclusion } from '../../../platform/keyboard/keyboard-occlusion'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

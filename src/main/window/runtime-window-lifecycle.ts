@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/creation/launch-types'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-session-contracts'
 import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
@@ -52,6 +52,7 @@ export function registerRuntimeWindowLifecycle(
     reposChanged: () => send('repos:changed'),
     browserProfilesChanged: () => send('browser:session:profilesChanged'),
     automationsChanged: (payload) => send('automations:changed', payload),
+    workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,
       worktreeId,

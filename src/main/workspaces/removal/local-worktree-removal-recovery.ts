@@ -1,7 +1,7 @@
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import { pruneGitWorktrees } from '../../git/worktrees/removal/worktree-prune-guard'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal/removal'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../ipc/worktree-logic'
 import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'

@@ -60,7 +60,7 @@ function focusedButtonFixture(variant: (typeof VARIANTS)[number]) {
   return defineFixture({
     width: 320,
     render: () => (
-      <div className="flex items-center justify-center gap-3 p-4">
+      <div data-slot="dialog-footer" className="flex items-center justify-center gap-3 p-4">
         <Button variant="outline">Cancel</Button>
         <Button variant={variant} data-fixture-focus>
           {variant === 'destructive' ? <Trash2 /> : <Plus />}

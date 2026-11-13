@@ -83,24 +83,20 @@ it('rolls back the entire Codex exit settlement when a later row fails', async (
   const diskBefore = liveTestJournalRows(database.db, SESSION)
   const sawEarlierInserts: number[] = []
   const transaction = database.transaction.bind(database)
-  vi.spyOn(database, 'transaction').mockImplementation((run, streamed, committed) =>
-    transaction(
-      (db) => {
-        try {
-          return run(db)
-        } catch (error) {
-          sawEarlierInserts.push(liveTestJournalRows(db, SESSION).length - diskBefore.length)
-          expect(journal.snapshot()).toEqual(before)
-          expect(commits).not.toHaveBeenCalled()
-          expect(
-            published.every((snapshot) => JSON.stringify(snapshot) === JSON.stringify(before))
-          ).toBe(true)
-          throw error
-        }
-      },
-      streamed,
-      committed
-    )
+  vi.spyOn(database, 'transaction').mockImplementation((run, committed) =>
+    transaction((db) => {
+      try {
+        return run(db)
+      } catch (error) {
+        sawEarlierInserts.push(liveTestJournalRows(db, SESSION).length - diskBefore.length)
+        expect(journal.snapshot()).toEqual(before)
+        expect(commits).not.toHaveBeenCalled()
+        expect(
+          published.every((snapshot) => JSON.stringify(snapshot) === JSON.stringify(before))
+        ).toBe(true)
+        throw error
+      }
+    }, committed)
   )
   database.db.exec(`CREATE TEMP TRIGGER reject_codex_later BEFORE INSERT ON journal_rows
     WHEN NEW.session_id = '${SESSION}' AND NEW.seq > ${before.cursor.sequence + 1}
