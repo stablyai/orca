@@ -175,27 +175,33 @@ export function resolveAgentLaunchCommand(args: {
   const render = (tokens: readonly string[]): string =>
     tokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')
   const withArgs = (suffix: string, head = command): string => (suffix ? `${head} ${suffix}` : head)
-  const initialTokens = args.sessionOptionsOverrideAgentArgs
-    ? insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.args)
-    : [...resolvedOptions.args, ...keptTokens]
+  const withOptionArgs = (optionArgs: readonly string[]): string[] =>
+    args.sessionOptionsOverrideAgentArgs
+      ? insertBeforeTerminator(args.agent, keptTokens, optionArgs)
+      : [...optionArgs, ...keptTokens]
+  const initialTokens = withOptionArgs(resolvedOptions.args)
   // Aider's last boolean flag wins, even over configured --check-update.
   const launchTokens =
     args.agent === 'aider'
       ? insertBeforeTerminator(args.agent, initialTokens, suppressionArgs)
       : initialTokens
-  // Restart retains explicit policy and surviving raw pins, while providers restore model seeds.
-  const resumeArgs = render(
-    insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.permissionArgs ?? [])
+  // The saved recipe is this launch minus choices the agent's own session restores on resume.
+  const recipeTokens = withOptionArgs(
+    removeOverriddenAgentSessionArgs(
+      args.agent,
+      sessionOwnedLaunchChoices(args.agent, resolvedOptions.appliedValues),
+      resolvedOptions.args
+    )
   )
+  const recipeArgs = render(recipeTokens)
   return {
     ok: true,
     command: withArgs(render(launchTokens), launchHead),
     resumeLaunch: {
-      agentCommand: withArgs(resumeArgs),
-      ...(keptTokens.length !== rawTokens.length ||
-      keptTokens.some((token, index) => token !== rawTokens[index]) ||
-      resolvedOptions.permissionArgs
-        ? { agentArgs: resumeArgs }
+      agentCommand: withArgs(recipeArgs),
+      ...(recipeTokens.length !== rawTokens.length ||
+      recipeTokens.some((token, index) => token !== rawTokens[index])
+        ? { agentArgs: recipeArgs }
         : {})
     },
     appliedSessionOptions: resolvedOptions.appliedValues,
@@ -203,6 +209,16 @@ export function resolveAgentLaunchCommand(args: {
       ? { startupEnv: STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent] }
       : {})
   }
+}
+
+// Claude resumes on its session's model, and its resume replays the live effort; a recorded flag would undo a mid-session switch.
+const SESSION_OWNED_LAUNCH_CHOICES: Partial<Record<TuiAgent, readonly string[]>> = {
+  claude: ['model', 'effort']
+}
+
+function sessionOwnedLaunchChoices(agent: TuiAgent, applied: Record<string, SessionOptionValue>) {
+  const owned = SESSION_OWNED_LAUNCH_CHOICES[agent] ?? []
+  return Object.fromEntries(Object.entries(applied).filter(([id]) => owned.includes(id)))
 }
 
 function insertBeforeTerminator(

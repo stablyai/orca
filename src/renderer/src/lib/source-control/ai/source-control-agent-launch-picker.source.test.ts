@@ -312,7 +312,10 @@ it('retains a genuinely admitted saved model node through real effort editing, S
   if (!compiled.ok) {
     throw new Error(compiled.error)
   }
-  expect(compiled.resumeLaunch).toEqual({ agentCommand: "codex '--search'" })
+  expect(compiled.resumeLaunch).toEqual({
+    agentCommand: "codex '--search' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high'",
+    agentArgs: "'--search' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high'"
+  })
 })
 
 it.each([
@@ -420,14 +423,10 @@ it.each([
       throw new Error(resumeTokens.error)
     }
     expect(resumeTokens.tokens).toContain('provider-recorded-session')
-    expect(resumeTokens.tokens).not.toContain('model_reasoning_effort=future_effort')
-    expect(resumeTokens.tokens).not.toContain('model_reasoning_effort=high')
-    if (agent === 'codex') {
-      expect(resumeTokens.tokens.filter((token) => token === '-m')).toHaveLength(1)
-      expect(resumeTokens.tokens).toContain(raw.split(' ')[1])
-    } else {
-      expect(resumeTokens.tokens.filter((token) => token === '--model')).toHaveLength(0)
-    }
+    // The resume keeps every launch choice, each flag once.
+    expect(resumeTokens.tokens).toEqual(expect.arrayContaining([...expected]))
+    const modelFlag = agent === 'codex' ? '-m' : '--model'
+    expect(resumeTokens.tokens.filter((token) => token === modelFlag)).toHaveLength(1)
     process.stdout.write(
       `${JSON.stringify({ metric: 'dependent-initial-provider-resume', agent, raw, options, projection, compiled, resumed })}\n`
     )
