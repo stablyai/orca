@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import type { ChildProcess, SpawnOptions } from 'node:child_process'
+import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { startGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './process-capture/abort-error'
@@ -163,13 +164,16 @@ export function gitSpawn(args: string[], callerOptions: GitSpawnOptions): ChildP
     ...(wslDistro ? { wslDistro } : {}),
     ...(spawnOptions.env ? { env: spawnOptions.env } : {})
   })
-  const spawnStartedAt = performance.now()
-  const child = spawn(resolved.binary, resolved.args, {
-    ...spawnOptions,
-    env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
-    windowsHide: true,
-    cwd: resolved.cwd
-  })
-  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
-  return child
+  return spawnNativeProcess(
+    resolved.binary,
+    resolved.args,
+    {
+      ...spawnOptions,
+      env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
+      windowsHide: true,
+      cwd: resolved.cwd
+    },
+    undefined,
+    recordSubprocessSpawn
+  )
 }
