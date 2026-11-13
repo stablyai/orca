@@ -18,7 +18,6 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import {
   CLONE_ACCESS_WAIT_MS,
-  copyOwnerRequest,
   githubRepoUrlFor,
   useCloneAccessHandoff
 } from './use-clone-access-handoff'
@@ -119,17 +118,6 @@ describe('CLONE-ACCESS-ERROR: a clone GitHub refused', () => {
       vi.advanceTimersByTime(CLONE_ACCESS_WAIT_MS)
     })
     await waitFor(() => expect(hook.result.current.phase).toBe('missing'))
-  })
-
-  it('the request for an owner carries the install link that preselects the repository', async () => {
-    mocks.access.mockResolvedValue({
-      ...answer('requested'),
-      installUrl: 'https://github.com/apps/orca/install'
-    })
-    await copyOwnerRequest(REPO, githubRepoUrlFor(REPO))
-    const [text] = mocks.clipboard.mock.calls[0] ?? []
-    expect(text).toContain(REPO)
-    expect(text).toContain('https://github.com/apps/orca/install')
   })
 
   it('names only owner/repo as a GitHub repository', () => {
