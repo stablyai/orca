@@ -99,21 +99,42 @@ describe('RelayOriginPool drain retry cap', () => {
     vi.restoreAllMocks()
   })
 
-  it('caps the retry at 60s when the director answered and only the cell connect failed', async () => {
-    const { pool, gapsBetweenAsks } = await poolWithDeadControl(async () => assignment)
-    const gaps = await gapsBetweenAsks(10)
-    // 1, 2, 4 ... 32s, then 60s instead of doubling on to 300s.
-    expect(Math.max(...gaps)).toBeLessThanOrEqual(61_000)
-    expect(gaps.slice(-3).every((gap) => gap >= 60_000)).toBe(true)
+  const THIRTY_MINUTES = 30 * 60_000
+
+  async function asksDuring(ms: number, ask: () => Promise<RelayAssignment>): Promise<number[]> {
+    const { pool, gapsBetweenAsks } = await poolWithDeadControl(ask)
+    await vi.advanceTimersByTimeAsync(ms)
+    const gaps = await gapsBetweenAsks(0)
     pool.closeNow()
+    return gaps
+  }
+
+  it('asks the director no more often than the full backoff while it keeps naming a dead cell', async () => {
+    const deadCell = await asksDuring(THIRTY_MINUTES, async () => assignment)
+    harness.origins.length = 0
+    harness.failOpens = false
+    const directorDown = await asksDuring(THIRTY_MINUTES, async () => {
+      throw new RelayHttpError('assignment', 503)
+    })
+    expect(deadCell.length).toBeLessThanOrEqual(directorDown.length)
+    // Backoff reaches the 300s cap, not 60s.
+    expect(Math.max(...deadCell)).toBeGreaterThan(250_000)
+  })
+
+  it('retries within 60s each time the director names a different cell that then fails', async () => {
+    let epoch = 1
+    const gaps = await asksDuring(THIRTY_MINUTES, async () => {
+      epoch += 1
+      return { ...assignment, cellUrl: `https://relay-c${epoch}.example`, assignmentEpoch: epoch }
+    })
+    expect(gaps.length).toBeGreaterThan(25)
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(61_000)
   })
 
   it('keeps the full backoff while the director itself is failing', async () => {
-    const { pool, gapsBetweenAsks } = await poolWithDeadControl(async () => {
+    const gaps = await asksDuring(THIRTY_MINUTES, async () => {
       throw new RelayHttpError('assignment', 503)
     })
-    const gaps = await gapsBetweenAsks(10)
     expect(Math.max(...gaps)).toBeGreaterThan(250_000)
-    pool.closeNow()
   })
 })
