@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { afterAll, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -63,5 +64,29 @@ describe('ACP prompt content', () => {
     ).toMatchObject({
       attachment: { reason: 'totalTooLarge' }
     })
+  })
+
+  it('links mentioned files inside the session folder and keeps the text as typed', async () => {
+    const root = join(dir, 'project')
+    mkdirSync(join(root, 'my dir'), { recursive: true })
+    writeFileSync(join(root, 'a.txt'), 'a')
+    writeFileSync(join(root, 'my dir', 'b.txt'), 'b')
+    mkdirSync(join(dir, 'outside'))
+    writeFileSync(join(dir, 'outside', 'c.txt'), 'secret')
+    // A junction needs no privilege on Windows.
+    symlinkSync(join(dir, 'outside'), join(root, 'escape'), 'junction')
+    const text =
+      'Read @a.txt. and @"my dir/b.txt", not @../outside/c.txt @escape/c.txt @missing.txt me@a.txt'
+    const real = realpathSync(root)
+
+    expect(await acpPromptBlocks(message({ type: 'text', text }), true, root)).toEqual([
+      { type: 'text', text },
+      { type: 'resource_link', uri: pathToFileURL(join(real, 'a.txt')).href, name: 'a.txt' },
+      {
+        type: 'resource_link',
+        uri: pathToFileURL(join(real, 'my dir', 'b.txt')).href,
+        name: 'my dir/b.txt'
+      }
+    ])
   })
 })
