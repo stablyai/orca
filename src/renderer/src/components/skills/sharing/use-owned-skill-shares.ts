@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { SkillCloudOwnedShare } from '../../../../../shared/skill-cloud-contract'
 import { translate } from '@/i18n/i18n'
+import { noteSkillSharesChanged, onSkillSharesChanged } from './skill-shares-changed'
 
 function inventoryError(status: string): string {
   return status === 'reconnect-required'
@@ -58,7 +59,10 @@ export function useOwnedSkillShares(): OwnedSkillShares {
 
   useEffect(() => {
     void load()
+    // EP-7: a link published (or revoked) anywhere on this computer shows here at once.
+    const unsubscribe = onSkillSharesChanged(() => void load())
     return () => {
+      unsubscribe()
       generation.current += 1
     }
   }, [load])
@@ -73,6 +77,8 @@ export function useOwnedSkillShares(): OwnedSkillShares {
         return
       }
       setShares((current) => current.filter((candidate) => candidate.id !== share.id))
+      // Other open lists (and the page's link count) re-read; this one already dropped it.
+      noteSkillSharesChanged()
       toast.success(translate('auto.components.settings.shareSkills.linkRevoked', 'Link revoked'))
     } catch {
       setError(
