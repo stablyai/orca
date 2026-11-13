@@ -251,6 +251,8 @@ export function buildDefaultSettings(args: {
     geminiCliOAuthEnabled: false,
     claudeOAuthUsageEnabled: true,
     agentCmdOverrides: {},
+    // Why: empty keeps launches direct; users opt into devenv/nix wrappers via $CMD.
+    shellCommandWrapper: '',
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
     agentLaunchChoices: {},
