@@ -122,4 +122,36 @@ describe('Orca Cloud workspace delete', () => {
     expect(calledMethods()).not.toContain('worktree.rm')
     expect(mockApi.worktrees.forgetLocal).toHaveBeenCalled()
   })
+
+  it('EP-8: a running sandbox this computer cannot reach asks for Force delete, never waits on it', async () => {
+    const { store, wt } = seedCloudWorkspace()
+    Object.assign(mockApi.ephemeralVm, {
+      preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, unreachable: 'rejected' })
+    })
+
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
+
+    expect(result.ok).toBe(false)
+    // Nothing went to the server whose pairing was refused (it would never answer).
+    expect(calledMethods()).toEqual([])
+    expect(mockApi.worktrees.forgetLocal).not.toHaveBeenCalled()
+    expect(store.getState().deleteStateByWorktreeId[wt.id]?.canForceDelete).toBe(true)
+  })
+
+  it('EP-8: Force delete of an unreachable sandbox destroys it through Orca Cloud', async () => {
+    const { store, wt } = seedCloudWorkspace()
+    Object.assign(mockApi.ephemeralVm, {
+      preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, unreachable: 'no_answer' })
+    })
+    mockApi.ephemeralVm.listRuntimes.mockImplementation(async () => [
+      { id: 'runtime-cloud', workspaceId: wt.id, cleanupStatus: 'not_started' }
+    ])
+
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, true)
+
+    expect(result).toEqual({ ok: true })
+    expect(calledMethods()).toEqual([])
+    expect(mockApi.worktrees.forgetLocal).toHaveBeenCalled()
+    expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-cloud' })
+  })
 })

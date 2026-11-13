@@ -28,6 +28,7 @@ import {
   preflightCloudWorkspaceDelete,
   type CloudDeletePreflight
 } from '../hosted-sandbox/cloud-delete-preflight'
+import { probeCloudServer } from '../hosted-sandbox/cloud-server-probe'
 import { getHostedSandboxControlPlaneClient } from '../hosted-sandbox/hosted-sandbox-install'
 import {
   parsePendingVmCheckouts,
@@ -157,7 +158,8 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           app.getPath('userData'),
           String(args?.runtimeEnvironmentId ?? '')
         ),
-        getHostedSandboxControlPlaneClient()
+        getHostedSandboxControlPlaneClient(),
+        () => probeCloudServer(app.getPath('userData'), String(args?.runtimeEnvironmentId ?? ''))
       )
   )
 
