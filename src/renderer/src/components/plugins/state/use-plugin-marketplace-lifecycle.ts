@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { useTranslate } from '@/i18n/use-translate'
 import { pluginNeedsReview } from '../presentation/plugin-status-presentation'
 

@@ -7,7 +7,7 @@ import type { PendingSessionSelection } from '../../session/tabs/pending-session
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal-webview-messages'
 import type { Keyboard } from 'react-native'
-import type { MobileTextInputHandle } from '../../platform/text-input-handle'
+import type { MobileTextInputHandle } from '../../platform/text-input/text-input-handle'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'

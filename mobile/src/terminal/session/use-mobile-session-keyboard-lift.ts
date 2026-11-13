@@ -1,4 +1,4 @@
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { hostOs } from '../../platform/host-os'
 import { computeActiveTerminalKeyboardLift } from '../terminal-keyboard-avoidance-lift'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'

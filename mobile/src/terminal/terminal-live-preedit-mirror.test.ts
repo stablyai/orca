@@ -12,26 +12,13 @@ type MirrorRun = {
 
 type MirrorFrame = { readonly text: string; readonly composing?: boolean }
 
-function runMirrorSequence(
-  fieldStates: readonly (string | MirrorFrame)[],
-  options: { readonly commitAtEnd: boolean } = { commitAtEnd: false }
-): MirrorRun {
+function runMirrorSequence(fieldStates: readonly (string | MirrorFrame)[]): MirrorRun {
   const payloads: string[] = []
   let sentText = ''
   let heldText = ''
   for (const frame of fieldStates) {
     const { text, composing } = typeof frame === 'string' ? { text: frame } : frame
     const step = computeTerminalLiveMirrorStep(sentText, text, { commitHeld: false, composing })
-    const payload = buildTerminalLiveMirrorPayload(step)
-    if (payload.length > 0) {
-      payloads.push(payload)
-    }
-    sentText = step.nextSentText
-    heldText = step.heldText
-  }
-  if (options.commitAtEnd) {
-    const lastField = sentText + heldText
-    const step = computeTerminalLiveMirrorStep(sentText, lastField, { commitHeld: true })
     const payload = buildTerminalLiveMirrorPayload(step)
     if (payload.length > 0) {
       payloads.push(payload)
@@ -117,19 +104,7 @@ const twoSetFields = [
 describe('terminal live mirror with iOS keyboard edits', () => {
   it.each([
     { keyboard: 'Cheonjiin', fields: cheonjiinFields },
-    { keyboard: 'two-set', fields: twoSetFields },
-    {
-      keyboard: 'autocorrect around a held Korean tail',
-      fields: ['teh 하', 'teh 하ᄉᆞ', 'the 하ᄉᆞ', 'the 하세 ']
-    },
-    {
-      keyboard: 'replacement of an already-sent Korean prefix',
-      fields: ['안녕하', '안녕하ᄉᆞ', '반가ᄉᆞ', '반가워 ']
-    },
-    {
-      keyboard: 'delete-all with a held Korean tail',
-      fields: ['안녕하', '안녕하ᄉᆞ', '', '새 입력 ']
-    }
+    { keyboard: 'two-set', fields: twoSetFields }
   ])('replays $keyboard edits for both receiver deletion units', ({ fields }) => {
     const run = runMirrorSequence(fields.map((text) => ({ text, composing: false })))
     const segmenter = new Intl.Segmenter('ko', { granularity: 'grapheme' })

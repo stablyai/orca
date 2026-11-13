@@ -10,7 +10,7 @@ import {
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useReservedRegions } from './reserved-regions'
-import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
+import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import {
   getSideRailStrip,
   hasTerminalDirectionPadSpace,

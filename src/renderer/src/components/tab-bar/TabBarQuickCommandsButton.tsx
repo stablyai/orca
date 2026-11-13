@@ -122,15 +122,14 @@ export function TabBarQuickCommandsButton({
   const handleDeleteCommand = async (entry: HostedTerminalQuickCommand): Promise<void> => {
     const { command } = entry
     const confirmed = await confirm({
-      title: t(
-        'auto.components.tab.bar.TabBarQuickCommandsButton.e8e1a52edb',
-        'Delete "{{value0}}"?',
-        { value0: command.label }
-      ),
-      description: t(
-        'auto.components.tab.bar.TabBarQuickCommandsButton.3220e2da27',
-        'This quick command will be removed from your saved list.'
-      ),
+      title: t('common.delete', 'Delete'),
+      description: [
+        command.label,
+        t(
+          'auto.components.tab.bar.TabBarQuickCommandsButton.3220e2da27',
+          'This quick command will be removed from your saved list.'
+        )
+      ].join('\n'),
       confirmLabel: t('auto.components.tab.bar.TabBarQuickCommandsButton.be8f0ff166', 'Delete'),
       confirmVariant: 'destructive'
     })

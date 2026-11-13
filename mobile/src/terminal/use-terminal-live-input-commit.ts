@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
-import { reportedLiveInputComposing } from '../platform/live-input-composing-range'
+import { reportedLiveInputComposing } from '../platform/text-input/live-input-composing-range'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'

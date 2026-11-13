@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../mobile-file-preview-operations'
+import '../preview/mobile-file-preview-operations'
 import { sessionLaunchUnreadReplySchema } from '../../transport/rpc/rpc-uninterpreted-reply-schemas'
 import '../../agent-history/mobile-ai-vault-resume-reply-schema'
 import '../../browser/tab-navigation/mobile-session-browser-reply-schema'

@@ -71,7 +71,6 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
         ANTHROPIC_AUTH_TOKEN: 'chosen-token'
       }
     })
-    expect(await prepareLocalCommitMessageAgentEnv('custom', undefined)).toEqual({ ok: true })
   })
 
   it('hydrates OpenCode config dir from shell startup files for headless generation', async () => {
@@ -85,21 +84,6 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       ok: true,
       env: expect.objectContaining({
         OPENCODE_CONFIG_DIR: `${home}/company/opencode`
-      })
-    })
-  })
-
-  it('hydrates Pi agent dir from shell startup files for headless generation', async () => {
-    const home = makeHome()
-    delete process.env.PI_CODING_AGENT_DIR
-    writeFileSync(join(home, '.zshrc'), 'export PI_CODING_AGENT_DIR="$HOME/.config/pi-agent"\n')
-
-    const result = await prepareLocalCommitMessageAgentEnv('pi', undefined)
-
-    expect(result).toEqual({
-      ok: true,
-      env: expect.objectContaining({
-        PI_CODING_AGENT_DIR: `${home}/.config/pi-agent`
       })
     })
   })

@@ -3,7 +3,7 @@ import {
   MAX_DICTATION_AUDIO_CHUNK_BYTES,
   PCM_BYTES_PER_SAMPLE
 } from '../../../src/shared/rpc-contract/speech-params'
-import type { DictationCaptureChunk } from '../platform/dictation-capture-contract'
+import type { DictationCaptureChunk } from '../platform/audio-capture/dictation-capture-contract'
 
 // Five minutes of 16 kHz PCM (9.6 MB): the longest recording kept for a replay to the computer.
 export const MAX_HELD_AUDIO_BYTES = DICTATION_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * 300

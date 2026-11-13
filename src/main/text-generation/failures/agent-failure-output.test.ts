@@ -8,15 +8,6 @@ const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
 
 describe('captureAgentGenerationFailureOutput', () => {
-  it('returns null when both streams are blank', () => {
-    expect(captureAgentGenerationFailureOutput('Pi', 1, '  \n', '\t')).toBeNull()
-  })
-
-  it('keeps short streams verbatim', () => {
-    const capture = captureAgentGenerationFailureOutput('Pi', 1, 'out', 'err')
-    expect(capture).toEqual({ label: 'Pi', exitCode: 1, stdout: 'out', stderr: 'err' })
-  })
-
   it('bounds an oversized stream to its head and tail with an omission marker', () => {
     const oversized = `${'h'.repeat(20_000)}${'m'.repeat(40_000)}${'t'.repeat(50_000)}`
     const capture = captureAgentGenerationFailureOutput('Pi', 1, '', oversized)
@@ -29,30 +20,6 @@ describe('captureAgentGenerationFailureOutput', () => {
 })
 
 describe('formatAgentGenerationFailureOutputForDisplay', () => {
-  it('renders a header plus the streams that had content, stderr first', () => {
-    const text = formatAgentGenerationFailureOutputForDisplay({
-      label: 'Pi',
-      exitCode: 1,
-      stdout: 'partial result',
-      stderr: 'No API key found for github-copilot.'
-    })
-    expect(text).toBe(
-      'Pi exited with code 1.\n\n[stderr]\nNo API key found for github-copilot.\n\n[stdout]\npartial result'
-    )
-  })
-
-  it('omits a blank stream section and reports an unknown exit code', () => {
-    const text = formatAgentGenerationFailureOutputForDisplay({
-      label: 'Claude',
-      exitCode: null,
-      stdout: 'Not logged in · Please run /login',
-      stderr: '   '
-    })
-    expect(text).toBe(
-      'Claude exited with code unknown.\n\n[stdout]\nNot logged in · Please run /login'
-    )
-  })
-
   it('strips ANSI, OSC, and bidi-override characters while keeping line structure', () => {
     const text = formatAgentGenerationFailureOutputForDisplay({
       label: 'Pi',

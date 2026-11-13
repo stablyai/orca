@@ -4,7 +4,7 @@ import { ClipboardPaste, FileUp, ImagePlus, Monitor, Plus, Smartphone } from 'lu
 import type { LucideIcon } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { SectionHeader } from '../../components/list/ListGroup'
-import { triggerMediumImpact } from '../../platform/haptics'
+import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import type { TerminalAccessoryKey } from '../terminal-accessory-keys'
 import { TERMINAL_SHORTCUT_SPECIAL_KEYS } from '../terminal-accessory-keys'
 import type { CustomKey } from '../terminal-custom-keys'

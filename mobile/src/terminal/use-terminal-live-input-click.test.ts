@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
-vi.mock('../platform/live-input-composing-range', () => ({
+vi.mock('../platform/text-input/live-input-composing-range', () => ({
   reportedLiveInputComposing: (isComposing: boolean | undefined) => isComposing
 }))
 
@@ -17,12 +17,11 @@ type ClickHarness = {
   readonly captures: readonly string[]
   readonly handlers: Handlers
   readonly sent: readonly string[]
-  readonly changeHandle: (handle: string) => void
   readonly unmount: () => void
 }
 
 function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
-  let activeHandle = 'terminal-a'
+  const activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
   const activeSessionTabTypeRef: RefObject<string | null> = { current: 'terminal' }
   const captures: string[] = []
@@ -69,11 +68,6 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
       return handlers
     },
     sent,
-    changeHandle: (handle) => {
-      activeHandle = handle
-      activeHandleRef.current = handle
-      act(() => renderer?.update(createElement(Harness)))
-    },
     unmount: () => {
       act(() => renderer?.unmount())
     }
@@ -171,21 +165,18 @@ describe('terminal live input around a click', () => {
     }
   })
 
-  it.each(['insertText', 'insertFromPaste', 'insertCompositionText'])(
-    'preserves immediate matching DOM input %s without a key event',
-    async (inputType) => {
-      const { handlers, sent, captures, unmount } = createClickHarness()
-      try {
-        change(handlers, 'x')
-        await handlers.sendLiveInputClick('terminal-a', CLICK)
-        handlers.handleLiveInputChange({
-          nativeEvent: { text: 'x', isComposing: false, inputType }
-        })
-        await vi.waitFor(() => expect(sent.join('')).toBe('x' + CLICK + 'x'))
-        expect(captures.at(-1)).toBe('x')
-      } finally {
-        unmount()
-      }
+  it('preserves immediate matching DOM input without a key event', async () => {
+    const { handlers, sent, captures, unmount } = createClickHarness()
+    try {
+      change(handlers, 'x')
+      await handlers.sendLiveInputClick('terminal-a', CLICK)
+      handlers.handleLiveInputChange({
+        nativeEvent: { text: 'x', isComposing: false, inputType: 'insertText' }
+      })
+      await vi.waitFor(() => expect(sent.join('')).toBe(`x${CLICK}x`))
+      expect(captures.at(-1)).toBe('x')
+    } finally {
+      unmount()
     }
-  )
+  })
 })

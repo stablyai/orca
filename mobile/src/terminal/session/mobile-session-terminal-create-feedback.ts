@@ -1,4 +1,4 @@
-import { triggerError } from '../../platform/haptics'
+import { triggerError } from '../../platform/haptics/haptics'
 import { terminalCreateCopy } from './mobile-session-terminal-create-copy'
 import type { MobileSessionAttachmentsModel } from '../../files/attachments/use-mobile-session-attachments'
 import type { MobileSessionTerminalCreateOptions } from './mobile-session-terminal-create-request'

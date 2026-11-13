@@ -1,4 +1,4 @@
-import { useShellStorage } from '../platform/shell-storage'
+import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'

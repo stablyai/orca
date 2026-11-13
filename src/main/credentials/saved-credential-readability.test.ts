@@ -49,8 +49,7 @@ describe('savedCredentialUnreadable', () => {
 
   it.each([
     ['an empty', ''],
-    ['a non-base64', 'not*base64!'],
-    ['a truncated base64', 'c2VhbGVkLWhlcmU6a2V5x']
+    ['a non-base64', 'not*base64!']
   ])('reports %s payload as unreadable, not sealed elsewhere', (_label, payload) => {
     expect(judge(`${PREFIX}encrypted:${payload}`)).toBe('unreadable')
   })

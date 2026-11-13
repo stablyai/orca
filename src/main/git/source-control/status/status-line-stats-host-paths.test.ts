@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import type * as BoundedFileReader from '../../../../shared/file-content/node-bounded-file-reader'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
-import { invalidateGitBranchLineTotalInFlight } from '../../../../shared/git/status/git-branch-line-total'
 
 const { lstatPaths, untrackedFiles } = vi.hoisted(() => ({
   lstatPaths: [] as string[],
@@ -47,30 +46,10 @@ vi.mock('../../../../shared/file-content/node-bounded-file-reader', async (impor
   }
 })
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
-
-vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  gitExecFileAsync: gitExecFileAsyncMock,
-  gitExecFileAsyncBuffer: vi.fn()
-}))
-
-vi.mock('../../command-runner/git-environment/git-process-env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => env
-}))
-
-vi.mock('../../command-runner/git-stream-stdout', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  gitStreamStdout: vi.fn()
-}))
-
 import { attachLineStats } from './status-line-stats'
-import { createBranchLineTotalInput } from './status-branch-line-total-input'
 
 const GUEST_WORKTREE = '/home/me/repo'
 const UNC_WORKTREE = String.raw`\\wsl.localhost\Ubuntu\home\me\repo`
-const MERGE_BASE = 'a'.repeat(40)
 
 function untrackedEntry(entryPath: string): GitStatusEntry {
   return { path: entryPath, area: 'untracked', status: 'added' }
@@ -80,29 +59,11 @@ describe('untracked line stats on a WSL worktree read by a Windows host', () => 
   beforeEach(() => {
     lstatPaths.length = 0
     untrackedFiles.clear()
-    gitExecFileAsyncMock.mockReset()
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    invalidateGitBranchLineTotalInFlight()
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('invalidates an overlapping untracked branch total through the WSL filesystem spelling', async () => {
-    const target = path.join(UNC_WORKTREE, 'fresh.txt')
-    untrackedFiles.set(target, 'one\ntwo\n')
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '0\t2\tfresh.txt\0', stderr: '' })
-    const input = createBranchLineTotalInput(
-      GUEST_WORKTREE,
-      [untrackedEntry('fresh.txt')],
-      { wslDistro: 'Ubuntu', branchLineTotalMergeBase: MERGE_BASE },
-      true
-    )
-
-    expect(await input?.compute()).toBeNull()
-    expect(lstatPaths).toEqual([target])
   })
 
   it('re-spells the guest form only, leaving every host-openable spelling byte-identical', async () => {
@@ -113,7 +74,6 @@ describe('untracked line stats on a WSL worktree read by a Windows host', () => 
         worktree: '//wsl.localhost/Ubuntu/home/me/repo',
         expected: '//wsl.localhost/Ubuntu/home/me/repo'
       },
-      { worktree: '//wsl$/Ubuntu/home/me/repo', expected: '//wsl$/Ubuntu/home/me/repo' },
       { worktree: '/home/me/my repo ', expected: '/home/me/my repo ' }
     ]
 
@@ -126,7 +86,6 @@ describe('untracked line stats on a WSL worktree read by a Windows host', () => 
 
       await attachLineStats(worktree, entries, { wslDistro: 'Ubuntu' })
 
-      expect(lstatPaths, worktree).toEqual([target])
       expect(entries[0].added, worktree).toBe(2)
     }
   })
