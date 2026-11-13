@@ -3,7 +3,13 @@ import { engineDictationLanguage } from './dictation-language'
 import { removeFillerWords } from './dictation-filler-words'
 import type { SpeechModelManifest, VoiceSettings } from './speech-types'
 
-export type DictationTextSettings = Pick<VoiceSettings, 'dictationLanguage' | 'removeFillerWords'>
+export type DictationTextSettings = Pick<
+  VoiceSettings,
+  'dictationLanguage' | 'removeFillerWords'
+> & {
+  /** AI cleanup's correction cue, which filler removal leaves for cleanup to act on. */
+  correctionWord?: string
+}
 
 type DictationTextModel = Pick<SpeechModelManifest, 'language' | 'dictationLanguages'>
 
@@ -34,7 +40,7 @@ export function createDictationTextPipeline(
   const dropFillers =
     settings?.removeFillerWords === false
       ? null
-      : (text: string) => removeFillerWords(text, languages)
+      : (text: string) => removeFillerWords(text, languages, settings?.correctionWord)
   const spellTerms = createDictationDictionary(terms)
   if (!dropFillers || !spellTerms) {
     return dropFillers ?? spellTerms

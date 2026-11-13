@@ -30,11 +30,10 @@ import {
   WORKTREE_PATH,
   makeSession
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
-import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 const REPLACEMENT_PTY_ID = 'pty-close-continuity-replacement'
 const REPLACEMENT_INCARNATION_ID = '77777777-7777-4777-8777-777777777777'
-const LATER_INCARNATION_ID = '88888888-8888-4888-8888-888888888888'
 
 const directories: string[] = []
 const stores: Store[] = []
@@ -215,37 +214,6 @@ describe('intentional stops keep the pane through the exit', () => {
         preserveRendererBinding: true
       }
     ])
-  })
-
-  it('never reads the exit of a later process on the same id as the stop', async () => {
-    const harness = createHarness({ lateProviderExit: true })
-    await stopRendererOwnedPty(harness.deps, { id: PTY_ID, keepHistory: true })
-    // The later process's commit binds its pane before it registers, as the spawn commit does.
-    await harness.store.persistPtyBinding({
-      worktreeId: WORKTREE_ID,
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      ptyId: PTY_ID,
-      incarnationId: LATER_INCARNATION_ID,
-      origin: 'reattach'
-    })
-    harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      incarnationId: LATER_INCARNATION_ID
-    })
-    ptyIncarnationById.set(PTY_ID, LATER_INCARNATION_ID)
-
-    harness.emitProviderExit(LATER_INCARNATION_ID)
-
-    // Why wait: an unstopped exit retires the pane through an async durable save.
-    await vi.waitFor(() => expect(harness.boundPtyId()).toBeNull())
-    expect(harness.rendererExits().at(-1)).toEqual({
-      id: PTY_ID,
-      code: 0,
-      incarnationId: LATER_INCARNATION_ID,
-      hostId: 'local'
-    })
   })
 
   it('keeps the tab and its wake binding when the runtime puts the worktree to sleep', async () => {

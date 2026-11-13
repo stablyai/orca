@@ -30,7 +30,7 @@
 7 src/main/antigravity/native-file-credentials.ts
 12 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts
-1 src/main/automations/external-manager-discovery.ts
+1 src/main/automations/external-managers/external-manager-discovery.ts
 7 src/main/bitbucket/credential-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
@@ -451,8 +451,7 @@
 5 src/main/pty/history/terminal-history.ts
 1 src/main/pty/process-retirement/posix-pty-process-table.ts
 12 src/main/pty/scrollback/overlay-mirror.ts
-1 src/main/pty/scrollback/terminal-scrollback-snapshot-nonblocking-reads.ts
-11 src/main/pty/scrollback/terminal-scrollback-snapshots.ts
+7 src/main/pty/scrollback/terminal-scrollback-snapshots.ts
 2 src/main/pty/shell-startup/codex-shell-launch-preflight.ts
 7 src/main/pty/shell-startup/git-bash.ts
 3 src/main/pty/shell-startup/legacy-terminal-posix-tombstone.ts

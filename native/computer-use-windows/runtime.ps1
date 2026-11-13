@@ -105,6 +105,9 @@ public static class OrcaDesktopWin32 {
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
+    [DllImport("user32.dll")]
     public static extern bool SetCursorPos(int x, int y);
 
     [DllImport("user32.dll")]
@@ -561,6 +564,14 @@ function Restore-OrcaWindow($Process) {
     [void][OrcaDesktopWin32]::SetForegroundWindow([IntPtr]$Process.MainWindowHandle)
 }
 
+function Test-OrcaTargetTookForeground([IntPtr]$Before, $Process) {
+    $after = [OrcaDesktopWin32]::GetForegroundWindow()
+    if ($after -eq $Before) { return $false }
+    $owner = [uint32]0
+    [void][OrcaDesktopWin32]::GetWindowThreadProcessId($after, [ref]$owner)
+    $owner -eq $Process.Id
+}
+
 function Test-OrcaWindowFocused([IntPtr]$WindowHandle) {
     [OrcaDesktopWin32]::GetForegroundWindow() -eq $WindowHandle
 }
@@ -647,15 +658,50 @@ function Get-OrcaValueText($Element) {
     }
 }
 
-function Get-OrcaActions($Element) {
+function Get-OrcaRangeValueText($Element) {
+    try {
+        $pattern = $Element.GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern)
+        ([double]$pattern.Current.Value).ToString([Globalization.CultureInfo]::InvariantCulture)
+    } catch {
+        ""
+    }
+}
+
+function Test-OrcaRangeValueWritable($Element) {
+    try {
+        -not $Element.GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).Current.IsReadOnly
+    } catch {
+        $false
+    }
+}
+
+function Get-OrcaExpandCollapseActions($Element) {
+    try {
+        $state = $Element.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Current.ExpandCollapseState
+    } catch {
+        return @()
+    }
+    switch ($state) {
+        ([Windows.Automation.ExpandCollapseState]::Collapsed) { return @("Expand") }
+        ([Windows.Automation.ExpandCollapseState]::Expanded) { return @("Collapse") }
+        ([Windows.Automation.ExpandCollapseState]::PartiallyExpanded) { return @("Expand", "Collapse") }
+    }
+    @()
+}
+
+function Get-OrcaActions($Element, $Patterns = $null) {
+    if ($null -eq $Patterns) { $Patterns = @($Element.GetSupportedPatterns()) }
     $actions = New-Object System.Collections.Generic.List[string]
-    foreach ($pattern in $Element.GetSupportedPatterns()) {
+    foreach ($pattern in $Patterns) {
         $name = [string]$pattern.ProgrammaticName
         if ($name -like "InvokePatternIdentifiers.Pattern") { $actions.Add("Invoke") }
         elseif ($name -like "TogglePatternIdentifiers.Pattern") { $actions.Add("Toggle") }
         elseif ($name -like "SelectionItemPatternIdentifiers.Pattern") { $actions.Add("Select") }
         elseif ($name -like "ScrollPatternIdentifiers.Pattern") { $actions.Add("Scroll") }
         elseif ($name -like "ValuePatternIdentifiers.Pattern") { $actions.Add("SetValue") }
+        elseif ($name -like "RangeValuePatternIdentifiers.Pattern") { if (Test-OrcaRangeValueWritable $Element) { $actions.Add("SetValue") } }
+        elseif ($name -like "ExpandCollapsePatternIdentifiers.Pattern") { foreach ($action in @(Get-OrcaExpandCollapseActions $Element)) { $actions.Add($action) } }
+        elseif ($name -like "ScrollItemPatternIdentifiers.Pattern") { $actions.Add("ScrollToVisible") }
     }
     @($actions | Select-Object -Unique)
 }
@@ -751,6 +797,11 @@ function Test-OrcaPlainTextSubtree($Element, [int]$MaxDepth = 4) {
 function New-OrcaElementRecord($Element, [int]$Index, $WindowFrame) {
     $controlType = try { [string]$Element.Current.ControlType.ProgrammaticName } catch { "" }
     $nativeWindowHandle = try { [int64]$Element.Current.NativeWindowHandle } catch { 0 }
+    $patterns = @($Element.GetSupportedPatterns())
+    $value = Get-OrcaValueText $Element
+    if ([string]::IsNullOrEmpty($value) -and $patterns -contains [Windows.Automation.RangeValuePattern]::Pattern) {
+        $value = Get-OrcaRangeValueText $Element
+    }
     [pscustomobject]@{
         index = $Index
         runtimeId = @(Get-OrcaRuntimeId $Element)
@@ -759,12 +810,12 @@ function New-OrcaElementRecord($Element, [int]$Index, $WindowFrame) {
         controlType = $controlType
         localizedControlType = Get-OrcaProperty $Element "LocalizedControlType"
         className = Get-OrcaProperty $Element "ClassName"
-        value = Get-OrcaValueText $Element
+        value = $value
         isSelected = Test-OrcaElementSelected $Element
         isDisabled = Test-OrcaElementDisabled $Element
         nativeWindowHandle = $nativeWindowHandle
         frame = Get-OrcaElementFrame $Element $WindowFrame
-        actions = @(Get-OrcaActions $Element)
+        actions = @(Get-OrcaActions $Element $patterns)
     }
 }
 
@@ -1120,6 +1171,7 @@ function Get-OrcaHandshake {
             actions = [pscustomobject]@{
                 click = $true
                 typeText = $true
+                typeTextElement = $false
                 pressKey = $true
                 hotkey = $true
                 pasteText = $true
@@ -1175,7 +1227,8 @@ function Invoke-OrcaPrimaryAction($Element) {
 
 function Invoke-OrcaNamedAction($Element, [string]$Action) {
     $wanted = ""
-    if ($null -ne $Action) { $wanted = $Action.Trim().ToLowerInvariant() }
+    # Why: accept the rendered name ("ScrollToVisible") and macOS's spaced form ("scroll to visible").
+    if ($null -ne $Action) { $wanted = ($Action -replace "\s+", "").ToLowerInvariant() }
     switch ($wanted) {
         "invoke" {
             $pattern = $Element.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
@@ -1192,10 +1245,32 @@ function Invoke-OrcaNamedAction($Element, [string]$Action) {
             $pattern.Toggle()
             return $true
         }
+        "expand" {
+            $pattern = $Element.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
+            $pattern.Expand()
+            return $true
+        }
+        "collapse" {
+            $pattern = $Element.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
+            $pattern.Collapse()
+            return $true
+        }
+        "scrolltovisible" {
+            $pattern = $Element.GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern)
+            $pattern.ScrollIntoView()
+            return $true
+        }
         default {
             return $false
         }
     }
+}
+
+function Test-OrcaRangeValueMatches([string]$Actual, [double]$Expected) {
+    # Why: allow float32 rounding (0.1 reads back 0.100000001), but cap it so a snapped neighbour never verifies at any size.
+    $actualNumber = 0.0
+    [double]::TryParse($Actual, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$actualNumber) -and
+        [Math]::Abs($actualNumber - $Expected) -le [Math]::Min(1e-6 * [Math]::Max(1.0, [Math]::Abs($Expected)), 1e-3)
 }
 
 function Set-OrcaElementValue($Element, [string]$Value) {
@@ -1203,10 +1278,95 @@ function Set-OrcaElementValue($Element, [string]$Value) {
         $pattern = $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
         if (-not $pattern.Current.IsReadOnly) {
             $pattern.SetValue($Value)
-            return $true
+            return [pscustomobject]@{ verification = $null }
         }
     } catch {}
-    $false
+    if (-not (Test-OrcaRangeValueWritable $Element)) { return $null }
+    $range = $Element.GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern)
+    $culture = [Globalization.CultureInfo]::InvariantCulture
+    $number = 0.0
+    if (-not [double]::TryParse($Value, [Globalization.NumberStyles]::Float, $culture, [ref]$number) -or [double]::IsNaN($number)) {
+        throw "value must be a number for this range control"
+    }
+    $minimum = [double]$range.Current.Minimum
+    $maximum = [double]$range.Current.Maximum
+    if ($number -lt $minimum -or $number -gt $maximum) {
+        throw "value $Value is outside this range control's $($minimum.ToString($culture))..$($maximum.ToString($culture))"
+    }
+    $range.SetValue($number)
+    # Why: Chromium applies the write asynchronously, so poll briefly like macOS's settled readback.
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        $actual = Get-OrcaRangeValueText $Element
+        $matched = Test-OrcaRangeValueMatches $actual $number
+        if ($matched -or $stopwatch.ElapsedMilliseconds -ge 500) { break }
+        Start-Sleep -Milliseconds 25
+    }
+    $verification = if ($matched) {
+        [pscustomobject]@{ state = "verified"; property = "value"; expected = $Value; actualPreview = $actual }
+    } elseif ([string]::IsNullOrEmpty($actual)) {
+        # Why: a failed read is not evidence the write failed; only a read-back number can contradict it.
+        [pscustomobject]@{ state = "unverified"; reason = "readback_unsupported"; expected = $Value }
+    } else {
+        [pscustomobject]@{ state = "unverified"; reason = "value_mismatch"; expected = $Value; actualPreview = $actual }
+    }
+    [pscustomobject]@{ verification = $verification }
+}
+
+function Get-OrcaScrollPattern($Element, $RootElement, [bool]$Vertical) {
+    $rootId = Get-OrcaRuntimeId $RootElement
+    $current = $Element
+    # Why: an item's ScrollPattern lives on its list or viewport, the same container a wheel at its center would scroll.
+    while ($null -ne $current) {
+        try {
+            $pattern = $current.GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern)
+            $scrollable = if ($Vertical) { $pattern.Current.VerticallyScrollable } else { $pattern.Current.HorizontallyScrollable }
+            if ($scrollable) { return $pattern }
+        } catch {}
+        if (Test-OrcaSameRuntimeId (Get-OrcaRuntimeId $current) $rootId) { break }
+        $current = try { [Windows.Automation.TreeWalker]::RawViewWalker.GetParent($current) } catch { $null }
+    }
+    $null
+}
+
+function Get-OrcaScrollPercent($Pattern, [bool]$Vertical) {
+    try {
+        if ($Vertical) { return [double]$Pattern.Current.VerticalScrollPercent }
+        [double]$Pattern.Current.HorizontalScrollPercent
+    } catch {
+        $null
+    }
+}
+
+function Invoke-OrcaScrollPattern($Element, $RootElement, [string]$Direction, [double]$Pages) {
+    # Why: ScrollPattern moves in whole pages; fractional pages keep the wheel, as on macOS.
+    if ($null -eq $Element -or $Pages -ne [Math]::Floor($Pages)) { return $false }
+    $vertical = $Direction -in @("up", "down")
+    $pattern = Get-OrcaScrollPattern $Element $RootElement $vertical
+    if ($null -eq $pattern) { return $false }
+    $amount = if ($Direction -in @("down", "right")) { [Windows.Automation.ScrollAmount]::LargeIncrement } else { [Windows.Automation.ScrollAmount]::LargeDecrement }
+    $none = [Windows.Automation.ScrollAmount]::NoAmount
+    # Why: without a readable position the loop can't tell the end of the content, so the wheel handles it.
+    $before = Get-OrcaScrollPercent $pattern $vertical
+    if ($null -eq $before) { return $false }
+    for ($page = 0; $page -lt $Pages; $page++) {
+        try {
+            if ($vertical) { $pattern.Scroll($none, $amount) } else { $pattern.Scroll($amount, $none) }
+        } catch {
+            # Why: a refusal before any page moved falls back to the wheel; after that it is the end of the content.
+            return $page -gt 0
+        }
+        # Why: WPF and Chromium move the viewport after Scroll returns; an unmoved or unreadable percent after the wait is the end.
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+        while ($true) {
+            $after = Get-OrcaScrollPercent $pattern $vertical
+            if ($after -ne $before -or $stopwatch.ElapsedMilliseconds -ge 500) { break }
+            Start-Sleep -Milliseconds 25
+        }
+        if ($null -eq $after -or $after -eq $before) { break }
+        $before = $after
+    }
+    $true
 }
 
 function Get-OrcaRequiredNumber($Value, [string]$Name) {
@@ -1479,6 +1639,8 @@ function Invoke-OrcaOperation($Operation) {
     if ($Operation.tool -in @("type_text", "press_key", "hotkey", "paste_text")) {
         Assert-OrcaKeyboardFocus $handle $Operation
     }
+    # Why: pattern paths need an element; reading the foreground only then keeps coordinate input untouched.
+    $foregroundBefore = if ($null -ne $element) { [OrcaDesktopWin32]::GetForegroundWindow() } else { [IntPtr]::Zero }
     $action = $null
 
     switch ($Operation.tool) {
@@ -1508,7 +1670,8 @@ function Invoke-OrcaOperation($Operation) {
             $action = [pscustomobject]@{ path = "accessibility"; actionName = $Operation.action; fallbackReason = $null }
         }
         "scroll" {
-            $delta = 120 * [int][Math]::Ceiling((Get-OrcaPositiveNumber $Operation.pages "pages"))
+            $pages = Get-OrcaPositiveNumber $Operation.pages "pages"
+            $delta = 120 * [int][Math]::Ceiling($pages)
             $mouseEvent = $MouseEvents.Wheel
             if ($Operation.direction -eq "down") {
                 $delta = -1 * $delta
@@ -1520,12 +1683,18 @@ function Invoke-OrcaOperation($Operation) {
             } elseif ($Operation.direction -ne "up") {
                 throw "unsupported scroll direction: $($Operation.direction)"
             }
-            $windowFrame = Restore-OrcaPointerWindow $process $root
-            $point = Get-OrcaElementScreenPoint $element
-            if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-            [void][OrcaDesktopWin32]::SetCursorPos([int]$point.x, [int]$point.y)
-            [OrcaDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)
-            $action = [pscustomobject]@{ path = "synthetic"; actionName = "scroll"; fallbackReason = $null }
+            if (Invoke-OrcaScrollPattern $element $root $Operation.direction $pages) {
+                $action = [pscustomobject]@{ path = "accessibility"; actionName = "scroll"; fallbackReason = $null }
+            } else {
+                # Why: the wheel scrolls whatever is under the pointer, so the window must be on top.
+                $windowFrame = Restore-OrcaPointerWindow $process $root
+                $point = Get-OrcaElementScreenPoint $element
+                if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
+                [void][OrcaDesktopWin32]::SetCursorPos([int]$point.x, [int]$point.y)
+                [OrcaDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)
+                $fallbackReason = if ($null -ne $element) { "actionUnsupported" } else { $null }
+                $action = [pscustomobject]@{ path = "synthetic"; actionName = "scroll"; fallbackReason = $fallbackReason }
+            }
         }
         "drag" {
             $windowFrame = Restore-OrcaPointerWindow $process $root
@@ -1565,15 +1734,25 @@ function Invoke-OrcaOperation($Operation) {
             $action = [pscustomobject]@{ path = "clipboard"; actionName = "paste"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "clipboard_paste" } }
         }
         "set_value" {
-            if ($null -eq $element -or -not (Set-OrcaElementValue $element ([string]$Operation.value))) {
+            $written = if ($null -ne $element) { Set-OrcaElementValue $element ([string]$Operation.value) } else { $null }
+            if ($null -eq $written) {
                 throw "element value is not settable"
             }
             $action = [pscustomobject]@{ path = "accessibility"; actionName = "setValue"; fallbackReason = $null }
+            if ($null -ne $written.verification) {
+                $action | Add-Member -NotePropertyName verification -NotePropertyValue $written.verification
+            }
         }
         default {
             throw "unsupported tool: $($Operation.tool)"
         }
     }
+    # Why: input paths raise the target; WPF also activates its own window for most patterns, so those are measured.
+    $delivery = "foreground"
+    if ($action.path -eq "accessibility" -and -not [bool]$Operation.restoreWindow -and -not (Test-OrcaTargetTookForeground $foregroundBefore $process)) {
+        $delivery = "background"
+    }
+    $action | Add-Member -NotePropertyName delivery -NotePropertyValue $delivery
 
     try {
         try {
