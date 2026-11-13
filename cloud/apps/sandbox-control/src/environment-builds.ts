@@ -94,6 +94,11 @@ export type BuildConfig = {
   machineSize: MachineSize
   /** `git clone --filter`: automatic environments clone blobless (auto-environments.ts). */
   cloneFilter?: 'blob:none'
+  /**
+   * Automatic environments only, with no install script: install the first repo's JavaScript
+   * dependencies from its lockfile, never failing the build (environment-build.sh auto_install).
+   */
+  autoInstall?: boolean
 }
 
 export type BuildResult = {
@@ -368,7 +373,9 @@ async function bootBuild(deps: BuildDeps, row: BuildRow, config: BuildConfig): P
     ORCA_INSTALL_SCRIPT_B64: base64(config.installScript),
     ORCA_LOCKFILES: LOCKFILES.join(' '),
     ORCA_DEPS_HOOK_B64: base64(ENVIRONMENT_DEPS_HOOK),
-    ...(config.cloneFilter ? { ORCA_CLONE_FILTER: config.cloneFilter } : {})
+    ...(config.cloneFilter ? { ORCA_CLONE_FILTER: config.cloneFilter } : {}),
+    // An admin's own install script always wins: auto_install runs only without one.
+    ...(config.autoInstall && !config.installScript.trim() ? { ORCA_AUTO_INSTALL: '1' } : {})
   }
   // Counts only.
   log('environment_build_secrets', {
