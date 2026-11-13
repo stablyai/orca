@@ -48,8 +48,10 @@ import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
   ProviderAccountAction,
-  RemoveAccountTarget
+  RemoveAccountTarget,
+  RenameAccountTarget
 } from './accounts-pane-types'
+import { AccountRenameDialog } from './account-rename-dialog'
 import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './scope/accounts-pane-runtime'
 import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-runtime-label'
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
@@ -149,6 +151,7 @@ export function AccountsPane({
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
+  const [renameTarget, setRenameTarget] = useState<RenameAccountTarget | null>(null)
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
@@ -301,6 +304,7 @@ export function AccountsPane({
     visibleClaudeAccounts,
     systemClaudeActive,
     setRemoveClaudeTarget,
+    setRenameTarget,
     runClaudeAccountAction,
     codexAccounts,
     codexAction,
@@ -380,6 +384,7 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget, t)}
+      <AccountRenameDialog model={model} target={renameTarget} />
       <SettingsSectionStack sections={visibleSections} />
     </div>
   )

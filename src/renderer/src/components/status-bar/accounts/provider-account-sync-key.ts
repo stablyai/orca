@@ -28,7 +28,7 @@ export function getClaudeAccountRosterSyncKey(settings: GlobalSettings | null | 
     claudeKeyBySettings,
     settings,
     (resolved) =>
-      `${resolved.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeClaudeManagedAccountIdsByRuntime ?? null)}:${resolved.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+      `${resolved.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeClaudeManagedAccountIdsByRuntime ?? null)}:${resolved.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}:${JSON.stringify(resolved.managedAccountDisplayNames?.claude ?? null)}`
   )
 }
 
@@ -43,7 +43,7 @@ export function getCodexAccountSyncKey(settings: GlobalSettings | null | undefin
     codexKeyBySettings,
     settings,
     (resolved) =>
-      `${resolved.activeRuntimeEnvironmentId?.trim() || 'local'}:${resolved.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeCodexManagedAccountIdsByRuntime ?? null)}:${resolved.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+      `${resolved.activeRuntimeEnvironmentId?.trim() || 'local'}:${resolved.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeCodexManagedAccountIdsByRuntime ?? null)}:${resolved.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}:${JSON.stringify(resolved.managedAccountDisplayNames?.codex ?? null)}`
   )
 }
 
@@ -63,7 +63,8 @@ export function getClaudeAccountSettings(
   const next: ClaudeAccountSettings = {
     claudeManagedAccounts: settings.claudeManagedAccounts,
     activeClaudeManagedAccountId: settings.activeClaudeManagedAccountId,
-    activeClaudeManagedAccountIdsByRuntime: settings.activeClaudeManagedAccountIdsByRuntime
+    activeClaudeManagedAccountIdsByRuntime: settings.activeClaudeManagedAccountIdsByRuntime,
+    managedAccountDisplayNames: settings.managedAccountDisplayNames
   }
   const stable =
     previousClaudeProjection !== null && sameProviderAccountData(previousClaudeProjection, next)

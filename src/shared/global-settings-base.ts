@@ -27,6 +27,7 @@ import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/age
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
 import type { PRAutoRefreshSettings } from './review-refresh-policy'
+import type { ManagedAccountNameSettings } from './agent-accounts/managed-account-display-names'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
@@ -57,4 +58,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
   WorkspaceCleanupPolicySettings &
-  PRAutoRefreshSettings
+  PRAutoRefreshSettings &
+  ManagedAccountNameSettings
