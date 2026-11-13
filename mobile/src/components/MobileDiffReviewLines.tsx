@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlatList, Platform, Pressable, Text, View, type ViewStyle } from 'react-native'
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  Text,
+  View,
+  type HostInstance,
+  type ViewStyle
+} from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { UnfoldVertical } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
@@ -177,7 +185,7 @@ export function MobileDiffReviewLines({
   // The release that ends a pick also reaches the starting row as a tap; that tap must not replace the range.
   const pickConsumedTapRef = useRef(false)
   // Browsers decide on the first touchmove whether to scroll; once a pick is live, claim it so the drag isn't cancelled.
-  const frameRef = useRef<View>(null)
+  const frameRef = useRef<HostInstance>(null)
   useEffect(() => {
     const node: unknown = frameRef.current
     if (Platform.OS !== 'web' || !(node instanceof EventTarget)) {
@@ -353,7 +361,7 @@ export function MobileDiffReviewLines({
               <Text style={[styles.truncatedText, viewportRow]}>
                 {t('components.diffReviewBody.diffTruncated', 'Diff truncated for mobile preview.')}
               </Text>
-            ) : null
+            ) : undefined
           }
         />
       </View>

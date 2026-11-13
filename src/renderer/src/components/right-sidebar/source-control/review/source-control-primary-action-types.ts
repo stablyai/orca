@@ -1,6 +1,6 @@
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitUpstreamStatus } from '../../../../../../shared/git/status/git-status-types'
-import type { PRState } from '../../../../../../shared/github/pull-request-types'
+import type { PRState } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   SourceControlPrimaryActionKind,
   SourceControlRemoteOpKind

@@ -6,7 +6,7 @@ import type {
   SessionSearchStateCounts
 } from './session-search-store-types'
 import type SyncDatabase from '../../sqlite/sync-database'
-import { asRecord } from '../../ai-vault/session-scanner-record-value'
+import { asRecord } from '../../ai-vault/parsing/session-record-fields'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../../ai-vault/transcripts/session-transcript-consumers'
 import {

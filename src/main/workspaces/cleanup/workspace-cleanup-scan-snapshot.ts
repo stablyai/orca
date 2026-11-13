@@ -21,7 +21,7 @@ import {
 } from './workspace-snapshot-prune-index'
 
 const SNAPSHOT_FILE_NAME = 'orca-workspace-cleanup-scan.json'
-const SNAPSHOT_VERSION = 2
+const SNAPSHOT_VERSION = 3
 
 export type WorkspaceCleanupScanSnapshotPruneTarget = WorkspaceSnapshotPruneTarget
 

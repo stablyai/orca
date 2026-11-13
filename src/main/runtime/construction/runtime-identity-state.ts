@@ -71,6 +71,20 @@ import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
+export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
+
+export type MobileSessionTabSubscription = {
+  listener: (
+    snapshot: RuntimeMobileSessionTabsResult,
+    changeSequence: number,
+    delivery?: 'reconciliation'
+  ) => void
+  clientNavigationId?: string
+  clientKind?: 'mobile' | 'runtime'
+  observation?: 'caller'
+  acceptsWorktree?: (worktree: string) => boolean
+}
+
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
@@ -217,11 +231,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     }
   >()
 
-  protected mobileSessionTabListeners = new Set<{
-    listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
-    clientNavigationId?: string
-    clientKind?: 'mobile' | 'runtime'
-  }>()
+  protected mobileSessionTabListeners = new Set<MobileSessionTabSubscription>()
 
   protected pendingMobileSessionTabsChangeSequenceByWorktree = new Map<string, number>()
 

@@ -86,7 +86,7 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     ),
     description: translate(
       'components.settings.nativeChat.markNewMessagesCopy',
-      'Coming back to a chat draws a New line above what arrived while you were away, and scrolls to it if you were reading the latest.'
+      "When you come back to a chat, a New line marks what you missed if it's long or someone else wrote, and scrolls there. It fades once you've seen it."
     ),
     keywords: [translate('components.settings.nativeChat.markNewMessagesSearchUnread', 'unread')]
   },

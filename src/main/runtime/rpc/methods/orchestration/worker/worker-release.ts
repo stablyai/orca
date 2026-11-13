@@ -5,12 +5,15 @@ import {
   retainFederatedWorker
 } from '../../../../orchestration/legacy-remote-home/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
-import { resolvePinnedFederatedServer } from './pinned-federated-server'
-import { archiveSummary, exposeWorkerRetainReceipt } from './worker-terminal-resource-presentation'
+import { resolvePinnedFederatedServer } from '../../../../orchestration/legacy-remote-home/pinned-federated-server'
+import {
+  archiveSummary,
+  exposeWorkerRetainReceipt
+} from './release/worker-terminal-resource-presentation'
 import {
   completeWorkerTerminalRelease,
   type WorkerReleaseReceipt
-} from './worker-release-completion'
+} from './release/worker-release-completion'
 import {
   WorkerDispatchParams,
   WorkerRetainParams

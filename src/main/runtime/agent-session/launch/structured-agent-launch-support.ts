@@ -16,13 +16,13 @@ import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
-} from '../../../native-chat/structured-agent-session-create-support'
+} from '../../../native-chat/agent-launch/structured-agent-session-create-support'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
 import {
   refreshHostAgentBaseEnvironmentAfterMiss,
@@ -33,7 +33,6 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
-import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -103,12 +102,8 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
   agent: string,
   settings: LaunchEnvironmentSettings
 ): Promise<Record<string, string>> {
-  const inherited = { ...(await resolveHostAgentBaseEnvironment(settings)) }
-  if (agent === 'claude') {
-    stripInheritedAgentSessionEnv(inherited)
-  }
   return overlayEnvironmentVariables(
-    inherited,
+    await resolveHostAgentBaseEnvironment(settings),
     isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
     process.platform
   )

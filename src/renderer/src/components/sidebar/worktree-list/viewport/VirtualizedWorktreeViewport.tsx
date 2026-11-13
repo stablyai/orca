@@ -22,7 +22,8 @@ import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
-import { useWorktreeListKeyboardNavigation, withKeyboardPreview } from '../navigation/use-keyboard'
+import { withKeyboardPreview } from '../navigation/use-keyboard'
+import { useWorktreeViewportKeyboardNavigation } from './use-keyboard-navigation'
 import { useWorktreeRowGeometry } from './use-row-geometry'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
@@ -117,15 +118,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const { markDirectScrollInput } = scrollSuppression
   const programmaticScrollMarks = useMemo(() => createProgrammaticScrollMarks(), [])
 
-  const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
-    rows,
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
-    pinnedDisplayPolicy,
-    scrollRef,
-    activeModal: props.activeModal,
-    markDirectScrollInput
-  })
+  const { handleContainerKeyDown, handleContainerKeyUp, handleContainerBlur, keyboardPreview } =
+    useWorktreeViewportKeyboardNavigation({ props, scrollRef, markDirectScrollInput })
 
   const rowProps = useMemo(
     () => withKeyboardPreview(props, keyboardPreview),
@@ -385,14 +379,18 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         aria-orientation="vertical"
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
-          activeWorktreeId: rowProps.activeWorktreeId,
-          activeWorkspaceExecutionHostId: rowProps.activeWorkspaceExecutionHostId,
+          activeWorktreeId: props.focusedWorktree?.id ?? rowProps.activeWorktreeId,
+          activeWorkspaceExecutionHostId: props.focusedWorktree
+            ? (props.focusedWorkspaceExecutionHostId ?? null)
+            : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
           renderRows,
           virtualItems
         })}
         onKeyDown={handleContainerKeyDown}
+        onKeyUp={handleContainerKeyUp}
+        onBlur={handleContainerBlur}
         onPointerDown={handleScrollPointerDown}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}

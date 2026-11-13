@@ -3,7 +3,7 @@ import type { GitLabMRUpdate } from '../../../shared/gitlab-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import { classifyGlabError } from '../requests/glab-error-classification'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
@@ -11,7 +11,7 @@ import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 import { withProjectRef } from './merge-request-project-resolution'
 import { tryMarkMRReady } from './merge-request-ready'
 import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
-import { invalidateReviewLookupsAfterPRMutation } from '../../github/pr-mutation-review-invalidation'
+import { invalidateReviewLookupsAfterPRMutation } from '../../github/pull-requests/refresh/pr-mutation-review-invalidation'
 
 export async function updateMR(
   repoPath: string,

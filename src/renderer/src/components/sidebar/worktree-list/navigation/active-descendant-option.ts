@@ -40,6 +40,11 @@ export function getActiveDescendantOptionId(args: {
       const row = args.renderRows[item.index]
       if (
         row &&
+        renderRowContainsWorktree(
+          row,
+          args.activeWorktreeId,
+          args.activeWorkspaceExecutionHostId ?? undefined
+        ) &&
         getRenderRowOptionId(
           row,
           args.activeWorktreeId,

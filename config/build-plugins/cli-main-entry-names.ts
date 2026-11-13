@@ -3,15 +3,17 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/installation/managed-agent-hook-controls',
   'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',
-  'claude-accounts/keychain',
+  'claude-accounts/runtime-auth/keychain',
   // The CLI checks a relocated runtime socket dir before it sends the auth token.
   'daemon/endpoint/publication/daemon-socket-endpoint-path',
   'skills/bundled-skill-install/bundled-skill-local-host',
   'skills/bundled-skill-install/bundled-skill-installation',
   'filesystem/macos-tree-clone',
-  'orcad/orcad-stale-lock-reclaim',
-  'orcad/orcad-host-identity-reset',
-  'plugins/plugin-authoring-checks',
+  'orcad/instance-lock/orcad-stale-lock-reclaim',
+  'orcad/profile-state/orcad-host-identity-reset',
+  'plugins/plugin-artifact-validation',
+  'plugins/plugin-content-hash',
+  'plugins/plugin-catalog-release-entry',
   // `orca vm env doctor` runs its checks in the CLI process.
   'environment-doctor/environment-doctor',
   'environment-doctor/environment-doctor-host',
@@ -25,5 +27,5 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/recovery/profile-state-recovery-command',
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/http1-compatibility-marker'
+  'startup/network-compatibility/http1-compatibility-marker'
 ] as const

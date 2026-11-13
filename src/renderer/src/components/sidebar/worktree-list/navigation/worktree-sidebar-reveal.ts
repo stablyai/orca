@@ -25,7 +25,7 @@ function getElementScrollBounds(container: HTMLElement, element: Element): Sideb
   }
 }
 
-function getRevealTargetBounds(
+export function getRevealTargetBounds(
   container: HTMLElement,
   element: Element
 ): SidebarRevealBounds | null {
@@ -74,6 +74,20 @@ export function getScrollTopToRevealBounds(
     return bounds.end - container.clientHeight
   }
   return null
+}
+
+// 'partial' means clipped, with some part still showing below the sticky header inset.
+export function getRevealBoundsVisibility(
+  container: HTMLElement,
+  bounds: SidebarRevealBounds
+): 'full' | 'partial' | 'hidden' {
+  if (getScrollTopToRevealBounds(container, bounds, WORKTREE_SIDEBAR_REVEAL_TOP_INSET) === null) {
+    return 'full'
+  }
+  const viewportTop =
+    container.scrollTop + Math.min(container.clientHeight, WORKTREE_SIDEBAR_REVEAL_TOP_INSET)
+  const viewportBottom = container.scrollTop + container.clientHeight
+  return bounds.end > viewportTop && bounds.start < viewportBottom ? 'partial' : 'hidden'
 }
 
 export function revealElementInScrollContainer(

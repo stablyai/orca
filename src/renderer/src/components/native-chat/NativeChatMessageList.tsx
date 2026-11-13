@@ -38,6 +38,7 @@ import type { StructuredAgentSessionHostWork } from './session/structured/use-st
 import type { NativeChatDeliveryNotice } from './messages/rows/NativeChatMessageRow'
 import { splitNativeChatSlotsWaitingBehindLiveTurn } from './conversation/slots/native-chat-transcript-slot-selection'
 import { useNativeChatTranscriptSlots } from './conversation/slots/use-native-chat-transcript-slots'
+import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-rows'
 import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
 import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
 import { useNativeChatSubagentSections } from './subagents/use-native-chat-subagent-sections'
@@ -89,7 +90,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   deliveryNotices,
-  trailing,
+  timedRows,
   awaitingInput = null,
   turnActivity,
   stopping = false,
@@ -118,8 +119,8 @@ export function NativeChatMessageList({
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
-  /** Rows after the conversation that are not part of it, such as workers' open approvals. */
-  trailing?: React.ReactNode
+  /** Rows that are not part of the conversation but happened during it, such as workers' approvals. */
+  timedRows?: readonly NativeChatTimedRow[]
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
   turnActivity?: NativeChatTurnActivity | null
@@ -243,11 +244,11 @@ export function NativeChatMessageList({
     [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
   const navigationRequest = useNativeChatNavigationRequest(slots, messages, subagentSections)
-  const newRows = useNativeChatNewRowsMarker(
-    slots,
-    waitingSlots,
-    isVisible && session.readCurrent === true
-  )
+  const showingLatest = isVisible && session.readCurrent === true
+  const newRows = useNativeChatNewRowsMarker(slots, waitingSlots, showingLatest, {
+    items: journalItems ?? [],
+    latestTurn
+  })
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
     slots,
@@ -390,6 +391,7 @@ export function NativeChatMessageList({
                 >
                   <NativeChatTranscriptItems
                     slots={slots}
+                    timedRows={timedRows}
                     loadedMessageIds={loadedMessageIds}
                     context={rowContext}
                     window={transcriptWindow}
@@ -402,7 +404,6 @@ export function NativeChatMessageList({
                     <NativeChatAwaitingInputRow subject={null} pending />
                   ) : null}
                   <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
-                  {trailing}
                 </div>
               </div>
             </div>
@@ -415,7 +416,7 @@ export function NativeChatMessageList({
               pendingId={navigation.pendingRailId}
             />
             <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
-            <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
+            <NativeChatNewRowsAnnouncement arrival={newRows.announcement} />
           </div>
           <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
         </div>

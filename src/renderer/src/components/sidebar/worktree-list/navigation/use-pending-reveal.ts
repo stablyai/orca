@@ -6,10 +6,12 @@ import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
 } from '@/hooks/requestVirtualizedScrollAnchorRecord'
-import { getWorktreeOptionId } from '../rows/option-dom'
-import { getRenderRowOptionId } from './active-descendant-option'
 import { getRenderRowSidebarKey, rowKeyMatchesRenderRow } from './render-row-lookup'
-import { revealMountedSidebarRowElement, revealMountedWorktreeElement } from './mounted-row-reveal'
+import {
+  getPreferredMountedWorktreeOptionId,
+  revealMountedSidebarRowElement,
+  revealMountedWorktreeElement
+} from './mounted-row-reveal'
 import {
   expandGroupsForWorktreeReveal,
   MAX_REVEAL_RETRIES,
@@ -92,7 +94,6 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         return
       }
       const currentRows = argsRef.current.renderRows
-      const rowKey = pendingRevealWorktree.rowKey
       const { targetIndex, outcome } = resolvePendingWorktreeRevealTarget(
         argsRef.current,
         pendingRevealWorktree
@@ -113,13 +114,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
             container,
             pendingRevealWorktree.worktreeId,
             pendingRevealWorktree.behavior,
-            rowKey
-              ? getWorktreeOptionId(rowKey)
-              : getRenderRowOptionId(
-                  targetRow,
-                  pendingRevealWorktree.worktreeId,
-                  pendingRevealWorktree.executionHostId
-                ),
+            getPreferredMountedWorktreeOptionId(container, targetRow, pendingRevealWorktree),
             markRevealScroll,
             scrollToReveal
           )

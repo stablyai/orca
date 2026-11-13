@@ -5,7 +5,7 @@ import type {
   OrcadManagedPastLiveTerminals
 } from '../../../shared/orcad-managed-runtime'
 
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import {
   clearManagedOrcadUpdateDeferral,

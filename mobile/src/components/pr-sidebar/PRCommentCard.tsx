@@ -6,7 +6,7 @@ import type {
   GitHubReaction,
   GitHubReactionContent,
   PRComment
-} from '../../../../src/shared/github/comment-types'
+} from '../../../../src/shared/github/comments/comment-types'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
