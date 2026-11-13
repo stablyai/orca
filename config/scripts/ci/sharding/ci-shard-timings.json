@@ -6401,7 +6401,6 @@
       "src/shared/native-chat/transcript/native-chat-unverifiable-turn-status.test.ts": 150,
       "src/shared/native-file-drop.test.ts": 59,
       "src/shared/ndjson-retained-chunk-memory.test.ts": 327,
-      "src/shared/nested-repo-telemetry-schema.test.ts": 196,
       "src/shared/nested-repo-telemetry.test.ts": 55,
       "src/shared/network-proxy.test.ts": 44,
       "src/shared/network/manual-address.test.ts": 68,
