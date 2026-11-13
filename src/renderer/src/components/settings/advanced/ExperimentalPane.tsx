@@ -58,6 +58,30 @@ export function ExperimentalPane({
   return (
     <div className="space-y-8">
       <SettingsGroup>
+        {matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().community]) && (
+          <SearchableSetting
+            title={t('community.setting', 'Community previews')}
+            description={t(
+              'community.settingDescription',
+              'Explore unmerged Orca proposals and manage Custom additions.'
+            )}
+            keywords={getExperimentalSearchEntry().community.keywords}
+            id="experimental-community"
+            className="space-y-3 py-3"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="community-enabled">
+                {t('community.setting', 'Community previews')}
+              </Label>
+              <Switch
+                id="community-enabled"
+                checked={settings.experimentalCommunity === true}
+                onCheckedChange={(enabled) => updateSettings({ experimentalCommunity: enabled })}
+              />
+            </div>
+          </SearchableSetting>
+        )}
+
         {showAgentDashboard ? (
           <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
         ) : null}

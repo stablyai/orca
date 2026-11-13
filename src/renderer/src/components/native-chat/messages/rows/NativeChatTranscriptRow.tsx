@@ -1,3 +1,4 @@
+import { NativeChatImageGalleryRow } from '../../media/images/native-chat-image-gallery-context'
 import { memo, useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
@@ -113,74 +114,76 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     // The negative margin shortens the measured row, which is what moves the next one up.
     // A row that holds its response's actions keeps the gap whole: they stay in flow above the
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
-    <div
-      className={cn(
-        'flex flex-col gap-5',
-        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3',
-        sectionClassName
-      )}
-    >
-      {newRowsMarker?.place === 'above-row' ? marker : null}
-      {/* A turn with no user bubble carries its bar above its first row. */}
-      {slot.statusAbove ? statusRow : null}
-      {!slot.drawsMessage ? null : receipt ? (
-        <NativeChatResolutionReceipt
-          body={receipt}
-          disclosureId={message.id}
-          awaiting={isActionableStructuredAgentSessionPrompt(
-            message.id,
-            context.actionablePromptIds
-          )}
-        />
-      ) : (
-        <MessageRow
-          message={message}
-          agentName={context.agentName}
-          previousTodoWrite={predecessors?.todowrite}
-          previousUpdatePlan={predecessors?.update_plan}
-          revealedDiff={
-            (workRun ?? [message]).some((member) => member.id === context.revealedDiff?.messageId)
-              ? (context.revealedDiff ?? undefined)
-              : undefined
-          }
-          expandSignal={context.expandSignal}
-          activeTurnIsWorking={slot.activeTurnIsWorking}
-          trailingRun={slot.trailingRun}
-          continuesTurn={slot.continuesTurn}
-          endsResponse={slot.endsResponse}
-          latestResponse={slot.latestResponse === true}
-          actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}
-          onScrollMessageToTop={context.onScrollMessageToTop}
-          deliveryNotice={deliveryNotice}
-          subagentRoster={slot.subagentRoster}
-          subagentDisclosure={context.subagentDisclosure}
-          inSubagentSection={slot.depth > 0}
-          runtimeContext={context.runtimeContext}
-          structuredAttachments={context.structuredAttachments}
-          rewind={
-            nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
-            (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))
-              ? rewind
-              : undefined
-          }
-          fork={
-            fork &&
-            nativeChatSlotOffersFork(slot, { chat: fork, latestTurnKey: context.latestTurnKey })
-              ? fork.rowAction
-              : undefined
-          }
-          workRun={workRun}
-        />
-      )}
-      {newRowsMarker?.place === 'above-turn-bar' ? marker : null}
-      {slot.statusAbove ? null : statusRow}
-      {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
-      {openedPullRequests ? (
-        <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
-      ) : null}
-      {context.timedRows?.get(message.id)?.map(({ key, node }) => (
-        <div key={key}>{node}</div>
-      ))}
-    </div>
+    <NativeChatImageGalleryRow.Provider value={message.id}>
+      <div
+        className={cn(
+          'flex flex-col gap-5',
+          slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3',
+          sectionClassName
+        )}
+      >
+        {newRowsMarker?.place === 'above-row' ? marker : null}
+        {/* A turn with no user bubble carries its bar above its first row. */}
+        {slot.statusAbove ? statusRow : null}
+        {!slot.drawsMessage ? null : receipt ? (
+          <NativeChatResolutionReceipt
+            body={receipt}
+            disclosureId={message.id}
+            awaiting={isActionableStructuredAgentSessionPrompt(
+              message.id,
+              context.actionablePromptIds
+            )}
+          />
+        ) : (
+          <MessageRow
+            message={message}
+            agentName={context.agentName}
+            previousTodoWrite={predecessors?.todowrite}
+            previousUpdatePlan={predecessors?.update_plan}
+            revealedDiff={
+              (workRun ?? [message]).some((member) => member.id === context.revealedDiff?.messageId)
+                ? (context.revealedDiff ?? undefined)
+                : undefined
+            }
+            expandSignal={context.expandSignal}
+            activeTurnIsWorking={slot.activeTurnIsWorking}
+            trailingRun={slot.trailingRun}
+            continuesTurn={slot.continuesTurn}
+            endsResponse={slot.endsResponse}
+            latestResponse={slot.latestResponse === true}
+            actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}
+            onScrollMessageToTop={context.onScrollMessageToTop}
+            deliveryNotice={deliveryNotice}
+            subagentRoster={slot.subagentRoster}
+            subagentDisclosure={context.subagentDisclosure}
+            inSubagentSection={slot.depth > 0}
+            runtimeContext={context.runtimeContext}
+            structuredAttachments={context.structuredAttachments}
+            rewind={
+              nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
+              (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))
+                ? rewind
+                : undefined
+            }
+            fork={
+              fork &&
+              nativeChatSlotOffersFork(slot, { chat: fork, latestTurnKey: context.latestTurnKey })
+                ? fork.rowAction
+                : undefined
+            }
+            workRun={workRun}
+          />
+        )}
+        {newRowsMarker?.place === 'above-turn-bar' ? marker : null}
+        {slot.statusAbove ? null : statusRow}
+        {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
+        {openedPullRequests ? (
+          <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
+        ) : null}
+        {context.timedRows?.get(message.id)?.map(({ key, node }) => (
+          <div key={key}>{node}</div>
+        ))}
+      </div>
+    </NativeChatImageGalleryRow.Provider>
   )
 })

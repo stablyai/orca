@@ -1,5 +1,8 @@
+import { getCustomBuildInfo } from '../../../../shared/custom-build'
+import { openCommunity } from '@/components/community/community-navigation'
+import { SidebarNewBadge } from './SidebarNewBadge'
 import React from 'react'
-import { BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-react'
+import { Users, BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -60,6 +63,8 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
+  const communityEnabled =
+    useAppStore((s) => s.settings?.experimentalCommunity === true) || getCustomBuildInfo() !== null
   const showAgentDashboardButton = useAppStore((s) => shouldShowAgentDashboardButton(s.settings))
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
@@ -119,6 +124,23 @@ const SidebarNav = React.memo(function SidebarNav() {
       </button>
       <SetupGuideSidebarEntry />
       <SidebarTaskNavButton />
+      {communityEnabled && (
+        <button
+          type="button"
+          onClick={() => openCommunity()}
+          aria-current={activeView === 'community' ? 'page' : undefined}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors',
+            activeView === 'community'
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-sidebar-foreground/60 hover:bg-sidebar-accent'
+          )}
+        >
+          <Users className="size-4 shrink-0" />
+          <span className="flex-1">{t('community.nav', 'Community')}</span>
+          <SidebarNewBadge />
+        </button>
+      )}
       {showArtifactsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>

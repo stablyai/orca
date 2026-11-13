@@ -1,0 +1,120 @@
+name: Community candidate
+run-name: Community ${{ inputs.plan_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      plan_id:
+        description: 'Plan UUID from Orca Community'
+        required: true
+        type: string
+      plan:
+        description: 'Pinned public source plan from Orca Community'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: community-${{ inputs.plan_id }}
+  cancel-in-progress: false
+jobs:
+  inspect-and-build:
+    if: github.repository_owner != 'stablyai'
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Prepare a public source copy without credentials
+        env:
+          PLAN_JSON: ${{ inputs.plan }}
+          PLAN_ID: ${{ inputs.plan_id }}
+        shell: bash
+        run: |
+          set -eu
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process'
+          import { mkdirSync, writeFileSync } from 'node:fs'
+          import { resolve } from 'node:path'
+          const plan = JSON.parse(process.env.PLAN_JSON)
+          const sha = /^[a-f0-9]{40}$/
+          if (!/^[a-f0-9-]{36}$/.test(plan.id) || plan.id !== process.env.PLAN_ID || !sha.test(plan.baseSha) || !Array.isArray(plan.additions) || plan.additions.length > 12 || (!plan.additions.length && !plan.customSource)) throw new Error('Invalid source plan')
+          for (const pr of plan.additions) if (!Number.isSafeInteger(pr.number) || pr.number < 1 || !sha.test(pr.headSha)) throw new Error('Invalid PR source')
+          mkdirSync('source'); mkdirSync('evidence'); mkdirSync('empty-hooks')
+          writeFileSync('evidence/source-plan.json', JSON.stringify(plan, null, 2))
+          const git = (...args) => execFileSync('git', ['-c', `core.hooksPath=${resolve('empty-hooks')}`, ...args], { cwd: 'source', stdio: 'pipe', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' } }).toString().trim()
+          git('init'); git('config', 'user.name', 'Orca Community Candidate'); git('config', 'user.email', 'community-candidate@users.noreply.github.com')
+          git('remote', 'add', 'origin', 'https://github.com/stablyai/orca.git')
+          git('fetch', '--no-tags', '--no-recurse-submodules', 'origin', plan.baseSha)
+          git('checkout', '--detach', plan.baseSha)
+          if (plan.customSource) {
+            if (!/^[a-z\d-]{1,39}\/orca$/i.test(plan.customSource.repository) || !sha.test(plan.customSource.commit)) throw new Error('Invalid Custom source')
+            git('fetch', '--no-tags', '--no-recurse-submodules', `https://github.com/${plan.customSource.repository}.git`, plan.customSource.commit)
+            git('checkout', '--detach', plan.customSource.commit)
+            git('merge', '--no-edit', '--no-ff', plan.baseSha)
+          }
+          if (plan.combinedSource) {
+            if (!/^[a-z\d-]{1,39}\/orca$/i.test(plan.combinedSource.repository) || !sha.test(plan.combinedSource.commit)) throw new Error('Invalid combined source')
+            git('fetch', '--no-tags', '--no-recurse-submodules', `https://github.com/${plan.combinedSource.repository}.git`, plan.combinedSource.commit)
+            git('checkout', '--detach', plan.combinedSource.commit)
+          }
+          const heads = []
+          for (const pr of plan.additions) {
+            git('fetch', '--no-tags', '--no-recurse-submodules', 'origin', `refs/pull/${pr.number}/head`)
+            if (git('rev-parse', 'FETCH_HEAD') !== pr.headSha) throw new Error(`PR #${pr.number} changed. Prepare a new plan.`)
+            git('merge', '--no-edit', '--no-ff', pr.headSha)
+            heads.push({ number: pr.number, headSha: pr.headSha })
+          }
+          writeFileSync('evidence/combined-source.json', JSON.stringify({ baseSha: plan.baseSha, heads, commit: git('rev-parse', 'HEAD'), observedAt: new Date().toISOString() }, null, 2))
+          const files = git('diff', '--name-only', '-z', `${plan.baseSha}...HEAD`).split('\0').filter(Boolean)
+          const indicators = []
+          const patterns = [['process execution', /child_process|execFile|spawn\s*\(/], ['dynamic evaluation', /\beval\s*\(|new Function\s*\(/], ['credential access', /keychain|credential|authToken|process\.env/], ['network access', /fetch\s*\(|https?\.request|WebSocket/]]
+          writeFileSync('evidence/custom-build-manifest.json', JSON.stringify({ id: `community-${plan.id}`, baseVersion: JSON.parse(execFileSync('git', ['show', `${plan.baseSha}:package.json`], { cwd: 'source' })).version, profileMode: 'shared-profile', source: { repository: plan.combinedSource?.repository ?? plan.customSource?.repository ?? 'stablyai/orca', commit: git('rev-parse', 'HEAD') }, changes: [...(plan.includedChanges ?? []), ...plan.additions.map(pr => ({ id: `pr-${pr.number}`, title: pr.title, pullRequest: { number: pr.number, headSha: pr.headSha, url: pr.sourceUrl } }))] }, null, 2))
+          const { readFileSync, lstatSync } = await import('node:fs')
+          for (const file of files.slice(0, 2000)) {
+            const full = resolve('source', file)
+            if (!full.startsWith(resolve('source') + '/')) throw new Error('Invalid source path')
+            try {
+              const stat = lstatSync(full)
+              if (stat.isSymbolicLink() || !stat.isFile() || stat.size > 2 * 1024 * 1024) continue
+              const content = readFileSync(full, 'utf8')
+              for (const [name, pattern] of patterns) if (pattern.test(content)) indicators.push({ file, indicator: name })
+            } catch (error) { if (error.code !== 'ENOENT') throw error }
+          }
+          writeFileSync('evidence/risk-indicators.json', JSON.stringify({ type: 'heuristic-source-indicators', safetyVerdict: null, scannedPaths: files.slice(0, 2000), coverageComplete: files.length <= 2000, indicators, note: 'These indicators need review. They do not prove malicious behavior or safety.' }, null, 2))
+          NODE
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: source/package.json
+          package-manager-cache: false
+      - name: Install the pinned package manager
+        working-directory: source
+        run: corepack enable
+      - name: Install dependencies in this disposable runner
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Check the combined change
+        working-directory: source
+        env:
+          ORCA_CODE_QUALITY_BASE: ${{ fromJSON(inputs.plan).baseSha }}
+        run: pnpm check:changed
+      - name: Check dependency security
+        working-directory: source
+        run: pnpm check:dependencies
+      - name: Build an unsigned candidate
+        working-directory: source
+        env:
+          ORCA_CUSTOM_BUILD_MANIFEST: ${{ github.workspace }}/evidence/custom-build-manifest.json
+        run: pnpm build:mac
+      - name: Upload candidate and source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: community-${{ inputs.plan_id }}
+          path: |
+            evidence/
+            source/dist/*.zip
+            source/dist/*mac*.yml
+            source/dist/*.blockmap
+          if-no-files-found: error
+          retention-days: 14

@@ -1,3 +1,4 @@
+import { NativeChatImageGallery } from './media/images/NativeChatImageGallery'
 import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
 import {
   nativeChatTranscriptOuterClass,
@@ -21,10 +22,9 @@ import { useNativeChatQuestionReceipts } from './conversation/projection/use-nat
 import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
-import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
+import { NativeChatTranscriptTail } from './messages/rows/NativeChatTranscriptTail'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
-import { NativeChatTurnActivityLine } from './messages/reasoning/NativeChatTurnActivityLine'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
@@ -229,19 +229,18 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
-  const { slots: allSlots, liveLine } = transcript
   useNativeChatSideChatForkPointReport(transcript.forkPoint)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
     () =>
       splitNativeChatSlotsWaitingBehindLiveTurn(
-        allSlots,
+        transcript.slots,
         journalItems,
         stopping,
         journalSubmissions,
         { latestTurn, ...hostWork }
       ),
-    [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
+    [transcript.slots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
   const navigationRequest = useNativeChatNavigationRequest(slots, messages, subagentSections)
   const newRows = useNativeChatNewRowsMarker(
@@ -276,7 +275,6 @@ export function NativeChatMessageList({
   })
   const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
     transcriptScroll
-  const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
     historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
@@ -312,7 +310,6 @@ export function NativeChatMessageList({
     readerLeavesEnd,
     scrollToBottom
   })
-  const { beginNavigation, jumpToLatest } = navigation
   const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()
   const onTranscriptScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -322,10 +319,10 @@ export function NativeChatMessageList({
     [onScroll, sustainRail]
   )
   const onReaderScroll = useCallback(() => {
-    beginNavigation()
-    recordReaderScroll()
+    navigation.beginNavigation()
+    transcriptScroll.recordReaderScroll()
     wakeRail()
-  }, [beginNavigation, recordReaderScroll, wakeRail])
+  }, [navigation, transcriptScroll, wakeRail])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
@@ -335,11 +332,11 @@ export function NativeChatMessageList({
   })
   useNativeChatMessageListHandle(ref, {
     readerAtEnd,
-    beginNavigation,
+    beginNavigation: navigation.beginNavigation,
     scrollToBottom,
     onSent: newRows.dismiss,
     revealFindMatch: readerInput.revealFindMatch,
-    slots: allSlots,
+    slots: transcript.slots,
     revealSubagent: navigation.revealSubagent
   })
 
@@ -360,67 +357,69 @@ export function NativeChatMessageList({
     onRevealDiff: navigation.revealDiff
   })
 
+  const galleryProps = { rows: turnRows, visuals: structuredAttachments, runtimeContext }
   return (
-    <NativeChatDisclosureContext.Provider value={disclosures}>
-      <NativeChatPullRequestChangeContext.Provider value={openedPullRequests.latestChangeKey}>
-        <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
-          <div className="relative min-h-0 flex-1">
-            <div
-              ref={scrollRef}
-              onScroll={onTranscriptScroll}
-              onCopy={copyChatMathSelection}
-              {...readerInput.scrollerProps}
-              // Measurement finds this named scroll root independently of utility classes.
-              data-native-chat-scroll
-              aria-label={t('components.native-chat.transcriptLabel', 'Conversation')}
-              // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
-              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
-            >
-              {showOlderHistory ? (
-                <NativeChatOlderHistoryRow
-                  olderHistory={olderHistory}
-                  loadingEarlier={loadingEarlier}
-                />
-              ) : null}
-              <div className={nativeChatTranscriptOuterClass(rail.visible)}>
-                <div
-                  ref={measureContent}
-                  data-native-chat-transcript-column
-                  // Shares the composer's maximum width; rail clearance and the 5px inner inset narrow constrained panes.
-                  className={NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS}
-                >
-                  <NativeChatTranscriptItems
-                    slots={slots}
-                    timedRows={timedRows}
-                    loadedMessageIds={loadedMessageIds}
-                    context={rowContext}
-                    window={transcriptWindow}
-                    newRowsMarker={newRows.marker}
-                    forwardGesture={readerInput.forwardedGesture}
+    <NativeChatImageGallery {...galleryProps}>
+      <NativeChatDisclosureContext.Provider value={disclosures}>
+        <NativeChatPullRequestChangeContext.Provider value={openedPullRequests.latestChangeKey}>
+          <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
+            <div className="relative min-h-0 flex-1">
+              <div
+                ref={scrollRef}
+                onScroll={onTranscriptScroll}
+                onCopy={copyChatMathSelection}
+                {...readerInput.scrollerProps}
+                // Measurement finds this named scroll root independently of utility classes.
+                data-native-chat-scroll
+                aria-label={t('components.native-chat.transcriptLabel', 'Conversation')}
+                // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
+                className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
+              >
+                {showOlderHistory ? (
+                  <NativeChatOlderHistoryRow
+                    olderHistory={olderHistory}
+                    loadingEarlier={loadingEarlier}
                   />
-                  {liveLine ? (
-                    <NativeChatTurnActivityLine line={liveLine} />
-                  ) : tailRow === 'awaiting-input' ? (
-                    <NativeChatAwaitingInputRow subject={null} pending />
-                  ) : null}
-                  <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                ) : null}
+                <div className={nativeChatTranscriptOuterClass(rail.visible)}>
+                  <div
+                    ref={measureContent}
+                    data-native-chat-transcript-column
+                    // Shares the composer's maximum width; rail clearance and the 5px inner inset narrow constrained panes.
+                    className={NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS}
+                  >
+                    <NativeChatTranscriptItems
+                      slots={slots}
+                      timedRows={timedRows}
+                      loadedMessageIds={loadedMessageIds}
+                      context={rowContext}
+                      window={transcriptWindow}
+                      newRowsMarker={newRows.marker}
+                      forwardGesture={readerInput.forwardedGesture}
+                    />
+                    <NativeChatTranscriptTail
+                      line={transcript.liveLine}
+                      awaiting={tailRow === 'awaiting-input'}
+                    />
+                    <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                  </div>
                 </div>
               </div>
+              <NativeChatMessageRail
+                rail={rail}
+                railRef={railRef}
+                scrollRef={scrollRef}
+                onSelect={navigation.selectRailItem}
+                onReaderScroll={readerInput.railWheel}
+                pendingId={navigation.pendingRailId}
+              />
+              <NativeChatJumpToLatest visible={showJump} onJump={navigation.jumpToLatest} />
+              <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
             </div>
-            <NativeChatMessageRail
-              rail={rail}
-              railRef={railRef}
-              scrollRef={scrollRef}
-              onSelect={navigation.selectRailItem}
-              onReaderScroll={readerInput.railWheel}
-              pendingId={navigation.pendingRailId}
-            />
-            <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
-            <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
+            <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
           </div>
-          <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
-        </div>
-      </NativeChatPullRequestChangeContext.Provider>
-    </NativeChatDisclosureContext.Provider>
+        </NativeChatPullRequestChangeContext.Provider>
+      </NativeChatDisclosureContext.Provider>
+    </NativeChatImageGallery>
   )
 }
