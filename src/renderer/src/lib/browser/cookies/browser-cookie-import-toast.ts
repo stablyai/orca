@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import type { BrowserCookieImportSummary } from '../../../../../shared/browser-workspace-types'
 import { isHandledWireDiscriminant } from '../../../../../shared/handled-wire-discriminant'
+import { joinSentences } from '../../../../../shared/sentence-joining'
 import { translate } from '@/i18n/i18n'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>
@@ -81,11 +82,14 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
             }
             if (message) {
               return warning.otherFailedCookies
-                ? `${message} ${translate(
-                    'auto.lib.browser.cookie.import.toast.otherUndecryptableCookies',
-                    '{{count}} more cookies could not be decrypted for another reason.',
-                    { count: warning.otherFailedCookies }
-                  )}`
+                ? joinSentences([
+                    message,
+                    translate(
+                      'auto.lib.browser.cookie.import.toast.otherUndecryptableCookies',
+                      '{{count}} more cookies could not be decrypted for another reason.',
+                      { count: warning.otherFailedCookies }
+                    )
+                  ])
                 : message
             }
           }
@@ -218,11 +222,14 @@ export function emitBrowserCookieImportToast(
     )
     const message =
       skipped > 0
-        ? `${successMessage} ${translate(
-            'auto.lib.browser.cookie.import.toast.cookiesSkipped',
-            '{{value0}} cookies skipped.',
-            { value0: skipped }
-          )}`
+        ? joinSentences([
+            successMessage,
+            translate(
+              'auto.lib.browser.cookie.import.toast.cookiesSkipped',
+              '{{value0}} cookies skipped.',
+              { value0: skipped }
+            )
+          ])
         : successMessage
     const description = cookieImportLocationDescription(execution)
     if (description) {

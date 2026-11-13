@@ -6724,7 +6724,8 @@
           "todo": "할 일",
           "inProgress": "진행 중",
           "inReview": "검토 중",
-          "done": "완료"
+          "done": "완료",
+          "numbered": "상태 {{number}}"
         }
       },
       "shared": {
@@ -14730,7 +14731,6 @@
           "HomeSlide": {
             "a4c3f7b7aa": "작업",
             "cf3f98fa3f": "연결이 끊김",
-            "19c212e25e": "맥북 프로",
             "2f1a1d10c4": "데스크탑",
             "af761a0c0d": "설정",
             "5d94e8ddcc": "Orca"
@@ -14739,34 +14739,11 @@
             "0bb39f8fe6": "보내기",
             "69334b4b10": "음성 받아쓰기",
             "29f2d13839": "명령을 입력하세요…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "붙여넣기",
             "985373052e": "휴대폰 모드로 전환",
-            "58a9ee6003": "도구 호출 형식. 다음으로 diff를 추가할까요?",
-            "aa64b519c6": "terminal 화면. Tokyonight palette, Menlo, real claude",
-            "e75112c834": "페어 스캔 슬라이드를 고화질로 교체했습니다.",
-            "3ce3e8c892": "14개 통과, 1개 건너뛰기(1.8초)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "통과",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ 페어 스캔 슬라이드를 terminal 세션으로 대체했습니다.",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "편집",
-            "fc83e0d5ef": "⎿ 2103줄 읽기",
-            "80cc356591": "읽기",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "셸",
             "606aa93192": "파일",
             "94febb0976": "소스 제어",
             "8d6516312d": "terminals 2개 · claude 활성",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "뒤로"
           },
           "WorktreeListSlide": {
@@ -14775,7 +14752,6 @@
             "22971156df": "Repo",
             "17f9e0d226": "최근",
             "0e3e809a4b": "필터",
-            "b4271864bd": "맥북 프로",
             "cefd048225": "뒤로"
           }
         },

@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
+import { joinSentences } from '../../../../../shared/sentence-joining'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { Button } from '../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
@@ -21,6 +22,7 @@ import type { SettingsSearchEntry } from '../search/settings-search'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
 import { getRecipeVmRemovalTargets } from '@/store/repos/recipe-vm-project-removal'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -65,7 +67,7 @@ function selectSetupHostLabel(state: AppState, setup: ProjectHostSetup, t: Trans
   // An unlabeled host falls back to its raw id, which users can't recognize.
   return label === rawId
     ? t('auto.components.settings.RepositoryRemoveProjectSection.unknownHost', 'Unknown host')
-    : label
+    : translateExecutionHostLabel(label, t)
 }
 
 // Group by host, not label: two machines can share a display name.
@@ -246,9 +248,7 @@ export function RepositoryRemoveProjectSection({
                 { name: repo.displayName }
               )}
             </DialogTitle>
-            <DialogDescription>
-              {description} {filesNote}
-            </DialogDescription>
+            <DialogDescription>{joinSentences([description, filesNote])}</DialogDescription>
           </DialogHeader>
           {groups.length > 0 ? (
             <div className="scrollbar-sleek max-h-64 overflow-y-auto rounded-md border border-border p-3">

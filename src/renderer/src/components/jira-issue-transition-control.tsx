@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
 import { classifyTransitionRequirements } from '../../../shared/jira/jira-transition-fields'
+import { joinSentences } from '../../../shared/sentence-joining'
 import { JiraTransitionFieldsForm } from './jira-transition-fields-form'
 import type {
   JiraIssue,
@@ -117,7 +118,10 @@ export function JiraIssueTransitionControl({
           {error ? (
             <>
               <p className="text-xs text-destructive" role="alert">
-                {t('jira.transitions.loadError', 'Could not load status changes.')} {error}
+                {joinSentences([
+                  t('jira.transitions.loadError', 'Could not load status changes.'),
+                  error
+                ])}
               </p>
               <Button variant="secondary" size="sm" onClick={onRetry} disabled={loading}>
                 {t('jira.transitions.retry', 'Retry')}

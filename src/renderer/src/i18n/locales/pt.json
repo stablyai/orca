@@ -13178,7 +13178,8 @@
           "todo": "A fazer",
           "inProgress": "Em andamento",
           "inReview": "Em revisão",
-          "done": "Concluído"
+          "done": "Concluído",
+          "numbered": "Status {{number}}"
         }
       },
       "editor": {
@@ -17105,7 +17106,6 @@
           "HomeSlide": {
             "a4c3f7b7aa": "Tarefas",
             "cf3f98fa3f": "Desconectado",
-            "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktops",
             "af761a0c0d": "Configurações",
             "5d94e8ddcc": "Orca",
@@ -17115,7 +17115,6 @@
             "609517273b": "Trabalhando",
             "005afbad3d": "agora mesmo",
             "04a94cadee": "40 worktrees · 5 ativos",
-            "b5308d5e2c": "M1 Mini",
             "aefd110ea5": "Emparelhar um computador",
             "d08ee9c466": "Novo espaço de trabalho",
             "aa44b4a6b2": "Explore suas issues e revisões",
@@ -17126,34 +17125,11 @@
             "0bb39f8fe6": "Enviar",
             "69334b4b10": "Ditado por voz",
             "29f2d13839": "Digite um comando…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Colar",
             "985373052e": "Mudar para o modo celular",
-            "58a9ee6003": "formatação de chamada de ferramenta. Quer que eu adicione o diff a seguir?",
-            "aa64b519c6": "tela de terminal. Paleta Tokyonight, Menlo, claude real",
-            "e75112c834": "Substituí o slide de pair-scan por um de alta fidelidade",
-            "3ce3e8c892": "14 aprovados, 1 ignorado (1.8s)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Substituiu o slide de pair-scan por sessão de terminal",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Editar",
-            "fc83e0d5ef": "⎿ Leu 2103 linhas",
-            "80cc356591": "Read",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Arquivos",
             "94febb0976": "Controle de código-fonte",
             "8d6516312d": "2 terminais · claude ativo",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Voltar"
           },
           "WorktreeListSlide": {
@@ -17162,7 +17138,6 @@
             "22971156df": "Repo",
             "17f9e0d226": "Recente",
             "0e3e809a4b": "Filtro",
-            "b4271864bd": "MacBook Pro",
             "cefd048225": "Voltar"
           }
         },

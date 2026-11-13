@@ -6727,7 +6727,8 @@
           "todo": "未着手",
           "inProgress": "進行中",
           "inReview": "レビュー中",
-          "done": "完了"
+          "done": "完了",
+          "numbered": "ステータス {{number}}"
         }
       },
       "shared": {
@@ -14733,7 +14734,6 @@
           "HomeSlide": {
             "a4c3f7b7aa": "タスク",
             "cf3f98fa3f": "切断済み",
-            "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "デスクトップ",
             "af761a0c0d": "設定",
             "5d94e8ddcc": "Orca"
@@ -14742,34 +14742,11 @@
             "0bb39f8fe6": "送信",
             "69334b4b10": "音声ディクテーション",
             "29f2d13839": "コマンドを入力してください…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "タブ",
-            "4930eaaae7": "ESC",
             "fa22927f13": "貼り付け",
             "985373052e": "スマートフォンモードに切り替え",
-            "58a9ee6003": "ツール呼び出しのフォーマット。次に差分を追加しますか?",
-            "aa64b519c6": "ターミナル画面。Tokyonight パレット、Menlo、real claude",
-            "e75112c834": "ペアスキャンスライドを高忠実度のものに交換しました",
-            "3ce3e8c892": "14 件が合格、1 件がスキップ (1.8 秒)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "合格",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm テスト --フィルターモバイル",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ ペアスキャンスライドをターミナルセッションに置き換えました",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "編集",
-            "fc83e0d5ef": "⎿ 2103 行を読み取ります",
-            "80cc356591": "読む",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "開発@マック",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "シェル",
             "606aa93192": "ファイル",
             "94febb0976": "ソース管理",
             "8d6516312d": "ターミナル 2 個 · claude 実行中",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "戻る"
           },
           "WorktreeListSlide": {
@@ -14778,7 +14755,6 @@
             "22971156df": "Repo",
             "17f9e0d226": "最近の",
             "0e3e809a4b": "フィルター",
-            "b4271864bd": "MacBook Pro",
             "cefd048225": "戻る"
           }
         },

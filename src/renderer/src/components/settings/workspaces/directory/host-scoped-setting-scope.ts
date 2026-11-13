@@ -3,6 +3,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { SidebarHostOption } from '../../../sidebar/worktree-list/controls/sidebar-host-options'
+import { translateExecutionHostLabel } from '../../../sidebar/execution-host-label'
 
 /** Sentinel scope for "edit the shared client default" rather than a host override. */
 export const CLIENT_DEFAULT_SCOPE = 'client-default'
@@ -22,7 +23,7 @@ export function buildHostScopeChoices(
   const choices: HostScopeChoice[] = [{ scope: CLIENT_DEFAULT_SCOPE, label: clientDefaultLabel }]
   for (const host of hosts) {
     if (host.id !== LOCAL_EXECUTION_HOST_ID) {
-      choices.push({ scope: host.id, label: host.label })
+      choices.push({ scope: host.id, label: translateExecutionHostLabel(host.label) })
     }
   }
   return choices

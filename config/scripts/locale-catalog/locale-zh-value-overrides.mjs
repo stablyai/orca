@@ -116,8 +116,8 @@ export const ZH_VALUE_OVERRIDES = {
   'Conductor Progress': 'Conductor 进度',
   'Conductor Review': 'Conductor 评审',
   'Conductor Done': 'Conductor 完成',
-  'Detecting agents...': '正在检测智能体...',
-  'Agents spawned': '已启动智能体',
+  'Detecting agents...': '正在检测代理...',
+  'Agents spawned': '已启动代理',
   'floating terminal': '浮动终端',
   'New Issue': '新建议题',
   'No issues match the selected filters. Clear a filter or try different criteria.':
@@ -142,7 +142,7 @@ export const ZH_VALUE_OVERRIDES = {
   'Use review template when available': '可用时使用评审模板',
   'Create hosted reviews as drafts unless changed in the composer.':
     '除非在编辑器中更改，否则将托管评审创建为草稿',
-  'Start an agent from failed hosted-review checks.': '从失败的托管评审检查中启动智能体',
+  'Start an agent from failed hosted-review checks.': '从失败的托管评审检查中启动代理',
   'Checks require a Git branch and hosted review context': '检查需要 Git 分支和托管评审上下文',
   'Resolve Review Conflicts With AI': '使用 AI 解决评审冲突',
   'Hosted review operation in progress…': '托管评审操作进行中…',
@@ -185,9 +185,9 @@ export const ZH_VALUE_OVERRIDES = {
   'Show local markdown review note controls in rich editor mode.':
     '在富文本编辑器模式下显示本地 Markdown 评审笔记控件',
   'Start an agent for local or hosted-review merge conflicts.':
-    '启动用于解决本地或托管评审合并冲突的智能体',
+    '启动用于解决本地或托管评审合并冲突的代理',
   'changed since you last approved. Re-review before it runs':
-    '自您上次批准以来已发生变化。运行前请重新评审',
+    '自你上次批准以来已发生变化。运行前请重新评审',
   'Run the weekly dependency audit and summarize risky changes.':
     '每周运行依赖项审计并总结有风险的更改',
   'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.':
@@ -202,11 +202,11 @@ export const ZH_VALUE_OVERRIDES = {
     '留空以使用系统代理设置和继承的代理环境变量',
   'Proxy Command': '代理命令',
   "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.":
-    '让智能体直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作',
+    '让代理直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作',
   'X finishes, send it the review task.”': 'X 完成后，把评审任务发给它。”',
   'Branch naming, base refs, and Git AI Author.': '分支命名、基础引用和 Git AI Author',
   'You have unsaved Git AI Author changes. Leaving will discard them.':
-    '您有未保存的 Git AI Author 更改。离开将丢弃它们',
+    '你有未保存的 Git AI Author 更改。离开将丢弃它们',
   'Discard unsaved Git AI Author changes?': '放弃未保存的 Git AI Author 更改？',
   'Create a Linear project for the selected team.': '为所选团队创建 Linear 项目',
   'Linear task mode': 'Linear 任务模式',
@@ -233,10 +233,10 @@ export const ZH_VALUE_OVERRIDES = {
   'Optional account switching for Claude while preserving shared chat context.':
     'Claude 的可选账户切换，同时保留共享聊天上下文',
   'Countdown timer showing time until prompt cache expires (Claude agents).':
-    '显示提示词缓存到期倒计时的计时器（Claude 智能体）',
+    '显示提示词缓存到期倒计时的计时器（Claude 代理）',
   'Claude caches your conversation to reduce costs. When idle too long the cache expires and the next message resends full context at higher cost. This shows a countdown so you know when to resume.':
-    'Claude 会缓存对话以降低成本。空闲过久后缓存会过期，下一条消息将以更高成本重新发送完整上下文。此倒计时可帮助您了解何时继续',
-  'from Orca. It is still on your disk.': '来自 Orca。它仍保留在您的磁盘上',
+    'Claude 会缓存对话以降低成本。空闲过久后缓存会过期，下一条消息将以更高成本重新发送完整上下文。此倒计时可帮助你了解何时继续',
+  'from Orca. It is still on your disk.': '来自 Orca。它仍保留在你的磁盘上',
   'Pull request reopened': '拉取请求已重新打开',
   'Reopen PR': '重新打开 PR',
   'Reopened MR !{{value0}}': '已重新打开 MR !{{value0}}',

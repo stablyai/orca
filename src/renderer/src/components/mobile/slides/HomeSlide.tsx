@@ -24,9 +24,12 @@ const STATUS_TONE: Partial<Record<AgentIndicator, string>> = {
   done: 'is-done'
 }
 
+// Desktop names come from the user's own machines, so the phone shows them untranslated.
+const ONLINE_DESKTOP = 'MacBook Pro'
+const OFFLINE_DESKTOP = 'M1 Mini'
+
 export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element {
   const t = useTranslate()
-  const macbookPro = t('auto.components.mobile.slides.HomeSlide.19c212e25e', 'MacBook Pro')
   return (
     <div className="mp-device-screen">
       <div className="mp-app-topbar">
@@ -54,7 +57,7 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
             indicator="waiting"
             name="fix-auth-redirect"
             status={t('auto.components.mobile.slides.HomeSlide.c2a0215163', 'Waiting for input')}
-            desktop={macbookPro}
+            desktop={ONLINE_DESKTOP}
             time={t('auto.components.mobile.slides.HomeSlide.0c14dac908', '2m')}
           />
           <JumpBackInRow
@@ -62,7 +65,7 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
             indicator="working"
             name="relay-reconnect-backoff"
             status={t('auto.components.mobile.slides.HomeSlide.609517273b', 'Working')}
-            desktop={macbookPro}
+            desktop={ONLINE_DESKTOP}
             time={t('auto.components.mobile.slides.HomeSlide.005afbad3d', 'now')}
           />
         </div>
@@ -77,7 +80,7 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
               <span className="mp-status-dot is-green" />
             </div>
             <div className="mp-home-text">
-              <div className="mp-home-title">{macbookPro}</div>
+              <div className="mp-home-title">{ONLINE_DESKTOP}</div>
               <div className="mp-home-subtitle">
                 {t('auto.components.mobile.slides.HomeSlide.04a94cadee', '40 worktrees · 5 active')}
               </div>
@@ -91,9 +94,7 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
               <span className="mp-status-dot is-muted" />
             </div>
             <div className="mp-home-text">
-              <div className="mp-home-title">
-                {t('auto.components.mobile.slides.HomeSlide.b5308d5e2c', 'M1 Mini')}
-              </div>
+              <div className="mp-home-title">{OFFLINE_DESKTOP}</div>
               <div className="mp-home-subtitle">
                 {t('auto.components.mobile.slides.HomeSlide.cf3f98fa3f', 'Disconnected')}
               </div>

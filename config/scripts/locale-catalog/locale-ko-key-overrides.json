@@ -1193,29 +1193,8 @@
   "auto.components.mobile.PhoneCarousel.93217b41c1": {
     "ko": "워크트리 목록"
   },
-  "auto.components.mobile.slides.TerminalSlide.2defc05141": {
-    "ko": "dev@mac"
-  },
-  "auto.components.mobile.slides.TerminalSlide.53ff909568": {
-    "ko": "Tab"
-  },
-  "auto.components.mobile.slides.TerminalSlide.58a9ee6003": {
-    "ko": "도구 호출 형식. 다음으로 diff를 추가할까요?"
-  },
-  "auto.components.mobile.slides.TerminalSlide.80cc356591": {
-    "ko": "읽기"
-  },
   "auto.components.mobile.slides.TerminalSlide.8d6516312d": {
     "ko": "terminals 2개 · claude 활성"
-  },
-  "auto.components.mobile.slides.TerminalSlide.a6e7cdc688": {
-    "ko": "pnpm test --filter mobile"
-  },
-  "auto.components.mobile.slides.TerminalSlide.e0f98be657": {
-    "ko": "orca/feat-mobile-page"
-  },
-  "auto.components.mobile.slides.TerminalSlide.e4befee569": {
-    "ko": "셸"
   },
   "auto.components.mobile.slides.WorktreeListSlide.17f9e0d226": {
     "ko": "최근"

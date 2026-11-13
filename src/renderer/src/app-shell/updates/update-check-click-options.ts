@@ -1,4 +1,5 @@
 import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
+import { joinSentences } from '../../../../shared/sentence-joining'
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '../../lib/keyboard/shortcut-platform'
 
@@ -15,10 +16,13 @@ export function getUpdateCheckHint(isMac = isMacShortcutPlatform()): string {
     { rcKey: isMac ? '⇧' : 'Shift', perfKey: isMac ? '⌘' : 'Ctrl' }
   )
   return isMac
-    ? `${releaseHints} ${translate(
-        'auto.lib.updateCheckClickOptions.localMacBuildHint',
-        '⌥+click chooses a local macOS build.'
-      )}`
+    ? joinSentences([
+        releaseHints,
+        translate(
+          'auto.lib.updateCheckClickOptions.localMacBuildHint',
+          '⌥+click chooses a local macOS build.'
+        )
+      ])
     : releaseHints
 }
 
