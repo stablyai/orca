@@ -525,9 +525,12 @@ it('keeps rejected Codex originals out of receipt rank and preserves prospective
 })
 
 it('releases each failed legacy predecessor once when the live transport falls back', () => {
-  const first = { ...send('first', 'a  b  '), evidenceModePending: true }
-  const second = { ...send('second', 'a b '), evidenceModePending: true }
-  const successor = { ...send('successor', 'a b'), evidenceModePending: true }
+  const first: NativeChatPendingSend = { ...send('first', 'a  b  '), evidenceModePending: true }
+  const second: NativeChatPendingSend = { ...send('second', 'a b '), evidenceModePending: true }
+  const successor: NativeChatPendingSend = {
+    ...send('successor', 'a b'),
+    evidenceModePending: true
+  }
   appendPendingSendCache(scope, first)
   appendPendingSendCache(scope, second)
   let pending = appendPendingSendCache(scope, successor)
@@ -541,8 +544,11 @@ it('releases each failed legacy predecessor once when the live transport falls b
 })
 
 it('keeps a late claimed occurrence spent when a failed predecessor leaves fallback', () => {
-  const first = { ...send('first', 'a  b'), evidenceModePending: true }
-  const successor = { ...send('successor', 'a b'), evidenceModePending: true }
+  const first: NativeChatPendingSend = { ...send('first', 'a  b'), evidenceModePending: true }
+  const successor: NativeChatPendingSend = {
+    ...send('successor', 'a b'),
+    evidenceModePending: true
+  }
   appendPendingSendCache(scope, first)
   let pending = appendPendingSendCache(scope, successor)
   pending = resolvePendingSendEvidence(pending, first.id, 'opencode', false)
