@@ -375,6 +375,31 @@ describe('a hand-off to a teammate', () => {
     expect(await t.row()).toMatchObject({ user_id: 'mia', status: 'suspended' })
   })
 
+  it('a wake that races in between the stop and the write refuses the hand-off and leaves the VM as the waker left it', async () => {
+    const t = await setup()
+    // The previous owner wakes it after the stop and just before the owner is written.
+    const db = t.h.env.SANDBOX_DB
+    const prepare = db.prepare.bind(db)
+    let raced = 0
+    db.prepare = ((sql: string) => {
+      if (sql.includes('ownership_transferred_at = ?') && sql.startsWith('UPDATE sandboxes SET user_id')) {
+        raced += 1
+        t.h.raw.prepare("UPDATE sandboxes SET status = 'running', session_id = 'sess_woken_again' WHERE id = ?").run(t.id)
+      }
+      return prepare(sql)
+    }) as typeof db.prepare
+    const refused = await t.transfer(t.mallory, 'mia')
+    db.prepare = prepare
+    expect(raced).toBe(1)
+    expect([refused.status, refused.body]).toEqual([409, { error: 'conflict', reason: 'sandbox_not_stopped' }])
+    // Still Mallory's, unmarked, and running as her wake left it.
+    expect(await t.row()).toMatchObject({ user_id: 'mallory', ownership_transferred_at: null, status: 'running', session_id: 'sess_woken_again' })
+    expect(t.h.raw.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'workspace.owner_changed'").get()).toEqual({ n: 0 })
+    for (const value of MIA_VALUES) {
+      expect(everythingSent(t.h)).not.toContain(value)
+    }
+  })
+
   it('writes the owner only if the workspace is stopped at that instant', async () => {
     const t = await setup()
     // As if the previous owner woke it again between the stop and the write.
