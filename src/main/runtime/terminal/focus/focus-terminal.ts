@@ -183,6 +183,22 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
     return { ...target, navigated: await notifier.revealTerminalPane(target) }
   }
 
+  async scrollSessionTab(
+    worktreeSelector: string,
+    tabId: string,
+    leafId: string | null,
+    deltaY: number
+  ): Promise<{ scrolled: boolean }> {
+    const notifier = this.notifier
+    if (!notifier?.scrollSessionTab) {
+      throw new Error('renderer_unavailable')
+    }
+    const worktreeId =
+      this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
+      (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    return { scrolled: await notifier.scrollSessionTab({ worktreeId, tabId, leafId, deltaY }) }
+  }
+
   protected getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
     const ptyIds = new Set<string>()
     for (const pty of this.ptysById.values()) {

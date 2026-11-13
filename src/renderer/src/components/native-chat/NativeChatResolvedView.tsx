@@ -201,6 +201,7 @@ export function NativeChatResolvedView({
   const composerReady = shownPromptCard === null && targetPtyId !== null && canSend
   const rootInput = useNativeChatRootInputRouting({
     tabId: terminalTabId,
+    scroll: { messageListRef, paneKey },
     rootRef,
     composerRef,
     questionAnswerInputRef,

@@ -34,6 +34,16 @@ export const ActivateTab = WorktreeTabSelector.extend({
   intent: z.enum(TAB_ACTIVATION_INTENTS).optional()
 })
 
+export const ScrollTab = WorktreeTabSelector.extend({
+  tabId: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing tab id')),
+  leafId: z.string().max(128).optional(),
+  // CSS pixels, positive scrolls toward the latest output; one call is at most a few screens.
+  deltaY: z.number().finite().min(-20_000).max(20_000)
+})
+
 export const CloseTab = ActivateTab.extend({
   // Absent preserves legacy user closes; lifecycle intent uses the evidence-bearing method.
   // Send replay only with SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY after reconnect.

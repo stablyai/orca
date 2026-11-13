@@ -200,6 +200,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
+    scroll: { messageListRef: submits.messageListRef, paneKey: null },
     rootRef,
     composerRef,
     questionAnswerInputRef,

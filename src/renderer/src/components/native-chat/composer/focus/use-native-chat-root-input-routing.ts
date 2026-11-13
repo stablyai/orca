@@ -14,14 +14,21 @@ import {
   useNativeChatComposerRevealFocus,
   type NativeChatComposerRevealFocusArgs
 } from './use-native-chat-composer-reveal-focus'
+import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
+import { useNativeChatTabScroll } from '../../viewport/scroll/use-native-chat-tab-scroll'
 
 // Floating panels can reveal a chat beside the workspace’s chat.
 const revealedChatRoots = new Set<HTMLElement>()
 
-/** Route revealed-pane typing/dictation to its input when focus is unowned or within that chat. */
+/** Route revealed-pane typing/dictation to its input when focus is unowned or within that chat, and outside scrolls to its transcript. */
 export function useNativeChatRootInputRouting(
   args: Omit<NativeChatComposerRevealFocusArgs, 'scheduleFrame'> & {
     questionAnswerInputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>
+    /** `paneKey` is the terminal pane a chat view over a TUI stands in for; null for a chat tab. */
+    scroll?: {
+      messageListRef: RefObject<NativeChatMessageListHandle | null>
+      paneKey: string | null
+    }
   }
 ): {
   onPointerDownCapture: (event: ReactPointerEvent) => void
@@ -29,6 +36,9 @@ export function useNativeChatRootInputRouting(
 } {
   const { rootRef, composerRef, questionAnswerInputRef } = args
   useNativeChatComposerRevealFocus(args)
+  useNativeChatTabScroll(
+    args.scroll ? { ...args.scroll, tabId: args.tabId, isVisible: args.isVisible } : null
+  )
   const revealed = args.isVisible && args.isFocusedGroup
   useEffect(() => {
     const root = rootRef.current
