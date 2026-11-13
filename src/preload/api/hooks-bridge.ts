@@ -1,10 +1,15 @@
 import { ipcRenderer } from 'electron'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PreloadApi } from '../api-types'
+import type { SetupHooksCreateSource } from '../../shared/worktree/setup-hooks-create-source'
 
 export const hooksApi = {
-  check: (args: { repoId: string; hostId?: ExecutionHostId; background?: boolean }) =>
-    ipcRenderer.invoke('hooks:check', args),
+  check: (args: {
+    repoId: string
+    hostId?: ExecutionHostId
+    background?: boolean
+    createSource?: SetupHooksCreateSource
+  }) => ipcRenderer.invoke('hooks:check', args),
 
   inspectSetupScriptImports: (args: { repoId: string; hostId?: ExecutionHostId }) =>
     ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),

@@ -13,6 +13,25 @@ import { getAutomationRunRepoId } from '../../../../../shared/automations/histor
 import type { SetupDecision, SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
+/** Runs create from the automation's base, so approve the orca.yaml there, not the project checkout's. */
+export function approveAutomationSetup(
+  repoId: string,
+  hostId: ExecutionHostId | undefined,
+  baseBranch: string | null | undefined
+): Promise<HookTrustApproval> {
+  const createSource = { kind: 'base' as const, baseBranch: baseBranch?.trim() || undefined }
+  return ensureHooksApproved(
+    useAppStore.getState(),
+    repoId,
+    'setup',
+    hostId,
+    undefined,
+    undefined,
+    undefined,
+    createSource
+  )
+}
+
 /** A skipped setup still waiting for approval; null once the automation approves that content. */
 export type PendingAutomationSetupReview = { content: SetupTrustMismatch | null }
 

@@ -17,7 +17,6 @@ import type {
   AutomationUpdateInput
 } from '../../../../../shared/automations/automation-definition'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { ensureHooksApproved } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'
@@ -28,7 +27,7 @@ import {
 import { buildDraftPrecheck, buildDraftSchedule } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
-import { reconfirmSkippedSetup } from './automation-setup-review'
+import { approveAutomationSetup, reconfirmSkippedSetup } from './automation-setup-review'
 import {
   createAutomationOnDestination,
   moveAutomationToDestination,
@@ -135,9 +134,10 @@ export async function saveOrcaAutomation(
           draftSetupDecision: draft.setupDecision
         })
       : currentAutomation.setupDecision
+  const setupBase = edited('baseBranch') ? draft.baseBranch : currentAutomation?.baseBranch
   const trust =
     setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))
-      ? await ensureHooksApproved(useAppStore.getState(), draft.projectId, 'setup', setupHostId)
+      ? await approveAutomationSetup(draft.projectId, setupHostId, setupBase)
       : null
   // Stored with `run` so later runs execute only this content.
   const setupTrustHash =
