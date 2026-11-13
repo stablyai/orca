@@ -130,9 +130,9 @@ declare module 'orca/host' {
       result: { output: JsonValue }
       surfaces: "panel" | "editor"
     }
-    /** The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. Since host API 1.2. */
+    /** The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. Since host API 1.2. */
     "agents.list": {
-      params: Record<string, never> | undefined
+      params: { workspaceId?: string } | undefined
       result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] }
       surfaces: "worker" | "panel" | "editor"
     }
