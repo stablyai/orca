@@ -13,6 +13,7 @@ import {
 import {
   readEnvironmentStore,
   readPersistedEnvironmentStore,
+  readSharedEnvironmentStore,
   writeEnvironmentStore
 } from './runtime-environment-store-file'
 import {
@@ -214,7 +215,9 @@ export function resolveEnvironment(
   userDataPath: string,
   selector: string
 ): KnownRuntimeEnvironment {
-  return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), selector)
+  return structuredClone(
+    resolveEnvironmentFromStore(readSharedEnvironmentStore(userDataPath), selector)
+  )
 }
 
 export function resolveEnvironmentPairingOffer(
