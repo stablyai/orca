@@ -36,6 +36,7 @@ export class JournalSqlDatabase {
     options: {
       readerPath?: string
       onMaintenanceError: (error: unknown, sessionId?: string) => void
+      onMaintenanceTick?: () => void
     }
   ) {
     this.readers = new JournalSqlReaderPool(
@@ -59,7 +60,8 @@ export class JournalSqlDatabase {
       this.readers,
       this.conversions,
       this.activity,
-      options.onMaintenanceError
+      options.onMaintenanceError,
+      options.onMaintenanceTick
     )
   }
 
@@ -69,6 +71,8 @@ export class JournalSqlDatabase {
       writerPath?: string
       readerPath?: string
       onMaintenanceError: (error: unknown, sessionId?: string) => void
+      /** Each periodic maintenance pass, for owners that recover their own work on it. */
+      onMaintenanceTick?: () => void
     }
   ): Promise<JournalSqlDatabase> {
     const filename = journalDomainDatabasePath(stateDirectory)

@@ -1,3 +1,4 @@
+// @orca-isolated-worker -- Watch admission and committed shutdown are process-wide and one-way.
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +17,8 @@ import {
 import * as watches from './pr-watch-runtime'
 import { recordStructuredAgentSessionHostInstallRefusal } from './structured-agent-session-host-refusal'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { localAgentSessionRecordStoreLocation } from './records/local-agent-session-record-store-startup-open'
+import { markHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import type * as HostRuntime from './structured-agent-session-runtime'
 
 // The chat host's own installation is covered elsewhere; this exercises what installation does next.
@@ -41,6 +44,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   watches.stopPRWatchRuntime()
   await retireAgentSessionRecordStore((opened) =>
     closeAgentSessionRecordStoreDatabase(opened?.journalDatabase)
@@ -115,4 +119,66 @@ it('keeps one PR outcome observer when a partly started watch service fails and 
   expect(observers).toBe(1)
   watches.stopPRWatchRuntime()
   expect(observers).toBe(0)
+})
+
+/** The reviewer's input: the first `watch-chats` read fails once, after the service registered its observer. */
+function failFirstWatchRead(): { failed: () => boolean } {
+  const read = JournalSqlReaderPool.prototype.database
+  let failed = false
+  vi.spyOn(JournalSqlReaderPool.prototype, 'database').mockImplementation(function (
+    this: InstanceType<typeof JournalSqlReaderPool>,
+    operation
+  ) {
+    if (!failed && operation.kind === 'pr-watch' && operation.operation.kind === 'watch-chats') {
+      failed = true
+      return Promise.reject(new Error('watch read failed once'))
+    }
+    return read.call(this, operation)
+  })
+  return { failed: () => failed }
+}
+
+/** A saved-chat host's store, opened through the production location so its maintenance pass is wired. */
+async function openInstalledHostStore() {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  await openTestAgentSessionRecordStoreSlot(localAgentSessionRecordStoreLocation([]))
+  return { ...location(), resolveWorkspace: async () => null }
+}
+
+const MAINTENANCE_PASS_MS = 60_000
+
+it('does not restart a running watch service on the maintenance pass', async () => {
+  const started = vi.spyOn(PRWatchService.prototype, 'start')
+  const deps = await openInstalledHostStore()
+
+  await watches.startPRWatchRuntime(deps, { admit: true })
+  await vi.advanceTimersByTimeAsync(MAINTENANCE_PASS_MS)
+
+  expect(started).toHaveBeenCalledTimes(1)
+})
+
+it('retries a failed first watch start on the maintenance pass, with no chat install or restart', async () => {
+  const started = vi.spyOn(PRWatchService.prototype, 'start')
+  const watchRead = failFirstWatchRead()
+  const deps = await openInstalledHostStore()
+
+  await watches.startPRWatchRuntime(deps, { admit: true })
+  expect(watchRead.failed()).toBe(true)
+  await vi.advanceTimersByTimeAsync(MAINTENANCE_PASS_MS)
+
+  await vi.waitFor(() => expect(started).toHaveBeenCalledTimes(2))
+  await expect(started.mock.results[1]?.value).resolves.toBeUndefined()
+})
+
+// Committed shutdown is process-wide and sticky, so this runs last.
+it('does not retry a failed watch start on the maintenance pass after shutdown committed', async () => {
+  const started = vi.spyOn(PRWatchService.prototype, 'start')
+  failFirstWatchRead()
+  const deps = await openInstalledHostStore()
+
+  await watches.startPRWatchRuntime(deps, { admit: true })
+  markHostShuttingDown()
+  await vi.advanceTimersByTimeAsync(MAINTENANCE_PASS_MS)
+
+  expect(started).toHaveBeenCalledTimes(1)
 })

@@ -1,4 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { resumePRWatchRuntime } from '../pr-watch-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import {
   createStructuredAgentSessionLogger,
@@ -24,7 +25,9 @@ export function localAgentSessionRecordStoreLocation(
     stateDirectory: getProfileUserDataPath(),
     legacySessionTabIds,
     hostId: LOCAL_EXECUTION_HOST_ID,
-    logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
+    logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
+    // An admitted CI-line watch start that failed retries on the journal's periodic pass.
+    onMaintenanceTick: resumePRWatchRuntime
   }
 }
 

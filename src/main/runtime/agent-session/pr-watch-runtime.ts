@@ -21,6 +21,7 @@ export type PRWatchRuntimeDeps = {
 
 let generation = 0
 let admitted = false
+let admittedDeps: PRWatchRuntimeDeps | null = null
 let starting: Promise<void> | null = null
 let running: PRWatchService | null = null
 
@@ -44,13 +45,15 @@ export function startPRWatchRuntime(
   if (!admitted || isHostShuttingDown()) {
     return Promise.resolve()
   }
+  admittedDeps = deps
   const startedIn = generation
   starting ??= (async () => {
     const { store, journalDatabase } = await openAgentSessionRecordStoreOnce({
       stateDirectory: deps.stateDirectory,
       legacySessionTabIds: [...deps.legacySessionTabIds],
       hostId: deps.hostId,
-      logger: deps.logger
+      logger: deps.logger,
+      onMaintenanceTick: resumePRWatchRuntime
     })
     if (startedIn !== generation) {
       return
@@ -91,6 +94,13 @@ export function startPRWatchRuntime(
     deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
   })
   return starting
+}
+
+/** The journal's periodic maintenance pass retries an admitted start that failed; a no-op otherwise. */
+export function resumePRWatchRuntime(): void {
+  if (admittedDeps && !running && !starting) {
+    void startPRWatchRuntime(admittedDeps)
+  }
 }
 
 /** Before the journal database closes; the next start rebuilds from the saved tables. */

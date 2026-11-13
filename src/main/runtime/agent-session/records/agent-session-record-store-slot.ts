@@ -18,7 +18,7 @@ export type AgentSessionRecordStoreLocation = {
   maintenanceAfter?: Promise<void>
 } & Pick<
   Parameters<typeof openStructuredAgentSessionSqlJournalDatabase>[0],
-  'writerPath' | 'readerPath'
+  'writerPath' | 'readerPath' | 'onMaintenanceTick'
 >
 
 export type OpenedAgentSessionRecordStore = {
