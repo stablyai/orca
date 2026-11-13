@@ -10904,12 +10904,12 @@
         },
         {
           "file": "src/main/runtime/rpc/methods/orchestration/worker/release/worker-release.test.ts",
-          "assertions": ["retains a dead external terminal without closing a process"]
+          "assertions": ["does not claim retention succeeded after terminal close was committed"]
         },
         {
           "file": "src/main/runtime/rpc/methods/orchestration/worker/release/worker-release-recovery.test.ts",
           "assertions": [
-            "finishes a requested release after restart-style interruption within the same runtime and database",
+            "settles a closed terminal after restart when exact process liveness is exited",
             "coalesces reconciliation joining an interactive release into one recorded recovery attempt and one terminal close"
           ]
         },
