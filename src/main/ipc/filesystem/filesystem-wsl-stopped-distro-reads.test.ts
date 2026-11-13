@@ -109,7 +109,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
 vi.mock(
-  '../../text-generation/pull-request-context',
+  '../../text-generation/pull-request-context/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
 vi.mock(

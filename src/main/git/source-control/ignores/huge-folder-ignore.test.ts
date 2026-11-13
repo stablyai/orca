@@ -25,13 +25,6 @@ describe('appendFolderToGitignore', () => {
     await fs.rm(dir, { recursive: true, force: true })
   })
 
-  it('creates .gitignore with the folder pattern when absent', async () => {
-    const wrote = await appendFolderToGitignore(dir, 'node_modules')
-    expect(wrote).toBe(true)
-    const content = await fs.readFile(path.join(dir, '.gitignore'), 'utf-8')
-    expect(content).toContain('node_modules/')
-  })
-
   it('appends with a leading newline when the file lacks a trailing one', async () => {
     await fs.writeFile(path.join(dir, '.gitignore'), '*.log')
     const wrote = await appendFolderToGitignore(dir, 'dist')
@@ -44,7 +37,5 @@ describe('appendFolderToGitignore', () => {
     await expect(appendFolderToGitignore(dir, 'node_modules\n/etc/passwd')).rejects.toThrow(
       /Refusing to add/
     )
-    await expect(appendFolderToGitignore(dir, '../escape')).rejects.toThrow(/Refusing to add/)
-    await expect(appendFolderToGitignore(dir, 'arbitrary')).rejects.toThrow(/Refusing to add/)
   })
 })

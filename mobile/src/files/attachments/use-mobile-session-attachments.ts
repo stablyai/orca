@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
-import { useClipboardReader } from '../../platform/clipboard'
-import { triggerSelection, triggerError } from '../../platform/haptics'
+import { useClipboardReader } from '../../platform/clipboard/clipboard'
+import { triggerSelection, triggerError } from '../../platform/haptics/haptics'
 import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
 import { useMobileNewTabAgentOptions } from '../../session/agent-launch/use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
@@ -11,8 +11,8 @@ import {
   resolveMobileNativeChatSessionId
 } from '../../session/native-chat/mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
-import { useMobileTerminalPaste } from '../../terminal/session/use-mobile-terminal-paste'
-import type { MobileSessionAccessorySelectionModel } from '../../terminal/session/use-mobile-session-accessory-selection'
+import { useMobileTerminalPaste } from '../../terminal/session/input-controls/use-mobile-terminal-paste'
+import type { MobileSessionAccessorySelectionModel } from '../../terminal/session/accessory-keys/use-mobile-session-accessory-selection'
 
 export function useMobileSessionAttachments(scope: MobileSessionAccessorySelectionModel) {
   const {

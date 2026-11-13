@@ -171,9 +171,7 @@ export function DeleteNestedWorktreesDialog({
       >
         <DialogContent surface="security" showCloseButton={!deleting}>
           <DialogHeader>
-            <DialogTitle>
-              {t('worktree.nestedRemoval.title', 'Delete workspace and nested worktrees?')}
-            </DialogTitle>
+            <DialogTitle>{t('common.delete', 'Delete')}</DialogTitle>
             <DialogDescription>
               {t(
                 'worktree.nestedRemoval.description',
@@ -244,7 +242,7 @@ export function DeleteNestedWorktreesDialog({
                 {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 {deleting
                   ? t('worktree.nestedRemoval.deleting', 'Deleting…')
-                  : t('worktree.nestedRemoval.confirm', 'Delete all listed worktrees')}
+                  : t('common.delete', 'Delete')}
               </Button>
             )}
           </DialogFooter>

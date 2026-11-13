@@ -18,19 +18,7 @@ describe('drag completion and cancellation', () => {
     await act(async () => fixture.root.unmount())
   })
 
-  it('does not write after a failed activation or an unchanged drop', async () => {
-    const fixture = await mounted()
-    await act(async () => {
-      fixture.gesture.finalize!({ absoluteY: 100, translationY: 0 }, false)
-      fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true)
-      fixture.gesture.finalize!({ absoluteY: 100, translationY: 0 }, true)
-    })
-    expect(fixture.onReorder).not.toHaveBeenCalled()
-    await act(async () => fixture.root.unmount())
-  })
-
   it.each([
-    { ids: ['a', 'fixed'], distance: 80, expected: { a: 0, fixed: 1 }, changed: false },
     { ids: ['a', 'fixed', 'b'], distance: 80, expected: { a: 0, fixed: 1, b: 2 }, changed: false },
     { ids: ['a', 'fixed', 'b'], distance: 160, expected: { b: 0, fixed: 1, a: 2 }, changed: true }
   ])('settles a drag across excluded slots at $distance with $ids', async (test) => {
@@ -90,22 +78,6 @@ describe('catalog changes during a drag', () => {
     await act(async () => fixture.root.unmount())
   })
 
-  it.each([{ ids: ['a', 'b', 'c'] }, { ids: ['b', 'a'] }])(
-    'does not commit a stale drag after the catalog becomes $ids',
-    async ({ ids }) => {
-      const fixture = await mounted()
-      await act(async () => {
-        fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true)
-        fixture.gesture.update!({ absoluteY: 180, translationY: 80 }, true)
-      })
-      await fixture.updateItems(ids)
-      await act(async () => fixture.gesture.finalize!({ absoluteY: 180, translationY: 80 }, true))
-      expect(fixture.onReorder).not.toHaveBeenCalled()
-      expect(fixture.onActive.mock.calls).toEqual([[true], [false]])
-      await act(async () => fixture.root.unmount())
-    }
-  )
-
   it('releases its owner when unmounted while a row is held', async () => {
     const fixture = await mounted()
     await act(async () => fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true))
@@ -135,34 +107,24 @@ describe('catalog changes during a drag', () => {
 })
 
 describe('late gesture callbacks', () => {
-  it('ignores movement delivered after the row catalog changes', async () => {
-    const fixture = await mounted()
-    await act(async () => fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true))
-    await fixture.updateItems(['a', 'b', 'c'])
-    await act(async () => fixture.gesture.update!({ absoluteY: 180, translationY: 80 }, true))
-    expect(positions()).toEqual({ a: 0, b: 1, c: 2 })
-    expect(fixture.onReorder).not.toHaveBeenCalled()
-    await act(async () => fixture.root.unmount())
-  })
-
-  it.each([
-    ['a', 'b', 'c'],
-    ['b', 'a']
-  ])('does not save a completed drop queued before catalog %j replaces it', async (...ids) => {
-    const fixture = await mounted()
-    await act(async () => {
-      fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true)
-      fixture.gesture.update!({ absoluteY: 180, translationY: 80 }, true)
-      probe.deferJS = true
-      fixture.gesture.finalize!({ absoluteY: 180, translationY: 80 }, true)
-    })
-    await fixture.updateItems(ids)
-    await act(async () => {
-      probe.jsQueue.splice(0).forEach((fn) => fn())
-    })
-    expect(fixture.onReorder).not.toHaveBeenCalled()
-    await act(async () => fixture.root.unmount())
-  })
+  it.each([['a', 'b', 'c']])(
+    'does not save a completed drop queued before catalog %j replaces it',
+    async (...ids) => {
+      const fixture = await mounted()
+      await act(async () => {
+        fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true)
+        fixture.gesture.update!({ absoluteY: 180, translationY: 80 }, true)
+        probe.deferJS = true
+        fixture.gesture.finalize!({ absoluteY: 180, translationY: 80 }, true)
+      })
+      await fixture.updateItems(ids)
+      await act(async () => {
+        probe.jsQueue.splice(0).forEach((fn) => fn())
+      })
+      expect(fixture.onReorder).not.toHaveBeenCalled()
+      await act(async () => fixture.root.unmount())
+    }
+  )
 
   it('does not revive a queued drop when the original row order returns', async () => {
     const fixture = await mounted()

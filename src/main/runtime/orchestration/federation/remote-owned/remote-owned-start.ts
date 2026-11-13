@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
