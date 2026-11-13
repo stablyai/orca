@@ -10,7 +10,6 @@ export class RendererStatusSender {
   private pending = new Map<string, RendererStatusRecord>()
   private last = new Map<string, RendererStatusRecord>()
   private snapshot = true
-  private seq = 0
   private timer: ReturnType<typeof setTimeout> | undefined
   private inFlight = false
   private active = false
@@ -20,7 +19,8 @@ export class RendererStatusSender {
     private readonly epoch: string,
     private readonly capture: (key: string) => RendererStatusRecord | null,
     private readonly keys: () => Iterable<string>,
-    private readonly send: (batch: RendererStatusPublication) => Promise<RendererStatusAck>
+    private readonly send: (batch: RendererStatusPublication) => Promise<RendererStatusAck>,
+    private readonly cursor = { seq: 0 }
   ) {}
 
   graphAccepted(): void {
@@ -96,7 +96,7 @@ export class RendererStatusSender {
       const ack = await this.send({
         type: snapshot ? 'snapshot' : 'changes',
         epoch: this.epoch,
-        seq: ++this.seq,
+        seq: ++this.cursor.seq,
         rows
       })
       if (!ack.accepted && !ack.snapshotRequired) {

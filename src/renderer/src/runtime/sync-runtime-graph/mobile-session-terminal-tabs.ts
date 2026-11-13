@@ -11,6 +11,7 @@ import type { MobileSessionWorktreeInputs } from './types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   mobileTerminalSurfaceId,
+  rendererTerminalBinding,
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId,
   isUnifiedTabActiveInActiveGroup
@@ -61,10 +62,13 @@ export function buildMobileTerminalSurfaceTabs(
 
   return leafIds.map((leafId) => {
     const numericPaneId = capture?.numericPaneIdByLeafId.get(leafId) ?? null
-    const ptyId =
-      numericPaneId === null
-        ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
-        : (capture?.ptyIdByNumericPaneId.get(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
+    const ptyId = rendererTerminalBinding(
+      numericPaneId,
+      numericPaneId === null ? null : capture?.ptyIdByNumericPaneId.get(numericPaneId),
+      savedPtyIdsByLeafId[leafId],
+      leafIds.length,
+      terminal.ptyId
+    )
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
     const paneTitle =
       numericPaneId !== null

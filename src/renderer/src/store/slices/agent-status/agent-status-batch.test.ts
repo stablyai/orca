@@ -1,4 +1,4 @@
-import * as mobileStatusProjection from '@/runtime/sync-runtime-graph/agent-status-projection'
+import type { RendererStatusPublication } from '../../../../../shared/agent-status/renderer-status-publication'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -40,21 +40,77 @@ describe('setAgentStatuses', () => {
     const rows = projection.list('wt-1')
     const observed = vi.fn()
     const stop = before.agentStatusByPaneKey.subscribe(FIRST_PANE, observed)
-    const serializer = vi
-      .spyOn(mobileStatusProjection, 'serializeAgentStatusEntry')
-      .mockImplementationOnce(() => {
-        throw new Error('cannot serialize status')
-      })
+    const serializer = vi.spyOn(projection, 'prepare').mockImplementationOnce(() => {
+      throw new Error('cannot prepare projection')
+    })
     try {
       expect(() =>
         store.getState().setAgentStatus(FIRST_PANE, { state: 'done', prompt: 'Finished' })
-      ).toThrow('cannot serialize status')
+      ).toThrow('cannot prepare projection')
       expect(store.getState()).toBe(before)
       expect(before.agentStatusByPaneKey.get(FIRST_PANE)?.state).toBe('working')
       expect(projection.list('wt-1')).toBe(rows)
       expect(observed).not.toHaveBeenCalled()
     } finally {
       serializer.mockRestore()
+      stop()
+    }
+  })
+
+  it('reseeds an unchanged accepted row when its saved binding changes', async () => {
+    vi.useFakeTimers()
+    const batches: RendererStatusPublication[] = []
+    vi.stubGlobal('window', {
+      api: {
+        runtime: {
+          syncAgentStatus: async (batch: RendererStatusPublication) => {
+            batches.push(batch)
+            return { accepted: true }
+          }
+        }
+      }
+    })
+    const { startRendererStatusPublication, rendererStatusGraphAccepted } =
+      await import('@/runtime/agent-status/renderer-status-publication')
+    const store = seedBatchStore()
+    const leafId = FIRST_PANE.slice('tab-1:'.length)
+    const layout = {
+      root: { type: 'leaf' as const, leafId },
+      activeLeafId: leafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [leafId]: 'A' }
+    }
+    store.setState({ terminalLayoutsByTabId: { 'tab-1': layout } })
+    store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'same turn' })
+    const row = store.getState().agentStatusByPaneKey.get(FIRST_PANE)
+    const stop = startRendererStatusPublication(store)
+    try {
+      rendererStatusGraphAccepted()
+      await vi.advanceTimersByTimeAsync(16)
+      expect(batches.at(-1)?.rows).toEqual([
+        expect.objectContaining({
+          rendererPtyId: 'A',
+          row: expect.objectContaining({ prompt: 'same turn' })
+        })
+      ])
+      store.setState({
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            ...layout,
+            ptyIdsByLeafId: { [leafId]: 'B' }
+          }
+        }
+      })
+      await vi.advanceTimersByTimeAsync(16)
+      expect(batches.at(-1)).toMatchObject({
+        type: 'changes',
+        rows: [
+          { rendererPtyId: 'A', row: null },
+          { rendererPtyId: 'B', row: { prompt: 'same turn' } }
+        ]
+      })
+      expect(store.getState().agentStatusByPaneKey.get(FIRST_PANE)).toBe(row)
+    } finally {
       stop()
     }
   })

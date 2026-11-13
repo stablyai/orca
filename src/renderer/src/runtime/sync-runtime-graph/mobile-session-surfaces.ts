@@ -46,6 +46,18 @@ export function getRuntimeLeafIdsForTerminal(
   return []
 }
 
+export function rendererTerminalBinding(
+  numericPaneId: number | null,
+  livePtyId: string | null | undefined,
+  savedPtyId: string | null | undefined,
+  leafCount: number,
+  tabPtyId: string | null | undefined
+): string | null {
+  return numericPaneId === null
+    ? (savedPtyId ?? (leafCount === 1 ? tabPtyId : null) ?? null)
+    : (livePtyId ?? savedPtyId ?? null)
+}
+
 export function resolveMobileTabWideAgentHintLeafId(
   capture: MountedTerminalSurfaceCapture | undefined,
   savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined

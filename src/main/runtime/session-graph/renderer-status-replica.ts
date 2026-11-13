@@ -19,6 +19,8 @@ export class RendererStatusReplica {
   private seq = 0
   private seeded = false
   private members = new Map<string, RendererStatusMember>()
+  private membersByWorktree = new Map<string, Set<string>>()
+  private pendingByPane = new Map<string, Set<string>>()
   private rows = new Map<string, RendererStatusRecord>()
   private pending = new Map<string, RendererStatusRecord>()
   private retired = new Set<string>()
@@ -36,67 +38,111 @@ export class RendererStatusReplica {
     this.pending.clear()
     this.retired.clear()
     this.active.clear()
+    this.bound.clear()
+    this.pendingByPane.clear()
+  }
+
+  *membersForWorktree(worktreeId: string): IterableIterator<RendererStatusMember> {
+    for (const key of this.membersByWorktree.get(worktreeId) ?? []) {
+      yield this.members.get(key)!
+    }
   }
 
   reconcileGraph(
     incoming: Map<string, RendererStatusMember>,
-    unchanged: ReadonlySet<string>
+    worktrees: ReadonlySet<string>
   ): Set<string> {
-    for (const [key, member] of this.members) {
-      if (unchanged.has(member.worktreeId) && !incoming.has(key)) {
-        incoming.set(key, member)
-      }
-    }
-    return this.reconcile(incoming)
-  }
-
-  reconcile(members: Map<string, RendererStatusMember>): Set<string> {
     const changed = new Set<string>()
-    for (const [paneKey, old] of this.members) {
-      const next = members.get(paneKey)
-      const priorPty = this.bound.get(paneKey) ?? old.rendererPtyId
-      if (
-        !next ||
-        (priorPty !== null && next.rendererPtyId !== null && priorPty !== next.rendererPtyId)
-      ) {
-        const key = rendererStatusOccupantKey({ ...old, rendererPtyId: priorPty })
-        this.retired.add(key)
-        this.active.delete(paneKey)
-        this.rows.delete(key)
-        this.pending.delete(key)
-        // An unbound continuation belongs to the departed pane too.
-        const unbound = rendererStatusOccupantKey({ ...old, rendererPtyId: null })
-        this.rows.delete(unbound)
-        this.pending.delete(unbound)
-        if (!next) {
-          this.retired.add(unbound)
-          this.bound.delete(paneKey)
+    for (const worktreeId of worktrees) {
+      const previous = this.membersByWorktree.get(worktreeId) ?? new Set<string>()
+      for (const paneKey of previous) {
+        const old = this.members.get(paneKey)!
+        const next = incoming.get(paneKey)
+        const priorPty = this.bound.get(paneKey) ?? old.rendererPtyId
+        if (
+          !next ||
+          old.leafId !== next.leafId ||
+          (priorPty !== null && next.rendererPtyId !== null && priorPty !== next.rendererPtyId)
+        ) {
+          const key = rendererStatusOccupantKey({ ...old, rendererPtyId: priorPty })
+          const unbound = rendererStatusOccupantKey({ ...old, rendererPtyId: null })
+          this.retired.add(key)
+          this.rows.delete(key)
+          this.deletePending(key, paneKey)
+          this.rows.delete(unbound)
+          this.deletePending(unbound, paneKey)
+          if (this.active.get(paneKey) === key || this.active.get(paneKey) === unbound) {
+            this.active.delete(paneKey)
+          }
+          if (!next) {
+            this.retired.add(unbound)
+            for (const pendingKey of this.pendingByPane.get(paneKey) ?? []) {
+              this.retired.add(pendingKey)
+              this.pending.delete(pendingKey)
+            }
+            this.pendingByPane.delete(paneKey)
+            const active = this.active.get(paneKey)
+            if (active) {
+              this.retired.add(active)
+              this.rows.delete(active)
+              this.active.delete(paneKey)
+            }
+            this.bound.delete(paneKey)
+          }
         }
+        if (
+          !next ||
+          old.rendererPtyId !== next.rendererPtyId ||
+          old.statusSuppressionTitle !== next.statusSuppressionTitle
+        ) {
+          changed.add(worktreeId)
+        }
+        this.members.delete(paneKey)
       }
-      if (
-        !next ||
-        old.rendererPtyId !== next.rendererPtyId ||
-        old.statusSuppressionTitle !== next.statusSuppressionTitle
-      ) {
-        changed.add(old.worktreeId)
-      }
+      this.membersByWorktree.delete(worktreeId)
     }
-    for (const [paneKey, member] of members) {
+    for (const [paneKey, member] of incoming) {
+      this.members.set(paneKey, member)
+      const keys = this.membersByWorktree.get(member.worktreeId) ?? new Set<string>()
+      keys.add(paneKey)
+      this.membersByWorktree.set(member.worktreeId, keys)
       if (member.rendererPtyId !== null) {
         this.bound.set(paneKey, member.rendererPtyId)
       }
-    }
-    this.members = members
-    for (const [key, record] of this.pending) {
-      const member = members.get(record.paneKey)
-      if (member && this.matches(record, member)) {
-        this.pending.delete(key)
-        this.rows.set(key, record)
-        this.active.set(record.paneKey, key)
-        changed.add(member.worktreeId)
+      const activeKey = this.active.get(paneKey)
+      const active = activeKey ? this.rows.get(activeKey) : undefined
+      if (active && !this.matches(active, member)) {
+        this.rows.delete(activeKey!)
+        this.active.delete(paneKey)
+        this.setPending(activeKey!, active)
+      }
+      for (const key of this.pendingByPane.get(paneKey) ?? []) {
+        const record = this.pending.get(key)!
+        if (this.matches(record, member)) {
+          this.deletePending(key, paneKey)
+          this.rows.set(key, record)
+          this.active.set(paneKey, key)
+          changed.add(member.worktreeId)
+        }
       }
     }
     return changed
+  }
+
+  private deletePending(key: string, paneKey: string): void {
+    this.pending.delete(key)
+    const keys = this.pendingByPane.get(paneKey)
+    keys?.delete(key)
+    if (!keys?.size) {
+      this.pendingByPane.delete(paneKey)
+    }
+  }
+
+  private setPending(key: string, record: RendererStatusRecord): void {
+    this.pending.set(key, record)
+    const keys = this.pendingByPane.get(record.paneKey) ?? new Set<string>()
+    keys.add(key)
+    this.pendingByPane.set(record.paneKey, keys)
   }
 
   private matches(row: RendererStatusOccupant, member: RendererStatusMember): boolean {
@@ -126,6 +172,7 @@ export class RendererStatusReplica {
       this.rows.clear()
       this.active.clear()
       this.pending.clear()
+      this.pendingByPane.clear()
       this.seeded = true
     }
     this.seq = batch.seq
@@ -137,7 +184,7 @@ export class RendererStatusReplica {
       }
       const member = this.members.get(record.paneKey)
       this.rows.delete(key)
-      this.pending.delete(key)
+      this.deletePending(key, record.paneKey)
       if (record.row === null) {
         if (this.active.get(record.paneKey) === key) {
           this.active.delete(record.paneKey)
@@ -152,9 +199,10 @@ export class RendererStatusReplica {
         this.active.set(record.paneKey, key)
         worktrees.add(member.worktreeId)
       } else {
-        this.pending.set(key, record)
+        this.setPending(key, record)
         if (this.pending.size > 2048) {
-          this.pending.delete(this.pending.keys().next().value!)
+          const oldest = this.pending.entries().next().value!
+          this.deletePending(oldest[0], oldest[1].paneKey)
           snapshotRequired = true
         }
       }

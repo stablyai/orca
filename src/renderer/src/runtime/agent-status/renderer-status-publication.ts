@@ -1,23 +1,24 @@
 import type { AppState } from '@/store/types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import {
   findRegisteredTerminalTab,
   subscribeMountedTerminalTabChanges
 } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { isWebOnlyMirroredTerminalTab } from '../sync-runtime-graph/mobile-session-surfaces'
+import {
+  getRuntimeLeafIdsForTerminal,
+  rendererTerminalBinding,
+  isWebOnlyMirroredTerminalTab
+} from '../sync-runtime-graph/mobile-session-surfaces'
 import { mobilePublicationEpoch } from '../sync-runtime-graph/graph-state'
 import { RendererStatusSender } from './renderer-status-sender'
 
+const publicationCursor = { seq: 0 }
 let sender: RendererStatusSender | undefined
 export function rendererStatusGraphAccepted(): void {
   sender?.graphAccepted()
 }
 
-export function startRendererStatusPublication(store: {
-  getState(): AppState
-  subscribe(listener: (state: AppState, previous: AppState) => void): () => void
-}): () => void {
+export function startRendererStatusPublication(store: { getState(): AppState }): () => void {
   const publication = new RendererStatusSender(
     mobilePublicationEpoch,
     (key) => {
@@ -38,14 +39,18 @@ export function startRendererStatusPublication(store: {
       }
       const mounted = findRegisteredTerminalTab(identity.tabId, source.worktreeId)?.tab
       const numericId = mounted?.getManager()?.getNumericIdForLeaf(identity.leafId)
-      const rendererPtyId =
-        numericId != null
-          ? mounted!.getPtyIdForPane(numericId)
-          : (layout?.ptyIdsByLeafId?.[identity.leafId] ?? source.tab.ptyId ?? null)
+      const rendererPtyId = rendererTerminalBinding(
+        numericId ?? null,
+        numericId == null ? null : mounted!.getPtyIdForPane(numericId),
+        layout?.ptyIdsByLeafId?.[identity.leafId],
+        getRuntimeLeafIdsForTerminal(undefined, layout).length,
+        source.tab.ptyId
+      )
       return { paneKey: key, leafId: identity.leafId, rendererPtyId, row }
     },
     () => store.getState().agentStatusByPaneKey.keys(),
-    (batch) => window.api.runtime.syncAgentStatus(batch)
+    (batch) => window.api.runtime.syncAgentStatus(batch),
+    publicationCursor
   )
   sender = publication
   const unsubscribeRows = store
@@ -53,16 +58,6 @@ export function startRendererStatusPublication(store: {
     .agentStatusByPaneKey.subscribeChanges((keys) => publication.changed(keys))
   const changedTab = (tabId: string): void =>
     publication.changed(new Set(store.getState().agentStatusByPaneKey.keysForTab(tabId)))
-  const unsubscribeBindings = store.subscribe((state, previous) => {
-    for (const field of ['terminalLayoutsByTabId', 'ptyIdsByTabId'] as const) {
-      const diff = readRecordChanges(state[field], previous[field])
-      if (diff?.kind === 'addressed') {
-        diff.keys.forEach(changedTab)
-      } else if (diff) {
-        publication.changed(null)
-      }
-    }
-  })
   const unsubscribeMounts = subscribeMountedTerminalTabChanges((tab) => {
     if (tab) {
       changedTab(tab.tabId)
@@ -70,7 +65,6 @@ export function startRendererStatusPublication(store: {
   })
   return () => {
     unsubscribeRows()
-    unsubscribeBindings()
     unsubscribeMounts()
     publication.stop()
     if (sender === publication) {

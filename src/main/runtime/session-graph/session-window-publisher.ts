@@ -36,19 +36,38 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
     return ack
   }
 
+  protected captureRendererStatusBindings(
+    graph: RuntimeSyncWindowGraph,
+    worktrees: ReadonlySet<string>
+  ): Map<string, string | null> {
+    const bindings = new Map<string, string | null>()
+    for (const leaf of graph.leaves) {
+      if (
+        worktrees.has(leaf.worktreeId) ||
+        this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))?.ptyId !== leaf.ptyId
+      ) {
+        bindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
+      }
+    }
+    return bindings
+  }
+
   protected reconcileRendererStatusMembership(
     rendererGeneration: string,
     graph: RuntimeSyncWindowGraph,
+    rawBindings: ReadonlyMap<string, string | null>,
     changedMobileWorktrees: Set<string>
   ): void {
     const replica = rendererStatusReplica(this)
     replica.beginEpoch(rendererGeneration)
     const members = new Map<string, RendererStatusMember>()
-    const unchanged = new Set(graph.unchangedMobileSessionWorktrees ?? [])
-    const rawBindings = new Map(
-      graph.leaves.map((leaf) => [makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId])
-    )
+    const reconciled = new Set(changedMobileWorktrees)
+    const retained = new Set(changedMobileWorktrees)
     for (const snapshot of graph.mobileSessionTabs ?? []) {
+      if (!reconciled.has(snapshot.worktree)) {
+        continue
+      }
+      retained.delete(snapshot.worktree)
       const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
       if (
         !accepted ||
@@ -56,7 +75,7 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
         accepted.rendererVersion !== snapshot.snapshotVersion
       ) {
         if (accepted) {
-          unchanged.add(snapshot.worktree)
+          reconciled.delete(snapshot.worktree)
         }
         continue
       }
@@ -77,7 +96,25 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
         })
       }
     }
-    for (const worktreeId of replica.reconcileGraph(members, unchanged)) {
+    for (const worktreeId of retained) {
+      const stored = this.mobileSessionTabsByWorktree.get(worktreeId)
+      const storedKeys = new Set<string>(
+        stored?.tabs.flatMap((tab) =>
+          tab.type === 'terminal' ? [makePaneKey(tab.parentTabId, tab.leafId)] : []
+        )
+      )
+      for (const member of replica.membersForWorktree(worktreeId)) {
+        if (storedKeys.has(member.paneKey)) {
+          members.set(member.paneKey, {
+            ...member,
+            rendererPtyId: rawBindings.has(member.paneKey)
+              ? rawBindings.get(member.paneKey)!
+              : member.rendererPtyId
+          })
+        }
+      }
+    }
+    for (const worktreeId of replica.reconcileGraph(members, reconciled)) {
       if (!changedMobileWorktrees.has(worktreeId)) {
         const stored = this.mobileSessionTabsByWorktree.get(worktreeId)
         if (stored) {

@@ -28,6 +28,7 @@ it('preserves post-capture changes and binding removals across an in-flight snap
   }
   const batches: RendererStatusPublication[] = []
   let acknowledge: ((ack: RendererStatusAck) => void) | undefined
+  const cursor = { seq: 0 }
   const sender = new RendererStatusSender(
     'renderer',
     () => current,
@@ -37,7 +38,8 @@ it('preserves post-capture changes and binding removals across an in-flight snap
       return new Promise((resolve) => {
         acknowledge = resolve
       })
-    }
+    },
+    cursor
   )
   sender.graphAccepted()
   await vi.advanceTimersByTimeAsync(16)
@@ -65,4 +67,18 @@ it('preserves post-capture changes and binding removals across an in-flight snap
   })
   acknowledge!({ accepted: true })
   sender.stop()
+  const restarted = new RendererStatusSender(
+    'renderer',
+    () => current,
+    () => ['tab:leaf'],
+    async (batch) => {
+      batches.push(batch)
+      return { accepted: true }
+    },
+    cursor
+  )
+  restarted.graphAccepted()
+  await vi.advanceTimersByTimeAsync(16)
+  expect(batches[3]).toMatchObject({ type: 'snapshot', seq: 4 })
+  restarted.stop()
 })

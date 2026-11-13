@@ -18,6 +18,11 @@ export function publishProjectionTopology(
     data.changedKeys.add(change.paneKey)
     data.notices.add(`status\0${change.paneKey}`)
   }
+  for (const tabId of topology.bindingTabs) {
+    for (const key of data.acceptedByTab.get(tabId) ?? []) {
+      data.changedKeys.add(key)
+    }
+  }
   data.inputs = state
   represented.commitInto(data.represented)
   for (const [id, tab] of nextTabs) {

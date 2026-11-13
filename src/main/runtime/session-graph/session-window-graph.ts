@@ -5,6 +5,7 @@ import type {
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../../shared/runtime-session-contracts'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
@@ -88,6 +89,10 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       publishedMobileSessionTabs
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
+    const rendererBindings =
+      graph === rendererGraph
+        ? new Map<string, string | null>()
+        : this.captureRendererStatusBindings(rendererGraph, changedMobileWorktrees)
     const graphSyncedAt = this.nextTitleObservationSequence()
     // Stamp this graph's surfaces; newer records survive until the next statement (pty-recorded-surface-topology.ts).
     // Exempt the one-shot headless placeholder: it names no renderer panes and cannot re-stamp later claims (#18191).
@@ -108,6 +113,12 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
+      if (
+        graph === rendererGraph &&
+        (changedMobileWorktrees.has(leaf.worktreeId) || existing?.ptyId !== leaf.ptyId)
+      ) {
+        rendererBindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
+      }
       const ptyId =
         leaf.ptyId === null &&
         existing?.ptyId &&
@@ -272,6 +283,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       this.reconcileRendererStatusMembership(
         rendererGeneration,
         rendererGraph,
+        rendererBindings,
         changedMobileWorktrees
       )
     }

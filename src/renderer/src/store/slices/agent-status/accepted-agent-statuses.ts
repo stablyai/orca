@@ -1,4 +1,3 @@
-import { serializeAgentStatusEntry } from '@/runtime/sync-runtime-graph/agent-status-projection'
 import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/structural-value-equality'
 import { isAiVaultTitleAgent } from '../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { AgentStatusProjection } from './agent-status-projection'
@@ -11,7 +10,6 @@ export type AgentStatusReplacement = readonly [string, AgentStatusEntry | null]
 export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEntry> {
   readonly [Symbol.toStringTag] = 'AcceptedAgentStatuses'
   titleRevision = 0
-  mobileToken: object = {}
   private pending: Map<string, AgentStatusEntry | null> | null = null
   private operations: AgentStatusReplacement[] = []
   private moved = new Set<string>()
@@ -59,7 +57,6 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       ? this
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
-    draft.mobileToken = this.mobileToken
     draft.pending ??= new Map()
     for (const [key, value] of replacements) {
       const prior = draft.get(key)
@@ -87,7 +84,6 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       ? this
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
-    draft.mobileToken = this.mobileToken
     draft.pending ??= new Map()
     draft.refreshes = keys
     return draft
@@ -152,16 +148,9 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
     const titleChanged = changes.some(
       (change) => !equal(fact(change.previous), fact(change.current))
     )
-    const mobileChanged = changes.some(
-      ({ paneKey, previous, current }) =>
-        (previous ? serializeAgentStatusEntry(paneKey, previous) : null) !==
-        (current ? serializeAgentStatusEntry(paneKey, current) : null)
-    )
     const titleRevision = this.titleRevision + Number(titleChanged)
-    const mobileToken = mobileChanged ? {} : this.mobileToken
     return () => {
       this.titleRevision = titleRevision
-      this.mobileToken = mobileToken
       for (const [key, value] of this.operations) {
         if (value === null) {
           this.rows.delete(key)
@@ -183,7 +172,6 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       this.sleepingCount
     )
     captured.titleRevision = this.titleRevision
-    captured.mobileToken = this.mobileToken
     return captured
   }
 
