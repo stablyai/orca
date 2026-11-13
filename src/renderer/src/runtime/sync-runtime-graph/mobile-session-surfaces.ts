@@ -53,11 +53,33 @@ export function rendererTerminalBinding(
   leafCount: number | (() => number),
   tabPtyId: string | null | undefined
 ): string | null {
-  return numericPaneId === null
-    ? (savedPtyId ??
-        ((typeof leafCount === 'function' ? leafCount() : leafCount) === 1 ? tabPtyId : null) ??
-        null)
-    : (livePtyId ?? savedPtyId ?? null)
+  if (numericPaneId !== null) {
+    return livePtyId ?? savedPtyId ?? null
+  }
+  if (savedPtyId != null) {
+    return savedPtyId
+  }
+  if (tabPtyId == null) {
+    return null
+  }
+  return (typeof leafCount === 'function' ? leafCount() : leafCount) === 1 ? tabPtyId : null
+}
+
+/** Saved terminal leaves counted up to 2: the binding only asks "exactly one?". */
+export function countSavedTerminalLeavesUpToTwo(
+  savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
+): number {
+  let count = 0
+  const stack = savedLayout?.root ? [savedLayout.root] : []
+  while (stack.length > 0 && count < 2) {
+    const node = stack.pop()!
+    if (node.type === 'leaf') {
+      count += isTerminalLeafId(node.leafId) ? 1 : 0
+    } else {
+      stack.push(node.second, node.first)
+    }
+  }
+  return count
 }
 
 export function resolveMobileTabWideAgentHintLeafId(

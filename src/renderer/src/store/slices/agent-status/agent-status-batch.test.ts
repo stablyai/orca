@@ -209,6 +209,20 @@ describe('setAgentStatuses', () => {
           { rendererPtyId: 'saved', row: null },
           { rendererPtyId: 'sole-tab', row: { prompt: 'unmounted' } }
         ])
+        store.setState({
+          tabsByWorktree: {
+            'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', title: 'pi', ptyId: null })]
+          },
+          terminalLayoutsByTabId: { 'tab-1': { ...layout, ptyIdsByLeafId: {} } }
+        })
+        await vi.advanceTimersByTimeAsync(16)
+        visits = 0
+        store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'unbound' })
+        await vi.advanceTimersByTimeAsync(16)
+        expect(batches.at(-1)?.rows).toMatchObject([
+          { rendererPtyId: null, row: { prompt: 'unbound' } }
+        ])
+        expect(visits).toBe(0)
       } finally {
         stop()
         unregister()

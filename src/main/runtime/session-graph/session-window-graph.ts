@@ -5,7 +5,7 @@ import type {
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../../shared/runtime-session-contracts'
-import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
@@ -113,8 +113,10 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
+      // Why: status rows are keyed by UUID leaf ids; older or mirrored leaves can't carry one.
       if (
         graph === rendererGraph &&
+        isTerminalLeafId(leaf.leafId) &&
         (changedMobileWorktrees.has(leaf.worktreeId) || existing?.ptyId !== leaf.ptyId)
       ) {
         rendererBindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)

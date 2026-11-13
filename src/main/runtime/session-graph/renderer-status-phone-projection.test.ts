@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RendererStatusSender } from '../../../renderer/src/runtime/agent-status/renderer-status-sender'
 import type { RendererStatusPublication } from '../../../shared/agent-status/renderer-status-publication'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 await import('../orca-runtime-tests/runtime-test-module-registration.spec')
@@ -166,6 +167,57 @@ it('publishes only the affected phone frame with increasing versions and exclude
     } finally {
       sender.stop()
     }
+  } finally {
+    stop()
+  }
+})
+
+it('releases held phone frames when the unseeded desktop closes back to headless', async () => {
+  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+    makeWorkspaceSessionWithHeadlessTerminal()
+  )
+  const runtime = new OrcaRuntimeService(runtimeStore)
+  publishHeadlessRuntimeGraph(runtime)
+  runtime.attachWindow(1)
+  const frames: RuntimeMobileSessionTabsResult[] = []
+  const stop = runtime.onMobileSessionTabsChanged(
+    (frame) => frames.push(frame),
+    undefined,
+    'mobile'
+  )
+  try {
+    runtime.syncWindowGraph(1, {
+      rendererGeneration: 'renderer',
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: [
+            {
+              type: 'terminal',
+              id: `host-tab::${HEADLESS_LEAF_ID}`,
+              parentTabId: 'host-tab',
+              leafId: HEADLESS_LEAF_ID,
+              ptyId: null,
+              title: 'Claude',
+              isActive: true,
+              statusSuppressionTitle: 'Claude'
+            }
+          ]
+        }
+      ]
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(frames).toEqual([])
+    runtime.markGraphUnavailable(1)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(frames.map((frame) => frame.worktree)).toContain(TEST_WORKTREE_ID)
   } finally {
     stop()
   }

@@ -43,8 +43,13 @@ export class RendererStatusReplica {
     this.pendingByPane.clear()
   }
 
-  awaitingSnapshot(worktreeId: string): boolean {
-    return !this.seeded && this.membersByWorktree.has(worktreeId)
+  /** Only the generation that owes the seed holds phone frames; losing authority releases them. */
+  awaitingSnapshot(worktreeId: string, generation: string | null): boolean {
+    return generation === this.epoch && !this.seeded && this.membersByWorktree.has(worktreeId)
+  }
+
+  unseededWorktrees(): Iterable<string> {
+    return this.seeded ? [] : this.membersByWorktree.keys()
   }
 
   *membersForWorktree(worktreeId: string): IterableIterator<RendererStatusMember> {

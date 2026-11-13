@@ -5,7 +5,7 @@ import {
   subscribeMountedTerminalTabChanges
 } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
-  getRuntimeLeafIdsForTerminal,
+  countSavedTerminalLeavesUpToTwo,
   rendererTerminalBinding,
   isWebOnlyMirroredTerminalTab
 } from '../sync-runtime-graph/mobile-session-surfaces'
@@ -43,7 +43,7 @@ export function startRendererStatusPublication(store: { getState(): AppState }):
         numericId ?? null,
         numericId == null ? null : mounted!.getPtyIdForPane(numericId),
         layout?.ptyIdsByLeafId?.[identity.leafId],
-        () => getRuntimeLeafIdsForTerminal(undefined, layout).length,
+        () => countSavedTerminalLeavesUpToTwo(layout),
         source.tab.ptyId
       )
       return { paneKey: key, leafId: identity.leafId, rendererPtyId, row }

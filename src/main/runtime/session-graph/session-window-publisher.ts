@@ -1,5 +1,5 @@
 import { rendererStatusReplica, type RendererStatusMember } from './renderer-status-replica'
-import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type {
   RendererStatusPublication,
   RendererStatusAck
@@ -42,8 +42,9 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
     const bindings = new Map<string, string | null>()
     for (const leaf of graph.leaves) {
       if (
-        worktrees.has(leaf.worktreeId) ||
-        this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))?.ptyId !== leaf.ptyId
+        isTerminalLeafId(leaf.leafId) &&
+        (worktrees.has(leaf.worktreeId) ||
+          this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))?.ptyId !== leaf.ptyId)
       ) {
         bindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
       }
@@ -82,7 +83,7 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
         this.mobileSessionTabsByWorktree.get(snapshot.worktree)?.tabs.map((tab) => tab.id)
       )
       for (const tab of snapshot.tabs) {
-        if (tab.type !== 'terminal' || !storedIds.has(tab.id)) {
+        if (tab.type !== 'terminal' || !storedIds.has(tab.id) || !isTerminalLeafId(tab.leafId)) {
           continue
         }
         const paneKey = makePaneKey(tab.parentTabId, tab.leafId)
@@ -99,7 +100,9 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
       const stored = this.mobileSessionTabsByWorktree.get(worktreeId)
       const storedKeys = new Set<string>(
         stored?.tabs.flatMap((tab) =>
-          tab.type === 'terminal' ? [makePaneKey(tab.parentTabId, tab.leafId)] : []
+          tab.type === 'terminal' && isTerminalLeafId(tab.leafId)
+            ? [makePaneKey(tab.parentTabId, tab.leafId)]
+            : []
         )
       )
       for (const member of replica.membersForWorktree(worktreeId)) {
