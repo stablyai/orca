@@ -30,11 +30,13 @@ export type CatalogEntryImageFill = (
 export async function extractCatalogImages(
   marketplace: PluginMarketplace,
   readBlob: CatalogBlobReader,
-  fill?: CatalogEntryImageFill
+  fill?: CatalogEntryImageFill,
+  // Why: a smaller cap keeps budget-pressure tests cheap; production always uses the catalog bound.
+  options: { maxBytes?: number } = {}
 ): Promise<{ marketplace: PluginMarketplace; images: Buffer[] }> {
   const verified = new Map<string, Buffer>()
   const rejected = new Set<string>()
-  let budget = CATALOG_IMAGES_MAX_BYTES
+  let budget = options.maxBytes ?? CATALOG_IMAGES_MAX_BYTES
   const check = async (
     image: CatalogImage,
     kind: PluginImageKind,
@@ -64,45 +66,92 @@ export async function extractCatalogImages(
     }
     return ok
   }
-  const keep = async (
-    images: PluginCatalogImages,
+  const filled: { entry: PluginMarketplaceEntry; read: CatalogBlobReader }[] = []
+  for (const listed of marketplace.plugins) {
+    const prepared = fill ? await fill(listed, readBlob) : { entry: listed, readBlob }
+    filled.push({ entry: prepared.entry, read: prepared.readBlob })
+  }
+  const kept: PluginCatalogImages[][] = filled.map(({ entry }) =>
+    (entry.releases ?? []).map(() => ({}))
+  )
+  type ImageTask = {
+    pluginIndex: number
+    releaseIndex: number
+    kind: PluginImageKind
+    image: CatalogImage
     read: CatalogBlobReader
-  ): Promise<PluginCatalogImages> => {
-    const icon = images.icon && (await check(images.icon, 'icon', read)) ? images.icon : undefined
-    const cover =
-      images.cover && (await check(images.cover, 'cover', read)) ? images.cover : undefined
-    const screenshots: CatalogImage[] = []
-    for (const shot of images.screenshots ?? []) {
-      if (await check(shot, 'screenshot', read)) {
-        screenshots.push(shot)
-      }
-    }
-    return {
-      ...(icon ? { icon } : {}),
-      ...(cover ? { cover } : {}),
-      ...(screenshots.length ? { screenshots } : {})
+  }
+  const tasks: ImageTask[] = []
+  const enqueue = (
+    pluginIndex: number,
+    releaseIndex: number,
+    kind: PluginImageKind,
+    image: CatalogImage | undefined,
+    read: CatalogBlobReader
+  ): void => {
+    if (image) {
+      tasks.push({ pluginIndex, releaseIndex, kind, image, read })
     }
   }
-  const plugins: PluginMarketplace['plugins'] = []
-  for (const listed of marketplace.plugins) {
-    const { entry, readBlob: read } = fill
-      ? await fill(listed, readBlob)
-      : { entry: listed, readBlob }
-    if (!entry.releases) {
-      plugins.push(entry)
-      continue
+  // Why: alphabetical order must not decide which plugins keep artwork. Identity art (icon and
+  // cover) of the newest release, then of older selectable releases, goes before any screenshot.
+  filled.forEach(({ entry, read }, pluginIndex) => {
+    const images = entry.releases?.[0]?.images
+    if (!images) {
+      return
     }
-    const releases: PluginCatalogRelease[] = []
-    for (const release of entry.releases) {
-      if (!release.images) {
-        releases.push(release)
+    enqueue(pluginIndex, 0, 'icon', images.icon, read)
+    enqueue(pluginIndex, 0, 'cover', images.cover, read)
+  })
+  filled.forEach(({ entry, read }, pluginIndex) => {
+    const releases = entry.releases ?? []
+    for (let releaseIndex = 1; releaseIndex < releases.length; releaseIndex += 1) {
+      const images = releases[releaseIndex]?.images
+      if (!images) {
         continue
       }
-      const { images, ...rest } = release
-      const kept = await keep(images, read)
-      releases.push(Object.keys(kept).length ? { ...rest, images: kept } : rest)
+      enqueue(pluginIndex, releaseIndex, 'icon', images.icon, read)
+      enqueue(pluginIndex, releaseIndex, 'cover', images.cover, read)
     }
-    plugins.push({ ...entry, releases })
+  })
+  filled.forEach(({ entry, read }, pluginIndex) => {
+    for (const shot of entry.releases?.[0]?.images?.screenshots ?? []) {
+      enqueue(pluginIndex, 0, 'screenshot', shot, read)
+    }
+  })
+  filled.forEach(({ entry, read }, pluginIndex) => {
+    const releases = entry.releases ?? []
+    for (let releaseIndex = 1; releaseIndex < releases.length; releaseIndex += 1) {
+      for (const shot of releases[releaseIndex]?.images?.screenshots ?? []) {
+        enqueue(pluginIndex, releaseIndex, 'screenshot', shot, read)
+      }
+    }
+  })
+  for (const task of tasks) {
+    if (!(await check(task.image, task.kind, task.read))) {
+      continue
+    }
+    const target = kept[task.pluginIndex]![task.releaseIndex]!
+    if (task.kind === 'screenshot') {
+      const screenshots = (target.screenshots ??= [])
+      screenshots.push(task.image)
+    } else {
+      target[task.kind] = task.image
+    }
   }
+  const plugins: PluginMarketplace['plugins'] = filled.map(({ entry }, pluginIndex) => {
+    if (!entry.releases) {
+      return entry
+    }
+    const releases: PluginCatalogRelease[] = entry.releases.map((release, releaseIndex) => {
+      if (!release.images) {
+        return release
+      }
+      const { images: _images, ...rest } = release
+      const keptImages = kept[pluginIndex]![releaseIndex]!
+      return Object.keys(keptImages).length > 0 ? { ...rest, images: keptImages } : rest
+    })
+    return { ...entry, releases }
+  })
   return { marketplace: { ...marketplace, plugins }, images: [...verified.values()] }
 }
