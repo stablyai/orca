@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
 import { ActionSheetModal } from '../components/ActionSheetModal'
@@ -48,7 +48,6 @@ export function MobileHomeScreen() {
   useMobileColorScheme()
   const data = useMobileHomeData()
   useHomeSparePage(data.hostCatalogLoaded ? data.sortedHosts.map((host) => host.id) : [])
-  const insets = useSafeAreaInsets()
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
   const openMobileAutomations = useOpenMobileAutomations()
@@ -236,7 +235,6 @@ export function MobileHomeScreen() {
           <MobileHomeTabBar
             tabs={HOME_TABS}
             active={tab}
-            bottomInset={insets.bottom}
             agentsBadge={data.agentsNeedingYou.length}
             onSelect={selectTab}
           />
