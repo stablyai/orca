@@ -69,6 +69,9 @@ export function mergedAgentModelCatalogModels(
       ...(model.supportsFastMode === undefined && olderModel?.supportsFastMode !== undefined
         ? { supportsFastMode: olderModel.supportsFastMode }
         : {}),
+      ...(model.defaultFastMode === undefined && olderModel?.defaultFastMode !== undefined
+        ? { defaultFastMode: olderModel.defaultFastMode }
+        : {}),
       ...(observation !== undefined
         ? {
             declaredDefaultEffort:

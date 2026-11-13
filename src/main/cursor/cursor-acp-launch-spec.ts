@@ -15,7 +15,7 @@ const CURSOR_SESSION_HISTORY: StructuredAgentSessionHistory = {
 
 // The config folder holds Cursor's allowlist and sessions; its login lives elsewhere per platform.
 function cursorConfigDirectory(homePath: string, env: NodeJS.ProcessEnv): string {
-  const xdg = env.XDG_CONFIG_HOME?.trim()
+  const xdg = (env.XDG_CONFIG_HOME ?? process.env.XDG_CONFIG_HOME)?.trim()
   return xdg ? join(xdg, 'cursor') : join(homePath, '.cursor')
 }
 

@@ -30,6 +30,7 @@ export async function readCursorModelCatalog(connection: {
       (raw) => SessionConfigOptionSchema.safeParse(raw).data ?? []
     )
     const effort = acpEffortOption(options)
+    const fast = options.find((option) => option.id === 'fast')
     return {
       id: model.value,
       label: model.name,
@@ -39,7 +40,8 @@ export async function readCursorModelCatalog(connection: {
         ? acpSelectChoices(effort).map((choice) => ({ value: choice.value, label: choice.name }))
         : [],
       ...(effort ? { defaultEffort: effort.currentValue } : {}),
-      supportsFastMode: options.some((option) => option.id === 'fast')
+      supportsFastMode: fast !== undefined,
+      ...(fast?.type === 'select' ? { defaultFastMode: fast.currentValue === 'true' } : {})
     }
   })
 }

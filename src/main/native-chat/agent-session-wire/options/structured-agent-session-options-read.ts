@@ -134,12 +134,14 @@ export async function readStructuredAgentSessionOptions(
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   if (live && fillsLiveModelsFromCatalog(agent)) {
+    const listed = restingOptions.inventory.origin === 'unknown' ? null : restingOptions.inventory
     options = {
       ...options,
-      models: fillUnknownModelEfforts(
-        options.models,
-        restingOptions.inventory.origin === 'unknown' ? [] : restingOptions.inventory.models
-      )
+      models: fillUnknownModelEfforts(options.models, listed?.models ?? []),
+      // A current model without Fast must not hide it for the listed models that have it.
+      ...(!options.fastModeSupport && listed?.fastModeSupport
+        ? { fastModeSupport: listed.fastModeSupport }
+        : {})
     }
   }
   const resting = live ? restingOptions : null

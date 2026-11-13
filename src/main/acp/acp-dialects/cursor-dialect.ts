@@ -41,10 +41,6 @@ function questionRequest(params: unknown): AcpRequestPresentation {
   if (!parsed.success) {
     throw new AcpRpcError(-32602, 'Invalid agent question request')
   }
-  // A card keeps only so many questions; refused, Cursor asks each one on its own.
-  if (parsed.data.questions.length > MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS) {
-    throw new AcpRpcError(-32602, 'Too many questions for one card')
-  }
   const questions = parsed.data.questions.map((question) => ({
     id: question.id,
     question: question.prompt,
@@ -115,9 +111,19 @@ function fallbackQuestionRequest(params: unknown): AcpRequestPresentation | unde
   }
 }
 
+const TOO_MANY_QUESTIONS = `Orca shows at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS} questions at once; ask again with at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS}.`
+
 function settleRequest(method: string, params: unknown): AcpRequestSettlement | undefined {
   if (REPORTS.includes(method)) {
     return { reply: {} }
+  }
+  // A card keeps only so many questions; any error would make Cursor drop multi-select ones.
+  if (
+    method === ASK_QUESTION &&
+    (questionRequestSchema.safeParse(params).data?.questions.length ?? 0) >
+      MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS
+  ) {
+    return { reply: { outcome: { outcome: 'skipped', reason: TOO_MANY_QUESTIONS } } }
   }
   if (method !== CREATE_PLAN) {
     return undefined

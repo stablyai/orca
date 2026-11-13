@@ -243,7 +243,7 @@ it("writes the person's Fast choice again after a model switch resets it", async
   ).toEqual(['model=grok-4.7', 'fast=false', 'model=composer-2.5', 'fast=false'])
 })
 
-it("lists each model's own effort levels and Fast support before a chat exists", async () => {
+it("lists each model's own effort levels and Fast default before a chat exists", async () => {
   const models = await readCursorModelCatalog({
     requestSessionFreeExtension: async (method) => {
       expect(method).toBe('cursor/list_available_models')
@@ -255,7 +255,12 @@ it("lists each model's own effort levels and Fast support before a chat exists",
             name: 'Claude Opus 4.8',
             configOptions: OPUS_OPTIONS.slice(1)
           },
-          { value: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', configOptions: [] }
+          { value: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', configOptions: [] },
+          {
+            value: 'composer-2.5',
+            name: 'Composer 2.5',
+            configOptions: [{ ...OPUS_OPTIONS[3]!, currentValue: 'true' }]
+          }
         ]
       }
     }
@@ -272,7 +277,8 @@ it("lists each model's own effort levels and Fast support before a chat exists",
         { value: 'max', label: 'Max' }
       ],
       defaultEffort: 'high',
-      supportsFastMode: true
+      supportsFastMode: true,
+      defaultFastMode: false
     },
     {
       id: 'gemini-3.1-pro',
@@ -280,6 +286,14 @@ it("lists each model's own effort levels and Fast support before a chat exists",
       isDefault: false,
       efforts: [],
       supportsFastMode: false
+    },
+    {
+      id: 'composer-2.5',
+      label: 'Composer 2.5',
+      isDefault: false,
+      efforts: [],
+      supportsFastMode: true,
+      defaultFastMode: true
     }
   ])
 })
