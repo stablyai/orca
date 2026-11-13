@@ -218,6 +218,8 @@ export type RuntimeTerminalBufferSnapshot = {
 }
 
 export type HeadlessSeedMetadata = {
+  replaceExisting?: boolean
+  outputSequence?: number
   cwd?: string | null
   oscLinks?: TerminalOscLinkRange[]
   preferProviderIfExisting?: boolean

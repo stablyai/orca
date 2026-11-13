@@ -87,8 +87,8 @@ describe('orchestration mailbox pointer for a terminal no pane shows', () => {
       const readyFrame = recording.slice(recording.indexOf('\x1b[?1049h'))
       try {
         const data = `\x1b]133;C\x07\x1b]0;Freebuff: \x07${readyFrame}\x1b[?1049l\x1b]133;D;0\x07\x1b]133;A\x07\x1b]133;C\x07\x1b]0;claude\x07new invocation hook\r\n`
-        const seq = Date.now()
-        runtime.onPtyData(PTY_ID, data, seq)
+        runtime.onPtyData(PTY_ID, data, Date.now())
+        const seq = runtime.getPtyOutputSequence(PTY_ID)
         const settled = vi.fn()
         const wait = runtime.waitForTerminal(TERMINAL_HANDLE, {
           condition: 'tui-idle',

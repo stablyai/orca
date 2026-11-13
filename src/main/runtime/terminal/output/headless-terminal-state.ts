@@ -39,7 +39,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
   /** Create runtime emulators with query forwarding and ConPTY DA1 override for seed, hydration and live bytes; daemon emulators use another factory. */
   protected createPtyHeadlessTerminalState(
     ptyId: string,
-    dims: { cols: number; rows: number }
+    dims: { cols: number; rows: number },
+    existing?: RuntimeHeadlessTerminal
   ): RuntimeHeadlessTerminal {
     let state: RuntimeHeadlessTerminal | null = null
     const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
@@ -57,7 +58,11 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       // Use provider input for query replies to retain shell-ready/SSH routing without interactive echo metering.
       onQueryReply: (reply) => {
         // Queued links can outlive disposal; only the current state may reply to a reused PTY id.
-        if (state !== null && this.headlessTerminals.get(ptyId) === state) {
+        if (
+          state !== null &&
+          this.headlessTerminals.get(ptyId) === state &&
+          state.emulator === emulator
+        ) {
           if (!this.shouldForwardTerminalQueryReply(ptyId, reply)) {
             return
           }
@@ -75,28 +80,36 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (viewAttributes) {
       emulator.applyPushedViewAttributes(viewAttributes)
     }
-    const constructed: RuntimeHeadlessTerminal = {
-      emulator,
-      outputSequence: 0,
-      writeChain: Promise.resolve(),
-      ownership: new PtyShellOwnershipMirror(async () => {
-        const controller = this.ptyController
-        const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
-        if (
-          !controller?.confirmShellForeground ||
-          this.headlessTerminals.get(ptyId) !== constructed
-        ) {
-          return false
-        }
-        const confirmed = await controller.confirmShellForeground(ptyId)
-        return (
-          confirmed &&
-          this.headlessTerminals.get(ptyId) === constructed &&
-          this.getPtyLifecycleGeneration(ptyId) === lifecycleGeneration
-        )
-      })
+    const ownership = new PtyShellOwnershipMirror(async () => {
+      const controller = this.ptyController
+      const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
+      if (
+        !controller?.confirmShellForeground ||
+        !state ||
+        this.headlessTerminals.get(ptyId) !== state ||
+        state.ownership !== ownership
+      ) {
+        return false
+      }
+      const confirmed = await controller.confirmShellForeground(ptyId)
+      return (
+        confirmed &&
+        this.headlessTerminals.get(ptyId) === state &&
+        state.ownership === ownership &&
+        this.getPtyLifecycleGeneration(ptyId) === lifecycleGeneration
+      )
+    })
+    if (existing) {
+      state = existing
+      existing.emulator = emulator
+      existing.ownership = ownership
+      existing.outputSequence = 0
+      delete existing.rendererSeedSeq
+      delete existing.rendererSeedEscapeTail
+      delete existing.unrepaintedReflowGrid
+      return existing
     }
-    state = constructed
+    state = { emulator, ownership, outputSequence: 0, writeChain: Promise.resolve() }
     return state
   }
 

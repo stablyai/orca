@@ -106,6 +106,7 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
       data: string
       cols: number
       rows: number
+      seq?: number
       cwd?: string | null
       oscLinks?: TerminalOscLinkRange[]
     },
@@ -116,12 +117,19 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
     }
     // Why: a redraw byte can create a suffix-only model before the renderer settles; replace it with the exact snapshot already sent mobile.
     this.providerSnapshotPreferredPtys.add(ptyId)
-    this.disposeHeadlessTerminal(ptyId)
+    this.headlessHydrationState.set(ptyId, 'done')
     this.seedHeadlessTerminal(
       ptyId,
       snapshot.data,
       { cols: snapshot.cols, rows: snapshot.rows },
-      { cwd: snapshot.cwd, oscLinks: snapshot.oscLinks }
+      {
+        cwd: snapshot.cwd,
+        oscLinks: snapshot.oscLinks,
+        replaceExisting: true,
+        outputSequence:
+          snapshot.seq ??
+          (trailingOutput[0] ? trailingOutput[0].seq - trailingOutput[0].data.length : undefined)
+      }
     )
     // Why: a hidden pane answers at its own size; later bytes paint the PTY grid.
     const ptyGrid = this.getTerminalSize(ptyId)
@@ -132,8 +140,6 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
       // Replayed bytes already passed live ingestion; restoring their screen cannot renew action evidence.
       this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq, false, () => false)
     }
-    // The seed's write chain owns subsequent live bytes; suppress on-data hydration from replacing this known-good seed.
-    this.headlessHydrationState.set(ptyId, 'done')
   }
 
   waitForRendererTerminalSerializer(

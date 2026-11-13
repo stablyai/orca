@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { HeadlessEmulator } from '../../../../daemon/emulation/headless-emulator'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -59,7 +60,7 @@ async function startWorkerPane(launchAgent: TuiAgent) {
     }
     await runtime.readTerminal(handle)
   }
-  return { db, write, runId: run.id, dispatchId: dispatch.id }
+  return { db, write, runtime, handle, runId: run.id, dispatchId: dispatch.id }
 }
 
 describe('Codex reconnect failure inside a live worker PTY', () => {
@@ -87,6 +88,86 @@ describe('Codex reconnect failure inside a live worker PTY', () => {
       db.close()
     }
   })
+
+  it.each(['trailing', 'covered', 'repeated', 'invalidated'] as const)(
+    'preserves current native actions and later output through %s recovery',
+    async (mode) => {
+      const { db, runtime, handle, runId, dispatchId } = await startWorkerPane('codex')
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const originalWrite = HeadlessEmulator.prototype.write
+      const heldWrite = vi
+        .spyOn(HeadlessEmulator.prototype, 'write')
+        .mockImplementationOnce(async function (this: HeadlessEmulator, data, options) {
+          entered.resolve()
+          await release.promise
+          await originalWrite.call(this, data, options)
+        })
+      try {
+        runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, INLINE_OUTPUT, 1)
+        await entered.promise
+        const seq = runtime.getPtyOutputSequence(TRANSCRIPT_PANE_PTY_ID)
+        const trailing = mode === 'covered' ? [] : [{ data: INLINE_OUTPUT, seq }]
+        runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+          TRANSCRIPT_PANE_PTY_ID,
+          {
+            data: mode === 'covered' ? `earlier screen\r\n${INLINE_OUTPUT}` : 'earlier screen\r\n',
+            cols: 80,
+            rows: 24,
+            seq: mode === 'covered' ? seq : 0
+          },
+          trailing
+        )
+        if (mode === 'repeated') {
+          runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+            TRANSCRIPT_PANE_PTY_ID,
+            { data: 'second screen\r\n', cols: 80, rows: 24, seq: 0 },
+            trailing
+          )
+        } else if (mode === 'invalidated') {
+          runtime.preparePtyExecutionContext(TRANSCRIPT_PANE_PTY_ID, null, {
+            resetIncarnation: true
+          })
+        }
+        runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, 'LATER LIVE SUFFIX\r\n', 2)
+        release.resolve()
+        await runtime.readTerminal(handle)
+        const escalations = db
+          .getUnreadRunMailbox(runId, 100, ['escalation'])
+          .map((message) => message.subject)
+        if (mode === 'invalidated') {
+          expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
+          expect(escalations).toEqual([])
+        } else {
+          expect({
+            dispatch: db.getDispatchContextById(dispatchId)?.status,
+            worker: db.getWorkerDispatch(dispatchId)?.state,
+            stage: db.getWorkerDispatch(dispatchId)?.stage,
+            escalations
+          }).toEqual({
+            dispatch: 'failed',
+            worker: 'failed',
+            stage: 'agent_session_lost',
+            escalations: ['Worker lost without reporting']
+          })
+        }
+        const screen = await runtime.serializeMainTerminalBuffer(TRANSCRIPT_PANE_PTY_ID)
+        expect(screen?.data).toContain('LATER LIVE SUFFIX')
+        expect(screen?.data.match(/Automatic reconnect/g) ?? []).toHaveLength(
+          mode === 'invalidated' ? 0 : 1
+        )
+        if (mode !== 'invalidated') {
+          expect(screen?.data.indexOf('Automatic reconnect')).toBeLessThan(
+            screen?.data.indexOf('LATER LIVE SUFFIX') ?? 0
+          )
+        }
+      } finally {
+        release.resolve()
+        heldWrite.mockRestore()
+        db.close()
+      }
+    }
+  )
 
   it('ignores the text when a Codex pane shows it as indented output', async () => {
     const { db, write, dispatchId } = await startWorkerPane('codex')

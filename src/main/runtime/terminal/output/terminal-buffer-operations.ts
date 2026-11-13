@@ -77,7 +77,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   abstract resetHeadlessTerminalInputModes(ptyId: string): Promise<void>
   protected abstract createPtyHeadlessTerminalState(
     ptyId: string,
-    dims: { cols: number; rows: number }
+    dims: { cols: number; rows: number },
+    existing?: RuntimeHeadlessTerminal
   ): RuntimeHeadlessTerminal
   protected abstract applySeededAgentStatus(ptyId: string, title: string): void
 
@@ -186,7 +187,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       return
     }
     const existing = this.headlessTerminals.get(ptyId)
-    if (existing) {
+    if (existing && !metadata.replaceExisting) {
       // Why: emulator already has live data — re-seeding would duplicate
       // every byte. The seed is only valid when the emulator is fresh.
       if (metadata.preferProviderIfExisting) {
@@ -195,8 +196,12 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       return
     }
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
-    const seededSequence = this.getPtyOutputSequence(ptyId)
+    const state = existing ?? this.createPtyHeadlessTerminalState(ptyId, dims)
+    const seededSequence = metadata.outputSequence ?? this.getPtyOutputSequence(ptyId)
+    if (existing) {
+      existing.emulator.disableQueryReplyForwarding()
+      existing.ownership.dispose()
+    }
     this.headlessTerminals.set(ptyId, state)
     this.recordOsc7MetadataForPty(ptyId, data)
     this.recordRecentPtyOutput(ptyId, data)
@@ -205,8 +210,14 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
-        // Why: seed writes never set forwardQueryReplies — the main-side
-        // replay guard. A snapshot containing old queries must answer no one.
+        if (existing) {
+          const oldEmulator = state.emulator
+          oldEmulator.disableQueryReplyForwarding()
+          state.ownership.dispose()
+          this.createPtyHeadlessTerminalState(ptyId, dims, state)
+          oldEmulator.dispose()
+        }
+        // Snapshot recovery replaces presentation resources after prior live effects, keeping their queue owner.
         await state.emulator.write(data)
         if (this.headlessTerminals.get(ptyId) !== state) {
           return

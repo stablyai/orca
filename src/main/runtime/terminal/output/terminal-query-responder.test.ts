@@ -196,6 +196,29 @@ describe('reply ownership matrix', () => {
 })
 
 describe('main-side replay guard', () => {
+  it('silences queued and replayed queries across model recovery, then answers live bytes', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
+    markHiddenRendererPty('pty-recovered')
+    runtime.seedHeadlessTerminal('pty-recovered', 'old screen')
+    await settle(runtime, 'pty-recovered')
+    runtime.onPtyData('pty-recovered', QUERY_BATCH, Date.now())
+    runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+      'pty-recovered',
+      { data: `restored prompt${QUERY_BATCH}`, cols: 80, rows: 24, seq: 0 },
+      [{ data: QUERY_BATCH, seq: runtime.getPtyOutputSequence('pty-recovered') }]
+    )
+    await settle(runtime, 'pty-recovered')
+    expect(replies).toEqual([])
+    runtime.onPtyData('pty-recovered', QUERY_BATCH, Date.now())
+    await settle(runtime, 'pty-recovered')
+    expect(replies.map((reply) => reply.data)).toEqual([
+      '\x1b[?1;2c',
+      '\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\',
+      '\x1b[?997;1n'
+    ])
+  })
+
   it('never answers queries embedded in a seeded snapshot, then answers live bytes', async () => {
     const { runtime, replies } = createResponderRuntime()
     setTerminalViewAttributes(viewAttributes())
