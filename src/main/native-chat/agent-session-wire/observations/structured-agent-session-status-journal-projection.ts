@@ -128,62 +128,82 @@ export class StructuredAgentSessionJournalProjections {
 
   /** Narrow work and full status occupy the same validated per-journal entry. */
   async readWorkSql(journal: SqlAgentSessionJournal, capture: () => CapturedWork | null) {
-    // No rows ride along, so a current cached answer needs no read.
-    const frame = await this.readWorkFrame(journal, capture, async (work) => ({
-      value: undefined,
-      ...(work && !work.unlessAt ? { work: await journal.reads.work(work.read) } : {})
-    }))
-    return frame.answer
+    for (;;) {
+      const captured = capture()
+      if (!captured) {
+        this.byJournal.delete(journal)
+        return null
+      }
+      const answer = this.currentWorkSql(journal, captured)
+      if (answer) {
+        return answer
+      }
+      const authority = copyJournalCurrentWorkAuthority(captured.authority)
+      const result = await journal.reads.work({ authority, operation: { kind: 'state' } })
+      const recaptured = capture()
+      if (!recaptured) {
+        this.byJournal.delete(journal)
+        return null
+      }
+      if (
+        recaptured.contextId !== captured.contextId ||
+        !journalSqlWorkAnswerIsCurrent(journal, () => recaptured.authority, authority, result)
+      ) {
+        continue
+      }
+      this.remember(journal, recaptured, result, captured.contextId)
+      return result
+    }
   }
 
-  /** Answer work in the same reader snapshot as the caller's rows; a cached answer is reused only
-   *  at that snapshot, and an answer main has not adopted yet is read again once it has. */
-  async readWorkFrame<T>(
+  /** One attempt: the caller's rows and work from one reader snapshot, validated against live
+   *  authority. A cached answer is reused only at that same snapshot. Null when authority changed
+   *  during the read; the change's own publication schedules the replacement. */
+  async captureWorkFrame<T>(
     journal: SqlAgentSessionJournal,
     capture: () => CapturedWork | null,
     read: (work: JournalDomainHistoryWork | undefined) => Promise<{
       value: T
       work?: JournalSqlWorkResult
     }>
-  ): Promise<{ answer: JournalSqlWorkResult | null; value: T }> {
-    for (;;) {
-      const captured = capture()
-      if (!captured) {
-        this.byJournal.delete(journal)
-        return { answer: null, value: (await read(undefined)).value }
-      }
-      const cached = this.currentWorkSql(journal, captured)
-      const authority = copyJournalCurrentWorkAuthority(captured.authority)
-      const frame = await read({
-        read: { authority, operation: { kind: 'state' } },
-        ...(cached
-          ? { unlessAt: { cursor: cached.cursor, physicalCursor: cached.physicalCursor } }
-          : {})
-      })
-      const answer = frame.work ?? cached
-      const recaptured = capture()
-      if (!recaptured) {
-        this.byJournal.delete(journal)
-        return { answer: null, value: frame.value }
-      }
-      if (
-        !answer ||
-        recaptured.contextId !== captured.contextId ||
-        !journalSqlWorkAnswerIsCurrent(journal, () => recaptured.authority, authority, answer)
-      ) {
-        continue
-      }
-      if (
-        frame.work &&
-        (this.currentEntry(journal)?.kind !== 'full' || !this.currentWorkSql(journal, recaptured))
-      ) {
-        this.byJournal.set(journal, {
-          kind: 'work-only',
-          answer: frame.work,
-          contextId: captured.contextId
-        })
-      }
-      return { answer, value: frame.value }
+  ): Promise<{ answer: JournalSqlWorkResult | null; value: T } | null> {
+    const captured = capture()
+    if (!captured) {
+      this.byJournal.delete(journal)
+      return { answer: null, value: (await read(undefined)).value }
+    }
+    const cached = this.currentWorkSql(journal, captured)
+    const authority = copyJournalCurrentWorkAuthority(captured.authority)
+    const frame = await read({
+      read: { authority, operation: { kind: 'state' } },
+      ...(cached
+        ? { unlessAt: { cursor: cached.cursor, physicalCursor: cached.physicalCursor } }
+        : {})
+    })
+    const answer = frame.work ?? cached
+    const recaptured = capture()
+    if (
+      !recaptured ||
+      !answer ||
+      recaptured.contextId !== captured.contextId ||
+      !journalSqlWorkAnswerIsCurrent(journal, () => recaptured.authority, authority, answer)
+    ) {
+      return null
+    }
+    if (frame.work) {
+      this.remember(journal, recaptured, frame.work, captured.contextId)
+    }
+    return { answer, value: frame.value }
+  }
+
+  private remember(
+    journal: SqlAgentSessionJournal,
+    captured: CapturedWork,
+    answer: JournalSqlWorkResult,
+    contextId: string | null
+  ) {
+    if (this.currentEntry(journal)?.kind !== 'full' || !this.currentWorkSql(journal, captured)) {
+      this.byJournal.set(journal, { kind: 'work-only', answer, contextId })
     }
   }
 

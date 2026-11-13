@@ -147,11 +147,13 @@ function sameQueuePause(
   return (previous === null) === (next === null) && previous?.reason === next?.reason
 }
 
+/** `inLane`: the caller already holds the chat's command lane, which is not reentrant. */
 export async function readQueuePublication(
   journal: AgentSessionJournal,
-  gate: QueueSendGate
+  gate: QueueSendGate,
+  inLane = false
 ): Promise<QueuePublication> {
-  return journal.readInOrder(async () => {
+  const read = async () => {
     const { rows: cardRows, list: queuedMessages, pauses } = await publishedQueueRows(journal)
     // Show pauses only when Resume can send a card; hide old pauses after clear/reopen.
     const visible = Math.max(
@@ -200,16 +202,18 @@ export async function readQueuePublication(
     const publication = { queuedMessages, queuePause, nextQueuedMessageId }
     publications.set(journal, publication)
     return publication
-  })
+  }
+  return inLane ? read() : journal.readInOrder(read)
 }
 
 /** Closing handles return no claim instead of failing streams/history reads. */
 export async function tryReadQueuePublication(
   journal: AgentSessionJournal | undefined,
-  gate: QueueSendGate
+  gate: QueueSendGate,
+  inLane = false
 ): Promise<QueuePublication | undefined> {
   try {
-    return journal ? await readQueuePublication(journal, gate) : undefined
+    return journal ? await readQueuePublication(journal, gate, inLane) : undefined
   } catch {
     return undefined
   }

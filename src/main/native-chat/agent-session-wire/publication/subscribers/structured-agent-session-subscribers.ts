@@ -74,14 +74,18 @@ export class AgentSessionSubscribers {
     this.enqueue(subscriber, async () => {
       const hostNow = this.now()
       const port = this.deliveryPort(input.sessionId, journal)
-      const work = (await port.hooks.readCurrentWork?.(input.sessionId, journal)) ?? undefined
-      if (!this.isActive(subscriber)) {
-        return
-      }
       if (input.cursor) {
-        await deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: true })
+        const frame = await deliverToSubscriber(port, {
+          subscriber,
+          journal,
+          hostNow,
+          emitCheckpoint: true
+        })
         await this.forkMarkers.refresh(subscriber, journal, true)
-        await refreshDerivedStopNotes(port, subscriber, journal, hostNow, work)
+        // An abandoned frame is replaced by its invalidation's delivery, never decorated here.
+        if (frame) {
+          await refreshDerivedStopNotes(port, subscriber, journal, hostNow, frame.work)
+        }
       } else {
         await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
@@ -166,9 +170,15 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal, queueChanged)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, () =>
-        deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity })
-      )
+      this.enqueue(subscriber, async () => {
+        await deliverToSubscriber(port, {
+          subscriber,
+          journal,
+          hostNow,
+          emitCheckpoint: false,
+          activity
+        })
+      })
     }
   }
 

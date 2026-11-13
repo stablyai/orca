@@ -30,12 +30,14 @@ type HistoryReadOptions = {
 
 export type AgentSessionHistoryFrame<T> = { result: T; work?: JournalSqlWorkResult }
 
-/** The page and any requested work share one reader snapshot. */
+/** The page and any requested work share one reader snapshot. `inLane`: the caller already holds
+ *  the chat's command lane, which is not reentrant. */
 export async function readAgentSessionHistoryFrame(
   journal: SqlAgentSessionJournal,
   request: AgentSessionHistoryRequest,
   { scope = 'every-agent', reader = CLIENT_HISTORY_READER, rowReplay = false }: HistoryReadOptions,
-  work?: JournalDomainHistoryWork
+  work?: JournalDomainHistoryWork,
+  inLane = false
 ): Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> {
   const read = async (): Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> => {
     const frame = await journal.history(
@@ -66,9 +68,10 @@ export async function readAgentSessionHistoryFrame(
       }
     }
   }
-  return reader.queueSourceIds ? journal.readInOrder(read) : read()
+  return reader.queueSourceIds && !inLane ? journal.readInOrder(read) : read()
 }
 
+/** Subscriber catch-up reads inside its held frame capture. */
 export function createAgentSessionCatchUpReader(
   journal: SqlAgentSessionJournal,
   reader: HistoryReader = CLIENT_HISTORY_READER
@@ -77,7 +80,7 @@ export function createAgentSessionCatchUpReader(
   work?: JournalDomainHistoryWork
 ) => Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> {
   return (request, work) =>
-    readAgentSessionHistoryFrame(journal, request, { reader, rowReplay: true }, work)
+    readAgentSessionHistoryFrame(journal, request, { reader, rowReplay: true }, work, true)
 }
 
 export async function readAgentSessionHydrationPage(
@@ -92,7 +95,8 @@ export async function readAgentSessionHydrationFrame(
   journal: SqlAgentSessionJournal,
   fence?: number,
   reader: HistoryReader = CLIENT_HISTORY_READER,
-  work?: JournalDomainHistoryWork
+  work?: JournalDomainHistoryWork,
+  inLane = false
 ): Promise<AgentSessionHistoryFrame<AgentSessionHistoryPage>> {
   const read = async (): Promise<AgentSessionHistoryFrame<AgentSessionHistoryPage>> => {
     const frame = await journal.history(
@@ -111,7 +115,7 @@ export async function readAgentSessionHydrationFrame(
     )
     return { ...frame, result: await projectPage(journal, frame.result.page, reader, false) }
   }
-  return reader.queueSourceIds ? journal.readInOrder(read) : read()
+  return reader.queueSourceIds && !inLane ? journal.readInOrder(read) : read()
 }
 
 async function projectPage(

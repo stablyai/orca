@@ -14,13 +14,14 @@ import {
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import type { Subscriber } from './agent-session-subscribe-input'
 
-/** Correct notes after stale in-flight pages; restate current work so rows retain modern-host semantics. */
+/** Correct notes after stale in-flight pages. Rows clear unstated work fields, so restate those of
+ *  the frame captured at the subscriber's cursor; the queue stays as that frame delivered it. */
 export async function refreshDerivedStopNotes(
   port: Pick<SubscriberDeliveryPort, 'emit' | 'isActive'>,
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   hostNow: number,
-  work?: AgentSessionPublishedWork
+  work: AgentSessionPublishedWork | undefined
 ): Promise<void> {
   const { form, budgetBytes } = subscriberHistoryReader(subscriber)
   const fields = work ? agentSessionPublishedWorkFields(journal, work) : {}
@@ -40,7 +41,7 @@ export async function refreshDerivedStopNotes(
         ...fields,
         hostNow
       },
-      { currentWork: work, journal }
+      { currentWork: work, journal, withholdQueued: true }
     )
     pending = []
     bytes = 0

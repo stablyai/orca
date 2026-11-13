@@ -11,7 +11,8 @@ import {
 
 type Observed = (projection: StructuredAgentSessionJournalProjection) => void
 
-/** Rows and current work from one reader snapshot, validated against live authority. */
+/** Rows and current work from one reader snapshot, validated against live authority once; null
+ *  when that authority changed during the read. */
 export type StructuredAgentSessionWorkFrameReader = <T>(
   sessionId: string,
   journal: SqlAgentSessionJournal,
@@ -19,7 +20,7 @@ export type StructuredAgentSessionWorkFrameReader = <T>(
     value: T
     work?: JournalSqlWorkResult
   }>
-) => Promise<{ work: StructuredAgentSessionObservedWork | null; value: T }>
+) => Promise<{ work: StructuredAgentSessionObservedWork | null; value: T } | null>
 /** The existing per-handle cache binds the reader to its real live owners and publication path. */
 export function createStructuredAgentSessionStatusReader(
   deps: StructuredAgentSessionStatusFeedDeps,
@@ -89,8 +90,17 @@ export function createStructuredAgentSessionStatusReader(
     observedWork(journal, await projections.readWorkSql(journal, capture(sessionId, journal)))
 
   const workFrame: StructuredAgentSessionWorkFrameReader = async (sessionId, journal, rows) => {
-    const frame = await projections.readWorkFrame(journal, capture(sessionId, journal), rows)
-    return { work: observedWork(journal, frame.answer), value: frame.value }
+    const replaced = () => {
+      const owner = deps.sessions.get(sessionId)?.journal
+      return owner !== undefined && owner !== journal
+    }
+    if (replaced()) {
+      return null
+    }
+    const frame = await projections.captureWorkFrame(journal, capture(sessionId, journal), rows)
+    return frame && !replaced()
+      ? { work: observedWork(journal, frame.answer), value: frame.value }
+      : null
   }
 
   return Object.assign(read, { work, workFrame })

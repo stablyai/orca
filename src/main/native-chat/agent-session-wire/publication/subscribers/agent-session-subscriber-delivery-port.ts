@@ -1,5 +1,4 @@
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { sameJournalCursor } from '../../../agent-session-journal/replay/journal-cursor'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
@@ -16,66 +15,37 @@ export function subscriberDeliveryPort(
   queueChanged = true
 ): SubscriberDeliveryPort {
   let work: Promise<StructuredAgentSessionObservedWork | null> | undefined
-  let queue:
-    | {
-        work: StructuredAgentSessionObservedWork | null
-        value: Promise<QueuePublication | undefined>
-      }
-    | undefined
-  const read = () =>
-    Promise.resolve(
+  let queue: Promise<QueuePublication | undefined> | undefined
+  let framed: { key: string; value: Promise<QueuePublication | undefined> } | undefined
+  const readWork = () =>
+    (work ??= Promise.resolve(
       sessionId && journal ? base.hooks.readCurrentWork?.(sessionId, journal) : null
-    ).then((value) => value ?? null)
-  const readWork = async () => {
-    const shared = (work ??= read())
-    const value = await shared
-    // A commit adopted since the shared answer makes it stale for every later reader.
-    if (value && journal && !sameJournalCursor(value.cursor, journal.cursor())) {
-      if (work === shared) {
-        work = read()
+    ).then((value) => value ?? null))
+  const readQueue = base.hooks.readQueuePublication
+  // Frames at one complete work identity and queue revision share one in-lane queue answer.
+  const captureQueue = readQueue
+    ? (id: string, current: StructuredAgentSessionObservedWork | undefined) => {
+        const key = journal && frameQueueKey(journal, current)
+        if (key === undefined || framed?.key !== key) {
+          const value = Promise.resolve(readQueue(id, current, true))
+          framed = key === undefined ? undefined : { key, value }
+          return value
+        }
+        return framed.value
       }
-      return work
-    }
-    return value
-  }
-  const readWorkFrame = base.hooks.readWorkFrame
+    : undefined
   const hooks: SubscriberDeliveryPort['hooks'] =
     sessionId && journal
       ? {
           ...base.hooks,
           readCurrentWork: readWork,
-          // A frame's answer is current at the adopted cursor, so later readers share it.
-          ...(readWorkFrame
-            ? {
-                readWorkFrame: async (id, source, rows) => {
-                  const frame = await readWorkFrame(id, source, rows)
-                  const shared = await work
-                  if (
-                    frame.work &&
-                    sameJournalCursor(frame.work.cursor, journal.cursor()) &&
-                    !sameWorkCursor(shared ?? null, frame.work)
-                  ) {
-                    work = Promise.resolve(frame.work)
-                  }
-                  return frame
-                }
-              }
-            : {}),
-          // The queue is read with the shared work answer and follows it to newer cursors.
           readQueuePublication: queueChanged
-            ? async () => {
-                const current = await readWork()
-                if (!queue || !sameWorkCursor(queue.work, current)) {
-                  queue = {
-                    work: current,
-                    value: Promise.resolve(
-                      base.hooks.readQueuePublication?.(sessionId, current ?? undefined)
-                    )
-                  }
-                }
-                return queue.value
-              }
-            : undefined
+            ? () =>
+                (queue ??= readWork().then((value) =>
+                  base.hooks.readQueuePublication?.(sessionId, value ?? undefined)
+                ))
+            : undefined,
+          captureQueuePublication: queueChanged ? captureQueue : undefined
         }
       : base.hooks
   return {
@@ -94,9 +64,19 @@ export function subscriberDeliveryPort(
   }
 }
 
-function sameWorkCursor(
-  a: StructuredAgentSessionObservedWork | null,
-  b: StructuredAgentSessionObservedWork | null
-): boolean {
-  return a === b || (a !== null && b !== null && sameJournalCursor(a.cursor, b.cursor))
+function frameQueueKey(
+  journal: SqlAgentSessionJournal,
+  work: StructuredAgentSessionObservedWork | undefined
+): string | undefined {
+  const source = work?.readSource
+  if (work && !source) {
+    return undefined
+  }
+  return JSON.stringify([
+    source && [source.cursor, source.physicalCursor, source.authority],
+    journal.cursor(),
+    journal.physicalCursor(),
+    journal.queuedMessages.revision(),
+    journal.reopenFloor()
+  ])
 }

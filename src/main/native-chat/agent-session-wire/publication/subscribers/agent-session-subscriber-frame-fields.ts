@@ -37,9 +37,11 @@ export type SubscriberFieldHooks = {
     sessionId: string,
     commandsOnRequest?: boolean
   ) => AgentSessionSlashCommand[] | undefined
+  /** `inLane`: read inside a held frame capture; never admits the lane itself. */
   readQueuePublication?: (
     sessionId: string,
-    work?: StructuredAgentSessionObservedWork
+    work?: StructuredAgentSessionObservedWork,
+    inLane?: boolean
   ) => QueuePublication | undefined | Promise<QueuePublication | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
