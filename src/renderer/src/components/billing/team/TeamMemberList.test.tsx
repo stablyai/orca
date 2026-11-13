@@ -102,8 +102,8 @@ it.each(['owner', 'admin'] as const)('shows the MFA column to an %s', (viewerRol
   const { container } = renderList({ ...rosterWithMfa, viewerRole }, 'u-neil')
   const cell = (key: string): Element =>
     container.querySelector(`[data-team-row="${key}"] [data-team-mfa]`)!
-  expect(cell('member:u-neil').textContent).toBe('MFA on')
-  expect(cell('member:u-grace').textContent).toBe('MFA due Nov 24')
+  expect(cell('member:u-neil').textContent).toBe('2FA on')
+  expect(cell('member:u-grace').textContent).toBe('2FA due Nov 24')
   // A small muted badge, not bare text.
   expect(cell('member:u-neil').querySelector('[data-slot="badge"]')).not.toBeNull()
   // Invites keep an empty cell so the role column stays aligned.
@@ -134,7 +134,7 @@ it('leaves the cell blank, not "off", for a member with no status', () => {
   )
   const cell = (key: string): Element =>
     container.querySelector(`[data-team-row="${key}"] [data-team-mfa]`)!
-  expect(cell('member:u-neil').textContent).toBe('MFA off')
+  expect(cell('member:u-neil').textContent).toBe('2FA off')
   expect(cell('member:u-grace').textContent).toBe('')
 })
 
@@ -153,4 +153,19 @@ it('shows no MFA badge for a member who has not signed in yet', () => {
     '[data-team-row="member:linus@acme.dev"] [data-team-mfa]'
   )!
   expect(pending.textContent).toBe('')
+})
+
+it('shows a member whose two-factor is their identity provider’s as via SSO', () => {
+  const { container } = renderList(
+    {
+      ...roster,
+      members: [
+        { ...roster.members[0]!, mfa: 'on' },
+        { ...roster.members[1]!, mfa: 'sso' }
+      ]
+    },
+    'u-neil'
+  )
+  const cell = container.querySelector('[data-team-row="member:u-grace"] [data-team-mfa]')!
+  expect(cell.textContent).toBe('2FA via SSO')
 })

@@ -8,6 +8,7 @@ import { activeTeamRole } from '@/lib/orca-cloud/active-team-role'
 import { useAppStore } from '@/store'
 import { refreshBillingSummary, useBillingState } from '../../billing/billing-summary-store'
 import { canManageMembers } from '../../billing/team/team-roles'
+import { EnterpriseMfaPolicy } from '../../team-mfa/EnterpriseMfaPolicy'
 import { EnterpriseSettingsView } from './EnterpriseSettingsView'
 import { ENTERPRISE_CONTACT_URL, type EnterpriseContact } from './EnterpriseUpsell'
 import { useEnterpriseAuditLog } from './use-enterprise-audit-log'
@@ -37,6 +38,7 @@ function EnterpriseSettingsPaneBody(): React.JSX.Element | null {
   const role = activeTeamRole(authStatus)
   const admin = role !== null && canManageMembers(role)
   const contact = useEnterpriseContact()
+  const orgId = authStatus?.cloud?.activeOrgId ?? null
   const audit = useEnterpriseAuditLog(availability?.status === 'ready' && admin)
   if (availability?.status !== 'ready' || !admin) {
     return null
@@ -46,6 +48,15 @@ function EnterpriseSettingsPaneBody(): React.JSX.Element | null {
       // Enterprise's features come together in one plan version, so the audit log's answer says
       // which side of the plan the team is on. Unknown while it loads or fails: the block waits.
       ssoIncluded={audit.log.status === 'ok' ? true : audit.log.status === 'upsell' ? false : null}
+      policies={
+        orgId ? (
+          <EnterpriseMfaPolicy
+            orgId={orgId}
+            contact={contact}
+            onContactSales={(url) => void window.api.shell.openUrl(url)}
+          />
+        ) : undefined
+      }
       audit={{
         log: audit.log,
         filters: audit.filters,

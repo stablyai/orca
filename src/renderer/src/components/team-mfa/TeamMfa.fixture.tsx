@@ -76,8 +76,8 @@ export const toast = frame(
       lines: [
         {
           key: 'mfa',
-          text: 'Acme Engineering requires MFA from December 2, 2026.',
-          action: { label: 'Set up MFA', primary: true, onClick: noop }
+          text: 'Acme Engineering requires two-factor authentication from December 2, 2026.',
+          action: { label: 'Set up two-factor', primary: true, onClick: noop }
         }
       ]
     }}
@@ -119,7 +119,7 @@ const off: OrcaTeamMfaPolicy = {
   policy: null,
   self: 'on',
   setupUrl,
-  manage: { available: true, pendingMembers: 3 }
+  manage: { available: true, pendingMembers: 3, ssoHandled: false }
 }
 const scheduled: OrcaTeamMfaPolicy = {
   ...off,
@@ -142,7 +142,7 @@ const row = (props: Partial<RequireMfaRowProps>) =>
     />
   )
 
-/** Not required yet: pick when, then Require MFA. */
+/** Not required yet: pick when, then Require two-factor. */
 export const rowOff = row({})
 /** The admin has no MFA themselves: the change is held back until they add it. */
 export const rowAdminNeedsOwnMfa = row({ policy: { ...off, self: 'off' } })
@@ -154,9 +154,11 @@ export const rowEnforced = row({
   pending: pendingMembers.map((member) => ({ ...member, mfa: 'blocked' as const }))
 })
 export const rowEveryoneSet = row({
-  policy: { ...scheduled, manage: { available: true, pendingMembers: 0 } },
+  policy: { ...scheduled, manage: { available: true, pendingMembers: 0, ssoHandled: false } },
   pending: []
 })
+/** An admin who signs in through the team's SSO: no own factor needed to change the policy. */
+export const rowAdminViaSso = row({ policy: { ...off, self: 'delegated' } })
 export const rowSaving = row({ policy: scheduled, pending: pendingMembers, busy: true })
 export const rowReminded = row({
   policy: scheduled,
