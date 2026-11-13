@@ -213,6 +213,36 @@ describe('derived tool row turn ownership', () => {
     expect(membership.turnKeys).toEqual([undefined, undefined, undefined])
   })
 
+  it('reports provider turn bounds as known when the legacy journal names every opener', () => {
+    const items = [
+      text('A', 1, 'user', null),
+      turn('tA', 2, 'A', null),
+      text('a1', 3, 'assistant', null),
+      turn('tB', 4, 'B', null),
+      text('b1', 5, 'assistant', null)
+    ]
+    const membership = nativeChatTurnMembership(projectStructuredItemsToNativeChat(items), {
+      items,
+      submissions: []
+    })
+    expect(membership.providerTurnBoundsKnown).toBe(true)
+  })
+
+  it('reports provider turn bounds as unknown when a legacy record names no opener', () => {
+    const items = [
+      text('A', 1, 'user', null),
+      turn('tA', 2, 'A', null),
+      text('a1', 3, 'assistant', null),
+      item('tB', 4, { kind: 'turn', turnId: 'tB', state: 'completed' }, null),
+      text('b1', 5, 'assistant', null)
+    ]
+    const messages = projectStructuredItemsToNativeChat(items)
+    const membership = nativeChatTurnMembership(messages, { items, submissions: [] })
+    expect(messages.filter((message) => message.role === 'assistant').length).toBe(2)
+    expect(membership.turnKeys.every((turnKey) => turnKey === 'A')).toBe(true)
+    expect(membership.providerTurnBoundsKnown).toBe(false)
+  })
+
   it('indexes source positions once for many derived rows and skips that work for known rows', () => {
     let sequenceReads = 0
     const sources = Array.from({ length: 1_024 }, (_, index) => {
