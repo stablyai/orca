@@ -57,6 +57,18 @@ export function validateProfileStateDomainTransaction(transaction: ProfileStateD
       throw new Error(`Profile state patch repeats replacement: ${patch.domain}`)
     }
   }
+  if (transaction.domainOrder !== undefined) {
+    const present = new Set([...domains, ...patches.map(({ domain }) => domain)])
+    if (
+      !Array.isArray(transaction.domainOrder) ||
+      transaction.domainOrder.length !== present.size ||
+      !transaction.domainOrder.every(
+        (domain: unknown) => typeof domain === 'string' && present.delete(domain)
+      )
+    ) {
+      throw new Error('Profile state domain order is invalid')
+    }
+  }
   return patches
 }
 

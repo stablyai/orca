@@ -86,6 +86,7 @@ function isPatchOperation(value: unknown): boolean {
 function isPreparedWrite(value: unknown): value is PreparedProfileStateWrite {
   return (
     isRecord(value) &&
+    isStringArray(value.domainOrder) &&
     Array.isArray(value.replacements) &&
     value.replacements.every(isReplacement) &&
     Array.isArray(value.patches) &&

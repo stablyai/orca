@@ -152,6 +152,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writePreparedState(write: PreparedProfileStateWrite): void {
     this.writeDomainTransaction({
+      domainOrder: write.domainOrder,
       replacements: write.replacements,
       patches: write.patches,
       complete: write.complete,

@@ -95,7 +95,11 @@ function equalJson(value: unknown, previous: unknown, ancestors: Set<object>): b
         if (!Object.hasOwn(value, index)) {
           throw unsupported
         }
-        const childEqual = equalJson(readDataProperty(value, String(index)), old[index], ancestors)
+        const childEqual = equalJson(
+          readDataProperty(value, String(index)),
+          Object.hasOwn(old, index) ? old[index] : undefined,
+          ancestors
+        )
         equal &&= childEqual
       }
       return equal
@@ -109,7 +113,11 @@ function equalJson(value: unknown, previous: unknown, ancestors: Set<object>): b
       if (child === undefined) {
         continue
       }
-      const childEqual = equalJson(child, old?.[key], ancestors)
+      const childEqual = equalJson(
+        child,
+        old && Object.hasOwn(old, key) ? old[key] : undefined,
+        ancestors
+      )
       equal &&= key === oldKeys[index] && childEqual
       index++
     }

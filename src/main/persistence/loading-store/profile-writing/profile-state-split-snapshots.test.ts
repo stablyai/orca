@@ -55,6 +55,29 @@ describe('profile state split capture', () => {
     ).toEqual([])
   })
 
+  it('does not observe inherited properties missing from the captured baseline', () => {
+    const snapshots = new ProfileStateSplitSnapshots()
+    snapshots.seed({ workspaceSession: { tabsByWorktree: { w: [{}] } } })
+    const current = { tabsByWorktree: { w: [{ probe: 1 }] } }
+    let observations = 0
+    Object.defineProperty(Object.prototype, 'probe', {
+      configurable: true,
+      get() {
+        observations++
+        throw new Error('unexpected inherited read')
+      }
+    })
+    try {
+      const captured = snapshots.capture('workspaceSession', current)!
+      expect(captured.patch.operations).toEqual([
+        { kind: 'set', path: ['tabsByWorktree', 'w'], payload: '[{"probe":1}]' }
+      ])
+      expect(observations).toBe(0)
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'probe')
+    }
+  })
+
   it('normalizes array undefined and nonfinite numbers without changing JSON values', () => {
     const snapshots = new ProfileStateSplitSnapshots()
     snapshots.seed({ workspaceSession: { a: { b: [null, null, 0] } } })

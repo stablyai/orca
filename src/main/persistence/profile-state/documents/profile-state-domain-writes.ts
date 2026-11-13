@@ -51,6 +51,7 @@ export type ProfileStateDomainMutation = Omit<ProfileStateDomainReplacement, 'ex
 /** One shared revision check makes cross-domain mutations an atomic compare-and-swap. */
 export type ProfileStateDomainTransaction = {
   expectedRevision: number
+  domainOrder?: readonly string[]
   replacements: readonly ProfileStateDomainMutation[]
   /** Enable selective run-row updates from Store's changed projection. */
   automationRunsAfter?: readonly unknown[]
@@ -115,6 +116,10 @@ export function writeProfileStateDomains(
       ...prepared,
       ...preparePatchedProfileStateDomains(db, patches, actualRevision, readLegacyDocument)
     ]
+    if (transaction.domainOrder) {
+      const ranks = new Map(transaction.domainOrder.map((domain, index) => [domain, index]))
+      mutations.sort((left, right) => ranks.get(left.domain)! - ranks.get(right.domain)!)
+    }
     if (transaction.complete) {
       const present = [
         ...patches.map(({ domain }) => domain),

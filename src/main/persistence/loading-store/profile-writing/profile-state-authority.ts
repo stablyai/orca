@@ -4,6 +4,7 @@ import type { ProfileStateDatabaseQuarantine } from '../../profile-state/recover
 import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
 
 export type PreparedProfileStateWrite = {
+  domainOrder: readonly string[]
   replacements: readonly ProfileStateDomainReplacement[]
   patches: readonly ProfileStateDomainPatch[]
   runPayloads?: readonly string[]

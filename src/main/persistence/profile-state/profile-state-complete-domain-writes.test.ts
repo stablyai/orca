@@ -8,6 +8,8 @@ import {
 } from './database/profile-state-database'
 import './documents/profile-state-documents'
 import { readProfileStateRevision } from './database/profile-state-revision'
+import { ProfileStateSplitSnapshots } from '../loading-store/profile-writing/profile-state-split-snapshots'
+import { capturePreparedProfileStateWrite } from '../loading-store/profile-writing/profile-state-prepared-write'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 
 const fixtures: { authority: ProfileStateSqliteAuthority; directory: string }[] = []
@@ -42,6 +44,29 @@ afterEach(() => {
 })
 
 describe('complete domain revision fencing', () => {
+  it.each([false, true])(
+    'exports mixed domain kinds in capture order (complete=%s)',
+    (complete) => {
+      const { authority } = fixture(false)
+      const snapshots = new ProfileStateSplitSnapshots()
+      snapshots.seed(undefined)
+      const captured = capturePreparedProfileStateWrite({
+        snapshots,
+        stateToSave: { workspaceSession: { activeTabId: 't' }, marker: 'kept' },
+        complete,
+        secretSubs: [],
+        protectedSecretUpdates: []
+      })
+      if (!captured.write) {
+        throw new Error('Expected a prepared write')
+      }
+      authority.writePreparedState(captured.write)
+      expect(authority.readSerializedState()).toBe(
+        '{"workspaceSession":{"activeTabId":"t"},"marker":"kept"}'
+      )
+    }
+  )
+
   it('rejects an older complete replacement after a concurrent writer commits', () => {
     const { authority, databasePath } = fixture(true)
     authority.readSerializedState()

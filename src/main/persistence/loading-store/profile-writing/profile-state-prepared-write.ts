@@ -63,6 +63,7 @@ export function capturePreparedProfileStateWrite({
     }
     return { ...built, acknowledge }
   }
+  const domainOrder: string[] = []
   const replacements: ProfileStateDomainReplacement[] = []
   const patches: ProfileStateDomainPatch[] = []
   // Complete serialization captures entries before any hook; selective reads each key in turn.
@@ -75,6 +76,7 @@ export function capturePreparedProfileStateWrite({
     const split = PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.has(domain)
     const captured = split ? snapshots.capture(domain, value) : undefined
     if (captured) {
+      domainOrder.push(domain)
       patches.push(captured.patch)
       candidates.set(domain, captured.value)
       continue
@@ -89,6 +91,7 @@ export function capturePreparedProfileStateWrite({
     const payload =
       serialized === '{}' ? null : extractProfileStateDomainPayload(domain, serialized)
     if (!complete || split || payload !== null) {
+      domainOrder.push(domain)
       replacements.push({ domain, payload })
     }
     if (split) {
@@ -113,7 +116,7 @@ export function capturePreparedProfileStateWrite({
         })
       : undefined
   return {
-    write: { replacements, patches, complete, runPayloads },
+    write: { domainOrder, replacements, patches, complete, runPayloads },
     stateHash: null,
     protectedSecretUpdates,
     acknowledge
