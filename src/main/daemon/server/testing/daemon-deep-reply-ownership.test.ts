@@ -20,7 +20,7 @@ import { DaemonPendingRequests } from '../../transport/client/daemon-client-pend
 import type * as DescendantShutdownModule from '../../sessions/terminal-descendant-shutdown'
 
 // A graceful close's descendant verification can stay in flight after its root signal fails.
-const verification = vi.hoisted(() => ({ held: null as Promise<'exited'> | null }))
+const verification = vi.hoisted((): { held: Promise<'exited'> | null } => ({ held: null }))
 vi.mock('../../sessions/terminal-descendant-shutdown', async (importOriginal) => {
   const actual = await importOriginal<typeof DescendantShutdownModule>()
   return {

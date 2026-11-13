@@ -46,7 +46,7 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
           ptyIdsByLeafId: ptyId ? { [LEAF_2]: ptyId } : {}
         }
       }
-    } as StoreState
+    }
   }
 
   function seedUnverifiableRestoredPane() {
@@ -207,6 +207,7 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
       )
       expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalled()
       transport.connect.mockImplementation(async ({ callbacks }) => {
+        transport.getPtyId.mockReturnValue('fresh-pty')
         callbacks?.onConnect?.()
         return { id: 'fresh-pty' }
       })
@@ -218,6 +219,9 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
       expect(transport.connect.mock.calls[1]?.[0].sessionId).toBeUndefined()
       expect(createdTransportOptions).toHaveLength(1)
       expect(deps.onPtyErrorRef.current).toHaveBeenCalledTimes(1)
+      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId[LEAF_2]).toBe(
+        'fresh-pty'
+      )
       sendTerminalInputThroughPane(pane, 'typed')
       expect(transport.sendInput.mock.lastCall?.[0]).toBe('typed')
     })
