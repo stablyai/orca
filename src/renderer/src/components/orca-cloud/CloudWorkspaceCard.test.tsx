@@ -80,6 +80,21 @@ describe('calm cloud workspace card', () => {
     expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toContain('Wake')
   })
 
+  it('PAIRED-CHROME: an asleep paired row (no Wake yet) says opening it wakes it', () => {
+    const { container } = render(card('sleeping', { actions: { onSleep: noop } }))
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).not.toContain(
+      'Wake'
+    )
+    expect(container.querySelector('[data-cloud-card-wake-hint]')?.textContent).toBe(
+      'Opens and wakes when you select it.'
+    )
+  })
+
+  it('an asleep owned row offers Wake, no hint', () => {
+    const { container } = render(card('sleeping'))
+    expect(container.querySelector('[data-cloud-card-wake-hint]')).toBeNull()
+  })
+
   it('the usage line discloses Details, remembered for the session', () => {
     const { container, unmount } = render(card('running'))
     expect(container.querySelector('[data-cloud-card-details]')).toBeNull()

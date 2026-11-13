@@ -7,6 +7,8 @@ import { openMoveToThisComputer } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import type { CloudPanelActions } from './CloudWorkspaceStatusPanel'
+import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isPairedCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import {
   runArchiveCloudWorkspace,
   runRestartCloudWorkspace,
@@ -32,8 +34,10 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
   const confirm = useContext(ConfirmationDialogContext)
   const agentsRunning = useWorktreeActivityStatus(workspaceId) === 'working'
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
-  return useMemo(
-    () => ({
+  // PAIRED-CHROME: main can't wake, restart, archive or move a paired row yet (PAIRED-WAKE / -ARCHIVE).
+  const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, workspaceId))
+  return useMemo(() => {
+    const all: CloudPanelActions = {
       onWake: () => {
         close()
         void wakeCloudWorkspace(workspaceId)
@@ -59,7 +63,11 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
         close()
         runWorktreeDelete(workspaceId)
       }
-    }),
-    [workspaceId, close, agentsRunning, confirm, name]
-  )
+    }
+    if (!paired) {
+      return all
+    }
+    const { onSleep, onDelete } = all
+    return { onSleep, onDelete }
+  }, [workspaceId, close, agentsRunning, confirm, name, paired])
 }

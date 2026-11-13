@@ -45,7 +45,7 @@ export function CloudWorkspaceMark({
   workspaceId: string
   onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
 }): React.JSX.Element | null {
-  const view = useCloudWorkspaceView(workspaceId)
+  const view = useCloudWorkspaceView(workspaceId, { pairedRows: true })
   if (!view.isCloud) {
     return null
   }

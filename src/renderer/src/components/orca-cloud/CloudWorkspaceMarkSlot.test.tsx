@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   isCloud: false,
+  paired: false,
   cloudHost: false,
   refresh: vi.fn(async () => {})
 }))
@@ -12,7 +13,11 @@ vi.mock('@/store', () => ({
     select({ ephemeralVmRuntimesByWorkspaceId: {}, runtimeEnvironments: [] })
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-workspace-store', () => ({
-  useIsCloudWorkspace: () => mocks.isCloud,
+  useCloudWorkspace: (select: (state: unknown) => unknown) =>
+    select({
+      ids: new Set(mocks.isCloud ? ['wt'] : []),
+      paired: mocks.paired ? { wt: 'env-1' } : {}
+    }),
   refreshCloudWorkspaceIds: mocks.refresh
 }))
 vi.mock('./WorkspaceHostGlyph', () => ({ useIsOrcaCloudHost: () => mocks.cloudHost }))
@@ -51,6 +56,16 @@ describe('cloud mark slot (NP-5)', () => {
     mocks.cloudHost = true
     const { container } = slot()
     expect(container.querySelector('[data-live-cloud-mark]')).not.toBeNull()
+  })
+
+  it('PAIRED-CHROME: a paired row (created elsewhere) gets the live cloud mark', () => {
+    mocks.isCloud = false
+    mocks.paired = true
+    mocks.cloudHost = true
+    const { container } = slot()
+    expect(container.querySelector('[data-live-cloud-mark]')).not.toBeNull()
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    mocks.paired = false
   })
 
   it('anything else keeps its own glyph', () => {

@@ -27865,7 +27865,8 @@
     },
     "primaryDelete": {
       "noSandbox": "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
-    }
+    },
+    "opensAndWakes": "Opens and wakes when you select it."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
