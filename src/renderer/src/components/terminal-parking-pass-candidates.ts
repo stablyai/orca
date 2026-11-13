@@ -44,13 +44,13 @@ export function collectTerminalParkingPassCandidates(
     mountedWorktreeIdsRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
-    renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalSshParkingEnabled,
     terminalWorktreeHiddenSinceRef,
     terminalWorktreeParkCooldownUntilRef,
     terminalWorktreeParkingTimersRef,
+    visibleWorkspaceIds,
     workspaceSurfaceIdSet
   } = controller
   let owner = owners.get(terminalWorktreeHiddenSinceRef)
@@ -91,7 +91,7 @@ export function collectTerminalParkingPassCandidates(
       owner.budget.delete(worktreeId)
       continue
     }
-    const isVisible = activeView === 'terminal' && renderedActiveWorktreeId === worktreeId
+    const isVisible = activeView === 'terminal' && visibleWorkspaceIds.includes(worktreeId)
     const shouldMeasureHiddenWorktree =
       !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktreeId)
     const hasActivityTerminalPortal = activityTerminalPortals.some(

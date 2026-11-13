@@ -52,6 +52,7 @@ import type { StructuredChatSleptAtSlice } from './slices/agent-status/structure
 import type { StructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
 import type { EphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import type { WorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-contract'
+import type { WorkspaceGridViewSlice } from './slices/workspace-grid-view/workspace-grid-view'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -104,4 +105,5 @@ export type AppState = RepoSlice &
   StructuredChatSleptAtSlice &
   StructuredChatCompanionWritesSlice &
   WorkspaceAttentionSlice &
-  EphemeralVmLifecycleSlice
+  EphemeralVmLifecycleSlice &
+  WorkspaceGridViewSlice

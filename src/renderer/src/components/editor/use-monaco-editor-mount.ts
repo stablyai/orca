@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import { registerFileSearchSelectedTextProvider } from '@/lib/files/search/file-search-selection'
+import { isUnfocusedGridViewMember } from '@/lib/workspace/grid-view/workspace-grid-view-membership'
 import { syncContentOnMount } from './monaco-content-sync'
 import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
 import {
@@ -253,7 +254,18 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         restoreMonacoViewState(
           editorInstance,
           viewStateKey,
-          reveal?.viewStateId && revealMatchesEditor ? () => false : undefined
+          reveal?.viewStateId && revealMatchesEditor
+            ? () => false
+            : () => {
+                // Why: an unfocused grid view cell is not inert, so focusing here would make the
+                // cell take workspace focus from the one the user is working in.
+                const { workspaceGridViewMemberIds, activeWorktreeId } = useAppStore.getState()
+                return !isUnfocusedGridViewMember(
+                  workspaceGridViewMemberIds,
+                  activeWorktreeId,
+                  worktreeId
+                )
+              }
         )
       }
 

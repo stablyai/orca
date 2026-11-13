@@ -7226,7 +7226,9 @@
           "copyPathOption": "Path",
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
-          "projectGroupSubmenu": "Project Group"
+          "projectGroupSubmenu": "Project Group",
+          "removeFromGridView": "Remove from Grid View",
+          "addToGridView": "Add to Grid View"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -20061,6 +20063,18 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "Create"
+      },
+      "workspace-grid-view": {
+        "WorkspaceGridViewCellHeader": {
+          "cellNameWithProject": "{{value0}} ({{value1}})",
+          "removeFromGridView": "Remove from Grid View",
+          "removeNamedFromGridView": "Remove from Grid View: {{value0}}"
+        },
+        "WorkspaceGridViewEmptyCell": {
+          "openingWorkspace": "Opening workspace…",
+          "openNamedWorkspace": "Open Workspace: {{value0}}",
+          "openWorkspace": "Open Workspace"
+        }
       }
     },
     "i18n": {

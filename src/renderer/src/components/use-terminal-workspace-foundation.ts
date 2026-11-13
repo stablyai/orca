@@ -5,6 +5,7 @@ import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-
 import { useAppStore } from '../store/index'
 import { useWorktreeMap } from '../store/slices/worktrees/listing/use-worktree-catalog'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import { resolveVisibleWorkspaceIds } from '@/lib/workspace/grid-view/workspace-grid-view-membership'
 import type { WorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import {
@@ -70,6 +71,20 @@ export function useTerminalWorkspaceFoundation() {
     () => new Set(workspaceSurfaceIds),
     [workspaceSurfaceIds]
   )
+  const workspaceGridViewMemberIds = useAppStore((state) => state.workspaceGridViewMemberIds)
+  // Why separate from renderedActiveWorktreeId: grid view members are on screen together, but only
+  // the active one owns keyboard focus and global shortcuts.
+  const visibleWorkspaceIds = useReusedArrayIdentity(
+    useMemo(
+      () =>
+        resolveVisibleWorkspaceIds({
+          gridViewMemberIds: workspaceGridViewMemberIds,
+          activeWorkspaceId: renderedActiveWorktreeId,
+          mountableWorkspaceIds: workspaceSurfaceIdSet
+        }),
+      [workspaceGridViewMemberIds, renderedActiveWorktreeId, workspaceSurfaceIdSet]
+    )
+  )
   const activeView = useAppStore((state) => state.activeView)
   // Root subscriptions track mount/parking transitions; LiveTerminalTabBar alone consumes title-only updates.
   const tabsByWorktree = useAppStore((state) =>
@@ -110,6 +125,7 @@ export function useTerminalWorkspaceFoundation() {
     workspaceSurfaceIdSet,
     activeWorktreeId,
     renderedActiveWorktreeId,
+    visibleWorkspaceIds,
     activeWorktreeDeferralHostId,
     activeView,
     tabsByWorktree,

@@ -134,7 +134,8 @@ it('keeps cursor and gutter copy on the current file owner after migration', asy
       }
     ],
     runtimeEnvironments: [],
-    detectedWorktreesByRepo: {}
+    detectedWorktreesByRepo: {},
+    workspaceGridViewMemberIds: []
   })
   const params = mountParams(store, oldId, filePath)
   let emitCursor:

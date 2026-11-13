@@ -3,11 +3,13 @@ import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-v
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
 import { resolveBrowserWorkspaceOwner } from '@/lib/browser/workspace/browser-workspace-source-resolution'
+import { focusWorkspaceGridViewMember } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import { resolveBrowserChromeShortcutScope } from './browser-chrome-shortcut-scope'
 import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { useBrowserGuestPaintRetention } from '../host-guest/browser-guest-paint-retention'
@@ -122,10 +124,12 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 // Memoize the layer against unrelated parent props; focused-split state comes from its own selector.
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
-  isWorktreeActive
+  isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  isWorktreeFocused?: boolean
 }): React.JSX.Element {
   const { browserTabs, unifiedTabs, groups, focusedGroupId } = useAppStore(
     useShallow((state) => ({
@@ -191,30 +195,28 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
           )?.groupId
         : undefined
       if (groupId) {
+        // Why: the cell's own pointer handler misses this press too, so an unfocused grid view
+        // cell must take workspace focus here or its page never owns the chrome chords.
+        if (!isWorktreeFocused) {
+          focusWorkspaceGridViewMember(worktreeId)
+        }
         focusOwningGroup(groupId)
       }
     })
-  }, [focusOwningGroup, isWorktreeActive, worktreeId])
+  }, [focusOwningGroup, isWorktreeActive, isWorktreeFocused, worktreeId])
 
   return (
     <>
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        const inFocusedGroup =
-          knownFocusedGroupId !== undefined && assignment?.groupId === knownFocusedGroupId
-        const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
-          ? 'inactive'
-          : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
-            isFloatingWorkspace
-            ? inFocusedGroup
-              ? 'owned-target-focused'
-              : 'owned-target'
-            : knownFocusedGroupId === undefined
-              ? 'owned-target'
-              : inFocusedGroup
-                ? 'focused'
-                : 'inactive'
+        const chromeShortcutScope = resolveBrowserChromeShortcutScope({
+          isActive,
+          isWorktreeFocused,
+          isFloatingWorkspace,
+          focusedGroupId: knownFocusedGroupId,
+          groupId: assignment?.groupId
+        })
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
@@ -288,15 +290,22 @@ function ClientHostedBrowserRowOverlaySlot({
 export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive,
   mountEligible
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  /** False for a visible grid view member: its browsers paint but must not own chrome chords. */
+  isWorktreeFocused?: boolean
   mountEligible: boolean
 }): React.JSX.Element | null {
   return (
     <DeferredBrowserContent mountEligible={mountEligible}>
-      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
+      <BrowserPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isWorktreeActive}
+        isWorktreeFocused={isWorktreeFocused}
+      />
     </DeferredBrowserContent>
   )
 })

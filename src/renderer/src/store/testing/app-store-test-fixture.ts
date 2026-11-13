@@ -55,6 +55,7 @@ import { createStructuredChatSleptAtSlice } from '../slices/agent-status/structu
 import { createStructuredChatCompanionWritesSlice } from '../slices/agent-status/structured-chat-companion-writes'
 import { createWorkspaceAttentionSlice } from '../slices/workspace-attention/workspace-attention-slice'
 import { createEphemeralVmLifecycleSlice } from '../slices/ephemeral-vm/ephemeral-vm-lifecycle'
+import { createWorkspaceGridViewSlice } from '../slices/workspace-grid-view/workspace-grid-view'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../slices/editor/buffers/editor-buffer-record-lifecycle'
 import { withAgentConversationRetention } from '../slices/agent-status/agent-conversation-retention'
@@ -124,7 +125,8 @@ export function createTestStore(
         ...createStructuredChatSleptAtSlice(...a),
         ...createStructuredChatCompanionWritesSlice(...a),
         ...createWorkspaceAttentionSlice(...a),
-        ...createEphemeralVmLifecycleSlice(...a)
+        ...createEphemeralVmLifecycleSlice(...a),
+        ...createWorkspaceGridViewSlice(...a)
       }),
       true
     )
