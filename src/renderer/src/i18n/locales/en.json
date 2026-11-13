@@ -21498,6 +21498,8 @@
       "sideChat": {
         "description": "Ask a side question in a fork beside this chat",
         "argumentHint": "<question>",
+        "pill": "Side chat",
+        "placeholder": "Ask a side question",
         "notReady": "Side chats are not ready yet. Try again in a moment.",
         "replyRunning": "Available when this reply finishes.",
         "noReply": "Available after the first reply.",

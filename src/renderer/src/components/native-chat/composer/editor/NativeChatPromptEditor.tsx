@@ -1,4 +1,4 @@
-import { insertAgentReferences, NativeChatAgentReference } from './native-chat-agent-reference'
+import { insertAgentReferences } from './native-chat-agent-reference'
 import {
   nativeChatDraftPositions,
   hasUnsavedNativeChatComposerDraftChange
@@ -18,13 +18,10 @@ import { TextSelection } from '@tiptap/pm/state'
 import { memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react'
 import { shallow } from 'zustand/shallow'
 import { EditorContent, useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
 import {
   fileReferenceContent,
   NativeChatFileReference,
   NativeChatImageReference,
-  NativeChatSkill,
   promptLeafText,
   promptText,
   promptTextOffset,
@@ -36,8 +33,10 @@ import type {
   NativeChatPromptEditorProps
 } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
+import { pillLeadingSideChatCommand } from './native-chat-side-chat-node'
+import { nativeChatPromptExtensions } from './native-chat-prompt-extensions'
+import { NativeChatSideChatAvailable } from './NativeChatSideChatPill'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
-import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 
@@ -60,6 +59,7 @@ function NativePromptEditor({
   initialValue,
   disabled,
   placeholder,
+  sideChat = false,
   onChange,
   onSelect,
   className,
@@ -78,38 +78,14 @@ function NativePromptEditor({
   }
   const placeholderRef = useRef(placeholder)
   placeholderRef.current = placeholder
+  const sideChatRef = useRef(sideChat)
+  sideChatRef.current = sideChat
   const editor = useEditor(
     {
-      extensions: [
-        StarterKit.configure({
-          blockquote: false,
-          bold: false,
-          bulletList: false,
-          code: false,
-          codeBlock: false,
-          dropcursor: false,
-          gapcursor: false,
-          heading: false,
-          horizontalRule: false,
-          italic: false,
-          link: false,
-          listItem: false,
-          orderedList: false,
-          strike: false,
-          underline: false,
-          trailingNode: false
-        }),
-        NativeChatAgentReference,
-        NativeChatSkill,
-        NativeChatFileReference,
-        NativeChatImageReference,
-        NativeChatUnkernedRunDecorations,
-        // A disabled box still says why it is disabled, as the plain text box's placeholder does.
-        Placeholder.configure({
-          placeholder: () => placeholderRef.current,
-          showOnlyWhenEditable: false
-        })
-      ],
+      extensions: nativeChatPromptExtensions({
+        placeholder: () => placeholderRef.current,
+        sideChat: () => sideChatRef.current
+      }),
       content: adopted.current?.document || promptTextContent(initialValue),
       editable: !disabled,
       editorProps: {
@@ -239,6 +215,10 @@ function NativePromptEditor({
   }, [editor, scopeKey, historyPaths])
 
   useLayoutEffect(() => editor?.setEditable(!disabled, false), [disabled, editor])
+  // Redraws the empty side-chat placeholder, which reads availability from a ref.
+  useLayoutEffect(() => {
+    editor?.view.dispatch(editor.state.tr.setMeta('preventUpdate', true))
+  }, [editor, sideChat])
 
   const input = useMemo<NativeChatComposerInput | null>(
     () =>
@@ -359,6 +339,12 @@ function NativePromptEditor({
                 .run()
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
+            pillSideChatCommand: () => {
+              const tr = sideChatRef.current ? pillLeadingSideChatCommand(editor.state) : null
+              if (tr) {
+                editor.view.dispatch(closeHistory(tr))
+              }
+            },
             removeImageReferences: (attachmentId) => {
               const { tr } = editor.state
               editor.state.doc.descendants((node, position) => {
@@ -401,13 +387,15 @@ function NativePromptEditor({
   return (
     <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
       <NativeChatImageRowProvider value={imageRow}>
-        <EditorContent
-          editor={editor}
-          {...events}
-          onCompositionStartCapture={claimSelection}
-          data-disabled={disabled || undefined}
-          className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-        />
+        <NativeChatSideChatAvailable.Provider value={sideChat}>
+          <EditorContent
+            editor={editor}
+            {...events}
+            onCompositionStartCapture={claimSelection}
+            data-disabled={disabled || undefined}
+            className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+          />
+        </NativeChatSideChatAvailable.Provider>
       </NativeChatImageRowProvider>
     </NativeChatPastedTextScopeProvider>
   )
