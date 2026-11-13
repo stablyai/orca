@@ -27,7 +27,11 @@ import { wakeBillingDenial } from './hosted-environment-provider'
 import { noteWakeTimeline } from './cloud-wake-timeline'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import { getCloudSyncService } from '../cloud-sync/cloud-sync-ipc'
-import { findCloudSandbox, registerCloudArchiveInfoHandler } from './cloud-workspace-target'
+import {
+  findCloudSandbox,
+  registerCloudArchiveInfoHandler,
+  restartPairedOrNotCloud
+} from './cloud-workspace-target'
 import {
   NOT_CLOUD,
   createOomTracker,
@@ -208,10 +212,10 @@ export function installHostedWorkspaceService(deps: {
     }
   })
 
-  ipcMain.handle(CH.restart, async (_event, args: { workspaceId: string }) => {
+  ipcMain.handle(CH.restart, async (_event, args: CloudWorkspaceTarget) => {
     const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
     if (!found) {
-      return NOT_CLOUD
+      return restartPairedOrNotCloud(deps, args, (event) => service.emitWakeProgress(event))
     }
     const startedAt = Date.now()
     service.emitWakeProgress({

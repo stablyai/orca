@@ -6,6 +6,7 @@ import type { CloudWorkspaceResult } from '../../../../shared/hosted-sandbox/clo
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {
   cloudWorkspaceApi,
+  cloudWorkspaceTarget,
   dismissCloudOom,
   refreshCloudWorkspaceStatus,
   updateCloudWorkspaceSnapshot
@@ -44,7 +45,7 @@ export function restartCloudWorkspace(workspaceId: string): Promise<CloudWorkspa
     return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'restart', async () => {
-    const result = await bridge.restart({ workspaceId })
+    const result = await bridge.restart(cloudWorkspaceTarget(workspaceId))
     if (result.ok) {
       dismissCloudOom(workspaceId)
     }

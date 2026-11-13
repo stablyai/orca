@@ -75,7 +75,7 @@ export type OrcaCloudWorkspaceApi = {
    */
   getStatus: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
-  restart: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
+  restart: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
   archive: (args: {
     workspaceId: string

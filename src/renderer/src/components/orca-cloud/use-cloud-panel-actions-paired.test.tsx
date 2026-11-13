@@ -51,8 +51,8 @@ describe('the hovercard actions on a paired row', () => {
     ])
   })
 
-  it('a paired row offers only Sleep and Delete', () => {
+  it('a paired row offers Wake, Restart, Sleep and Delete (PAIRED-WAKE); not Archive or Move yet', () => {
     mocks.paired = true
-    expect(offered()).toEqual(['onDelete', 'onSleep'])
+    expect(offered()).toEqual(['onDelete', 'onRestart', 'onSleep', 'onWake'])
   })
 })

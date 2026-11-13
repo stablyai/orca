@@ -34,7 +34,8 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
   const confirm = useContext(ConfirmationDialogContext)
   const agentsRunning = useWorktreeActivityStatus(workspaceId) === 'working'
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
-  // PAIRED-CHROME: main can't wake, restart, archive or move a paired row yet (PAIRED-WAKE / -ARCHIVE).
+  // PAIRED-CHROME: main can't archive or move a paired row yet (PAIRED-ARCHIVE). Wake and Restart
+  // reach its sandbox (PAIRED-WAKE).
   const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, workspaceId))
   return useMemo(() => {
     const all: CloudPanelActions = {
@@ -67,7 +68,7 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
     if (!paired) {
       return all
     }
-    const { onSleep, onDelete } = all
-    return { onSleep, onDelete }
+    const { onWake, onRestart, onSleep, onDelete } = all
+    return { onWake, onRestart, onSleep, onDelete }
   }, [workspaceId, close, agentsRunning, confirm, name, paired])
 }
