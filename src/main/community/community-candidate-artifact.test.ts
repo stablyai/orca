@@ -33,6 +33,7 @@ const run: CommunityCandidateRun = {
     digest: 'b'.repeat(64),
     createdAt: '2026-11-12T12:00:00.000Z',
     baseSha: 'a'.repeat(40),
+    profileMode: null,
     customSource: null,
     includedChanges: [],
     additions: []

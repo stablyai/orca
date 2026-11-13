@@ -68,6 +68,7 @@ export class CommunityCandidateService {
       id: randomUUID(),
       createdAt: new Date().toISOString(),
       baseSha: base.sha,
+      profileMode: build?.profileMode ?? null,
       customSource: build?.source ?? null,
       includedChanges: (build?.changes ?? []).filter(
         (change) => !additions.some((pr) => pr.number === change.pullRequest?.number)

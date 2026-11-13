@@ -12,6 +12,7 @@ export type CommunityCandidatePlan = {
   id: string
   createdAt: string
   baseSha: string
+  profileMode: 'isolated-preview' | 'interactive-preview' | 'shared-profile' | null
   customSource: { repository: string; commit: string } | null
   includedChanges: {
     id: string

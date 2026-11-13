@@ -4,6 +4,10 @@ export const communityCandidatePlanSchema = z.object({
   id: z.uuid(),
   createdAt: z.iso.datetime(),
   baseSha: sha,
+  profileMode: z
+    .enum(['isolated-preview', 'interactive-preview', 'shared-profile'])
+    .nullable()
+    .default(null),
   customSource: z
     .object({ repository: z.string().regex(/^[a-z\d-]{1,39}\/orca$/i), commit: sha })
     .nullable(),
