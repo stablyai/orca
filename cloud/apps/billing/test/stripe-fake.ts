@@ -62,6 +62,8 @@ export function createFakeStripe() {
   const priceFor = (id: string, usage: 'licensed' | 'metered'): FakePrice =>
     structuredClone(prices.get(id) ?? { id, recurring: { usage_type: usage } })
   let failMeterEvents = 0
+  let failSubscriptionCancels = 0
+  const cancelParams: Array<Record<string, string>> = []
 
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
@@ -137,6 +139,21 @@ export function createFakeStripe() {
       page = matching.slice(-limit).reverse()
       return Response.json({ object: 'list', data: page, has_more: matching.length > limit })
     }
+    if (method === 'DELETE' && url.pathname.startsWith('/v1/subscriptions/')) {
+      if (failSubscriptionCancels > 0) {
+        failSubscriptionCancels--
+        return Response.json({ error: { message: 'temporarily unavailable' } }, { status: 503 })
+      }
+      const subscription = subscriptions.get(decodeURIComponent(url.pathname.slice('/v1/subscriptions/'.length)))
+      if (!subscription || subscription.status === 'canceled') {
+        return Response.json({ error: { code: 'resource_missing', message: 'No such subscription' } }, { status: 404 })
+      }
+      cancelParams.push(Object.fromEntries(url.searchParams))
+      subscription.status = 'canceled'
+      subscription.cancel_at = null
+      subscription.cancel_at_period_end = false
+      return Response.json(subscription)
+    }
     if (method === 'GET' && url.pathname.startsWith('/v1/subscriptions/')) {
       const subscription = subscriptions.get(decodeURIComponent(url.pathname.slice('/v1/subscriptions/'.length)))
       return subscription
@@ -206,6 +223,10 @@ export function createFakeStripe() {
     /** Stripe records an event (whether or not its webhook is delivered). */
     recordEvent(event: { id: string; type: string; created: number; livemode: boolean; data: { object: Record<string, unknown> } }) {
       events.push(event)
+    },
+    cancelParams,
+    failNextSubscriptionCancels(count: number) {
+      failSubscriptionCancels = count
     },
     failNextMeterEvents(count: number) {
       failMeterEvents = count

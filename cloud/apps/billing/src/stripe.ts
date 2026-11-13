@@ -162,6 +162,17 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
         `overage-item-price:${args.item}:${args.price}`
       )
     },
+    /**
+     * Cancels a subscription now (EP-10, deleting a team whose plan is already set to end):
+     * metered usage already reported is invoiced (invoice_now), the unused time isn't refunded
+     * (prorate false). DELETE is idempotent in Stripe; an already canceled one answers 404/400.
+     */
+    cancelSubscriptionNow(id: string) {
+      return request<{ id: string; status: string }>('DELETE', `/v1/subscriptions/${encodeURIComponent(id)}`, {
+        invoice_now: 'true',
+        prorate: 'false'
+      })
+    },
     /** DELETE is idempotent in Stripe, so no idempotency key (Stripe ignores one there). */
     deleteSubscriptionItem(item: string) {
       return request<{ id: string; deleted: boolean }>(
