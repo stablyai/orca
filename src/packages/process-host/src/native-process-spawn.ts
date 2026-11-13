@@ -52,9 +52,11 @@ export function spawnNativeProcess(
   observe?: AttemptObserver
 ): ChildProcess {
   let startedAt = performance.now()
-  const selected = eligible(options)
-    ? (selection ?? nativeExecutableResolver.resolve(program, options.env))
-    : { program, file: program }
+  // Node cleans spawn timeout/abort state on exit, which a failed candidate never emits.
+  const selected =
+    eligible(options) && options.timeout === undefined && options.signal === undefined
+      ? (selection ?? nativeExecutableResolver.resolve(program, options.env))
+      : { program, file: program }
   const file = nativeExecutableResolver.file(selected, options.env)
   const launch = (binary: string): ChildProcess => {
     try {
