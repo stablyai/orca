@@ -1,12 +1,12 @@
 import {
   createContentScriptRelayBridge,
   installContentScriptRelayFilter
-} from './browser-extension-content-script-relay'
-import { installBrowserExtensionInertApis } from './browser-extension-inert-apis'
+} from './browser/extensions/messaging/browser-extension-content-script-relay'
+import { installBrowserExtensionInertApis } from './browser/extensions/api/browser-extension-inert-apis'
 import {
   installBrowserExtensionStorageSync,
   PRELOAD_STORAGE_SYNC_CONSTANTS
-} from './browser-extension-storage-sync'
+} from './browser/extensions/storage/browser-extension-storage-sync'
 
 /**
  * Orca's content script, bundled into one standalone file that Orca's manifest rewrite puts first

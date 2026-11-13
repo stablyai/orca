@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 
-import '../../../../../shared/rpc-contract/native-chat-params'
+import '../../../../../shared/rpc-contract/native-chat/native-chat-params'
 import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
 
 import type { RpcContext } from '../../core'

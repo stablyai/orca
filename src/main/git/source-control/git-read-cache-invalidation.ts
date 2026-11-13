@@ -8,13 +8,13 @@ import {
 } from '../../../shared/git/status/git-status-line-stats-cache'
 import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git/status/git-branch-line-total'
 import { GitStatusReadLeaseOwner } from '../../../shared/git/status/git-status-read-lease-owner'
-import { invalidateGitUpstreamStatusReads } from './upstream'
-import { clearSubmodulePathsCache } from './submodule-paths'
-import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
+import { invalidateGitUpstreamStatusReads } from './upstream/upstream'
+import { clearSubmodulePathsCache } from './submodules/submodule-paths'
+import { resolvedUpstreamNameCache } from './upstream/resolved-upstream-name-cache'
 import {
   getStatusLineStatsCacheKey,
   isStatusKeyForWorktreePath
-} from './status-branch-line-total-input'
+} from './status/status-branch-line-total-input'
 import {
   FILE_DIFF_CACHE_LIMITS,
   NUMSTAT_CACHE_LIMITS,

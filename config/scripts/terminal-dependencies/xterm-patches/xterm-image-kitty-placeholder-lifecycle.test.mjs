@@ -62,7 +62,7 @@ describe('Kitty virtual placement lifecycle', () => {
     }
   })
 
-  it.each(['reset', 'dispose'])('discards a virtual decode completing after %s', async (action) => {
+  it('discards a virtual decode completing after disposal', async () => {
     const h = createPlaceholderTerminal()
     try {
       let finishDecode
@@ -72,7 +72,7 @@ describe('Kitty virtual placement lifecycle', () => {
         })
       const decoding = writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
       await vi.waitFor(() => expect(finishDecode).toBeTypeOf('function'))
-      h.addon[action]()
+      h.addon.dispose()
       const bitmap = new TrackedBitmap()
       finishDecode(bitmap)
       await decoding

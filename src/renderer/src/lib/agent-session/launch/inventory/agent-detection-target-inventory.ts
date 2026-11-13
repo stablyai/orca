@@ -3,7 +3,7 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import '../../../../../../shared/delegated-mobile-device-contract'
 import { PREFLIGHT_PROJECT_LAUNCH_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/preflight-runtime-capabilities'
-import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
+import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AppState } from '@/store/types'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'

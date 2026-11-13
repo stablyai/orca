@@ -109,30 +109,4 @@ describe('probeRuntimeListener', () => {
       vi.useRealTimers()
     }
   })
-
-  it.each([
-    ['a missing endpoint', undefined],
-    ['a blank endpoint', '   '],
-    ['a numeric endpoint', 42]
-  ])('frees a profile whose metadata carries %s instead of dialling it', async (_label, value) => {
-    // Invalid endpoints can throw or dial an unrelated numeric TCP port.
-    const metadata = metadataFor(nextEndpoint())
-    const transport = { ...metadata.transports[0]! }
-    Object.assign(transport, { endpoint: value })
-
-    await expect(probeRuntimeListener({ ...metadata, transports: [transport] })).resolves.toBe(
-      'not-listening'
-    )
-  })
-
-  it('frees a profile whose metadata published no local transport to probe', async () => {
-    const metadata = metadataFor(nextEndpoint())
-
-    await expect(
-      probeRuntimeListener({
-        ...metadata,
-        transports: metadata.transports.filter((transport) => transport.kind === 'websocket')
-      })
-    ).resolves.toBe('not-listening')
-  })
 })

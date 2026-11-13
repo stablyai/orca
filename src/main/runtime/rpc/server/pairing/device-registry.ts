@@ -10,7 +10,7 @@ import {
 } from './pairing-ticket-exchange'
 import { planIdleEphemeralPrune } from './ephemeral-device-rows'
 import { DeviceRegistrySightings } from './device-registry-sightings'
-import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
+import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import type { DelegatedPhone } from '../../../../../shared/delegated-mobile-device-contract'
@@ -18,7 +18,7 @@ import {
   planDelegatedMobileDevices,
   type DelegatedMobileDeviceEntry
 } from './delegated-mobile-devices'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { validGrants } from './device-registry-row-validation'
 import {
   expiredPairingOffers,

@@ -26,7 +26,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
+import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -188,14 +188,21 @@ function hostStructuredAgentsInput(
   return agents ? { hostStructuredAgents: agents.map((row) => row.agent) } : {}
 }
 
-export function resolveAgentLaunchHost(
+export function resolveAgentLaunchOwner(
   store: AgentLaunchRouteStore,
   workspace: ProspectiveWorkspace
 ) {
   const owner = workspace.worktreeId
     ? resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
     : undefined
-  const executionHostId = owner ?? resolveExecutionHostId(store, workspace)
+  return { owner, executionHostId: owner ?? resolveExecutionHostId(store, workspace) }
+}
+
+export function resolveAgentLaunchHost(
+  store: AgentLaunchRouteStore,
+  workspace: ProspectiveWorkspace
+) {
+  const { owner, executionHostId } = resolveAgentLaunchOwner(store, workspace)
   return {
     owner,
     executionHostId,

@@ -1,4 +1,4 @@
-import type { ITerminalOptions } from '@xterm/xterm'
+import type { ITerminalInitOnlyOptions, ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 
@@ -34,7 +34,7 @@ export function resolveTerminalCursorInactiveStyle(
 // Panes own mode 2031 and ?996n because gated hidden output never reaches xterm; xterm's built-in reports would duplicate each flip.
 export const PANE_TERMINAL_VT_EXTENSIONS = { colorSchemeQuery: false } as const
 
-export function buildDefaultTerminalOptions(): ITerminalOptions {
+export function buildDefaultTerminalOptions(): ITerminalOptions & ITerminalInitOnlyOptions {
   const cursorStyle: TerminalCursorStyle = 'block'
 
   return {
@@ -42,6 +42,8 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     cursorBlink: true,
     cursorStyle,
     cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
+    // Why: xterm draws no cursor until its textarea gets a focus event or keystroke. Remounted panes keep DOM focus (no event), so TUIs on the hardware cursor (agy) lost it until the next keypress; let ?25h/?25l alone decide.
+    showCursorImmediately: true,
     fontSize: 14,
     // Cross-platform fallback chain; keep in sync with FALLBACK_FONTS in layout-serialization.ts.
     fontFamily:

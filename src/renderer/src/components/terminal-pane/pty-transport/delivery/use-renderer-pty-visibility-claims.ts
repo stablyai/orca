@@ -1,4 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useEffect } from 'react'
 import type { PtyTransport } from '../pty-transport-types'
 import {
@@ -22,18 +23,24 @@ function reportRendererPtyVisibility(
 
 export function useRendererPtyVisibilityClaims({
   paneTransportsRef,
+  terminalManager,
   rendererVisible
 }: {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  terminalManager: PaneManager | null
   rendererVisible: boolean
 }): void {
   useEffect(() => {
+    if (!terminalManager) {
+      return
+    }
     const paneTransports = paneTransportsRef.current
     reportRendererPtyVisibility(paneTransports, rendererVisible)
+    const claimedTransports = Array.from(paneTransports.values())
     return () => {
-      for (const transport of paneTransports.values()) {
+      for (const transport of claimedTransports) {
         releaseRendererPtyVisibilityClaim(transport)
       }
     }
-  }, [rendererVisible, paneTransportsRef])
+  }, [terminalManager, rendererVisible, paneTransportsRef])
 }

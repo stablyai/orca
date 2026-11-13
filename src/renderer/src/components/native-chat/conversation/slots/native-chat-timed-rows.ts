@@ -8,7 +8,7 @@ export type NativeChatTimedRow = { key: string; at: number; node: React.ReactNod
 export type NativeChatTimedRowPlacement = {
   /** Keyed by message id: the rows drawn after that message, oldest first. */
   afterMessage: ReadonlyMap<string, readonly NativeChatTimedRow[]>
-  /** Rows no loaded message precedes, drawn at the end of the conversation. */
+  /** Rows in a conversation with no dated message, drawn at its end. */
   unplaced: readonly NativeChatTimedRow[]
 }
 
@@ -16,8 +16,9 @@ export type NativeChatTimedRowPlacement = {
 const FIELD = '\u0000'
 const ROW = '\u0001'
 
-/** The message each row follows: the last top-level message at or before its time; null for none. */
-function anchorNativeChatTimedRows(
+/** The message each row follows: the last top-level message at or before its time; null when no
+ *  message is dated. A row older than every loaded message waits for the history it belongs to. */
+export function anchorNativeChatTimedRows(
   slots: readonly NativeChatTranscriptSlot[],
   rows: readonly NativeChatTimedRow[]
 ): [key: string, messageId: string | null][] {
@@ -28,7 +29,10 @@ function anchorNativeChatTimedRows(
   )
   return rows
     .toSorted((a, b) => a.at - b.at)
-    .map((row) => [row.key, dated.findLast((message) => message.at <= row.at)?.id ?? null])
+    .flatMap((row): [string, string | null][] => {
+      const anchor = dated.findLast((message) => message.at <= row.at)?.id ?? null
+      return anchor === null && dated.length > 0 ? [] : [[row.key, anchor]]
+    })
 }
 
 /** Stable while no row changes the message it follows, so streaming text does not redraw every row. */

@@ -47,6 +47,15 @@ function coordinatorAliasSql(runIdSql: string, addressSql: string): string {
   )`
 }
 
+/** Whether routing would move direct row `messageSql`: alias OR active Dispatch, unlike the insert trigger's alias AND NOT Dispatch. */
+export function runOwnsDirectMessageSql(messageSql: string): string {
+  const runIdSql = `${messageSql}.run_id`
+  const addressSql = `${messageSql}.to_handle`
+  return `(EXISTS (SELECT 1 FROM runs WHERE runs.id = ${runIdSql} AND runs.legacy = 0)
+    AND (${coordinatorAliasSql(runIdSql, addressSql)}
+      OR ${activeDispatchOwnsAddressSql(runIdSql, addressSql)}))`
+}
+
 export function rememberRunCoordinatorHandle(
   this: OrchestrationDb,
   runId: string,

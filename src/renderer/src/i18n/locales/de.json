@@ -401,7 +401,8 @@
       "remove": "Entfernen…",
       "empty": "Für dieses Profil sind keine Erweiterungen aktiviert",
       "visitWebStore": "Chrome Web Store besuchen",
-      "manage": "Erweiterungen verwalten"
+      "manage": "Erweiterungen verwalten",
+      "openWebStoreFailed": "Der Chrome Web Store konnte nicht geöffnet werden."
     },
     "history": {
       "clear": "Browserverlauf löschen",
@@ -2112,9 +2113,6 @@
         "unreadableSkillSource": "Ein Skill-Ordner hat nicht geantwortet, daher ist dieser Status möglicherweise unvollständig."
       },
       "useMacosTccPromptNotice": {
-        "title": "Werden Meldungen wie „Orca would like to access…“ angezeigt?",
-        "description": "Berechtigungsabfragen von macOS können erscheinen, wenn ein in Orca ausgeführter Agent oder ein Terminalwerkzeug auf geschützte Dateien zugreift. In den Einstellungen „Full Disk Access“ gewähren, um diese Abfragen zu reduzieren.",
-        "openSettings": "Einstellungen öffnen",
         "dismiss": "Nicht mehr anzeigen"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -3815,7 +3813,6 @@
             "7eee951968": "Arbeitsbereiche werden durchsucht",
             "191f0bc98e": "Schließen",
             "7ae2ad30f4": "Aktualisieren",
-            "b2c1331844": "Inaktive Arbeitsbereiche löschen",
             "7f451a3e2c": "Bereinigungsvorschlag konnte nicht ignoriert werden",
             "662b8ec3f8": "Suche nach zu bereinigenden Arbeitsbereichen fehlgeschlagen",
             "9cc26c019d": "Entfernen",
@@ -3825,7 +3822,6 @@
             "1d3503357d": "Dieses Fenster kann geschlossen und später wieder geöffnet werden, während das Löschen fortgesetzt wird.",
             "4c2990886e": "{{value0}}/{{value1}} gelöscht",
             "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
-            "deleteButtonCount": "{{value0}} löschen",
             "archivedStatus": "Archiviert",
             "74f6c16279": "Zurück"
           },
@@ -3863,7 +3859,6 @@
             "runningTerminalBlocker": "Laufender Terminal-Prozess",
             "terminalLivenessUnknownBlocker": "Terminal-Aktivität unbekannt",
             "dirtyEditorBufferBlocker": "Ungespeicherter Editor-Puffer",
-            "volatileLocalContextBlocker": "Flüchtiger lokaler Kontext",
             "recentVisibleContextBlocker": "Kürzlich besuchte Tabs",
             "liveAgentBlocker": "Aktiver Agent",
             "sshDisconnectedBlocker": "Remote-Host nicht verfügbar",
@@ -4025,6 +4020,8 @@
             "15dd899676": "Zu {{value0}} hinzufügen…"
           },
           "TerminalErrorToast": {
+            "title": "Terminalproblem",
+            "errorTitle": "Terminalfehler",
             "e4aa243f8c": "Daemon neu starten",
             "retry": "Erneut versuchen",
             "retrying": "Wird erneut versucht…",
@@ -4415,7 +4412,6 @@
             "1d411fb6a5": "Schnellbefehl für dieses Repo speichern",
             "8f1e971966": "Schnellbefehl hinzufügen",
             "3220e2da27": "Dieser Schnellbefehl wird aus der Liste gespeicherter Befehle entfernt.",
-            "e8e1a52edb": "„{{value0}}“ löschen?",
             "37e1bb90ce": "Ausführen: {{value0}}",
             "77ac113df0": "{{value0}} starten: {{value1}}",
             "7b1c9d6ae1": "Ausführen",
@@ -5810,7 +5806,6 @@
           "loading": "Inhalt wird geladen…",
           "deleteFailed": "Orca konnte dieses Element nicht aus der Cloud löschen.",
           "deleted": "Aus der Cloud gelöscht",
-          "confirmDelete": "Löschen bestätigen",
           "moreActions": "Weitere Aktionen für {{name}}",
           "deletePackage": "Aus der Cloud löschen"
         },
@@ -6077,8 +6072,6 @@
           "5cc1a6701c": "Einstellungen öffnen",
           "2b56b35f53": "Dies lässt sich in den Einstellungen ändern.",
           "dd3a45bbbd": "Diese Bestätigung wird beim nächsten Mal übersprungen.",
-          "fc23c4cbdf": "Arbeitsbereich löschen",
-          "86f0ae1257": "Arbeitsbereiche löschen",
           "removeFolderProjectInstead": "Das Ordnerprojekt entfernen, statt diesen Arbeitsbereich zu löschen.",
           "gitBlocksMainWorktree": "Git erlaubt das Entfernen des Haupt-Worktrees nicht.",
           "removeBatchFolder_one": "<target>{{count}} Arbeitsbereich</target> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
@@ -6184,11 +6177,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Abbrechen",
-          "591f330288": "Projektgruppe löschen",
           "2c14ce677a": "Wird gelöscht…",
           "0e0e6764af": "Enthaltene Projekte",
           "55f75628c0": "Projektordner auf dem Datenträger werden nicht gelöscht.",
-          "fec7e9c8ae": "Gruppe löschen",
           "removeContainedProjects_one": "{{count}} enthaltenes Projekt entfernen",
           "removeContainedProjects_other": "{{count}} enthaltene Projekte entfernen",
           "deleteGroupDescription": "<name>{{name}}</name> löschen.",
@@ -6915,9 +6906,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "Abbrechen",
           "cf95e3b5bb": "Schließen",
-          "deleteWorkspace": "Arbeitsbereich löschen",
           "deleting": "Wird gelöscht…",
-          "forceDelete": "Löschen erzwingen",
           "forceDeleting": "Löschen wird erzwungen…"
         },
         "HostRemoveDialog": {
@@ -7183,15 +7172,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "Beibehaltene Branches prüfen",
           "f21976c9a8": "Lokale Branches auswählen, deren Löschung erzwungen werden soll. Nicht ausgewählte Branches bleiben in ihren Repositorys.",
           "38c947f7c5": "Alle auswählen",
           "9602129d38": "{{value0}} von {{value1}} ausgewählt",
           "ee39e872d5": "Möglicherweise nicht gemergt",
           "676db406fd": "HEAD nicht verfügbar",
-          "285e1e4882": "Abbrechen",
-          "a0f9863597_one": "Löschen von {{count}} Branch erzwingen",
-          "a0f9863597_other": "Löschen von {{count}} Branches erzwingen"
+          "285e1e4882": "Abbrechen"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Nach oben springen"
@@ -7707,8 +7693,6 @@
             "df205a675e": "Stärke der Farbtönung",
             "ba1d9a0607": "Farbtönung der Seitenleiste"
           },
-          "interfaceDefaultFont": "Standardschriftart",
-          "terminalDefaultFont": "Standardschriftart",
           "interfaceTitle": "Oberfläche",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Seitenleiste, Statusleiste und Datei-Explorer",
@@ -8575,7 +8559,6 @@
           "c6b155911b": "Alle Befehle",
           "c36912efd5": "Über die Schaltfläche „Schnellbefehle“ in der Tab-Leiste oder per Rechtsklick in einem beliebigen Terminal ausführen.",
           "3d9dc558e8": "Dieser Schnellbefehl wird aus der Liste gespeicherter Befehle entfernt.",
-          "3edf3deaf8": "„{{value0}}“ löschen?",
           "9fcfc29519": "Einfügen",
           "9b3e338d62": "Enter",
           "4ccc63da87": "Agent",
@@ -8628,16 +8611,12 @@
           "5426ecbdcb": "Lokale Skripte werden nicht ausgeführt",
           "95a0411b3e": "Vorlage",
           "175daba180": "Beispiel",
-          "b20c5df6ca": "Eine Datei `orca.yaml` hinzufügen, um gemeinsame Standardwerte für Einrichtung, Archivierung oder Issue-Automatisierung in diesem Repository zu aktivieren. Beispielvorlage:",
-          "56f9a4a1d0": "`orca.yaml` wird verwendet",
           "623e0c9f31": "`orca.yaml` konnte nicht geparst werden",
-          "5a67e4793d": "Keine `orca.yaml` erkannt",
           "07ba35bc68": "Die Einrückung unter `scripts:` prüfen. Hook-Schlüssel sollten mit zwei Leerzeichen und Befehlszeilen mit vier Leerzeichen eingerückt sein.",
           "787ca433ef": "Nur die unterstützten Schlüssel definieren: `scripts`, `setup`, `archive` und `issueCommand`.",
           "ecc73d9125": "Die Datei mit der funktionierenden Vorlage unten vergleichen und bei Bedarf deren Struktur übernehmen.",
           "0cc712b823": "Die zentrale Konfigurationsdatei ist im Repository-Stammverzeichnis vorhanden, aber Orca konnte die unterstützten Hook-Definitionen noch nicht parsen.",
           "aba825233f": "Die Datei enthält Konfigurationsschlüssel, die diese Version von Orca nicht erkennt. Möglicherweise muss Orca aktualisiert oder die Datei auf Tippfehler geprüft werden.",
-          "ca424ff135": "Gemeinsame Standardwerte für Hooks und Issue-Automatisierung sind im Repository definiert und für alle verfügbar, die es verwenden.",
           "8bfe65fc60": "Lokale Befehle verwenden",
           "8d6c56bff8": "Beide ausführen",
           "0fa21e19ec": "Name des Arbeitsbereichs, in der Regel vom Branch-Namen abgeleitet.",
@@ -9033,8 +9012,7 @@
           "60f8a673a7": "Zur App zurückkehren",
           "6503182299": "Checkliste für den Einstieg",
           "82db1b7de4": "Einrichtungscheckliste, {{value0}} von {{value1}} erledigt. Einrichtungsanleitung anzeigen.",
-          "df38d612b7": "Noch keine Projekte hinzugefügt.",
-          "3e483e256b": "Keine passenden Projekteinstellungen."
+          "df38d612b7": "Noch keine Projekte hinzugefügt."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",
@@ -13503,7 +13481,6 @@
             "abf59262fb": "Vor dem Start eines Agenten die vollständige Befehlseingabe prüfen und bearbeiten.",
             "4ede779461": "Review-Konflikte mit KI lösen",
             "3b203c62f8": "Der Kommentar wird dauerhaft aus dem PR entfernt.",
-            "ea9b649ce3": "Kommentar löschen?",
             "5788d1059d": "Der Review-Thread konnte nicht aktualisiert werden. Das GitHub-API-Kontingent prüfen.",
             "07871c0589": "Weiteren PR verknüpfen",
             "7f4489f370": "Aktualisieren",
@@ -14385,8 +14362,7 @@
                   "5ddd8cac7f": "Alle vorgemerkten Änderungen verwerfen?",
                   "d4df3a61df": "Änderungen an „{{value0}}“ verwerfen?",
                   "5c0bdbc4cb": "„{{value0}}“ wiederherstellen?",
-                  "d97bf697c9": "Dadurch wird diese Datei dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
-                  "96c772bee9": "„{{value0}}“ löschen?"
+                  "d97bf697c9": "Dadurch wird diese Datei dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden."
                 },
                 "dialog": {
                   "3bc61dc989": "Abbrechen",
@@ -14623,7 +14599,6 @@
             "unresolved": "Der zuständige Host für diesen Arbeitsbereich konnte nicht ermittelt werden. Verbindung prüfen und erneut versuchen."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "„{{value0}}“ dauerhaft löschen?",
             "92276aceb7": "Löschen",
             "7fb9435c86": "Das Verzeichnis und sein Inhalt werden auf dem Remote-Host dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
             "23e98f192f": "Die Datei wird auf dem Remote-Host dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
@@ -14812,7 +14787,6 @@
             "resumeInNewCliTooltipChat": "Dieser Chat bleibt unverändert."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "Diese Sitzung löschen?",
             "description": "„{{value0}}“ wird gelöscht. Danach kann die Sitzung auch über die eigene Befehlszeile von {{value1}} nicht mehr fortgesetzt werden.",
             "remoteDescription": "„{{value0}}“ wird von {{value2}} gelöscht. Danach kann die Sitzung auch über die eigene Befehlszeile von {{value1}} nicht mehr fortgesetzt werden.",
             "confirm": "Löschen"
@@ -16513,7 +16487,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Link entfernen",
           "cdfe166f6f": "Link bearbeiten",
-          "bfc813e909": "Link öffnen",
           "7b0b945fdc": "Link einfügen oder eingeben…",
           "copyLink": "Link kopieren"
         },
@@ -17206,6 +17179,14 @@
                     "logins": {
                       "title": "Angemeldet bleiben",
                       "body": "Bestehende Anmeldungen in Orca übernehmen, um sofort angemeldet zu bleiben."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome-Erweiterungen",
+                        "body": "Installiere Erweiterungen aus dem Chrome Web Store und hefte sie neben der Adressleiste an.",
+                        "action": "Web Store öffnen",
+                        "secondaryAction": "Verstanden"
+                      }
                     }
                   },
                   "tasks": {
@@ -17565,7 +17546,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Weniger anzeigen",
-          "showMore": "Mehr anzeigen"
+          "showMore": "Mehr anzeigen",
+          "copied": "Kopiert",
+          "copyFailed": "Kopieren fehlgeschlagen",
+          "copyPrompt": "Prompt kopieren"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -17602,7 +17586,13 @@
           "precheckNone": "Keine",
           "migrate": "Migrieren",
           "migrateNotice": "{{host}} wurde auf einen neuen Remote-Host umgestellt. Migriere diese Automatisierung, damit sie weiterläuft.",
-          "needsMigration": "Migration erforderlich"
+          "needsMigration": "Migration erforderlich",
+          "repeats": "Wiederholung",
+          "missedRunGrace": "Nachholfrist",
+          "execution": "Ausführung",
+          "notRunYet": "Noch nicht ausgeführt",
+          "usageDetail_one": "{{tokens}} Token · {{known}}/{{count}} Ausführung gemeldet",
+          "usageDetail_other": "{{tokens}} Token · {{known}}/{{count}} Ausführungen gemeldet"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Abbrechen",
@@ -17706,9 +17696,7 @@
           "2faecab10b": "Jetzt ausführen",
           "13118faadf": "Unbekanntes Projekt",
           "73f630b49d": "Abbrechen",
-          "9adfab2596": "Externe Automatisierung löschen",
           "1e2e41392f": "Nicht erneut fragen",
-          "080dcb5fbb": "Automatisierung löschen",
           "19a6e30eae": "Automatisierungen aktualisieren",
           "77c2778945": "Automatisierungen",
           "e1bf9b1512": "Der Arbeitsbereich ist nicht verfügbar.",
@@ -18628,7 +18616,6 @@
         "ArtifactsPage": {
           "signInAgain": "Erneut bei Orca anmelden, um Artefakte zu laden.",
           "loadFailed": "Artefakte konnten nicht geladen werden.",
-          "deleteTitle": "Artefakt löschen?",
           "deleteDescription": "„{{name}}“ wird unter seinem öffentlichen Link nicht mehr verfügbar sein.",
           "delete": "Löschen",
           "deleteFailed": "Das Artefakt konnte nicht gelöscht werden.",
@@ -20532,11 +20519,8 @@
           "candidateName": "{{value0}} auf {{value1}}"
         },
         "stopAgents": {
-          "titleMany": "Diese Agenten stoppen?",
           "descriptionOne": "Beim Löschen wird die aktuelle Arbeit des Agenten gestoppt.",
-          "descriptionMany": "Beim Löschen wird die aktuelle Arbeit dieser Agenten gestoppt.",
-          "confirm": "Agenten stoppen und löschen",
-          "confirmOne": "Den Agenten stoppen und löschen"
+          "descriptionMany": "Beim Löschen wird die aktuelle Arbeit dieser Agenten gestoppt."
         },
         "candidateRow": {
           "gitChip": {
@@ -20760,6 +20744,7 @@
           "about": {
             "parakeetV3": "Schnell. {{languages}} europäische Sprachen.",
             "parakeetV2": "Schnell. Nur Englisch, darin am genauesten.",
+            "parakeetUnifiedEn": "Nur Englisch. Wörter erscheinen, während du sprichst.",
             "whisperTiny": "Kleinster Download. Gut zum Ausprobieren.",
             "whisperTurbo": "Die meisten Sprachen, rund 100. Langsam ohne GPU.",
             "senseVoice": "Schnell. Für Chinesisch, Japanisch und Koreanisch.",
@@ -21224,10 +21209,7 @@
       "unstagedSelectionIncludingUntrackedDescription": "Nicht vorgemerkte Änderungen werden zurückgesetzt und alle nicht versionierten Dateien in dieser Auswahl dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
       "unstagedFilesIncludingUntrackedDescription_other": "Nicht vorgemerkte Änderungen werden zurückgesetzt und alle nicht versionierten Dateien unter diesen {{count}} Dateien dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
       "delete": "Löschen",
-      "deleteCount": "{{count}} löschen",
       "deleteUntrackedFilesDescription_one": "{{count}} nicht versionierte Datei wird dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
-      "deleteUntrackedTitle_one": "{{count}} nicht versionierte Datei löschen?",
-      "deleteUntrackedTitle_other": "{{count}} nicht versionierte Dateien löschen?",
       "discard": "Verwerfen",
       "discardAll": "Alle verwerfen",
       "restore": "Wiederherstellen",
@@ -21703,7 +21685,8 @@
   },
   "common": {
     "retry": "Erneut versuchen",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -21828,8 +21811,7 @@
     "trashFailed": {
       "titleRecycleBin": "„{{name}}“ konnte nicht in den Papierkorb verschoben werden. Endgültig löschen?",
       "titleTrash": "„{{name}}“ konnte nicht in den Papierkorb verschoben werden. Endgültig löschen?",
-      "description": "Dies kann nicht rückgängig gemacht werden.",
-      "confirm": "Endgültig löschen"
+      "description": "Dies kann nicht rückgängig gemacht werden."
     }
   },
   "sparsePreset": {
@@ -21873,7 +21855,6 @@
       "description": "Die Agenten dort verwenden die Standardkonten der Distribution für Claude und Codex, bis Orca in WSL aktualisiert wird."
     },
     "antigravity": {
-      "chatTitle": "Antigravity-Chats",
       "chatSignIn": "Anmelden",
       "chatChangeAccount": "Konto wechseln",
       "chatRetry": "Anmeldung erneut versuchen",
@@ -21891,23 +21872,13 @@
       "chatFailed": "Anmeldung fehlgeschlagen. Erneut versuchen.",
       "chatOtherClient": "In einem anderen Client läuft bereits eine Anmeldung.",
       "chatReadFailed": "Die Anmeldung auf {{host}} konnte nicht überprüft werden.",
-      "signIn": "agy auf diesem Host starten und die Anmeldung im Browser abschließen, dann das aktuelle Konto speichern. Um ein anderes Konto hinzuzufügen, /logout in agy ausführen und erneut anmelden.",
-      "docs": "Anmeldeanleitung",
       "retry": "Erneut versuchen",
-      "identityUnknown": "Angemeldete Identität nicht verfügbar",
-      "signedOut": "Es ist kein natives agy-Konto angemeldet.",
       "changed": "Das native Konto hat sich geändert. Vor dem Start von agy erneut ein gespeichertes Konto auswählen.",
-      "save": "Aktuelles Konto speichern",
       "refresh": "Konten aktualisieren",
       "usage": "Nutzung aktualisieren",
-      "working": "Konto wird aktualisiert",
       "usageReading": "Sitzung: {{session}} · Wöchentlich: {{weekly}}",
       "saved": "Gespeichertes Google-Konto",
-      "nativeActive": "Natives Konto",
-      "selected": "Ausgewählt",
-      "select": "Auswählen",
       "remove": "Entfernen",
-      "sessions": "Die Auswahl gilt für neue agy-Sitzungen auf diesem Host. Bestehende Sitzungen behalten möglicherweise ihr bisheriges Konto.",
       "searchDescription": "Native Google-Konten von agy auf dem Ausführungshost speichern und auswählen.",
       "title": "Antigravity",
       "keyword": {
@@ -21919,7 +21890,6 @@
       "authMethod": "Anmelden mit",
       "personal": "Google-Konto",
       "gcpProject": "Google-Cloud-Projekt",
-      "gcpLocation": "Google-Cloud-Standort",
       "settingsIncomplete": "Wähle einen Antigravity-Kontotyp und gib dessen Google-Cloud-Projekt und -Standort ein.",
       "settingsLoadFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht laden. Versuche es erneut.",
       "settingsSaveFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht speichern. Versuche es erneut.",
@@ -21988,6 +21958,11 @@
         "reasonSharedSession": "Auch in einem anderen Bereich geöffnet",
         "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
         "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen."
+      },
+      "oauthUsage": {
+        "title": "Claude-Nutzungsabfrage",
+        "description": "Verwendet deine Claude-Code-Anmeldung, um Nutzung, Guthaben und inaktive Konten abzufragen. Deaktiviere diese Option, um nur Live-Daten aus Terminalsitzungen zu verwenden.",
+        "about": "Über die Claude-Nutzungsabfrage"
       }
     },
     "managedData": {
@@ -22050,7 +22025,6 @@
     "nestedRemoval": {
       "refreshFailed": "Die Liste der Arbeitsbereiche konnte nicht aktualisiert werden",
       "review": "Mit verschachtelten Worktrees löschen…",
-      "title": "Arbeitsbereich und verschachtelte Worktrees löschen?",
       "description": "Dadurch werden „{{name}}“, alle unten aufgeführten verschachtelten Worktrees und alle darin enthaltenen Dateien einschließlich nicht committeter Änderungen endgültig gelöscht. Ihre Terminals und Agenten werden gestoppt.",
       "detached": "Losgelöster HEAD",
       "loading": "Verschachtelte Worktrees werden überprüft…",
@@ -22058,7 +22032,6 @@
       "cancel": "Abbrechen",
       "retry": "Erneut überprüfen",
       "deleting": "Wird gelöscht…",
-      "confirm": "Alle aufgeführten Worktrees löschen",
       "preservedBranches": "Einige Branches verschachtelter Worktrees wurden beibehalten"
     },
     "setupTerminalTitle": "Einrichtung",
@@ -23637,11 +23610,10 @@
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
-    "legacyModels": "Ältere Modelle",
     "toggleArguments": "Argumente ein-/ausblenden",
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
-    "legacyModelCount": "{{total}} Modelle",
+    "moreModelsWithCount": "Weitere Modelle ({{total}})",
     "search": "Suchen, z. B. Opus 5.5…",
     "configure": "{{agent}} konfigurieren",
     "arguments": "Argumente",

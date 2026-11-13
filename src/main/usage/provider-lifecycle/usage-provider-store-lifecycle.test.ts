@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -9,6 +9,8 @@ import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
 import {
   splitUsageCacheFile,
+  readUsageSourceCache,
+  usageSourceCachePath,
   type UsageCacheSplitRequest,
   type UsageCacheSplitResult,
   type UsageSourceCacheRef
@@ -144,6 +146,52 @@ describe('UsageProviderStoreLifecycle', () => {
     await Promise.all(stores.map((store) => store.flush()))
     rmSync(tempDirectory, { recursive: true, force: true })
     vi.restoreAllMocks()
+  })
+
+  it('preserves inline sources across failed migration, an enabled toggle and a later retry', async () => {
+    const cacheFile = join(tempDirectory, 'inline.json')
+    const sidecar = usageSourceCachePath(cacheFile)
+    const sources = [{ id: 'owner', ownedEventKeys: ['turn-1|10,0,0,0,10|'], checkpoint: 123 }]
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(
+        makeState({
+          processedSources: sources,
+          sessions: [{ id: 'session' }],
+          dailyAggregates: [{ day: '2026-04-10' }],
+          scanState: { enabled: true }
+        })
+      )
+    )
+    mkdirSync(sidecar)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const first = new TestUsageStore(cacheFile, scan, split, capture)
+    stores.push(first)
+    await first.whenLoaded()
+    expect(first.getState().sessions).toEqual([{ id: 'session' }])
+    await first.setEnabled(false)
+    await first.flush()
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+      processedSources: sources,
+      dailyAggregates: [{ day: '2026-04-10' }],
+      scanState: { enabled: false }
+    })
+    rmSync(sidecar, { recursive: true })
+    const retried = new TestUsageStore(cacheFile, scan, split, capture)
+    stores.push(retried)
+    await retried.whenLoaded()
+    await retried.flush()
+    expect(retried.getState().sessions).toEqual([{ id: 'session' }])
+    expect(retried.getScanState().enabled).toBe(false)
+    expect(
+      await readUsageSourceCache({
+        path: sidecar,
+        schemaVersion: 1,
+        worktreeFingerprint: null,
+        reuse: true
+      })
+    ).toEqual(sources)
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8')).processedSources).toBeUndefined()
   })
 
   it('keeps a successful scan when the first async telemetry consent request rejects', async () => {

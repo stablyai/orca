@@ -1,8 +1,8 @@
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
@@ -12,7 +12,7 @@ import type { AppState } from '@/store/types'
 import {
   getGitHubPRCacheKey,
   getLegacyGitHubPRCacheKey
-} from '../../../../../../shared/github/github-cache-key'
+} from '../../../../../../shared/github/cache/github-cache-key'
 import type { ParentPrChecksCacheEntry } from './parent-pr-checks-row-types'
 
 export function canUseParentPrChecksGitHubPRCacheEntry(

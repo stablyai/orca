@@ -12,7 +12,7 @@ const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 const { __resetTrustPromptChainForTests } =
   await import('../../../../runtime/repo-hooks/ensure-hooks-confirmed')
 const { DirectWorkItemSetupDialog } =
-  await import('@/components/new-workspace/DirectWorkItemSetupDialog')
+  await import('@/components/new-workspace/setup/DirectWorkItemSetupDialog')
 
 const hooks = { scripts: { setup: 'echo prepared' } }
 const args = {

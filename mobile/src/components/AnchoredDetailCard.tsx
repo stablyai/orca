@@ -3,7 +3,7 @@ import { Animated, ScrollView, StyleSheet, Text, View, type HostInstance } from 
 import { DetailCardFocusBoundary, DetailCardLayer } from './detail-card-host'
 import type { AnchoredDetailCardState } from './use-anchored-detail-card'
 import { useDetailCardMotion } from './use-detail-card-motion'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

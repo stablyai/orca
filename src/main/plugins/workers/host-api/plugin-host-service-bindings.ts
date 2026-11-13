@@ -2,7 +2,7 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../../shared/plugins/work
 import type { PluginHostServices, PluginDesktopFrameServices } from './plugin-host-method-bindings'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
 import type { PluginStatusBarState } from '../../status-bar/plugin-status-bar-state'
-import type { PluginRuntimeRpc } from './plugin-host-workspace-method-bindings'
+import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 import {
   pluginSettingValueIssue,
@@ -19,6 +19,7 @@ import type { PluginEditorTypographySource } from '../../appearance/plugin-edito
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
+    identityKey?: string
     path: string
     branch: string
     displayName: string
@@ -48,6 +49,8 @@ export type PluginRuntimeDelegate = {
   }): Promise<{ delivered: boolean }>
   /** The hook server's agent rows; absent where no hook server runs. */
   listAgentStatuses?(): readonly PluginAgentStatusRow[]
+  /** Dispatched orchestration task titles by pane key; absent where no runtime dispatches tasks. */
+  listAgentTaskTitles?(): ReadonlyMap<string, string>
   /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
   callRuntime?: PluginRuntimeRpc
 }
@@ -73,6 +76,7 @@ export function bindPluginHostServices(input: {
     appearance: input.appearance ?? null,
     editorTypography: input.editorTypography ?? null,
     desktop: input.desktop ?? null,
+    confirm: input.desktop?.confirm ?? null,
     panels: input.panels ?? null,
     statusBar: input.statusBar
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
@@ -84,9 +88,11 @@ export function bindPluginHostServices(input: {
       if (!context) {
         return null
       }
-      // Retain path-bearing worktree IDs for host membership checks; public projections exclude them.
+      // Retain path-bearing worktree IDs for host membership checks; public projections expose
+      // the identity form instead when there is one.
       return {
         worktreeId: context.worktreeId,
+        ...(context.identityKey ? { identityKey: context.identityKey } : {}),
         branch: context.branch,
         displayName: context.displayName
       }
@@ -106,6 +112,14 @@ export function bindPluginHostServices(input: {
       }))
     },
     listAgentStatuses: () => delegate.listAgentStatuses?.() ?? [],
+    listAgentTaskTitles: () => {
+      try {
+        return delegate.listAgentTaskTitles?.() ?? new Map()
+      } catch {
+        // Task titles are optional; an orchestration read failure must not lose the agent rows.
+        return new Map()
+      }
+    },
     sendTerminalText: async (terminalId, action) => {
       const result = await delegate.sendTerminal(terminalId, action, { inputKind: 'driving' })
       return { accepted: result.accepted }

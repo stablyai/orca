@@ -13,7 +13,10 @@ export function isContextualTourStepDone(
 }
 
 export function hasContextualTourActionStep(tour: ContextualTour): boolean {
-  return tour.steps.some((step) => step.advanceOnFeatureInteraction !== undefined)
+  return (
+    tour.kind !== 'announcement' &&
+    tour.steps.some((step) => step.advanceOnFeatureInteraction !== undefined)
+  )
 }
 
 export function hasUndoneContextualTourAction(
@@ -21,11 +24,14 @@ export function hasUndoneContextualTourAction(
   featureInteractions: FeatureInteractionState,
   fromStepIndex = 0
 ): boolean {
-  return tour.steps
-    .slice(fromStepIndex)
-    .some(
-      (step) =>
-        step.advanceOnFeatureInteraction !== undefined &&
-        !isContextualTourStepDone(step, featureInteractions)
-    )
+  return (
+    hasContextualTourActionStep(tour) &&
+    tour.steps
+      .slice(fromStepIndex)
+      .some(
+        (step) =>
+          step.advanceOnFeatureInteraction !== undefined &&
+          !isContextualTourStepDone(step, featureInteractions)
+      )
+  )
 }

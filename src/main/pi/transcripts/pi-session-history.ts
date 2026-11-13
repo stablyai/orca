@@ -1,9 +1,9 @@
-import { sessionIdFromFileName } from '../../ai-vault/session-scanner-accumulator'
+import { sessionIdFromFileName } from '../../ai-vault/parsing/session-scanner-accumulator'
 import {
   resumeInvocationFromOptions,
   sessionFileResumeTargetMatches,
   type StructuredAgentSessionHistory
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const PI_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['pi'],

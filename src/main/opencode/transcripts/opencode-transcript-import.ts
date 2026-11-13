@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises'
-import { admitTranscriptPath } from '../../native-chat/transcript-path-admission'
+import { admitTranscriptPath } from '../../native-chat/transcript-discovery/transcript-path-admission'
 import { dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -7,7 +7,7 @@ import { getManagedDataAccountService } from '../../managed-data-accounts/servic
 import {
   absoluteConversationStore,
   type StructuredAgentTranscriptImport
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import { resolveOpenCodeDatabasePath } from '../accounts/opencode-data-directory'
 import { environmentForStructuredOpenCodeAccountHome } from '../accounts/opencode-structured-account-home'
 

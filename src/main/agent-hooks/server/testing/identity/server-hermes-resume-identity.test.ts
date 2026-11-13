@@ -7,7 +7,7 @@ import { createHookListenerState } from '../../../../../shared/agent-hook-listen
 import { resumeRecordFromStatus } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { AgentHookRelayEnvelope } from '../../../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hook-server'
+import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hooks/server/agent-hook-server'
 import { AgentHookServer } from '../../agent-hook-server'
 import { buildBody, postHookEvent } from '../server.test-fixtures'
 

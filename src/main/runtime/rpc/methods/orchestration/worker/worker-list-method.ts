@@ -11,20 +11,20 @@ import {
   encodeWorkerListCursor,
   type WorkerListCursor,
   type WorkerListInventory
-} from './worker-list-cursor'
+} from './fleet/worker-list-cursor'
 import {
   createWorkerListSnapshot,
   ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS,
   pinWorkerListSnapshot,
   readWorkerListSnapshot
-} from './worker-list-snapshot-store'
-import { projectWorkerListFleet, type WorkerListPageParams } from './worker-list-projection'
-import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
+} from './fleet/worker-list-snapshot-store'
+import { projectWorkerListFleet, type WorkerListPageParams } from './fleet/worker-list-projection'
+import { exposeWorkerTerminalResource } from './release/worker-terminal-resource-presentation'
 import { withRemoteWorkerRows } from '../../../../orchestration/federation/remote-owned/remote-owned-reads'
 import {
   WORKER_TERMINAL_LIST_STATES,
   WorkerListParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 
 export const emptyWorkerListPage = (limit: number) => ({
   workers: [],

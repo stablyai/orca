@@ -53,9 +53,16 @@ const {
   assertRemoteUrlReadableMock: vi.fn()
 }))
 
-vi.mock('../github/gh-utils', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', () => ({
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+
+vi.mock('../github/execution/github-operation-slots', () => ({
   acquire: vi.fn(async () => {}),
   release: vi.fn()
 }))
@@ -78,7 +85,9 @@ vi.mock('../git/command-runner/git-environment/git-process-env', async (importOr
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream/upstream', () => ({
+  getUpstreamStatus: getUpstreamStatusMock
+}))
 
 vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -117,15 +126,15 @@ vi.mock('../github/client/lookup/pr-for-branch-outcome', () => ({
   getPRForBranchOutcome: getPRForBranchOutcomeMock
 }))
 
-vi.mock('../github/client', () => ({
-  getRepoSlug: getRepoSlugMock,
-  getRepoUpstream: getRepoUpstreamMock,
-  getPRForBranchOutcome: getPRForBranchOutcomeMock,
-  getGitHubPRLookupRateLimitBlock: vi.fn(async () => null),
+vi.mock('../github/client/lookup/pr-lookup-rate-limit', () => ({
+  getGitHubPRLookupRateLimitBlock: vi.fn(async () => null)
+}))
+
+vi.mock('../github/client/create/create-github-pull-request', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock
 }))
 
-vi.mock('../github/github-enterprise-repository', () => ({
+vi.mock('../github/repositories/github-enterprise-repository', () => ({
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 

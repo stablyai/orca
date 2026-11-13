@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PRRefreshOutcome } from '../../../../../shared/github/pull-request-refresh-types'
+import type { PRRefreshOutcome } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   createTestStore,
   makePR,

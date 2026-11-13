@@ -64,7 +64,7 @@ export class SessionSearchIndexWriter {
     private readonly db: SyncDatabase,
     private readonly commitChars: number = SESSION_SEARCH_COMMIT_CHARS,
     /** Schedule bounded orphan reclamation after commit; synchronous cleanup would enlarge the transaction. */
-    private readonly onOrphanedRows: () => void = () => undefined,
+    private readonly onOrphanedRows: (sessionRowId: number) => void = () => undefined,
     private readonly onMessagesChanged: (delta: number) => void = () => undefined
   ) {
     this.records = new SessionSearchFileRecords(db)
@@ -192,7 +192,7 @@ export class SessionSearchIndexWriter {
     }
     // Replace the session once, hiding old messages through joins; reclaim orphans after commit.
     let replaced = append
-    let orphaned = false
+    let orphaned: number | null = null
     // Stop buffering after a fence failure rather than opening a doomed transaction per message.
     let fenced = false
 
@@ -236,7 +236,7 @@ export class SessionSearchIndexWriter {
                 session = this.records.createSessionRow(candidate)
                 if (previous !== null) {
                   db.prepare('DELETE FROM sessions WHERE id = ?').run(previous)
-                  orphaned = true
+                  orphaned = previous
                 }
                 replaced = true
               }
@@ -264,9 +264,10 @@ export class SessionSearchIndexWriter {
             throw error
           }
           // Schedule reclamation only after commit; rolled-back generations remain live.
-          if (orphaned) {
-            orphaned = false
-            this.onOrphanedRows()
+          if (orphaned !== null) {
+            const retired = orphaned
+            orphaned = null
+            this.onOrphanedRows(retired)
           }
           expected = {
             session_row_id: session,
