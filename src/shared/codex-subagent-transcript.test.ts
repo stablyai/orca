@@ -48,7 +48,7 @@ describe('Codex subagent transcript reconciliation', () => {
   it('resolves a child rollout filed under a later session day than the parent', () => {
     const root = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
     dirs.push(root)
-    const childStartedAt = Date.now()
+    const childStartedAt = 1_767_225_600_000
     const parentDir = dayDirectory(root, childStartedAt - 24 * 60 * 60 * 1000)
     const childDir = dayDirectory(root, childStartedAt)
     mkdirSync(parentDir, { recursive: true })
