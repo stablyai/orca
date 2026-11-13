@@ -111,9 +111,8 @@ export function materializeTaskPageItemList(args: {
     const scope = resolveItemSourceScope(item.repoId, item.id)
     byKey.set(k, getRegistryMergedTaskPageGitHubWorkItem(item, scope))
   }
-  return [...byKey.values()].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  )
+  // Host pages are already newest-number-first; updatedAt order shuffles the page after triage.
+  return [...byKey.values()]
 }
 
 export function reconcileTaskPagePagesAfterQuietRefresh(args: {
