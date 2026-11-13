@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
@@ -147,7 +149,9 @@ export function createClaudeModelCatalogProbe(
     const launchDeps = {
       ...deps,
       operation,
-      ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
+      ...(lookup !== 'recover'
+        ? { resolveInheritedEnv: deps.resolveSavedEnvironment ?? deps.resolveInheritedEnv }
+        : {}),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     }
@@ -175,6 +179,13 @@ export function createClaudeModelCatalogProbe(
     const settingSources = listIn === cwd ? CLAUDE_DEFAULT_SETTING_SOURCES : ['user']
     const args = argsFor(true, settingSources)
     return {
+      inputStamp: await agentModelCatalogInputStamp({
+        command,
+        prefixArgs,
+        cwd: listIn ?? process.cwd(),
+        env: launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
+        configFiles: [join(requireLegacyAgentSessionAccountHome(accountHome).path, 'settings.json')]
+      }),
       identity: {
         command,
         prefixArgs,
@@ -280,6 +291,9 @@ export function createClaudeModelCatalogProbe(
           options?.operation
         )
       ).run(options?.signal),
-    { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
+    {
+      resolve,
+      resolveLegacy: (home, operation, lookup) => resolve(home, undefined, lookup, operation)
+    }
   )
 }

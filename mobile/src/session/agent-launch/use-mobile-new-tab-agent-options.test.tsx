@@ -127,6 +127,11 @@ describe('useMobileNewTabAgentOptions', () => {
     const drawer = mountDrawer(queryClient)
     const answered = createClient({ agents: () => claude })
     await drawer.render({ client: answered, open: true, executionHost: 'runtime:vm-a' })
+    expect(
+      answered.sendRequest.mock.calls
+        .filter(([method]) => method === 'preflight.refreshAgents')
+        .map(([, params]) => params)
+    ).toEqual([expect.not.objectContaining({ userInitiated: true })])
     await drawer.render({ client: answered, open: false, executionHost: 'runtime:vm-a' })
 
     await drawer.render({

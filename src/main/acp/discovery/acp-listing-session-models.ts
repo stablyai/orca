@@ -14,6 +14,7 @@ import type {
   SetSessionConfigOptionResponse
 } from '../generated/acp-protocol.generated'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import type { AgentModelCatalogReady } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { AcpAgentError } from '../transport/acp-errors'
 
 /** Session-free capability boundary: no session methods are exposed. */
@@ -61,7 +62,7 @@ export async function readSessionModels(
   operation?: StructuredAgentResolutionOperation,
   selectedModels?: readonly string[],
   launchedModel?: string,
-  ready?: (cleanup: () => Promise<unknown>) => void
+  ready?: AgentModelCatalogReady<{ models: AgentSessionModelOption[]; attemptedModels: string[] }>
 ): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
   const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
@@ -80,12 +81,15 @@ export async function readSessionModels(
       })
     }
   }
-  // Startup and menu discovery have separate budgets; cleanup also runs on cancellation.
-  ready?.(cleanup)
   const options = new AcpStructuredOptions(spec.dialect)
   options.adoptSession(started.response, 'new')
   let models = options.read().models
   const attemptedModels: string[] = []
+  const partial = () => {
+    stopped = true
+    return { models: [...models], attemptedModels: [...attemptedModels] }
+  }
+  ready?.(cleanup, models.length > 0 ? partial : undefined)
   try {
     if (launchedModel !== undefined) {
       attemptedModels.push(launchedModel)
@@ -136,9 +140,19 @@ export async function readSessionModels(
           }
         }
       }
-      await withTimeout(sweep(), 5_000, undefined)
+      await withTimeout(
+        sweep(),
+        Math.max(
+          0,
+          Math.min(
+            5_000,
+            operation?.deadline === undefined ? Infinity : operation.deadline - Date.now()
+          )
+        ),
+        undefined
+      )
+      stopped = true
     }
-    assertStructuredAgentResolutionCurrent(operation)
     return { models, attemptedModels }
   } finally {
     if (!ready) {

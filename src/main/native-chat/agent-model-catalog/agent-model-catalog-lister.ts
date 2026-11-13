@@ -1,6 +1,7 @@
 import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { AgentModelCatalogProbeError } from './agent-model-catalog-probe-runner'
 import { startSpan } from '../../observability/tracer'
 import {
   AgentModelCatalogListingStoppedError,
@@ -96,6 +97,7 @@ export function refreshAgentModelCatalogListing(input: {
   refreshes: Map<string, InFlightListing>
   failures: AgentModelCatalogFailures
   listingWaiters: AgentModelCatalogListingWaiters
+  failed: () => void
   writeSuccess: (
     fingerprint: string,
     agent: string,
@@ -117,18 +119,32 @@ export function refreshAgentModelCatalogListing(input: {
   let expiry: ReturnType<typeof setTimeout> | undefined
   const holders = new Map<AbortSignal, () => void>()
   // A listing started without a signal is held until it settles.
+  let admitted = false
+  const queuedAt = Date.now()
   let held = signal === undefined
   const setDeadline = (next: number | undefined): void => {
     deadline = next
     clearTimeout(expiry)
     if (deadline !== undefined) {
-      expiry = setTimeout(retire, Math.max(0, deadline - Date.now()))
+      expiry = setTimeout(
+        () => {
+          if (admitted) {
+            stopped.abort(
+              new AgentModelCatalogProbeError('Model listing work deadline ended', 'timeout')
+            )
+          } else {
+            retire()
+          }
+        },
+        Math.max(0, deadline - Date.now())
+      )
     }
   }
   const flight: InFlightListing = {
     agent,
     targets: new Set(input.selectedModel ? [input.selectedModel] : []),
-    current: () => !lifetime?.aborted && (deadline === undefined || Date.now() < deadline),
+    current: () =>
+      !lifetime?.aborted && (admitted || deadline === undefined || Date.now() < deadline),
     hold: (holder) => {
       if (!held && holder && !holder.aborted && !holders.has(holder)) {
         setDeadline(budgetDeadline)
@@ -177,6 +193,8 @@ export function refreshAgentModelCatalogListing(input: {
         span.end()
         return
       }
+      admitted = true
+      span.setAttribute('queuedMs', Date.now() - queuedAt)
       held = true
       // Admission replaces the abandonment deadline with the probe's own execution budget.
       setDeadline(
@@ -185,13 +203,17 @@ export function refreshAgentModelCatalogListing(input: {
           : Math.min(budgetDeadline ?? Infinity, Date.now() + timeoutMs)
       )
       const owner: StructuredAgentResolutionOperation = {
-        current,
+        current: () => current() && !stopped.signal.aborted,
         signal: stopped.signal,
         deadline
       }
       let targets = input.selectedModel ? [input.selectedModel] : undefined
+      const tried = new Set<string>()
       let entry: AgentModelCatalogEntry | null = null
       do {
+        for (const target of targets ?? []) {
+          tried.add(target)
+        }
         const success = await listModels(targets, owner)
         if (!current()) {
           return
@@ -207,8 +229,10 @@ export function refreshAgentModelCatalogListing(input: {
             flight.targets.delete(target)
           }
         }
-        targets = [...flight.targets].filter(input.targetDue)
-      } while (targets.length > 0 && current())
+        targets = [...flight.targets].filter(
+          (target) => !tried.has(target) && input.targetDue(target)
+        )
+      } while (targets.length > 0 && current() && !stopped.signal.aborted)
       if (current()) {
         flight.finish(entry)
       }
@@ -216,6 +240,7 @@ export function refreshAgentModelCatalogListing(input: {
     } catch (error) {
       span.fail(error instanceof Error ? error : String(error))
       if (current() && !(error instanceof AgentModelCatalogListingStoppedError)) {
+        input.failed()
         input.failures.probeFailed(fingerprint, agent, error)
       }
     } finally {
@@ -234,36 +259,34 @@ export function scopedAgentModelCatalogLister(input: {
   probeHome: AgentSessionAccountHome | null
   workspacePath: string | undefined
 }): AgentModelCatalogListModels {
-  const { legacy, resolved, probe, probeHome, workspacePath } = input
+  const { resolved, probe, probeHome, workspacePath } = input
   return async (selectedModels, operation) => {
     const signal = operation.signal
       ? AbortSignal.any([input.signal, operation.signal])
       : input.signal
-    const deadline = new AbortController()
-    // Share the retry budget and await bounded provider teardown before settling.
-    const timer = legacy ? setTimeout(() => deadline.abort(), 30_000) : undefined
-    const attemptSignal = AbortSignal.any([signal, deadline.signal])
     try {
       // A slot that frees as the budget ends never starts the queued listing.
       if (operation.current?.() === false) {
         throw new AgentModelCatalogListingStoppedError('listing budget ended')
       }
       if (resolved) {
-        return await resolved.run(attemptSignal, operation)
+        return await resolved.run(signal, operation, selectedModels)
       }
       if (!probe || !probeHome) {
         throw new AgentModelCatalogListingStoppedError('catalog scope unavailable')
       }
       return await probe(probeHome, {
-        signal: attemptSignal,
+        signal,
         workspacePath,
         ...(selectedModels ? { selectedModels } : {}),
         operation
       })
     } catch (error) {
-      throw signal.aborted ? new AgentModelCatalogListingStoppedError(String(error)) : error
-    } finally {
-      clearTimeout(timer)
+      throw input.signal.aborted
+        ? new AgentModelCatalogListingStoppedError(String(error))
+        : operation.signal?.aborted
+          ? operation.signal.reason
+          : error
     }
   }
 }

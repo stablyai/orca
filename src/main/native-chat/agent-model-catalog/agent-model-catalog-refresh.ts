@@ -191,9 +191,8 @@ export function createAgentModelCatalogRefreshes(context: {
               {
                 signal,
                 lifetime,
-                ...(launch.legacy
-                  ? { deadline }
-                  : { admission, timeoutMs: AGENT_MODEL_CATALOG_REFRESH_MS })
+                admission,
+                timeoutMs: AGENT_MODEL_CATALOG_REFRESH_MS
               },
               model
             )

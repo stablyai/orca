@@ -4,10 +4,12 @@ import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
 export type AgentModelCatalogResolvedProbe = {
   identity: unknown
+  inputStamp?: string
   /** `operation` owns the run; it defaults to the one the invocation was resolved under. */
   run: (
     signal?: AbortSignal,
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    selectedModels?: readonly string[]
   ) => Promise<AgentModelCatalogSuccess>
 }
 
@@ -26,7 +28,8 @@ export type AgentModelCatalogProbe = ((
 ) => Promise<AgentModelCatalogSuccess>) & {
   resolveLegacy?: (
     home: AgentSessionAccountHome,
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    lookup?: AgentModelCatalogLookup
   ) => Promise<AgentModelCatalogResolvedProbe>
   resolve?: (
     home: AgentSessionAccountHome,

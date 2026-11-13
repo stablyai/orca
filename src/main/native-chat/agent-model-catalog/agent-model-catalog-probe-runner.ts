@@ -106,7 +106,10 @@ export async function runAgentModelCatalogListing(
       // Required replies already in hand outlive an optional reply that runs out of time or room.
       const failUnlessReady = (message: string, reason: AgentModelCatalogProbeFailure): void =>
         partialTimer === undefined ? fail(message, reason) : resolve(output.text())
-      onAbort = () => fail(`${launch.command} listing stopped`, 'stopped')
+      onAbort = () =>
+        isAgentModelCatalogWorkTimeout(options.signal)
+          ? failUnlessReady(`${launch.command} listing timed out`, 'timeout')
+          : fail(`${launch.command} listing stopped`, 'stopped')
       options.signal?.addEventListener('abort', onAbort, { once: true })
       timer = setTimeout(
         () =>
@@ -167,11 +170,21 @@ function throwIfStopped(signal: AbortSignal | undefined, label: string): void {
   }
 }
 
+export function isAgentModelCatalogWorkTimeout(signal?: AbortSignal): boolean {
+  return (
+    signal?.aborted === true &&
+    signal.reason instanceof AgentModelCatalogProbeError &&
+    signal.reason.reason === 'timeout'
+  )
+}
+
+export type AgentModelCatalogReady<T> = (cleanup: () => Promise<unknown>, partial?: () => T) => void
+
 export type AgentModelCatalogProbeConnection = { close(): Promise<unknown> }
 
 export async function runAgentModelCatalogSession<C extends AgentModelCatalogProbeConnection, T>(
   open: () => C,
-  body: (connection: C, ready: (cleanup: () => Promise<unknown>) => void) => Promise<T>,
+  body: (connection: C, ready: AgentModelCatalogReady<T>) => Promise<T>,
   options: { label: string; timeoutMs?: number; signal?: AbortSignal }
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS
@@ -179,29 +192,38 @@ export async function runAgentModelCatalogSession<C extends AgentModelCatalogPro
   const connection = open()
   let timer: ReturnType<typeof setTimeout> | undefined
   let cleanup: (() => Promise<unknown>) | undefined
-  const ready = (closeSession: () => Promise<unknown>): void => {
-    cleanup = closeSession
-    clearTimeout(timer)
+  let partial: (() => T) | undefined
+  let settled = false
+  const ready: AgentModelCatalogReady<T> = (closeSession, readPartial) => {
+    if (!settled) {
+      cleanup = closeSession
+      partial = readPartial
+    }
   }
   let onAbort = (): void => {}
-  const deadline = new Promise<never>((_resolve, reject) => {
-    onAbort = () =>
-      reject(new AgentModelCatalogProbeError(`${options.label} listing stopped`, 'stopped'))
+  const deadline = new Promise<T>((resolve, reject) => {
+    const expire = (): void => {
+      settled = true
+      if (partial) {
+        resolve(partial())
+      } else {
+        reject(new AgentModelCatalogProbeError(`${options.label} listing timed out`, 'timeout'))
+      }
+    }
+    onAbort = () => {
+      if (isAgentModelCatalogWorkTimeout(options.signal)) {
+        expire()
+      } else {
+        reject(new AgentModelCatalogProbeError(`${options.label} listing stopped`, 'stopped'))
+      }
+    }
     options.signal?.addEventListener('abort', onAbort, { once: true })
-    timer = setTimeout(
-      () =>
-        reject(
-          new AgentModelCatalogProbeError(
-            `${options.label} did not list models within ${timeoutMs}ms`,
-            'timeout'
-          )
-        ),
-      timeoutMs
-    )
+    timer = setTimeout(expire, timeoutMs)
   })
   try {
     return await Promise.race([body(connection, ready), deadline])
   } finally {
+    settled = true
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', onAbort)
     if (cleanup) {

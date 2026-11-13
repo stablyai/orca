@@ -1,3 +1,9 @@
+import { join, resolve as resolvePath } from 'node:path'
+import {
+  getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath
+} from '../../configuration/homes/codex-home-paths'
+import { agentModelCatalogInputStamp } from '../../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
@@ -64,7 +70,9 @@ export function createCodexModelCatalogProbe(
     const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
     const overlay = overlayEnvironmentVariables({}, deps.resolveEnv?.(), process.platform)
     const readEnvironment =
-      lookup === 'saved' ? deps.resolveSavedEnvironment : deps.resolveEnvironment
+      lookup !== 'recover'
+        ? (deps.resolveSavedEnvironment ?? deps.resolveEnvironment)
+        : deps.resolveEnvironment
     const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
       ...deps,
       operation,
@@ -98,6 +106,20 @@ export function createCodexModelCatalogProbe(
       CODEX_HOME: accountHomePath
     }
     return {
+      inputStamp: await agentModelCatalogInputStamp({
+        command,
+        prefixArgs,
+        cwd: listIn ?? process.cwd(),
+        env: launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
+        configFiles: [
+          join(
+            resolvePath(accountHomePath) === resolvePath(resolveOrcaManagedCodexHomePath())
+              ? getSystemCodexHomePath()
+              : accountHomePath,
+            'config.toml'
+          )
+        ]
+      }),
       identity: { command, args, cwd: listIn, overlay: Object.entries(overlay).sort() },
       run: async (
         signal?: AbortSignal,
@@ -186,6 +208,9 @@ export function createCodexModelCatalogProbe(
       (await resolve(home, options?.cwd ?? process.cwd(), 'recover', options?.operation)).run(
         options?.signal
       ),
-    { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
+    {
+      resolve,
+      resolveLegacy: (home, operation, lookup) => resolve(home, undefined, lookup, operation)
+    }
   )
 }

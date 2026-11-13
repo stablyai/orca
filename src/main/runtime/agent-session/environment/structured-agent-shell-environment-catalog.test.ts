@@ -68,11 +68,12 @@ function rig(overlay?: Record<string, string>) {
     workspaceMayOverrideDefaultModel: defaults
   })
   const environment = createStructuredAgentEnvironmentResolvers({
-    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] }),
+    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: ['IGNORED'] }),
     resolveAgentLaunchEnv: () => overlay ?? {}
   })
   cleanups.push(service.stop, environment.bindCatalogSources(['grok']))
   const listing = (id: string) => ({
+    origin: 'probe' as const,
     models: [{ id, label: id, isDefault: true, efforts: [] }],
     configuredDefault: { modelId: id, effort: 'high' }
   })
@@ -86,21 +87,32 @@ function rig(overlay?: Record<string, string>) {
   }
 }
 
-it('keeps a Windows catalog source while only a shadowed inherited path changes', async () => {
-  vi.stubGlobal('process', { ...process, platform: 'win32' })
-  const overlay = { path: '/configured/bin' }
-  const h = rig(overlay)
-  const source = h.service.captureSource(h.record)
-  cleanups.push(() => source.release?.())
-  await captureHostShellEnvironment(async () => {
-    shell.next = { PATH: '/changed', IGNORED: 'a' }
-  })
-  expect(source()).toBe(true)
-  await captureHostShellEnvironment(async () => {
-    overlay.path = '/new-configured/bin'
-  })
-  expect(source()).toBe(false)
-})
+it.each(['darwin', 'win32'] as const)(
+  'keeps a %s catalog source through PATH-only and overlay-shadowed changes',
+  async (platform) => {
+    vi.stubGlobal('process', { ...process, platform })
+    const overlay = { IGNORED: 'configured' }
+    const h = rig(overlay)
+    const source = h.service.captureSource(h.record)
+    cleanups.push(() => source.release?.())
+    agentModelCatalogStore.recordSuccess(h.fingerprint, 'grok', h.listing('saved'), 'discovery')
+    const held = Promise.withResolvers<ReturnType<typeof h.listing>>()
+    const flight = agentModelCatalogStore.refresh(h.fingerprint, 'grok', () => held.promise)
+    await Promise.resolve()
+    await captureHostShellEnvironment(async () => {
+      shell.next = { PATH: '/changed', IGNORED: 'shadowed' }
+    })
+    expect(source()).toBe(true)
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('saved')
+    held.resolve(h.listing('current'))
+    await flight
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('current')
+    await captureHostShellEnvironment(async () => {
+      overlay.IGNORED = 'new-configured'
+    })
+    expect(source()).toBe(false)
+  }
+)
 
 it('retires a producer on effective Refresh before new publication and fences late defaults and new old reports', async () => {
   const h = rig()
@@ -116,7 +128,7 @@ it('retires a producer on effective Refresh before new publication and fences la
   h.service.recordLiveListing(h.record.sessionId, h.listing('A'), sourceA)
   await vi.waitFor(() => expect(h.defaults).toHaveBeenCalledOnce())
   await captureHostShellEnvironment(async () => {
-    shell.next = { PATH: '/b', IGNORED: 'a' }
+    shell.next = { PATH: '/b', IGNORED: 'b' }
   })
   expect(sourceA()).toBe(false)
   const sourceB = h.service.captureSource(h.record)

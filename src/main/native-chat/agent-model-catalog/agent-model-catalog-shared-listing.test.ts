@@ -1,3 +1,5 @@
+import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { runAgentModelCatalogSession } from './agent-model-catalog-probe-runner'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
@@ -90,4 +92,55 @@ it("never answers a newly picked folder with the previous folder's late listing"
   expect(h.service.snapshot({ agent: 'codex', workspacePath: '/own-old' })).toMatchObject({
     models: [{ id: 'old' }]
   })
+})
+
+it('keeps the admitted slot and publication until timeout teardown completes', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const store = new AgentModelCatalogStore()
+  const admission = new PrioritySemaphore(1)
+  const close = Promise.withResolvers<void>()
+  const closing = Promise.withResolvers<void>()
+  const first = store.refresh(
+    'first',
+    'grok',
+    async (_selected, owner) =>
+      runAgentModelCatalogSession(
+        () => ({
+          close: () => {
+            closing.resolve()
+            return close.promise
+          }
+        }),
+        async (_connection, ready) => {
+          ready(
+            async () => {},
+            () => listing('partial')
+          )
+          return new Promise<AgentModelCatalogSuccess>(() => {})
+        },
+        { label: 'grok', signal: owner.signal }
+      ),
+    { admission, timeoutMs: 30_000 }
+  )
+  let secondStarted = false
+  const second = store.refresh(
+    'second',
+    'grok',
+    async () => {
+      secondStarted = true
+      return listing('second')
+    },
+    { admission, timeoutMs: 30_000 }
+  )
+  await vi.advanceTimersByTimeAsync(30_001)
+  await closing.promise
+  expect(secondStarted).toBe(false)
+  expect(store.isListing('first')).toBe(true)
+  expect(store.get('first')).toBeNull()
+  close.resolve()
+  expect((await first)?.models[0]?.id).toBe('partial')
+  expect((await second)?.models[0]?.id).toBe('second')
 })

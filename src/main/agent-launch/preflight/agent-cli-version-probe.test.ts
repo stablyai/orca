@@ -38,6 +38,20 @@ describe('checkAgentCliVersion', () => {
     )
   })
 
+  it('propagates owner cancellation instead of certifying a missing CLI', async () => {
+    const owner = new AbortController()
+    runProcess.mockImplementation(async ({ signal }) => {
+      await new Promise<void>((resolve) =>
+        signal.addEventListener('abort', () => resolve(), { once: true })
+      )
+      return { code: null, signal: 'SIGTERM', stdout: '', stderr: '', timedOut: false }
+    })
+    const read = checkAgentCliVersion({ ...INPUT, operation: { signal: owner.signal } }, [])
+    const observed = expect(read).rejects.toThrow('superseded')
+    owner.abort(new Error('superseded'))
+    await observed
+  })
+
   it('reads a version printed only on stderr, as Pi 0.73 does', async () => {
     prints('', { stderr: '0.73.1\n' })
     expect(await checkAgentCliVersion(INPUT, ['0.84.0'])).toEqual({

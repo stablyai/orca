@@ -1,5 +1,7 @@
+import { agentModelCatalogInputStamp } from '../../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import {
   assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation,
   type StructuredAgentCommandSettings
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { homedir } from 'node:os'
@@ -8,7 +10,10 @@ import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-s
 import type { resolveCliCommand } from '../../../../shared/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../../agent-launch/preflight/agent-cli-version-probe'
 import { JsonlRpcAgentConnection } from '../../../jsonl-rpc/agent-connection'
-import type { AgentModelCatalogProbe } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
+import type {
+  AgentModelCatalogProbe,
+  AgentModelCatalogLookup
+} from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { AgentModelCatalogSuccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { runAgentModelCatalogSession } from '../../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
@@ -26,6 +31,7 @@ const discoveryStateSchema = z.object({
 })
 
 export type PiModelCatalogProbeDeps = {
+  resolveSavedEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   /** Refresh once on a missing Pi binary; absent disables retry. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
@@ -54,74 +60,102 @@ function connectPiModelCatalog(launch: ProviderProcessLaunch): PiModelCatalogCon
 }
 
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
-  return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
-    const operation = options?.operation ?? { signal: options?.signal }
+  const resolve = async (
+    accountHome: Parameters<AgentModelCatalogProbe>[0],
+    _workspace: string,
+    lookup: AgentModelCatalogLookup = 'recover',
+    operation?: StructuredAgentResolutionOperation
+  ) => {
     assertStructuredAgentResolutionCurrent(operation)
     const cwd = deps.homePath ?? homedir()
     const { env, command, prefixArgs } = await resolvePiRpcInvocation({
       operation,
       accountDir: requireLegacyAgentSessionAccountHome(accountHome).path,
-      resolveEnvironment: deps.resolveEnvironment,
+      resolveEnvironment:
+        lookup === 'recover'
+          ? deps.resolveEnvironment
+          : (deps.resolveSavedEnvironment ?? deps.resolveEnvironment),
       commandSettings: deps.resolveCommandSettings?.(),
       resolveCommand: deps.resolveCommand,
-      refreshEnvironmentAfterMiss: deps.refreshEnvironmentAfterMiss,
+      refreshEnvironmentAfterMiss:
+        lookup === 'recover' ? deps.refreshEnvironmentAfterMiss : undefined,
       resolveWorkingDirectory: () => cwd
     })
     assertStructuredAgentResolutionCurrent(operation)
-    const release = await checkPiRpcVersion({ command, prefixArgs, cwd, env }, deps.probeVersion)
-    assertStructuredAgentResolutionCurrent(operation)
-    if (release.status === 'tooOld') {
-      throw new Error(`pi at ${command} does not run structured chats`)
-    }
-    const launch = buildPiRpcLaunch({
-      command,
-      prefixArgs,
-      cwd,
-      ...piRpcSessionlessEnvironment(env),
-      fullAccess: true
-    })
-    const success = await runAgentModelCatalogSession(
-      () =>
-        (deps.connect ?? connectPiModelCatalog)({
-          ...launch,
-          args: [...launch.args, '--no-session']
-        }),
-      async (connection): Promise<AgentModelCatalogSuccess> => {
-        let configured: AgentModelCatalogSuccess['configured']
-        let unknownProvider = false
-        try {
-          const state = discoveryStateSchema.safeParse(await connection.request('get_state'))
-          unknownProvider = state.success && state.data.model?.provider === 'unknown'
-          if (state.success && state.data.model && !unknownProvider) {
-            configured = {
-              model: piModelOptionId(state.data.model.provider, state.data.model.id),
-              ...(typeof state.data.thinkingLevel === 'string' && state.data.thinkingLevel
-                ? { effort: state.data.thinkingLevel }
-                : {})
-            }
-          }
-        } catch {
-          // Optional default facts cannot prevent a usable inventory from being discovered.
-        }
+    return {
+      identity: { command, prefixArgs, cwd },
+      inputStamp: await agentModelCatalogInputStamp({ command, prefixArgs, cwd, env }),
+      run: async (
+        signal?: AbortSignal,
+        runOperation = operation
+      ): Promise<AgentModelCatalogSuccess> => {
+        const operation = runOperation
+        const options = { signal }
         assertStructuredAgentResolutionCurrent(operation)
-        options?.signal?.throwIfAborted()
-        // Pi's own "No models available" condition: no selected provider and nothing listable.
-        const models = await readPiRpcModelOptions(connection).catch((error: unknown) => {
-          if (unknownProvider) {
-            throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
-          }
-          throw error
-        })
-        if (unknownProvider && models.length === 0) {
-          throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
+        const release = await checkPiRpcVersion(
+          { command, prefixArgs, cwd, env, operation },
+          deps.probeVersion
+        )
+        assertStructuredAgentResolutionCurrent(operation)
+        if (release.status === 'tooOld') {
+          throw new Error(`pi at ${command} does not run structured chats`)
         }
-        return { models, origin: 'probe', ...(configured ? { configured } : {}) }
-      },
-      { label: 'pi', signal: options?.signal }
-    )
-    if (success.models.length === 0) {
-      throw new Error('pi listed no models')
+        const launch = buildPiRpcLaunch({
+          command,
+          prefixArgs,
+          cwd,
+          ...piRpcSessionlessEnvironment(env),
+          fullAccess: true
+        })
+        const success = await runAgentModelCatalogSession(
+          () =>
+            (deps.connect ?? connectPiModelCatalog)({
+              ...launch,
+              args: [...launch.args, '--no-session']
+            }),
+          async (connection): Promise<AgentModelCatalogSuccess> => {
+            let configured: AgentModelCatalogSuccess['configured']
+            let unknownProvider = false
+            try {
+              const state = discoveryStateSchema.safeParse(await connection.request('get_state'))
+              unknownProvider = state.success && state.data.model?.provider === 'unknown'
+              if (state.success && state.data.model && !unknownProvider) {
+                configured = {
+                  model: piModelOptionId(state.data.model.provider, state.data.model.id),
+                  ...(typeof state.data.thinkingLevel === 'string' && state.data.thinkingLevel
+                    ? { effort: state.data.thinkingLevel }
+                    : {})
+                }
+              }
+            } catch {
+              // Optional default facts cannot prevent a usable inventory from being discovered.
+            }
+            assertStructuredAgentResolutionCurrent(operation)
+            options?.signal?.throwIfAborted()
+            // Pi's own "No models available" condition: no selected provider and nothing listable.
+            const models = await readPiRpcModelOptions(connection).catch((error: unknown) => {
+              if (unknownProvider) {
+                throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
+              }
+              throw error
+            })
+            if (unknownProvider && models.length === 0) {
+              throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
+            }
+            return { models, origin: 'probe', ...(configured ? { configured } : {}) }
+          },
+          { label: 'pi', signal: options?.signal }
+        )
+        if (success.models.length === 0) {
+          throw new Error('pi listed no models')
+        }
+        return success
+      }
     }
-    return success
   }
+  return Object.assign<AgentModelCatalogProbe, Pick<AgentModelCatalogProbe, 'resolve'>>(
+    async (home, options) =>
+      (await resolve(home, '', 'recover', options?.operation)).run(options?.signal),
+    { resolve }
+  )
 }

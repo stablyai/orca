@@ -1,3 +1,7 @@
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import { compareAppVersions, parseCliVersion } from '../../../shared/app-version'
 import { runProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
@@ -14,6 +18,7 @@ export type AgentCliVersionCheck =
   | { status: 'unknown' | 'missing'; version: null }
 
 export type AgentCliVersionInput = Pick<ProcessSpec, 'program' | 'cwd' | 'env'> & {
+  operation?: StructuredAgentResolutionOperation
   prefixArgs?: readonly string[]
 }
 
@@ -60,21 +65,31 @@ export async function readAgentCliVersion(
   input: AgentCliVersionInput,
   parseVersion: typeof parseCliVersion = parseCliVersion
 ): Promise<{ version: string | null; started?: false }> {
-  const { prefixArgs = [], ...launch } = input
+  const { prefixArgs = [], operation, ...launch } = input
+  assertStructuredAgentResolutionCurrent(operation)
   let result
   try {
     result = await runProcess({
       ...launch,
       args: [...prefixArgs, '--version'],
       terminationBarrier: true,
-      timeoutMs: 5_000,
+      signal: operation?.signal,
+      timeoutMs: Math.max(
+        1,
+        Math.min(
+          5_000,
+          operation?.deadline === undefined ? Infinity : operation.deadline - Date.now()
+        )
+      ),
       maxOutputBytes: 4_096,
       killOnOutputLimit: true
     })
   } catch (error) {
+    assertStructuredAgentResolutionCurrent(operation)
     warnRefused(input.program, `did not start (${String(error)})`)
     return { version: null, started: false }
   }
+  assertStructuredAgentResolutionCurrent(operation)
   const output = `${result.stdout}\n${result.stderr}`
   if (result.timedOut || result.outputTruncated || result.code !== 0) {
     const why = result.timedOut
