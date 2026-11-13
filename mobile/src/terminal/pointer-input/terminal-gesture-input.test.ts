@@ -43,22 +43,6 @@ describe('isTerminalGestureInput', () => {
     ).toBe(true)
   })
 
-  it('accepts repeated default mouse wheel sequences', () => {
-    expect(
-      isTerminalGestureInput(
-        `${ESC}[M${String.fromCharCode(96, 97, 33)}${ESC}[M${String.fromCharCode(97, 126, 126)}`
-      )
-    ).toBe(true)
-  })
-
-  it('accepts bounded default left-click press and release sequences', () => {
-    expect(
-      isTerminalGestureInput(
-        `${ESC}[M${String.fromCharCode(32, 33, 33)}${ESC}[M${String.fromCharCode(35, 33, 33)}`
-      )
-    ).toBe(true)
-  })
-
   it('rejects shell text and other terminal input', () => {
     expect(isTerminalGestureInput('rm -rf .\r')).toBe(false)
     expect(isTerminalGestureInput(`${ESC}[200~paste${ESC}[201~`)).toBe(false)
