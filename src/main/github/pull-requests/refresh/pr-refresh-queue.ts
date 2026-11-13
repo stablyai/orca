@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   aliasFromCandidate,
+  automaticDueAt,
   bypassesFreshnessDelay,
   freshRetryAt,
   POST_PUSH_DELAY_MS,
@@ -128,7 +129,7 @@ export class PRRefreshQueue {
       entry.candidate = candidateFor(entry.key, entry.candidate)
       entry.priority = visibleFollowUpPriority(entry.candidate, entry.priority)
       entry.dueAt = Math.max(
-        freshRetryAt(entry.candidate) ?? Date.now(),
+        automaticDueAt(entry.candidate) ?? Number.POSITIVE_INFINITY,
         this.backgroundNotBefore.get(entry.key)?.until ?? 0
       )
       if (!Number.isFinite(entry.dueAt)) {
@@ -186,6 +187,7 @@ export class PRRefreshQueue {
     ) {
       existing.dueAt = Math.min(existing.dueAt, dueAt)
       existing.followUp = false
+      existing.errorRetry = false
       existing.foreground ||= exposureDueAt !== null
     }
     const shouldPromote =

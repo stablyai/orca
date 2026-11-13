@@ -7,8 +7,16 @@ import {
   getPRAutoRefreshCadence,
   type PRAutoRefreshCadence
 } from '../../../../shared/review-refresh-policy'
-import { refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
-import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import {
+  aliasFromCandidate,
+  refreshIntervalForCandidate,
+  sameAliasRequestIdentity
+} from './pr-refresh-candidate-policy'
+import type {
+  PRReadSettlement,
+  PreparedPRBranchRead
+} from '../../client/lookup/pr-for-branch-outcome'
+import type { PRReadFailureHold } from '../../client/lookup/pr-branch-read-resources'
 import type { PRRefreshQueue } from './pr-refresh-queue'
 
 type ErrorBackoff = {
@@ -18,7 +26,16 @@ type ErrorBackoff = {
    *  that holds its key and whether a timed retry is planned; null once a newer read replaced it. */
   settled?: PRRefreshOutcome
   retime?: () => { gate: number; timed: boolean } | null
+  /** The failed provider read's claim, current until a newer read of its resource starts. */
+  hold?: PRReadFailureHold
+  /** A newer read or a scope change replaced this failure; it owes no automatic retry. */
+  revoked?: boolean
+  /** The row as it failed; a row now reported with another HEAD or links is another request. */
+  candidate?: GitHubPRRefreshCandidate
 }
+
+// Failures a newer provider read of the same request had already replaced when they settled.
+const superseded = new WeakSet<PRRefreshOutcome>()
 
 export class PRRefreshRetryState {
   private readonly errorBackoff = new Map<string, ErrorBackoff>()
@@ -29,8 +46,15 @@ export class PRRefreshRetryState {
   }
 
   reset(key: string): void {
-    this.errorBackoff.delete(key)
+    this.releaseFailure(key)
     this.manualRetryGates.delete(key)
+  }
+
+  /** The row's demand ended (no longer visible): its failure owes nothing, though a manual
+   *  rate-limit gate still holds. */
+  releaseFailure(key: string): void {
+    this.errorBackoff.get(key)?.hold?.release()
+    this.errorBackoff.delete(key)
   }
 
   noteManualGate(key: string, outcome: PRRefreshOutcome): void {
@@ -52,7 +76,9 @@ export class PRRefreshRetryState {
     candidate: GitHubPRRefreshCandidate,
     cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
   ): number {
-    const failures = (this.errorBackoff.get(key)?.failures ?? 0) + 1
+    const previous = this.errorBackoff.get(key)
+    previous?.hold?.release()
+    const failures = (previous?.failures ?? 0) + 1
     const failedAt = Date.now()
     this.errorBackoff.set(key, { failures, failedAt })
     return planErrorRetry(candidate, failures, failedAt, cadence)
@@ -67,7 +93,9 @@ export class PRRefreshRetryState {
     cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
   ): number | null {
     const state = this.errorBackoff.get(key)
-    return state ? planErrorRetry(candidate, state.failures, state.failedAt, cadence) : null
+    return state && !state.revoked
+      ? planErrorRetry(candidate, state.failures, state.failedAt, cadence)
+      : null
   }
 
   /** How long a failed key stays closed to background reads. Off plans no retry, yet holds the key
@@ -80,6 +108,25 @@ export class PRRefreshRetryState {
     return state ? planErrorRetry(candidate, state.failures, state.failedAt, 'default') : Date.now()
   }
 
+  /** A failure a newer read of the same request had already replaced when it settled. */
+  replacedFailure(outcome: PRRefreshOutcome): boolean {
+    return superseded.has(outcome)
+  }
+
+  /** Whether the recorded failure belongs to the row as it is reported now (same HEAD and links);
+   *  a failure of another request is released rather than restored for this one. */
+  failureMatches(key: string, candidate: GitHubPRRefreshCandidate): boolean {
+    const failed = this.errorBackoff.get(key)?.candidate
+    if (
+      failed &&
+      sameAliasRequestIdentity(aliasFromCandidate(failed), aliasFromCandidate(candidate))
+    ) {
+      return true
+    }
+    this.releaseFailure(key)
+    return false
+  }
+
   /** Moves every retained error's shared schedule and gate to the current cadence, and returns
    *  when each still-current failure retries under it (none under Off), from its own failure. */
   retimeErrors(queue: PRRefreshQueue): Map<string, number> {
@@ -88,6 +135,8 @@ export class PRRefreshRetryState {
       const plan = state.retime?.()
       if (plan === null) {
         state.retime = undefined
+        state.revoked = true
+        state.hold?.release()
       } else if (plan !== undefined) {
         const gate = Math.max(plan.gate, this.manualGateUntil(key))
         queue.protectBackgroundUntil(key, gate)
@@ -127,28 +176,52 @@ export class PRRefreshRetryState {
     if (this.errorBackoff.get(key)?.settled === outcome) {
       return outcome.nextAutoRetryAt ?? Number.POSITIVE_INFINITY
     }
+    if (superseded.has(outcome)) {
+      return undefined
+    }
     const scheduled = getPRAutoRefreshCadence() === 'off' ? undefined : outcome.nextAutoRetryAt
     return scheduled ?? (visible ? this.nextVisibleErrorRetryAt(key, candidate) : undefined)
   }
 
+  /**
+   * Settles the actual provider read's failure once, before its callers continue: plans the retry
+   * it owes and keeps how to re-plan it. A read the exact cache kept also schedules the shared
+   * error there; a full read the cache refused still owes its retry through its own claim. Other
+   * outcomes, and reads with no demand, pass through.
+   */
   settleProducerError(
     outcome: PRRefreshOutcome,
     key: string,
     candidate: GitHubPRRefreshCandidate,
     prepared: PreparedPRBranchRead,
-    queue: PRRefreshQueue
+    queue: PRRefreshQueue,
+    producer: Parameters<PRReadSettlement>[1] = { retained: true },
+    demand = true
   ): PRRefreshOutcome {
-    const rateLimitedUntil =
-      outcome.kind === 'upstream-error' ? (outcome.retryDisabledUntil ?? 0) : 0
+    if (outcome.kind !== 'upstream-error' || !demand || (!producer.retained && !producer.hold)) {
+      return outcome
+    }
+    const hold = producer.hold?.()
+    if (hold && !hold.current()) {
+      // A newer read already owns the request: this late failure owes it no retry.
+      hold.release()
+      superseded.add(outcome)
+      return outcome
+    }
+    const rateLimitedUntil = outcome.retryDisabledUntil ?? 0
     const retryAt = this.nextVisibleErrorRetryAt(key, candidate)
     const state = this.errorBackoff.get(key)!
     const result = this.withErrorSchedule(outcome, retryAt)
-    prepared.scheduleError(outcome, result)
+    if (producer.retained) {
+      prepared.scheduleError(outcome, result)
+    }
     state.settled = result
+    state.hold = hold
+    state.candidate = candidate
     let scheduled = result
     // Replaces only the error this settlement scheduled; a newer read's result stays.
     state.retime = () => {
-      if (!prepared.accepts(scheduled)) {
+      if ((hold && !hold.current()) || (producer.retained && !prepared.accepts(scheduled))) {
         return null
       }
       const planned = planErrorRetry(
@@ -157,10 +230,12 @@ export class PRRefreshRetryState {
         state.failedAt,
         getPRAutoRefreshCadence()
       )
-      const next = this.withErrorSchedule(outcome, planned)
-      prepared.scheduleError(scheduled, next)
-      if (prepared.accepts(next)) {
-        scheduled = next
+      if (producer.retained) {
+        const next = this.withErrorSchedule(outcome, planned)
+        prepared.scheduleError(scheduled, next)
+        if (prepared.accepts(next)) {
+          scheduled = next
+        }
       }
       return {
         gate: Math.max(this.errorGateAt(key, candidate, planned), rateLimitedUntil),

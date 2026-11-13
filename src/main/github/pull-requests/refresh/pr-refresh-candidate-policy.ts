@@ -143,6 +143,15 @@ export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null
     : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
 }
 
+/** When a visible row's automatic follow-up is due under the current cadence: its validated
+ *  interval after its data, now when it has none yet, or null when there is no timer for it (Off,
+ *  or data even Default does not poll). Creation, retiming and the check before a start all use it. */
+export function automaticDueAt(candidate: GitHubPRRefreshCandidate): number | null {
+  return Number.isFinite(refreshIntervalForCandidate(candidate))
+    ? (freshRetryAt(candidate) ?? Date.now())
+    : null
+}
+
 /** How old data may be when a foreground return reads it again: its Default interval (the
  *  validated quiet one where that applies), or the settled age for data Default runs no timer for.
  *  The same age decides whether a return earns a read and whether a cached answer satisfies it. */

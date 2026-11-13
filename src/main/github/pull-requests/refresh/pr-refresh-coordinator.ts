@@ -32,7 +32,12 @@ import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evid
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 
 const retry = new PRRefreshRetryState()
-const queue = new PRRefreshQueue((key) => retry.reset(key))
+// Dropping an old gate index entry must not forget a visible row's current failure.
+const queue = new PRRefreshQueue((key) => {
+  if (!visibility.has(key)) {
+    retry.reset(key)
+  }
+})
 const pacing = new PRRefreshPacing()
 const visibility = new PRRefreshVisibility()
 const events = new PRRefreshEventPublisher()
@@ -116,8 +121,23 @@ function removeInvisibleVisibleRefreshes(): void {
   }
 }
 
+// A row no longer shown owes no retry for its failure; only its rate-limit gate stays.
+function releaseHiddenFailures(shown: ReadonlySet<string>): void {
+  for (const key of shown) {
+    if (!visibility.has(key)) {
+      retry.releaseFailure(key)
+    }
+  }
+}
+
+function shownKeys(): Set<string> {
+  return new Set(Array.from(visibility.reported(), ([, candidate]) => refreshKey(candidate)))
+}
+
 export function clearVisiblePRRefreshWindow(windowId: number): void {
+  const shown = shownKeys()
   const hadVisibleRefreshes = visibility.clearWindow(windowId)
+  releaseHiddenFailures(shown)
   pacing.clearActiveBurstWindow(windowId)
   if (hadVisibleRefreshes) {
     removeInvisibleVisibleRefreshes()
@@ -128,9 +148,9 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
 
 /** A cadence change moves queued visible follow-ups, error retries and their shared schedules to
  *  the new interval, and the gates of queued host jobs with them; "off" drops them. Under a timed
- *  cadence visible rows then get the next read it gives them, so Off back to Default resumes without
- *  waiting for the windows to report again: a row whose failure is still current gets that
- *  failure's own retry back, still an error retry the next Off retires; others their next read. */
+ *  cadence visible rows then get their automatic work back without waiting for the windows to
+ *  report again: a row whose failure is still current gets that failure's own retry, others the
+ *  follow-up the cadence gives them. Either stays automatic, so the next Off retires it. */
 export function retimePRRefreshesForCadence(): void {
   const failureRetries = retry.retimeErrors(queue)
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
@@ -140,22 +160,21 @@ export function retimePRRefreshesForCadence(): void {
   for (const [windowId, reported] of timed ? visibility.reported() : []) {
     const key = refreshKey(reported)
     const candidate = visibility.candidate(key, reported)
-    const retryAt = failureRetries.get(key)
     if (validateCandidate(candidate)) {
       continue
     }
+    const failed = failureRetries.get(key)
+    const retryAt =
+      failed !== undefined && retry.failureMatches(key, candidate) ? failed : undefined
     // Work already queued for the row (its retry, a return or an action) keeps its own reason.
-    if (retryAt !== undefined && !queue.get(key)) {
-      drainer.scheduleErrorRetry(
-        key,
-        candidate,
-        retryAt,
-        40,
-        [aliasFromCandidate(candidate)],
-        windowId
-      )
-    } else if (retryAt === undefined) {
-      queue.enqueue(candidate, 'visible', 40, windowId)
+    if (queue.get(key)) {
+      continue
+    }
+    const aliases = [aliasFromCandidate(candidate)]
+    if (retryAt === undefined) {
+      drainer.restoreFollowUp(key, candidate, 40, aliases, windowId)
+    } else {
+      drainer.scheduleErrorRetry(key, candidate, retryAt, 40, aliases, windowId)
     }
   }
   drainer.schedule()
@@ -201,9 +220,11 @@ export function reportVisiblePRRefreshCandidates(
 ): void {
   refreshPRPolicyContext()
   const newlyExposed = new Set(candidates.map(refreshKey).filter((key) => !visibility.has(key)))
+  const shown = shownKeys()
   if (!visibility.report(candidates, generation, windowId)) {
     return
   }
+  releaseHiddenFailures(shown)
   removeInvisibleVisibleRefreshes()
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   for (const candidate of candidates) {

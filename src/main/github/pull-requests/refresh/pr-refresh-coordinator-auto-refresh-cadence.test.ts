@@ -172,14 +172,15 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     expect(getPRForBranchOutcomeMock.mock.calls.length).toBeGreaterThan(2)
   })
 
-  it('restores a failed row’s own retry on Default, which the next Off retires again', async () => {
+  it('restores a failed row’s own retry from its failure time and count, which the next Off retires again', async () => {
     const { policy, coordinator } = await loadCoordinatorWithCadence('default')
-    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+    const failure = async () => ({
       kind: 'upstream-error',
       errorType: 'unknown',
       message: 'offline',
       fetchedAt: Date.now()
-    }))
+    })
+    getPRForBranchOutcomeMock.mockImplementation(failure)
     // Fails at 1 s; Default would retry it at 121 s.
     coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
@@ -193,17 +194,24 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     await switchTo('off', 1_500)
     await switchTo('default', 2_000)
     await switchTo('off', 3_000)
-    await vi.advanceTimersByTimeAsync(130_000)
+    // Restored early: the retry still runs at 121 s, not later from the restoration.
+    await switchTo('default', 100_000)
+    await vi.advanceTimersByTimeAsync(120_999 - Date.now())
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
 
+    // That retry fails as the second real failure, so the next one is due at 241 s; a count that
+    // restoration had raised would push it to 361 s or later.
     getPRForBranchOutcomeMock.mockImplementation(async () => ({
       kind: 'found',
       pr: makePR({ checksStatus: 'pending' }),
       fetchedAt: Date.now()
     }))
-    await switchTo('default', Date.now())
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(240_999 - Date.now())
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
     expect(coordinatorMocks.sendToTrustedUIRendererMock.mock.calls.at(-1)?.[1]).toMatchObject({
       outcome: { kind: 'found' }
     })

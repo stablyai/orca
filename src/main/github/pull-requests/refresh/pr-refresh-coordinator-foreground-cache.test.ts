@@ -117,3 +117,54 @@ it.each([
     expect(provider.resolve).toHaveBeenCalledTimes(2)
   }
 )
+
+it('a settled PR shown again takes the answer another reader just fetched instead of reading again', async () => {
+  const coordinator = await import('./pr-refresh-coordinator')
+  const { getPRForBranchOutcome } = await import('../../client/lookup/pr-for-branch-outcome')
+  const { hostedReviewOptionArgs } = await import('./pr-refresh-candidate-policy')
+  const settled = (title: string) => async () => ({
+    kind: 'found',
+    // ast-grep-ignore: test-no-wall-clock -- resetPRRefreshCoordinatorMocks installs fake timers
+    fetchedAt: Date.now(),
+    pr: makePR({ title, state: 'merged', checksStatus: 'success' })
+  })
+  provider.resolve.mockImplementation(settled('merged'))
+  const candidate = makeCandidate({ currentHeadOid: 'head-sha' })
+  coordinator.reportVisiblePRRefreshCandidates([candidate], 1, 1)
+  await vi.advanceTimersByTimeAsync(0)
+  coordinator.clearVisiblePRRefreshWindow(1)
+  await vi.advanceTimersByTimeAsync(20_000)
+
+  // Another reader of the same request reads it just before the row is shown again.
+  provider.resolve.mockImplementation(settled('shared'))
+  await coordinator.runHostedPRRead(candidate, () =>
+    getPRForBranchOutcome(
+      candidate.repoPath,
+      candidate.branch,
+      null,
+      null,
+      null,
+      hostedReviewOptionArgs(candidate, 'visible')[0] ?? {}
+    )
+  )
+  expect(provider.resolve).toHaveBeenCalledTimes(2)
+  coordinator.reportVisiblePRRefreshCandidates(
+    [
+      {
+        ...candidate,
+        cachedFetchedAt: 1_000,
+        cachedHeadOid: 'head-sha',
+        cachedHasPR: true,
+        cachedPRState: 'merged',
+        cachedChecksStatus: 'success'
+      }
+    ],
+    2,
+    1
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  expect(provider.resolve).toHaveBeenCalledTimes(2)
+  expect(coordinatorMocks.sendToTrustedUIRendererMock.mock.calls.at(-1)?.[1]).toMatchObject({
+    outcome: { pr: { title: 'shared' } }
+  })
+})

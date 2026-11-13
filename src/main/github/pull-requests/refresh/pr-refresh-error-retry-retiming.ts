@@ -20,7 +20,9 @@ export function retimeQueuedErrorRetries(
       entry.key,
       candidateFor(entry.key, entry.candidate)
     )
+    // No current failure owes it a retry (replaced, or its demand ended): it is not owed.
     if (planned === null) {
+      queue.delete(entry.key)
       continue
     }
     const retryAt = Math.max(planned, retry.manualGateUntil(entry.key))

@@ -3,7 +3,7 @@ import {
   captureGitHubRepoExecution,
   outsideGitHubRepoExecution
 } from '../../repositories/github-repository-identity'
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
+import { runCoalescedProbe } from '../../../git/remotes/coalesced-probe'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { acquire, release } from '../../execution/github-operation-slots'
 
@@ -29,7 +29,14 @@ import {
   scopeGeneration
 } from '../../../source-control/hosted-review-scope-generations'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-const reads: CoalescedProbes<PRRefreshOutcome> = new Map()
+import {
+  holdPRBranchReadFailure,
+  pendingPRBranchRead,
+  prBranchReadResource,
+  retirePRBranchReadResource,
+  startPRBranchRead,
+  type PRReadFailureHold
+} from './pr-branch-read-resources'
 class PRLookupRetentionRefused extends Error {}
 
 /** A phone read may take the last lookup's open PR; it was already observed when it was looked up. */
@@ -133,24 +140,26 @@ export async function preparePRBranchRead(
         scope
       )
       const ownerKey = lastOutcomeKey(repoPath, branchName, scope)
-      const freshKey = `${key}::fresh`
-      const timedKey = `${key}::timed`
-      const coalescingKey = options.resetQuietBackoff || options.userRefresh ? freshKey : timedKey
-      const pendingAt = (key: string) => {
-        const pending = reads.get(key)
-        return pending && Date.now() - pending.startedAt < 2 * 60_000 ? pending.promise : null
-      }
+      const coalescingKey = options.resetQuietBackoff || options.userRefresh ? 'fresh' : 'timed'
+      const pendingAt = (intent: 'fresh' | 'timed') => pendingPRBranchRead(key, intent)
+      const isCurrent = () =>
+        outsideGitHubRepoExecution(
+          () =>
+            lastOutcomeKey(repoPath, branchName, prLookupScope(repoPath, connectionId, options)) ===
+            ownerKey
+        )
       const narrowed =
         options.checkPageLimit !== undefined ||
         options.exactRepository ||
         options.includeDerivedData === false
       let didRead = false
       const readCore = (requireRetention = false, settle?: PRReadSettlement) =>
-        withExecution(
-          () =>
-            (!options.userRefresh && coalescingKey === timedKey ? pendingAt(freshKey) : null) ??
+        withExecution(() => {
+          const resource = prBranchReadResource(key)
+          return (
+            (!options.userRefresh && coalescingKey === 'timed' ? pendingAt('fresh') : null) ??
             runCoalescedProbe(
-              reads,
+              resource.probes,
               coalescingKey,
               async (ownsKey) => {
                 const start = startPRLookup()
@@ -165,6 +174,7 @@ export async function preparePRBranchRead(
                 if (requireRetention && !retained) {
                   throw new PRLookupRetentionRefused()
                 }
+                const ended = startPRBranchRead(key, resource, start.sequence)
                 didRead = true
                 try {
                   await acquire()
@@ -205,20 +215,25 @@ export async function preparePRBranchRead(
                       cached: () => readTimedPROutcome(ownerKey, key)
                     })
                   }
+                  const hold = narrowed
+                    ? undefined
+                    : () => holdPRBranchReadFailure(key, resource, start.sequence, isCurrent)
                   return settle &&
                     (retained ? readTimedPROutcome(ownerKey, key)?.outcome === outcome : ownsKey())
-                    ? settle(outcome, { retained })
+                    ? settle(outcome, { retained, hold })
                     : outcome
                 } finally {
                   if (retained) {
                     releaseExactPRLookup(key, start.sequence)
                   }
+                  ended()
                 }
               },
               2 * 60_000,
               { userRefresh: options.userRefresh === true }
-            )
-        )
+            ).finally(() => retirePRBranchReadResource(key, resource))
+          )
+        })
       const read = async (settle?: PRReadSettlement): Promise<PRRefreshOutcome> => {
         try {
           return await readCore(false, settle)
@@ -243,15 +258,7 @@ export async function preparePRBranchRead(
         key,
         reprepare,
         cached: () => readTimedPROutcome(ownerKey, key),
-        isCurrent: () =>
-          outsideGitHubRepoExecution(
-            () =>
-              lastOutcomeKey(
-                repoPath,
-                branchName,
-                prLookupScope(repoPath, connectionId, options)
-              ) === ownerKey
-          ),
+        isCurrent,
         accepts: (outcome) => readTimedPROutcome(ownerKey, key)?.outcome === outcome,
         didRead: () => didRead,
         release: () => {},
@@ -259,7 +266,7 @@ export async function preparePRBranchRead(
         readRetained,
         canRetain: () => canRetainPROutcome(key),
         scheduleError: (expected, outcome) => scheduleExactPRError(key, expected, outcome),
-        pending: () => pendingAt(freshKey) ?? pendingAt(timedKey),
+        pending: () => pendingAt('fresh') ?? pendingAt('timed'),
         withExecution,
         read
       }
@@ -267,9 +274,11 @@ export async function preparePRBranchRead(
   )
 }
 
+/** `hold`: for a full read, claims this provider read's failure for a retry it owes, whether or not
+ *  the exact cache kept the outcome. */
 export type PRReadSettlement = (
   outcome: PRRefreshOutcome,
-  producer: { retained: boolean }
+  producer: { retained: boolean; hold?: () => PRReadFailureHold }
 ) => PRRefreshOutcome
 
 export type PreparedPRBranchRead = {

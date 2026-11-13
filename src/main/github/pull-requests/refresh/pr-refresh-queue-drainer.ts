@@ -34,6 +34,7 @@ export class PRRefreshQueueDrainer {
   private readonly scheduler: PRRefreshQueueScheduler
   readonly scheduleVisibleFollowUp: PRRefreshQueueScheduler['scheduleVisibleFollowUp']
   readonly scheduleErrorRetry: PRRefreshQueueScheduler['scheduleErrorRetry']
+  readonly restoreFollowUp: PRRefreshQueueScheduler['restoreFollowUp']
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -54,6 +55,7 @@ export class PRRefreshQueueDrainer {
     )
     this.scheduleVisibleFollowUp = this.scheduler.scheduleVisibleFollowUp.bind(this.scheduler)
     this.scheduleErrorRetry = this.scheduler.scheduleErrorRetry.bind(this.scheduler)
+    this.restoreFollowUp = this.scheduler.restoreFollowUp.bind(this.scheduler)
     this.hostedJobs = new HostedPRReadJobs(
       queue,
       pacing,
@@ -173,8 +175,9 @@ export class PRRefreshQueueDrainer {
             next.hosted?.finish(null)
             continue
           }
-          // A job retired or replaced while quota was checked never starts; the pause still holds.
-          if (this.hostedJobs.completeFromCache(next)) {
+          // A job retired or replaced, or automatic work the cadence no longer gives, while quota
+          // was checked never starts; the pause it learned still holds.
+          if (this.hostedJobs.completeFromCache(next) || this.scheduler.retired(next)) {
             if (pausedUntil !== null) {
               this.queue.protectBackgroundUntil(next.key, pausedUntil)
             }
@@ -230,20 +233,18 @@ export class PRRefreshQueueDrainer {
           if (!prepared.isCurrent()) {
             return outcome
           }
-          const settled =
-            producer.retained &&
-            outcome.kind === 'upstream-error' &&
-            (next.hosted || this.visibility.has(next.key))
-              ? this.retry.settleProducerError(
-                  outcome,
-                  next.key,
-                  next.hosted
-                    ? { ...next.candidate, isSelected: false }
-                    : this.visibility.candidate(next.key, next.candidate),
-                  prepared,
-                  this.queue
-                )
-              : outcome
+          // A host job's failure keeps its job's own finite lifetime, so it takes no retry claim.
+          const settled = this.retry.settleProducerError(
+            outcome,
+            next.key,
+            next.hosted
+              ? { ...next.candidate, isSelected: false }
+              : this.visibility.candidate(next.key, next.candidate),
+            prepared,
+            this.queue,
+            next.hosted ? { retained: producer.retained } : producer,
+            Boolean(next.hosted) || this.visibility.has(next.key)
+          )
           this.events.observe(next.candidate, settled, aliases)
           return settled
         }

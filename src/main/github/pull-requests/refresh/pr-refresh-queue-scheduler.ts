@@ -5,7 +5,7 @@ import type {
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   aliasFromCandidate,
-  freshRetryAt,
+  automaticDueAt,
   isBudgetedBackground,
   isMergeabilityPendingOutcome,
   sameAliasRequestIdentity,
@@ -52,6 +52,9 @@ export class PRRefreshQueueScheduler {
     options?: { pendingMergeabilityDelayMs?: number; plannedRetryAt?: number }
   ): void {
     if (outcome.kind === 'upstream-error') {
+      if (this.retry.replacedFailure(outcome)) {
+        return
+      }
       const retryCandidate = this.visibility.candidate(key, candidate)
       const retryAt = Math.max(
         options?.plannedRetryAt ?? this.retry.nextVisibleErrorRetryAt(key, retryCandidate),
@@ -77,7 +80,7 @@ export class PRRefreshQueueScheduler {
       return
     }
     const followUpCandidate = this.visibility.candidate(key, refreshed)
-    const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+    const regularDueAt = automaticDueAt(followUpCandidate) ?? Number.POSITIVE_INFINITY
     const pendingDueAt =
       options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
         ? outcome.fetchedAt + options.pendingMergeabilityDelayMs
@@ -109,6 +112,49 @@ export class PRRefreshQueueScheduler {
       windowId
     })
     this.schedule(Math.max(0, dueAt - Date.now()))
+  }
+
+  /** Queues the automatic follow-up the current cadence gives a visible row whose timed work came
+   *  back, due now if its data is already stale; none when the cadence gives it no timer. It stays
+   *  an automatic follow-up while it waits, so the next Off retires it. */
+  restoreFollowUp(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    priority: number,
+    aliases: GitHubPRRefreshAlias[],
+    windowId?: number
+  ): void {
+    const dueAt = automaticDueAt(candidate)
+    if (dueAt === null || !this.visibility.has(key)) {
+      return
+    }
+    this.queue.setVisibleFollowUp({
+      key,
+      candidate,
+      aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
+      reason: 'visible',
+      priority: visibleFollowUpPriority(candidate, priority),
+      dueAt: Math.max(dueAt, this.queue.backgroundGateUntil(key)),
+      queuedAt: this.queue.nextOrder(),
+      followUp: true,
+      windowId
+    })
+    this.schedule(Math.max(0, dueAt - Date.now()))
+  }
+
+  /** Whether an automatic attempt still in its own reason (a follow-up or a failure's retry, not a
+   *  return, an action or a forced reread) is no longer given by the current cadence; checked again
+   *  once it has waited for quota, before it may start. */
+  retired(entry: PRRefreshQueueEntry): boolean {
+    if (entry.reason !== 'visible' || entry.hosted || entry.watch || entry.bypassBackgroundBudget) {
+      return false
+    }
+    const candidate = this.visibility.candidate(entry.key, entry.candidate)
+    if (entry.errorRetry) {
+      const retryAt = this.retry.retimedVisibleErrorRetryAt(entry.key, candidate)
+      return retryAt === null || !Number.isFinite(retryAt)
+    }
+    return entry.followUp === true && automaticDueAt(candidate) === null
   }
 
   /** Queues the automatic retry a failure earned; it stays an error retry until it runs, is

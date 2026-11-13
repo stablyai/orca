@@ -119,16 +119,15 @@ export async function runImmediatePRRefresh(
       if (!prepared.isCurrent()) {
         return outcome
       }
-      const settled =
-        producer.retained && outcome.kind === 'upstream-error' && visibility.has(key)
-          ? retry.settleProducerError(
-              outcome,
-              key,
-              visibility.candidate(key, candidate),
-              prepared,
-              queue
-            )
-          : outcome
+      const settled = retry.settleProducerError(
+        outcome,
+        key,
+        visibility.candidate(key, candidate),
+        prepared,
+        queue,
+        producer,
+        visibility.has(key)
+      )
       events.observe(candidate, settled, aliases)
       return settled
     })
