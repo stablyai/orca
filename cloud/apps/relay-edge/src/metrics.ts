@@ -26,7 +26,8 @@ export type MetricEvent =
 // blobs: [event, label, version, reason, place]; doubles: [value, ...extra]. place is the
 // client's ingress '<continent>/<colo>/<country>' (e.g. 'AS/HKG/HK'; country appended so prefix
 // filters on continent/colo keep working), '' where no client is involved. A verified ingress hop
-// appends its name: 'AS/HKG/HK/cn' (continent/colo/country are then the ingress box's). One index per event for sampling.
+// appends its name: 'AS/HKG/HK/cn' (continent/colo are then the ingress hop's; country is the
+// client's when the ingress reports it, else the hop's). One index per event for sampling.
 // Heartbeat events fire per host every ping interval; keep 1 in 10 (multiply counts by 10).
 const HEARTBEAT_SAMPLE = 0.1
 
@@ -44,8 +45,9 @@ export function metric(env: Env, event: MetricEvent, value = 1, label = '', extr
 }
 
 // From the Worker's request (cf is absent in local dev).
-export function requestPlace(request: Request, ingress?: { name: string } | null): string {
+export function requestPlace(request: Request, ingress?: { name: string; country?: string } | null): string {
   const cf = (request as Request & { cf?: { colo?: string; continent?: string; country?: string } }).cf
-  const place = cf ? `${cf.continent ?? '?'}/${cf.colo ?? '?'}/${cf.country ?? '?'}` : 'local'
+  const country = ingress?.country ?? cf?.country ?? '?'
+  const place = cf ? `${cf.continent ?? '?'}/${cf.colo ?? '?'}/${country}` : 'local'
   return ingress ? `${place}/${ingress.name}` : place
 }

@@ -4,12 +4,12 @@
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import type { Env } from './env'
-import type { IngressClaim } from '../../../packages/relay-contract/src/ingress-header'
+import type { Ingress } from './ingress'
 import { metric, requestPlace } from './metrics'
 
 // The caller's address as Cloudflare saw it (clients cannot set this header), or as a verified
 // ingress saw it. IPv6 callers are keyed by their /64, which one subscriber usually holds whole.
-export function sourceKey(request: Request, ingress?: IngressClaim | null): string {
+export function sourceKey(request: Request, ingress?: Ingress | null): string {
   const ip = (ingress?.clientIp ?? request.headers.get('cf-connecting-ip'))?.trim() ?? ''
   if (!ip.includes(':')) return ip || 'unknown'
   const [head, tail = ''] = ip.split('::')
@@ -24,7 +24,7 @@ export function sourceKey(request: Request, ingress?: IngressClaim | null): stri
 
 // Counted per source per colo by the Rate Limiting binding. Fails open: a limiter outage must not
 // refuse live users. Without a binding (local spike runs) nothing is limited.
-export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data', ingress?: IngressClaim | null): Promise<boolean> {
+export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data', ingress?: Ingress | null): Promise<boolean> {
   if (!env.PREAUTH_LIMITER) return true
   try {
     const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request, ingress)}` })

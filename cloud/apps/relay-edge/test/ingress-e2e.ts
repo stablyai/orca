@@ -3,18 +3,28 @@
 // SHIPPED desktop control client and data transport, and phone-like sockets, through the proxy.
 //   pnpm --filter @orca-cloud/relay-contract build && npx tsx test/ingress-e2e.ts
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
-import { get as httpsGet } from 'node:https'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SignJWT, exportJWK, generateKeyPair, type KeyLike } from 'jose'
-import nacl from 'tweetnacl'
-import WebSocket from 'ws'
-import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
+import { exportJWK, generateKeyPair, type KeyLike } from 'jose'
 import { RelayRetrySchedule } from '../../../../src/main/runtime/mobile-cloud-relay/relay-retry-schedule'
-import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
+import {
+  adminAssign as assignOnEdge,
+  desktop as desktopClient,
+  mint as mintJwt,
+  newHost,
+  oversizeControl,
+  phoneHello,
+  preauthStatus,
+  sha,
+  sleep,
+  unauthenticatedControl,
+  waitFor,
+  type Account,
+  type Host
+} from './relay-clients'
 
 const EDGE_PORT = 8789
 const PROXY_PORT = 8443
@@ -54,116 +64,10 @@ function record(name: string, ok: boolean, detail = ''): void {
   results.push({ name, ok, detail })
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`)
 }
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-const sha = (s: string) => createHash('sha256').update(s).digest('base64url')
-async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
-  const end = Date.now() + ms
-  while (Date.now() < end) {
-    if (cond()) return true
-    await sleep(10)
-  }
-  return cond()
-}
-
-type Host = { relayHostId: string; keypair: { publicKey: Uint8Array; secretKey: Uint8Array; publicKeyB64: string } }
-function newHost(): Host {
-  const box = nacl.box.keyPair()
-  return {
-    relayHostId: createHash('sha256').update(box.publicKey).digest('base64url').slice(0, 16),
-    keypair: { publicKey: box.publicKey, secretKey: box.secretKey, publicKeyB64: Buffer.from(box.publicKey).toString('base64') }
-  }
-}
-
-function mint(key: KeyLike, relayHostId: string): Promise<string> {
-  return new SignJWT({ purpose: 'host-control', prof: `prof-${USER}`, relayHostId })
-    .setProtectedHeader({ alg: 'ES256', kid: 'e2e' })
-    .setSubject(USER)
-    .setIssuer(ISSUER)
-    .setAudience('orca-relay')
-    .setIssuedAt()
-    .setExpirationTime('10m')
-    .sign(key)
-}
-
-// The desktop: shipped control client + shipped data transport, echoing every phone frame.
-function desktop(cellUrl: string, host: Host, jwt: string, resume?: { previousGeneration: number; controlResumeSecret?: string }) {
-  const events = { closes: [] as number[], lastConnId: '' }
-  let transport: CloudRelayTransport | null = null
-  const client = new RelayControlClient({
-    cellUrl,
-    relayJwt: jwt,
-    relayHostId: host.relayHostId,
-    assignmentEpoch: EPOCH,
-    identity: { userId: USER, profileId: `prof-${USER}`, organizationId: '' },
-    keypair: host.keypair as never,
-    appVersion: 'ingress-e2e',
-    ...resume,
-    onConnectionOpen: (m) => {
-      events.lastConnId = m.connId
-      void transport?.openConnection(m).catch(() => {})
-    },
-    onDrain: () => {},
-    onClose: (code) => events.closes.push(code),
-    createSocket: (url, token) =>
-      new WebSocket(url, { headers: { authorization: `Bearer ${token}`, 'x-orca-host-capabilities': 'pending-conn-details' }, perMessageDeflate: false, maxPayload: 1024 * 1024 + 1024 })
-  })
-  return {
-    client,
-    events,
-    async connect() {
-      const ack = await client.connect()
-      transport = new CloudRelayTransport({ cellUrl, relayHostId: host.relayHostId, generation: ack.generation })
-      transport.onMessage(((m: string | Uint8Array, reply: (r: string | Uint8Array) => void) => reply(m)) as never)
-      return ack
-    }
-  }
-}
-
-// A phone-like socket: auth frame, then the relay hello, then raw frames.
-function phone(origin: string, relayHostId: string, credential: string) {
-  const ws = new WebSocket(`${origin.replace(/^http/, 'ws')}/v1/connect/${relayHostId}`, { perMessageDeflate: false, maxPayload: 8 * 1024 * 1024 })
-  const state = { hello: null as Record<string, unknown> | null, frames: [] as Buffer[], closed: null as number | null, closedAt: 0 }
-  ws.on('open', () => ws.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential })))
-  ws.on('message', (raw) => {
-    if (state.hello === null) state.hello = JSON.parse(raw.toString())
-    else state.frames.push(raw as Buffer)
-  })
-  ws.on('close', (code) => {
-    state.closed = code
-    state.closedAt = Date.now()
-  })
-  ws.on('error', () => {})
-  return { ws, state }
-}
-async function phoneHello(origin: string, relayHostId: string, credential: string) {
-  const p = phone(origin, relayHostId, credential)
-  await waitFor(() => p.state.hello !== null || p.state.closed !== null, 8000)
-  return p
-}
-
-async function adminAssign(relayHostId: string, devices: unknown[] = []) {
-  const raw = JSON.stringify({ userId: USER, relayHostId, cellId: 'edge', assignmentEpoch: EPOCH, devices })
-  const token = await new SignJWT({ purpose: 'edge-admin', op: 'assign', bodySha256: sha(raw) })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuer(DIRECTOR)
-    .setAudience('orca-relay-edge-admin')
-    .setIssuedAt()
-    .setExpirationTime('1m')
-    .sign(new TextEncoder().encode(SIGNING_KEY))
-  // The director talks to the edge directly; the ingress refuses admin paths.
-  const r = await fetch(`${EDGE}/__admin/assign`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: raw })
-  return (await r.json()) as { outcome?: string }
-}
-
-// Pre-auth probe: a plain GET to the phone route is admitted (426) or limited (429).
-function preauthStatus(origin: string, relayHostId: string): Promise<number> {
-  return new Promise((resolve) => {
-    httpsGet(`${origin}/v1/connect/${relayHostId}`, (res) => {
-      res.resume()
-      resolve(res.statusCode ?? 0)
-    }).on('error', () => resolve(-1))
-  })
-}
+const ACCOUNT: Account = { user: USER, epoch: EPOCH, jwtIssuer: ISSUER, jwtKid: 'e2e' }
+const mint = (key: KeyLike, relayHostId: string) => mintJwt(ACCOUNT, key, relayHostId)
+const desktop = (cellUrl: string, host: Host, jwt: string) => desktopClient(ACCOUNT, cellUrl, host, jwt)
+const adminAssign = (relayHostId: string, devices: unknown[] = []) => assignOnEdge(EDGE, { key: SIGNING_KEY, issuer: DIRECTOR }, ACCOUNT, relayHostId, devices)
 
 function startProxy(port: number, secret: string): { child: ChildProcess; log: () => string } {
   writeFileSync(join(DIR, `secret-${port}`), secret)
@@ -308,18 +212,8 @@ async function scenarios(key: KeyLike, proxy: ReturnType<typeof startProxy>): Pr
   await waitFor(() => unknown.state.closed !== null, 3000)
   const stray = await phoneHello(INGRESS, newHost().relayHostId, randomBytes(32).toString('base64url'))
   await waitFor(() => stray.state.closed !== null, 3000)
-  const big = new WebSocket(`${INGRESS.replace('https', 'wss')}/v1/host/control`, { headers: { authorization: `Bearer ${jwt}` }, perMessageDeflate: false })
-  big.on('error', () => {})
-  const bigCode = await new Promise<number>((res) => {
-    big.on('open', () => big.send('x'.repeat(1024 * 1024 + 1)))
-    big.on('close', (c) => res(c))
-    setTimeout(() => res(-1), 8000)
-  })
-  const noJwt = await new Promise<number>((res) => {
-    const ws = new WebSocket(`${INGRESS.replace('https', 'wss')}/v1/host/control`)
-    ws.on('unexpected-response', (_q, r) => res(r.statusCode ?? 0))
-    ws.on('error', () => res(-1))
-  })
+  const bigCode = await oversizeControl(INGRESS, jwt)
+  const noJwt = await unauthenticatedControl(INGRESS)
   record(
     'close codes through the ingress: unknown credential 4401, unpushed host 4409, control frame > 1 MiB 1009; 401 before upgrade',
     unknown.state.closed === 4401 && stray.state.closed === 4409 && bigCode === 1009 && noJwt === 401,

@@ -7,12 +7,13 @@ import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
-import { INGRESS_HEADER, verifyIngressHeader, type IngressClaim } from '../../../packages/relay-contract/src/ingress-header'
+import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
+import { readIngress, type Ingress } from './ingress'
 import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
-const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place', INGRESS_HEADER]
+const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place', INGRESS_HEADER, 'x-orca-client-ip', 'x-orca-client-country']
 
 function reject(status: number, retryAfter?: number): Response {
   const headers = retryAfter === undefined ? undefined : { 'retry-after': String(retryAfter) }
@@ -22,7 +23,7 @@ function reject(status: number, retryAfter?: number): Response {
 function forward(
   env: Env,
   request: Request,
-  ingress: IngressClaim | null,
+  ingress: Ingress | null,
   relayHostId: string,
   extra: Record<string, string>,
   target: 'host' | 'splice' = 'host',
@@ -90,11 +91,10 @@ export default {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
     if (url.search) return reject(400)
-    // A verified ingress hop (ingress-header.ts) stands in for the Worker's own URL and the caller's
-    // address; anything else, including a header that fails to verify, is treated as absent.
-    const ingressHeader = request.headers.get(INGRESS_HEADER)
-    const ingress = ingressHeader ? await verifyIngressHeader(ingressHeader, edgeConfig(env).ingressSecrets) : null
-    if (ingressHeader && !ingress) metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request))
+    // A trusted ingress hop (ingress.ts) stands in for the Worker's own URL and the caller's address;
+    // anything else, including a header that fails to verify, is treated as absent.
+    const ingress = await readIngress(edgeConfig(env), request)
+    if (!ingress && request.headers.has(INGRESS_HEADER)) metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request))
     const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
     if (admin) return handleAdmin(env, request, admin[1] as AdminOp)
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
