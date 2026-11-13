@@ -24,6 +24,7 @@ export type OrcadBrowserProvider = {
 
 export type OrcadBrowserProviderOptions = {
   userDataPath: string
+  noAgentHookSync?: boolean
   signal?: AbortSignal
   environment?: NodeJS.ProcessEnv
   resolveInstalledElectronExecutable?: () => Promise<string | null>
@@ -192,9 +193,10 @@ export async function resolveOrcadBrowserProvider(
     return null
   }
 
-  const installedElectronExecutable = await (
-    options.resolveInstalledElectronExecutable ?? resolveInstalledElectronExecutable
-  )()
+  // Older Electron helpers reconcile shared hooks during startup.
+  const installedElectronExecutable = options.noAgentHookSync
+    ? null
+    : await (options.resolveInstalledElectronExecutable ?? resolveInstalledElectronExecutable)()
   if (options.signal?.aborted) {
     return null
   }
