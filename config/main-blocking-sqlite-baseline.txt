@@ -37,7 +37,7 @@
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 3 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 13 src/main/native-chat/agent-session-journal/database/journal-database.ts
-5 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
+7 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
 2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 20 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
