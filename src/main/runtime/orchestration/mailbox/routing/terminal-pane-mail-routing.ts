@@ -138,11 +138,13 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
       if (!this.ptyController) {
         return false
       }
-      let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
+      const current = this.ptyForegroundAgent.captureGeneration(ptyId)
+      const controller = this.ptyController
+      let foregroundProcess = await controller.getForegroundProcess(ptyId)
       let agent = recognizeAgentProcess(foregroundProcess)?.agent
       // Confirm unfamiliar foreground names (macOS Claude p_comm can be 2.1.258) before downgrading atomic paste to truncating unframed chunks.
-      if (agent === undefined && this.ptyController.confirmForegroundProcess) {
-        foregroundProcess = await this.ptyController.confirmForegroundProcess(ptyId)
+      if (agent === undefined && controller.confirmForegroundProcess) {
+        foregroundProcess = await controller.confirmForegroundProcess(ptyId)
         agent = recognizeAgentProcess(foregroundProcess)?.agent
       }
       // Why every agent: unframed keystrokes can open Pi's `#` completion or answer a trust menu; Dispatch already frames them all.
@@ -150,6 +152,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
       const proof = agent && GENERIC_PROCESS_NAME_AGENTS.has(agent) ? null : foregroundProcess
       const presence = { retryForegroundWrappers: false, foregroundProcess: proof }
       if (agent === undefined || !(await this.isTerminalRunningAgent(handle, presence))) {
+        return false
+      }
+      if (!current()) {
         return false
       }
       trackedPty.foregroundAgent = agent

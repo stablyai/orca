@@ -1,5 +1,6 @@
 import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   DraftPasteMarkerSignal,
@@ -54,33 +55,49 @@ const AGENT_PAINT_SIGNALS: readonly DraftPasteMarkerSignal[] = [
 
 /** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
 export class TerminalCommandPaint {
+  commandEpoch = 0
+  commandActive = false
   private awaitingPaint = false
   private markerEndInChunk = -1
+  private commandOutputPrefix = ''
   /** Armed at each command start; absent before the first marker, where no command is attributable. */
   private composers: Map<
     DraftPasteMarkerSignal,
     { scanner: DraftPasteReadyScanner; seen: boolean }
   > | null = null
   private readonly scanner = createOsc133CommandFinishedScanner(
-    () => {},
-    (endInChunk) => {
-      this.markerEndInChunk = endInChunk
-    }
-  )
-
-  observe(data: string, normalizedText: string): void {
-    this.markerEndInChunk = -1
-    this.scanner.scan(data)
-    if (this.markerEndInChunk !== -1) {
-      // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
-      const commandOutput = data.slice(this.markerEndInChunk)
-      this.awaitingPaint = !hasVisibleText(normalizeTerminalChunk(commandOutput).text)
+    () => {
+      this.commandActive = false
+      this.awaitingPaint = false
+      this.markerEndInChunk = -1
+    },
+    undefined,
+    (endInChunk, outputPrefix) => {
       this.composers = new Map(
         AGENT_PAINT_SIGNALS.map((signal) => [
           signal,
           { scanner: createDraftPasteReadyScanner(signal), seen: false }
         ])
       )
+      this.commandEpoch += 1
+      this.commandActive = true
+      this.markerEndInChunk = endInChunk
+      this.commandOutputPrefix = outputPrefix
+    }
+  )
+
+  get commandBoundaryPending(): boolean {
+    return this.scanner.hasPendingCommandStart()
+  }
+
+  observe(data: string, normalizedText: string): void {
+    this.markerEndInChunk = -1
+    this.commandOutputPrefix = ''
+    this.scanner.scan(data)
+    if (this.markerEndInChunk !== -1) {
+      // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
+      const commandOutput = this.commandOutputPrefix + data.slice(this.markerEndInChunk)
+      this.awaitingPaint = !hasVisibleText(normalizeTerminalChunk(commandOutput).text)
       this.observeComposers(commandOutput)
       return
     }
@@ -91,7 +108,7 @@ export class TerminalCommandPaint {
   }
 
   private observeComposers(data: string): void {
-    if (!this.composers || data.length === 0) {
+    if (!this.commandActive || !this.composers || data.length === 0) {
       return
     }
     for (const composer of this.composers.values()) {
@@ -109,18 +126,27 @@ export class TerminalCommandPaint {
   hasAgentComposer(signal: DraftPasteMarkerSignal): boolean {
     return this.composers === null || (this.composers.get(signal)?.seen ?? false)
   }
+
+  hasObservedAgentComposer(signal: DraftPasteMarkerSignal): boolean {
+    return this.composers?.get(signal)?.seen === true
+  }
 }
 
 export type TerminalCommandPaintRecord = { commandPaint?: TerminalCommandPaint }
 
 /** `normalizedText` is the chunk as the tail buffer received it (pending escapes resolved). */
 export function observeTerminalCommandPaint(
-  record: TerminalCommandPaintRecord,
+  record: TerminalCommandPaintRecord & { foregroundAgent: TerminalAgent | null },
   data: string,
   normalizedText: string
 ): void {
+  const epoch = record.commandPaint?.commandEpoch ?? 0
+  const active = record.commandPaint?.commandActive ?? false
   record.commandPaint ??= new TerminalCommandPaint()
   record.commandPaint.observe(data, normalizedText)
+  if (epoch !== record.commandPaint.commandEpoch || active !== record.commandPaint.commandActive) {
+    record.foregroundAgent = null
+  }
 }
 
 /** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */

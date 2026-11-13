@@ -22,6 +22,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     observedAt: number
   ): void
   protected abstract resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void
+  protected abstract clearDeliveryRecheck(ptyId: string): void
   protected abstract shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
     pty: RuntimePtyWorktreeRecord,
     title: string
@@ -243,11 +244,12 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
 
   /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
    *  teardown so it cannot fire into pruned records. */
-  protected disposePtyTitleTracker(ptyId: string): void {
+  protected disposePtyTitleTracker(ptyId: string, preserveStartupInterest = false): void {
+    this.clearDeliveryRecheck(ptyId)
     this.observeClaudeTerminalEvidence(ptyId, { kind: 'reset' })
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
-    this.ptyForegroundAgent.forget(ptyId)
+    this.ptyForegroundAgent.forget(ptyId, preserveStartupInterest)
     this.openCodeRunLifetime.forgetPty(ptyId)
     this.mobileSessionTabsAgentStatusHeartbeat.removePty(ptyId)
     this.clientEvents.clearPtyTitleGate(ptyId)
@@ -255,7 +257,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
 
   protected resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
     // Reused PTY ids must not inherit predecessor title/parser state.
-    this.disposePtyTitleTracker(ptyId)
+    this.disposePtyTitleTracker(ptyId, true)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
@@ -284,6 +286,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       pty.waitBlockedAt = null
       pty.tailWaitState = undefined
       pty.commandPaint = undefined
+      pty.foregroundAgent = null
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.lastOscTitle = null

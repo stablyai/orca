@@ -22,6 +22,7 @@ export type TranscriptPaneOptions = {
   remoteWindowsHost?: boolean
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
+  foregroundProcessRead?: () => Promise<string | null>
   /** Controller grid size; the runtime emulator defaults to 80x24. */
   size?: { cols: number; rows: number }
   confirmedForegroundProcess?: string | null
@@ -96,6 +97,9 @@ export async function createTranscriptPane(
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {
       options.onForegroundProbe?.()
+      if (options.foregroundProcessRead) {
+        return options.foregroundProcessRead()
+      }
       return options.foregroundProbeHangs === true
         ? new Promise<string | null>(() => {})
         : Promise.resolve(options.foregroundProcess)

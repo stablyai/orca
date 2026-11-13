@@ -144,6 +144,8 @@ export type TuiIdleEvaluationInput = {
   /** When the PTY's own current title was observed; null when it has none or no clock. */
   titleObservedAtEpochMs: number | null
   agent: TuiAgent | null | undefined
+  terminalAgent?: TerminalAgent | null
+  commandBoundaryPending?: boolean
   firstPartyStatus: FirstPartyAgentStatus
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
@@ -201,6 +203,9 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
 }
 
 function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
+  if (input.commandBoundaryPending) {
+    return { kind: 'pending', quietForeground: 'closed' }
+  }
   const hookVerdict = input.readHookTurn ? evaluateHookTurn(input.agent, input.readHookTurn) : null
   if (hookVerdict) {
     return hookVerdict

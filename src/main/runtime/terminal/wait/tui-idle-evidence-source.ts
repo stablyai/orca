@@ -1,6 +1,8 @@
 // Gathers each tui-idle evaluation's evidence from runtime state; tui-idle-evidence.ts ranks it.
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
   detectTerminalWaitBlockedReason,
@@ -15,10 +17,7 @@ import {
 } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
 import { hasTerminalAgentPainted } from '../input/terminal-command-paint'
-import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { titleCommandLaunchesInteractiveTui } from '../../../../shared/agent-status/title/interactive-agent-title-command'
-import { isPagerProcess } from '../../../../shared/agent-status/process/pager-process-detection'
+import type { PtyStartupObservation } from '../lifecycle/pty-startup-observation'
 import type {
   FirstPartyAgentStatus,
   TuiIdleEvaluationInput,
@@ -30,6 +29,7 @@ export type TuiIdleEvidenceSource = {
   quiescenceMs: number
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
+  getPaneTerminalAgent?(ptyId: string | null | undefined): TerminalAgent | null
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
   /** The hook server's fresh row for the pane's main agent; absent on a host with no store. */
   getHookTurn?(ptyId: string, agent: TuiAgent): TuiIdleHookTurn | null
@@ -39,9 +39,7 @@ export type TuiIdleEvidenceSource = {
   readRuledScreen?(ptyId: string | null | undefined): RuledScreen | null
   /** The PTY's quiet clock: its last output, else when main began receiving its silent stream. */
   getOutputClockAt?(ptyId: string | null | undefined): number | null
-  /** The foreground process a poll read during the pane's current quiet stretch; absent before any
-   *  such read, and once output has moved on. Only the idle polls supply it. */
-  getQuietForegroundProcess?(ptyId: string | null | undefined): string | null
+  startupObservation?: Pick<PtyStartupObservation, 'read' | 'watch' | 'refresh'>
 }
 
 /** One clock per terminal, read by ptyId. */
@@ -123,44 +121,21 @@ function lazyWaitText(readWaitText: () => string): () => string {
   return () => (waitText ??= readWaitText())
 }
 
-/** The agent whose paint corroborates a name-only idle: launch authority first, else the title's
- *  agent, the same fallback `nameOnlyIdleNeedsCorroboration` uses. Why: an adopted pane, or a Claude
- *  run through a command Orca does not recognize, is identified by its title alone; without this the
- *  title required corroboration while the paint check fell back to any visible byte, so a printing
- *  preexec hook could still settle it before the composer existed (STA-14925).
- *
- *  Why only a positively interactive title: a shell title is retained from the command's start, so
- *  `claude --help | less` or `claude -p …` keeps Claude's name while the live process (a pager, a
- *  one-shot) never draws Claude's composer; holding for that composer would wait out the caller's
- *  timeout. The gate therefore needs the title to read as the TUI itself (no pipe or redirect, no
- *  print or informational flag) and the quiet foreground, where a poll has read it, to be something
- *  other than a known non-agent such as a pager. Otherwise the pane keeps the any-visible-byte rule,
- *  as before. Not covered: a title whose tokens name a second agent (`claude --resume codex`), which
- *  the title policy attributes to that agent (STA-14961). */
-function paintAgent(
-  agent: TuiAgent | null,
-  title: string | null | undefined,
-  quietForegroundProcess: string | null
-): TuiAgent | null {
-  if (agent) {
-    return agent
-  }
-  if (!title || isPagerProcess(quietForegroundProcess)) {
-    return null
-  }
-  const fromTitle = resolveTerminalTitlePolicyAgentType(title)
-  return isTuiAgent(fromTitle) && titleCommandLaunchesInteractiveTui(title, fromTitle)
-    ? fromTitle
-    : null
-}
-
 export function ptyTuiIdleEvidence(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
   readWaitText: () => string
 ): TuiIdleEvaluationInput {
   const waitText = lazyWaitText(readWaitText)
-  const agent = source.getPaneAgent(pty.ptyId)
+  const startup = source.startupObservation?.read(pty.ptyId)
+  const commandBoundaryPending = pty.commandPaint?.commandBoundaryPending === true
+  const terminalAgent =
+    commandBoundaryPending || startup?.kind === 'non-agent' || startup?.kind === 'pending'
+      ? null
+      : ((source.getPaneTerminalAgent
+          ? source.getPaneTerminalAgent(pty.ptyId)
+          : source.getPaneAgent(pty.ptyId)) ?? (startup?.kind === 'agent' ? startup.agent : null))
+  const agent = isTuiAgent(terminalAgent) ? terminalAgent : null
   const readScreen = screenReader(source, agent, pty.ptyId)
   const record = evidenceRecord(source, pty)
   return {
@@ -177,18 +152,13 @@ export function ptyTuiIdleEvidence(
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
+    terminalAgent,
+    commandBoundaryPending,
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
     // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
     readCommandPainted: () =>
-      hasTerminalAgentPainted(
-        pty,
-        paintAgent(
-          agent,
-          record.lastOscTitle,
-          source.getQuietForegroundProcess?.(pty.ptyId) ?? null
-        )
-      )
+      hasTerminalAgentPainted(pty, startup?.kind === 'pending' ? startup.candidate : agent)
   }
 }

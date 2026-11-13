@@ -83,6 +83,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   protected clearDeliveryRecheck(ptyId: string): void {
+    this.deliveryStartupObservationStopsByPtyId.get(ptyId)?.()
+    this.deliveryStartupObservationStopsByPtyId.delete(ptyId)
     const timer = this.deliveryRecheckTimersByPtyId.get(ptyId)
     if (timer) {
       clearTimeout(timer)
@@ -97,8 +99,16 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     // Refusal can lift without another edge (hook deadlines, foreground recognition), but only waiting work needs the retry.
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
+      this.clearDeliveryRecheck(ptyId)
       return
     }
+    if (!this.deliveryStartupObservationStopsByPtyId.has(ptyId)) {
+      this.deliveryStartupObservationStopsByPtyId.set(
+        ptyId,
+        this.ptyForegroundAgent.startup.watch(ptyId, () => this.deliverPendingMessagesForPty(ptyId))
+      )
+    }
+    this.ptyForegroundAgent.startup.refresh(ptyId)
     // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
     const outputAt = this.readOutputClockAt(ptyId)
     const quietRemainingMs =
@@ -140,10 +150,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (hold) {
       return { kind: hold }
     }
-    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
+    const { verdict, readScreenInputVeto, terminalAgent } = this.deliveryTuiVerdict(pty)
     return terminalDeliveryRefusal({
       verdict,
-      recognizedAgent: !!this.getPaneTerminalAgent(ptyId),
+      recognizedAgent: !!terminalAgent,
       readScreenInputVeto
     })
   }
@@ -155,7 +165,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
-    return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
+    return {
+      verdict,
+      terminalAgent: evidence.terminalAgent,
+      readScreenInputVeto: evidence.readScreenInputVeto
+    }
   }
 
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.

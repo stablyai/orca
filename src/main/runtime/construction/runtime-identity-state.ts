@@ -58,6 +58,7 @@ import {
   type TerminalSpawnCommit
 } from '../terminal/lifecycle/terminal-run-facts'
 import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
+import type { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
 import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
@@ -270,6 +271,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   }
 
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
+  protected deliveryStartupObservationStopsByPtyId = new Map<string, () => void>()
+  protected abstract readonly ptyForegroundAgent: RuntimePtyForegroundAgent
 
   // Sequence authoritative graph statements to distinguish absent surfaces from unpublished ones.
   protected abstract readonly graphSequence: number
@@ -324,12 +327,18 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+    getPaneTerminalAgent: (ptyId) => this.getPaneTerminalAgent(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
-    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId)
+    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
+    startupObservation: {
+      read: (ptyId) => this.ptyForegroundAgent.startup.read(ptyId),
+      watch: (ptyId, changed) => this.ptyForegroundAgent.startup.watch(ptyId, changed),
+      refresh: (ptyId) => this.ptyForegroundAgent.startup.refresh(ptyId)
+    }
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
