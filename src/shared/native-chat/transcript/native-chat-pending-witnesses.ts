@@ -203,6 +203,7 @@ export function nativeChatPendingWitnesses(
       }
       if (
         entry.sourceAgent &&
+        (!options.onlyRows || options.onlyRows.has(row.message.id)) &&
         sourceWindows[index](row) &&
         row.message.inputContent?.retained &&
         (options.prospective ||

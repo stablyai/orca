@@ -196,7 +196,17 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
       )) as { messages: NativeChatMessage[] }
       const once = prepareNativeChatMessages(result.messages, 'codex')
       const twice = prepareNativeChatMessages(once, 'codex')
-      expect(prunePendingSends([pending], twice)).toEqual([pending])
+      expect(prunePendingSends([pending], twice)).toEqual([
+        kind === 'text'
+          ? pending
+          : {
+              ...pending,
+              sourceReceipt: { sessionId: '', id: 'a-1' },
+              receiptMembers: ['pending'],
+              receiptProof: 'legacy',
+              receiptGlue: false
+            }
+      ])
       expect(twice[0].inputContent).toBeUndefined()
     }
   )
