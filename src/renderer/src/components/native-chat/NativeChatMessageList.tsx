@@ -359,7 +359,7 @@ export function NativeChatMessageList({
 
   const galleryProps = { rows: turnRows, visuals: structuredAttachments, runtimeContext }
   return (
-    <NativeChatImageGallery {...galleryProps}>
+    <NativeChatImageGallery sessionId={session.sessionId} {...galleryProps}>
       <NativeChatDisclosureContext.Provider value={disclosures}>
         <NativeChatPullRequestChangeContext.Provider value={openedPullRequests.latestChangeKey}>
           <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">

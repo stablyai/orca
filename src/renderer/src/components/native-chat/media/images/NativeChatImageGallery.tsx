@@ -18,7 +18,6 @@ type ActiveGallery = {
   group: string
   selected: string
   snapshot: NativeChatGalleryRecord[]
-  scope: string
   preview?: { id: string; src: string }
 }
 function ReferenceSource({
@@ -52,6 +51,7 @@ function MarkdownSource({
   return null
 }
 type GalleryProps = {
+  sessionId: string | null
   rows: NativeChatTurnRows
   visuals: boolean
   runtimeContext: RuntimeFileOperationArgs | null | undefined
@@ -60,7 +60,7 @@ type GalleryProps = {
 export function NativeChatImageGallery(props: GalleryProps): React.JSX.Element {
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
   const runtime = props.runtimeContext === undefined ? owner?.runtimeContext : props.runtimeContext
-  const scope = `${runtime === null ? 'unresolved:' : ''}${getLocalImageCacheKey('', runtime?.connectionId, runtime ?? undefined)}`
+  const scope = `${props.sessionId ?? owner?.sessionId ?? owner?.fileLinkContext?.sourceTabId ?? props.rows.messages[0]?.id ?? 'empty'}\0${runtime === null ? 'unresolved:' : ''}${getLocalImageCacheKey('', runtime?.connectionId, runtime ?? undefined)}`
   return <ScopedNativeChatImageGallery key={scope} {...props} />
 }
 function ScopedNativeChatImageGallery({
@@ -76,8 +76,6 @@ function ScopedNativeChatImageGallery({
 }): React.JSX.Element {
   const t = useTranslate()
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
-  const runtime = runtimeContext === undefined ? owner?.runtimeContext : runtimeContext
-  const scope = `${runtime === null ? 'unresolved:' : ''}${getLocalImageCacheKey('', runtime?.connectionId, runtime ?? undefined)}`
   const [active, setActive] = useState<ActiveGallery | null>(null)
   const [sources, setSources] = useState<Record<string, string | undefined>>({})
   useEffect(() => {
@@ -105,11 +103,10 @@ function ScopedNativeChatImageGallery({
         group,
         selected: selected.id,
         snapshot: records,
-        scope,
         ...(previewSrc ? { preview: { id: selected.id, src: previewSrc } } : {})
       })
     },
-    [rows, visuals, scope]
+    [rows, visuals]
   )
   const records = useMemo(() => {
     if (!active) {
