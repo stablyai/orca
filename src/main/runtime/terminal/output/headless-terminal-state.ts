@@ -213,24 +213,31 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       })
   }
 
-  protected resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
+  protected resizeHeadlessTerminal(
+    ptyId: string,
+    cols: number,
+    rows: number,
+    reflowOnly = false
+  ): void {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
     }
-    const unpainted = state.unrepaintedReflowGrid
-    // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
-    if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {
-      state.unrepaintedReflowGrid = undefined
-    }
-    // Reflow joins the byte stream so snapshots cannot capture wraps from an out-of-order width change.
+    // Screen validity changes in the same queue position as its resize and model replacement.
     state.writeChain = state.writeChain
       .then(() => {
+        const unpainted = state.unrepaintedReflowGrid
+        if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {
+          state.unrepaintedReflowGrid = undefined
+        }
+        const applied = state.emulator.getAppliedSize()
         state.emulator.resize(cols, rows)
+        if (reflowOnly && (applied.cols !== cols || applied.rows !== rows)) {
+          state.unrepaintedReflowGrid = { cols, rows }
+        }
       })
       .catch(() => {
-        // Best-effort mirror tracking; live PTY streaming must continue even
-        // if xterm rejects a raced resize during teardown.
+        // Best-effort mirror tracking; live PTY streaming must continue through teardown.
       })
   }
 
@@ -243,18 +250,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
 
   /** Reflow to provider-proven size after early live bytes used default geometry; preserve renderer restore baselines because no pane was measured. */
   reflowHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
-    if (cols <= 0 || rows <= 0) {
-      return
-    }
-    const state = this.headlessTerminals.get(ptyId)
-    if (!state) {
-      return
-    }
-    const applied = state.emulator.getAppliedSize()
-    this.resizeHeadlessTerminal(ptyId, cols, rows)
-    // Why: nothing resized the PTY, so the TUI does not repaint and its cells keep the old grid.
-    if (applied.cols !== cols || applied.rows !== rows) {
-      state.unrepaintedReflowGrid = { cols, rows }
+    if (cols > 0 && rows > 0) {
+      this.resizeHeadlessTerminal(ptyId, cols, rows, true)
     }
   }
 
