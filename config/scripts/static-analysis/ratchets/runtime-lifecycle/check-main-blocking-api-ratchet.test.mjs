@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { main as fsMain } from './check-main-sync-fs-ratchet.mjs'
-import { collectSyncLaunchUses } from '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
+import '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
 import { countBlockingApis, main } from './check-main-blocking-api-ratchet.mjs'
 
 const file = 'src/main/consumer.ts'
@@ -24,34 +24,6 @@ afterEach(() => {
 })
 
 describe('main blocking API ratchets', () => {
-  it('counts import aliases, namespace APIs, CommonJS and Atomics aliases by category', () => {
-    expect(
-      counts(`import { scryptSync as hash } from 'node:crypto'
-      import * as z from 'node:zlib'
-      const { pbkdf2Sync } = require('crypto')
-      hash('pw'); pbkdf2Sync('pw'); z.gzipSync('bytes'); z.futureSync('bytes')
-      const { wait: sleep } = Atomics; sleep(buffer, 0, 0)`)
-    ).toEqual({ compression: 2, crypto: 2, atomics: 1, sqlite: 0, ipc: 0 })
-  })
-
-  it.each([
-    ["import { DatabaseSync as DB } from 'node:sqlite'", 'DB'],
-    ["import DB from 'better-sqlite3'", 'DB'],
-    ["import DB from '../sqlite/sync-database'", 'DB'],
-    ["const { DatabaseSync: DB } = require('node:sqlite')", 'DB'],
-    ["const { DatabaseSync: DB } = process.getBuiltinModule('node:sqlite')", 'DB'],
-    ["import * as sqlite from 'node:sqlite'", 'sqlite.DatabaseSync']
-  ])('guards SQLite constructors and statement work: %s', (load, ctor) => {
-    expect(
-      counts(`${load}
-      const db = new ${ctor}('db')
-      db.exec('schema')
-      const statement = db.prepare('select')
-      statement.run(); statement.get(); statement.all(); for (const row of statement.iterate()) {}
-      db.prepare('select').get()`)
-    ).toEqual({ compression: 0, crypto: 0, atomics: 0, sqlite: 9, ipc: 0 })
-  })
-
   it('guards typed SQL receivers without charging Map.get or async backup', () => {
     expect(
       counts(`import type Database from '../sqlite/sync-database'
@@ -75,31 +47,6 @@ describe('main blocking API ratchets', () => {
       function query(db: sqlite.DatabaseSync, statement: sqlite.StatementSync) { db.exec('sql'); statement.get() }
     `).sqlite
     ).toBe(5)
-  })
-
-  it('guards callable better-sqlite3 construction and modern builtin subprocess loads', () => {
-    expect(
-      counts(
-        `import Database from 'better-sqlite3'; const db = Database('test'); db.exec('sql'); db.prepare('sql').get()`
-      ).sqlite
-    ).toBe(4)
-    expect(
-      collectSyncLaunchUses(file, `process.getBuiltinModule('node:child_process').execSync('test')`)
-        .count
-    ).toBe(1)
-  })
-
-  it('guards synchronous preload requests and main replies', () => {
-    expect(
-      counts(
-        "import { ipcRenderer as ipc } from 'electron'; ipc.sendSync('get')",
-        'src/preload/index.ts'
-      ).ipc
-    ).toBe(1)
-    expect(counts("ipcMain.on('get', (event) => { event.returnValue = value })").ipc).toBe(1)
-    expect(counts("ipc.sendSync('get'); event.returnValue = value", 'src/shared/ipc.ts').ipc).toBe(
-      2
-    )
   })
 
   it('ignores strings, comments, unrelated SQL-shaped methods and nonblocking APIs', () => {

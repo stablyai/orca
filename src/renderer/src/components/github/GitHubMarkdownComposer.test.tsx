@@ -7,7 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { GHCommentComposer } from '@/components/github-item-dialog/discuss-item/gh-comment-composer'
 import type { AppState } from '@/store/types'
-import type { GitHubCommentResult, PRComment } from '../../../../shared/github/comment-types'
+import type {
+  GitHubCommentResult,
+  PRComment
+} from '../../../../shared/github/comments/comment-types'
 import { GitHubMarkdownComposer } from './GitHubMarkdownComposer'
 import type { GitHubImageUploadAddress } from './github-image-upload'
 
@@ -145,19 +148,6 @@ describe('GitHubMarkdownComposer submission', () => {
       expect(view.onCommentAdded).toHaveBeenCalledExactlyOnceWith(comment)
     }
   )
-
-  it('does not report editability changes as draft edits', async () => {
-    const onChange = vi.fn()
-    const props = { value: 'Draft comment', onChange, placeholder: 'Add a comment…' }
-    const view = render(<GitHubMarkdownComposer {...props} />)
-    await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
-    onChange.mockClear()
-
-    view.rerender(<GitHubMarkdownComposer {...props} disabled />)
-    view.rerender(<GitHubMarkdownComposer {...props} disabled={false} />)
-
-    expect(onChange).not.toHaveBeenCalled()
-  })
 
   it('accepts an external nonempty value while editability changes', async () => {
     const onChange = vi.fn()

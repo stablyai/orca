@@ -1,12 +1,12 @@
 import { defineMethod } from '../../core'
-import { resolveWorktreeCatalogSnapshot } from '../../worktree-catalog-snapshot'
-import { coarsenWorktreePsActivity } from '../../worktree-ps-coarse-activity'
-import { markWorktreePsOtherClientRows } from '../../worktree-ps-other-client-marks'
-import { supportsWorktreeVisibilitySourceDefaults } from '../../worktree-visibility-client-capability'
+import { resolveWorktreeCatalogSnapshot } from '../../workspace-client-views/worktree-catalog-snapshot'
+import { coarsenWorktreePsActivity } from '../../workspace-client-views/worktree-ps-coarse-activity'
+import { markWorktreePsOtherClientRows } from '../../workspace-client-views/worktree-ps-other-client-marks'
+import { supportsWorktreeVisibilitySourceDefaults } from '../../workspace-client-views/worktree-visibility-client-capability'
 import {
   projectWorktreeListRemovals,
   projectWorktreePsRemovals
-} from '../../worktree-removal-marker-projection'
+} from '../../workspace-client-views/worktree-removal-marker-projection'
 import { snapshotPendingWorktreeRemovals } from '../../../../workspaces/removal/worktree-removal-listing'
 import {
   WorktreeDetectedListParams,

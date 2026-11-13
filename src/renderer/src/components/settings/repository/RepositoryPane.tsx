@@ -1,4 +1,4 @@
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
 import type {
@@ -20,6 +20,7 @@ import { SparsePresetSettingsSection } from './worktrees/SparsePresetSettingsSec
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { RepositorySidebarVisibilitySection } from './RepositorySidebarVisibilitySection'
 import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -194,7 +195,8 @@ export function RepositoryPane({
     sourceControlAi: sourceControlAiEntries,
     hostSetups: hostSetupEntries,
     projectRuntime: projectRuntimeEntries,
-    removeProject: removeProjectEntry
+    removeProject: removeProjectEntry,
+    sidebarVisibility: sidebarVisibilityEntry
   } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
@@ -385,6 +387,14 @@ export function RepositoryPane({
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
+    ) : null,
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [sidebarVisibilityEntry]) ? (
+      <RepositorySidebarVisibilitySection
+        key="sidebar-visibility"
+        repo={repo}
+        searchEntry={sidebarVisibilityEntry}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
     ) : null,
     // Last on the page: removal is rare and should not sit above everyday settings.
     forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [removeProjectEntry]) ? (

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { claudeChildEnv, resolveClaudeChildEnvSources } from './claude-structured-child-env'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 
 afterEach(() => {
   vi.unstubAllEnvs()

@@ -1,25 +1,28 @@
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
 import { translate } from '../../i18n/mobile-i18n'
-import { triggerError } from '../../platform/haptics'
-import { currentSoftKeyboardHeight } from '../../platform/keyboard-occlusion'
-import type { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
-import { sendTerminalLiveAccessoryRawBytes } from '../terminal-live-accessory-raw-send'
+import { triggerError } from '../../platform/haptics/haptics'
+import { currentSoftKeyboardHeight } from '../../platform/keyboard/keyboard-occlusion'
+import type { createTerminalLiveAccessoryInput } from '../live-input/terminal-live-accessory-input'
+import { sendTerminalLiveAccessoryRawBytes } from '../live-input/terminal-live-accessory-raw-send'
 import {
   clearTerminalLiveInputFocusTimer,
   isTerminalLiveInputWithinByteLimit
-} from '../terminal-live-input'
-import { dismissTerminalKeyboard } from '../terminal-keyboard-dismiss'
-import { terminalInputSend } from '../mobile-terminal-operations'
-import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from '../terminal-send-request'
-import { normalizeTerminalTextInput } from '../terminal-text-input-normalization'
-import { encodeTerminalKeyForModes } from '../terminal-key-mode-encoding'
-import { useTerminalTextFieldSubmitBinding } from '../use-terminal-text-field-submit-binding'
+} from '../live-input/terminal-live-input'
+import { dismissTerminalKeyboard } from '../keyboard/terminal-keyboard-dismiss'
+import { terminalInputSend } from '../host-operations/mobile-terminal-operations'
+import {
+  buildTerminalSendParams,
+  TERMINAL_INPUT_SEND_OPTIONS
+} from '../input-delivery/terminal-send-request'
+import { normalizeTerminalTextInput } from '../live-input/terminal-text-input-normalization'
+import { encodeTerminalKeyForModes } from '../key-input/terminal-key-mode-encoding'
+import { useTerminalTextFieldSubmitBinding } from '../live-input/use-terminal-text-field-submit-binding'
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 import { useMobileSessionTabActionSheetOpener } from '../../session/tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
-import type { TerminalLiveInputSender } from '../terminal-live-input-sender'
+import type { TerminalLiveInputSender } from '../live-input/terminal-live-input-sender'
 
 export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminalWebviewModel) {
   const {

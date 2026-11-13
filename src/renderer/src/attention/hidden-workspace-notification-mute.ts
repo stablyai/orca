@@ -6,6 +6,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/controls/sidebar-filter-actions'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
+import { NO_HIDDEN_PROJECTS } from '../../../shared/hidden-projects'
 import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-creator-visibility'
 import {
   selectFolderWorkspaces,
@@ -46,6 +47,8 @@ export function isWorkspaceNotificationMutedBySidebarFilters(
   // Use the full sidebar pass (~0.2–0.3ms/1,000 workspaces) to preserve every rule that adds rows back.
   const visibleIds = computeVisibleWorktreeIds(selectWorktreesByRepo(state), [], {
     ...inputs,
+    // Hiding a project is a view choice, never a mute: its workspaces notify as if listed.
+    hiddenProjects: NO_HIDDEN_PROJECTS,
     filterRepoIds: [],
     workspaceHostScope: ALL_EXECUTION_HOSTS_SCOPE,
     visibleWorkspaceHostIds: null

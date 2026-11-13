@@ -2,12 +2,13 @@ import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   annotateSparseCheckoutStatus,
   listWorktreeGraph as listWorktreeGraphUnshared,
-  listWorktreesStrict as listWorktreesStrictUnshared,
-  listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared
+  listWorktreesStrict as listWorktreesStrictUnshared
 } from './worktree-listing'
+import { listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared } from './strict-true-empty-worktree-listing'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 import { resolveGitAdmissionTier } from '../../command-runner/admission/git-operation-executor'
+import { withRepositoryGitCause } from '../../repository-git-cause'
 
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
@@ -25,7 +26,17 @@ function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
   return false
 }
 
+const scanGenerationBumpListeners = new Set<(repoPath: string) => void>()
+
+/** Settled catalog owners outlive in-flight scans, so mutations must reach them too. */
+export function onWorktreeScanGenerationBump(listener: (repoPath: string) => void): void {
+  scanGenerationBumpListeners.add(listener)
+}
+
 export function bumpWorktreeScanGeneration(repoPath: string): void {
+  for (const listener of scanGenerationBumpListeners) {
+    listener(repoPath)
+  }
   // Retain generations only while a pre-mutation scan can still be joined.
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     return
@@ -63,7 +74,12 @@ function shareWorktreeScan(
   run: (repoPath: string, options: GitWorktreeExecOptions) => Promise<GitWorktreeInfo[]>
 ): Promise<GitWorktreeInfo[]> {
   if (options.signal) {
-    return run(repoPath, options)
+    return withRepositoryGitCause(
+      repoPath,
+      options,
+      { family: 'catalog', reason: 'worktree-scan', cache: 'bypass-signal' },
+      () => run(repoPath, options)
+    )
   }
   const generation = worktreeScanGenerations.get(repoPath) ?? 0
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
@@ -73,7 +89,12 @@ function shareWorktreeScan(
   if (inFlight) {
     return inFlight
   }
-  const scan = run(repoPath, options).finally(() => {
+  const scan = withRepositoryGitCause(
+    repoPath,
+    options,
+    { family: 'catalog', reason: 'worktree-scan', cache: 'miss' },
+    () => run(repoPath, options)
+  ).finally(() => {
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }

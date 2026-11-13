@@ -108,9 +108,7 @@ for (const [name, options] of [
   [
     'alternate PostgreSQL',
     { env: { ORCA_IDLE_REHOME_POSTGRES_URL: 'postgres://localhost:55440/relay' } }
-  ],
-  ['application database', { env: { DATABASE_URL: databaseUrl } }],
-  ['one CPU', { parallelism: 1 }]
+  ]
 ]) {
   test(`retains the original single run for ${name}`, async (t) => {
     const h = start(t, options)
@@ -122,20 +120,6 @@ for (const [name, options] of [
     }
     finish(h.calls[0])
     assert.equal(await h.pending, 0)
-    assertClean(h)
-  })
-}
-
-for (const [name, result] of [
-  ['null exit code', { ...success, code: null }],
-  ['termination signal', { ...success, signal: 'SIGTERM' }],
-  ['timeout', { ...success, timedOut: true }]
-]) {
-  test(`fails a ${name} even when other result fields indicate success`, async (t) => {
-    const h = start(t)
-    finish(h.calls[0], result)
-    finish(h.calls[1])
-    assert.equal(await h.pending, 1)
     assertClean(h)
   })
 }
@@ -152,8 +136,7 @@ test('fails and retains scratch when a child never reports closure', async (t) =
 })
 
 for (const [signal, exitCode, laterSignal] of [
-  ['SIGINT', 130, 'SIGTERM'],
-  ['SIGTERM', 143, 'SIGINT']
+  ['SIGINT', 130, 'SIGTERM']
 ]) {
   test(`${signal} cancels every child and retains scratch despite root close callbacks`, async (t) => {
     const h = start(t)

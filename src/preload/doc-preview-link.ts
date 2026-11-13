@@ -1,9 +1,9 @@
 import {
   installDocPreviewLinkInterception,
   PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL
-} from './doc-preview-link-interception'
+} from './document-preview/doc-preview-link-interception'
 import type { IpcRenderer, WebFrame } from 'electron'
-import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
+import { installNativeChatVisualGuestTheme } from './native-chat/native-chat-visual-guest-theme'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {

@@ -1,5 +1,5 @@
-import { SPECIAL_KEY_LABELS } from '../terminal-key-definitions'
-import { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
+import { SPECIAL_KEY_LABELS } from '../key-input/terminal-key-definitions'
+import { createTerminalLiveAccessoryInput } from '../live-input/terminal-live-accessory-input'
 import { isTerminalPhoneDisplayMode } from './terminal-phone-display-mode'
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 import { TerminalMoreKeysSheet } from './TerminalMoreKeysSheet'

@@ -5,8 +5,8 @@ import { AppState, Keyboard, Platform, type HostInstance } from 'react-native'
 import {
   createTerminalAccessoryRepeatController,
   createTerminalAccessoryRepeatSender
-} from '../terminal-accessory-repeat'
-import { useClipboardReader, useClipboardWriter } from '../../platform/clipboard'
+} from '../key-input/terminal-accessory-repeat'
+import { useClipboardReader, useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   newTabRepoListRead,
@@ -17,16 +17,16 @@ import {
   triggerSuccess,
   triggerError,
   triggerEdgeBump
-} from '../../platform/haptics'
+} from '../../platform/haptics/haptics'
 import {
   sameTerminalKeyboardAvoidanceMetrics,
   type TerminalKeyboardAvoidanceMetrics,
   type TerminalModes
-} from '../terminal-webview-contract'
-import type { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
-import { clearTerminalLiveInputFocusTimer } from '../terminal-live-input'
+} from '../webview/terminal-webview-contract'
+import type { createTerminalLiveAccessoryInput } from '../live-input/terminal-live-accessory-input'
+import { clearTerminalLiveInputFocusTimer } from '../live-input/terminal-live-input'
 import { stripTerminalSelectionGutter } from '../../../../src/shared/terminal/output/terminal-selection-gutter'
-import { useTerminalCopyTrimsGutter } from '../terminal-copy-gutter-preference'
+import { useTerminalCopyTrimsGutter } from '../preferences/terminal-copy-gutter-preference'
 import type { MobileSessionTerminalInputModel } from './use-mobile-session-terminal-input'
 
 export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalInputModel) {

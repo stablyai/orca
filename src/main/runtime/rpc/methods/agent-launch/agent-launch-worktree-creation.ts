@@ -11,11 +11,11 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance,
   resolveClientAutomationWorkspaceProvenance
-} from '../../../../automations/workspace-provenance'
+} from '../../../../automations/ownership/workspace-provenance'
 import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent-launch-surface-factories'
 import { combineLaunchWarnings } from '../../../../agent-launch/agent-launch-warnings'
 import type { RpcContext } from '../../core'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   buildManagedWorktreeCreateArgs,
   worktreeCreateRepoSelector

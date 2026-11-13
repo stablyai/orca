@@ -228,6 +228,30 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "hiddenProjects": {
+      "hidden": "{{name}} hidden",
+      "hiddenDescription": "Its terminals and agents keep running. Show it again from Hidden projects below the list.",
+      "undo": "Undo",
+      "hideFailed": "Couldn't hide {{name}}. Its host may need an Orca update.",
+      "showFailed": "Couldn't show {{name}} again.",
+      "listLabel": "Hidden projects",
+      "show": "Show",
+      "showAriaLabel": "Show {{name}} in the sidebar",
+      "settingsTitle": "Hide from sidebar",
+      "settingsDescription": "Hides this host's copy of the project from the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running. On a paired Orca server, this hides it for everyone connected to that server.",
+      "settingsToggleLabel": "Hide {{name}} from the sidebar",
+      "keywordHide": "hide",
+      "keywordHidden": "hidden",
+      "keywordSidebar": "sidebar",
+      "hideFromSidebar": "Hide from Sidebar",
+      "sectionTitle": "Hidden projects ({{count}})",
+      "allHidden": "Every project is hidden. Show one from Hidden projects below.",
+      "undoGone": "{{name}} was removed from Orca.",
+      "settingsGroup": "Sidebar",
+      "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
+      "keywordShow": "show",
+      "keywordUnhide": "unhide"
     }
   },
   "app": {
@@ -405,6 +429,7 @@
       "remove": "Remove…",
       "empty": "No extensions are on for this profile",
       "visitWebStore": "Visit Chrome Web Store",
+      "openWebStoreFailed": "Couldn't open the Chrome Web Store.",
       "manage": "Manage extensions"
     },
     "history": {
@@ -902,9 +927,7 @@
         "importInvalid": "{{count}} unreadable rows",
         "importUndecryptable": "{{count}} protected by the browser; export a CSV from it instead",
         "imported": "Imported {{count}} passwords",
-        "deleteAllConfirmTitle": "Delete all password data?",
         "deleteAllConfirmDescription": "Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.",
-        "deleteAll": "Delete data",
         "deletedAll": "Password data deleted",
         "form": {
           "invalidSite": "Enter a website address, like example.com.",
@@ -944,7 +967,6 @@
         "editFor": "Edit {{account}}",
         "moreActions": "More actions for {{account}}",
         "accountCount": "{{count}} accounts",
-        "deleteConfirmTitle": "Delete the {{site}} password for {{username}}?",
         "deleteConfirmDescription": "Orca won’t fill it anymore. This can’t be undone.",
         "deleteConfirm": "Delete",
         "profileDescription": "Saved logins for the {{profile}} profile. Orca fills one only when you pick it under a sign-in field.",
@@ -1389,6 +1411,17 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "search": {
+      "clear": "Clear search",
+      "results": "Settings search results",
+      "noResults": "No settings match “{{value0}}”",
+      "moreResults": "{{value0}} more · keep typing to narrow"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "Clean up dictated text before it lands."
+      }
     }
   },
   "menu": {
@@ -2617,9 +2650,11 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "title": "Seeing “Orca would like to access…” prompts?",
-        "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
-        "openSettings": "Open Settings",
+        "titleOne": "macOS just interrupted an agent",
+        "titleMany": "macOS interrupted your agents {{count}}×",
+        "subtitle": "Full Disk Access stops these file prompts.",
+        "enable": "Turn on Full Disk Access",
+        "close": "Close",
         "dismiss": "Don't show again"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -4355,7 +4390,6 @@
             "7eee951968": "Scanning workspaces",
             "191f0bc98e": "Close",
             "7ae2ad30f4": "Refresh",
-            "b2c1331844": "Delete Inactive Workspaces",
             "7f451a3e2c": "Could not ignore cleanup suggestion",
             "662b8ec3f8": "Workspace cleanup scan failed",
             "9cc26c019d": "Remove",
@@ -4365,7 +4399,6 @@
             "1d3503357d": "You can close this and come back while deletion continues.",
             "4c2990886e": "{{value0}}/{{value1}} deleted",
             "86ba852118": "{{value0}}, {{value1}} failed",
-            "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
             "mergedStatus": "Merged",
             "unchangedStatus": "No new commits",
@@ -4587,7 +4620,9 @@
             "remoteTerminalClosed": "Remote terminal was closed.",
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
-            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again."
+            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
+            "title": "Terminal issue",
+            "errorTitle": "Terminal error"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -4966,7 +5001,6 @@
             "1d411fb6a5": "Save a quick command for this repo",
             "8f1e971966": "Add quick command",
             "3220e2da27": "This quick command will be removed from your saved list.",
-            "e8e1a52edb": "Delete \"{{value0}}\"?",
             "37e1bb90ce": "Run: {{value0}}",
             "77ac113df0": "Start {{value0}}: {{value1}}",
             "7b1c9d6ae1": "Run",
@@ -6385,7 +6419,6 @@
           "loading": "Loading contents…",
           "deleteFailed": "Orca could not delete this from the Cloud.",
           "deleted": "Deleted from the Cloud",
-          "confirmDelete": "Confirm delete",
           "moreActions": "More actions for {{name}}",
           "deletePackage": "Delete from the Cloud"
         },
@@ -6475,7 +6508,9 @@
           "updateSkipped": "Update skipped: {{value0}}",
           "updateAvailable": "Update available",
           "repairAvailable": "Repair available",
-          "installAvailable": "Install available"
+          "installAvailable": "Install available",
+          "otherBuild": "Installed by another Orca version",
+          "otherBuildKept": "Kept: written by another Orca version"
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -6662,8 +6697,6 @@
           "5cc1a6701c": "Open Settings",
           "2b56b35f53": "You can change this in Settings.",
           "dd3a45bbbd": "We'll skip this confirmation next time.",
-          "fc23c4cbdf": "Delete Workspace",
-          "86f0ae1257": "Delete Workspaces",
           "removeFolderProjectInstead": "Remove the folder project instead of deleting this workspace.",
           "gitBlocksMainWorktree": "Git does not allow removing the main worktree.",
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
@@ -6770,11 +6803,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancel",
-          "591f330288": "Delete Project Group",
           "2c14ce677a": "Deleting...",
           "0e0e6764af": "Contained projects",
           "55f75628c0": "Project folders on disk are not deleted.",
-          "fec7e9c8ae": "Delete Group",
           "removeContainedProjects_one": "Remove {{count}} contained project",
           "removeContainedProjects_other": "Remove {{count}} contained projects",
           "deleteGroupDescription": "Delete <name>{{name}}</name>.",
@@ -7527,9 +7558,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "Cancel",
           "cf95e3b5bb": "Close",
-          "deleteWorkspace": "Delete Workspace",
           "deleting": "Deleting...",
-          "forceDelete": "Force Delete",
           "forceDeleting": "Force Deleting..."
         },
         "HostRemoveDialog": {
@@ -7803,16 +7832,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "Review kept branches",
           "f21976c9a8": "Select the local branches you want to force delete. Unselected branches stay in their repositories.",
           "38c947f7c5": "Select all",
           "9602129d38": "{{value0}} of {{value1}} selected",
           "ee39e872d5": "May be unmerged",
           "676db406fd": "Head unavailable",
-          "285e1e4882": "Cancel",
-          "a0f9863597_one": "Force Delete {{count}} Branch",
-          "a0f9863597_other": "Force Delete {{count}} Branches",
-          "a0f9863597": "Force Delete {{count}} Branches"
+          "285e1e4882": "Cancel"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Jump to top"
@@ -8342,8 +8367,6 @@
             "df205a675e": "Tint strength",
             "ba1d9a0607": "Sidebar tint"
           },
-          "interfaceDefaultFont": "Default font",
-          "terminalDefaultFont": "Default font",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Sidebar, status bar, and file explorer",
@@ -9223,7 +9246,6 @@
           "c6b155911b": "All commands",
           "c36912efd5": "Run them from the Quick Commands button in the tab bar, or right-click inside any terminal.",
           "3d9dc558e8": "This quick command will be removed from your saved list.",
-          "3edf3deaf8": "Delete \"{{value0}}\"?",
           "9fcfc29519": "Insert",
           "9b3e338d62": "Enter",
           "4ccc63da87": "Agent",
@@ -9276,16 +9298,12 @@
           "5426ecbdcb": "Local scripts will not run",
           "95a0411b3e": "template",
           "175daba180": "Example",
-          "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
-          "56f9a4a1d0": "Using `orca.yaml`",
           "623e0c9f31": "`orca.yaml` could not be parsed",
-          "5a67e4793d": "No `orca.yaml` detected",
           "07ba35bc68": "Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.",
           "787ca433ef": "Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.",
           "ecc73d9125": "Compare your file against the working template below and copy that shape if needed.",
           "0cc712b823": "The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.",
           "aba825233f": "The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.",
-          "ca424ff135": "Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.",
           "8bfe65fc60": "Use local commands",
           "8d6c56bff8": "Run both",
           "0fa21e19ec": "Name of the workspace, usually based on the branch name.",
@@ -9328,7 +9346,11 @@
           "da00f141c2": "Custom GitHub issue command",
           "88c6d1e54a": "Command source",
           "01bdba296f": "Worktree hooks",
-          "1ecf0b115a": "Setup script"
+          "1ecf0b115a": "Setup script",
+          "yamlDetected": "<yaml>orca.yaml</yaml> detected",
+          "yamlNotDetected": "No <yaml>orca.yaml</yaml> detected",
+          "yamlNotDetectedDescription": "Add one to share scripts with your team.",
+          "copyTemplate": "Copy template"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -9689,7 +9711,6 @@
           "6503182299": "Onboarding checklist",
           "82db1b7de4": "Onboarding checklist, {{value0}} of {{value1}} done. Show setup guide.",
           "df38d612b7": "No projects added yet.",
-          "3e483e256b": "No matching project settings.",
           "progressComplete": "{{value0}}/{{value1}} complete"
         },
         "ShortcutFilterRail": {
@@ -12027,7 +12048,10 @@
               "shortcutDescription": "The key that starts dictation.",
               "shortcutKeyword": "keyboard",
               "keepLoadedTitle": "Keep model loaded",
-              "gpuKeyword": "graphics card"
+              "gpuKeyword": "graphics card",
+              "cleanupDescription": "Fix punctuation, numbers and spoken corrections with your agent before text lands.",
+              "cleanupKeyword": "correction word",
+              "cleanupScratchKeyword": "scratch that"
             }
           }
         },
@@ -12793,7 +12817,8 @@
           "title": "Remove {{value0}}?",
           "description": "Its data is removed too.",
           "cancel": "Cancel",
-          "remove": "Remove"
+          "remove": "Remove",
+          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again."
         },
         "PluginRollbackDialog": {
           "title": "Roll back {{value0}}?",
@@ -13939,7 +13964,8 @@
           "dataLoadFailed": "Couldn’t load its files"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Plugins are off"
+          "offTitle": "Plugins are off",
+          "offAutomations": "Automations plugins created are paused, and stay paused when plugins are turned back on."
         },
         "PluginFilterPopover": {
           "kind": "Category",
@@ -14309,7 +14335,6 @@
             "abf59262fb": "Review and edit the full command input before starting an agent.",
             "4ede779461": "Resolve Review Conflicts With AI",
             "3b203c62f8": "This will permanently remove the comment from the PR.",
-            "ea9b649ce3": "Delete comment?",
             "5788d1059d": "Could not update review thread. Check the GitHub API budget.",
             "07871c0589": "Link another PR",
             "7f4489f370": "Refresh",
@@ -14769,6 +14794,11 @@
             "locallyResolvedConflictOfKind": "Conflict resolved locally ({{kind}})",
             "locallyResolvedConflict": "Conflict resolved locally",
             "pushesToForkTarget": "Pushes to fork {{target}}",
+            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
+            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
+            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
+            "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
+            "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",
             "abortMergeConfirmTitle": "Abort merge?",
             "abortRebaseConfirmDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
@@ -15193,8 +15223,7 @@
                   "5ddd8cac7f": "Discard all staged changes?",
                   "d4df3a61df": "Discard changes to \"{{value0}}\"?",
                   "5c0bdbc4cb": "Restore \"{{value0}}\"?",
-                  "d97bf697c9": "This will permanently delete this file. This cannot be undone.",
-                  "96c772bee9": "Delete \"{{value0}}\"?"
+                  "d97bf697c9": "This will permanently delete this file. This cannot be undone."
                 },
                 "dialog": {
                   "3bc61dc989": "Cancel",
@@ -15452,7 +15481,6 @@
             "unresolved": "Couldn't determine which host owns this workspace. Check the connection and try again."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "Permanently delete '{{value0}}'?",
             "92276aceb7": "Delete",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
@@ -15641,7 +15669,6 @@
             "resumeInNewCliTooltipChat": "This chat stays unchanged."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "Delete this session?",
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
@@ -17398,7 +17425,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Remove link",
           "cdfe166f6f": "Edit link",
-          "bfc813e909": "Open link",
           "7b0b945fdc": "Paste or type a link…",
           "copyLink": "Copy link"
         },
@@ -18113,6 +18139,14 @@
                     "logins": {
                       "title": "Stay logged in",
                       "body": "Bring your existing logins into Orca to stay signed in immediately."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome extensions",
+                        "body": "Install from the Chrome Web Store and pin them next to the address bar.",
+                        "action": "Open Web Store",
+                        "secondaryAction": "Got it"
+                      }
                     }
                   },
                   "tasks": {
@@ -18522,7 +18556,11 @@
           "missedRunGrace": "Missed-run grace",
           "execution": "Execution",
           "notRunYet": "Not run yet",
-          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported"
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} run reported",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported",
+          "createdBy": "Created by",
+          "createdByPluginTitle": "Plugin {{plugin}}",
+          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -18626,9 +18664,7 @@
           "2faecab10b": "Run Now",
           "13118faadf": "Unknown project",
           "73f630b49d": "Cancel",
-          "9adfab2596": "Delete External Automation",
           "1e2e41392f": "Don't ask again",
-          "080dcb5fbb": "Delete Automation",
           "19a6e30eae": "Refresh automations",
           "77c2778945": "Automations",
           "e1bf9b1512": "Workspace is not available.",
@@ -19571,7 +19607,6 @@
         "ArtifactsPage": {
           "signInAgain": "Sign in to Orca again to load artifacts.",
           "loadFailed": "Could not load artifacts.",
-          "deleteTitle": "Delete artifact?",
           "deleteDescription": "“{{name}}” will no longer be available at its public link.",
           "delete": "Delete",
           "deleteFailed": "Could not delete the artifact.",
@@ -21228,6 +21263,9 @@
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
       },
+      "signIn": {
+        "title": "Sign in to {{agent}} to start chatting"
+      },
       "claudeSignIn": {
         "signingIn": "Signing in…"
       },
@@ -21750,11 +21788,8 @@
           "candidateName": "{{value0}} on {{value1}}"
         },
         "stopAgents": {
-          "titleMany": "Stop these agents?",
           "descriptionOne": "Deleting will stop the agent's current work.",
-          "descriptionMany": "Deleting will stop these agents' current work.",
-          "confirm": "Stop agents and delete",
-          "confirmOne": "Stop agent and delete"
+          "descriptionMany": "Deleting will stop these agents' current work."
         },
         "candidateRow": {
           "gitChip": {
@@ -21762,13 +21797,14 @@
             "dirty": "Dirty",
             "unpushed": "Unpushed",
             "unknown": "Unknown"
-          }
+          },
+          "ignoredFilesBlocker": "Ignored local files",
+          "ignoredFilesNamed": "Ignored files: {{value0}}",
+          "ignoredFilesUnchecked": "Ignored files not fully checked"
         },
         "confirm": {
           "deletingTitle_one": "Deleting {{count}} workspace",
-          "deletingTitle_other": "Deleting {{count}} workspaces",
-          "deleteTitle_one": "Delete {{count}} workspace?",
-          "deleteTitle_other": "Delete {{count}} workspaces?"
+          "deletingTitle_other": "Deleting {{count}} workspaces"
         }
       },
       "creation": {
@@ -21796,7 +21832,13 @@
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
-        }
+        },
+        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+      },
+      "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
+        "namesAndMore": "{{names}} and more"
       }
     },
     "agentSessionContinuation": {
@@ -21850,7 +21892,11 @@
       "TerminalContextMenu": {
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
-        "copySessionIdError": "Unable to copy session ID"
+        "copySessionIdError": "Unable to copy session ID",
+        "copyOrcaSessionId": "Copy Orca Session ID",
+        "orcaSessionIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
+        "orcaSessionIdCopied": "Orca session ID copied",
+        "orcaSessionIdCopyFailed": "Unable to copy Orca session ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
@@ -22022,6 +22068,7 @@
           "about": {
             "parakeetV3": "Fast. {{languages}} European languages.",
             "parakeetV2": "Fast. English only, and the most accurate at it.",
+            "parakeetUnifiedEn": "English only. Words appear as you speak.",
             "whisperTiny": "Smallest download. Good for trying dictation out.",
             "whisperTurbo": "Most languages, about 100. Slow without a GPU.",
             "senseVoice": "Fast. For Chinese, Japanese and Korean.",
@@ -22060,7 +22107,13 @@
           "listening": "{{model}} is listening too…",
           "heardLabel": "{{model}} heard",
           "heardNothing": "No words. Try speaking louder.",
-          "heardFailed": "{{model}} couldn’t transcribe the recording."
+          "heardFailed": "{{model}} couldn’t transcribe the recording.",
+          "cleaningUp": "Cleaning up…",
+          "tryCleanup": "Try cleanup",
+          "cleanupFailed": "Cleanup failed: {{reason}}",
+          "cleanupTimedOut": "Cleanup took too long.",
+          "cleanupOff": "AI cleanup is off.",
+          "afterCleanup": "After cleanup · {{agent}}, {{model}} · {{seconds}} s"
         },
         "silenceStop": {
           "off": "Off",
@@ -22093,6 +22146,44 @@
         },
         "gpu": {
           "description": "Turn off if dictation freezes your computer."
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "{{company}}, through {{agent}} on this computer. Counts toward your {{plan}} plan.",
+            "goesToAgent": "Wherever {{agent}} on this computer is set up to send prompts.",
+            "sentLabel": "Sent",
+            "sent": "The dictated text, your vocabulary and your instructions.",
+            "notSentLabel": "Not sent",
+            "notSent": "Audio, files, or what’s on screen.",
+            "goesToLabel": "Goes to",
+            "waitLabel": "Wait",
+            "wait": "Text lands a few seconds later.",
+            "title": "Turn on AI cleanup?",
+            "description": "After each dictation, Orca sends the text to {{agent}} to tidy it before it lands.",
+            "cancel": "Cancel",
+            "confirm": "Turn on"
+          },
+          "instructions": {
+            "label": "Instructions",
+            "custom": "Your own instructions.",
+            "builtIn": "Built-in: fix punctuation, numbers and corrections. Keep my wording.",
+            "edit": "Edit",
+            "emptyHint": "Leave empty for the built-in ones.",
+            "reset": "Reset",
+            "cancel": "Cancel",
+            "save": "Save"
+          },
+          "saveFailed": "Could not save AI cleanup.",
+          "noAgent": "No agent can run AI cleanup. Pick one below.",
+          "title": "Cleanup",
+          "label": "AI cleanup",
+          "description": "Fixes punctuation, numbers and spoken corrections before text lands. Sends the text to {{agent}}, never audio.",
+          "anAgent": "an AI agent",
+          "agent": "Agent and model",
+          "agentDescription": "Runs on this computer. A small, fast model keeps the wait short.",
+          "correctionWord": "Correction word",
+          "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
+          "correctionWordOff": "None"
         }
       },
       "repositoryHooks": {
@@ -22372,7 +22463,16 @@
       "notWritableSelection": "The {{target}} agent did not accept the selection."
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
+      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence",
+      "cleanupNotice": {
+        "timedOut": "Cleanup took too long. Inserted as heard.",
+        "failed": "Cleanup failed. Inserted as heard.",
+        "dismiss": "Dismiss"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "Cleaning up…",
+        "skipCleanup": "Skip cleanup and insert as heard"
+      }
     }
   },
   "dashboardPopout": {
@@ -22602,9 +22702,6 @@
       "restore": "Restore",
       "discard": "Discard",
       "discardAll": "Discard all",
-      "deleteUntrackedTitle_one": "Delete {{count}} untracked file?",
-      "deleteUntrackedTitle_other": "Delete {{count}} untracked files?",
-      "deleteCount": "Delete {{count}}",
       "deleteUntrackedFilesDescription_one": "This will permanently delete {{count}} untracked file. This cannot be undone.",
       "unstagedFilesIncludingUntrackedDescription_one": "This will revert unstaged changes and permanently delete any untracked files among {{count}} file. This cannot be undone."
     },
@@ -22767,7 +22864,10 @@
         "kimiProviderLimited": "Kimi reached a provider limit or the provider is busy. Wait before retrying or reduce request frequency.",
         "kimiContextOverflow": "Kimi ran out of context. Shorten the prompt or start a new session, then retry.",
         "kimiConfigInvalid": "Kimi has invalid configuration. Check the model and provider configuration on the execution host before retrying.",
-        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying."
+        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying.",
+        "commandTemplateEmptyDictationCleanup": "Command template is empty for dictation cleanup.",
+        "dictationCleanupAgentUnsupported": "Choose a supported agent for AI cleanup in Settings -> Voice -> Cleanup. Supported agents: {{agents}}, or Custom command.",
+        "agentCannotGenerateDictationCleanup": "Agent \"{{agent}}\" does not support dictation cleanup. Supported agents: {{agents}}, or Custom command."
       },
       "enableSourceControlAi": "Enable Source Control AI in Settings -> Git.",
       "chooseBaseBranch": "Choose a base branch before generating.",
@@ -23082,7 +23182,8 @@
   "common": {
     "retry": "Retry",
     "cancel": "Cancel",
-    "unassigned": "Unassigned"
+    "unassigned": "Unassigned",
+    "delete": "Delete"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -23226,8 +23327,7 @@
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
       "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
-      "description": "This cannot be undone.",
-      "confirm": "Delete Permanently"
+      "description": "This cannot be undone."
     }
   },
   "sparsePreset": {
@@ -23271,7 +23371,6 @@
       "description": "Agents there use the distro's default Claude and Codex accounts until Orca in WSL is updated."
     },
     "antigravity": {
-      "chatTitle": "Antigravity chats",
       "chatSignIn": "Sign in",
       "chatChangeAccount": "Change account",
       "chatRetry": "Retry sign-in",
@@ -23289,23 +23388,14 @@
       "chatFailed": "Sign-in failed. Try again.",
       "chatOtherClient": "Sign-in is in progress in another client.",
       "chatReadFailed": "Could not check the sign-in on {{host}}.",
-      "signIn": "Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.",
-      "docs": "Sign-in instructions",
       "retry": "Retry",
-      "identityUnknown": "Signed-in identity unavailable",
-      "signedOut": "No native agy account is signed in.",
       "changed": "The native account changed. Select a saved account again before launching agy.",
-      "save": "Save current account",
       "refresh": "Refresh accounts",
       "usage": "Refresh usage",
-      "working": "Updating account",
+      "usageWithReading": "Refresh usage ({{reading}})",
       "usageReading": "Session: {{session}} · Weekly: {{weekly}}",
       "saved": "Saved Google account",
-      "nativeActive": "Native account",
-      "selected": "Selected",
-      "select": "Select",
       "remove": "Remove",
-      "sessions": "Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.",
       "searchDescription": "Save and select native agy Google accounts on the execution host.",
       "title": "Antigravity",
       "keyword": {
@@ -23315,12 +23405,10 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
-      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
       "authMethod": "Sign in with",
       "personal": "Google account",
       "enterprise": "Gemini Enterprise",
       "gcpProject": "Google Cloud project",
-      "gcpLocation": "Google Cloud location",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
@@ -23328,9 +23416,8 @@
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet",
-      "personalDescription": "Uses your personal Google AI plan.",
-      "enterpriseDescription": "Uses your organization's Gemini Enterprise license.",
       "chatSeparate": "Separate from your agy terminal account.",
+      "chatAccount": "Chat account",
       "chatBadgeSigningIn": "Signing in",
       "chatBadgeSignedIn": "Signed in",
       "chatBadgeSignedOut": "Not signed in",
@@ -23338,7 +23425,26 @@
       "chatPasteOpen": "Browser page didn't load?",
       "chatSwitchMethod": "Sign in again to switch to {{method}}.",
       "enterpriseFieldsNeeded": "Enter a Google Cloud project and location.",
-      "fd47b5a5dd": "Antigravity accounts"
+      "fd47b5a5dd": "Antigravity accounts",
+      "personalOption": "Your personal Google AI plan",
+      "enterpriseOption": "Your organization's license",
+      "location": "Location",
+      "enterpriseFieldsShort": "Enter a project and location.",
+      "chatUseMethod": "Sign in again to use {{method}}",
+      "signInEllipsis": "Sign in…",
+      "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
+      "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
+      "loadFailed": "Couldn't load agy accounts",
+      "loading": "Loading accounts…",
+      "notSignedIn": "Not signed in",
+      "runAgy": "Run agy on this host to sign in",
+      "signInHelp": "Sign-in help",
+      "currentLogin": "Current agy login",
+      "currentNotSaved": "Current agy login · not saved",
+      "noEmailNotSaved": "agy didn't report an email · not saved",
+      "saveShort": "Save",
+      "readAt": "Read {{time}}",
+      "active": "Active"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -23401,6 +23507,11 @@
         "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "restartCount_one": "Restart {{count}} session"
+      },
+      "oauthUsage": {
+        "title": "Claude usage polling",
+        "description": "Uses your Claude Code sign-in to check usage, credits, and inactive accounts. Turn off to use live terminal readings only.",
+        "about": "About Claude usage polling"
       }
     },
     "managedData": {
@@ -23473,7 +23584,6 @@
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
       "review": "Delete with nested worktrees…",
-      "title": "Delete workspace and nested worktrees?",
       "description": "This permanently deletes \"{{name}}\", every nested worktree listed below, and all files inside them, including uncommitted changes. Their terminals and agents will be stopped.",
       "detached": "Detached HEAD",
       "loading": "Checking nested worktrees…",
@@ -23481,7 +23591,6 @@
       "cancel": "Cancel",
       "retry": "Review again",
       "deleting": "Deleting…",
-      "confirm": "Delete all listed worktrees",
       "preservedBranches": "Some nested worktree branches were kept"
     },
     "setupTerminalTitle": "Setup",
@@ -25194,6 +25303,20 @@
       "cancel": "Cancel",
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
+    },
+    "actionConfirmation": {
+      "cancel": "Cancel",
+      "deleteAutomation": "{{plugin}} wants to delete the automation “{{automation}}”",
+      "deleteAutomationDetail": "The plugin did not create it. Its schedule stops and it is removed from Automations.",
+      "delete": "Delete",
+      "changeAutomation": "{{plugin}} wants to change the automation “{{automation}}”",
+      "changeAutomationDetail": "The plugin did not create it. It would change: {{fields}}.",
+      "change": "Change",
+      "changeElevatedAutomationDetail": "It runs its agent with extra settings you chose (arguments, a permission mode or a precheck command). It would change: {{fields}}.",
+      "newPrompt": "New prompt: “{{prompt}}”",
+      "unknownProject": "an unknown project",
+      "automationNewWorkspaces": "Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.",
+      "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
     }
   },
   "checks": {

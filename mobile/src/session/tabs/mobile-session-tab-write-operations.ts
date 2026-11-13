@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../../terminal/terminal-reply-schema'
+import '../../terminal/host-operations/terminal-reply-schema'
 import { sessionCreatedTerminalTabSchema } from '../../terminal/session/mobile-session-terminal-reply-schema'
 import { sessionTabCloseReplySchema } from './mobile-session-tab-write-reply-schema'
 import { sessionWriteUnreadReplySchema } from '../../transport/rpc/rpc-uninterpreted-reply-schemas'

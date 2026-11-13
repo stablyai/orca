@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/hidden-window-frame-pump'
-import { installHiddenWindowFramePump } from './hidden-window-frame-pump'
+import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
-import { installBrowserFindListener } from './preload-runtime-support'
+import { installBrowserFindListener } from './renderer/renderer-runtime'
 import { appApi } from './api/app-bridge'
 import { orcaProfilesApi } from './api/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
@@ -29,7 +29,7 @@ import { crashReportsApi } from './api/crash-reports-bridge'
 import { exportApi } from './api/export-bridge'
 import { ghApi } from './api/gh-bridge'
 import { hostedReviewApi } from './api/hosted-review-bridge'
-import { glApiBridge } from './api/gl-bridge'
+import { glApi } from './api/gitlab'
 import { bitbucketApi } from './api/bitbucket-bridge'
 import { linearApi } from './api/linear-bridge'
 import { jiraApi } from './api/jira-bridge'
@@ -131,7 +131,7 @@ const api = {
   export: exportApi,
   gh: ghApi,
   hostedReview: hostedReviewApi,
-  gl: glApiBridge,
+  gl: glApi,
   bitbucket: bitbucketApi,
   linear: linearApi,
   jira: jiraApi,

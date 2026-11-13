@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { switchBranchGuarded, type BranchSwitchDeps } from './branch-switch'
 import { checkoutBranch } from './checkout'
-import { getStatus } from '../../source-control/status-read'
+import { getStatus } from '../../source-control/status/status-read'
 
 let directory: string
 let initialHead: string

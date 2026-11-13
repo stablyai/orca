@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
+import { computeActiveTerminalKeyboardLift } from '../terminal/keyboard/terminal-keyboard-avoidance-lift'
 import {
   terminalPaneDirection,
   terminalPaneKeyboardLayout
@@ -32,7 +32,7 @@ import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
-import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
+import { loadMarkdownPreviewImage } from '../files/markdown/mobile-markdown-image-source'
 
 export function MobileSessionActiveContent({
   controller
