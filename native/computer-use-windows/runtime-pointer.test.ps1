@@ -86,9 +86,6 @@ public static class OrcaDesktopWin32 {
         Calls.Add("move:" + x + "," + y);
         return true;
     }
-    public static void MoveCursorAfterInput(int x, int y) {
-        Calls.Add("cursor-back:" + x + "," + y);
-    }
     public static void mouse_event(uint flags, uint dx, uint dy, int data, UIntPtr extra) {
         Calls.Add("mouse");
     }
@@ -142,7 +139,7 @@ function Invoke-TestOperation([hashtable]$Fields) {
 }
 
 function Get-TestPointerCalls {
-    @([OrcaDesktopWin32]::Calls | Where-Object { $_ -like "move:*" -or $_ -like "cursor-back:*" -or $_ -in @("mouse", "modified") })
+    @([OrcaDesktopWin32]::Calls | Where-Object { $_ -like "move:*" -or $_ -in @("mouse", "modified") })
 }
 
 # Elements without a primary pattern; pattern-capable ones are records with pattern = $true.
@@ -182,7 +179,7 @@ foreach ($case in $pointerCases) {
     $pointer = Get-TestPointerCalls
     $expectedFirst = if ($null -ne $case.element) { "move:540,240" } else { "move:505,206" }
     Assert-TestEqual $pointer[0] $expectedFirst "$label geometry after delayed activation"
-    Assert-TestEqual $pointer[$pointer.Count - 1] "cursor-back:7,8" "$label puts the pointer back last"
+    Assert-TestEqual $pointer[$pointer.Count - 1] "move:7,8" "$label puts the pointer back last"
 }
 
 # A refused raise tries the UIA route, then one more raise, and sends nothing when all fail.

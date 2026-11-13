@@ -116,26 +116,10 @@ public static class OrcaDesktopWin32 {
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
 
-    [DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int index);
-
     // DWMWA_CLOAKED: the shell hides windows on other virtual desktops this way; raising one switches desktops.
     public static bool IsWindowCloaked(IntPtr hwnd) {
         int cloaked;
         return DwmGetWindowAttribute(hwnd, 14, out cloaked, sizeof(int)) == 0 && cloaked != 0;
-    }
-
-    // Queued behind input already sent, so a click or wheel lands before the pointer moves; SetCursorPos would race it.
-    public static void MoveCursorAfterInput(int x, int y) {
-        long left = GetSystemMetrics(76);
-        long top = GetSystemMetrics(77);
-        long width = Math.Max(1, GetSystemMetrics(78));
-        long height = Math.Max(1, GetSystemMetrics(79));
-        // Absolute coordinates are 0..65535 across the virtual desktop; aim at the pixel's center.
-        var dx = (uint)(((x - left) * 65536 + 32768) / width);
-        var dy = (uint)(((y - top) * 65536 + 32768) / height);
-        const uint move = 0x0001, virtualDesk = 0x4000, absolute = 0x8000;
-        mouse_event(move | virtualDesk | absolute, dx, dy, 0, UIntPtr.Zero);
     }
 
     [DllImport("user32.dll")]
@@ -667,9 +651,10 @@ function Get-OrcaCursorPosition {
 
 function Restore-OrcaCursorPosition($Point) {
     if ($null -eq $Point) { return }
-    # Why: apps read the live cursor while handling a click (context menus, hover), and Windows doesn't say when they're done.
+    # Why: injected input is handled asynchronously and apps read the live cursor while handling it (context menus, hover);
+    # Windows gives no signal when they are done.
     Start-Sleep -Milliseconds 200
-    [OrcaDesktopWin32]::MoveCursorAfterInput($Point.X, $Point.Y)
+    [void][OrcaDesktopWin32]::SetCursorPos($Point.X, $Point.Y)
 }
 
 function Get-OrcaElementFrame($Element, $WindowFrame) {
@@ -1410,8 +1395,23 @@ function Get-OrcaScrollPattern($Element, $RootElement, [bool]$Vertical) {
     $null
 }
 
-# Innermost element under a screen point whose ScrollPattern scrolls that way; windows covering the point don't matter.
+function Test-OrcaElementWithin($Element, $RootElement) {
+    $rootId = Get-OrcaRuntimeId $RootElement
+    $current = $Element
+    for ($depth = 0; $null -ne $current -and $depth -le $MaxDepth; $depth++) {
+        if (Test-OrcaSameRuntimeId (Get-OrcaRuntimeId $current) $rootId) { return $true }
+        $current = try { [Windows.Automation.TreeWalker]::RawViewWalker.GetParent($current) } catch { $null }
+    }
+    $false
+}
+
+# The element a wheel at this screen point would scroll: what is drawn there, else (when another window covers it)
+# the innermost on-screen scroll container under it.
 function Find-OrcaScrollContainerAt($RootElement, [double]$ScreenX, [double]$ScreenY, [bool]$Vertical) {
+    try {
+        $hit = [Windows.Automation.AutomationElement]::FromPoint((New-Object System.Windows.Point $ScreenX, $ScreenY))
+        if (Test-OrcaElementWithin $hit $RootElement) { return $hit }
+    } catch {}
     $candidates = @($RootElement)
     try {
         $condition = New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::IsScrollPatternAvailableProperty, $true)
@@ -1422,6 +1422,7 @@ function Find-OrcaScrollContainerAt($RootElement, [double]$ScreenX, [double]$Scr
     $bestArea = [double]::PositiveInfinity
     foreach ($candidate in $candidates) {
         try {
+            if ($candidate.Current.IsOffscreen) { continue }
             $rect = $candidate.Current.BoundingRectangle
             if ($rect.IsEmpty -or $ScreenX -lt $rect.X -or $ScreenY -lt $rect.Y -or $ScreenX -ge $rect.X + $rect.Width -or $ScreenY -ge $rect.Y + $rect.Height) { continue }
             $pattern = $candidate.GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern)
