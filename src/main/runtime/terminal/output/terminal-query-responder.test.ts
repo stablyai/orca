@@ -202,7 +202,7 @@ describe('main-side replay guard', () => {
     markHiddenRendererPty('pty-recovered')
     runtime.seedHeadlessTerminal('pty-recovered', 'old screen')
     await settle(runtime, 'pty-recovered')
-    runtime.onPtyData('pty-recovered', QUERY_BATCH, Date.now())
+    runtime.onPtyData('pty-recovered', QUERY_BATCH, 1_000)
     runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
       'pty-recovered',
       { data: `restored prompt${QUERY_BATCH}`, cols: 80, rows: 24, seq: 0 },
@@ -210,7 +210,7 @@ describe('main-side replay guard', () => {
     )
     await settle(runtime, 'pty-recovered')
     expect(replies).toEqual([])
-    runtime.onPtyData('pty-recovered', QUERY_BATCH, Date.now())
+    runtime.onPtyData('pty-recovered', QUERY_BATCH, 2_000)
     await settle(runtime, 'pty-recovered')
     expect(replies.map((reply) => reply.data)).toEqual([
       '\x1b[?1;2c',
