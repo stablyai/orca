@@ -43,7 +43,7 @@ export function startRendererStatusPublication(store: { getState(): AppState }):
         numericId ?? null,
         numericId == null ? null : mounted!.getPtyIdForPane(numericId),
         layout?.ptyIdsByLeafId?.[identity.leafId],
-        getRuntimeLeafIdsForTerminal(undefined, layout).length,
+        () => getRuntimeLeafIdsForTerminal(undefined, layout).length,
         source.tab.ptyId
       )
       return { paneKey: key, leafId: identity.leafId, rendererPtyId, row }

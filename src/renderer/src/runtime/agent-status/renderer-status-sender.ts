@@ -14,6 +14,7 @@ export class RendererStatusSender {
   private inFlight = false
   private active = false
   private stopped = false
+  private retryDelay = 0
 
   constructor(
     private readonly epoch: string,
@@ -24,11 +25,17 @@ export class RendererStatusSender {
   ) {}
 
   graphAccepted(): void {
+    if (this.stopped) {
+      return
+    }
     this.active = true
     this.schedule()
   }
 
   changed(keys: ReadonlySet<string> | null): void {
+    if (this.stopped) {
+      return
+    }
     if (keys === null) {
       this.snapshot = true
     } else {
@@ -67,10 +74,13 @@ export class RendererStatusSender {
       return
     }
     // Hidden renderers still publish; animation frames may be suspended indefinitely.
-    this.timer = setTimeout(() => {
-      this.timer = undefined
-      void this.flush()
-    }, 16)
+    this.timer = setTimeout(
+      () => {
+        this.timer = undefined
+        void this.flush()
+      },
+      Math.max(16, this.retryDelay)
+    )
   }
 
   private async flush(): Promise<void> {
@@ -99,14 +109,16 @@ export class RendererStatusSender {
         seq: ++this.cursor.seq,
         rows
       })
-      if (!ack.accepted && !ack.snapshotRequired) {
-        this.active = false
+      if (!ack.accepted && ack.reason === 'superseded') {
+        this.stop()
+        return
       }
+      this.retryDelay = ack.accepted ? 0 : Math.min(2000, (this.retryDelay || 50) * 2)
       if (ack.snapshotRequired || !ack.accepted) {
         this.snapshot = true
       }
     } catch {
-      this.active = false
+      this.retryDelay = Math.min(2000, (this.retryDelay || 50) * 2)
       this.snapshot = true
     } finally {
       this.inFlight = false

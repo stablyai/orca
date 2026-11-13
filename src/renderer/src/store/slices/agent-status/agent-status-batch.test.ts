@@ -1,4 +1,7 @@
 import type { RendererStatusPublication } from '../../../../../shared/agent-status/renderer-status-publication'
+import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -114,6 +117,104 @@ describe('setAgentStatuses', () => {
       stop()
     }
   })
+
+  // The changed-key capture must stay independent of the saved split width.
+  it.each([100, 1000])(
+    'resolves live and saved bindings before traversing %i saved leaves',
+    async (width) => {
+      vi.useFakeTimers()
+      const batches: RendererStatusPublication[] = []
+      vi.stubGlobal('window', {
+        api: {
+          runtime: {
+            syncAgentStatus: async (batch: RendererStatusPublication) => {
+              batches.push(batch)
+              return { accepted: true }
+            }
+          }
+        }
+      })
+      const { startRendererStatusPublication, rendererStatusGraphAccepted } =
+        await import('@/runtime/agent-status/renderer-status-publication')
+      const store = seedBatchStore()
+      const leafId = FIRST_PANE.slice('tab-1:'.length)
+      let visits = 0
+      const tree = (count: number, offset = 0): TerminalPaneLayoutNode =>
+        count === 1
+          ? {
+              type: 'leaf',
+              get leafId() {
+                if (offset !== 0) {
+                  visits++
+                }
+                return offset === 0
+                  ? leafId
+                  : `11111111-1111-4111-8111-${String(offset).padStart(12, '0')}`
+              }
+            }
+          : {
+              type: 'split',
+              direction: 'horizontal',
+              first: tree(Math.floor(count / 2), offset),
+              second: tree(count - Math.floor(count / 2), offset + Math.floor(count / 2))
+            }
+      const layout = {
+        root: tree(width),
+        activeLeafId: leafId,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [leafId]: 'saved' }
+      }
+      store.setState({ terminalLayoutsByTabId: { 'tab-1': layout } })
+      store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'initial' })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: capture only asks this fixture manager for the addressed numeric ID.
+      const manager = {
+        getNumericIdForLeaf: (id: string) => (id === leafId ? 1 : null)
+      } as PaneManager
+      const unregister = registerRuntimeTerminalTab({
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        getManager: () => manager,
+        getContainer: () => null,
+        getPtyIdForPane: () => 'live',
+        getTabWideAgentHintLeafId: () => leafId
+      })
+      const stop = startRendererStatusPublication(store)
+      try {
+        rendererStatusGraphAccepted()
+        await vi.advanceTimersByTimeAsync(16)
+        visits = 0
+        store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'mounted' })
+        await vi.advanceTimersByTimeAsync(16)
+        expect(batches.at(-1)?.rows).toMatchObject([
+          { rendererPtyId: 'live', row: { prompt: 'mounted' } }
+        ])
+        expect(visits).toBe(0)
+        unregister()
+        await vi.advanceTimersByTimeAsync(16)
+        visits = 0
+        store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'unmounted' })
+        await vi.advanceTimersByTimeAsync(16)
+        expect(batches.at(-1)?.rows).toMatchObject([
+          { rendererPtyId: 'saved', row: { prompt: 'unmounted' } }
+        ])
+        expect(visits).toBe(0)
+        store.setState({
+          tabsByWorktree: {
+            'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', title: 'pi', ptyId: 'sole-tab' })]
+          },
+          terminalLayoutsByTabId: { 'tab-1': { ...layout, root: tree(1), ptyIdsByLeafId: {} } }
+        })
+        await vi.advanceTimersByTimeAsync(16)
+        expect(batches.at(-1)?.rows).toMatchObject([
+          { rendererPtyId: 'saved', row: null },
+          { rendererPtyId: 'sole-tab', row: { prompt: 'unmounted' } }
+        ])
+      } finally {
+        stop()
+        unregister()
+      }
+    }
+  )
 
   it('exposes cap evictions to later updates in the same transaction', () => {
     const store = seedBatchStore()

@@ -123,3 +123,136 @@ describe('renderer status / graph join', () => {
     expect(replica.get('tab:leaf')?.row?.prompt).toBe('current')
   })
 })
+
+// The resource bound is a requested regression contract, including recovery debt.
+it.each([100, 1000])('releases retirement debt across 20 turnover cycles at %i panes', (width) => {
+  const replica = new RendererStatusReplica()
+  replica.beginEpoch('renderer')
+  let seq = 0
+  replica.apply({ type: 'snapshot', epoch: 'renderer', seq: ++seq, rows: [] })
+  for (let cycle = 0; cycle < 20; cycle++) {
+    const fleet = new Map(
+      Array.from({ length: width }, (_, index) => {
+        const item = { ...member(`A-${cycle}`), paneKey: `tab-${cycle}-${index}:leaf` }
+        return [item.paneKey, item] as const
+      })
+    )
+    reconcile(replica, fleet)
+    replica.apply({
+      type: 'changes',
+      epoch: 'renderer',
+      seq: ++seq,
+      rows: [...fleet.values()].map((item) => ({ ...item, row }))
+    })
+    const future = [...fleet.values()].map((item) => ({
+      ...item,
+      rendererPtyId: `B-${cycle}`,
+      row: { ...row, prompt: 'future' }
+    }))
+    replica.apply({ type: 'changes', epoch: 'renderer', seq: ++seq, rows: future })
+    reconcile(replica, new Map(future.map((item) => [item.paneKey, item])))
+    replica.apply({
+      type: 'changes',
+      epoch: 'renderer',
+      seq: ++seq,
+      rows: [...fleet.values()].map((item) => ({ ...item, row: { ...row, prompt: 'late' } }))
+    })
+    for (const item of fleet.values()) {
+      expect(replica.get(item.paneKey)?.row?.prompt).toBe('future')
+    }
+    replica.apply({
+      type: 'changes',
+      epoch: 'renderer',
+      seq: ++seq,
+      rows: [...fleet.values()].map((item) => ({ ...item, row: null }))
+    })
+    expect(replica).toHaveProperty('retired.size', 0)
+    reconcile(replica, new Map())
+    replica.apply({
+      type: 'changes',
+      epoch: 'renderer',
+      seq: ++seq,
+      rows: future.map((item) => ({ ...item, row: null }))
+    })
+    replica.apply({ type: 'snapshot', epoch: 'renderer', seq: ++seq, rows: [] })
+    for (const table of [
+      'retired',
+      'rows',
+      'pending',
+      'pendingByPane',
+      'members',
+      'membersByWorktree',
+      'active',
+      'bound'
+    ]) {
+      expect(replica).toHaveProperty(`${table}.size`, 0)
+    }
+  }
+})
+
+it.each([100, 1000])(
+  'settles healthy close debt without snapshots at %i panes, in either graph order',
+  (width) => {
+    const replica = new RendererStatusReplica()
+    replica.beginEpoch('renderer')
+    let seq = 0
+    replica.apply({ type: 'snapshot', epoch: 'renderer', seq: ++seq, rows: [] })
+    for (let cycle = 0; cycle < 20; cycle++) {
+      const fleet = new Map(
+        Array.from({ length: width }, (_, index) => {
+          const item = { ...member(`A-${cycle}`), paneKey: `tab-${cycle}-${index}:leaf` }
+          return [item.paneKey, item] as const
+        })
+      )
+      reconcile(replica, fleet)
+      const rows = [...fleet.values()].map((item) => ({
+        ...item,
+        row: { ...row, paneKey: item.paneKey }
+      }))
+      const tombstones = rows.map((item) => ({ ...item, row: null }))
+      replica.apply({
+        type: 'changes',
+        epoch: 'renderer',
+        seq: ++seq,
+        rows: rows.map((item) => ({ ...item, rendererPtyId: null }))
+      })
+      replica.apply({ type: 'changes', epoch: 'renderer', seq: ++seq, rows })
+      expect(replica).toHaveProperty('rows.size', width)
+      if (cycle % 2 === 0) {
+        reconcile(replica, new Map())
+        replica.apply({ type: 'changes', epoch: 'renderer', seq: ++seq, rows: tombstones })
+      } else {
+        replica.apply({ type: 'changes', epoch: 'renderer', seq: ++seq, rows: tombstones })
+        reconcile(replica, new Map())
+      }
+      for (const table of [
+        'retired',
+        'rows',
+        'pending',
+        'pendingByPane',
+        'members',
+        'membersByWorktree',
+        'active',
+        'bound'
+      ]) {
+        expect(replica).toHaveProperty(`${table}.size`, 0)
+      }
+    }
+    reconcile(replica, members(null))
+    replica.apply({
+      type: 'changes',
+      epoch: 'renderer',
+      seq: ++seq,
+      rows: [record(null, 'unbound')]
+    })
+    reconcile(replica, members('A'))
+    reconcile(replica, new Map())
+    replica.apply({
+      type: 'changes',
+      epoch: 'renderer',
+      seq: ++seq,
+      rows: [{ ...record('A', ''), row: null }]
+    })
+    expect(replica).toHaveProperty('retired.size', 0)
+  }
+)

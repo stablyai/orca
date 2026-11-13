@@ -43,6 +43,10 @@ export class RendererStatusReplica {
     this.pendingByPane.clear()
   }
 
+  awaitingSnapshot(worktreeId: string): boolean {
+    return !this.seeded && this.membersByWorktree.has(worktreeId)
+  }
+
   *membersForWorktree(worktreeId: string): IterableIterator<RendererStatusMember> {
     for (const key of this.membersByWorktree.get(worktreeId) ?? []) {
       yield this.members.get(key)!
@@ -67,25 +71,19 @@ export class RendererStatusReplica {
         ) {
           const key = rendererStatusOccupantKey({ ...old, rendererPtyId: priorPty })
           const unbound = rendererStatusOccupantKey({ ...old, rendererPtyId: null })
-          this.retired.add(key)
-          this.rows.delete(key)
-          this.deletePending(key, paneKey)
-          this.rows.delete(unbound)
-          this.deletePending(unbound, paneKey)
+          this.retireOutstanding(key, paneKey)
+          this.retireOutstanding(unbound, paneKey)
           if (this.active.get(paneKey) === key || this.active.get(paneKey) === unbound) {
             this.active.delete(paneKey)
           }
           if (!next) {
-            this.retired.add(unbound)
             for (const pendingKey of this.pendingByPane.get(paneKey) ?? []) {
-              this.retired.add(pendingKey)
-              this.pending.delete(pendingKey)
+              this.retireOutstanding(pendingKey, paneKey)
             }
             this.pendingByPane.delete(paneKey)
             const active = this.active.get(paneKey)
             if (active) {
-              this.retired.add(active)
-              this.rows.delete(active)
+              this.retireOutstanding(active, paneKey)
               this.active.delete(paneKey)
             }
             this.bound.delete(paneKey)
@@ -121,13 +119,30 @@ export class RendererStatusReplica {
         const record = this.pending.get(key)!
         if (this.matches(record, member)) {
           this.deletePending(key, paneKey)
-          this.rows.set(key, record)
-          this.active.set(paneKey, key)
+          this.setActive(key, record)
           changed.add(member.worktreeId)
         }
       }
     }
     return changed
+  }
+
+  private setActive(key: string, record: RendererStatusRecord): void {
+    const previous = this.active.get(record.paneKey)
+    if (previous !== undefined) {
+      this.rows.delete(previous)
+    }
+    this.rows.set(key, record)
+    this.active.set(record.paneKey, key)
+  }
+
+  private retireOutstanding(key: string, paneKey: string): void {
+    // An ordered tombstone already settled an absent row; graph removal creates no new debt.
+    if ((this.active.get(paneKey) === key && this.rows.has(key)) || this.pending.has(key)) {
+      this.retired.add(key)
+    }
+    this.rows.delete(key)
+    this.deletePending(key, paneKey)
   }
 
   private deletePending(key: string, paneKey: string): void {
@@ -164,12 +179,10 @@ export class RendererStatusReplica {
       return { accepted: false, snapshotRequired: true, worktrees }
     }
     if (batch.type === 'snapshot') {
-      for (const row of this.rows.values()) {
-        const member = this.members.get(row.paneKey)
-        if (member) {
-          worktrees.add(member.worktreeId)
-        }
+      for (const worktreeId of this.membersByWorktree.keys()) {
+        worktrees.add(worktreeId)
       }
+      this.retired.clear()
       this.rows.clear()
       this.active.clear()
       this.pending.clear()
@@ -180,13 +193,15 @@ export class RendererStatusReplica {
     let snapshotRequired = false
     for (const record of batch.rows) {
       const key = rendererStatusOccupantKey(record)
-      if (this.retired.has(key)) {
+      if (record.row !== null && this.retired.has(key)) {
         continue
       }
       const member = this.members.get(record.paneKey)
       this.rows.delete(key)
       this.deletePending(key, record.paneKey)
       if (record.row === null) {
+        this.retired.delete(key)
+        this.retired.delete(rendererStatusOccupantKey({ ...record, rendererPtyId: null }))
         if (this.active.get(record.paneKey) === key) {
           this.active.delete(record.paneKey)
         }
@@ -196,8 +211,7 @@ export class RendererStatusReplica {
         continue
       }
       if (member && this.matches(record, member)) {
-        this.rows.set(key, record)
-        this.active.set(record.paneKey, key)
+        this.setActive(key, record)
         worktrees.add(member.worktreeId)
       } else {
         this.setPending(key, record)

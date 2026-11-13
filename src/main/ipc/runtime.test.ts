@@ -117,12 +117,18 @@ describe('registerRuntimeHandlers', () => {
     const sender = { mainFrame: frame }
     const batch = { type: 'snapshot', epoch: 'renderer', seq: 1, rows: [] }
     fromWebContentsMock.mockReturnValue({ id: 17 })
-    expect(handler({ sender, senderFrame: { generation: 1 } }, batch)).toEqual({ accepted: false })
+    expect(handler({ sender, senderFrame: { generation: 1 } }, batch)).toEqual({
+      accepted: false,
+      reason: 'superseded'
+    })
     expect(runtime.syncRendererAgentStatus).not.toHaveBeenCalled()
     expect(handler({ sender, senderFrame: frame }, batch)).toEqual({ accepted: true })
     expect(runtime.syncRendererAgentStatus).toHaveBeenCalledWith(17, batch)
     fromWebContentsMock.mockReturnValue(null)
-    expect(handler({ sender, senderFrame: frame }, batch)).toEqual({ accepted: false })
+    expect(handler({ sender, senderFrame: frame }, batch)).toEqual({
+      accepted: false,
+      reason: 'superseded'
+    })
   })
 })
 

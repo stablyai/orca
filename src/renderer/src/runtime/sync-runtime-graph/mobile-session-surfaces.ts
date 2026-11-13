@@ -50,11 +50,13 @@ export function rendererTerminalBinding(
   numericPaneId: number | null,
   livePtyId: string | null | undefined,
   savedPtyId: string | null | undefined,
-  leafCount: number,
+  leafCount: number | (() => number),
   tabPtyId: string | null | undefined
 ): string | null {
   return numericPaneId === null
-    ? (savedPtyId ?? (leafCount === 1 ? tabPtyId : null) ?? null)
+    ? (savedPtyId ??
+        ((typeof leafCount === 'function' ? leafCount() : leafCount) === 1 ? tabPtyId : null) ??
+        null)
     : (livePtyId ?? savedPtyId ?? null)
 }
 

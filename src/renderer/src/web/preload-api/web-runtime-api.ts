@@ -10,7 +10,7 @@ import { noopUnsubscribe } from './web-storage'
 
 export function createWebRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
   return {
-    syncAgentStatus: async () => ({ accepted: false }),
+    syncAgentStatus: async () => ({ accepted: false, reason: 'superseded' }),
     syncWindowGraph: async (_graph: RuntimeSyncWindowGraph) => getRemoteRuntimeStatus(),
     getStatus: () => getRemoteRuntimeStatus(),
     call: ({ method, params }) => callRuntimeEnvelope(method, params),

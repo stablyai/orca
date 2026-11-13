@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { RendererStatusSender } from '../../../renderer/src/runtime/agent-status/renderer-status-sender'
+import type { RendererStatusPublication } from '../../../shared/agent-status/renderer-status-publication'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
@@ -32,15 +34,15 @@ it('publishes only the affected phone frame with increasing versions and exclude
     undefined,
     'mobile'
   )
-  const publish = (version: number, title: string) =>
+  const publish = (version: number, title: string, epoch = 'renderer') =>
     runtime.syncWindowGraph(1, {
-      rendererGeneration: 'renderer',
+      rendererGeneration: epoch,
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
         {
           worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'renderer',
+          publicationEpoch: epoch,
           snapshotVersion: version,
           activeGroupId: null,
           activeTabId: null,
@@ -77,8 +79,7 @@ it('publishes only the affected phone frame with increasing versions and exclude
   try {
     publish(1, 'Claude')
     await vi.advanceTimersByTimeAsync(100)
-    const before = frames.at(-1)!.snapshotVersion
-    frames.length = 0
+    expect(frames).toEqual([])
     expect(
       runtime.syncRendererAgentStatus(2, {
         type: 'snapshot',
@@ -86,10 +87,10 @@ it('publishes only the affected phone frame with increasing versions and exclude
         seq: 1,
         rows: [status]
       })
-    ).toEqual({ accepted: false })
+    ).toEqual({ accepted: false, reason: 'superseded' })
     expect(
       runtime.syncRendererAgentStatus(1, { type: 'snapshot', epoch: 'old', seq: 1, rows: [status] })
-    ).toEqual({ accepted: false })
+    ).toEqual({ accepted: false, reason: 'superseded' })
     runtime.syncRendererAgentStatus(1, {
       type: 'snapshot',
       epoch: 'renderer',
@@ -98,7 +99,6 @@ it('publishes only the affected phone frame with increasing versions and exclude
     })
     await vi.advanceTimersByTimeAsync(100)
     expect(frames.map((frame) => frame.worktree)).toEqual([TEST_WORKTREE_ID])
-    expect(frames[0].snapshotVersion).toBeGreaterThan(before)
     expect(frames[0].tabs[0]).toMatchObject({
       agentStatus: { state: 'blocked', prompt: 'Approve the change' }
     })
@@ -111,6 +111,61 @@ it('publishes only the affected phone frame with increasing versions and exclude
     publish(3, 'Claude')
     await vi.advanceTimersByTimeAsync(100)
     expect(frames.at(-1)!.tabs[0]).toMatchObject({ agentStatus: { prompt: 'Approve the change' } })
+    frames.length = 0
+    publish(1, 'Claude', 'replacement')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(frames).toEqual([])
+    runtime.syncRendererAgentStatus(1, {
+      type: 'snapshot',
+      epoch: 'replacement',
+      seq: 1,
+      rows: [status]
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(frames).toHaveLength(1)
+    expect(frames[0].tabs[0]).toMatchObject({ agentStatus: { prompt: 'Approve the change' } })
+
+    const batches: RendererStatusPublication[] = []
+    let settle: (() => void) | undefined
+    let current = status
+    const sender = new RendererStatusSender(
+      'replacement',
+      () => current,
+      () => [paneKey],
+      (batch) => {
+        batches.push(batch)
+        if (batches.length === 1) {
+          return new Promise((resolve) => {
+            settle = () => resolve(runtime.syncRendererAgentStatus(1, batch))
+          })
+        }
+        return Promise.resolve(runtime.syncRendererAgentStatus(1, batch))
+      },
+      { seq: 1 }
+    )
+    try {
+      sender.graphAccepted()
+      await vi.advanceTimersByTimeAsync(16)
+      const fence = runtime.markRendererReloading(1)!
+      settle!()
+      await Promise.resolve()
+      current = { ...status, row: { ...status.row, prompt: 'While reloading' } }
+      sender.changed(new Set([paneKey]))
+      expect(runtime.markRendererReloadCancelled(1, fence)).toBe(true)
+      await vi.advanceTimersByTimeAsync(300)
+      expect(batches[1]).toMatchObject({
+        type: 'snapshot',
+        rows: [{ row: { prompt: 'While reloading' } }]
+      })
+      expect(frames.at(-1)!.tabs[0]).toMatchObject({ agentStatus: { prompt: 'While reloading' } })
+      current = { ...status, row: { ...status.row, prompt: 'Current turn' } }
+      sender.changed(new Set([paneKey]))
+      await vi.advanceTimersByTimeAsync(100)
+      expect(batches[2].type).toBe('changes')
+      expect(frames.at(-1)!.tabs[0]).toMatchObject({ agentStatus: { prompt: 'Current turn' } })
+    } finally {
+      sender.stop()
+    }
   } finally {
     stop()
   }

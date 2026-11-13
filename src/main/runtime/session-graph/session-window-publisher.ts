@@ -13,12 +13,11 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-cont
 
 export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWithAttachWindow {
   syncRendererAgentStatus(windowId: number, batch: RendererStatusPublication): RendererStatusAck {
-    if (
-      windowId !== this.authoritativeWindowId ||
-      this.rendererGeneration !== batch.epoch ||
-      this.graphStatus !== 'ready'
-    ) {
-      return { accepted: false }
+    if (windowId !== this.authoritativeWindowId || this.rendererGeneration !== batch.epoch) {
+      return { accepted: false, reason: 'superseded' }
+    }
+    if (this.graphStatus !== 'ready') {
+      return { accepted: false, reason: 'not-ready' }
     }
     const { worktrees, ...ack } = rendererStatusReplica(this).apply(batch)
     for (const worktreeId of worktrees) {

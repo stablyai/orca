@@ -12,7 +12,11 @@ export type RendererStatusPublication = {
   seq: number
   rows: RendererStatusRecord[]
 }
-export type RendererStatusAck = { accepted: boolean; snapshotRequired?: boolean }
+export type RendererStatusAck = {
+  accepted: boolean
+  snapshotRequired?: boolean
+  reason?: 'superseded' | 'not-ready'
+}
 
 export function rendererStatusOccupantKey(occupant: RendererStatusOccupant): string {
   return JSON.stringify([occupant.paneKey, occupant.leafId, occupant.rendererPtyId])

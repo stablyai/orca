@@ -82,7 +82,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.handle('runtime:syncAgentStatus', (event, batch: RendererStatusPublication) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window || event.senderFrame !== event.sender.mainFrame) {
-      return { accepted: false }
+      return { accepted: false, reason: 'superseded' }
     }
     return runtime.syncRendererAgentStatus(window.id, batch)
   })
