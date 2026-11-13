@@ -4,6 +4,33 @@ import { AUTHORITATIVE_REMOVAL_MEMORY_LIMIT } from './worktree-slice-constants'
 // Bridge async durable SSH-metadata deletion with session suppression; reloads rely on actual metadata retirement.
 const authoritativelyRemovedWorktreeIdsByHost = new Map<ExecutionHostId, Set<string>>()
 
+type AuthoritativeWorktreeRemovalListener = (
+  hostId: ExecutionHostId,
+  worktreeIds: readonly string[]
+) => void
+const removalListeners = new Set<AuthoritativeWorktreeRemovalListener>()
+
+/** Hears every proven removal, including ones this bounded memory never keeps or has since evicted. */
+export function subscribeToAuthoritativeWorktreeRemovals(
+  listener: AuthoritativeWorktreeRemovalListener
+): () => void {
+  removalListeners.add(listener)
+  return () => removalListeners.delete(listener)
+}
+
+/** Reports a proven removal without fencing listings; hosts whose reads cannot resurrect rows use this. */
+export function announceAuthoritativeWorktreeRemovals(
+  hostId: ExecutionHostId,
+  worktreeIds: readonly string[]
+): void {
+  if (worktreeIds.length === 0) {
+    return
+  }
+  for (const listener of removalListeners) {
+    listener(hostId, worktreeIds)
+  }
+}
+
 export function rememberAuthoritativelyRemovedWorktrees(
   hostId: ExecutionHostId,
   worktreeIds: readonly string[]
@@ -11,6 +38,7 @@ export function rememberAuthoritativelyRemovedWorktrees(
   if (worktreeIds.length === 0) {
     return
   }
+  announceAuthoritativeWorktreeRemovals(hostId, worktreeIds)
   const removed = authoritativelyRemovedWorktreeIdsByHost.get(hostId) ?? new Set<string>()
   for (const worktreeId of worktreeIds) {
     // Why: re-insert so a re-removed id moves to the back of the insertion order the cap evicts from.

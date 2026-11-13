@@ -1,11 +1,18 @@
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { getAuthoritativelyRemovedWorktreeIds } from '@/store/slices/worktrees/listing/authoritative-worktree-removal-memory'
+import {
+  getAuthoritativelyRemovedWorktreeIds,
+  subscribeToAuthoritativeWorktreeRemovals
+} from '@/store/slices/worktrees/listing/authoritative-worktree-removal-memory'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
+  type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
@@ -139,25 +146,32 @@ const recordsByOwner = new Map<
 
 function isCheckoutPositivelyGone(
   owner: MergedBranchSectionOwner,
-  liveInstancesByHostIdentity: ReadonlyMap<string, ReadonlySet<string | null>>
+  liveInstancesByHostIdentity: ReadonlyMap<string, ReadonlySet<string | null>>,
+  liveRepoIds: ReadonlySet<string>
 ): boolean {
   const liveInstances = liveInstancesByHostIdentity.get(getWorktreeHostIdentity(owner))
   if (liveInstances) {
     // The host reports this workspace under another checkout, so this one was recreated.
     return !liveInstances.has(owner.instanceId ?? null)
   }
+  // Removing a project, or unpairing its host, removes the repo; a disconnected host keeps it.
+  if (!liveRepoIds.has(getRepoIdFromWorktreeId(owner.id))) {
+    return true
+  }
   if (owner.hostId === LOCAL_EXECUTION_HOST_ID) {
     return true
   }
-  // Remote rows vanish while their host is disconnected; only an authoritative removal proves deletion.
-  return owner.hostId !== undefined && parseExecutionHostId(owner.hostId)?.kind === 'ssh'
+  // Remote rows can vanish from a partial listing; only an authoritative removal proves deletion.
+  return owner.hostId !== undefined
     ? (getAuthoritativelyRemovedWorktreeIds(owner.hostId)?.has(owner.id) ?? false)
     : false
 }
 
 function pruneRecordsOfRemovedCheckouts(keep: string): void {
+  const state = useAppStore.getState()
+  const liveRepoIds = new Set(state.repos.map((repo) => repo.id))
   const liveInstancesByHostIdentity = new Map<string, Set<string | null>>()
-  for (const worktrees of Object.values(selectWorktreesByRepo(useAppStore.getState()) ?? {})) {
+  for (const worktrees of Object.values(selectWorktreesByRepo(state) ?? {})) {
     for (const worktree of worktrees) {
       const hostIdentity = getWorktreeHostIdentity(worktree)
       const instances = liveInstancesByHostIdentity.get(hostIdentity) ?? new Set<string | null>()
@@ -166,13 +180,34 @@ function pruneRecordsOfRemovedCheckouts(keep: string): void {
     }
   }
   for (const [key, entry] of recordsByOwner) {
-    if (key !== keep && isCheckoutPositivelyGone(entry.owner, liveInstancesByHostIdentity)) {
+    if (
+      key !== keep &&
+      isCheckoutPositivelyGone(entry.owner, liveInstancesByHostIdentity, liveRepoIds)
+    ) {
       recordsByOwner.delete(key)
     }
   }
   // Doubling the bar keeps scans amortized O(1) per write when most records must stay.
   pruneThreshold = Math.max(MIN_PRUNE_THRESHOLD, recordsByOwner.size * 2)
 }
+
+function dropRecordsOfRemovedCheckouts(
+  hostId: ExecutionHostId,
+  worktreeIds: readonly string[]
+): void {
+  if (recordsByOwner.size === 0) {
+    return
+  }
+  const removed = new Set(worktreeIds.map((id) => composeWorktreeHostIdentity(hostId, id)))
+  for (const [key, entry] of recordsByOwner) {
+    if (removed.has(getWorktreeHostIdentity(entry.owner))) {
+      recordsByOwner.delete(key)
+    }
+  }
+}
+
+// Subscribed on first write: removals are dropped as they are proven, unbounded by the removal memory.
+let subscribedToRemovals = false
 
 export function readMergedBranchSectionRecord(
   owner: MergedBranchSectionOwner
@@ -188,6 +223,10 @@ export function writeMergedBranchSectionRecord(
   if (record.merged === null && record.disclosure.kind === 'untouched') {
     recordsByOwner.delete(key)
     return
+  }
+  if (!subscribedToRemovals) {
+    subscribedToRemovals = true
+    subscribeToAuthoritativeWorktreeRemovals(dropRecordsOfRemovedCheckouts)
   }
   recordsByOwner.set(key, {
     owner: { id: owner.id, hostId: owner.hostId, instanceId: owner.instanceId },
