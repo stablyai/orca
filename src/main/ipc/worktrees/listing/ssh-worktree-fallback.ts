@@ -47,6 +47,11 @@ export type SshWorktreeMetaCandidate = {
 
 export type SshWorktreeMetaIndex = Map<string, SshWorktreeMetaCandidate[]>
 
+type DetectedGitWorktreeStore = Parameters<typeof resolveWorktreeMetaWithDiscoveryBackfill>[0] &
+  Parameters<typeof projectWorktreeLineageWithHostPeers>[0] & {
+    getSettings(): Parameters<typeof toDetectedWorktree>[0]['settings']
+  }
+
 export function createSshWorktreeMetaIndex(
   entries: [string, WorktreeMeta][]
 ): SshWorktreeMetaIndex {
@@ -144,7 +149,7 @@ export function listDisconnectedSshWorktrees(
 }
 
 export function buildDetectedGitWorktrees(
-  store: Store,
+  store: DetectedGitWorktreeStore,
   repo: Repo,
   gitWorktrees: GitWorktreeInfo[],
   allMetaOverride?: Record<string, WorktreeMeta>

@@ -222,10 +222,10 @@ describe('folder-to-Git checkout identity', () => {
         comment: 'keep me'
       })
       deps.metaById[oldId] = metadata
-      Object.assign(deps.store, { getProjectHostSetups: () => [] })
+      const detectedStore = Object.assign(deps.store, { getProjectHostSetups: () => [] })
       deps.rawScanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree(gitPath)] })
 
-      const detected = buildDetectedGitWorktrees(deps.store, owner, [gitWorktree(gitPath)])
+      const detected = buildDetectedGitWorktrees(detectedStore, owner, [gitWorktree(gitPath)])
       const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
       for (const result of [detected, rows]) {
         expect(result).toHaveLength(1)
@@ -244,8 +244,8 @@ describe('folder-to-Git checkout identity', () => {
 it('retains bare storage for saved layouts without exposing a checkout or an import', () => {
   const owner = repo('bare', '/project/.bare')
   const deps = createDeps([owner])
-  Object.assign(deps.store, { getProjectHostSetups: () => [] })
-  const worktrees = buildDetectedGitWorktrees(deps.store, owner, [
+  const detectedStore = Object.assign(deps.store, { getProjectHostSetups: () => [] })
+  const worktrees = buildDetectedGitWorktrees(detectedStore, owner, [
     { ...gitWorktree('/project/.bare'), isBare: true, isMainWorktree: true, branch: '' },
     { ...gitWorktree('/project/a-stale'), prunable: true },
     gitWorktree('/project/main')

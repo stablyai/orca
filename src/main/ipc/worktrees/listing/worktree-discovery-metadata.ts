@@ -9,8 +9,14 @@ import {
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { randomUUID } from 'node:crypto'
 
+type WorktreeDiscoveryMetadataStore = Pick<
+  Store,
+  'getRepos' | 'getAllWorktreeMeta' | 'getWorktreeMeta' | 'setWorktreeMeta' | 'getProjectHostSetups'
+> &
+  Partial<Pick<Store, 'getWorktreeMetaForHost'>>
+
 export function getProjectHostSetupMetaUpdates(
-  store: Store,
+  store: Pick<Store, 'getProjectHostSetups'>,
   repo: Repo,
   existing?: WorktreeMeta
 ): Partial<Pick<WorktreeMeta, 'projectId' | 'hostId' | 'projectHostSetupId'>> {
@@ -32,7 +38,7 @@ export function getProjectHostSetupMetaUpdates(
 
 // First-discovered worktrees need activity timestamps to avoid sinking to the bottom of Recent.
 export function resolveWorktreeMetaWithDiscoveryBackfill(
-  store: Store,
+  store: WorktreeDiscoveryMetadataStore,
   repo: Repo,
   worktreeId: string,
   allMetaOverride?: Record<string, WorktreeMeta>,
