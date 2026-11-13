@@ -23,6 +23,7 @@ import {
   withCloudWorkspaceOpenFeedback
 } from './cloud-workspace-open-feedback'
 import { openCloudWorkspacePicker } from './cloud-workspace-picker-store'
+import { waitForHostWorktree } from './wait-for-host-worktree'
 
 /** On success, the worktree that was revealed (null when its projects are still syncing). */
 export type OpenOutcome =
@@ -137,7 +138,7 @@ async function connectAndReveal(
     (options) => useAppStore.getState().fetchWorktreeLineage(options)
   )
   const hostId = toRuntimeExecutionHostId(environment.id)
-  const worktreeId = firstWorktreeOnHost(hostId, branch)
+  const worktreeId = await waitForHostWorktree(() => firstWorktreeOnHost(hostId, branch))
   if (worktreeId) {
     activateAndRevealWorktree(worktreeId, { executionHostId: hostId })
   } else {
