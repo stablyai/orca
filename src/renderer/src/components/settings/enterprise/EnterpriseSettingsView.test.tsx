@@ -6,7 +6,7 @@ import {
   EnterpriseSettingsView as RawView,
   type EnterpriseSettingsViewProps
 } from './EnterpriseSettingsView'
-import { FIXTURE_EVENTS, FIXTURE_NOW, fixtureAuditProps } from './enterprise-fixture-data'
+import { FIXTURE_EVENTS, FIXTURE_NOW, fixtureAuditProps } from './enterprise-audit.fixtures'
 import { auditCategoryLabel, auditEventSentence, isKnownAuditAction } from './enterprise-audit-copy'
 
 afterEach(cleanup)

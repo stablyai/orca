@@ -158,8 +158,10 @@ function Filters({
         value={filters.category ?? ALL}
         disabled={disabled}
         onValueChange={(value) =>
-          // SAFETY: every option's value is ALL or a member of CLOUD_AUDIT_CATEGORIES.
-          onFilter({ ...filters, category: value === ALL ? null : (value as CloudAuditCategory) })
+          onFilter({
+            ...filters,
+            category: CLOUD_AUDIT_CATEGORIES.find((category) => category === value) ?? null
+          })
         }
       >
         <SelectTrigger

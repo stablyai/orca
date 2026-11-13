@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { EnterpriseSettingsView } from './EnterpriseSettingsView'
-import { fixtureAuditProps } from './enterprise-fixture-data'
+import { fixtureAuditProps } from './enterprise-audit.fixtures'
 import type { EnterpriseAuditLogProps } from './EnterpriseAuditLog'
 
 const BARE_BODY = 'rounded-none border-0 bg-transparent p-0 shadow-none'

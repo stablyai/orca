@@ -3,7 +3,7 @@
 // Enterprise audit log now, so this pane must never call an audit route (the control plane
 // refuses those without the entitlement) and must never show an error because of one.
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   CloudApiKeyList,
   CloudApiMe,
@@ -12,12 +12,18 @@ import type {
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CloudApiKeysPane } from './CloudApiKeysPane'
 
+beforeEach(() => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+})
+
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
-const NOW = Date.now()
+// A fixed clock, so "5 minutes ago" never depends on when the test runs.
+const NOW = Date.UTC(2026, 10, 12, 17, 30)
 const ME: CloudApiMe = {
   accountId: 'org:acme',
   userId: 'u_ada',
