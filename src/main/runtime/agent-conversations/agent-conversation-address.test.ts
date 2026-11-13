@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveAgentConversation } from './agent-conversation-address'
+import { REVERSE_LOOKUP_UNAVAILABLE } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 
 const hookServer = vi.hoisted(() => ({
   isTerminalAgentId: vi.fn<(id: string) => Promise<boolean | undefined>>(),
-  terminalAgentIdsOfProviderSession: vi.fn<(id: string) => Promise<string[]>>()
+  terminalAgentIdsOfProviderSession: vi.fn<(id: string) => Promise<unknown>>()
 }))
 const chats = vi.hoisted(() => ({ ids: new Set<string>(), aliases: new Map<string, string>() }))
 
@@ -76,5 +77,21 @@ describe('resolveAgentConversation', () => {
         'orca_session_id:claude_5688af50-12a0-4b0b-9a4a-098d87fe1e68'
       )
     ).resolves.toEqual({ kind: 'terminal', orcaSessionId: TERMINAL })
+  })
+
+  it.each([
+    '7f201ef0-437e-44d9-94da-6323eee9a3f4',
+    'session_7f201ef0-437e-44d9-94da-6323eee9a3f4',
+    'thread-not-a-uuid'
+  ])('says %s cannot be converted when this file cannot look provider ids up', async (input) => {
+    hookServer.terminalAgentIdsOfProviderSession.mockResolvedValue(REVERSE_LOOKUP_UNAVAILABLE)
+    await expect(resolveAgentConversation(runtime, input)).rejects.toMatchObject({
+      code: 'agent_unavailable'
+    })
+    // A real empty answer still says what it does.
+    hookServer.terminalAgentIdsOfProviderSession.mockResolvedValue([])
+    await expect(resolveAgentConversation(runtime, input)).rejects.not.toMatchObject({
+      code: 'agent_unavailable'
+    })
   })
 })

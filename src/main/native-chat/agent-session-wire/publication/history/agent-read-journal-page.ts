@@ -4,7 +4,10 @@ import { agentChatEntryOf } from '../../../../../shared/agent-conversations/agen
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { findSequenceGap } from '../../../agent-session-journal/replay/journal-cursor'
 import { journalRowItemIds } from '../../../agent-session-journal/replay/journal-row-item-ids'
-import { readJournalDisplayTail } from '../../../agent-session-journal/projection/journal-display-order'
+import { journalAgentReadIndex } from '../../../agent-session-journal/projection/journal-agent-read-index'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemForWire } from './agent-session-item-wire-form'
+import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 import { renderJournalStatusItem } from '../../../agent-session-journal/projection/journal-public-read'
 
 /** Where an agent read continues: rows through `sequence` are read, and the first `within`
@@ -16,26 +19,37 @@ export type AgentReadJournalPage =
   | { ok: false }
 
 /** One `orca agent read` page from a chat's journal, with work bounded by the page: a tail walks
- *  back from the newest candidate through the journal's position index, and a cursor read takes
- *  at most `limit + 1` rows and renders only the items they name. Neither renders the timeline,
- *  builds a snapshot or scans for turns. `waiting`: the live answer for a pending prompt. */
+ *  back over the journal's live agent-read entries, and a cursor read takes at most `limit + 1`
+ *  rows and renders only the items they name. Neither renders the timeline, builds a snapshot or
+ *  scans for turns. Entries use the history wire form (visibly shortened when too large), and a
+ *  page stops at `limit` entries or the history page byte budget, whichever comes first.
+ *  `waiting`: the live answer for a pending prompt. */
 export function readAgentJournalPage(
   journal: AgentSessionJournal,
   request: { limit: number; after?: AgentReadJournalPosition },
   waiting: (itemId: string) => boolean
 ): AgentReadJournalPage {
   const { limit, after } = request
+  const page = new PageBudget(limit)
   if (!after) {
-    const tail = readJournalDisplayTail(
-      journal,
-      limit,
-      (item) => agentChatEntryOf(item, waiting) !== null
-    )
+    const newestFirst: AgentReadEntry[] = []
+    let limited = false
+    for (const item of journalAgentReadIndex(journal).newestFirst()) {
+      const entry = entryOf(item, waiting)
+      if (!entry) {
+        continue
+      }
+      if (!page.admit(entry)) {
+        limited = true
+        break
+      }
+      newestFirst.push(entry)
+    }
     return {
       ok: true,
-      entries: tail.items.flatMap((item) => agentChatEntryOf(item, waiting) ?? []),
+      entries: newestFirst.toReversed(),
       next: { cursor: journal.cursor(), within: 0 },
-      limited: tail.older
+      limited
     }
   }
   const since = journal.readSince(after.cursor, limit + 1)
@@ -57,22 +71,27 @@ export function readAgentJournalPage(
   })
   const display = journal.queuedMessages.displayState()
   const entries: AgentReadEntry[] = []
-  const seen = new Set<string>()
   for (const row of rows) {
     const ids = journalRowItemIds(row, {
       canonical: journal.canonicalItemId,
       hasSubmission: (id) => journal.submission(id) !== undefined
     })
     const start = row.seq === after.cursor.sequence + 1 ? after.within : 0
+    // One row's items appear once each, current content; `within` counts its raw positions.
+    const seen = new Set(ids.slice(0, start))
     for (let index = start; index < ids.length; index++) {
       const id = ids[index]
-      const item = id === undefined || seen.has(id) ? null : renderJournalStatusItem(display, id)
-      const entry = item && agentChatEntryOf(item, waiting)
-      if (!entry || !id) {
+      if (id === undefined || seen.has(id)) {
         continue
       }
-      if (entries.length === limit) {
-        // The page is full inside this row: the next read resumes at this item.
+      const item = renderJournalStatusItem(display, id)
+      const entry = item && entryOf(item, waiting)
+      if (!entry) {
+        seen.add(id)
+        continue
+      }
+      if (!page.admit(entry)) {
+        // Stop before this item: the next read resumes at it.
         return { ok: true, entries, next: position(row.seq - 1, index), limited: true }
       }
       seen.add(id)
@@ -85,5 +104,37 @@ export function readAgentJournalPage(
     entries,
     next: position(more ? (rows.at(-1)?.seq ?? after.cursor.sequence) : since.through),
     limited: more
+  }
+}
+
+/** The entry an item reads as, from its history wire form. */
+function entryOf(
+  item: AgentJournalRenderItem,
+  waiting: (itemId: string) => boolean
+): AgentReadEntry | null {
+  const sent = agentJournalItemForWire(item).item
+  const entry = agentChatEntryOf(sent, waiting)
+  return entry && sent.shortened ? { ...entry, shortened: true } : entry
+}
+
+/** `limit` entries and the history page's byte budget; a first entry always fits, since wire
+ *  forms are bounded well under the budget. */
+class PageBudget {
+  private count = 0
+  private bytes = 0
+
+  constructor(private readonly limit: number) {}
+
+  admit(entry: AgentReadEntry): boolean {
+    const size = Buffer.byteLength(JSON.stringify(entry)) + 1
+    if (
+      this.count >= this.limit ||
+      (this.count > 0 && this.bytes + size > HISTORY_PAGE_CONTENT_BUDGET_BYTES)
+    ) {
+      return false
+    }
+    this.count++
+    this.bytes += size
+    return true
   }
 }

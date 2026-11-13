@@ -37,10 +37,106 @@ const LOOKUP_INDEX_SQL = `CREATE INDEX IF NOT EXISTS provider_links_by_orca_sess
   ON provider_links(orca_session_id);
 CREATE INDEX IF NOT EXISTS provider_links_by_provider_session
   ON provider_links(provider_session_id);`
+
+type ReverseLookupColumn = 'orca_session_id' | 'provider_session_id'
+
 const PROVIDER_SESSION_ID_MATCH_LIMIT = 8
+
+function querySql(column: ReverseLookupColumn, index: string): string {
+  const from = `FROM provider_links INDEXED BY ${quoteIdentifier(index)}`
+  return column === 'orca_session_id'
+    ? `SELECT execution_host, wsl_distro, agent, provider_session_id, locator ${from}
+       WHERE orca_session_id = ? LIMIT 1`
+    : `SELECT DISTINCT orca_session_id ${from}
+       WHERE provider_session_id = ? LIMIT ${PROVIDER_SESSION_ID_MATCH_LIMIT}`
+}
 
 function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`
+}
+
+/** The reverse queries a provider-links table can answer by index search, never by a scan of
+ *  every link. A candidate leads with the requested ordinary column under BINARY collation, and
+ *  the exact query forced onto it (`INDEXED BY`) must plan as a SEARCH on that column: a partial
+ *  index the query doesn't imply, a NOCASE one or a name alone never qualify. Checked once per
+ *  schema version; the validated query is the one executed. */
+class ReverseLookupQueries {
+  private checked: { schema: number; sql: Map<ReverseLookupColumn, string | null> } | null = null
+
+  constructor(
+    private readonly db: SyncDatabase,
+    /** Run once per schema version before inspecting, e.g. a writable file's own indexes. */
+    private readonly prepareSchema: () => void
+  ) {}
+
+  /** The validated query for `column`, or null when no index can serve it. */
+  sqlFor(column: ReverseLookupColumn): string | null {
+    let schema = this.schemaVersion()
+    if (this.checked?.schema !== schema) {
+      this.prepareSchema()
+      schema = this.schemaVersion()
+      this.checked = { schema, sql: new Map() }
+    }
+    let sql = this.checked.sql.get(column)
+    if (sql === undefined) {
+      sql = this.find(column)
+      this.checked.sql.set(column, sql)
+    }
+    return sql
+  }
+
+  private schemaVersion(): number {
+    return Number(this.db.pragma('schema_version', { simple: true }))
+  }
+
+  private find(column: ReverseLookupColumn): string | null {
+    for (const index of this.db.prepare('PRAGMA index_list(provider_links)').all()) {
+      const name = String(index.name)
+      const lead = this.db
+        .prepare(`PRAGMA index_xinfo(${quoteIdentifier(name)})`)
+        .all()
+        .find((term) => Number(term.key) === 1)
+      if (
+        !lead ||
+        Number(lead.seqno) !== 0 ||
+        Number(lead.cid) < 0 ||
+        lead.name !== column ||
+        String(lead.coll).toUpperCase() !== 'BINARY'
+      ) {
+        continue
+      }
+      const sql = querySql(column, name)
+      if (this.searches(sql, name, column)) {
+        return sql
+      }
+    }
+    return null
+  }
+
+  /** The forced plan searches `provider_links` by `column` and walks no table or index. */
+  private searches(sql: string, index: string, column: ReverseLookupColumn): boolean {
+    let plan: string[]
+    try {
+      plan = this.db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all('')
+        .map((row) => String(row.detail))
+    } catch {
+      // A partial index the query doesn't imply cannot be forced at all.
+      return false
+    }
+    return (
+      plan.some((detail) =>
+        new RegExp(
+          `^SEARCH provider_links USING (COVERING )?INDEX ${escapeRegExp(index)} \\(${column}=\\?`
+        ).test(detail)
+      ) && !plan.some((detail) => detail.startsWith('SCAN provider_links'))
+    )
+  }
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /** Orca ids for provider conversations, which nothing can rebuild: the file is never deleted, and
@@ -51,42 +147,21 @@ export class AgentIdentityStore {
   /** A newer build's file: existing ids resolve, nothing is minted. */
   readonly readOnly: boolean
 
-  /** Reverse lookups run only on an index, never as a scan of every link: the columns an index
-   *  leads with, checked once per schema version. */
-  private reverseIndexes: { schema: number; leading: Set<string> } | null = null
+  /** Reverse lookups run only as an index search, never as a scan of every link. */
+  private readonly reverse: ReverseLookupQueries
 
   constructor(path: string, busyTimeoutMs = 25) {
     const opened = openIdentityDatabase(path, busyTimeoutMs)
     this.db = opened.db
     this.readOnly = opened.readOnly
     hardenSqliteDatabaseFiles(path)
-  }
-
-  /** Whether a reverse query on `column` can use an index. A writable file gets this build's
-   *  indexes, and a busy one throws so the caller's failure backoff retries it. A newer build's
-   *  read-only file is used as it is: any index leading with the column serves, and without
-   *  one that lookup is unavailable while every other lookup keeps working. */
-  private reverseIndexed(column: 'orca_session_id' | 'provider_session_id'): boolean {
-    const schema = Number(this.db.pragma('schema_version', { simple: true }))
-    if (this.reverseIndexes?.schema !== schema) {
+    // A writable file gets this build's indexes, and a busy one throws so the caller's failure
+    // backoff retries it; a newer build's read-only file is used as it is.
+    this.reverse = new ReverseLookupQueries(this.db, () => {
       if (!this.readOnly) {
         this.db.exec(LOOKUP_INDEX_SQL)
       }
-      const leading = new Set<string>()
-      for (const index of this.db.prepare(`PRAGMA index_list(provider_links)`).all()) {
-        const [first] = this.db
-          .prepare(`PRAGMA index_info(${quoteIdentifier(String(index.name))})`)
-          .all()
-        if (first) {
-          leading.add(String(first.name))
-        }
-      }
-      this.reverseIndexes = {
-        schema: Number(this.db.pragma('schema_version', { simple: true })),
-        leading
-      }
-    }
-    return this.reverseIndexes.leading.has(column)
+    })
   }
 
   lookup(key: AgentProviderKey): OrcaSessionId | null {
@@ -142,15 +217,11 @@ export class AgentIdentityStore {
 
   /** The provider conversation `id` names: each mint links exactly one key. */
   providerKeyOf(id: string): AgentProviderKey | null | ReverseLookupUnavailable {
-    if (!this.reverseIndexed('orca_session_id')) {
+    const sql = this.reverse.sqlFor('orca_session_id')
+    if (!sql) {
       return REVERSE_LOOKUP_UNAVAILABLE
     }
-    const row = this.db
-      .prepare(
-        `SELECT execution_host, wsl_distro, agent, provider_session_id, locator
-         FROM provider_links WHERE orca_session_id = ? LIMIT 1`
-      )
-      .get(id)
+    const row = this.db.prepare(sql).get(id)
     return row
       ? {
           executionHost: String(row.execution_host),
@@ -164,13 +235,12 @@ export class AgentIdentityStore {
 
   /** Orca ids linked to a provider's own session id, so a caller can be told which to use. */
   idsOfProviderSession(providerSessionId: string): OrcaSessionId[] | ReverseLookupUnavailable {
-    if (!this.reverseIndexed('provider_session_id')) {
+    const sql = this.reverse.sqlFor('provider_session_id')
+    if (!sql) {
       return REVERSE_LOOKUP_UNAVAILABLE
     }
     return this.db
-      .prepare(
-        `SELECT DISTINCT orca_session_id FROM provider_links WHERE provider_session_id = ? LIMIT ${PROVIDER_SESSION_ID_MATCH_LIMIT}`
-      )
+      .prepare(sql)
       .all(providerSessionId)
       .map((row) => row.orca_session_id)
       .filter((id): id is OrcaSessionId => typeof id === 'string' && isOrcaSessionId(id))

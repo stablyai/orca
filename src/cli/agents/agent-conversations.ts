@@ -17,6 +17,7 @@ import {
   AGENT_READ_MAX_LIMIT,
   type AgentConversationRow,
   type AgentListResult,
+  type AgentReadEntry,
   type AgentReadResult,
   type AgentReadTool,
   type AgentShowResult
@@ -149,21 +150,11 @@ function formatTool(tool: AgentReadTool): string {
 }
 
 function formatAgentRead(result: AgentReadResult): string {
-  const lines = result.entries.map((entry) => {
-    if (entry.kind === 'message') {
-      return [
-        ...(entry.text ? [`${entry.role}: ${entry.text}`] : []),
-        ...(entry.tools ?? []).map((tool) => formatTool(tool))
-      ].join('\n')
-    }
-    if (entry.kind === 'error') {
-      return `[error] ${entry.text}`
-    }
-    if (entry.kind === 'tool') {
-      return formatTool(entry)
-    }
-    return `[${entry.kind}${entry.pending ? ', waiting for an answer' : ''}] ${entry.text}`
-  })
+  const lines = result.entries.map((entry) =>
+    entry.shortened
+      ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
+      : formatEntry(entry)
+  )
   if (lines.length === 0) {
     lines.push('Nothing new.')
   }
@@ -171,4 +162,20 @@ function formatAgentRead(result: AgentReadResult): string {
     lines.push('', `More later: --cursor ${result.cursor}`)
   }
   return lines.join('\n')
+}
+
+function formatEntry(entry: AgentReadEntry): string {
+  if (entry.kind === 'message') {
+    return [
+      ...(entry.text ? [`${entry.role}: ${entry.text}`] : []),
+      ...(entry.tools ?? []).map((tool) => formatTool(tool))
+    ].join('\n')
+  }
+  if (entry.kind === 'error') {
+    return `[error] ${entry.text}`
+  }
+  if (entry.kind === 'tool') {
+    return formatTool(entry)
+  }
+  return `[${entry.kind}${entry.pending ? ', waiting for an answer' : ''}] ${entry.text}`
 }

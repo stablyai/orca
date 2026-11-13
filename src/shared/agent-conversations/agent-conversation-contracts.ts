@@ -39,7 +39,10 @@ export type AgentShowResult = {
 
 export type AgentReadTool = { name: string; state?: string }
 
-export type AgentReadEntry =
+/** Every entry may say `shortened`: its text was cut to fit one reply; the app keeps it whole. */
+export type AgentReadEntry = AgentReadEntryBody & { shortened?: true }
+
+type AgentReadEntryBody =
   /** `tools`: the tool calls a transcript message made, folded into its one entry. */
   | { kind: 'message'; role: string; text: string; tools?: AgentReadTool[] }
   | ({ kind: 'tool' } & AgentReadTool)
