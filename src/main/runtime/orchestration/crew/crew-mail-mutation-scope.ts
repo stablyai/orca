@@ -74,7 +74,9 @@ export class CrewMailMutationScope {
     }
     this.row(this.db.getTask(id))
     for (const row of this.db.db
-      .prepare('SELECT id FROM dispatch_contexts WHERE task_id = ?')
+      .prepare(
+        "SELECT id FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
+      )
       .all(id)) {
       if (typeof row.id === 'string') {
         this.dispatch(row.id)
