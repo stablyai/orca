@@ -54,6 +54,9 @@ function Chat({ revealed }: { revealed: boolean }): React.JSX.Element {
       <div data-testid="transcript">Reply text</div>
       <button type="button">Copy code</button>
       <a href="https://example.com">example.com</a>
+      <details>
+        <summary>Retrying</summary>
+      </details>
       <div role="option" tabIndex={0} aria-selected="false">
         Option
       </div>
@@ -77,7 +80,7 @@ afterEach(() => {
 })
 
 describe('useNativeChatRootInputRouting', () => {
-  it('leaves Space with a focused button or link and letters with a composite control', () => {
+  it('leaves Space with a focused button, link or summary and letters with a composite control', () => {
     const view = render(<Chat revealed />)
     expect(fireEvent.keyDown(view.getByRole('button', { name: 'Copy code' }), { key: ' ' })).toBe(
       true
@@ -85,6 +88,7 @@ describe('useNativeChatRootInputRouting', () => {
     expect(fireEvent.keyDown(view.getByRole('link', { name: 'example.com' }), { key: ' ' })).toBe(
       true
     )
+    expect(fireEvent.keyDown(view.getByText('Retrying'), { key: ' ' })).toBe(true)
     expect(fireEvent.keyDown(view.getByRole('option'), { key: 'o' })).toBe(true)
     const code = view.getByTestId('code')
     code.focus()

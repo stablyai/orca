@@ -19230,6 +19230,13 @@
         "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
         "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
+        "retrying": "正在重試。查看詳細資訊。",
+        "retryingCount": "正在重試（第 {{attempt}} 次，共 {{max}} 次）。查看詳細資訊。",
+        "rateLimitedRetrying": "已達速率限制，正在重試。查看詳細資訊。",
+        "rateLimitedRetryingCount": "已達速率限制，正在重試（第 {{attempt}} 次，共 {{max}} 次）。查看詳細資訊。",
+        "codexConfigurationWarning": "Codex 設定警告。查看詳細資訊。",
+        "codexDeprecationNotice": "Codex 淘汰通知。查看詳細資訊。",
+        "providerResponse": "供應商回應",
         "forkedFrom": "分支來源"
       },
       "composer": {

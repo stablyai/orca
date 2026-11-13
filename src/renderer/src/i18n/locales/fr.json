@@ -19831,6 +19831,13 @@
         "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
         "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
         "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
+        "retrying": "Nouvelle tentative. Voir les détails.",
+        "retryingCount": "Nouvelle tentative ({{attempt}} sur {{max}}). Voir les détails.",
+        "rateLimitedRetrying": "Limite de débit atteinte, nouvelle tentative. Voir les détails.",
+        "rateLimitedRetryingCount": "Limite de débit atteinte, nouvelle tentative ({{attempt}} sur {{max}}). Voir les détails.",
+        "codexConfigurationWarning": "Avertissement de configuration Codex. Voir les détails.",
+        "codexDeprecationNotice": "Avis d’obsolescence Codex. Voir les détails.",
+        "providerResponse": "Réponse du fournisseur",
         "forkedFrom": "Branche créée à partir de"
       },
       "providerFrame": {

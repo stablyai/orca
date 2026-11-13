@@ -10,7 +10,8 @@ export type KeyboardRedirectEvent = {
 }
 
 // Plain pressables use only Space and Enter, so other keys may pass them to the chat's input.
-const PRESSABLE_TARGET_SELECTOR = ['a[href]', 'button', '[role="button"]'].join(',')
+// A <details> summary toggles on Space like a button.
+const PRESSABLE_TARGET_SELECTOR = ['a[href]', 'button', '[role="button"]', 'summary'].join(',')
 
 const KEY_OWNER_TARGET_SELECTOR = [
   'input',

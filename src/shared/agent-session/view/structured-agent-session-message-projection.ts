@@ -8,7 +8,10 @@ import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../requests/structu
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
 import { isQueuedAgentJournalSubmission } from '../requests/agent-session-queued-submission'
-import { collapseProviderRetryRuns } from '../../native-chat/native-chat-provider-retry-runs'
+import {
+  collapseProviderRetryRuns,
+  type NativeChatProviderRetryStamps
+} from '../../native-chat/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
   placeStoppedSends,
@@ -117,7 +120,8 @@ export function projectStructuredAgentSessionMessageRows(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[],
-  projectItems: StructuredAgentSessionItemProjector
+  projectItems: StructuredAgentSessionItemProjector,
+  retryStamps?: NativeChatProviderRetryStamps
 ): StructuredAgentSessionMessageRows {
   // Keep stopped-before-start sends in conversation history; queued handoffs stay in their cards.
   const stoppedBeforeStart = new Map(
@@ -198,9 +202,10 @@ export function projectStructuredAgentSessionMessageRows(
   if (shownStopped.size > 0) {
     moved = keepStoppedSendsInSendOrder(delivered, stoppedBeforeStart, shownStopped) || moved
   }
+  const collapsed = collapseProviderRetryRuns(delivered, retryStamps)
   const ordered = moved
-    ? Array.from(collapseProviderRetryRuns(delivered)).sort(compareNativeChatTranscriptMessages)
-    : collapseProviderRetryRuns(delivered)
+    ? Array.from(collapsed).sort(compareNativeChatTranscriptMessages)
+    : collapsed
   const conversation =
     shownStopped.size > 0 ? withStopRowsAfterStoppedSends(ordered, shownStopped) : ordered
   // Merge unsent rows at journal positions after stop grouping so each run retains one stop notice.

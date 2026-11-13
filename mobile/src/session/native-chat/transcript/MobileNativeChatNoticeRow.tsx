@@ -13,31 +13,24 @@ import {
 } from '../../../../../src/shared/native-chat/native-chat-notice'
 import {
   isTextBlock,
-  type NativeChatBlock,
-  type NativeChatTextBlock
+  type NativeChatBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-setup-commands'
-import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,
-  MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeView
+  MobileNativeChatNoticeContext
 } from './mobile-native-chat-notice-context'
+import { mobileNativeChatNoticeLineText } from './mobile-native-chat-notice-line-text'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
-import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
-import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
-import { sayMobileAgentSessionFailure } from '../agent-session/agent-session-failure-copy'
-import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
@@ -45,61 +38,25 @@ import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollVi
 import { toolStyles } from './mobile-native-chat-tool-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
+import { MobileNativeChatCollapsedNotice } from './MobileNativeChatCollapsedNotice'
 import { sheetPrimaryButtonStyles } from '../../../components/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
 }
 
-// The phone always reads its Orca host as remote.
-function noticeLineText(
-  notice: NativeChatTextBlock,
-  names: MobileNativeChatNoticeView,
-  t: Translate
-): string {
-  if (notice.orcaStop) {
-    const say = nativeChatOrcaStopSay(t)
-    return nativeChatOrcaStopRowText(
-      notice.orcaStop.cause,
-      names.hostName ?? say('unnamedServer'),
-      { continueAvailable: names.continuation?.continueAvailable === true, remoteHost: true },
-      say
-    )
-  }
-  const failure = readWholeAgentSessionFailureFact(notice.failure)
-  if (failure?.kind === 'usageLimitReached') {
-    return nativeChatUsageLimitText(failure.usageLimit, names.agentName, t)
-  }
-  // Only reword text fully described by its fact; other host text stays as written.
-  const context = { agentName: names.agentName }
-  const surface =
-    failure &&
-    [
-      'savedConversationMissing',
-      'pluginInputRequired',
-      'modelUnavailable',
-      'providerUnavailable',
-      'providerSafetyStopped',
-      'providerResponseFailed'
-    ].includes(failure.kind)
-      ? (['row', 'rejection'] as const).find(
-          (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
-        )
-      : undefined
-  return failure && surface
-    ? agentSessionFailureSentence(failure, surface, context, sayMobileAgentSessionFailure)
-    : notice.text
-}
-
 // Render system notices separately so they cannot read as the agent’s own prose.
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
-  onLongPress
+  onLongPress,
+  disclosureKeys
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
   onLongPress?: () => void
+  /** Where a collapsed notice's open choice is kept, newest first. */
+  disclosureKeys?: readonly string[]
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -122,7 +79,7 @@ export function MobileNativeChatNoticeRow({
     ) : null
   }
   const look = nativeChatNoticeLook(notice)
-  const lineText = noticeLineText(notice, names, t)
+  const lineText = mobileNativeChatNoticeLineText(notice, names, t)
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const failureDetail = agentSessionFailureDetailText(failure)
   const signInCommand =
@@ -193,6 +150,16 @@ export function MobileNativeChatNoticeRow({
         </View>
       )
     }
+    case 'collapsed-notice':
+      return (
+        <MobileNativeChatCollapsedNotice
+          notice={notice}
+          look={look}
+          fontScale={fontScale}
+          onLongPress={onLongPress}
+          disclosureKeys={disclosureKeys}
+        />
+      )
     case 'divider': {
       const label = copy[look.label]
       return (

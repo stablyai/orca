@@ -19092,6 +19092,13 @@
         "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
+        "retrying": "再試行中。詳細を表示。",
+        "retryingCount": "再試行中（{{attempt}}/{{max}}）。詳細を表示。",
+        "rateLimitedRetrying": "レート制限のため再試行中。詳細を表示。",
+        "rateLimitedRetryingCount": "レート制限のため再試行中（{{attempt}}/{{max}}）。詳細を表示。",
+        "codexConfigurationWarning": "Codex の設定に関する警告。詳細を表示。",
+        "codexDeprecationNotice": "Codex の非推奨に関する通知。詳細を表示。",
+        "providerResponse": "プロバイダーの応答",
         "forkedFrom": "分岐元"
       },
       "providerFrame": {

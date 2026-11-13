@@ -19350,6 +19350,13 @@
         "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
+        "retrying": "正在重试。查看详情。",
+        "retryingCount": "正在重试（第 {{attempt}} 次，共 {{max}} 次）。查看详情。",
+        "rateLimitedRetrying": "已达速率限制，正在重试。查看详情。",
+        "rateLimitedRetryingCount": "已达速率限制，正在重试（第 {{attempt}} 次，共 {{max}} 次）。查看详情。",
+        "codexConfigurationWarning": "Codex 配置警告。查看详情。",
+        "codexDeprecationNotice": "Codex 弃用通知。查看详情。",
+        "providerResponse": "提供方响应",
         "forkedFrom": "分支来源"
       },
       "providerFrame": {

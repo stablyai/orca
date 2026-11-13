@@ -19470,6 +19470,13 @@
         "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
+        "retrying": "Yeniden deneniyor. Ayrıntıları görüntüleyin.",
+        "retryingCount": "Yeniden deneniyor ({{attempt}}/{{max}}). Ayrıntıları görüntüleyin.",
+        "rateLimitedRetrying": "İstek sınırına ulaşıldı, yeniden deneniyor. Ayrıntıları görüntüleyin.",
+        "rateLimitedRetryingCount": "İstek sınırına ulaşıldı, yeniden deneniyor ({{attempt}}/{{max}}). Ayrıntıları görüntüleyin.",
+        "codexConfigurationWarning": "Codex yapılandırma uyarısı. Ayrıntıları görüntüleyin.",
+        "codexDeprecationNotice": "Codex kullanımdan kaldırma bildirimi. Ayrıntıları görüntüleyin.",
+        "providerResponse": "Sağlayıcı yanıtı",
         "forkedFrom": "Çatallandığı kaynak"
       },
       "composer": {

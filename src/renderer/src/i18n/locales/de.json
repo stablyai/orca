@@ -19492,6 +19492,13 @@
         "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
         "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
         "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
+        "retrying": "Neuer Versuch. Details anzeigen.",
+        "retryingCount": "Neuer Versuch ({{attempt}} von {{max}}). Details anzeigen.",
+        "rateLimitedRetrying": "Ratenlimit erreicht, neuer Versuch. Details anzeigen.",
+        "rateLimitedRetryingCount": "Ratenlimit erreicht, neuer Versuch ({{attempt}} von {{max}}). Details anzeigen.",
+        "codexConfigurationWarning": "Codex-Konfigurationswarnung. Details anzeigen.",
+        "codexDeprecationNotice": "Codex-Hinweis auf veraltete Funktion. Details anzeigen.",
+        "providerResponse": "Anbieterantwort",
         "forkedFrom": "Abgezweigt von"
       },
       "composer": {

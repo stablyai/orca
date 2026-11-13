@@ -266,6 +266,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   awaitsRetry?: true
   /** Withdrawn sends have no rail tick because the host conversation outline excludes them. */
   stoppedBeforeStart?: true
+  /** Client-derived on a drawn retry row: its run's loaded retry ids, oldest first, ending with its own. */
+  providerRetryRunIds?: readonly string[]
   /** Structured journal ordering outranks timestamps; terminal transcripts omit it and worker reads strip it. */
   journalPosition?: AgentJournalPosition
   /** Newest absorbed tool row’s position; the folded row still sorts by its own position. */

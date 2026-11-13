@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { colors, pressedStyle, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -12,13 +12,15 @@ export function MobileNativeChatNoticeDisclosure({
   expanded,
   fontScale,
   onPress,
-  onLongPress
+  onLongPress,
+  style
 }: {
   summary: string
   expanded: boolean
   fontScale: number
   onPress: () => void
   onLongPress?: () => void
+  style?: StyleProp<ViewStyle>
 }): React.JSX.Element {
   return (
     <Pressable
@@ -27,7 +29,7 @@ export function MobileNativeChatNoticeDisclosure({
       aria-expanded={expanded}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [styles.disclosure, pressed && pressedStyle]}
+      style={({ pressed }) => [styles.disclosure, style, pressed && pressedStyle]}
     >
       <View style={expanded ? toolStyles.caretOpen : undefined}>
         <ChevronRight size={16 * fontScale} color={colors.textMuted} />

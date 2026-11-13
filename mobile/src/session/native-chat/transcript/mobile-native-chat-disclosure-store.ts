@@ -77,13 +77,20 @@ export function useMobileNativeChatDisclosures(scopeKey: string): MobileNativeCh
 
 export function useMobileNativeChatDisclosure(
   key: string | undefined,
-  initialOpen: boolean
+  initialOpen: boolean,
+  /** Read-only, in order, when `key` holds no choice: a replaced row's keys. */
+  inheritedKeys?: readonly string[]
 ): [boolean, (next: boolean) => void] {
   const store = useContext(MobileNativeChatDisclosureContext)
   const [local, setLocal] = useState({ key, initialOpen, open: initialOpen })
   const localOpen =
     local.key === key && local.initialOpen === initialOpen ? local.open : initialOpen
-  const open = key !== undefined && store ? (store.read(key) ?? localOpen) : localOpen
+  const open =
+    key !== undefined && store
+      ? (store.read(key) ??
+        inheritedKeys?.map(store.read).find((choice) => choice !== undefined) ??
+        localOpen)
+      : localOpen
   const write = store?.write
   const setOpen = useCallback(
     (next: boolean) => {
