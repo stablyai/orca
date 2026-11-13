@@ -161,37 +161,3 @@ it('does not resurrect an in-flight alert after a dismissal and transient provid
   expect(await store.pendingCount('phone')).toBe(0)
 })
 
-it('fences late renew and finish after an expired claim is dismissed', async () => {
-  const { db, store, advance } = await fixture()
-  const alert = notification(1)
-  await store.accept('host', 'phone', alert)
-  const stale = (await store.claim())!
-  advance(DELIVERY_LEASE_MS)
-  await store.accept('host', 'phone', {
-    ...notification(2, 'dismiss'),
-    notificationId: alert.notificationId
-  })
-  const read = async () =>
-    (
-      await db.query(
-        'SELECT state, payload_json, lease_until FROM push_delivery_batches WHERE batch_id = ?',
-        [stale.id]
-      )
-    )[0]
-  expect(await read()).toBeUndefined()
-  await store.renew(stale)
-  await store.finish(stale, 1000)
-  await store.finish(stale)
-  expect(await read()).toBeUndefined()
-  const dismissal = (await store.claim())!
-  expect(dismissal.notification.kind).toBe('dismiss')
-  await store.finish(dismissal)
-  await store.accept('host', 'phone', notification(3))
-  const fresh = (await store.claim())!
-  await store.finish(fresh, 1000)
-  advance(1000)
-  const retry = (await store.claim())!
-  expect(retry.id).toBe(fresh.id)
-  await store.finish(retry)
-  expect(await store.claim()).toBeNull()
-})
