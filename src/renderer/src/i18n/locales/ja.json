@@ -20067,6 +20067,7 @@
           "about": {
             "parakeetV3": "高速。ヨーロッパの {{languages}} 言語。",
             "parakeetV2": "高速。英語専用で、英語では最も正確です。",
+            "parakeetUnifiedEn": "英語のみ。話すそばから文字が表示されます。",
             "whisperTiny": "最小のダウンロード。音声入力のお試しに。",
             "whisperTurbo": "最多の約 100 言語。GPU がないと低速です。",
             "senseVoice": "高速。中国語、日本語、韓国語向け。",

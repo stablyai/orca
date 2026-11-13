@@ -22316,6 +22316,7 @@
           "about": {
             "parakeetV3": "Rápido. {{languages}} idiomas europeus.",
             "parakeetV2": "Rápido. Só inglês, e o mais preciso nele.",
+            "parakeetUnifiedEn": "Somente inglês. As palavras aparecem enquanto você fala.",
             "whisperTiny": "O menor download. Bom para experimentar o ditado.",
             "whisperTurbo": "Mais idiomas, cerca de 100. Lento sem GPU.",
             "senseVoice": "Rápido. Para chinês, japonês e coreano.",

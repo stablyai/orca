@@ -20770,6 +20770,7 @@
           "about": {
             "parakeetV3": "Schnell. {{languages}} europäische Sprachen.",
             "parakeetV2": "Schnell. Nur Englisch, darin am genauesten.",
+            "parakeetUnifiedEn": "Nur Englisch. Wörter erscheinen, während du sprichst.",
             "whisperTiny": "Kleinster Download. Gut zum Ausprobieren.",
             "whisperTurbo": "Die meisten Sprachen, rund 100. Langsam ohne GPU.",
             "senseVoice": "Schnell. Für Chinesisch, Japanisch und Koreanisch.",
