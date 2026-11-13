@@ -24,6 +24,26 @@ export function subscribeEditorRuntimeFileWatch(
     unsubscribe?.()
     unsubscribe = null
     const isCurrent = (): boolean => !disposed && attempt === currentAttempt
+    let resyncPending = resync
+    // Resync once the host watcher is installed, or writes before install are lost; a failed
+    // install still re-reads once so outage changes surface.
+    const resyncMissed = (): void => {
+      if (!resyncPending) {
+        return
+      }
+      resyncPending = false
+      onPayload({
+        worktreePath: target.worktreePath,
+        events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+        resync: true
+      })
+    }
+    const fail = (error: unknown): void => {
+      if (isCurrent()) {
+        resyncMissed()
+        onError(error)
+      }
+    }
     void subscribeRuntimeFileChanges(
       {
         target: runtimeTargetForOwnerEnvironment(target.runtimeEnvironmentId),
@@ -36,23 +56,12 @@ export function subscribeEditorRuntimeFileWatch(
           onPayload(payload)
         }
       },
-      (error) => {
-        if (isCurrent()) {
-          onError(error)
-        }
-      },
+      fail,
       () => {
         if (!isCurrent()) {
           return
         }
-        // Resync missed changes only once the host watcher is installed, or writes before install are lost.
-        if (resync) {
-          onPayload({
-            worktreePath: target.worktreePath,
-            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
-            resync: true
-          })
-        }
+        resyncMissed()
         if (!readySeen) {
           readySeen = true
           onFirstReady?.()
@@ -66,11 +75,7 @@ export function subscribeEditorRuntimeFileWatch(
         }
         unsubscribe = stop
       })
-      .catch((error: unknown) => {
-        if (isCurrent()) {
-          onError(error)
-        }
-      })
+      .catch(fail)
   }
   const stopContact = subscribeRuntimeHostContactRegained(target.runtimeEnvironmentId, () =>
     start(true)

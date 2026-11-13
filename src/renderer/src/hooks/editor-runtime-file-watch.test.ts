@@ -89,4 +89,22 @@ describe('editor runtime file watch recovery', () => {
     stop()
     expect(stopFresh).toHaveBeenCalledOnce()
   })
+
+  it('still re-reads once when the recovered host watcher fails to install', async () => {
+    const onPayload = vi.fn()
+    const onError = vi.fn()
+    runtime.subscribe.mockResolvedValue(vi.fn())
+    subscribeEditorRuntimeFileWatch(target, onPayload, onError)
+    runtime.contact.get('host-a')?.()
+    await settle()
+    const freshError: unknown = runtime.subscribe.mock.calls[1]?.[2]
+    if (typeof freshError !== 'function') {
+      throw new Error('fresh stream registered no error callback')
+    }
+    freshError(new Error('watcher capacity'))
+    freshError(new Error('watcher capacity'))
+    expect(onPayload).toHaveBeenCalledOnce()
+    expect(onPayload).toHaveBeenCalledWith(expect.objectContaining({ resync: true }))
+    expect(onError).toHaveBeenCalledTimes(2)
+  })
 })
