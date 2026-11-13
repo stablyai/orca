@@ -10,9 +10,9 @@ import {
   hostWorktreeCatalogKey,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
-import { hostViewFamily, hostViewKey } from '../host-screen/host-view-memory'
-import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sections'
+} from '../host-screen/catalog/host-list-queries'
+import { hostViewFamily, hostViewKey } from '../host-screen/view-settings/host-view-memory'
+import { hostProjectSectionsQuery } from '../host-screen/catalog/use-host-project-sections'
 import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import type { MobileSessionTab } from '../session/tabs/mobile-session-tabs'
 import { activeSessionTabOf } from '../session/tabs/active-session-tab'

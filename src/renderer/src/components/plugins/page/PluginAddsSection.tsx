@@ -16,10 +16,8 @@ import {
   SquareTerminal,
   Type
 } from 'lucide-react'
-import type {
-  PluginHostListEntry,
-  PluginMarketplaceHostInstallPreview
-} from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import { translate } from '@/i18n/i18n'

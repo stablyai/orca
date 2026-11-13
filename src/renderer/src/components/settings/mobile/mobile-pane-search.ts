@@ -4,8 +4,15 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { getMachineNameSearchEntries } from '../machine-identity/machine-name-search'
 
+export const MOBILE_SETTING_ANCHORS = {
+  networkInterface: 'mobile-network-interface',
+  pairing: 'mobile-pairing',
+  devices: 'mobile-paired-devices'
+} as const
+
 const getNetworkInterfaceSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: MOBILE_SETTING_ANCHORS.networkInterface,
     title: translate('auto.components.settings.mobile.pane.search.a068d70f7b', 'Network interface'),
     description: translate(
       'auto.components.settings.mobile.pane.search.3190ef67a4',
@@ -54,6 +61,7 @@ export function shouldOpenMobilePairingAddress(searchQuery: string): boolean {
 
 export const getMobilePaneSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: MOBILE_SETTING_ANCHORS.pairing,
     title: translate('auto.components.settings.mobile.pane.search.1dcb1d1a11', 'Mobile pairing'),
     description: translate(
       'auto.components.settings.mobile.pane.search.7fb728fb2b',
@@ -69,6 +77,7 @@ export const getMobilePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: MOBILE_SETTING_ANCHORS.devices,
     title: translate('auto.components.settings.mobile.pane.search.cb018bcc07', 'Connected devices'),
     description: translate(
       'auto.components.settings.mobile.pane.search.13419718b3',

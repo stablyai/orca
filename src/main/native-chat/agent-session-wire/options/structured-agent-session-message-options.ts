@@ -46,9 +46,12 @@ export function codexTurnOptionsDiffer(
     next: options
   })
   if (!applied) {
-    return options === undefined || Object.values(options).some((value) => value !== undefined)
+    return false
   }
   return OPTION_ORDER.some(
-    (key) => applied.next[key] !== undefined && applied.next[key] !== applied.active[key]
+    (key) =>
+      applied.active[key] !== undefined &&
+      applied.next[key] !== undefined &&
+      applied.next[key] !== applied.active[key]
   )
 }

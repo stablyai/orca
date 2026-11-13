@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { PluginInvokeTaskSourceParams } from '../../../../../shared/rpc-contract/plugins-params'
+import { PluginInvokeTaskSourceParams } from '../../../../../shared/rpc-contract/plugins/plugins-params'
 import { invokePluginTaskSource } from '../../../../plugins/plugin-task-source-invocation'
 import { requirePluginService } from './plugins'
 

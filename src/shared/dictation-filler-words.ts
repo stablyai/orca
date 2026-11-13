@@ -57,12 +57,31 @@ function capitalizeLowercaseWord(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-/** Drops standalone filler sounds and the pause punctuation after them; text with none comes back unchanged. */
-export function removeFillerWords(text: string, languages: readonly string[] | undefined): string {
+// Where the correction cue is said, as [start, end) ranges; cleanup needs it intact to find the correction.
+function cueRanges(text: string, cue: string | undefined): [number, number][] {
+  const words = cue?.trim().split(/\s+/u).filter(Boolean) ?? []
+  if (words.length === 0) {
+    return []
+  }
+  const escaped = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const pattern = new RegExp(
+    `(?<!${WORD_CHAR})${escaped.join(String.raw`[\s,\uFF0C\u3001]+`)}(?!${WORD_CHAR})`,
+    'giu'
+  )
+  return [...text.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length])
+}
+
+/** Drops standalone filler sounds and the pause punctuation after them; text with none comes back unchanged. The correction cue is never dropped. */
+export function removeFillerWords(
+  text: string,
+  languages: readonly string[] | undefined,
+  correctionWord?: string
+): string {
   const pattern = fillerPattern(languages, text)
   if (!pattern) {
     return text
   }
+  const cue = cueRanges(text, correctionWord)
   let out = ''
   let cursor = 0
   let capitalizeNext = false
@@ -76,7 +95,10 @@ export function removeFillerWords(text: string, languages: readonly string[] | u
   }
   for (const match of text.matchAll(pattern)) {
     const filler = match[1]
-    if (!caseless && isAllCaps(filler)) {
+    if (
+      (!caseless && isAllCaps(filler)) ||
+      cue.some(([start, end]) => match.index < end && match.index + filler.length > start)
+    ) {
       continue
     }
     keep(text.slice(cursor, match.index))

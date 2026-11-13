@@ -1,4 +1,4 @@
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { PluginManager } from './PluginManager'
 import { PluginsOffState } from './PluginsOffState'
 import type { InstalledRowHandlers } from './PluginManagerRows'

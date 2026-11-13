@@ -7,11 +7,13 @@ import type {
 } from '../../shared/computer-use-runtime-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
+  getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { queryComputerTreeText } from './computer-tree-query'
+import { runComputerWait } from './computer-wait-command'
 import { RuntimeClientError } from '../runtime/types'
 import {
   formatComputerAction,
@@ -31,8 +33,10 @@ import {
   getComputerScrollActionFlags,
   getComputerSecondaryActionFlags,
   getComputerSetValueActionFlags,
-  getComputerTextActionFlags
+  getComputerTextActionFlags,
+  getComputerTypeTextActionFlags
 } from './computer-action-flags'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
 
 export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer capabilities': async ({ client, json }) => {
@@ -84,17 +88,30 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerObserveFlags(flags)
     const query = getOptionalStringFlag(flags, 'query')
     const maxElements = getOptionalPositiveIntegerFlag(flags, 'max-elements')
+    const rootElementIndex = getOptionalNonNegativeIntegerFlag(flags, 'element-index')
     const target = await getComputerCommandTarget(flags, cwd, client)
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
       ...target,
-      ...observeFlags
+      ...observeFlags,
+      ...(rootElementIndex === undefined ? {} : { rootElementIndex })
     })
+    // Why: older runtimes drop the param and return the whole window, which would look like the subtree.
+    if (
+      rootElementIndex !== undefined &&
+      result.result.snapshot.rootElementIndex !== rootElementIndex
+    ) {
+      throw new RuntimeClientError(
+        'unsupported_capability',
+        'This Orca runtime cannot read one element subtree; update Orca, or run get-app-state without --element-index'
+      )
+    }
     if (query !== undefined || maxElements !== undefined) {
       const { snapshot } = result.result
       snapshot.treeText = queryComputerTreeText(snapshot.treeText, { query, maxElements })
     }
     printResult(result, json, formatGetAppState)
   },
+  'computer wait': runComputerWait,
   'computer click': async ({ flags, client, cwd, json }) => {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)
@@ -154,8 +171,19 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer type-text': async ({ flags, client, cwd, json }) => {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)
-    const actionParams = await getComputerTextActionFlags(flags)
+    const actionParams = await getComputerTypeTextActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+    if (actionParams.elementIndex !== undefined) {
+      // Why: older runtimes strip elementIndex, so ask first rather than type into the focused field.
+      const capabilities = await client.call<ComputerProviderCapabilities>(
+        'computer.capabilities',
+        {}
+      )
+      const unsupported = computerTypeTextTargetUnsupportedMessage(capabilities.result)
+      if (unsupported) {
+        throw new RuntimeClientError('unsupported_capability', unsupported)
+      }
+    }
     const result = await client.call<ComputerActionResult>('computer.typeText', {
       ...target,
       ...actionParams,

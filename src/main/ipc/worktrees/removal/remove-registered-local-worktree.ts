@@ -39,7 +39,8 @@ import {
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   removesInBackground,
-  startBackgroundWorktreeRemoval
+  startBackgroundWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
@@ -175,8 +176,10 @@ export async function removeRegisteredLocalWorktree(
       return result
     },
     publish: () => runtime.publishWorktreeRemovalChange(repoId),
+    admissionFailed: () => removalGate.finish(false),
     cleanupPushTargetRemote: cleanupPushTarget
   })
+  await waitForWorktreeRemovalAcceptance(args.worktreeId)
   return { removing: true }
 }
 
@@ -268,12 +271,11 @@ async function finishLocalWorktreeRemoval({
           removalHostId,
           args.snapshotPruneBatchId
         )
-        preservedBranchCleanupByScope.delete(
-          preservedBranchCleanupScopeKey({
-            worktreeId: args.worktreeId,
-            hostId: removalHostId
-          })
-        )
+        const cleanupScopeKey = preservedBranchCleanupScopeKey({
+          worktreeId: args.worktreeId,
+          hostId: removalHostId
+        })
+        preservedBranchCleanupByScope.delete(cleanupScopeKey)
         invalidateAuthorizedRootsCacheForRepo(store, repoId)
         removalCompleted = true
         return {}

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import '../orca-runtime'
-import '../../providers/pty-process-inspection'
+import '../../providers/pty/process-inspection'
 import '../../../shared/workspace-layout/stable-pane-id'
 
 import { createExplicitAgentStatusHarness, deferred } from './orca-runtime-test-fixtures.spec'

@@ -11,7 +11,7 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance,
   resolveClientAutomationWorkspaceProvenance
-} from '../../../../automations/workspace-provenance'
+} from '../../../../automations/ownership/workspace-provenance'
 import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent-launch-surface-factories'
 import { combineLaunchWarnings } from '../../../../agent-launch/agent-launch-warnings'
 import type { RpcContext } from '../../core'
@@ -21,7 +21,7 @@ import {
   worktreeCreateRepoSelector
 } from '../workspaces/worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch/choices/agent-launch-preferences'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 

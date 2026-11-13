@@ -28,12 +28,17 @@ const RESULT_HEADLINE_ORDER: readonly BundledSkillOutcomeText[] = [
   'Linked'
 ]
 
+/** Why setup can't finish: the first location Orca must leave and can't replace. */
 export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): string {
   const blocked = plan.skills
     .flatMap((entry) => entry.ops)
     .find(
       (op) =>
-        op.kind === 'leave' && !op.replaceable && op.reason && isBundledSkillLeaveReason(op.reason)
+        op.kind === 'leave' &&
+        !op.replaceable &&
+        op.reason !== 'other-build' &&
+        op.reason &&
+        isBundledSkillLeaveReason(op.reason)
     )
   switch (blocked?.reason) {
     case 'unwritable':
@@ -67,6 +72,8 @@ export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): strin
         'auto.components.settings.bundledSkillSetupCopy.attentionSharedNotCurrent',
         'Needs attention · The shared copy this folder uses is not Orca’s'
       )
+    // Another build's copy is kept, never a blocker, so it never reaches here; listed for exhaustiveness.
+    case 'other-build':
     case undefined:
       return translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }

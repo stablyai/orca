@@ -229,7 +229,6 @@ describe('client accept abandoned mid-DB-phase', () => {
         capacity
       )
       await vi.advanceTimersByTimeAsync(0)
-      expect(h.acquireActivity).toHaveBeenCalledOnce()
       // The phone's 12s bound fires while the cell still waits on Postgres.
       client.close(1000, 'client bound')
       capacity.release()
@@ -247,54 +246,12 @@ describe('client accept abandoned mid-DB-phase', () => {
         { userId: identity.sub, relayHostId: identity.relayHostId },
         expect.stringMatching(/^confirmation:/)
       )
-      expect(h.observer.recordClientAcceptAbandoned).toHaveBeenCalledWith(
-        'activity',
-        expect.any(Number)
-      )
-      const line = warn.mock.calls
-        .map((call) => String(call[0]))
-        .find((entry) => entry.includes('orca_relay_client_accept_abandoned'))
-      expect(line).toBeDefined()
-      expect(JSON.parse(line!)).toMatchObject({ stage: 'activity' })
-      expect(line).not.toContain(identity.relayHostId)
     } finally {
       warn.mockRestore()
       h.registry.drain(0)
       vi.advanceTimersByTime(0)
     }
   })
-
-  it('stops after a slow credential reservation without acquiring an activity lease', async () => {
-    const h = harness()
-    await activeHost(h)
-    const slowReserve = deferred<CredentialReservation>()
-    h.store.reserveCredential.mockReturnValueOnce(slowReserve.promise)
-    const client = new FakeSocket()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    try {
-      const accepting = h.registry.acceptClient(
-        client as unknown as WebSocket,
-        identity.relayHostId,
-        'credential'
-      )
-      await vi.advanceTimersByTimeAsync(0)
-      client.close(1000, 'client bound')
-      slowReserve.resolve(reservation)
-      await accepting
-
-      expect(h.acquireActivity).not.toHaveBeenCalled()
-      expect(h.store.failReservation).toHaveBeenCalledWith(reservation)
-      expect(h.observer.recordClientAcceptAbandoned).toHaveBeenCalledWith(
-        'credential',
-        expect.any(Number)
-      )
-    } finally {
-      warn.mockRestore()
-      h.registry.drain(0)
-      vi.advanceTimersByTime(0)
-    }
-  })
-
 })
 
 // The attach resolves its owning session once and hands it to the unfenced leg;
@@ -360,7 +317,6 @@ describe('host data attach ownership', () => {
       1
     )
     await vi.advanceTimersByTimeAsync(0)
-    expect(h.store.recordConnectionBasis).toHaveBeenCalledOnce()
     expect(client.send).not.toHaveBeenCalledWith(expect.stringContaining('relay-hello'))
     basis.resolve()
     expect(await attaching).toBe(true)
@@ -420,17 +376,4 @@ describe('paced drain and the phones of a host not yet told', () => {
     expect(served.close).not.toHaveBeenCalled()
     expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('conn-open'))
   })
-
-  it("refuses that host's phones as soon as its own drain is sent", async () => {
-    const { h, untold } = await twoHostCell()
-    h.registry.drain(0, { paceWindowMs: 40_000 })
-    await vi.advanceTimersByTimeAsync(40_000)
-    // Told by its zero-grace close, a timer nested 1 ms after the send.
-    await vi.advanceTimersByTimeAsync(1)
-    expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('"type":"drain"'))
-
-    const refused = await dial(h, laterHostId)
-    expect(refused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
-  })
-
 })

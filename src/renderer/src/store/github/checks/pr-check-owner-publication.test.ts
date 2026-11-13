@@ -9,9 +9,9 @@ import {
 } from '../github-slice-test-harness'
 import { setLocalRuntimeCapabilitiesForTests } from '../../../runtime/hosts/capabilities/local-runtime-capabilities'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as capability } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { createCompatibleRuntimeStatusResponse } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { getOverallCheckCounts } from '../../../components/pr-check-counts'
 

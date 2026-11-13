@@ -21,6 +21,7 @@ import { translate } from '../../../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from '../agent-session/agent-session-failure-copy'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { requestStructuredAgentSessionMutation } from '../agent-session/mobile-structured-agent-session-rpc'
+import { structuredAgentSessionCommandWriteRefusalCause } from '../../../../../src/shared/agent-session/failures/structured-agent-session-command-refusal-cause'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
 /** What the phone shows at keypress that holds a command; `background` also counts the strip mid-turn. */
@@ -82,6 +83,7 @@ export async function dispatchMobileStructuredCommand(input: {
       const shown = input.holds()
       const waitsInLine = input.waitsInLine(command)
       const hold = structuredConversationCommandHold({
+        command,
         waitsInLine,
         agentWorking: shown.working,
         promptPending: shown.prompt,
@@ -129,8 +131,17 @@ export async function dispatchMobileStructuredCommand(input: {
             )
           }
         }
+        // A refusal names its cause only when the phone showed it, as on desktop.
+        const refusedWhile = (cause: StructuredAgentSessionCommandRefusalCause | undefined) =>
+          cause !== undefined && cause !== 'retry' && shown[cause] ? { refusedWhile: cause } : {}
         if (result.status !== 'accepted') {
-          return { accepted: false, error: result.message }
+          return {
+            accepted: false,
+            error: result.message,
+            ...(result.status === 'refused'
+              ? refusedWhile(structuredAgentSessionCommandWriteRefusalCause(result.failure))
+              : {})
+          }
         }
         const reply = conversationCommandReply(result.value, {
           agentName: input.agentName,
@@ -138,16 +149,10 @@ export async function dispatchMobileStructuredCommand(input: {
           say: sayMobileAgentSessionFailure
         })
         accepted = reply.accepted
-        // A refusal names its cause only when the phone showed it, as on desktop.
         return {
           accepted: reply.accepted,
           error: reply.error,
-          ...(reply.error &&
-          reply.cause !== undefined &&
-          reply.cause !== 'retry' &&
-          shown[reply.cause]
-            ? { refusedWhile: reply.cause }
-            : {})
+          ...(reply.error ? refusedWhile(reply.cause) : {})
         }
       } finally {
         input.pending.current = false

@@ -1,4 +1,4 @@
-import type { TaskPageJiraSummaryGenerationModel } from './jira/use-task-page-jira-summary-generation'
+import type { TaskPageJiraSummaryGenerationModel } from './jira/creation/use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
 import { useTaskPageEscapeToClose } from './use-task-page-escape-to-close'
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {

@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../../src/shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'

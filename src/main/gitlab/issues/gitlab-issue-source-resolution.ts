@@ -1,6 +1,6 @@
 import { listCachedRemoteNames, shouldProbeGitRemote } from '../../git/remotes/remote-name-listing'
 import type { IssueSourcePreference } from '../../../shared/repo-types'
-import { readLocalGitConfigSignature } from '../../github/local-git-config-signature'
+import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { getProjectRefForRemoteWithSignature } from '../projects/gitlab-project-ref-resolution'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'

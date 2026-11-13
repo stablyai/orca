@@ -4,7 +4,7 @@ import type {
 } from '@/attention/agent-subject-read-actions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'

@@ -31,7 +31,7 @@ export function formatGetAppState(result: ComputerSnapshotResult): string {
       ? ''
       : ` @ ${result.snapshot.window.x},${result.snapshot.window.y}`
   const truncation = result.snapshot.truncation?.truncated
-    ? `  Truncated: yes (max nodes ${result.snapshot.truncation.maxNodes ?? 'unknown'}, max depth ${result.snapshot.truncation.maxDepth ?? 'unknown'})`
+    ? `  Truncated: yes (max nodes ${result.snapshot.truncation.maxNodes ?? 'unknown'}, max depth ${result.snapshot.truncation.maxDepth ?? 'unknown'}); read cut-off children with --element-index <their parent's index>`
     : '  Truncated: no'
   return [
     `${app.name} (pid ${app.pid}${bundle})`,
