@@ -21264,7 +21264,9 @@
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",
-        "showLess": "Show less"
+        "showLess": "Show less",
+        "collapseResponse": "Collapse response",
+        "expandResponse": "Expand response"
       },
       "visualUnavailable": "Visualization unavailable",
       "visualLoading": "Loading visualization",
