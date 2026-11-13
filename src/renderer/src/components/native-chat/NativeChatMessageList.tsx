@@ -71,7 +71,7 @@ import { isStructuredAgentSessionThinking } from '../../../../shared/agent-sessi
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { useNativeChatTurnDiffs } from './tools/diffs/use-native-chat-turn-diffs'
 import { useNativeChatTurnOpenedPullRequests } from './tools/pull-requests/use-native-chat-turn-opened-pull-requests'
-import { NativeChatPullRequestChangeContext } from './tools/pull-requests/NativeChatOpenedPullRequestCard'
+import { NativeChatTranscriptLinkContexts } from './links/NativeChatTranscriptLinkContexts'
 import { transcriptTailRow } from './conversation/slots/native-chat-transcript-tail-row'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
@@ -362,7 +362,7 @@ export function NativeChatMessageList({
 
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
-      <NativeChatPullRequestChangeContext.Provider value={openedPullRequests.latestChangeKey}>
+      <NativeChatTranscriptLinkContexts messages={messages} pullRequests={openedPullRequests}>
         <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
           <div className="relative min-h-0 flex-1">
             <div
@@ -420,7 +420,7 @@ export function NativeChatMessageList({
           </div>
           <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
         </div>
-      </NativeChatPullRequestChangeContext.Provider>
+      </NativeChatTranscriptLinkContexts>
     </NativeChatDisclosureContext.Provider>
   )
 }
