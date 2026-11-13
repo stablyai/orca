@@ -180,7 +180,7 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
       baseRef: 'origin/main',
       localBranch: 'main',
       status: 'updated',
-      ownerWorktreePath: 'C:/repo'
+      ownerWorktreePath: String.raw`C:\repo`
     })
   })
 
