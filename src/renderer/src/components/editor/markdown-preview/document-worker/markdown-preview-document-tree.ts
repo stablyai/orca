@@ -97,6 +97,13 @@ function sourceBounds(node: Nodes): { sourceLine: number | null; sourceEndLine: 
   }
 }
 
+function imageSourceText(node: Nodes): string {
+  if (node.type === 'element' && node.tagName === 'img') {
+    return String(node.properties.src ?? '')
+  }
+  return 'children' in node ? node.children.map((child) => imageSourceText(child)).join('\n') : ''
+}
+
 export function parseMarkdownPreviewDocument(content: string): {
   tree: Root
   document: MarkdownPreviewDocument
@@ -127,8 +134,8 @@ export function parseMarkdownPreviewDocument(content: string): {
       anchors,
       sourceColumn: node.position?.start.column,
       estimate: Math.min(1200, Math.max(40, Math.ceil(text.length / 90) * 24 + 32)),
-      // Length guards the 32-bit hash against colliding with text of another length.
-      contentSignature: `${getDiffContentSignature(text)}:${text.length}`,
+      // Length stays the visible text. Src is hashed so empty-alt images do not collide.
+      contentSignature: `${getDiffContentSignature(`${text}\n${imageSourceText(node)}`)}:${text.length}`,
       ...sourceBounds(node)
     }
   })

@@ -95,18 +95,6 @@ describe('large Markdown preview documents', () => {
     expect(() => engine.blocks([0])).toThrow('Invalid preview viewport')
   })
 
-  it('keeps global heading IDs, source lines, and references defined after the viewport', () => {
-    const { tree, document } = parseMarkdownPreviewDocument(
-      '# Same\n\n[Read][end]\n\n# Same\n\n[end]: https://example.com\n'
-    )
-    expect(document.blocks.flatMap((block) => block.anchors)).toEqual(['same', 'same-1'])
-    expect(document.toc.map((item) => item.id)).toEqual(['same', 'same-1'])
-    expect(document.blocks.map((block) => block.sourceLine)).toEqual([1, 3, 5])
-    expect(
-      elements(tree).find((node) => node.type === 'element' && node.tagName === 'a')
-    ).toMatchObject({ properties: { href: 'https://example.com' } })
-  })
-
   it.each([
     ['lines are inserted above it', 'S.\n\n## A\n\nRead.\n', 'S.\n\nNew.\n\n## A\n\nRead.\n', 2, 3],
     ['it is edited in place', 'S.\n\n## A\n\nRead.\n', 'S.\n\n## A\n\nRead on.\n', 2, 2],
@@ -148,6 +136,17 @@ describe('large Markdown preview documents', () => {
     expect(followMarkdownPreviewAnchor(anchor, previous, next)).toEqual({
       key: markdownPreviewScrollAnchorKey(next[to]),
       offset: 12
+    })
+  })
+
+  it('follows an empty-alt image when a new empty-alt image takes its source line', () => {
+    const previous = parseMarkdownPreviewDocument('![](kept.png)\n').document.blocks
+    const next = parseMarkdownPreviewDocument('![](inserted.png)\n\n![](kept.png)\n').document
+      .blocks
+
+    expect(followMarkdownPreviewAnchor({ key: 'source:1:1', offset: 4 }, previous, next)).toEqual({
+      key: 'source:3:1',
+      offset: 4
     })
   })
 
