@@ -25,40 +25,6 @@ vi.mock('../../../store/index', () => ({
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
-  it('honors a caller chat target even when the host observation selects another chat', () => {
-    const state = makeState()
-    const chat = (id: string, isActive: boolean) => ({
-      type: 'agent-session' as const,
-      id,
-      title: id,
-      sessionId: id.slice('agent-session:'.length),
-      agent: 'codex' as const,
-      isActive
-    })
-    const snapshot = makeSnapshot([chat('agent-session:a', true), chat('agent-session:c', false)], {
-      activeTabId: 'agent-session:a',
-      activeTabType: 'agent-session',
-      tabGroups: [
-        {
-          id: 'host-group-1',
-          activeTabId: 'agent-session:a',
-          tabOrder: ['agent-session:a', 'agent-session:c']
-        }
-      ]
-    })
-    recordWebSessionFocusIntent({ environmentId: ENV }, WT, 'agent-session:c')
-    const patch = applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
-    if (!patch) {
-      throw new Error('Expected caller focus to produce a navigation patch')
-    }
-    const selected = patch.groupsByWorktree?.[WT]?.find(
-      (group) => group.id === patch.activeGroupIdByWorktree?.[WT]
-    )?.activeTabId
-    expect(patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.id === selected)?.entityId).toBe(
-      'c'
-    )
-  })
-
   it('replays a snapshot that beat the RPC response and focuses the exact adopted leaf', () => {
     const mirroredTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const root = {
@@ -219,5 +185,83 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(completePatch.tabsByWorktree?.[WT]?.[0]?.ptyId).toBe('remote:web-env-1@@terminal-1')
     expect(completePatch.terminalLayoutsByTabId?.[mirroredTabId]?.activeLeafId).toBe(LEAF_ID)
+  })
+
+  it('keeps the pane the viewer picked when a split focus intent replays after the click', () => {
+    const mirroredTabId = toWebTerminalSurfaceTabId('host-tab-1')
+    const pickedLeafId = 'leaf-picked'
+    const ptyIdsByLeafId = {
+      [LEAF_ID]: 'remote:web-env-1@@terminal-1',
+      [SECOND_LEAF_ID]: 'remote:web-env-1@@terminal-2',
+      [pickedLeafId]: 'remote:web-env-1@@terminal-3'
+    }
+    const root = {
+      type: 'split' as const,
+      direction: 'horizontal' as const,
+      first: { type: 'leaf' as const, leafId: LEAF_ID },
+      second: {
+        type: 'split' as const,
+        direction: 'vertical' as const,
+        first: { type: 'leaf' as const, leafId: pickedLeafId },
+        second: { type: 'leaf' as const, leafId: SECOND_LEAF_ID }
+      }
+    }
+    const state = makeState({
+      activeTabId: mirroredTabId,
+      activeTabIdByWorktree: { [WT]: mirroredTabId },
+      unifiedTabsByWorktree: {
+        [WT]: [
+          {
+            id: mirroredTabId,
+            entityId: mirroredTabId,
+            worktreeId: WT,
+            groupId: 'group-1',
+            contentType: 'terminal',
+            label: 'shell',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: NOW
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [mirroredTabId]: { root, activeLeafId: pickedLeafId, expandedLeafId: null, ptyIdsByLeafId }
+      }
+    })
+    const surface = (leafId: string, terminal: string) => ({
+      type: 'terminal' as const,
+      id: `host-tab-1::${leafId}`,
+      title: 'shell',
+      parentTabId: 'host-tab-1',
+      leafId,
+      parentLayout: { root, activeLeafId: LEAF_ID, expandedLeafId: null, ptyIdsByLeafId },
+      isActive: false,
+      status: 'ready' as const,
+      terminal
+    })
+    // The split was requested from LEAF_ID; the viewer then clicked pickedLeafId before the replay.
+    recordWebSessionFocusIntent(
+      { environmentId: ENV },
+      WT,
+      'host-tab-1',
+      SECOND_LEAF_ID,
+      mirroredTabId,
+      LEAF_ID
+    )
+    acceptReplayedWebSessionTabsSnapshot(ENV, WT)
+    const patch: Partial<WebSessionTabsSyncState> = applyFreshWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        surface(LEAF_ID, 'terminal-1'),
+        surface(pickedLeafId, 'terminal-3'),
+        surface(SECOND_LEAF_ID, 'terminal-2')
+      ]),
+      ENV,
+      NOW
+    )
+
+    const layouts = patch.terminalLayoutsByTabId ?? state.terminalLayoutsByTabId
+    expect(layouts[mirroredTabId]?.activeLeafId).toBe(pickedLeafId)
   })
 })

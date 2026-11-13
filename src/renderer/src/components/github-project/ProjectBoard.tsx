@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import ProjectBoardCard from './ProjectBoardCard'
 import { ProjectItemsEmptyState } from './ProjectViewStates'
@@ -8,13 +8,16 @@ import {
   buildBoardColumns,
   resolveBoardColumnField,
   type ProjectBoardColumn
-} from '../../../../shared/github/project-board-columns'
-import { EMPTY_PROJECT_GROUP_KEY, sortRows } from '../../../../shared/github/project-group-sort'
+} from '../../../../shared/github/projects/project-board-columns'
+import {
+  EMPTY_PROJECT_GROUP_KEY,
+  sortRows
+} from '../../../../shared/github/projects/project-group-sort'
 import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow,
   GitHubProjectTable
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 
 const COLUMN_WIDTH_PX = 272
 const CARD_DRAG_MIME = 'application/x-orca-project-row'

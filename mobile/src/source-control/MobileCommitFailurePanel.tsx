@@ -94,6 +94,7 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
         error={action.launchError}
         warning={action.launchWarning}
         undeliveredPrompt={action.undeliveredPrompt}
+        opens={action.launchOpens}
         errorStyle={styles.commitFailureLaunchError}
       />
     </View>

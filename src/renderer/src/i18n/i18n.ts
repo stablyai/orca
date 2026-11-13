@@ -166,6 +166,14 @@ export async function loadRendererUiLanguage(language: UiLanguage): Promise<stri
   return locale
 }
 
+/** Test entry point: load the locale catalog, then switch the renderer language. */
+export async function setRendererUiLanguage(language: UiLanguage): Promise<void> {
+  const locale = await loadRendererUiLanguage(language)
+  if (i18n.language !== locale) {
+    await i18n.changeLanguage(locale)
+  }
+}
+
 /** Resolve an Intl-compatible BCP-47 tag: plugin pack resources use the pack’s declared tag, then the default locale. */
 export function getIntlLocale(): string {
   const active = i18n.language

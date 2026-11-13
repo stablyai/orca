@@ -90,6 +90,7 @@
       "usesCleartextTraffic": true,
       "allowBackup": false,
       "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
+      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
       "package": "com.stably.orca.mobile",
       "versionCode": 28,
       "googleServicesFile": "./google-services.json"

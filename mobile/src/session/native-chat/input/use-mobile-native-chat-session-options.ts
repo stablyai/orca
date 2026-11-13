@@ -25,7 +25,6 @@ import {
   type NativeChatPtySessionOptionsSurface
 } from '../../../../../src/shared/native-chat/input/native-chat-pty-session-options'
 import {
-  clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
@@ -83,11 +82,6 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 // Kept across remounts: a repeated hook model is not fresh evidence, and reapplying it would revert a newer pick.
 const appliedReportByScope = new Map<string, string>()
-
-export function clearMobileSessionOptionRecordsForTests(): void {
-  clearNativeChatSessionOptionCacheForTests()
-  appliedReportByScope.clear()
-}
 
 /** A tab that runs another agent starts over: a new session there carries none of the old one's picks. */
 function startScopeOverForAgent(scopeKey: string, agent: string): void {

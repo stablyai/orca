@@ -293,6 +293,7 @@ export function useEmulatorPaneSession({
   const view = buildEmulatorPaneSessionView({ devices, selectedUdid, session })
 
   return {
+    ...view,
     devices,
     selectedUdid,
     setSelectedUdid,
@@ -308,9 +309,6 @@ export function useEmulatorPaneSession({
     sendRotate,
     visualOrientation,
     displayName: formatSimulatorTabLabel(view.displayName, t),
-    previewUrl: view.previewUrl,
-    wsUrl: view.wsUrl,
-    streamKey: streamKey ?? undefined,
-    isLive: view.isLive
+    streamKey: streamKey ?? undefined
   }
 }

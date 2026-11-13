@@ -1,4 +1,4 @@
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 
 export type ViewerZoomDirection = 'in' | 'out' | 'reset'
 

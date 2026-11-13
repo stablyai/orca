@@ -8,17 +8,26 @@ import type { SshManagedServerLinkedProject } from '../../../../shared/ssh-types
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { Store } from '../../../persistence/loading-store/store'
-import { abortOrcadMigrationCutover } from '../cutover/orcad-migration-cutover-coordinator'
-import type { OrcadMigrationDestinationCatalog } from '../cutover/orcad-migration-cutover-coordinator'
-import { writeOrcadMigrationSourceCutover } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
-import { orcadSourceStoreWithout } from '../cutover/orcad-migration-delta-plan'
-import type { OrcadDeltaSourceStore } from '../cutover/orcad-migration-delta-plan'
-import { createOrcadMigrationManifest } from '../../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+import {
+  abortOrcadMigrationCutover,
+  type OrcadMigrationDestinationCatalog
+} from '../cutover/orcad-migration-cutover-coordinator'
+
+import { writeOrcadMigrationSourceCutover } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
+import {
+  orcadSourceStoreWithout,
+  type OrcadDeltaSourceStore
+} from '../cutover/orcad-migration-delta-plan'
+
+import { createOrcadMigrationManifest } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import type { OrcadMigrationSourceCutoverPort } from '../cutover/orcad-migration-source'
 import { sshRelayMigrationCutoverPort } from '../../../ssh/migration-source/orcad-migration-ssh-relay-source'
-import { orcadCatalogFingerprint } from '../../../persistence/migrating-orcad-catalog/orcad-retained-source'
-import { folderWorkspacesHeldByServer } from './orcad-server-folder-workspaces'
-import type { OrcadServerFolderCatalog } from './orcad-server-folder-workspaces'
+import { orcadCatalogFingerprint } from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
+import {
+  folderWorkspacesHeldByServer,
+  type OrcadServerFolderCatalog
+} from './orcad-server-folder-workspaces'
+
 import { projectGroupsHeldByServer, serverHeldProjectGroups } from './orcad-server-project-groups'
 
 import type { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'

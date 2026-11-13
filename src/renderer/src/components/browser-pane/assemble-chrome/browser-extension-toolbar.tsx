@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import type {
   BrowserExtensionToolbarAction,
   BrowserExtensionToolbarState
@@ -243,9 +243,16 @@ export function BrowserExtensionsMenuSub({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub
+      onOpenChange={(open) => {
+        if (open) {
+          void recordFeatureInteraction('browser-extensions')
+        }
+      }}
+    >
       <DropdownMenuSubTrigger>
         <Puzzle className="mr-2 size-3.5" />
         {t('browser.extensions.menu', 'Extensions')}

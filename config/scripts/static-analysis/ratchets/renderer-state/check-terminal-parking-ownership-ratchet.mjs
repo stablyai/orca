@@ -26,10 +26,7 @@ const ROOTS = new Map([
     `${RENDERER}components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.ts`,
     ['useTerminalTabColdParking']
   ],
-  [
-    `${WATCHERS}terminal-parked-tab-watchers.ts`,
-    ['syncParkedTerminalTabWatchers', 'canWatcherCoverParkedTerminalTab']
-  ],
+  [`${WATCHERS}terminal-parked-tab-watchers.ts`, ['syncParkedTerminalTabWatchers']],
   [`${WATCHERS}parked-terminal-tab-coverage.ts`, ['canWatcherCoverParkedTerminalTab']],
   [
     `${RENDERER}lib/agent-session/resume/resume-sleeping-agent-session.ts`,
@@ -128,7 +125,7 @@ const EFFECT_BOUNDARIES = new Set([
   `${WATCHERS}terminal-parked-pty-watcher.ts#startParkedPtyWatcher`,
   `${RENDERER}components/terminal-pane/parking/capture/parked-terminal-buffer-capture.ts#captureParkedTerminalBuffers`,
   `${RENDERER}lib/agent-session/resume/sleeping-agent-session-launch.ts#launchSleepingAgentSession`,
-  `${RENDERER}lib/host-mirror-handle-gap-wait.ts#parkUntilHostMirrorHandleLands`,
+  `${RENDERER}lib/agent-session/resume/host-mirror-handle-gap-wait.ts#parkUntilHostMirrorHandleLands`,
   `${RENDERER}runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration.ts#parkUntilHostSessionMirrorHydrates`
 ])
 const ENUMERATORS = new Set(['entries', 'values', 'keys', 'assign'])

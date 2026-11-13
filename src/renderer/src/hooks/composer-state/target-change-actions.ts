@@ -47,9 +47,10 @@ import {
   getProjectHostSetupSelectionKey,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { useAppStore } from '@/store'
-import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import '@/lib/workspace/creation/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
 
 export function useTargetChangeActions(input: TargetChangeActionsInput) {
   const {
@@ -246,7 +247,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
           : buildProjectHostSetupOptions({
               projectId: selectedRepoProjectId,
               projectHostSetups: useAppStore.getState().projectHostSetups,
-              eligibleRepos: getComposerEligibleRepos(useAppStore.getState().repos),
+              eligibleRepos: getNewWorkspaceDialogEligibleRepos(useAppStore.getState().repos),
               hosts: hostOptions
             }).find(
               (candidate): candidate is ReadyProjectHostSetupOption =>

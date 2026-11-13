@@ -356,8 +356,7 @@
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
       "resume": "Fortsetzen",
-      "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen",
-      "title": "Nachrichten in der Warteschlange"
+      "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen"
     },
     "offlineQueue": {
       "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
@@ -2321,20 +2320,16 @@
       "loadFailed": "Pull Request konnte nicht geladen werden"
     },
     "queuedCardText": {
-      "showLess": "Weniger anzeigen",
       "showLessHint": "Zeigt weniger von der Nachricht an",
-      "showMore": "Mehr anzeigen",
       "showMoreHint": "Zeigt die ganze Nachricht an"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Diese Nachricht aus der Warteschlange löschen",
       "images_one": "{{count}} Bild",
       "images_other": "{{count}} Bilder",
       "moreActions": "Weitere Aktionen",
       "send": "Senden",
       "sendAgainHint": "Diese Nachricht erneut senden",
       "sendHint": "Diese Nachricht senden",
-      "showLessHint": "Zeigt weniger von der Nachricht an",
       "steer": "Steuern",
       "steerHint": "Ohne Unterbrechung des Modells übermitteln"
     },
@@ -2454,8 +2449,7 @@
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
-      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -2498,6 +2492,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Anhängen fehlgeschlagen (erneuter Verbindungsaufbau)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Der Tab konnte nicht geschlossen werden. Versuche es erneut.",
+      "closeFailedDesktopNotReady": "Der Tab konnte nicht geschlossen werden. Orca wird auf deinem Computer noch geladen. Versuche es gleich noch einmal."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",
@@ -3365,6 +3363,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} zusammenführen?",
+      "confirmGitHubSquash": "PR #{{number}} mit Squash zusammenführen?",
+      "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
+      "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
+      "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
       "merged": "Zusammengeführt",
       "closed": "Geschlossen",
       "conflicts": "Konflikte",

@@ -1,7 +1,7 @@
 import {
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
-  applyWorkspaceCleanupPolicy,
+  type WorkspaceCleanupReason,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
@@ -20,9 +20,16 @@ const GIT_SORT_FIELDS: ReadonlySet<WorkspaceCleanupSortField> = new Set(['git', 
 
 const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'dirty-files',
+  'ignored-files',
   'unpushed-commits',
   'git-status-error',
   'unknown-base'
+])
+
+const GIT_DERIVED_REASONS: ReadonlySet<WorkspaceCleanupReason> = new Set([
+  'merged',
+  'unchanged',
+  'orchestration-worker'
 ])
 
 export function needsWorkspaceCleanupGitEvidence(
@@ -53,7 +60,12 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
     if (targets.length >= max) {
       break
     }
-    if (!hasWorkspaceCleanupGitEvidence(candidate) && !resolved.has(candidate.worktreeId)) {
+    // An unreachable host has no evidence to give until a fresh scan reaches it.
+    if (
+      !hasWorkspaceCleanupGitEvidence(candidate) &&
+      !resolved.has(candidate.worktreeId) &&
+      !candidate.blockers.includes('ssh-disconnected')
+    ) {
       targets.push(candidate.worktreeId)
     }
   }
@@ -77,13 +89,17 @@ export function applyWorkspaceCleanupGitEvidence(
     ) {
       return candidate
     }
-    return applyWorkspaceCleanupPolicy({
+    return {
       ...candidate,
+      reasons: [
+        ...candidate.reasons.filter((reason) => !GIT_DERIVED_REASONS.has(reason)),
+        ...evidence.reasons.filter((reason) => GIT_DERIVED_REASONS.has(reason))
+      ],
       blockers: [
         ...candidate.blockers.filter((blocker) => !GIT_DERIVED_BLOCKERS.has(blocker)),
         ...evidence.blockers.filter((blocker) => GIT_DERIVED_BLOCKERS.has(blocker))
       ],
       git: evidence.git
-    })
+    }
   })
 }

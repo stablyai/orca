@@ -89,10 +89,17 @@ export function prepareWebSessionTabsSnapshotBase(
           ) ?? null)
   const expectedCurrentLocalTabId = focusIntent?.expectedCurrentLocalTabId
   const currentVisibleLocalTabId = resolveWebSessionVisibleTabId(state, worktreeId)
+  const expectedCurrentLocalLeafId = focusIntent?.expectedCurrentLocalLeafId
+  const currentVisibleLocalLeafId = currentVisibleLocalTabId
+    ? (state.terminalLayoutsByTabId[currentVisibleLocalTabId]?.activeLeafId ?? null)
+    : null
   const callerFocusIntentTab =
     matchingFocusIntentTab &&
     (expectedCurrentLocalTabId === undefined ||
-      expectedCurrentLocalTabId === currentVisibleLocalTabId)
+      expectedCurrentLocalTabId === currentVisibleLocalTabId) &&
+    (expectedCurrentLocalLeafId === undefined ||
+      currentVisibleLocalLeafId === expectedCurrentLocalLeafId ||
+      currentVisibleLocalLeafId === focusIntent?.leafId)
       ? matchingFocusIntentTab
       : null
   const followIntentTab =

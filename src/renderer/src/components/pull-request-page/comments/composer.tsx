@@ -6,8 +6,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -15,8 +15,8 @@ import {
 import { addIssueCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'

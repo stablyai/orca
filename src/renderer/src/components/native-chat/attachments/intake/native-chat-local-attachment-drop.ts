@@ -1,15 +1,15 @@
 import {
   readBrowserAttachmentFile,
   releaseBrowserAttachmentFiles
-} from '@/lib/browser-attachment-files'
-import { userNamedFileAccess } from '@/lib/local-file-access'
+} from '@/lib/files/drop/browser-attachment-files'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import {
   nativeChatAttachmentOwnerChangedNotice,
   nativeChatAttachmentUnreadableNotice
 } from './native-chat-attachment-notices'
 import type { NativeChatAttachmentOwner } from '../uploads/native-chat-attachment-owner'
 import { stageNativeChatDraftFile } from '../../drafts/native-chat-draft-attachment-staging'
-import { isImageDropPath } from '../../../../../../shared/image-path-paste'
+import { isAgentInlineImagePath } from '../../../../../../shared/agent-inline-image-types'
 import { nativeChatPendingAttachmentScope } from '../chips/native-chat-pending-attachment-scopes'
 import type {
   NativeChatAttachmentFocusOptions,
@@ -99,7 +99,7 @@ export async function attachNativeChatLocalAttachmentPaths(args: {
                 owner.kind === 'local' && owner.stagingScope
                   ? nativeChatPendingAttachmentScope(owner.stagingScope, chipId)
                   : null
-              const retained = isImageDropPath(path)
+              const retained = isAgentInlineImagePath(path)
                 ? chips.resolve(chipId, path, undefined, completion)
                 : chips.attachReferences([{ id: chipId, path }], completion)
               if (retained && scope) {

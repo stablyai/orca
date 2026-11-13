@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
@@ -12,7 +12,10 @@ import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityD
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
-import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
+import {
+  getMobileEmulatorSearchEntries,
+  MOBILE_EMULATOR_SETTING_ANCHORS
+} from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { emulatorErrorText, emulatorMessageText } from '@/lib/simulator/launch/emulator-error-copy'
@@ -169,7 +172,7 @@ export function MobileEmulatorSettingsPane({
             onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
           />
 
-          <div className="py-3">
+          <div id={MOBILE_EMULATOR_SETTING_ANCHORS.availability} className="py-3">
             <div className="flex items-start gap-4">
               <div className="min-w-0 flex-1 space-y-0.5">
                 <Label>
@@ -233,6 +236,7 @@ export function MobileEmulatorSettingsPane({
 
       {enabled ? (
         <SearchableSetting
+          id={MOBILE_EMULATOR_SETTING_ANCHORS.agentControl}
           title={t(
             'auto.components.settings.MobileEmulatorSettingsPane.fd698d2d47',
             'Agent mobile emulator control'

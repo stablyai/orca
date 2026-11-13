@@ -14,7 +14,7 @@ import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-sel
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
-import { resolveNativeChatMediaPath } from '../../native-chat/native-chat-media-path'
+import { resolveNativeChatMediaPath } from '../../native-chat/conversation-files/native-chat-media-path'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { RuntimeFileSearch } from '../files/search/file-search'
 import { RuntimeTerminalArtifacts } from '../terminal/artifacts/terminal-artifacts'

@@ -49,6 +49,7 @@ export const ORCA_BROWSER_CLI_COMMAND_KEYS = {
     'open-url',
     'tab list',
     'tab show',
+    'tab annotations',
     'tab current',
     'tab switch',
     'tab create',

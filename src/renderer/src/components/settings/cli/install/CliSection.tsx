@@ -22,10 +22,12 @@ import {
 } from '../../../../lib/skills/runtime/skill-runtime-command'
 import { WslCliRegistration } from './WslCliRegistration'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { GENERAL_SETTING_ANCHORS } from '../../general/general-setting-anchors'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
 import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshness/use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -126,7 +128,7 @@ export function CliSection({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message) || error.message
             : translate(
                 'auto.components.settings.CliSection.7baec27029',
                 'Failed to load CLI status.'
@@ -182,7 +184,8 @@ export function CliSection({
                       'Checking CLI registration…'
                     )
                   : showDiagnostics
-                    ? (status?.detail ?? getInstallDescription(currentPlatform))
+                    ? formatCliUserFacingDetail(status?.detail) ||
+                      getInstallDescription(currentPlatform)
                     : t(
                         'settings.general.cli.description',
                         'Orca’s own terminals already have it.'
@@ -250,7 +253,9 @@ export function CliSection({
           ) : null}
 
           {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
-            <p className="text-xs text-muted-foreground">{status.detail}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatCliUserFacingDetail(status.detail)}
+            </p>
           ) : null}
 
           {installFailure ? (
@@ -299,23 +304,25 @@ export function CliSection({
         </div>
 
         {!isBrowserManaged ? (
-          <AgentSkillSetupPanel
-            variant="row"
-            title={t('settings.general.cli.skillTitle', 'Orca skill for agents')}
-            description={t(
-              'auto.components.settings.CliSection.e8012c03a1',
-              'Enables agents to use Orca workspace, terminal, and progress commands.'
-            )}
-            skillNames={[ORCA_CLI_SKILL_NAME]}
-            target={skillRuntime.bundledSkillTarget}
-            // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
-            terminalRuntime={agentRuntime}
-            installed={cliSkillDetected}
-            loading={cliSkillLoading}
-            error={cliSkillError}
-            onRecheck={refreshCliSkill}
-            freshnessSkillName={cliSkillFreshnessName}
-          />
+          <div id={GENERAL_SETTING_ANCHORS.cliSkill}>
+            <AgentSkillSetupPanel
+              variant="row"
+              title={t('settings.general.cli.skillTitle', 'Orca skill for agents')}
+              description={t(
+                'auto.components.settings.CliSection.e8012c03a1',
+                'Enables agents to use Orca workspace, terminal, and progress commands.'
+              )}
+              skillNames={[ORCA_CLI_SKILL_NAME]}
+              target={skillRuntime.bundledSkillTarget}
+              // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+              terminalRuntime={agentRuntime}
+              installed={cliSkillDetected}
+              loading={cliSkillLoading}
+              error={cliSkillError}
+              onRecheck={refreshCliSkill}
+              freshnessSkillName={cliSkillFreshnessName}
+            />
+          </div>
         ) : null}
 
         <WslCliRegistration currentPlatform={currentPlatform} />

@@ -5,7 +5,7 @@ import { Button } from '../../ui/button'
 import { Command, CommandItem, CommandList } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import RepoBadgeLabel from '../../repo/RepoBadgeLabel'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 export const GLOBAL_SCOPE_KEY = '__global__'

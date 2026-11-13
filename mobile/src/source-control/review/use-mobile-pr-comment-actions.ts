@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { GitHubPrRepoSlug } from './github-pr-repo-slug'

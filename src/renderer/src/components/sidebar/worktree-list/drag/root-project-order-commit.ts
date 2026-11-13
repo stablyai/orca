@@ -2,7 +2,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from '../../../../../../shared/project-group-order-capability'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
+import '@/store/project-groups/project-group-owner-routing'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRootProjectOrderUpdatesForSidebarDrop } from './root-project-header-drop'
@@ -42,7 +42,7 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
       .map((repo) => ({ repo, order }))
   })
   const targets = groupUpdates.flatMap((update) => {
-    const target = ipcOrRuntimeTargetForHostId(getProjectGroupHostId(update.group))
+    const target = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(update.group))
     return update.rootProjectOrder !== undefined && target?.kind === 'environment'
       ? [target.environmentId]
       : []
@@ -72,7 +72,7 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
         state.updateProjectGroups(
           groupUpdates.map(({ group, rootProjectOrder, tabOrder }) => ({
             groupId: group.id,
-            hostId: getProjectGroupHostId(group),
+            hostId: getRepoExecutionHostId(group),
             updates: {
               ...(rootProjectOrder !== undefined ? { rootProjectOrder } : {}),
               ...(tabOrder !== undefined ? { tabOrder } : {})
@@ -86,7 +86,7 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
               .updateProjectGroups([
                 {
                   groupId: group.id,
-                  hostId: getProjectGroupHostId(group),
+                  hostId: getRepoExecutionHostId(group),
                   updates: {
                     ...(rootProjectOrder !== undefined
                       ? { rootProjectOrder: group.rootProjectOrder ?? null }

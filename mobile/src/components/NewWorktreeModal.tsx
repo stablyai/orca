@@ -5,12 +5,15 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/share
 import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
-import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
-import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
-import { useWorktreeCreateBasePrefetch } from '../tasks/use-worktree-create-base-prefetch'
-import { useHostDescriptor } from '../transport/hosts/host-descriptor-store'
+import type { SmartModeAvailabilityInput } from '../new-workspace/source-selection/mobile-smart-source-modes'
+import {
+  deriveRepoSlug,
+  type PasteRepoCandidate
+} from '../new-workspace/source-selection/smart-source-paste-intent'
+import { useMobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
+import { useNewWorktreeRuntimeCapabilities } from '../new-workspace/creation/worktree-create-capability'
+import { useWorktreeCreateBasePrefetch } from '../new-workspace/creation/use-worktree-create-base-prefetch'
+import { useHostDescriptor } from '../host-descriptors/host-descriptor-store'
 import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,

@@ -1,10 +1,15 @@
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
-import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
+import type {
+  Project,
+  ProjectHostSetup,
+  ProjectUpdateArgs
+} from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
+import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
 import { useShallow } from 'zustand/react/shallow'
@@ -15,7 +20,8 @@ import { SparsePresetSettingsSection } from './worktrees/SparsePresetSettingsSec
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
+import { RepositorySidebarVisibilitySection } from './RepositorySidebarVisibilitySection'
+import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
@@ -49,6 +55,7 @@ type RepositoryPaneRepoUpdate = Omit<
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
+const EMPTY_REMOVAL_SETUPS: ProjectHostSetup[] = []
 
 type RepositoryPaneProps = {
   repo: Repo
@@ -61,12 +68,14 @@ type RepositoryPaneProps = {
     updates: RepositoryPaneRepoUpdate,
     options?: { hostId?: ExecutionHostId }
   ) => void | Promise<boolean>
-  removeProject: (repoId: string) => void
+  removeProject: () => void
   project?: Project | null
   selectedProjectSetupId?: string
   settingsSelectionKey?: string
   settingsEntryRepoIds?: ReadonlySet<string>
   removalScope?: SettingsProjectRemovalScope
+  /** Every checkout the remove action takes out of Orca. */
+  removalSetups?: readonly ProjectHostSetup[]
   isLocalWindowsProject?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -92,6 +101,7 @@ export function RepositoryPane({
   settingsSelectionKey,
   settingsEntryRepoIds,
   removalScope = 'project',
+  removalSetups = EMPTY_REMOVAL_SETUPS,
   isLocalWindowsProject = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -101,6 +111,7 @@ export function RepositoryPane({
 }: RepositoryPaneProps): React.JSX.Element {
   const t = useTranslate()
   const isFolder = isFolderRepo(repo)
+  const hooksSupported = useFolderSetupSupport(repo) === 'supported'
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
   const selectedHostId = getRepoExecutionHostId(repo)
   const updateSelectedRepo = useCallback(
@@ -183,11 +194,14 @@ export function RepositoryPane({
     sharedPaths: symlinkEntries,
     sourceControlAi: sourceControlAiEntries,
     hostSetups: hostSetupEntries,
-    projectRuntime: projectRuntimeEntries
+    projectRuntime: projectRuntimeEntries,
+    removeProject: removeProjectEntry,
+    sidebarVisibility: sidebarVisibilityEntry
   } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
-    !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
+    hooksSupported &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
       <RepositoryHooksSection
         key="hooks"
         repo={repo}
@@ -227,14 +241,6 @@ export function RepositoryPane({
               </span>
             ) : null}
           </>
-        }
-        action={
-          <RepositoryRemoveProjectButton
-            repo={repo}
-            removalScope={removalScope}
-            forceVisible={forceFullPaneForRepoMatch}
-            removeProject={removeProject}
-          />
         }
       >
         <SearchableSetting
@@ -381,6 +387,26 @@ export function RepositoryPane({
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
+    ) : null,
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [sidebarVisibilityEntry]) ? (
+      <RepositorySidebarVisibilitySection
+        key="sidebar-visibility"
+        repo={repo}
+        searchEntry={sidebarVisibilityEntry}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
+    ) : null,
+    // Last on the page: removal is rare and should not sit above everyday settings.
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [removeProjectEntry]) ? (
+      <RepositoryRemoveProjectSection
+        key="remove-project"
+        repo={repo}
+        setups={removalSetups}
+        removalScope={removalScope}
+        searchEntry={removeProjectEntry}
+        forceVisible={forceFullPaneForRepoMatch}
+        removeProject={removeProject}
+      />
     ) : null
   ].filter(Boolean)
 

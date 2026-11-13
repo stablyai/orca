@@ -1,12 +1,12 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
+import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
@@ -158,8 +158,8 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Briefly show a single-select pick before advancing; picking again retracts it. With previews,
-  // a pick stays put: a digit focuses its row, and Enter on the chosen row confirms.
+  // Briefly show a single-select pick before advancing; clicking it again retracts it, while Enter on
+  // the chosen row confirms. With previews, a pick stays put and a digit only focuses its row.
   const pickOption = (
     optionIndex: number,
     via: 'pointer' | 'digit' | 'enter' = 'pointer'
@@ -171,7 +171,8 @@ export function NativeChatQuestionCard({
         ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
         [optionIndex]?.focus()
     }
-    if (showsPreviews && cur.includes(optionIndex)) {
+    // Enter on a chosen single-select row does what the footer says (Next/Submit), never deselects.
+    if (cur.includes(optionIndex) && (showsPreviews || (via === 'enter' && !q.multiSelect))) {
       if (via === 'enter') {
         confirm(true)
       }
@@ -283,12 +284,13 @@ export function NativeChatQuestionCard({
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-lg border border-input bg-card shadow-xs">
+        {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up. */}
+        <div className="overflow-hidden rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm">
           <div className="flex items-start gap-2 px-3.5 py-2.5">
             <NativeChatQuestionText
               data-testid="native-chat-question-card-title"
               content={q.question}
-              className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground [&_p]:my-0 [&_p+p]:mt-2"
+              className="min-w-0 flex-1 break-words text-sm font-medium text-foreground [&_p]:my-0 [&_p+p]:mt-2"
             />
             {collapse ? (
               <NativeChatPromptCollapseToggle
@@ -308,7 +310,8 @@ export function NativeChatQuestionCard({
             </button>
           </div>
 
-          <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto border-t border-border scrollbar-sleek">
+          {/* Option rings are inset, so the scroll clip cannot cut them. */}
+          <div className="flex max-h-[50vh] flex-col gap-1.5 overflow-y-auto px-3.5 pb-3 scrollbar-sleek">
             {q.options.map((opt, i) => (
               <NativeChatQuestionOption
                 key={`${i}:${opt.label}`}
@@ -320,97 +323,108 @@ export function NativeChatQuestionCard({
                 selected={(selections[index] ?? []).includes(i)}
                 disabled={isSubmitting}
                 onSelect={() => pickOption(i)}
+                onEnter={() => pickOption(i, 'enter')}
               />
             ))}
-            <div className="flex items-center gap-3 px-3.5 py-2.5">
-              {questionAllowsOther ? (
-                <>
-                  <span
-                    className={cn(
-                      'flex size-6 shrink-0 items-center justify-center rounded-md',
-                      currentTypedAnswerChosen
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    )}
-                  >
-                    {currentTypedAnswerChosen ? (
-                      <Check className="size-3.5" strokeWidth={3} />
-                    ) : (
-                      <Pencil className="size-3.5" />
-                    )}
-                  </span>
-                  {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
-                  {freeTextInput?.multiline ? (
-                    <Textarea
-                      data-native-chat-answer-field
-                      data-native-chat-prompt-card-focus-target={fieldTakesFocus}
-                      disabled={isSubmitting}
-                      value={otherText[index]}
-                      onChange={(e) => setOther(index, e.target.value)}
-                      onClick={autoAdvance.cancel}
-                      placeholder={answerPlaceholder}
-                    />
-                  ) : (
-                    <ImeTextarea
-                      ref={answerInputRef}
-                      rows={1}
-                      data-native-chat-answer-field
-                      data-native-chat-prompt-card-focus-target={fieldTakesFocus}
-                      disabled={isSubmitting}
-                      value={otherText[index]}
-                      // Enter submits, so a line break becomes a space; edit in place so a mid-draft paste keeps the caret.
-                      onChange={(e) => {
-                        const field = e.target
-                        const oneLine = field.value.replace(LINE_BREAKS, ' ')
-                        if (oneLine !== field.value) {
-                          const { selectionStart, selectionEnd } = field
-                          field.value = oneLine
-                          field.setSelectionRange(selectionStart, selectionEnd)
-                        }
-                        setOther(index, oneLine)
-                      }}
-                      // Select typed text on click; tabbing toward Submit must not replace a picked option.
-                      onClick={() => {
-                        autoAdvance.cancel()
-                        if ((otherText[index] ?? '').trim().length > 0) {
-                          chooseTypedAnswer(index)
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          confirm(true)
-                        }
-                      }}
-                      placeholder={answerPlaceholder}
-                      className={cn(
-                        'scrollbar-sleek max-h-[6lh] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
-                        currentTypedAnswerChosen || !otherText[index]
-                          ? 'text-foreground'
-                          : 'text-muted-foreground'
-                      )}
-                    />
-                  )}
-                </>
-              ) : (
-                <span className="flex-1" />
-              )}
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => confirm()}
+          </div>
+          <div
+            className={cn(
+              'flex gap-2.5 px-3.5 pb-3.5',
+              freeTextInput?.multiline ? 'items-end' : 'items-center'
+            )}
+          >
+            {questionAllowsOther ? (
+              <div
                 className={cn(
-                  'shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
-                  currentAnswered
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  'flex min-h-9 min-w-0 flex-1 gap-3 rounded-[10px] border border-question-option-border px-2.5 py-1.5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-chat-focus-ring',
+                  freeTextInput?.multiline ? 'items-start' : 'items-center'
                 )}
               >
-                {isSubmitting
+                <span
+                  className={cn(
+                    'flex size-5.5 shrink-0 items-center justify-center rounded-md border',
+                    currentTypedAnswerChosen
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-question-option-border text-muted-foreground'
+                  )}
+                >
+                  {currentTypedAnswerChosen ? (
+                    <Check className="size-3.5" strokeWidth={3} />
+                  ) : (
+                    <Pencil className="size-3.5" />
+                  )}
+                </span>
+                {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
+                {freeTextInput?.multiline ? (
+                  // The box draws the field's edge, so the bare field (not the bordered Textarea primitive) sits inside it.
+                  <ImeTextarea
+                    data-native-chat-answer-field
+                    data-native-chat-prompt-card-focus-target={fieldTakesFocus}
+                    disabled={isSubmitting}
+                    value={otherText[index]}
+                    onChange={(e) => setOther(index, e.target.value)}
+                    onClick={autoAdvance.cancel}
+                    placeholder={answerPlaceholder}
+                    className="scrollbar-sleek max-h-[12lh] min-h-16 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent [field-sizing:content] text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50"
+                  />
+                ) : (
+                  <ImeTextarea
+                    ref={answerInputRef}
+                    rows={1}
+                    data-native-chat-answer-field
+                    data-native-chat-prompt-card-focus-target={fieldTakesFocus}
+                    disabled={isSubmitting}
+                    value={otherText[index]}
+                    // Enter submits, so a line break becomes a space; edit in place so a mid-draft paste keeps the caret.
+                    onChange={(e) => {
+                      const field = e.target
+                      const oneLine = field.value.replace(LINE_BREAKS, ' ')
+                      if (oneLine !== field.value) {
+                        const { selectionStart, selectionEnd } = field
+                        field.value = oneLine
+                        field.setSelectionRange(selectionStart, selectionEnd)
+                      }
+                      setOther(index, oneLine)
+                    }}
+                    // Select typed text on click; tabbing toward Submit must not replace a picked option.
+                    onClick={() => {
+                      autoAdvance.cancel()
+                      if ((otherText[index] ?? '').trim().length > 0) {
+                        chooseTypedAnswer(index)
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        confirm(true)
+                      }
+                    }}
+                    placeholder={answerPlaceholder}
+                    className={cn(
+                      'scrollbar-sleek max-h-[6lh] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
+                      currentTypedAnswerChosen || !otherText[index]
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
+                    )}
+                  />
+                )}
+              </div>
+            ) : (
+              <span className="flex-1" />
+            )}
+            <NativeChatQuestionConfirmButton
+              label={
+                isSubmitting
                   ? t('components.native-chat.question.sending', 'Sending…')
-                  : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()}
-              </button>
-            </div>
+                  : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()
+              }
+              answered={currentAnswered}
+              enterHint={
+                currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
+              }
+              disabled={isSubmitting}
+              onConfirm={() => confirm()}
+            />
           </div>
         </div>
 

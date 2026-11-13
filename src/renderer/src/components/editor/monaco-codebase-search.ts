@@ -1,5 +1,5 @@
 import type { IPosition, IRange } from 'monaco-editor'
-import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
+import { normalizeSelectedTextForFileSearch } from '@/lib/files/search/file-search-selection'
 
 type MonacoCodebaseSearchModel = {
   getValueInRange: (range: IRange) => string
