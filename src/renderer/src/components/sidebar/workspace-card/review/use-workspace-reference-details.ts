@@ -76,7 +76,11 @@ export function useWorkspaceReferenceDetails(
           : entry?.data
       return [
         getWorkspaceAttachmentKey(request.item),
-        entry ? (data ? { ...data, stale: entry.stale || hostOff } : undefined) : primary
+        entry
+          ? data
+            ? { ...data, stale: entry.stale || hostOff }
+            : undefined
+          : primary
       ]
     })
   )
