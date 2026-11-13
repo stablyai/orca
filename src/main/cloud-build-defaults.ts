@@ -1,18 +1,31 @@
 // Packaged builds read no shell env, so the integration build bakes in its backend URLs
 // (config/cloud-build-defaults.json via electron.vite.config.ts). Run-time env still wins.
-declare const ORCA_CLOUD_BUILD_DEFAULTS: {
-  billingApiUrl?: string
-  cloudSandboxUrl?: string
-  allowDevSigning?: boolean
-} | null
+type BuildServiceUrlDefaults = {
+  authApiUrl?: string
+  relayDirectorUrl?: string
+  pushGatewayUrl?: string
+  connectorUrl?: string
+  artifactsApiUrl?: string
+}
 
-function buildDefaults(): {
+type CloudBuildDefaults = BuildServiceUrlDefaults & {
   billingApiUrl?: string
   cloudSandboxUrl?: string
   allowDevSigning?: boolean
-} {
+}
+
+declare const ORCA_CLOUD_BUILD_DEFAULTS: CloudBuildDefaults | null
+
+function buildDefaults(): CloudBuildDefaults {
   // oxlint-disable-next-line unicorn/no-typeof-undefined -- undeclared outside electron-vite builds; a bare read throws.
   return (typeof ORCA_CLOUD_BUILD_DEFAULTS === 'undefined' ? null : ORCA_CLOUD_BUILD_DEFAULTS) ?? {}
+}
+
+export type BuildServiceUrlKey = keyof BuildServiceUrlDefaults
+
+/** Build-time service URL default, or `fallback` when the build sets none. */
+export function buildServiceUrlDefault(key: BuildServiceUrlKey, fallback: string): string {
+  return buildDefaults()[key]?.trim() || fallback
 }
 
 export function withCloudBuildDefaults(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
