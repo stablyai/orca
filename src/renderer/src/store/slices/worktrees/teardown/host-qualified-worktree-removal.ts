@@ -28,8 +28,11 @@ import {
   resolveSameIdSurvivingHostId
 } from './host-qualified-worktree-row-removal'
 import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
+import type { RemovedWorktreeInstance } from '../listing/authoritative-worktree-removal-memory'
 
-type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined
+type PreservedBranchWorktree =
+  | Pick<Worktree, 'displayName' | 'isMainWorktree' | 'instanceId'>
+  | undefined
 type RemoveWorktreeSliceResult = Awaited<ReturnType<WorktreeSlice['removeWorktree']>>
 
 /** Resolve confirmed host when given, otherwise use focus-free owner routing. */
@@ -157,6 +160,7 @@ export async function completeSameIdHostScopedRemoval(args: {
   get: WorktreeSliceGet
   worktreeId: string
   requiredExecutionHostId: ExecutionHostId
+  removedWorktree: RemovedWorktreeInstance
   removalResult: RemoveWorktreeResult | undefined
   removalRoute: WorktreeOperationRoute | null
   target: RuntimeClientTarget
@@ -192,7 +196,7 @@ export async function completeSameIdHostScopedRemoval(args: {
   })
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
   if (!args.rowAlreadyDropped) {
-    dropConfirmedHostRow(set, worktreeId, requiredExecutionHostId)
+    dropConfirmedHostRow(set, worktreeId, requiredExecutionHostId, args.removedWorktree)
   }
   const preservedBranch = removalResult?.preservedBranch
   if (!preservedBranch) {
