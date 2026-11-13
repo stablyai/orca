@@ -19759,8 +19759,7 @@
         "stateIdleCount_one": "{{value0}} durduruldu",
         "stateIdleCount_other": "{{value0}} durduruldu",
         "stateUnverifiableCount_one": "Durum bilgisi alınamıyor: {{value0}}",
-        "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}",
-        "showAgent": "{{value0}} öğesini konuşmada göster"
+        "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
       "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",

@@ -19679,8 +19679,7 @@
         "stateMonitoringCount": "{{value0}} supervisando",
         "stateUnverifiableCount": "{{value0}} con estado no disponible",
         "stateWaitingCount": "{{value0}} esperando",
-        "stateWorkingCount": "{{value0}} trabajando",
-        "showAgent": "Mostrar {{value0}} en la conversación"
+        "stateWorkingCount": "{{value0}} trabajando"
       },
       "taskList": {
         "title": "Tareas",

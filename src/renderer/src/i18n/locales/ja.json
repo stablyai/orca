@@ -19144,8 +19144,7 @@
         "stateMonitoringCount": "{{value0}} 監視",
         "stateUnverifiableCount": "{{value0}} は状態を取得できません",
         "stateWaitingCount": "{{value0}} 待機中",
-        "stateWorkingCount": "{{value0}} 実行中",
-        "showAgent": "会話に {{value0}} を表示"
+        "stateWorkingCount": "{{value0}} 実行中"
       },
       "railLabel": "あなたのメッセージ",
       "railImageMessage": "画像添付",

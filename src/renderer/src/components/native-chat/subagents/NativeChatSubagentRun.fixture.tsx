@@ -46,7 +46,7 @@ const block: NativeChatSubagentGroupBlock = {
 function Roster() {
   return (
     <div className="native-chat-appearance p-4 pt-36">
-      <NativeChatSubagentRun block={block} open onSetOpen={() => {}} />
+      <NativeChatSubagentRun block={block} onOpenSubagent={() => {}} />
     </div>
   )
 }
@@ -61,7 +61,7 @@ export const hovered = defineFixture({
   render: () => <Roster />,
   interact: async (frame) => {
     frame
-      .querySelector('[data-native-chat-subagent-entry="a1"] > div')
+      .querySelector('[data-native-chat-subagent-entry="a1"] > button')
       ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
