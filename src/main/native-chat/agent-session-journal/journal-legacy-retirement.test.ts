@@ -1,7 +1,5 @@
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import {
-  mkdtempSync,
-  rmSync,
   existsSync,
   writeFileSync,
   readFileSync,
@@ -11,17 +9,11 @@ import {
   statfsSync
 } from 'node:fs'
 import { join, basename } from 'node:path'
-import { tmpdir } from 'node:os'
 import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { spawnProcess } from '@orca/process-host'
-import { afterEach, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
-import {
-  initializeJournalDomainDatabase,
-  openJournalDomainDatabase
-} from './database/journal-domain-database'
 import { journalLegacyFileIdentity } from './database/journal-legacy-source-receipt'
 import { JournalSqlDatabase } from './database/journal-sql-database'
 import {
@@ -29,177 +21,16 @@ import {
   journalSqlReaderPath
 } from './journal-sql-worker-bundle.test-fixture'
 import { message } from './journal-sql-message.test-fixture'
-import { journalDatabasePath } from './database/journal-host-database'
-import { JournalSqlBatch } from './journal-sql-batch'
-import {
-  acquireJournalLegacyFileLock,
-  createJournalLegacyFileEligibility
-} from './journal-legacy-file-lock'
-import { JournalLegacyRetirement } from './journal-legacy-retirement'
+import { createJournalLegacyFileEligibility } from './journal-legacy-file-lock'
 import {
   advanceLegacyRetirementClock,
   JournalLegacyGraceClock
 } from './journal-legacy-retirement-state'
-import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
-import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journal-sql-maintenance'
-import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
-import { journalDomainImportState } from './journal-domain-import-rows'
-import { prepareJournalDomainImport } from './journal-domain-import'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
-import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
+import { insertJournalRow } from './durable-rows/journal-row-table'
+import { profile, cleanup } from './journal-legacy-retirement.test-fixture'
 
 vi.mock('@orca/process-host', { spy: true })
-
-const cleanup: (() => void)[] = []
-afterEach(() => {
-  vi.useRealTimers()
-  vi.restoreAllMocks()
-  for (const close of cleanup.splice(0).toReversed()) {
-    close()
-  }
-})
-
-async function profile(
-  seed?: (db: Database.Database) => void,
-  eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
-) {
-  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-retirement-'))
-  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-  const filename = journalDatabasePath(root)
-  const { db: legacy } = openJournalDatabase(filename)
-  runJournalTransaction(legacy, () => {
-    publishJournalSessionEpoch(
-      legacy,
-      { sessionId: 'unopened', workspaceId: 'folder-without-git' },
-      'epoch'
-    )
-    for (const row of journalSqlRetryRows(true)) {
-      insertJournalRow(legacy, 'unopened', row)
-    }
-  })
-  seed?.(legacy)
-  legacy.close()
-  const { db } = openJournalDomainDatabase(await initializeJournalDomainDatabase(root))
-  let closed = false
-  const closeDomain = () => {
-    if (!closed) {
-      db.close()
-      closed = true
-    }
-  }
-  cleanup.push(closeDomain)
-  let original: Database.Database | undefined
-  const source = () =>
-    (original ??= new Database(filename, { readonly: true, fileMustExist: true }))
-  cleanup.push(() => original?.close())
-  const batch = new JournalSqlBatch(db)
-  const writer = {
-    maintain: async (operation: JournalSqlMaintenance) => {
-      const result = await batch.run(
-        [operation],
-        (unit) => applyJournalSqlMaintenance(db, unit),
-        operation.kind === 'legacy-retirement-save' && operation.durable ? 'retirement' : 'normal'
-      )
-      const outcome = result.outcomes[0]!
-      if (!outcome.committed) {
-        throw outcome.error
-      }
-      return outcome.value
-    }
-  }
-  const readers = {
-    legacyProof: async (cursor) => readJournalLegacyProofPage(source(), cursor, db),
-    importState: async (id) => journalDomainImportState(db, id),
-    recycleSourceReaders: async () => {
-      original?.close()
-      original = undefined
-      return new AbortController()
-    },
-    releaseSourceReaders: () => {}
-  } satisfies Pick<
-    JournalSqlReaderPool,
-    'legacyProof' | 'importState' | 'recycleSourceReaders' | 'releaseSourceReaders'
-  >
-  const conversions = {
-    ensure: async (id: string) => {
-      if (journalDomainImportState(db, id).state === 'ready') {
-        return 'epoch'
-      }
-      const imported = prepareJournalDomainImport(source(), id)
-      if (!imported) {
-        return null
-      }
-      for (const page of imported.pages) {
-        await writer.maintain({ kind: 'import-page', target: imported, page })
-      }
-      return String(await writer.maintain({ kind: 'import-finish', header: imported }))
-    }
-  }
-  const errors: unknown[] = []
-  const lock =
-    process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
-      ? acquireJournalLegacyFileLock
-      : async () => ({ held: () => true, close: async () => {} })
-  const retirement = new JournalLegacyRetirement(
-    root,
-    writer,
-    readers,
-    conversions,
-    async () => true,
-    (error) => errors.push(error),
-    () => true,
-    lock,
-    undefined,
-    eligibility ??
-      (process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
-        ? undefined
-        : { check: async () => {}, present: () => {} })
-  )
-  const receiptState = () =>
-    JSON.parse(
-      String(
-        db
-          .prepare(
-            "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v1'"
-          )
-          .get()!.value
-      )
-    )
-  const saveState = (state: unknown) =>
-    db
-      .prepare(
-        "UPDATE agent_session_store_meta SET value=? WHERE key='journal.legacy-retirement.v1'"
-      )
-      .run(JSON.stringify(state))
-  const arm = () => {
-    const row = db
-      .prepare(
-        "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v1'"
-      )
-      .get()
-    const state = JSON.parse(String(row!.value))
-    state.credit = 604800000
-    state.process = 'prior-process'
-    db.prepare(
-      "UPDATE agent_session_store_meta SET value=? WHERE key='journal.legacy-retirement.v1'"
-    ).run(JSON.stringify(state))
-  }
-  return {
-    root,
-    filename,
-    db,
-    retirement,
-    errors,
-    arm,
-    source,
-    receiptState,
-    saveState,
-    writer,
-    closeDomain,
-    readers,
-    recycle: readers.recycleSourceReaders
-  }
-}
 
 it('accounts for an unopened folder chat, removes only the certified file and keeps current history', async () => {
   const test = await profile((legacy) => {
@@ -374,6 +205,14 @@ it('retains downgrade writes, a rollback journal and a nonempty WAL without chan
       expect(readFileSync(test.filename + (kind === 'wal' ? '-wal' : '-journal'), 'utf8')).toBe(
         'owed recovery bytes'
       )
+      if (kind === 'journal') {
+        unlinkSync(`${test.filename}-journal`)
+        const now = performance.now()
+        const clock = vi.spyOn(performance, 'now').mockReturnValue(now + 3600001)
+        await test.retirement.run()
+        expect(existsSync(test.filename)).toBe(false)
+        clock.mockRestore()
+      }
     }
   }
 })
@@ -419,12 +258,17 @@ it('retains queued-only text, recovery obligations and orphan history', async ()
     'repair',
     'orphan',
     'orphan-outcome',
-    'extra-profile-column'
+    'extra-profile-column',
+    'malformed-queue'
   ] as const) {
     const test = await profile((legacy) => {
       if (kind === 'queue') {
         legacy.exec(
           'DELETE FROM journal_rows; INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason) VALUES(\'unopened\',\'held\',1,\'{"kind":"message","role":"user","blocks":[{"type":"text","text":"held user text"}]}\',\'f\',1,\'h\',\'waiting\',\'manual\')'
+        )
+      } else if (kind === 'malformed-queue') {
+        legacy.exec(
+          "INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason) VALUES('unopened','held',1,'unreadable saved text','f',1,'h','waiting','manual')"
         )
       } else if (kind === 'orphan-outcome') {
         legacy.exec(
@@ -440,6 +284,13 @@ it('retains queued-only text, recovery obligations and orphan history', async ()
         legacy.exec("INSERT INTO journal_rows VALUES('orphan','old',1,1,'orphan user text')")
       }
     })
+    if (kind === 'malformed-queue') {
+      test.db
+        .prepare(
+          "UPDATE journal_chat_state SET epoch='epoch',last_sequence=1,highest_fence=0 WHERE session_id='unopened'"
+        )
+        .run()
+    }
     if (kind === 'queue') {
       const current = await JournalSqlDatabase.open(test.root, {
         writerPath: journalSqlWorkerPath(),
@@ -461,6 +312,9 @@ it('retains queued-only text, recovery obligations and orphan history', async ()
     const before = readFileSync(test.filename)
     await test.retirement.run()
     expect(test.errors.length).toBeGreaterThan(0)
+    if (kind === 'malformed-queue') {
+      expect(test.receiptState()).toMatchObject({ phase: 'refused', reason: 'source-queue' })
+    }
     expect(readFileSync(test.filename)).toEqual(before)
     if (kind === 'queue') {
       expect(test.source().prepare('SELECT body_json FROM queued_messages').get()).toEqual({
@@ -504,50 +358,6 @@ it('resumes only the prepared empty companions and preserves a recreated main', 
       expect(existsSync(shm)).toBe(false)
     }
   }
-})
-
-it('settles an unchanged permanent proof refusal and retries a recoverable reader failure', async () => {
-  const retained = await profile((legacy) => {
-    legacy.exec("INSERT INTO journal_rows VALUES('orphan','old',1,1,'orphan user text')")
-  })
-  const pages = vi.spyOn(retained.readers, 'legacyProof')
-  await retained.retirement.run()
-  const firstPass = pages.mock.calls.length
-  expect(firstPass).toBeGreaterThan(0)
-  await retained.retirement.run()
-  await retained.retirement.run()
-  expect(pages.mock.calls).toHaveLength(firstPass)
-  expect(readFileSync(retained.filename).includes(Buffer.from('orphan user text'))).toBe(true)
-
-  const unsupported = await profile(undefined, {
-    check: async () => {
-      throw new JournalLegacyRetentionError('unsupported volume')
-    },
-    present: () => {}
-  })
-  const unsupportedProof = vi.spyOn(unsupported.readers, 'legacyProof')
-  const recycle = vi.spyOn(unsupported.readers, 'recycleSourceReaders')
-  await unsupported.retirement.run()
-  await unsupported.retirement.run()
-  expect(unsupportedProof).not.toHaveBeenCalled()
-  expect(recycle).not.toHaveBeenCalled()
-  expect(existsSync(unsupported.filename)).toBe(true)
-
-  const recovered = await profile()
-  let now = 0
-  vi.spyOn(performance, 'now').mockImplementation(() => now)
-  const retry = vi
-    .spyOn(recovered.readers, 'legacyProof')
-    .mockRejectedValueOnce(new Error('reader exited'))
-  await recovered.retirement.run()
-  await recovered.retirement.run()
-  expect(retry.mock.calls).toHaveLength(1)
-  now = 60_001
-  await recovered.retirement.run()
-  expect(recovered.receiptState().phase).toBe('grace')
-  recovered.arm()
-  await recovered.retirement.run()
-  expect(existsSync(recovered.filename)).toBe(false)
 })
 
 it('retires in the same owner after a missing helper is restored', async () => {

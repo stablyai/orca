@@ -1,9 +1,9 @@
-import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
-import { journalOpenRefusal } from './replay/journal-open-failure'
+import {
+  JournalLegacyRetentionError,
+  readJournalLegacySource,
+  type LegacySourceRefusalReason
+} from './journal-legacy-retention-error'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
-import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
-import type { JournalSqlConversions } from './journal-sql-conversions'
-import type { JournalSqlOwner } from './journal-sql-owner'
 import type Database from '../../sqlite/sync-database'
 
 const PROFILE_TABLES = new Set([
@@ -40,7 +40,7 @@ const SOURCE_COLUMNS: Readonly<Record<string, string>> = {
     'session_id message_id position body_json fingerprint created_at host_instance state hold_reason returned_reason returned_rejection settled_at settled_by_op consumed_as carried_from queued_epoch queued_sequence options_json'
 }
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
-export type LegacyProofCursor = { table: number; after: string | null }
+export type LegacyProofCursor = { table: number; after: string | null; epoch?: string }
 export type LegacySourceSession = {
   sessionId: string
   workspaceId: string
@@ -51,6 +51,7 @@ export type LegacyProofPage = {
   next: LegacyProofCursor | null
   sessions: LegacySourceSession[]
   retained?: string
+  reason?: LegacySourceRefusalReason
 }
 
 /** Every saved content row must belong to the current catalog before any source file can retire. */
@@ -58,6 +59,30 @@ export function readJournalLegacyProofPage(
   db: Database.Database,
   cursor: LegacyProofCursor,
   destination: Database.Database
+): LegacyProofPage {
+  const copiedColumns = new Map<string, Set<unknown>>()
+  if (cursor.table === 0 && cursor.after === null) {
+    for (const table of PROFILE_TABLES) {
+      if (table !== 'sqlite_sequence') {
+        copiedColumns.set(
+          table,
+          new Set(
+            destination
+              .prepare(`PRAGMA table_info(${table})`)
+              .all()
+              .map((column) => column.name)
+          )
+        )
+      }
+    }
+  }
+  return readJournalLegacySource(() => readSourcePage(db, cursor, copiedColumns))
+}
+
+function readSourcePage(
+  db: Database.Database,
+  cursor: LegacyProofCursor,
+  copiedColumns: Map<string, Set<unknown>>
 ): LegacyProofPage {
   const tables = new Set(
     db
@@ -68,25 +93,26 @@ export function readJournalLegacyProofPage(
   if (cursor.table === 0 && cursor.after === null) {
     const version = Number(db.pragma('user_version', { simple: true }))
     if (version !== 3 && version !== 4) {
-      throw new JournalLegacyRetentionError('unsupported legacy source inventory')
+      throw new JournalLegacyRetentionError(
+        'unsupported legacy source inventory',
+        'source-inventory'
+      )
     }
     for (const table of tables) {
-      const names =
-        PROFILE_TABLES.has(table) && table !== 'sqlite_sequence'
-          ? destination
-              .prepare(`PRAGMA table_info(${table})`)
-              .all()
-              .map((column) => column.name)
-          : SOURCE_COLUMNS[table]?.split(' ')
-      if (names) {
-        const columns = new Set(names)
+      const columns =
+        copiedColumns.get(table) ??
+        (SOURCE_COLUMNS[table] ? new Set(SOURCE_COLUMNS[table]!.split(' ')) : undefined)
+      if (columns) {
         if (
           db
             .prepare(`PRAGMA table_info(${table})`)
             .all()
             .some((column) => !columns.has(column.name))
         ) {
-          throw new JournalLegacyRetentionError('legacy source has unaccounted columns')
+          throw new JournalLegacyRetentionError(
+            'legacy source has unaccounted columns',
+            'source-inventory'
+          )
         }
       }
 
@@ -99,10 +125,16 @@ export function readJournalLegacyProofPage(
       }
       const quoted = `"${table.replaceAll('"', '""')}"`
       if (db.prepare(`SELECT 1 FROM ${quoted} LIMIT 1`).get()) {
-        throw new JournalLegacyRetentionError('legacy source has unaccounted recovery data')
+        throw new JournalLegacyRetentionError(
+          'legacy source has unaccounted recovery data',
+          'source-recovery'
+        )
       }
       if (!RECOVERY_TABLES.includes(table)) {
-        throw new JournalLegacyRetentionError('legacy source has an unknown table')
+        throw new JournalLegacyRetentionError(
+          'legacy source has an unknown table',
+          'source-inventory'
+        )
       }
     }
   }
@@ -130,11 +162,22 @@ export function readJournalLegacyProofPage(
           : table === 'journal_rows'
             ? 'session_id,epoch'
             : 'session_id,epoch,generation'
+    const indexed = table === 'journal_rows' || table === 'journal_outcomes'
     const statement = db.prepare(
-      `SELECT rowid AS rowid,${columns} FROM ${table} ${cursor.after === null ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT 128`
+      indexed
+        ? table === 'journal_rows'
+          ? `SELECT DISTINCT session_id,epoch FROM journal_rows ${cursor.after === null ? '' : 'WHERE (session_id,epoch)>(?,?)'} ORDER BY session_id,epoch LIMIT 128`
+          : `SELECT DISTINCT generation FROM journal_outcomes ${cursor.after === null ? '' : 'WHERE generation>?'} ORDER BY generation LIMIT 128`
+        : `SELECT rowid AS rowid,${columns} FROM ${table} ${cursor.after === null ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT 128`
     )
     statement.setReadBigInts(true)
-    const rows = statement.all(...(cursor.after === null ? [] : [BigInt(cursor.after)]))
+    const rows = statement.all(
+      ...(cursor.after === null
+        ? []
+        : table === 'journal_rows'
+          ? [cursor.after, cursor.epoch!]
+          : [BigInt(cursor.after)])
+    )
     for (const row of rows) {
       if (
         table === 'queued_messages' &&
@@ -142,7 +185,10 @@ export function readJournalLegacyProofPage(
           db.prepare('SELECT * FROM queued_messages WHERE rowid=?').get(row.rowid!)
         )
       ) {
-        throw new JournalLegacyRetentionError('legacy source has unreadable queued text')
+        throw new JournalLegacyRetentionError(
+          'legacy source has unreadable queued text',
+          'source-queue'
+        )
       }
 
       const session =
@@ -154,7 +200,10 @@ export function readJournalLegacyProofPage(
               .get(row.generation!)
           : row
       if (table === 'journal_outcomes' && !session) {
-        throw new JournalLegacyRetentionError('legacy source has an orphan outcome')
+        throw new JournalLegacyRetentionError(
+          'legacy source has an orphan outcome',
+          'source-orphan'
+        )
       }
       if (table === 'journal_outcomes' || table === 'journal_outcome_generations') {
         if (
@@ -176,12 +225,22 @@ export function readJournalLegacyProofPage(
           )
           .get(session.session_id!, ...(matchEpoch ? [session.epoch!] : []))
       ) {
-        throw new JournalLegacyRetentionError('legacy source has orphan content')
+        throw new JournalLegacyRetentionError('legacy source has orphan content', 'source-orphan')
       }
     }
     return {
       next: rows.length
-        ? { table: cursor.table, after: String(rows.at(-1)!.rowid) }
+        ? {
+            table: cursor.table,
+            after: String(
+              table === 'journal_rows'
+                ? rows.at(-1)!.session_id
+                : table === 'journal_outcomes'
+                  ? rows.at(-1)!.generation
+                  : rows.at(-1)!.rowid
+            ),
+            ...(table === 'journal_rows' ? { epoch: String(rows.at(-1)!.epoch) } : {})
+          }
         : cursor.table < CONTENT_TABLES.length
           ? { table: cursor.table + 1, after: null }
           : null,
@@ -200,7 +259,10 @@ export function readJournalLegacyProofPage(
       tables.has('queued_messages') &&
       !!db.prepare('SELECT 1 FROM queued_messages WHERE session_id=? LIMIT 1').get(id)
     if (!hasRows && hasQueue) {
-      throw new JournalLegacyRetentionError('legacy queued-only history still requires its source')
+      throw new JournalLegacyRetentionError(
+        'legacy queued-only history still requires its source',
+        'source-queued-only-v1'
+      )
     }
     const empty =
       !hasRows &&
@@ -214,70 +276,5 @@ export function readJournalLegacyProofPage(
       ? { table: 0, after: String(rows.at(-1)!.session_id) }
       : { table: 1, after: null },
     sessions
-  }
-}
-
-export async function completeJournalLegacyProof(
-  readers: Pick<JournalSqlReaderPool, 'legacyProof' | 'importState'>,
-  conversions: Pick<JournalSqlConversions, 'ensure'>,
-  writer: Pick<JournalSqlOwner, 'maintain'>,
-  boundary: () => Promise<boolean>,
-  signal: AbortSignal,
-  rest: (started: number) => Promise<void>
-): Promise<void> {
-  let cursor: LegacyProofCursor | null = { table: 0, after: null }
-  while (cursor && !signal.aborted) {
-    if (!(await boundary())) {
-      throw new Error('legacy proof was interrupted')
-    }
-    const started = performance.now()
-    const page = await readers.legacyProof(cursor)
-    await rest(started)
-    if (page.retained) {
-      throw new JournalLegacyRetentionError(page.retained)
-    }
-    for (const source of page.sessions) {
-      try {
-        await conversions.ensure(source.sessionId, false)
-      } catch (error) {
-        const refusal = journalOpenRefusal(error)
-        if (
-          refusal.code === 'agent_session_journal_unreadable' &&
-          refusal.details?.reason !== 'journalUnavailable'
-        ) {
-          throw new JournalLegacyRetentionError(refusal.message)
-        }
-        throw error
-      }
-      if ((await readers.importState(source.sessionId)).state !== 'ready' && source.empty) {
-        await writer.maintain({
-          kind: 'import-finish',
-          header: {
-            sessionId: source.sessionId,
-            workspaceId: source.workspaceId,
-            epoch: source.epoch,
-            head: {
-              lastSequence: 0,
-              highestFence: 0,
-              contextBoundary: 0,
-              lastActivityAt: 0,
-              derivedTurnItemId: null,
-              historyOrigin: null,
-              queueFailureBoundary: 0,
-              queuePauseMarks: { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
-            }
-          }
-        })
-      }
-      if ((await readers.importState(source.sessionId)).state !== 'ready') {
-        throw new JournalLegacyRetentionError(
-          'legacy source still has unconverted or queued history'
-        )
-      }
-    }
-    cursor = page.next
-  }
-  if (signal.aborted) {
-    throw new Error('legacy proof was interrupted')
   }
 }

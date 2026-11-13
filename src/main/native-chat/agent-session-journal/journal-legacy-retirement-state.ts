@@ -1,3 +1,7 @@
+import {
+  LEGACY_SOURCE_REFUSALS,
+  type LegacySourceRefusalReason
+} from './journal-legacy-retention-error'
 import type { LegacyCompanionManifest } from './journal-legacy-retirement-files'
 
 export const LEGACY_RETIREMENT_WEEK = 7 * 24 * 60 * 60 * 1000
@@ -14,11 +18,59 @@ export type Retirement = {
   manifest?: LegacyCompanionManifest
 }
 
+export type LegacySourceRefusal = {
+  version: 1
+  phase: 'refused'
+  policy: 1
+  proof: string
+  observed: string
+  destination: string
+  reason: LegacySourceRefusalReason
+}
+
+export function decodeLegacySourceRefusal(value: string | null): LegacySourceRefusal | null {
+  const data: unknown = value ? JSON.parse(value) : null
+  if (!data || typeof data !== 'object' || !('phase' in data) || data.phase !== 'refused') {
+    return null
+  }
+  if (
+    !('version' in data) ||
+    data.version !== 1 ||
+    !('policy' in data) ||
+    data.policy !== 1 ||
+    !('proof' in data) ||
+    typeof data.proof !== 'string' ||
+    !('observed' in data) ||
+    typeof data.observed !== 'string' ||
+    !('destination' in data) ||
+    typeof data.destination !== 'string' ||
+    !('reason' in data) ||
+    typeof data.reason !== 'string'
+  ) {
+    return null
+  }
+  const reason = LEGACY_SOURCE_REFUSALS.find((reason) => reason === data.reason)
+  return reason
+    ? {
+        version: 1,
+        phase: 'refused',
+        policy: 1,
+        proof: data.proof,
+        observed: data.observed,
+        destination: data.destination,
+        reason
+      }
+    : null
+}
+
 export function decodeRetirement(value: string | null): Retirement | null {
   if (!value) {
     return null
   }
-  const data: Retirement = JSON.parse(value)
+  const data: Retirement | { phase: 'refused' } = JSON.parse(value)
+  if (data.phase === 'refused') {
+    return null
+  }
   if (
     data.version !== 1 ||
     typeof data.proof !== 'string' ||

@@ -1,5 +1,8 @@
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
-import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import {
+  JournalLegacyRetentionError,
+  JournalLegacyIneligibleError
+} from './journal-legacy-retention-error'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { createRequire } from 'node:module'
@@ -74,7 +77,7 @@ async function startLegacyHelper(
       } else {
         const error =
           code === 4
-            ? new JournalLegacyRetentionError('legacy storage or file identity is unsupported')
+            ? new JournalLegacyIneligibleError('legacy storage or file identity is unsupported')
             : new Error('legacy journal lock is unavailable')
         ready.reject(error)
         reject(error)

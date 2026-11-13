@@ -1,4 +1,7 @@
-import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import {
+  JournalLegacyRetentionError,
+  readJournalLegacySource
+} from './journal-legacy-retention-error'
 import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -89,11 +92,14 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
         if (!original && existsSync(workerData.originalFilename)) {
-          original = new Database(workerData.originalFilename, {
-            readonly: true,
-            fileMustExist: true,
-            timeout: 5000
-          })
+          const openSource = () =>
+            new Database(workerData.originalFilename, {
+              readonly: true,
+              fileMustExist: true,
+              timeout: 5000
+            })
+          original =
+            operation.kind === 'legacy-proof' ? readJournalLegacySource(openSource) : openSource()
         }
         if (operation.kind === 'legacy-proof') {
           if (!original) {
@@ -138,7 +144,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       reply({
         type: 'legacy-proof',
         id,
-        page: { next: null, sessions: [], retained: error.message }
+        page: { next: null, sessions: [], retained: error.message, reason: error.reason }
       })
       return
     }

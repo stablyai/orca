@@ -33,7 +33,10 @@ export class JournalSqlBackgroundMaintenance {
 
   private legacyRetirement?: JournalLegacyRetirement
 
-  ownLegacySource(directory: string, readers: JournalSqlReaderPool): void {
+  ownLegacySource(
+    directory: string,
+    readers: ConstructorParameters<typeof JournalLegacyRetirement>[2]
+  ): void {
     this.legacyRetirement = new JournalLegacyRetirement(
       directory,
       this.writer,

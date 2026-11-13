@@ -2,11 +2,9 @@ import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import { randomUUID } from 'node:crypto'
 import { ownsOrcadProfileDirectory } from '../../orcad/instance-lock/orcad-instance-lock-hold'
 import { journalDatabasePath } from './database/journal-host-database'
-import { journalDomainDatabasePath } from './database/journal-domain-database'
 import {
   legacyFilePresent as filePresent,
   removeLegacyCompanions,
-  legacyDestinationMain,
   retireJournalLegacyMain,
   type LegacyDestinationIdentity
 } from './journal-legacy-retirement-files'
@@ -24,7 +22,7 @@ import {
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
-import { completeJournalLegacyProof } from './journal-legacy-source-proof'
+import { JournalLegacyProof } from './journal-legacy-proof'
 
 const WEEK = LEGACY_RETIREMENT_WEEK
 const SAVE_INTERVAL = 6 * 60 * 60 * 1000
@@ -37,10 +35,9 @@ export class JournalLegacyRetirement {
   private lastSaved = 0
   private diagnosed?: string
   private stopped = new AbortController()
-  private descriptor?: string
-  private retained = false
-  private eligible = false
-  private proven = false
+  private excluded = false
+  private completeAbsent = false
+  private readonly proof: JournalLegacyProof
   private retryAt = 0
   private retryDelay = 60_000
 
@@ -51,15 +48,25 @@ export class JournalLegacyRetirement {
       JournalSqlReaderPool,
       'legacyProof' | 'importState' | 'recycleSourceReaders' | 'releaseSourceReaders'
     >,
-    private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
+    conversions: Pick<JournalSqlConversions, 'ensure'>,
     private readonly boundary: () => Promise<boolean>,
     private readonly report: (error: unknown) => void,
     private readonly ownsProfile = () => ownsOrcadProfileDirectory(directory),
     private readonly lock = acquireJournalLegacyFileLock,
-    private readonly rest: (started: number) => Promise<void> = async () => {},
+    rest: (started: number) => Promise<void> = async () => {},
     private readonly eligibility = createJournalLegacyFileEligibility()
   ) {
     this.filename = journalDatabasePath(directory)
+    this.proof = new JournalLegacyProof(
+      directory,
+      writer,
+      readers,
+      conversions,
+      boundary,
+      this.stopped.signal,
+      rest,
+      eligibility
+    )
   }
 
   stop(): void {
@@ -84,7 +91,12 @@ export class JournalLegacyRetirement {
   }
 
   async flushCredit(): Promise<void> {
-    if (!this.stopped.signal.aborted) {
+    if (
+      !this.stopped.signal.aborted ||
+      this.excluded ||
+      this.completeAbsent ||
+      this.proof.terminal
+    ) {
       return
     }
     try {
@@ -144,31 +156,25 @@ export class JournalLegacyRetirement {
     return JSON.stringify(await readJournalLegacySourceReceipt(this.filename)) === proof
   }
 
-  private async prove(): Promise<void> {
-    if (this.proven) {
-      return
-    }
-    await completeJournalLegacyProof(
-      this.readers,
-      this.conversions,
-      this.writer,
-      this.boundary,
-      this.stopped.signal,
-      this.rest
-    ).catch((error) => {
-      this.retained = error instanceof JournalLegacyRetentionError
-      throw error
-    })
-    this.proven = true
-    this.retryDelay = 60_000
-  }
-
   private async attempt(): Promise<void> {
     if (this.stopped.signal.aborted || performance.now() < this.retryAt) {
       return
     }
+    if (this.excluded) {
+      return
+    }
+    if (this.completeAbsent) {
+      if (!(await filePresent(this.filename))) {
+        return
+      }
+      this.completeAbsent = false
+    }
+    if (await this.proof.retained()) {
+      return
+    }
     const saved = await this.savedState()
     if (!saved.receipt) {
+      this.excluded = true
       return
     }
     const receipt = JSON.parse(saved.receipt)
@@ -178,32 +184,28 @@ export class JournalLegacyRetirement {
       receipt.disposition !== 'copied-source' ||
       receipt.wal?.kind !== 'empty'
     ) {
+      this.excluded = true
       return
     }
     const proof = saved.receipt
-    const observed = JSON.stringify(await readJournalLegacySourceReceipt(this.filename))
-    const descriptor = `${proof}\n${observed}\n${await legacyDestinationMain(journalDomainDatabasePath(this.directory))}`
-    if (descriptor !== this.descriptor) {
-      this.descriptor = descriptor
-      this.retained = this.eligible = this.proven = false
-      this.retryAt = 0
-      this.retryDelay = 60_000
-    }
-    if (this.retained) {
-      return
-    }
     let state = decodeRetirement(saved.retirement)
-    if (state && state.proof !== saved.receipt) {
+    if (state && state.proof !== proof) {
       throw new JournalLegacyRetentionError('legacy retirement provenance changed')
     }
     if (state?.phase === 'complete') {
       if (!(await filePresent(this.filename))) {
+        this.completeAbsent = true
         return
       }
       state = { ...state, phase: 'prepared' }
     }
     if (state?.phase === 'prepared' && !(await filePresent(this.filename))) {
       await this.removeCompanions(state)
+      return
+    }
+    const observation = await this.proof.observe(proof)
+    const { observed } = observation
+    if (this.proof.restore(saved.retirement, observation)) {
       return
     }
     if (observed !== proof) {
@@ -216,13 +218,11 @@ export class JournalLegacyRetirement {
     if (await filePresent(`${this.filename}-journal`)) {
       throw new JournalLegacyRetentionError('legacy rollback journal retained')
     }
-    if (!this.eligible) {
-      await this.eligibility.check(this.filename, this.stopped.signal)
-      this.eligible = true
-    }
+    await this.proof.checkEligibility()
     const now = Date.now()
     if (!state) {
-      await this.prove()
+      await this.proof.run(observation, state)
+      this.retryDelay = 60_000
       if (!(await this.matches(proof))) {
         throw new Error('legacy source changed during proof')
       }
@@ -242,12 +242,13 @@ export class JournalLegacyRetirement {
     }
     const advanced = this.clock.observe(state, now, PROCESS_TOKEN)
     if (advanced.process !== state.process || advanced.completedAt !== state.completedAt) {
-      this.proven = false
-      await this.prove()
+      await this.proof.run(observation, state, true)
+      this.retryDelay = 60_000
       if (!(await this.matches(proof))) {
         return
       }
       await this.save(advanced, true)
+      this.proof.restamped()
       return
     }
     state = advanced
@@ -257,7 +258,8 @@ export class JournalLegacyRetirement {
       }
       return
     }
-    await this.prove()
+    await this.proof.run(observation, state)
+    this.retryDelay = 60_000
     if (!(await this.matches(proof)) || !this.ownsProfile()) {
       return
     }
@@ -302,6 +304,7 @@ export class JournalLegacyRetirement {
       )
     ) {
       await this.save({ ...state, phase: 'complete' }, true)
+      this.completeAbsent = true
     }
   }
 }
