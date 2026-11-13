@@ -73,7 +73,9 @@ it('points owners and admins to Settings › Enterprise with one plain button', 
       />,
       { wrapper: TooltipProvider }
     )
-    const row = screen.getByRole('region', { name: 'Single sign-on, SCIM and audit log' })
+    const row = screen.getByRole('region', {
+      name: 'Single sign-on, directory sync and the audit log'
+    })
     // No Copy link split: the row has exactly one control.
     expect(row.querySelectorAll('button')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Open Enterprise settings' }))
@@ -94,5 +96,5 @@ it('hides the Enterprise row from plain members', () => {
     />,
     { wrapper: TooltipProvider }
   )
-  expect(screen.queryByText('Single sign-on, SCIM and audit log')).toBeNull()
+  expect(screen.queryByText('Single sign-on, directory sync and the audit log')).toBeNull()
 })

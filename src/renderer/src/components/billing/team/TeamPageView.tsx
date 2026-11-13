@@ -297,7 +297,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                 <KeyRound aria-hidden className="size-4 shrink-0 text-muted-foreground" />
                 {t(
                   'auto.components.billing.team.enterpriseRowTitle',
-                  'Single sign-on, SCIM and audit log'
+                  'Single sign-on, directory sync and the audit log'
                 )}
               </h3>
               <Button type="button" variant="outline" size="sm" onClick={props.onOpenEnterprise}>
