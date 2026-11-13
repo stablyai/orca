@@ -11,12 +11,14 @@ import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../worktree/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
+  createMobileAiVaultResumeMutationId,
   createMobileAiVaultResumeMutationRegistry,
   readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
@@ -32,7 +34,11 @@ import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-mes
 import { useRefreshHint } from '../query/refresh-hint'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
-import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import {
+  MobileAgentSessionHistoryList,
+  useMobileAgentHistoryOpenTabActions
+} from './MobileAgentSessionHistoryList'
+import { openHistorySession } from './worktree-navigation-actions'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import {
@@ -63,6 +69,7 @@ function scopeSegments(t: Translate): MobileSegment<AiVault.AiVaultScope>[] {
   ]
 }
 
+
 export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
   return <MobileAgentSessionHistoryPanelContent key={props.hostId} {...props} />
 }
@@ -71,12 +78,13 @@ function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
   name = '',
-  origin = ''
+  origin
 }: MobileAgentSessionHistoryPanelProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   // Use handoff, not useRouter: resumed session is a native route outside this single-document page.
   const router = useWorkspaceRouteHandoff()
+  const currentExecutionHost = useWorkspaceExecutionHost()
   const sessionBelow = useSessionScreenHandlers(hostId, worktreeId)
   const { client, state: connState } = useWorkspaceClient(hostId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
@@ -145,8 +153,24 @@ function MobileAgentSessionHistoryPanelContent({
     }
   }, [client, connState])
 
-  const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
+  const openTabActions = useMobileAgentHistoryOpenTabActions({
+    client,
+    connected: connState === 'connected',
+    hostId,
+    worktreeId,
+    worktrees,
+    origin,
+    router,
+    onRefresh,
+    sessions: screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS,
+    launchInFlightRef: resumeLaunchInFlightRef,
+    setResumingSessionId,
+    setResumeMessage
+  })
+  const sessions = openTabActions.sessionsWithOpenTabs
+  const { closingSessionId, closedSessionIds, fallbackOpenTabsPending, onJumpToOpenSession } =
+    openTabActions
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -158,21 +182,33 @@ function MobileAgentSessionHistoryPanelContent({
         scope,
         scopeFilterPaths,
         activeWorktreePath,
-        now
+        now,
+        closedSessionIds
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, t]
+    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, closedSessionIds, t]
   )
 
   const showRefreshLine = useRefreshHint(revalidating)
 
   const resumeActionStateBySessionId = useMemo(
-    () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
-    [resumingSessionId, sessions]
+    () =>
+      buildMobileAgentHistoryResumeActionState(
+        sessions,
+        resumingSessionId,
+        closingSessionId,
+        fallbackOpenTabsPending
+      ),
+    [closingSessionId, fallbackOpenTabsPending, resumingSessionId, sessions]
   )
 
   const onResumeSession = useCallback(
     async (session: AiVault.AiVaultSession): Promise<void> => {
       if (resumeLaunchInFlightRef.current) {
+        return
+      }
+      // The tab is already open; focusing it must not spawn a second terminal.
+      if (session.openTab && !closedSessionIds.has(session.id)) {
+        await onJumpToOpenSession(session, session.openTab)
         return
       }
       if (!client || connState !== 'connected') {
@@ -271,15 +307,28 @@ function MobileAgentSessionHistoryPanelContent({
           return
         }
         setResumeMessage(t('agentHistory.panel.sessionQueued', 'Agent session queued.'))
+        const resumedName = getWorktreeLabel(
+          worktrees.find((item) => item.worktreeId === target.worktreeId)?.displayName,
+          target.worktreeId
+        )
         // From a session screen the same workspace is the screen below; otherwise the session takes this screen's place.
-        if (origin === 'session' && target.worktreeId === worktreeId) {
+        if (
+          origin === 'session' &&
+          target.worktreeId === worktreeId &&
+          (target.targetExecutionHostId ?? null) === (currentExecutionHost ?? null)
+        ) {
           sessionBelow?.onResumedTerminal(resumed.terminal)
-          router.back()
-        } else {
-          router.replace(
-            `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}`
-          )
         }
+        openHistorySession(
+          router,
+          origin,
+          hostId,
+          worktreeId,
+          target.worktreeId,
+          resumedName,
+          target.targetExecutionHostId,
+          currentExecutionHost
+        )
       } catch (err) {
         triggerError()
         setResumeMessage(
@@ -296,12 +345,15 @@ function MobileAgentSessionHistoryPanelContent({
       client,
       connState,
       hostId,
+      currentExecutionHost,
       origin,
       sessionBelow,
       router,
       worktreeId,
       worktrees,
       claimResumeOwnership,
+      closedSessionIds,
+      onJumpToOpenSession,
       showResumeToast,
       t
     ]
@@ -395,6 +447,8 @@ function MobileAgentSessionHistoryPanelContent({
               showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
               resumeActionStateBySessionId={resumeActionStateBySessionId}
               onResume={onResumeSession}
+              onJumpToOpenTab={onJumpToOpenSession}
+              onCloseOpenTab={openTabActions.onCloseOpenSession}
               onRefresh={() => void onRefresh()}
               bottomPadding={searchBarHeight}
             />
@@ -415,9 +469,3 @@ function MobileAgentSessionHistoryPanelContent({
 
 const EMPTY_SESSIONS: AiVault.AiVaultSession[] = []
 const EMPTY_ISSUES: AiVault.AiVaultScanIssue[] = []
-
-function createMobileAiVaultResumeMutationId(sessionId: string): string {
-  const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'
-  const randomPart = Math.random().toString(36).slice(2, 10)
-  return `ai-vault-resume:${sessionPart}:${Date.now().toString(36)}:${randomPart}`
-}

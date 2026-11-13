@@ -33,7 +33,9 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
     hostId && worktreeId
       ? shellScreenRoute({
           pathname: `/h/${encodeURIComponent(hostId)}/agent-history/${encodeURIComponent(worktreeId)}`,
-          // Omit absent name: name= is an explicit label, while absence lets the panel derive one.
+          // Omitted rather than empty: the page reads the label and origin off the search half, and a
+          // `name=` or `origin=` with nothing after it is a named empty, where an absent one lets the
+          // panel derive its own.
           ...(Object.keys(routeParams).length === 0 ? {} : { params: routeParams })
         })
       : null
