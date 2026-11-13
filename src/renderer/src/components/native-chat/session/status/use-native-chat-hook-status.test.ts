@@ -37,12 +37,26 @@ it('preserves its pane status across another pane update and observes its own st
       { updatedAt: start, evidenceObservedAt: start, turnStartedAt: start }
     )
   }
-  const status = renderHook(() => useNativeChatHookStatus('own:1'))
-  const timing = renderHook(() => useNativeChatTerminalTurnTiming('own:1', messages, false))
+  let statusRenders = 0
+  let timingRenders = 0
+  const status = renderHook(() => {
+    statusRenders++
+    return useNativeChatHookStatus('own:1')
+  })
+  const timing = renderHook(() => {
+    timingRenders++
+    return useNativeChatTerminalTurnTiming('own:1', messages, false)
+  })
+  statusRenders = 0
+  timingRenders = 0
   act(() => {
     store.setAgentStatus('other:1', { state: 'done', prompt: 'task' })
-    useAppStore.setState((state) => ({ agentStatusEpoch: state.agentStatusEpoch + 1 }))
   })
+  expect(statusRenders).toBe(0)
+  expect(timingRenders).toBe(0)
+  act(() => useAppStore.setState((state) => ({ agentStatusEpoch: state.agentStatusEpoch + 1 })))
+  expect(statusRenders).toBe(0)
+  expect(timingRenders).toBe(0)
   expect(status.result.current[0]).toBe('working')
   act(() => {
     vi.setSystemTime(start + 5_000)

@@ -1,3 +1,4 @@
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -51,63 +52,76 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       isPinned: false,
       agentSessionAgent: 'codex'
     } satisfies Tab
-    const state = {
+    const store = createTestStore()
+    store.setState({
       tabsByWorktree: { 'wt-1': [] },
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] },
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: entry })),
       migrationUnsupportedByPtyId: {}
-    }
+    })
 
-    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
-    expect(
-      selectLiveAgentStatusEntriesForWorktree(
-        { ...state, unifiedTabsByWorktree: { 'wt-1': [] } },
-        'wt-1'
-      )
-    ).toEqual([])
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([entry])
+    store.setState({ unifiedTabsByWorktree: { 'wt-1': [] } })
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([])
   })
 
-  it('falls back to a full rebuild when a within-map update changes worktree attribution', () => {
+  it('moves the live row when its worktree attribution changes', () => {
     const entry = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',
       worktreeId: 'wt-1'
     })
-    const state = {
+    const store = createTestStore()
+    store.setState({
       tabsByWorktree: { 'wt-1': [], 'wt-2': [] },
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: entry })),
       migrationUnsupportedByPtyId: {}
-    }
-    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
+    })
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([entry])
 
     const moved = { ...entry, worktreeId: 'wt-2' }
-    const nextState = {
-      ...state,
+    store.setState({
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: moved }))
-    }
-    expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
-    expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')).toEqual([moved])
+    })
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([])
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-2')).toEqual([moved])
   })
 
-  it('falls back to a full rebuild when a live entry completes with its tab gone', () => {
+  it('removes a completed live row when its tab is gone', () => {
     const entry = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',
       worktreeId: 'wt-1'
     })
-    const state = {
+    const store = createTestStore()
+    store.setState({
       tabsByWorktree: { 'wt-1': [] },
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: entry })),
       migrationUnsupportedByPtyId: {}
-    }
-    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
+    })
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([entry])
 
     // done + tab absent must drop the row (bucket rule), not be patched in place.
     const done = { ...entry, state: 'done' as const }
-    const nextState = {
-      ...state,
+    store.setState({
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: done }))
-    }
-    expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
+    })
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([])
+  })
+  it('reads a new live agent after the last row was removed without an intervening read', () => {
+    const store = createTestStore()
+    const first = makeEntry(PANE_KEY_1, Date.now(), { state: 'working', worktreeId: 'wt-1' })
+    store.setState({ agentStatusByPaneKey: acceptedAgentStatuses([[PANE_KEY_1, first]]) })
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([first])
+    store.getState().removeAgentStatus(PANE_KEY_1)
+    const second = makeEntry('tab-2:33333333-3333-4333-8333-333333333333', Date.now(), {
+      state: 'working',
+      worktreeId: 'wt-1',
+      prompt: 'new task'
+    })
+    store.setState({
+      agentStatusByPaneKey: store
+        .getState()
+        .agentStatusByPaneKey.replace([[second.paneKey, second]])
+    })
+    expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([second])
   })
 })
-
-// Inactive inline-agent hooks need a shared identity to avoid allocating on every store write.

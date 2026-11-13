@@ -188,6 +188,9 @@ export class AgentStatusProjection {
     const publishCounts = stageProjectionCounts(data, state, rows.prepared)
     return () => {
       data.fullResync ||= fullResync
+      for (const key of refreshKeys) {
+        data.notices.add(`status\0${key}`)
+      }
       if (senderLocationsChanged) {
         data.notices.add('sender-locations')
       }

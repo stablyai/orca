@@ -46,8 +46,6 @@ export function applyWebSessionTabsStorePatch(
     .map(({ worktreeId }) => worktreeId)
 ): HostSessionMirrorSettle {
   let mirroredAgentStatusChanged = false
-  // Zustand commits before notifying subscribers, so a completed producer has landed even if a subscriber throws.
-  let patchCommitted = false
   const acceptedNotificationStatuses: {
     paneKey: string
     worktreeId: string
@@ -204,18 +202,10 @@ export function applyWebSessionTabsStorePatch(
         (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
       )
     }
-    patchCommitted = true
     return patch
   }
 
-  try {
-    useAppStore.getState().updateAgentStatusState(runStorePatch)
-  } catch (error) {
-    if (!patchCommitted) {
-      throw error
-    }
-    console.warn('[web-session-tabs-sync] a store subscriber failed after the patch landed:', error)
-  }
+  useAppStore.getState().updateAgentStatusState(runStorePatch)
 
   for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
     if (decision.apply && source) {

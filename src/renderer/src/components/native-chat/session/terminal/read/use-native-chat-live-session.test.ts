@@ -319,7 +319,14 @@ describe('useNativeChatLiveSession — transport routing', () => {
     useAppStore.setState({
       agentStatusByPaneKey: acceptedAgentStatuses(
         Object.entries({
-          [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
+          [PANE]: {
+            paneKey: PANE,
+            state: 'working' as const,
+            prompt: 'task',
+            stateStartedAt: 1,
+            updatedAt: Date.now(),
+            stateHistory: []
+          }
         })
       )
     })

@@ -17,6 +17,7 @@ export function captureProjectionState(
   captured.inputs = data.inputs
   captured.represented = data.represented
   captured.nextRank = data.nextRank
+  captured.nextRowRevision = data.nextRowRevision
   captured.freshEvidence = data.freshEvidence
   captured.deadCandidates = data.deadCandidates.capture()
   captured.freshCandidates = data.freshCandidates.capture()

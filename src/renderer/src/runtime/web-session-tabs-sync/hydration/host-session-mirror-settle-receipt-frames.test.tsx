@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
 
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -76,37 +77,48 @@ import '../../rpc/subscriptions/window-visibility-subscription-parking'
 describe('a global singular frame whose patch never lands', () => {
   installFrameOrderingHarness()
 
-  it('settles nothing when the patch itself throws mid-apply', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-apply-throw')
-    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
+  it.each(['patch', 'preparation'])(
+    'settles nothing when %s fails before the write',
+    async (failure) => {
+      renderHook(() => useWebSessionTabsSync())
+      await act(settle)
+      const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-apply-throw')
+      expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // Malformed ready-without-handle fails inside store write; no commit means no receipt.
-    const malformed = makeHostSnapshot(
-      WT,
-      OTHER_HOST_SURFACE_ID,
-      OTHER_HOST_PARENT_TAB_ID
-    ) as never as { tabs: Record<string, unknown>[] }
-    malformed.tabs[0]!.terminal = undefined
-    await publish(findSubscription('session.tabs.subscribeAll'), {
-      type: 'snapshot',
-      ...malformed
-    })
+      const snapshot = makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID)
+      const prepare = vi.spyOn(AgentStatusProjection.prototype, 'prepare')
+      if (failure === 'patch') {
+        const malformed = snapshot as never as { tabs: Record<string, unknown>[] }
+        malformed.tabs[0]!.terminal = undefined
+      } else {
+        prepare.mockImplementationOnce(() => {
+          throw new Error('cannot prepare status publication')
+        })
+      }
+      try {
+        await publish(findSubscription('session.tabs.subscribeAll'), {
+          type: 'snapshot',
+          ...snapshot
+        })
+      } finally {
+        prepare.mockRestore()
+      }
 
-    expect(tabIds(WT)).toEqual([MIRROR_TAB_ID])
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+      expect(hasHostSessionMirrorHydrated(ENV, WT)).toBe(false)
+      expect(tabIds(WT)).toEqual([MIRROR_TAB_ID])
+      expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+      expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
 
-    await publish(findSubscription('session.tabs.subscribeAll'), {
-      type: 'snapshot',
-      ...makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID),
-      snapshotVersion: 2
-    })
+      await publish(findSubscription('session.tabs.subscribeAll'), {
+        type: 'snapshot',
+        ...makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID),
+        snapshotVersion: 2
+      })
 
-    expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-apply-throw')
-  })
+      expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
+      expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-apply-throw')
+    }
+  )
 })
 
 describe('the eager post-create list answers for its worktree', () => {
@@ -188,12 +200,11 @@ describe('the eager post-create list answers for its worktree', () => {
   })
 })
 
-// Zustand commits before notification; subscriber failure must retain the receipt only when patchCommitted proves the write happened.
+// A failed observer cannot undo a landed frame or skip later observers.
 describe('a store subscriber that throws after the commit', () => {
   installFrameOrderingHarness()
 
   it('still settles the frame whose patch landed', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     renderHook(() => useWebSessionTabsSync())
     await act(settle)
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-subscriber-throw')
@@ -208,6 +219,8 @@ describe('a store subscriber that throws after the commit', () => {
       threw = true
       throw new Error('agent status subscriber failed')
     })
+    const observed = vi.fn()
+    const unsubscribeLater = useAppStore.subscribe(observed)
     try {
       await publish(findSubscription('session.tabs.subscribeAll'), {
         type: 'snapshot',
@@ -215,17 +228,13 @@ describe('a store subscriber that throws after the commit', () => {
       })
     } finally {
       unsubscribe()
+      unsubscribeLater()
     }
 
-    // Require catch evidence or settle could pass without exercising the failure branch.
     expect(threw).toBe(true)
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('a store subscriber failed after the patch landed'),
-      expect.anything()
-    )
+    expect(observed).toHaveBeenCalled()
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
     expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-subscriber-throw')
-    warn.mockRestore()
   })
 })

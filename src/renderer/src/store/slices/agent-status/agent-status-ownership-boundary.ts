@@ -35,6 +35,7 @@ export function withAgentStatusOwnership(
           ])
         }
         const statuses = next.agentStatusByPaneKey
+        const publishStatuses = statuses.prepare()
         const publishProjection = statuses.projection.prepare(
           next,
           statuses.changes(),
@@ -42,7 +43,7 @@ export function withAgentStatusOwnership(
           fullResync
         )
         publishProjection()
-        statuses.publish()
+        publishStatuses()
         write(next, true)
         statuses.projection.notify()
       }

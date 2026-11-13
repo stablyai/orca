@@ -64,6 +64,7 @@ export class AgentStatusProjectionState {
     revision: 0
   }
   nextRank = 0
+  nextRowRevision = 0
   freshEvidence = 0
   readonly candidates = new Map<string, Candidate>()
   deadCandidates = new KeyedDeadlines()

@@ -1,3 +1,4 @@
+import * as mobileStatusProjection from '@/runtime/sync-runtime-graph/agent-status-projection'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -29,6 +30,33 @@ describe('setAgentStatuses', () => {
     vi.restoreAllMocks()
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('leaves accepted rows and visible rows unchanged when publication preparation fails', () => {
+    const store = seedBatchStore()
+    store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'Task' })
+    const before = store.getState()
+    const projection = before.agentStatusByPaneKey.projection
+    const rows = projection.list('wt-1')
+    const observed = vi.fn()
+    const stop = before.agentStatusByPaneKey.subscribe(FIRST_PANE, observed)
+    const serializer = vi
+      .spyOn(mobileStatusProjection, 'serializeAgentStatusEntry')
+      .mockImplementationOnce(() => {
+        throw new Error('cannot serialize status')
+      })
+    try {
+      expect(() =>
+        store.getState().setAgentStatus(FIRST_PANE, { state: 'done', prompt: 'Finished' })
+      ).toThrow('cannot serialize status')
+      expect(store.getState()).toBe(before)
+      expect(before.agentStatusByPaneKey.get(FIRST_PANE)?.state).toBe('working')
+      expect(projection.list('wt-1')).toBe(rows)
+      expect(observed).not.toHaveBeenCalled()
+    } finally {
+      serializer.mockRestore()
+      stop()
+    }
   })
 
   it('exposes cap evictions to later updates in the same transaction', () => {

@@ -142,35 +142,38 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
     return changes
   }
 
-  /** Called only at the accepted store boundary, after every fallible write policy. */
-  publish(): void {
+  /** Materialize fallible facts before either owner or presentation is published. */
+  prepare(): () => void {
     const fact = (entry: AgentStatusEntry | undefined) =>
       entry && isAiVaultTitleAgent(entry.agentType) && entry.providerSession?.id
         ? [entry.agentType, entry.paneKey, entry.tabId, entry.worktreeId, entry.providerSession]
         : undefined
-    if (this.changes().some((change) => !equal(fact(change.previous), fact(change.current)))) {
-      this.titleRevision++
-    }
-    if (
-      this.changes().some(
-        ({ paneKey, previous, current }) =>
-          (previous ? serializeAgentStatusEntry(paneKey, previous) : null) !==
-          (current ? serializeAgentStatusEntry(paneKey, current) : null)
-      )
-    ) {
-      this.mobileToken = {}
-    }
-    for (const [key, value] of this.operations) {
-      if (value === null) {
-        this.rows.delete(key)
-      } else {
-        this.rows.set(key, value)
+    const changes = this.changes()
+    const titleChanged = changes.some(
+      (change) => !equal(fact(change.previous), fact(change.current))
+    )
+    const mobileChanged = changes.some(
+      ({ paneKey, previous, current }) =>
+        (previous ? serializeAgentStatusEntry(paneKey, previous) : null) !==
+        (current ? serializeAgentStatusEntry(paneKey, current) : null)
+    )
+    const titleRevision = this.titleRevision + Number(titleChanged)
+    const mobileToken = mobileChanged ? {} : this.mobileToken
+    return () => {
+      this.titleRevision = titleRevision
+      this.mobileToken = mobileToken
+      for (const [key, value] of this.operations) {
+        if (value === null) {
+          this.rows.delete(key)
+        } else {
+          this.rows.set(key, value)
+        }
       }
+      this.pending = null
+      this.operations = []
+      this.moved.clear()
+      this.refreshes = []
     }
-    this.pending = null
-    this.operations = []
-    this.moved.clear()
-    this.refreshes = []
   }
 
   capture(): AcceptedAgentStatuses {
