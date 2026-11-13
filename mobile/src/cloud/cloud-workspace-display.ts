@@ -108,3 +108,50 @@ export function nextCloudWorkspaceTitle(
   }
   return `${base} ${n}`
 }
+
+/** Usage once, honestly: sandbox hours so far (what the plan meters), and whether it is using them
+ *  now. No per-workspace dollars: included hours are not charged. */
+export function cloudSpendLine(
+  workspace: Pick<CloudWorkspace, 'sandboxMs' | 'status'>,
+  usage: { totalMs: number } | null,
+  awake: boolean,
+  t: Translate
+): string | null {
+  const ms = usage ? usage.totalMs : workspace.sandboxMs
+  if (ms === null) {
+    return null
+  }
+  const { value, label } = cloudSandboxHours(ms)
+  // Archived is not "asleep" to the user: it can't be woken from here at all.
+  if (workspace.status === 'archived') {
+    return t(
+      'cloud.usage.archived',
+      '{{hours}} sandbox hours used. Archived workspaces use no sandbox hours.',
+      {
+        count: value,
+        hours: label,
+        defaultValue_one: '{{hours}} sandbox hour used. Archived workspaces use no sandbox hours.'
+      }
+    )
+  }
+  if (!awake) {
+    return t(
+      'cloud.usage.asleep',
+      '{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.',
+      {
+        count: value,
+        hours: label,
+        defaultValue_one: '{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.'
+      }
+    )
+  }
+  return t(
+    'cloud.usage.running',
+    '{{hours}} sandbox hours so far. Uses sandbox hours while running.',
+    {
+      count: value,
+      hours: label,
+      defaultValue_one: '{{hours}} sandbox hour so far. Uses sandbox hours while running.'
+    }
+  )
+}

@@ -30,6 +30,7 @@ import {
   launchCloudPrompt,
   type CloudLaunchedAgent
 } from './cloud-workspace-host-operations'
+import { runCloudDelivery } from './cloud-delivery-run'
 import { ownerForCloudError, roleForCloudError } from './cloud-entitlement-copy'
 import { cloudWorkspaceProjectRoot } from './cloud-workspace-links'
 import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
@@ -113,76 +114,56 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
     deliveryStarted.current = run
     const client = host.client
     const hostId = run.hostId
+    const intent = run.intent
     void (async () => {
-      try {
-        const waiting = await listQueuedCloudPrompts(sandboxId)
-        if (!waiting.some((prompt) => prompt.status !== 'failed')) {
-          // Nothing to send: the connection is proven, so open the sandbox's workspaces.
-          if (mountedRef.current) {
-            setRun({ kind: 'idle' })
-            router.push(`/h/${hostId}`)
-          }
-          return
-        }
-        const projectRoot = (await cloudWorkspaceProjectRoot(sandboxId)) ?? undefined
-        const worktreeId = await ensureCloudProjectWorktree(client, projectRoot)
-        const launches: CloudLaunchedAgent[] = []
-        let failed = 0
-        // Prompts typed while this ran are picked up too, so none is left "waiting" behind it.
-        for (let round = 0; round < 5; round++) {
-          const next = await deliverQueuedCloudPrompts(
-            sandboxId,
-            async (prompt) => {
-              launches.push(await launchCloudPrompt(client, worktreeId, prompt))
-            },
-            cloudPromptErrorCode
-          )
-          failed += next.failed.length
-          const pending = await listQueuedCloudPrompts(sandboxId)
-          if (
-            next.delivered + next.failed.length === 0 ||
-            !pending.some((prompt) => prompt.status !== 'failed')
-          ) {
-            break
-          }
-        }
-        invalidate()
-        if (!mountedRef.current) {
-          return
-        }
-        if (failed > 0) {
-          const stillQueued = (await listQueuedCloudPrompts(sandboxId)).some(
-            (prompt) => prompt.status !== 'failed'
-          )
-          setRun({
-            kind: 'error',
-            message: t(
-              'cloud.error.deliver',
-              'The workspace is running, but a prompt didn’t start. Your files are safe.'
-            ),
-            retry: stillQueued ? 'send' : null
-          })
-          return
-        }
-        const last = launches[launches.length - 1]
-        if (last) {
-          // A cloud agent may still need its sign-in: say what happened before dropping into the
-          // session, and let the user pick the chat or the terminal.
-          setRun({ kind: 'launched', hostId, worktreeId, agent: last })
-          return
-        }
-        setRun({ kind: 'idle' })
-        router.push(`/h/${hostId}`)
-      } catch (error) {
-        if (mountedRef.current) {
-          // Delivery failures are about the prompt, not the sandbox: say which, never "something".
-          setRun({
-            kind: 'error',
-            message: cloudPromptErrorMessage(cloudPromptErrorCode(error), t),
-            retry: 'send'
-          })
-        }
+      const outcome = await runCloudDelivery(sandboxId, intent, {
+        listQueued: listQueuedCloudPrompts,
+        ensureWorktree: async () =>
+          ensureCloudProjectWorktree(
+            client,
+            (await cloudWorkspaceProjectRoot(sandboxId)) ?? undefined
+          ),
+        launch: (worktreeId, prompt) => launchCloudPrompt(client, worktreeId, prompt),
+        deliverQueued: deliverQueuedCloudPrompts,
+        markWaitingFailed: markWaitingCloudPromptsFailed,
+        errorCodeFor: cloudPromptErrorCode
+      }).catch((error: unknown) => ({
+        kind: 'failed' as const,
+        code: cloudPromptErrorCode(error),
+        open: intent === 'open'
+      }))
+      invalidate()
+      if (!mountedRef.current) {
+        return
       }
+      if (outcome.kind === 'launched') {
+        // A cloud agent may still need its sign-in: say what happened before dropping into the
+        // session, and let the user pick the chat or the terminal.
+        setRun({ kind: 'launched', hostId, worktreeId: outcome.worktreeId, agent: outcome.agent })
+        return
+      }
+      if (outcome.kind === 'failed') {
+        // Delivery failures are about the prompt, not the sandbox: say which, never "something".
+        // The failed prompts wait in the list with Retry and Remove; nothing retries them here.
+        setRun({
+          kind: 'error',
+          message:
+            outcome.code === null
+              ? t(
+                  'cloud.error.deliver',
+                  'The workspace is running, but a prompt didn’t start. Your files are safe.'
+                )
+              : cloudPromptErrorMessage(outcome.code, t),
+          retry: null
+        })
+        if (!outcome.open) {
+          return
+        }
+      } else {
+        setRun({ kind: 'idle' })
+      }
+      // Nothing (more) to send, or the user asked to open: the connection is proven, so open it.
+      router.push(`/h/${hostId}`)
     })()
   }, [run, host.client, host.state, sandboxId, invalidate, router, t, title])
 

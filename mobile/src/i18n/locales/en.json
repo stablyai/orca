@@ -5103,7 +5103,10 @@
       "rateLimited": "Too many new workspaces at once. Wait a minute, then try again.",
       "create": "Couldn’t start your cloud workspace. Nothing was created, and you weren’t charged.",
       "deliver": "The workspace is running, but a prompt didn’t start. Your files are safe.",
-      "restartOwner": "Only the workspace’s owner can restart it. Your files are safe."
+      "restartOwner": "Only the workspace’s owner can restart it. Your files are safe.",
+      "repoAccess": "Orca can’t access {{repo}}. If it’s private, connect GitHub and give Orca access to it in Orca on your computer. Check the name, then try again. Nothing was created, and you weren’t charged.",
+      "repoAccessUnnamed": "Orca can’t access this repository. If it’s private, connect GitHub and give Orca access to it in Orca on your computer. Check the name, then try again. Nothing was created, and you weren’t charged.",
+      "cloneNamed": "Couldn’t clone {{repo}}. Check the name, and that the Orca GitHub App can see it (Give Orca access, in Orca on your computer). Nothing was created, and you weren’t charged."
     },
     "workspace": {
       "title": "Cloud workspace",
@@ -5283,7 +5286,9 @@
       "asleep_one": "{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.",
       "asleep_other": "{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.",
       "running_one": "{{hours}} sandbox hour so far. Uses sandbox hours while running.",
-      "running_other": "{{hours}} sandbox hours so far. Uses sandbox hours while running."
+      "running_other": "{{hours}} sandbox hours so far. Uses sandbox hours while running.",
+      "archived_one": "{{hours}} sandbox hour used. Archived workspaces use no sandbox hours.",
+      "archived_other": "{{hours}} sandbox hours used. Archived workspaces use no sandbox hours."
     },
     "host": {
       "asleep": "{{name}} is asleep",
