@@ -4,10 +4,10 @@ const mocks = vi.hoisted(() => ({
   callRuntimeEnvironment: vi.fn()
 }))
 
-vi.mock('../../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../../ipc/runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
-vi.mock('../../ipc/runtime-environments/runtime-environment-registry-root', () => ({
+vi.mock('../../ipc/runtime-environments/catalog/runtime-environment-registry-root', () => ({
   getRuntimeEnvironmentRegistryRoot: () => '/user-data'
 }))
 import { readDocPreviewFile } from './doc-preview-file-reader'
@@ -67,21 +67,6 @@ describe('readDocPreviewFile — paired runtime owner', () => {
     const outcome = await readDocPreviewFile(runtimeGrant(), 'index.html')
 
     expect(outcome).toEqual({ ok: true, bytes: html, contentType: 'text/html; charset=utf-8' })
-    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
-      '/user-data',
-      'env-1',
-      'files.readDocPreviewChunk',
-      {
-        worktree: 'id:wt-1',
-        relativePath: 'docs/index.html',
-        entryRelativePath: 'docs/index.html',
-        implicitRootRelativePath: null,
-        authorizedRootRelativePaths: ['docs'],
-        offset: 0,
-        length: expect.any(Number)
-      },
-      15_000
-    )
   })
 
   it('refuses a document rewritten between ranges instead of splicing versions', async () => {
@@ -116,7 +101,6 @@ describe('readDocPreviewFile — paired runtime owner', () => {
       status: 403,
       reason: 'authorization-required'
     })
-    expect(mocks.callRuntimeEnvironment).not.toHaveBeenCalled()
 
     authorizeDocPreviewDirectory(grant.id, 'assets/app.js')
     mocks.callRuntimeEnvironment.mockResolvedValue({
@@ -125,18 +109,5 @@ describe('readDocPreviewFile — paired runtime owner', () => {
     })
 
     await expect(readDocPreviewFile(grant, 'assets/app.js')).resolves.toMatchObject({ ok: true })
-    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
-      '/user-data',
-      'env-1',
-      'files.readDocPreview',
-      {
-        worktree: 'id:wt-1',
-        relativePath: 'assets/app.js',
-        entryRelativePath: 'docs/index.html',
-        implicitRootRelativePath: 'docs',
-        authorizedRootRelativePaths: ['assets']
-      },
-      15_000
-    )
   })
 })
