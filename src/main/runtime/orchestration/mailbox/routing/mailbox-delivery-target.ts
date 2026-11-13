@@ -26,24 +26,11 @@ export class OrchestrationMailboxDeliveryTarget {
     if (this.deps.isStructuredSessionOwner(handle)) {
       return null
     }
-    const db = this.deps.getDb()
-    const runId = handle.startsWith('run:') ? handle.slice('run:'.length) : ''
-    const dispatchId = handle.startsWith('dispatch:') ? handle.slice('dispatch:'.length) : ''
-    const dispatch = dispatchId ? db?.getDispatchContextById?.(dispatchId) : undefined
-    const remote =
-      dispatchId && !dispatch ? db?.getRemoteDispatchAttachment?.(dispatchId) : undefined
-    const run = runId ? db?.getRun(runId) : undefined
-    // Runs bind their coordinator by pane; the stored handle is stale once that pane's PTY is replaced.
-    const paneKey = run
-      ? run.coordinator_pane_key
-      : (dispatch?.assignee_pane_key ?? remote?.pane_key)
+    const { paneKey, ownerHandle } = this.roleMailboxOwner(handle)
     const paneTerminal = paneKey ? this.deps.getMailboxTerminalForPaneKey(paneKey) : null
     if (paneTerminal) {
       return paneTerminal
     }
-    const ownerHandle = run
-      ? run.coordinator_handle
-      : (dispatch?.assignee_handle ?? remote?.terminal_handle)
     if (!ownerHandle) {
       return null
     }
@@ -59,6 +46,38 @@ export class OrchestrationMailboxDeliveryTarget {
       return null
     }
     return this.deps.getTerminalForHandle(ownerHandle)
+  }
+
+  /** Whether mail to the handle reaches a terminal open here, directly or through its owner's pane. */
+  reachesOpenTerminal(handle: string): boolean {
+    if (this.deps.hasTerminalHandle(handle)) {
+      return true
+    }
+    const { paneKey, ownerHandle } = this.roleMailboxOwner(handle)
+    if (paneKey && this.deps.getMailboxTerminalForPaneKey(paneKey)) {
+      return true
+    }
+    return Boolean(ownerHandle && this.deps.hasTerminalHandle(ownerHandle))
+  }
+
+  private roleMailboxOwner(handle: string): {
+    paneKey: string | null | undefined
+    ownerHandle: string | null | undefined
+  } {
+    const db = this.deps.getDb()
+    const runId = handle.startsWith('run:') ? handle.slice('run:'.length) : ''
+    const dispatchId = handle.startsWith('dispatch:') ? handle.slice('dispatch:'.length) : ''
+    const dispatch = dispatchId ? db?.getDispatchContextById?.(dispatchId) : undefined
+    const remote =
+      dispatchId && !dispatch ? db?.getRemoteDispatchAttachment?.(dispatchId) : undefined
+    const run = runId ? db?.getRun(runId) : undefined
+    // Runs bind their coordinator by pane; the stored handle is stale once that pane's PTY is replaced.
+    return run
+      ? { paneKey: run.coordinator_pane_key, ownerHandle: run.coordinator_handle }
+      : {
+          paneKey: dispatch?.assignee_pane_key ?? remote?.pane_key,
+          ownerHandle: dispatch?.assignee_handle ?? remote?.terminal_handle
+        }
   }
 
   deferForAbsenceProbe(

@@ -18,6 +18,8 @@ import {
   replayStableCallerParams,
   shouldObserveCompletedMutation
 } from './orchestration-mutation-receipt'
+import { expandCompactedMutationReceipt } from '../../../orchestration/db/mutation-receipts/mutation-receipt-compaction'
+import { readReceiptMessage } from '../../methods/orchestration/messaging/mailbox-message-receipt'
 
 export type DurableMutationInvocation = {
   identity: {
@@ -144,7 +146,11 @@ export class OrchestrationMutationExecutor {
       if (active) {
         return attachMutationReceipt(await active.promise, requestId, true)
       }
-      const receipt = JSON.parse(begun.row.receipt ?? 'null')
+      const receipt = expandCompactedMutationReceipt(
+        JSON.parse(begun.row.receipt ?? 'null'),
+        requestId,
+        (messageId) => readReceiptMessage(db, messageId)
+      )
       if (promptBindingChanged) {
         return attachMutationReceipt(
           markReplayedPromptIncarnationReplaced(receipt),
