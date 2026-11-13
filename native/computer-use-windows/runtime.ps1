@@ -1589,12 +1589,18 @@ function Resolve-OrcaLaunchExecutable([string]$Query) {
     throw "appNotFound(`"$Query`")"
 }
 
-function Wait-OrcaLaunchedWindow([int]$ProcessId, [int]$TimeoutMilliseconds) {
+function Wait-OrcaLaunchedWindow([int]$ProcessId, [string]$ProcessName, [DateTime]$StartedAt, [int]$TimeoutMilliseconds) {
     $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
     while ([DateTime]::UtcNow -lt $deadline) {
         $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
-        if ($null -eq $process) { return $null }
-        if ($process.MainWindowHandle -ne 0) { return $process }
+        if ($null -ne $process -and $process.MainWindowHandle -ne 0) { return $process }
+        if ($null -eq $process) {
+            # Why: stubs such as Windows 11's notepad.exe start the real app under the same name and exit.
+            $handoff = Get-OrcaWindowProcesses | Where-Object {
+                $_.ProcessName -ieq $ProcessName -and $_.StartTime -ge $StartedAt
+            } | Select-Object -First 1
+            if ($null -ne $handoff) { return $handoff }
+        }
         Start-Sleep -Milliseconds 100
     }
     Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
@@ -1612,8 +1618,10 @@ function Invoke-OrcaLaunchApp($Operation) {
     $query = ([string]$Operation.app).Trim()
     if ([string]::IsNullOrWhiteSpace($query)) { throw 'appNotFound("")' }
     $processName = [System.IO.Path]::GetFileNameWithoutExtension($query)
-    # Why: starting a running app again usually opens a second window over the user's work.
-    $running = Get-OrcaWindowProcesses | Where-Object { $_.ProcessName -ieq $processName } | Select-Object -First 1
+    # Why: starting a running app again usually opens a second window over the user's work; tray-only apps count too.
+    $session = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+    $running = @(Get-Process -Name ([WildcardPattern]::Escape($processName)) -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session }) |
+        Sort-Object { $_.MainWindowHandle -eq 0 } | Select-Object -First 1
     if ($null -ne $running) {
         Assert-OrcaProcessAllowed $running
         return New-OrcaLaunchResult $running $false
@@ -1625,6 +1633,9 @@ function Invoke-OrcaLaunchApp($Operation) {
         if ($name.Contains($fragment.Replace(" ", ""))) { throw "appBlocked(`"$name`")" }
     }
     $activate = [bool]$Operation.activate
+    # Why: Orca runs this script with ELECTRON_RUN_AS_NODE=1, which would start an Electron app as bare Node.
+    Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+    $startedAt = (Get-Date).AddSeconds(-1)
     try {
         $processId = if ($activate) {
             (Start-Process -FilePath $executable -PassThru).Id
@@ -1634,7 +1645,7 @@ function Invoke-OrcaLaunchApp($Operation) {
     } catch {
         throw "app_launch_failed: could not launch '$query': $($_.Exception.Message)"
     }
-    $process = Wait-OrcaLaunchedWindow $processId 10000
+    $process = Wait-OrcaLaunchedWindow $processId ([System.IO.Path]::GetFileNameWithoutExtension($executable)) $startedAt 10000
     if ($null -eq $process) {
         throw "app_launch_failed: the process started for '$query' exited; if it handed off to another process, find that one with list-apps"
     }

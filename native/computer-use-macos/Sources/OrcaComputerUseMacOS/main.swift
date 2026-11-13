@@ -816,8 +816,16 @@ final class Provider {
         guard let url = installedApplicationURL(query) else {
             throw ProviderError.coded("app_not_found", "app '\(query)' is not running and no installed app has that name, bundle ID or path")
         }
-        if let bundleId = Bundle(url: url)?.bundleIdentifier, blockedBundleIds.contains(bundleId) {
-            throw ProviderError.coded("app_blocked", "app '\(bundleId)' is blocked for safety")
+        if let bundleId = Bundle(url: url)?.bundleIdentifier {
+            if blockedBundleIds.contains(bundleId) {
+                throw ProviderError.coded("app_blocked", "app '\(bundleId)' is blocked for safety")
+            }
+            // Why: a path or display-name query misses the running check above, and menu bar apps aren't listed.
+            if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+                .first(where: { !$0.isTerminated }),
+                let app = appByPid(running.processIdentifier) {
+                return renderLaunch(app, launched: false)
+            }
         }
         let pid: pid_t
         do {
@@ -833,6 +841,11 @@ final class Provider {
         }
         guard let app = appByPid(pid) else {
             throw ProviderError.coded("app_launch_failed", "'\(query)' exited right after it launched")
+        }
+        // Why: Launch Services reports the app once it checks in; activation, asked for or not, lands after it finishes launching.
+        let deadline = Date().addingTimeInterval(5)
+        while !app.app.isFinishedLaunching, !app.app.isTerminated, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
         }
         return renderLaunch(app, launched: true)
     }
