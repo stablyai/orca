@@ -1,0 +1,151 @@
+// STA-13482 harness: drives the REAL agent model catalog service/store with fake probes that take
+// each agent's measured wall time, under a fake clock, and counts probes per `+` open.
+// Run: cp into src/main/native-chat/agent-model-catalog/ and `pnpm test <that path> --maxWorkers=1`.
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createAgentModelCatalogService } from './agent-model-catalog-service'
+import { AgentModelCatalogStore } from './agent-model-catalog-store'
+import type { AgentModelCatalogEntry, AgentModelCatalogSuccess } from './agent-model-catalog-entry'
+import type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
+
+// Median `agentModelCatalog.discovery` ms on this M4Air (installed 1.4.258 trace, 2026-11-06..12).
+const COST_MS: Record<string, number> = {
+  claude: 1317,
+  codex: 988,
+  grok: 897,
+  opencode: 1713, // 2.x lists through a session (same path as opencode2)
+  omp: 2521 // session discovery
+}
+const AGENTS = Object.keys(COST_MS)
+const FOLDER_SCOPED = new Set(['opencode', 'omp'])
+const INDEPENDENT = new Set(['claude', 'codex'])
+const HOME = { variable: 'HOME_VAR', path: '/account' }
+
+type Probe = { agent: string; at: number; folder?: string; ms: number }
+let probes: Probe[] = []
+let saved: AgentModelCatalogEntry[] = []
+
+const success = (agent: string): AgentModelCatalogSuccess => ({
+  origin: 'probe',
+  complete: true,
+  configured: {},
+  models: [{ id: `${agent}-m`, label: `${agent}-m`, isDefault: true, efforts: [] }]
+})
+
+function makeProbe(agent: string): AgentModelCatalogProbe {
+  const run = (folder?: string) =>
+    new Promise<AgentModelCatalogSuccess>((resolve) => {
+      probes.push({ agent, at: Date.now(), folder, ms: COST_MS[agent]! })
+      setTimeout(() => resolve(success(agent)), COST_MS[agent]!)
+    })
+  const probe = ((_home, options) => run(options?.workspacePath)) as AgentModelCatalogProbe
+  if (INDEPENDENT.has(agent)) {
+    probe.resolve = async () => ({ identity: `${agent}-bin`, run: () => run() })
+  }
+  return probe
+}
+
+function boot() {
+  const store = new AgentModelCatalogStore()
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: () => undefined,
+    getRecord: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => HOME,
+    listsInChatFolder: FOLDER_SCOPED,
+    hasChatRecords: () => true,
+    probes: Object.fromEntries(AGENTS.map((agent) => [agent, makeProbe(agent)]))
+  })
+  return { store, service }
+}
+
+// What the `+` menu does per enabled agent: the handler's demand + read, then a waiting read
+// when the first answer says a listing is still running (agent-launch-picker-acquisition.ts).
+async function openNewTabMenu(
+  service: ReturnType<typeof boot>['service'],
+  workspacePath: string
+): Promise<void> {
+  const start = Date.now()
+  await Promise.all(
+    AGENTS.map(async (agent) => {
+      const request = { agent, workspacePath }
+      void service.demand(request)
+      const first = await service.read(request)
+      if (first.listingInProgress) {
+        await service.read({ ...request, waitForListing: true })
+      }
+    })
+  )
+  lastOpenMs = Date.now() - start
+}
+let lastOpenMs = 0
+
+async function settle(open: Promise<void>, ms = 40_000): Promise<void> {
+  await vi.advanceTimersByTimeAsync(ms)
+  await open
+}
+
+function since(start: number) {
+  const rows = probes.filter((p) => p.at >= start)
+  const byAgent: Record<string, number> = {}
+  for (const p of rows) {
+    byAgent[p.agent] = (byAgent[p.agent] ?? 0) + 1
+  }
+  return {
+    count: rows.length,
+    modelsSettledMs: lastOpenMs,
+    probeMs: rows.reduce((t, p) => t + p.ms, 0),
+    byAgent
+  }
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'setInterval'] })
+  vi.setSystemTime(new Date('2026-11-12T09:00:00Z'))
+  probes = []
+})
+afterEach(() => vi.useRealTimers())
+
+it('reports probes per + open and per hour', async () => {
+  const report: Record<string, unknown> = {}
+  // Day 1: cold store (never listed), one open, then persist what was listed.
+  {
+    const { store, service } = boot()
+    const t = Date.now()
+    await settle(openNewTabMenu(service, '/wt/a'))
+    report.coldFirstOpen = since(t)
+    saved = [
+      ...(store as unknown as { entries: Map<string, AgentModelCatalogEntry> }).entries.values()
+    ]
+    await service.stop()
+  }
+  // Restart 1h later with the saved catalog (what agent-model-catalog.json holds).
+  vi.advanceTimersByTime(60 * 60_000)
+  probes = []
+  const { store, service } = boot()
+  await store.attachPersistence({ load: async () => saved, save: () => {}, flush: async () => {} })
+  const step = async (name: string, gapMs: number, folder: string) => {
+    vi.advanceTimersByTime(gapMs)
+    const t = Date.now()
+    await settle(openNewTabMenu(service, folder))
+    report[name] = since(t)
+  }
+  await step('firstOpenAfterRestart', 0, '/wt/a')
+  await step('reopen+30s', 30_000, '/wt/a')
+  await step('reopen+3min', 3 * 60_000, '/wt/a')
+  await step('otherWorktree+30s', 30_000, '/wt/b')
+  await step('reopen+11min', 11 * 60_000, '/wt/a')
+
+  // One hour of use: a `+` open every 4 minutes, cycling through 3 worktrees.
+  vi.advanceTimersByTime(30 * 60_000)
+  const hourStart = Date.now()
+  for (let i = 0; i < 15; i++) {
+    const t = Date.now()
+    await settle(openNewTabMenu(service, ['/wt/a', '/wt/b', '/wt/c'][i % 3]!))
+    vi.advanceTimersByTime(4 * 60_000 - (Date.now() - t))
+  }
+  report.hour_open_every_4min_3_worktrees = { opens: 15, ...since(hourStart) }
+  await service.stop()
+  console.log(JSON.stringify(report, null, 2))
+  expect(probes.length).toBeGreaterThan(0)
+})

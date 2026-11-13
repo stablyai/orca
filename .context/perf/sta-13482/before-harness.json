@@ -1,0 +1,75 @@
+{
+  "coldFirstOpen": {
+    "count": 5,
+    "modelsSettledMs": 4018,
+    "probeMs": 7436,
+    "byAgent": {
+      "grok": 1,
+      "opencode": 1,
+      "omp": 1,
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "firstOpenAfterRestart": {
+    "count": 5,
+    "modelsSettledMs": 4018,
+    "probeMs": 7436,
+    "byAgent": {
+      "grok": 1,
+      "opencode": 1,
+      "omp": 1,
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "reopen+30s": {
+    "count": 0,
+    "modelsSettledMs": 0,
+    "probeMs": 0,
+    "byAgent": {}
+  },
+  "reopen+3min": {
+    "count": 2,
+    "modelsSettledMs": 1317,
+    "probeMs": 2305,
+    "byAgent": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "otherWorktree+30s": {
+    "count": 2,
+    "modelsSettledMs": 2521,
+    "probeMs": 4234,
+    "byAgent": {
+      "opencode": 1,
+      "omp": 1
+    }
+  },
+  "reopen+11min": {
+    "count": 5,
+    "modelsSettledMs": 4018,
+    "probeMs": 7436,
+    "byAgent": {
+      "grok": 1,
+      "opencode": 1,
+      "omp": 1,
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "hour_open_every_4min_3_worktrees": {
+    "opens": 15,
+    "count": 65,
+    "modelsSettledMs": 3509,
+    "probeMs": 102570,
+    "byAgent": {
+      "grok": 5,
+      "opencode": 15,
+      "omp": 15,
+      "claude": 15,
+      "codex": 15
+    }
+  }
+}
