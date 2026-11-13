@@ -6518,7 +6518,6 @@
       "src/shared/plugins/contributions/plugin-content-pack-contributions.test.ts": 227,
       "src/shared/plugins/contributions/plugin-custom-editor-contribution.test.ts": 238,
       "src/shared/plugins/declarative/plugin-declarative-catalog-rich.test.ts": 147,
-      "src/shared/plugins/declarative/plugin-declarative-example.test.ts": 198,
       "src/shared/plugins/declarative/plugin-declarative-tree.test.ts": 168,
       "src/shared/plugins/declarative/runtime/declarative-act-snapshot.test.ts": 64,
       "src/shared/plugins/declarative/runtime/declarative-error-location.test.ts": 63,
