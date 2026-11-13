@@ -81,6 +81,14 @@ export function installTerminalLinkPtyMouseSuppression(
       captureCurrentMouseEvent()
       return
     }
+    // A middle-click link action claims the same deferral; without it claimAction() stays false and the action never runs.
+    if (isTerminalMiddleClickActivation(event) && shouldDeferPlainMouseEvent(event)) {
+      finishDeferredInput()
+      deferredPtyInput = []
+      addDeferredListeners()
+      captureCurrentMouseEvent()
+      return
+    }
     if (
       (!isTerminalLinkDirectActivation(event) && !isTerminalMiddleClickActivation(event)) ||
       !shouldSuppressMouseEvent(event)

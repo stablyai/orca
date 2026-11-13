@@ -51,6 +51,28 @@ afterEach(() => {
 })
 
 describe('terminal link PTY mouse suppression', () => {
+  it('lets a middle-click link action claim the deferral instead of returning false', async () => {
+    const { element, suppression } = createSuppression()
+    const forwarded: string[] = []
+    const forward = (data: string): void => {
+      forwarded.push(data)
+    }
+    element.addEventListener('mousedown', () =>
+      suppression.handlePtyInput('[<1;1;1M', forward)
+    )
+    element.addEventListener('mouseup', () => {
+      suppression.handlePtyInput('[<1;1;1m', forward)
+      // The middle-click link action claims the gesture, as requestTerminalLinkAction does for button 1.
+      expect(suppression.claimAction()).toBe(true)
+    })
+
+    element.dispatchEvent(mouseEvent('mousedown', { button: 1 }))
+    await settleGesture(element)
+
+    expect(forwarded).toEqual([])
+  })
+
+
   it('drops deferred mouse input when the completed action claims it', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
