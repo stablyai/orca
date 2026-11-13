@@ -16,6 +16,8 @@ export const NOTICE_MUTED_TOKEN = '--notice-muted'
 // Keep in sync with the built-in notice mixes in main.css.
 const NOTICE_LIFT = { light: 0, dark: 7 } as const
 const NOTICE_SECONDARY_MIX = { light: 6, dark: 10 } as const
+// Keep in sync with the [data-description] color-mix in main.css.
+const NOTICE_DESCRIPTION_OPACITY = 80
 
 const BLACK: Rgba = [0, 0, 0, 1]
 const painted = (color: Rgba): Rgba => hexToRgb(rgbaToHex(color))
@@ -33,11 +35,16 @@ function readable(a: Rgba, b: Rgba): boolean {
   return contrastRatio(step(lighter, -1), step(darker, 1)) >= MIN_TEXT_CONTRAST
 }
 
-/** `tint` mixed into `base` at the deepest percent, from `deepest` down, that keeps `text` readable. */
-function deepestReadableMix(tint: Rgba, base: Rgba, text: Rgba, deepest: number): Rgba {
+/** `tint` mixed into `base` at the deepest percent, from `deepest` down, where `reads` holds. */
+function deepestReadableMix(
+  tint: Rgba,
+  base: Rgba,
+  deepest: number,
+  reads: (candidate: Rgba) => boolean
+): Rgba {
   for (let percent = deepest; percent > 0; percent--) {
     const candidate = painted(mix(tint, base, percent))
-    if (readable(candidate, text)) {
+    if (reads(candidate)) {
       return candidate
     }
   }
@@ -47,9 +54,9 @@ function deepestReadableMix(tint: Rgba, base: Rgba, text: Rgba, deepest: number)
 /**
  * Toasts and corner cards lift the popover toward the foreground and paint popover and muted
  * text on it, but a theme's popover pair is only checked unlifted. So the lift and secondary
- * fill shrink until popover text stays readable, and muted text moves toward popover text until
- * it does too, on the surface and on muted panels. Emitted as final hex colors: CSS paints
- * exactly the colors measured here.
+ * fill shrink until popover text stays readable (on the surface, its 80% description blend
+ * too), and muted text moves toward popover text until it does too, on the surface and on muted
+ * panels. Emitted as final hex colors: CSS paints exactly the colors measured here.
  */
 export function noticeSurfaceTokensFor(
   colors: { foreground: Rgba; popover: Rgba; popoverForeground: Rgba; mutedForeground: Rgba },
@@ -60,8 +67,22 @@ export function noticeSurfaceTokensFor(
     return {}
   }
   const text = painted(popoverForeground)
-  const surface = deepestReadableMix(foreground, popover, text, NOTICE_LIFT[base])
-  const secondary = deepestReadableMix(foreground, surface, text, NOTICE_SECONDARY_MIX[base])
+  // Why: toast descriptions paint popover text at 80% (main.css [data-description]), so the lift
+  // must keep that blend readable too, not just the opaque text.
+  const surface = deepestReadableMix(
+    foreground,
+    popover,
+    NOTICE_LIFT[base],
+    (candidate) =>
+      readable(candidate, text) &&
+      readable(candidate, painted(mix(text, candidate, NOTICE_DESCRIPTION_OPACITY)))
+  )
+  const secondary = deepestReadableMix(
+    foreground,
+    surface,
+    NOTICE_SECONDARY_MIX[base],
+    (candidate) => readable(candidate, text)
+  )
   // Muted panels (bg-muted/N) paint between the surface and the secondary fill, so muted text
   // must read on both ends.
   const mutedReads = (color: Rgba): boolean =>

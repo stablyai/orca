@@ -572,11 +572,13 @@
     inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
-/* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts. */
+/* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
+   and every remapped foreground keeps its surface (outline buttons paint text-foreground on bg-background). */
 [data-sonner-toaster],
 .notification-card-stack {
   --popover: var(--notice-surface);
   --card: var(--notice-surface);
+  --background: var(--notice-surface);
   --foreground: var(--popover-foreground);
   --card-foreground: var(--popover-foreground);
   --muted: var(--notice-muted);

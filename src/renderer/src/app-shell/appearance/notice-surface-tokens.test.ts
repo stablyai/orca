@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { hexToRgb, rgbaToHex, type Rgba } from '../../../../shared/color/rgba-contrast'
 import { noticeSurfaceTokens } from './notice-surface-tokens'
@@ -51,6 +52,12 @@ function expectReadable(themeTokens: Record<string, string>): void {
   const surface = notice['--notice-surface']
   const muted = notice['--notice-muted-foreground']
   expect(wcagContrast(surface, text)).toBeGreaterThanOrEqual(4.5)
+  // Toast descriptions paint popover text at 80%. Lifting must not push them under 4.5:1, nor
+  // below the unlifted popover's own contrast when the theme already sat under it.
+  const description = (under: string): number => wcagContrast(composite(text, under, 0.8), under)
+  expect(description(surface)).toBeGreaterThanOrEqual(
+    Math.min(4.5, description(palette['--popover']))
+  )
   expect(wcagContrast(notice['--notice-secondary'], text)).toBeGreaterThanOrEqual(4.5)
   expect(wcagContrast(surface, muted)).toBeGreaterThanOrEqual(4.5)
   // UpdateErrorCardContent's bg-muted/30, /40 and /50 panels hold muted and body text. Without a
@@ -75,8 +82,8 @@ describe('noticeSurfaceTokens', () => {
   })
 
   // Popovers the theme validator accepts that once painted notice text under 4.5:1: #5a5a5a
-  // through Chromium's color-mix rounding, #383838 through hex rounding, white-on-dark-base
-  // through dark muted panels, the rest unlifted.
+  // through Chromium's color-mix rounding and an over-lifted 80% description, #383838 through hex
+  // rounding, white-on-dark-base through dark muted panels, the rest unlifted.
   it.each<Record<string, string>>([
     { '--popover': '#5a5a5a' },
     { '--popover': '#383838' },
@@ -100,13 +107,39 @@ describe('noticeSurfaceTokens', () => {
   })
 
   it('outlines secondary buttons only when their fill is gone', () => {
-    const notice = noticeSurfaceTokens(
-      { '--popover': '#303030', '--popover-foreground': '#a0a0a0' },
-      'dark',
-      DARK_BUILT_INS,
-      probe
-    )
-    expect(notice['--notice-secondary']).toBe(notice['--notice-surface'])
-    expect(notice['--notice-secondary-edge']).toBe('var(--notice-border)')
+    const tokensFor = (popoverForeground: string): Record<string, string> =>
+      noticeSurfaceTokens(
+        { '--popover': '#303030', '--popover-foreground': popoverForeground },
+        'dark',
+        DARK_BUILT_INS,
+        probe
+      )
+    const unfilled = tokensFor('#989898')
+    expect(unfilled['--notice-secondary']).toBe(unfilled['--notice-surface'])
+    expect(unfilled['--notice-secondary-edge']).toBe('var(--notice-border)')
+    const filled = tokensFor('#a0a0a0')
+    expect(filled['--notice-secondary']).not.toBe(filled['--notice-surface'])
+    expect(filled['--notice-secondary-edge']).toBe('transparent')
+  })
+
+  it('remaps the surface paired with every foreground the notice scope remaps', () => {
+    const css = readFileSync(new URL('../../assets/main.css', import.meta.url), 'utf8')
+    const scope = css.match(
+      /\[data-sonner-toaster\],\s*\.notification-card-stack\s*\{([^}]*)\}/
+    )?.[1]
+    expect(scope).toBeDefined()
+    const remapped = new Set([...(scope ?? '').matchAll(/(--[\w-]+):/g)].map(([, name]) => name))
+    // Why: a foreground remapped onto the popover's polarity over an unremapped surface (outline
+    // buttons: text-foreground on bg-background) paints light-on-light or dark-on-dark.
+    const pairs = [
+      ['--foreground', '--background'],
+      ['--card-foreground', '--card'],
+      ['--secondary-foreground', '--secondary'],
+      ['--muted-foreground', '--muted']
+    ]
+    for (const [foreground, surface] of pairs) {
+      expect(remapped.has(foreground), foreground).toBe(true)
+      expect(remapped.has(surface), `${surface} pairs with ${foreground}`).toBe(true)
+    }
   })
 })
