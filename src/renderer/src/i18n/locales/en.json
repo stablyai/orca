@@ -4315,6 +4315,18 @@
           "icon": {
             "priorityValue": "Priority: {{label}}"
           }
+        },
+        "issue": {
+          "sub": {
+            "issues": {
+              "653e08612f": "Manual",
+              "cc9625649c": "Created",
+              "ba2b66f817": "Show completed sub-issues",
+              "4d2a139ffc": "{{value0}} completed hidden",
+              "1734f8fdd9": "Sub-issue display options",
+              "f38946d078": "Sub-issues"
+            }
+          }
         }
       },
       "notification": {

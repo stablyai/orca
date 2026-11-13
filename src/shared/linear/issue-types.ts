@@ -40,7 +40,11 @@ export type LinearIssueChildSummary = {
   identifier: string
   title: string
   url: string
-  state?: LinearIssue['state']
+  state?: LinearIssue['state'] & { position?: number }
+  priority?: number
+  subIssueSortOrder?: number | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type LinearComment = {

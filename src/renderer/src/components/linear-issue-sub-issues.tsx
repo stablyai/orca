@@ -6,11 +6,29 @@ import {
 } from '@/lib/work-items/task-provider-error-copy'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, LoaderCircle, Plus } from 'lucide-react'
+import { ArrowDownUp, ArrowRight, LoaderCircle, Plus, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { getLinearStateMarkerStyle } from '@/components/linear-state-pill-style'
+import {
+  isLinearSubIssueOrderBy,
+  loadLinearSubIssueViewOptions,
+  orderLinearSubIssues,
+  saveLinearSubIssueViewOptions,
+  type LinearSubIssueOrderBy,
+  type LinearSubIssueViewOptions
+} from '@/components/linear-sub-issue-view-options'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -59,6 +77,23 @@ export function LinearIssueSubIssues({
     () => mergeLinearSubIssues(issue.subIssues, createdSubIssues),
     [createdSubIssues, issue.subIssues]
   )
+  const [viewOptions, setViewOptions] = useState(loadLinearSubIssueViewOptions)
+  const updateViewOptions = useCallback((next: LinearSubIssueViewOptions) => {
+    setViewOptions(next)
+    saveLinearSubIssueViewOptions(next)
+  }, [])
+  const visibleSubIssues = useMemo(
+    () => orderLinearSubIssues(subIssues, viewOptions),
+    [subIssues, viewOptions]
+  )
+  const hiddenCompletedCount = subIssues.length - visibleSubIssues.length
+  const orderOptions: { id: LinearSubIssueOrderBy; label: string }[] = [
+    { id: 'manual', label: t('auto.components.linear.issue.sub.issues.653e08612f', 'Manual') },
+    { id: 'status', label: t('auto.components.TaskPage.154b0fa623', 'Status') },
+    { id: 'priority', label: t('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
+    { id: 'updated', label: t('auto.components.TaskPage.f362667d55', 'Updated') },
+    { id: 'created', label: t('auto.components.linear.issue.sub.issues.cc9625649c', 'Created') }
+  ]
   useEffect(() => {
     setOpeningSubIssueId(null)
     return () => {
@@ -183,8 +218,77 @@ export function LinearIssueSubIssues({
   return (
     <section className="mt-10 max-w-[820px]">
       {subIssues.length > 0 ? (
+        <div className="mb-2 flex items-center justify-between gap-3 pl-1.5">
+          <h2 className="text-sm font-semibold text-foreground">
+            {t('auto.components.linear.issue.sub.issues.f38946d078', 'Sub-issues')}
+          </h2>
+          <div className="flex min-w-0 items-center gap-2">
+            {hiddenCompletedCount > 0 ? (
+              <span className="truncate text-xs text-muted-foreground">
+                {t(
+                  'auto.components.linear.issue.sub.issues.4d2a139ffc',
+                  '{{value0}} completed hidden',
+                  {
+                    value0: hiddenCompletedCount
+                  }
+                )}
+              </span>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t(
+                    'auto.components.linear.issue.sub.issues.1734f8fdd9',
+                    'Sub-issue display options'
+                  )}
+                >
+                  <SlidersHorizontal className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>
+                  <span className="flex items-center gap-2">
+                    <ArrowDownUp className="size-3.5" />
+                    {t('auto.components.TaskPage.5d2d835467', 'Ordering')}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={viewOptions.orderBy}
+                  onValueChange={(value) => {
+                    if (isLinearSubIssueOrderBy(value)) {
+                      updateViewOptions({ ...viewOptions, orderBy: value })
+                    }
+                  }}
+                >
+                  {orderOptions.map((option) => (
+                    <DropdownMenuRadioItem key={option.id} value={option.id}>
+                      {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={viewOptions.showCompleted}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={(checked) =>
+                    updateViewOptions({ ...viewOptions, showCompleted: checked === true })
+                  }
+                >
+                  {t(
+                    'auto.components.linear.issue.sub.issues.ba2b66f817',
+                    'Show completed sub-issues'
+                  )}
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      ) : null}
+      {visibleSubIssues.length > 0 ? (
         <div className="mb-3 space-y-1">
-          {subIssues.map((subIssue) => (
+          {visibleSubIssues.map((subIssue) => (
             <button
               key={subIssue.id}
               type="button"
