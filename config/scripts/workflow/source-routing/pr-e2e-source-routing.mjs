@@ -19,8 +19,9 @@ const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupp
 const XTERM_CORE_PATCH =
   /^config\/patches\/(?:@xterm__xterm@[^/]+\.patch|xterm-src\/@xterm__xterm@[^/]+\.src\.patch)$/
 
+// Paths follow the input/ime and input/keyboard owners (#39113); the pre-move paths matched nothing.
 const NATIVE_IME_PRODUCT_SOURCE =
-  /^(?:src\/shared\/terminal-unicode-provider\.ts$|src\/renderer\/src\/lib\/pane-manager\/terminal-ime-|src\/renderer\/src\/components\/terminal-pane\/(?:terminal-ime-|terminal-ios-hangul-|xterm-bypass-policy))/
+  /^(?:src\/shared\/terminal-unicode-provider\.ts$|src\/renderer\/src\/lib\/pane-manager\/terminal-input\/terminal-ime-|src\/renderer\/src\/components\/terminal-pane\/input\/(?:ime\/|keyboard\/xterm-bypass-policy|terminal-pane-pane-input\.ts$))/
 
 /** The harness itself: the session runner, the boundary probes, and the native specs. */
 const NATIVE_IME_HARNESS =
@@ -401,7 +402,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       isProductSource(file) &&
       (XTERM_CORE_PATCH.test(file) ||
-        /^src\/renderer\/src\/components\/terminal-pane\/(?:terminal-ime-|use-terminal-pane-lifecycle|xterm-bypass-policy|terminal-option-shortcut-policy)/.test(
+        /^src\/renderer\/src\/components\/terminal-pane\/(?:input\/ime\/terminal-ime-|controller\/use-terminal-pane-lifecycle|input\/keyboard\/(?:xterm-bypass-policy|terminal-option-shortcut-policy))/.test(
           file
         ))
   },
