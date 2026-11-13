@@ -29666,9 +29666,10 @@
   },
   "setupScriptImport": {
     "ubuntuNote": {
-      "title": "Uses dnf",
-      "check": "This script uses dnf; Orca’s sandboxes run Ubuntu. Check these lines:",
-      "translated": "This script used dnf; Orca’s sandboxes run Ubuntu, so its install lines now use apt-get."
+      "title": "Written for dnf",
+      "check": "Orca’s sandboxes run Ubuntu, and these lines still use dnf. Check them before saving:",
+      "translated": "Orca’s sandboxes run Ubuntu, so this script’s dnf install lines now use apt-get.",
+      "mixed": "Orca’s sandboxes run Ubuntu, so this script’s dnf install lines now use apt-get. These lines still use dnf. Check them before saving:"
     }
   }
 }

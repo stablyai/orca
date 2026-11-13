@@ -200,3 +200,31 @@ export const conductorDnfReview = defineFixture({
   ),
   interact: openReview
 })
+
+/** PARITY-DNF: every dnf install line translated. */
+export const conductorDnfTranslatedReview = defineFixture({
+  width: 720,
+  render: () => (
+    <Frame>
+      <SetupScriptPromptCardShell
+        {...base}
+        isPackageManagerSuggestion={false}
+        candidateSource="Conductor (.conductor/settings.toml)"
+        candidateProvenance=".conductor/settings.toml"
+        detectedSetupPreview={{
+          setup:
+            'sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y g++ make libpq-dev\npnpm install',
+          archive: null,
+          editable: false,
+          skippedFields: [],
+          runActions: null,
+          ubuntuNote: {
+            translated: 1,
+            checkLines: []
+          }
+        }}
+      />
+    </Frame>
+  ),
+  interact: openReview
+})
