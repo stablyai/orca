@@ -1,5 +1,5 @@
 import { Button } from '../ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceGridViewCellRect } from '@/lib/workspace/grid-view/workspace-grid-view-cell-rects'
 import { focusWorkspaceGridViewMember } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
 import {
@@ -27,6 +27,7 @@ export function WorkspaceGridViewEmptyCell({
   /** True while the member is being opened or restored, so there is nothing to offer yet. */
   isOpening: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { spokenName } = useWorkspaceGridViewCellName(workspaceId, workspacePath)
   return (
     <div
@@ -43,7 +44,7 @@ export function WorkspaceGridViewEmptyCell({
       <div className="flex flex-1 items-center justify-center bg-background">
         {isOpening ? (
           <span className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.workspace-grid-view.WorkspaceGridViewEmptyCell.openingWorkspace',
               'Opening workspace…'
             )}
@@ -52,14 +53,14 @@ export function WorkspaceGridViewEmptyCell({
           <Button
             variant="outline"
             size="sm"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.workspace-grid-view.WorkspaceGridViewEmptyCell.openNamedWorkspace',
               'Open Workspace: {{value0}}',
               { value0: spokenName }
             )}
             onClick={() => focusWorkspaceGridViewMember(workspaceId)}
           >
-            {translate(
+            {t(
               'auto.components.workspace-grid-view.WorkspaceGridViewEmptyCell.openWorkspace',
               'Open Workspace'
             )}

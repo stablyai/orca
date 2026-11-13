@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { LayoutGrid } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   addWorkspaceToGridViewAndShow,
   removeWorkspaceFromGridViewKeepingFocus
@@ -17,6 +17,7 @@ export function WorkspaceGridViewMenuItems({
   workspaceId: string
   disabled: boolean
 }): JSX.Element {
+  const t = useTranslate()
   const isMember = useAppStore((state) => state.workspaceGridViewMemberIds.includes(workspaceId))
   const isFull = useAppStore((state) =>
     isWorkspaceGridViewFull(state.workspaceGridViewMemberIds, (memberId) =>
@@ -31,7 +32,7 @@ export function WorkspaceGridViewMenuItems({
         disabled={disabled}
       >
         <LayoutGrid className="size-3.5" />
-        {translate(
+        {t(
           'auto.components.sidebar.WorktreeContextMenu.removeFromGridView',
           'Remove from Grid View'
         )}
@@ -44,7 +45,7 @@ export function WorkspaceGridViewMenuItems({
       disabled={disabled || isFull}
     >
       <LayoutGrid className="size-3.5" />
-      {translate('auto.components.sidebar.WorktreeContextMenu.addToGridView', 'Add to Grid View')}
+      {t('auto.components.sidebar.WorktreeContextMenu.addToGridView', 'Add to Grid View')}
     </DropdownMenuItem>
   )
 }

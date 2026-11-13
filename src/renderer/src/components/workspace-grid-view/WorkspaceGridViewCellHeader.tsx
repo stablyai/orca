@@ -5,7 +5,7 @@ import type { AppState } from '../../store/types'
 import { getTabRootStateClasses } from '../tab-bar/drop-indicator'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { cn } from '@/lib/class-names'
 import { removeWorkspaceFromGridViewKeepingFocus } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
@@ -44,13 +44,14 @@ export function useWorkspaceGridViewCellName(
   workspaceId: string,
   workspacePath: string
 ): { title: string; repoName: string | null; spokenName: string } {
+  const t = useTranslate()
   const title = useAppStore((state) =>
     selectWorkspaceGridViewCellTitle(state, workspaceId, workspacePath)
   )
   const repoName = useAppStore((state) => selectWorkspaceGridViewCellRepoName(state, workspaceId))
   // Why the project: two projects' `main` branches would otherwise announce the same name.
   const spokenName = repoName
-    ? translate(
+    ? t(
         'auto.components.workspace-grid-view.WorkspaceGridViewCellHeader.cellNameWithProject',
         '{{value0}} ({{value1}})',
         { value0: title, value1: repoName }
@@ -71,17 +72,18 @@ export function WorkspaceGridViewCellHeader({
   /** Corners where the floating sidebar toggles and window controls overlay this header. */
   windowCorners: { topLeft: boolean; topRight: boolean }
 }): React.JSX.Element {
+  const t = useTranslate()
   const { title, repoName, spokenName } = useWorkspaceGridViewCellName(workspaceId, workspacePath)
   const clearsLeftCorner = useAppStore((state) => windowCorners.topLeft && !state.sidebarOpen)
   const clearsRightCorner = useAppStore(
     (state) => windowCorners.topRight && !state.rightSidebarOpen
   )
-  const removeLabel = translate(
+  const removeLabel = t(
     'auto.components.workspace-grid-view.WorkspaceGridViewCellHeader.removeFromGridView',
     'Remove from Grid View'
   )
   // Why name the workspace: every cell has a remove button, so the bare action is ambiguous.
-  const removeAccessibleName = translate(
+  const removeAccessibleName = t(
     'auto.components.workspace-grid-view.WorkspaceGridViewCellHeader.removeNamedFromGridView',
     'Remove from Grid View: {{value0}}',
     { value0: spokenName }
