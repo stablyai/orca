@@ -6,7 +6,7 @@ import {
   aiVaultSessionLogFilePath,
   kiroV3TranscriptPathForManifest
 } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
-import { AI_VAULT_SCOPE_CWD_SOURCES } from '../../session-scope-cwd'
+import { AI_VAULT_SCOPE_CWD_SOURCES } from '../../scope/session-scope-cwd'
 import type { FileWithMtime } from '../../session-scanner-types'
 import {
   KIRO_V3_FIXTURE_MANIFEST,

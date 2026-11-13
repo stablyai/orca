@@ -12,7 +12,7 @@ import {
   DICTATION_SAMPLE_RATE,
   PCM_BYTES_PER_SAMPLE
 } from '../../../src/shared/rpc-contract/speech-params'
-import type { DictationCapture } from '../platform/dictation-capture-contract'
+import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 
 const WINDOW_MS = 50
 const WINDOW_SAMPLES = (DICTATION_SAMPLE_RATE * WINDOW_MS) / 1000

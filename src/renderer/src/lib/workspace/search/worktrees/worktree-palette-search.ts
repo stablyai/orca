@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
 import { matchPaletteDocument } from '../../../../../../shared/palette-match/match-document'
 import { preparePaletteQuery } from '../../../../../../shared/palette-match/palette-query'
 import type { MatchRange } from '../../../../../../shared/palette-match/normalized-text'
@@ -39,6 +40,7 @@ import {
   type PaletteActivityRank,
   type PaletteSearchContext
 } from '../../../../../../shared/palette-match/palette-ranking'
+import type { HiddenProjects } from '../../../../../../shared/hidden-projects'
 
 export type PaletteMatchedField = 'displayName' | 'branch' | 'repo' | 'host' | PaletteSupportingKind
 
@@ -70,17 +72,32 @@ export type PaletteSearchResult = {
 
 const NO_RANGES: readonly MatchRange[] = []
 
+/** What a typed search may surface: filter-hidden workspaces come back, hidden projects' never do. */
+export function isPaletteSearchableWorktree(
+  worktree: Worktree,
+  hiddenProjects: HiddenProjects
+): boolean {
+  return (
+    !worktree.isArchived &&
+    !isWorktreeRetiredByRemoval(worktree) &&
+    !hiddenProjects.isRowHidden(worktree)
+  )
+}
+
 export function getWorktreePaletteSearchScope(args: {
   hasQuery: boolean
   allWorktrees: readonly Worktree[]
   emptyQueryWorktrees: readonly Worktree[]
+  hiddenProjects: HiddenProjects
 }): Worktree[] {
   if (!args.hasQuery) {
     return [...args.emptyQueryWorktrees]
   }
 
   // Explicit search recovers sleeping/default-branch workspaces hidden by sidebar filters.
-  return args.allWorktrees.filter((worktree) => !worktree.isArchived)
+  return args.allWorktrees.filter((worktree) =>
+    isPaletteSearchableWorktree(worktree, args.hiddenProjects)
+  )
 }
 
 function makeEmptyPaletteSearchResult(

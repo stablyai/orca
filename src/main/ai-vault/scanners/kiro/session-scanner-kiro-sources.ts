@@ -5,8 +5,8 @@ import {
   kiroTranscriptPathForMetadata,
   kiroV3TranscriptPathForManifest
 } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
-import type { AiVaultAgentSource } from '../../session-scanner-agent-sources'
-import { sessionRootDirs } from '../../session-scanner-roots'
+import type { AiVaultAgentSource } from '../../discovery/session-scanner-agent-sources'
+import { sessionRootDirs } from '../../discovery/session-scanner-roots'
 import { isKiroSessionMetadataPath } from './session-scanner-kiro-parser'
 import {
   isKiroV3SessionManifestPath,

@@ -1,4 +1,4 @@
-import type { TerminalModes } from '../terminal-webview-contract'
+import type { TerminalModes } from '../webview/terminal-webview-contract'
 import '../../i18n/mobile-i18n'
 
 export const TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY = 64

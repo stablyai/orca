@@ -1,6 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { type isolatedScanRoots, writeJsonlFile } from '../../session-scanner-test-fixtures'
+import {
+  type isolatedScanRoots,
+  writeJsonlFile
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 export const KIRO_FIXTURE_SESSION_ID = '0b5e1c2a-3d4f-4a5b-8c6d-7e8f9a0b1c2d'
 

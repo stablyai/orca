@@ -7,7 +7,7 @@ import {
   sessionSearchRootListings
 } from '../../../ai-vault-search/discovery/session-search-scan-roots'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots } from '../../session-scanner-test-fixtures'
+import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
 import {
   KIRO_FIXTURE_SESSION_ID,
   KIRO_V3_FIXTURE_MANIFEST,

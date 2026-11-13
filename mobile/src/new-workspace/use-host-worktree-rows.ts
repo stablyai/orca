@@ -5,7 +5,7 @@ import {
   HOST_LIST_TARGET,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 
 type WorktreeRow = Pick<Worktree, 'path' | 'repoId' | 'branch'>
 

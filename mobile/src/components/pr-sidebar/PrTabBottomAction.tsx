@@ -3,8 +3,8 @@ import { GitMerge, GitPullRequest, Sparkles, type LucideIcon } from 'lucide-reac
 import { colors, feedback, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-request-merge-methods'
-import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-request-merge-state'
+import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-methods'
+import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-state'
 import { MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY } from '../../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 import { useRouteCapability } from '../../worktree/use-workspace-client'
 import { buildResolveConflictsPrompt } from '../../source-control/review/pr-ai-triage-prompt'
@@ -108,6 +108,7 @@ export function PrTabBottomAction({ tab, bottomInset }: { tab: MobilePrTab; bott
           error={notice.error}
           warning={notice.warning}
           undeliveredPrompt={notice.undeliveredPrompt}
+          opens={notice.opens}
           errorStyle={styles.errorText}
         />
         <ActionButton

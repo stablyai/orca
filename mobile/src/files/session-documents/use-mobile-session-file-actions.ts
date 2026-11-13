@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 import { resolveMobileNativeChatSessionId } from '../../session/native-chat/mobile-native-chat-eligibility'
 import { useProvideSessionScreenHandlers } from '../../session/session-screen-handlers'

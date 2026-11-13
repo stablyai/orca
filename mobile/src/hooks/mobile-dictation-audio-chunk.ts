@@ -17,7 +17,7 @@ import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setu
 import type {
   DictationCapture,
   DictationCaptureChunk
-} from '../platform/dictation-capture-contract'
+} from '../platform/audio-capture/dictation-capture-contract'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
 import type { MobileDictationRecording } from './mobile-dictation-recording'

@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { LayoutChangeEvent, ScrollViewInstance } from 'react-native'
-import type { MobileTextInputHandle } from '../../../platform/text-input-handle'
+import type { MobileTextInputHandle } from '../../../platform/text-input/text-input-handle'
 
 // Keep a focused reply in view when its card shrinks above the keyboard.
 export function useMobileNativeChatReplyScroll() {

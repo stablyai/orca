@@ -1,16 +1,19 @@
-import { normalizePRCheckHeadSha } from '../../../../src/shared/github/pr-check-head'
+import { normalizePRCheckHeadSha } from '../../../../src/shared/github/checks/pr-check-head'
 import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
-import type { GitHubReaction, PRComment } from '../../../../src/shared/github/comment-types'
+import type {
+  GitHubReaction,
+  PRComment
+} from '../../../../src/shared/github/comments/comment-types'
 import type {
   GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
-  GitHubRepositoryIdentity,
   ProviderCheckSummary
-} from '../../../../src/shared/github/pull-request-types'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+} from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../../../src/shared/github/repositories/repository-identity'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 
 // Require entity identity, salvage malformed list members, and default other fields for unguarded renderers.
 

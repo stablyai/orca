@@ -1,4 +1,4 @@
-import { readLocalGitConfigSignature } from '../../github/local-git-config-signature'
+import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'

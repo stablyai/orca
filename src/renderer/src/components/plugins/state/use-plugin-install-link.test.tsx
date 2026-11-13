@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugin-host-api'
 import { parsePluginInstallLink } from '../../../../../shared/plugins/catalog/plugin-install-link'
 import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { usePluginInstallLink } from './use-plugin-install-link'

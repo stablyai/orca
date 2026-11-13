@@ -8,7 +8,7 @@ import { isTerminalPhoneDisplayMode } from './terminal-phone-display-mode'
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 import { useShellTerminalKeyRail } from './shell-terminal-key-rail'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 
 const ESC = '\x1b'
 const CTRL_C = '\x03'

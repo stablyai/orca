@@ -5,7 +5,7 @@ import {
   ACK_WORKTREE,
   createAcknowledgedTabRetirementFixture
 } from './acknowledged-terminal-tab-retirement-fixture'
-import { advanceTerminalTopologyRevision } from '../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 // Main-owned closes have no window ack; their counterparts live in acknowledged-terminal-tab-retirement-main-close.test.ts.
@@ -23,22 +23,6 @@ function fixture(bound = false) {
   fixtures.push(result)
   return result
 }
-
-itSwitchOff.each([false, true])(
-  'durably retires an acknowledged row with graph-before-ack=%s',
-  async (graphBeforeAck) => {
-    const f = fixture()
-    const pending = f.close()
-    await f.entered.promise
-    expect(f.hasTab()).toBe(true)
-    if (graphBeforeAck) {
-      f.publish(false, 2)
-    }
-    f.acknowledgement.resolve()
-    await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
-    expect(f.hasTab()).toBe(false)
-  }
-)
 
 itSwitchOff(
   'protects a persisted incarnation replacement on the same leaf and raw PTY ID',

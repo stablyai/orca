@@ -1,5 +1,5 @@
 import { webContents } from 'electron'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { BrowserManagerState } from './browser-manager-state'
 import {
   focusGuardUnavailableError,
@@ -13,7 +13,7 @@ import {
 import { BrowserPageEvents, type BrowserPageEvent } from '../page-activity/browser-page-events'
 import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-page-input-credit'
 import { browserPopupPageId } from '../popups/browser-popup-page-id'
-import type { RpcCallerIdentity } from '../../../runtime/rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()

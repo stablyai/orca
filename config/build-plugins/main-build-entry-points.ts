@@ -16,7 +16,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'claude-conversation-fork-worker-entry': resolve(
-    'src/main/claude/claude-conversation-fork-worker-entry.ts'
+    'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts'
   ),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
@@ -26,11 +26,14 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'foreign-sqlite-reader-entry': resolve(
     'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
   ),
+  'agent-identity-worker-entry': resolve(
+    'src/main/agent-hooks/identity/agent-identity-worker-entry.ts'
+  ),
   'session-scanner-service-entry': resolve(
     'src/main/ai-vault/scan-service/session-scanner-service-entry.ts'
   ),
   'wsl-transcript-fs-process-entry': resolve(
-    'src/main/native-chat/wsl-transcript-fs-process-entry.ts'
+    'src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-entry.ts'
   ),
   // libuv spawns inline; run port probes on a worker to keep the UI loop free.
   'port-scan-command-worker-entry': resolve('src/main/ports/port-scan-command-worker-entry.ts'),

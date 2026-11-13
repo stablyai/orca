@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 
 /** `orca plugin dev hook`; listed in PLUGIN_RUNTIME_COMMAND_SPECS. */
 export const PLUGIN_DEV_HOOK_COMMAND_SPEC: CommandSpec = {

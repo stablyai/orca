@@ -1,5 +1,5 @@
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import type { TerminalWebViewHandle } from '../terminal-webview-contract'
+import type { TerminalWebViewHandle } from '../webview/terminal-webview-contract'
 
 /** A retired stream stays retired even when a cache clear reuses its numeric sequence. */
 export function createMobileTerminalStreamLifetime(args: {

@@ -7,10 +7,10 @@ import {
   Plus,
   Smartphone
 } from 'lucide-react-native'
-import { triggerMediumImpact } from '../../platform/haptics'
-import { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
-import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal-accessory-repeat'
-import { getVisibleTerminalAccessoryKeys } from '../terminal-accessory-layout'
+import { triggerMediumImpact } from '../../platform/haptics/haptics'
+import { createTerminalLiveAccessoryInput } from '../live-input/terminal-live-accessory-input'
+import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../key-input/terminal-accessory-repeat'
+import { getVisibleTerminalAccessoryKeys } from '../key-input/terminal-accessory-layout'
 import { useDirectionPadAvailable } from '../../layout/use-shell-side-rail'
 import { isTerminalPhoneDisplayMode } from './terminal-phone-display-mode'
 import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
@@ -18,14 +18,14 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors } from '../../theme/mobile-theme'
 import { styles as sessionStyles } from '../../session/mobile-session-styles'
-import { useKeyboardPersistingTaps } from '../../platform/keyboard-persisting-taps'
+import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'
 import { useMobileSessionKeyboardLift } from './use-mobile-session-keyboard-lift'
 import {
   AGENT_SMART_KEY_STEP_MS,
   type AgentSmartKey
 } from '../../../../src/shared/terminal/input/agent-smart-keys'
-import type { TerminalAccessoryKey } from '../terminal-accessory-keys'
+import type { TerminalAccessoryKey } from '../key-input/terminal-accessory-keys'
 import { resolveMobileTerminalTabSmartKeys } from './mobile-terminal-tab-agent'
 import { MobileSessionSmartKeys } from './MobileSessionSmartKeys'
 import { MobileSessionLatchKeys } from './MobileSessionLatchKeys'

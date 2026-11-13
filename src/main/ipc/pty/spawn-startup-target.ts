@@ -18,12 +18,13 @@ import {
   type LaunchScopeRuntimeStore
 } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveLocalPtyOptions } from '../../workspaces/execution-host/local-project-runtime-pty-options'
-import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnOptions } from '../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import {
   holdPassiveRestoreOfStoppedWslDistro,
   wslHoldReadAnchor as wslHoldReadAnchorNow
 } from '../../daemon/providers/wsl/daemon-wsl-passive-restore-hold'
-import { normalizeWindowsTerminalCwd } from '../../providers/windows-shell-args'
+import { msysDrivePathToWindows } from '../../../shared/cross-platform-path'
 import { wslUncDirectoryExistsAsync } from '../../wsl/filesystem/unc-path-access'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
 import { probeLocalStartupCwdDirectory } from './host-env/startup-cwd-directory-exists'
@@ -240,7 +241,7 @@ async function resolveStartupCwdWithFallback(
     onFallbackToWorkspaceRoot?: () => void
   ): TerminalStartupCwdMissingDirFallback => ({
     directoryExists: (path) => {
-      const probePath = process.platform === 'win32' ? normalizeWindowsTerminalCwd(path) : path
+      const probePath = process.platform === 'win32' ? msysDrivePathToWindows(path) : path
       const verdict =
         startupWslContext && path === initiallyResolvedStartupCwd
           ? wslStartupCwdExists

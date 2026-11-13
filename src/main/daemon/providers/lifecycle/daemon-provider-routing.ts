@@ -1,7 +1,7 @@
 import { DegradedDaemonPtyProvider } from '../routing/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonPtyRouter } from '../routing/daemon-pty-router'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 
 export type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 

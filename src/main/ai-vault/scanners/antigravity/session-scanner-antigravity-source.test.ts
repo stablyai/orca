@@ -11,7 +11,7 @@ import {
   isolatedScanRoots,
   writeAntigravityHistory,
   writeAntigravityTranscript
-} from '../../session-scanner-test-fixtures'
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 const tempRoots: string[] = []
 

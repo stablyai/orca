@@ -12,7 +12,7 @@ import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-en
 import { buildSidebarProjectCatalog } from '../../../../../../shared/sidebar-list/sidebar-project-catalog'
 import { fetchPairedServerCatalog } from '../../../../../../shared/sidebar-list/paired-server-catalog'
 import { group, mainWt, repo } from './sidebar-list-golden-factories.test-fixture'
-import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
+import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/feed/sidebar-inputs-feed'
 
 const ENVIRONMENT_ID = 'env-1'
 const SERVER_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID)

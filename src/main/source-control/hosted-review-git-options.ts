@@ -1,5 +1,5 @@
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 
 export type HostedReviewLocalGitOptions = {
   wslDistro?: string

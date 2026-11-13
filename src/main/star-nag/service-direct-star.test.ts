@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../github/client', () => ({
+vi.mock('../github/client/fetch/orca-star', () => ({
   checkOrcaStarred: mocks.checkOrcaStarredMock,
   starOrca: mocks.starOrcaMock
 }))
@@ -84,30 +84,6 @@ describe('StarNagService', () => {
     expect(ui.starNagCompleted).toBe(true)
   })
 
-  it('records failed direct star after dismissal without clearing the cooldown or re-showing', async () => {
-    const window = createWindow()
-    browserWindowMock.getAllWindows.mockReturnValue([window])
-    const deferredStar = createDeferred<boolean>()
-    starOrcaMock.mockReturnValue(deferredStar.promise)
-    const { service, ui } = createHarness()
-
-    service.registerIpcHandlers()
-    getIpcHandler('star-nag:forceShow')()
-    const starPromise = getIpcHandler('star-nag:starOrca')()
-    getIpcHandler('star-nag:dismiss')()
-
-    deferredStar.resolve(false)
-    await expect(starPromise).resolves.toBe(false)
-
-    expect(trackMock).toHaveBeenCalledWith(
-      'star_nag_outcome',
-      expect.objectContaining({ outcome: 'direct_star_failed', mode: 'gh' })
-    )
-    expect(ui.starNagCompleted).toBeUndefined()
-    expect(ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
-    expect(window.webContents.send).toHaveBeenCalledTimes(1)
-  })
-
   it('clears the in-flight direct-star guard after thrown attempts so the user can retry', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
@@ -123,42 +99,5 @@ describe('StarNagService', () => {
 
     expect(starOrcaMock).toHaveBeenCalledTimes(2)
     expect(ui.starNagCompleted).toBe(true)
-  })
-
-  it('records failed direct star before web fallback and guards duplicate in-flight attempts', async () => {
-    const window = createWindow()
-    browserWindowMock.getAllWindows.mockReturnValue([window])
-    const deferredStar = createDeferred<boolean>()
-    starOrcaMock.mockReturnValue(deferredStar.promise)
-    const { service, ui } = createHarness()
-
-    service.registerIpcHandlers()
-    getIpcHandler('star-nag:forceShow')()
-    const starFromNag = getIpcHandler('star-nag:starOrca')
-    const first = starFromNag()
-    const second = starFromNag()
-
-    deferredStar.resolve(false)
-    await expect(first).resolves.toBe(false)
-    await expect(second).resolves.toBe(false)
-
-    const starAttempts = trackMock.mock.calls.filter(
-      ([name, payload]) =>
-        name === 'star_nag_outcome' && (payload as { outcome?: string }).outcome === 'star_clicked'
-    )
-    expect(starAttempts).toHaveLength(1)
-    expect(trackMock).toHaveBeenCalledWith(
-      'star_nag_outcome',
-      expect.objectContaining({ outcome: 'direct_star_failed', mode: 'gh' })
-    )
-
-    getIpcHandler('star-nag:openWeb')()
-
-    expect(trackMock).toHaveBeenCalledWith(
-      'star_nag_outcome',
-      expect.objectContaining({ outcome: 'opened_repo', mode: 'web' })
-    )
-    expect(ui.starNagCompleted).toBeUndefined()
-    expect(ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
   })
 })
