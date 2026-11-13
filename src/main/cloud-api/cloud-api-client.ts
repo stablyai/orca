@@ -109,7 +109,7 @@ export function classifyCloudApiResponse(
 
 /** The "Couldn't switch to {team}" message, when the token could not be minted for the team. */
 function orgSwitchDetail(error: unknown): string | undefined {
-  return error instanceof Error && (error as { reason?: unknown }).reason === 'org_mismatch'
+  return error instanceof Error && 'reason' in error && error.reason === 'org_mismatch'
     ? error.message
     : undefined
 }

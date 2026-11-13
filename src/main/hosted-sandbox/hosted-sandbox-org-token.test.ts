@@ -12,6 +12,7 @@ import { linkOrcaProfileToCloud } from '../orca-profiles/cloud-auth/profile-clou
 import { noteOrcaCloudMemberships } from '../orca-profiles/cloud-token-epoch'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getHostedSandboxConfig } from './hosted-sandbox-config'
+import { readTokenOrg } from './hosted-sandbox-token-org'
 
 vi.mock('../orca-profiles/cloud-session/profile-cloud-session-refresh', () => ({
   runWithFreshOrcaCloudSession: async (
@@ -35,9 +36,7 @@ function fakeToken(org: string | null, serial: number): string {
 }
 
 function tokenOrg(authorization: string | null): string | null {
-  const payload = authorization?.replace(/^Bearer /, '').split('.')[1] ?? ''
-  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { org?: string }
-  return claims.org ?? null
+  return readTokenOrg(authorization?.replace(/^Bearer /, '') ?? '')
 }
 
 function cloud(activeOrgId?: string, activeOrgName?: string): OrcaProfileCloudSummary {
@@ -65,7 +64,7 @@ function harness(options: {
   const mints: MintCall[] = []
   const controlCalls: Headers[] = []
   let gate: Promise<void> | null = null
-  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+  const fetchImpl: typeof fetch = async (input, init) => {
     const url = String(input)
     if (url === MINT_URL) {
       const body = String(init?.body ?? '')
@@ -75,7 +74,10 @@ function harness(options: {
       if (status !== 200) {
         return Response.json({ error: 'invalid_request' }, { status })
       }
-      const requested = (JSON.parse(body) as { orgId?: string | null }).orgId
+      const parsed: unknown = JSON.parse(body)
+      const raw =
+        typeof parsed === 'object' && parsed && 'orgId' in parsed ? parsed.orgId : undefined
+      const requested = typeof raw === 'string' || raw === null ? raw : undefined
       // Auth decides the team when asked, even if its answer arrives after a switch.
       const org = options.issue ? options.issue(requested, call) : (requested ?? null)
       const pending = gate
@@ -89,7 +91,7 @@ function harness(options: {
     return (
       options.controlPlane?.({ headers, call: controlCalls.length }) ?? Response.json({ ok: true })
     )
-  }) as typeof fetch
+  }
   const config = getHostedSandboxConfig(
     state.dir,
     {
@@ -163,7 +165,7 @@ describe('sandbox token team checks', () => {
     link('org-new', 'Acme')
     const error = await h.config.getAccessToken().catch((caught: unknown) => caught)
     expect(isEnvironmentProviderError(error, 'conflict')).toBe(true)
-    expect((error as Error).message).toBe("Couldn't switch to Acme. Sign out and back in.")
+    expect(error).toHaveProperty('message', "Couldn't switch to Acme. Sign out and back in.")
     // Nothing was cached: the next call asks auth again.
     await h.config.getAccessToken().catch(() => undefined)
     expect(h.mints).toHaveLength(4)
@@ -292,7 +294,7 @@ describe('control-plane fetch', () => {
     link('org-1', 'Acme')
     const error = await call(h).catch((caught: unknown) => caught)
     expect(isEnvironmentProviderError(error, 'conflict')).toBe(true)
-    expect((error as Error).message).toBe("Couldn't switch to Acme. Sign out and back in.")
+    expect(error).toHaveProperty('message', "Couldn't switch to Acme. Sign out and back in.")
     expect(h.controlCalls).toHaveLength(2)
   })
 

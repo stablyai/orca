@@ -22,7 +22,8 @@ async function refusalOf(response: Response): Promise<Refusal> {
   if (typeof body !== 'object' || body === null) {
     return null
   }
-  const { error, reason } = body as { error?: unknown; reason?: unknown }
+  const error = 'error' in body ? body.error : undefined
+  const reason = 'reason' in body ? body.reason : undefined
   if (response.status === 409) {
     return error === ORG_MISMATCH || reason === ORG_MISMATCH ? 'org_mismatch' : null
   }

@@ -18,7 +18,7 @@ export function readTokenOrg(token: string): string | null {
       'Orca Cloud auth sent an invalid sandbox token.'
     )
   }
-  const org = (payload as { org?: unknown }).org
+  const org = 'org' in payload ? payload.org : undefined
   return typeof org === 'string' && org ? org : null
 }
 
@@ -40,8 +40,6 @@ export async function isNotAMember(response: Response): Promise<boolean> {
     .json()
     .catch(() => null)
   return (
-    typeof body === 'object' &&
-    body !== null &&
-    (body as { error?: unknown }).error === 'not_a_member'
+    typeof body === 'object' && body !== null && 'error' in body && body.error === 'not_a_member'
   )
 }

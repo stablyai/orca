@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
+import { getOrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { getOrcaCloudTokenEpoch } from '../cloud-token-epoch'
 
 const mocks = vi.hoisted(() => ({
-  calls: [] as string[],
+  calls: new Array<string>(),
   refresh: vi.fn(),
   commit: vi.fn()
 }))
@@ -40,16 +40,38 @@ vi.mock('../cloud-session/profile-cloud-session-owner', () => ({
 
 const { selectCloudOrg, ORG_SWITCH_REFRESH_FAILED } = await import('./profile-cloud-org-selection')
 
-const active = {
-  profile: {
-    id: 'p1',
-    cloud: { userId: 'user-a', cloudProfileId: 'cp-a', activeOrgId: 'org-old' }
+const profile = {
+  id: 'p1',
+  name: 'Test',
+  avatar: { kind: 'initials', initials: 'T', color: 'neutral' },
+  kind: 'cloud-linked',
+  createdAt: 1,
+  updatedAt: 1,
+  lastOpenedAt: 1,
+  cloud: {
+    userId: 'user-a',
+    cloudProfileId: 'cp-a',
+    email: 'a@example.test',
+    activeOrgId: 'org-old',
+    linkedAt: 1
   }
-} as unknown as ActiveOrcaProfileState
+} satisfies ActiveOrcaProfileState['profile']
+const active: ActiveOrcaProfileState = {
+  index: { schemaVersion: 1, activeProfileId: 'p1', profiles: [profile] },
+  profile,
+  dataFile: '/tmp/unused/data',
+  stateDatabaseFile: '/tmp/unused/state',
+  profileDirectory: '/tmp/unused'
+}
+
+const authConfig = getOrcaCloudAuthConfig(
+  { ORCA_CLOUD_API_URL: 'http://127.0.0.1:9', ORCA_CLOUD_CLIENT_ID: 'test-client' },
+  false
+)
 
 function select() {
   return selectCloudOrg({
-    config: {} as OrcaCloudAuthConfig,
+    config: authConfig.configured ? authConfig.config : expect.fail('auth config'),
     active,
     userDataPath: '/tmp/unused',
     orgId: 'org-new'
