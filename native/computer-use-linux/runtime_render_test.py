@@ -24,6 +24,7 @@ class FakeStateType:
     MULTI_LINE = 10
     VERTICAL = 11
     HORIZONTAL = 12
+    MULTISELECTABLE = 13
 
 
 class FakeStateSet:
@@ -762,9 +763,10 @@ class RuntimeRenderTest(unittest.TestCase):
             with patch.object(runtime.Atspi.Component, "scroll_to", scroll_to, create=True), \
                  patch.object(runtime.Atspi, "ScrollType", types.SimpleNamespace(TOP_EDGE="top", BOTTOM_EDGE="bottom"), create=True):
                 result = runtime.run_operation({"tool": "scroll", "app": "Fixture", "x": 50, "y": 50,
-                                                "direction": "down", "pages": 1, "noScreenshot": True})
+                                                "direction": "down", "pages": 3, "noScreenshot": True})
         # Why Item 2: it spans 340-460 and the viewport ends at 400, so its hidden half leads the next page.
-        self.assertEqual(scrolled, [("Item 2", "top")])
+        # The third page finds nothing past the document's end, and the two pages already moved still count.
+        self.assertEqual(scrolled, [("Item 2", "top"), ("Item 4", "top")])
         self.assertEqual(result["action"]["actionName"], "scrollTo")
 
     def test_click_without_an_action_selects_the_row_only_when_its_index_is_proven(self):
@@ -772,24 +774,28 @@ class RuntimeRenderTest(unittest.TestCase):
             ("Qt", "6.6", None, "selected"),
             ("GTK", "4.14", (True, False), "selected"),
             ("GTK", "4.14", (True, True), "refused"),
+            ("GTK", "4.14", (True, "timeout"), "refused"),
             ("Qt", "6.6", "replaced", "stale"),
+            ("GTK", "3.24", "multiple", "selected"),
         )
         for toolkit, version, counted, expected in cases:
             rows = [FakeAccessible("list item", name) for name in ("Mouse", "Keyboard")]
             listing = FakeAccessible("list", "Devices", children=rows)
-            selected = []
+            selected = ["Mouse"] if counted == "multiple" else []
+            listing.get_state_set = lambda: FakeStateSet(*([FakeStateType.MULTISELECTABLE] if counted == "multiple" else []))
             listing.get_selection_iface = lambda: listing
             if counted == "replaced":
                 rows[1].get_index_in_parent = lambda: 0
             for row in rows:
                 row.get_state_set = lambda row=row: FakeStateSet(*([FakeStateType.SELECTED] if row.name in selected else []))
             def is_child_selected(_, index):
-                answers = counted if isinstance(counted, tuple) else (True, False)
-                if not answers[index - len(rows) + 1]:
-                    raise RuntimeError("InvalidArgs")
+                answer = (counted if isinstance(counted, tuple) else (True, False))[index - len(rows) + 1]
+                if answer is not True:
+                    raise RuntimeError("Timeout was reached" if answer == "timeout" else "GDBus.Error:org.freedesktop.DBus.Error.InvalidArgs")
                 return False
             selection = types.SimpleNamespace(
                 select_child=lambda _, index: selected.append(rows[index].name) or True,
+                clear_selection=lambda _: selected.clear() or True,
                 is_child_selected=is_child_selected)
             with self.subTest(toolkit=toolkit, counted=counted), \
                  SnapshotFixture(FakeAccessible("frame", "Settings", children=[listing])) as fixture, \

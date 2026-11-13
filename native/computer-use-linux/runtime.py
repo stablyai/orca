@@ -171,6 +171,9 @@ def extents_rect(node, coord_type, read=attempt):
     return Rect(float(rect.x), float(rect.y), float(rect.width), float(rect.height))
 
 
+UNREAD = object()
+
+
 class Placement:
     """Screen and window-relative rectangles for one window's nodes.
 
@@ -179,10 +182,16 @@ class Placement:
     """
 
     def __init__(self, app, window):
-        self.window = window
-        self.base = None
+        self.app, self.window = app, window
+        self.base = self._origin = UNREAD
         self.window_coords = toolkit_kind(app) == "gtk4"
-        self.origin = gtk4_client_origin(app, window) if self.window_coords and not wayland_session() else None
+
+    @property
+    def origin(self):
+        if self._origin is UNREAD:
+            self._origin = (gtk4_client_origin(self.app, self.window)
+                            if self.window_coords and not wayland_session() else None)
+        return self._origin
 
     def screen(self, node, read=attempt):
         if not self.window_coords:
@@ -198,8 +207,8 @@ class Placement:
 
     def frame(self, node, read=attempt):
         coord_type = Atspi.CoordType.WINDOW if self.window_coords else Atspi.CoordType.SCREEN
-        if self.base is None:
-            self.base = extents_rect(self.window, coord_type)
+        if self.base is UNREAD:
+            self.base = extents_rect(self.window, coord_type, read)
         rect = self.base if node is self.window else extents_rect(node, coord_type, read)
         if rect is None or self.base is None:
             return None
@@ -1403,6 +1412,8 @@ def app_json(app):
 
 def window_json(app, index, window):
     bounds = Placement(app, window).bounds()
+    # Why the SCREEN fallback: a GTK 4 window with no known origin still has a true size, just no position.
+    size = bounds or screen_rect(window)
     showing = has_state(window, Atspi.StateType.SHOWING)
     return {
         "index": index,
@@ -1411,8 +1422,8 @@ def window_json(app, index, window):
         "title": name_of(window),
         "x": round(bounds.x) if bounds else None,
         "y": round(bounds.y) if bounds else None,
-        "width": max(0, round(bounds.width if bounds else 0)),
-        "height": max(0, round(bounds.height if bounds else 0)),
+        "width": max(0, round(size.width if size else 0)),
+        "height": max(0, round(size.height if size else 0)),
         "isMinimized": not showing,
         "isOffscreen": not showing,
         "screenIndex": None,
@@ -1446,6 +1457,9 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     app_info = app_json(app)
     window_title = name_of(window)
     screenshot = capture_png(bounds, app, window) if include_screenshot else None
+    if include_screenshot and bounds is None and placement.window_coords:
+        screenshot = screenshot_failure("GTK 4 screenshot skipped: Orca can't tell where this window sits on screen; "
+                                        "use --no-screenshot and trust the tree")
     geometry = GeometryReader()
     for item in records:
         node = geometry_nodes[id(item)]
@@ -1532,10 +1546,11 @@ def all_nodes(root):
     result = []
 
     def walk(node):
-        if len(result) >= MAX_NODES:
-            return
         result.append(node)
         for _, child in children(node):
+            # Why check before each child: every lookup is an AT-SPI round trip, and a list can hold thousands.
+            if len(result) >= MAX_NODES:
+                return
             walk(child)
 
     walk(root)
@@ -1834,14 +1849,14 @@ def scroll_without_pointer(window, node, placed, x, y, direction, pages):
         bar = scroll_bar(container, axis)
         if bar is not None:
             action = write_scroll_bar(container, bar, axis, sign, pages)
-            if action["verification"].get("reason") != "suspected_noop":
-                return action
-            # Why outward: like a wheel, a nested view at its end hands the scroll to the view around it.
-            at_limit = at_limit or action
         elif role_of(container).lower() in DOCUMENT_ROLES and float(pages).is_integer():
             action = scroll_to_pages(container, placed, axis, sign, int(pages))
-            if action is not None:
-                return action
+        else:
+            continue
+        if action is not None and action["verification"].get("reason") != "suspected_noop":
+            return action
+        # Why outward: like a wheel, a nested view at its end hands the scroll to the view around it.
+        at_limit = at_limit or action
     return at_limit
 
 
@@ -1898,7 +1913,7 @@ def write_scroll_bar(container, bar, axis, sign, pages):
     value, low, high, current = bar
     viewport = screen_rect(container)
     if viewport is None:
-        raise RuntimeError("scroll view has no readable size; run get-app-state again")
+        return None
     # Why the viewport length: toolkit adjustments count pixels, so one page is one viewport (scroll_plan.rs).
     page = viewport.height if axis == "vertical" else viewport.width
     wanted = min(high, max(low, current + sign * pages * page))
@@ -1907,7 +1922,7 @@ def write_scroll_bar(container, bar, axis, sign, pages):
         action["verification"] = {"state": "unverified", "reason": "suspected_noop"}
         return action
     if not attempt(lambda: Atspi.Value.set_current_value(value, wanted), False):
-        raise RuntimeError("value is not settable: the scroll bar refused the new position; nothing moved")
+        return None
     readback = attempt(lambda: Atspi.Value.get_current_value(value))
     action["verification"] = ({"state": "verified", "property": "value"}
                               if readback is not None and abs(float(readback) - wanted) < 0.5
@@ -1921,49 +1936,63 @@ def scroll_to_pages(container, placed, axis, sign, pages):
     scroll_type = getattr(getattr(Atspi, "ScrollType", None), edges[(axis, sign)], None)
     if scroll_type is None:
         return None
+    moved = accepted = 0
     for _ in range(min(pages, MAX_SCROLL_TO_PAGES)):
         viewport = placed.frame(container)
         if viewport is None:
-            return None
+            break
         start, length = (viewport.y, viewport.height) if axis == "vertical" else (viewport.x, viewport.width)
-        item = item_past_edge(container, placed, axis, sign, start, start + length, MAX_DEPTH)
+        item = item_past_edge(container, placed, axis, sign, start, start + length, MAX_DEPTH, [MAX_NODES])
         component = attempt(lambda: item.get_component_iface()) if item is not None else None
-        if component is None or not attempt(lambda: Atspi.Component.scroll_to(component, scroll_type), False):
-            return None
-        if not wait_item_in_view(item, placed, axis, start, length):
-            return None
-    return {"path": "accessibility", "actionName": "scrollTo", "fallbackReason": None,
-            "verification": {"state": "unverified", "reason": "accessibility_action_unasserted"}}
+        before = placed.frame(item) if component is not None else None
+        if before is None or not attempt(lambda: Atspi.Component.scroll_to(component, scroll_type), False):
+            break
+        accepted += 1
+        if not wait_item_moved(item, placed, axis, before):
+            break
+        moved += 1
+    if not accepted:
+        return None
+    # Why an action after any page: once the document moved, falling back to the pointer would scroll it twice.
+    verification = ({"state": "unverified", "reason": "accessibility_action_unasserted"} if moved
+                    else {"state": "unverified", "reason": "suspected_noop"})
+    return {"path": "accessibility", "actionName": "scrollTo", "fallbackReason": None, "verification": verification}
 
 
-def item_past_edge(node, placed, axis, sign, viewport_start, viewport_end, depth):
+def item_past_edge(node, placed, axis, sign, viewport_start, viewport_end, depth, budget):
     """The item that should lead the next page: the first one cut by or beyond the viewport edge we scroll toward."""
     if depth <= 0:
         return None
     edge = viewport_end if sign > 0 else viewport_start
-    items = list(children(node))
-    for _, child in (items if sign > 0 else reversed(items)):
-        frame = placed.frame(child)
+    count = int(attempt(lambda: node.get_child_count(), 0) or 0)
+    for index in (range(count) if sign > 0 else range(count - 1, -1, -1)):
+        # Why a shared budget: each child is an AT-SPI round trip, and a document can hold thousands.
+        budget[0] -= 1
+        if budget[0] < 0:
+            return None
+        child = attempt(lambda index=index: node.get_child_at_index(index))
+        frame = placed.frame(child) if child is not None else None
         if frame is None:
             continue
         start, end = (frame.y, frame.y + frame.height) if axis == "vertical" else (frame.x, frame.x + frame.width)
         if (start >= edge - 1) if sign > 0 else (end <= edge + 1):
             return child
         if start < edge < end:
-            inner = item_past_edge(child, placed, axis, sign, viewport_start, viewport_end, depth - 1)
+            inner = item_past_edge(child, placed, axis, sign, viewport_start, viewport_end, depth - 1, budget)
             # Why the cut item itself: its hidden part leads the next page, unless it already fills the viewport.
             leads = start > viewport_start + 1 if sign > 0 else end < viewport_end - 1
             return inner if inner is not None else child if leads else None
     return None
 
 
-def wait_item_in_view(item, placed, axis, start, length):
+def wait_item_moved(item, placed, axis, before):
+    """Wait until ScrollTo moved the item, so the next page is planned from settled geometry."""
     deadline = time.monotonic() + SCROLL_SETTLE_SECONDS
+    was = before.y if axis == "vertical" else before.x
     while True:
         frame = placed.frame(item)
-        position = None if frame is None else frame.y if axis == "vertical" else frame.x
-        size = None if frame is None else frame.height if axis == "vertical" else frame.width
-        if position is not None and position + size > start + 1 and position < start + length - 1:
+        now = None if frame is None else frame.y if axis == "vertical" else frame.x
+        if now is not None and abs(now - was) > 1:
             return True
         if time.monotonic() >= deadline:
             return False
@@ -1979,6 +2008,11 @@ def select_in_parent(app, node):
         return None
     if attempt(lambda: parent.get_child_at_index(index)) != node:
         raise RuntimeError("stale element: the selection index no longer names this element; run get-app-state again and use a fresh element index")
+    multiselectable = getattr(Atspi.StateType, "MULTISELECTABLE", None)
+    # Why clear first: a plain click replaces the selection, while SelectChild adds to a multi-select list's.
+    if (multiselectable is not None and has_state(parent, multiselectable)
+            and not attempt(lambda: Atspi.Selection.clear_selection(selection), False)):
+        return None
     if not attempt(lambda: Atspi.Selection.select_child(selection, index), False):
         return None
     attempt(lambda: node.clear_cache())
@@ -1994,15 +2028,16 @@ def selection_indices_proven(app, parent, selection):
         return True
     count = int(attempt(lambda: parent.get_child_count(), 0) or 0)
 
-    def answers(index):
+    def answer(index):
         try:
             Atspi.Selection.is_child_selected(selection, index)
-            return True
-        except Exception:
-            return False
+            return "answered"
+        except Exception as error:
+            # Why only InvalidArgs: a timeout or lost connection proves nothing about the index space.
+            return "refused" if "InvalidArgs" in str(error) else "unknown"
 
     # Why counted: the index spaces match exactly when the last child answers and the one past it is refused.
-    return count > 0 and answers(count - 1) and not answers(count)
+    return count > 0 and answer(count - 1) == "answered" and answer(count) == "refused"
 
 
 def is_enter_key(raw):
