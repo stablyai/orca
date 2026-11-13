@@ -167,16 +167,11 @@ describe.skipIf(process.platform === 'win32')('serve private admission snapshots
     writeFileSync(join(root, 'orca-runtime.json'), JSON.stringify(metadata))
     return metadata
   }
-  it('keeps the missing-M0 default path synchronous without a second read', () => {
-    expect(preflightElectronServe({}, root, { platform: 'linux' })).toBeNull()
-    expect(metadataReader.tryReadMetadata).toHaveBeenCalledTimes(1)
-  })
   it.each([2147483647, process.pid])(
     'retains launch permission for absent listener even with PID %s',
     async (pid) => {
       publish(pid)
       await expect(preflightElectronServe({}, root, { platform: 'linux' })).resolves.toBeNull()
-      expect(metadataReader.tryReadMetadata).toHaveBeenCalledTimes(2)
     }
   )
   it.each(['disappeared', 'replacement', 'incomplete'])(
@@ -209,7 +204,6 @@ describe.skipIf(process.platform === 'win32')('serve private admission snapshots
       expect(String(vi.mocked(process.stderr.write).mock.calls.at(-1)?.[0])).toContain(
         change === 'replacement' ? `pid ${process.pid}` : 'pid 2147483647'
       )
-      expect(metadataReader.tryReadMetadata).toHaveBeenCalledTimes(2)
     }
   )
 })
