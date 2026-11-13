@@ -111,6 +111,7 @@ export type InternalRateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
+  deepseek: ProviderRateLimits | null
   muse: ProviderRateLimits | null
 }
 

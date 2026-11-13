@@ -179,6 +179,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'osc52ClipboardDefaultOnNoticePending',
   '_antigravityStatusBarDefaultAdded',
   '_cursorStatusBarDefaultAdded',
+  '_deepseekStatusBarDefaultAdded',
   '_expandedWorktreeCardPropertiesDefaulted',
   '_explorerDisplayRootMigrated',
   '_grokStatusBarDefaultAdded',

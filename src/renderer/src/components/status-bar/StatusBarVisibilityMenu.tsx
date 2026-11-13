@@ -7,7 +7,14 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import {
+  ClaudeIcon,
+  DeepSeekIcon,
+  GeminiIcon,
+  MiniMaxIcon,
+  OpenAIIcon,
+  OpenCodeGoIcon
+} from './icons'
 import { useTranslate } from '@/i18n/use-translate'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import type { StatusBarController } from './use-status-bar-controller'
@@ -164,6 +171,16 @@ export function StatusBarVisibilityMenu({
         >
           <AgentIcon agent="cursor" size={14} />
           {t('auto.components.status.bar.StatusBar.cursorUsageMenu', 'Cursor Usage')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('deepseek')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('deepseek')
+          }}
+        >
+          <DeepSeekIcon size={14} />
+          {t('auto.components.status.bar.StatusBar.deepseekUsageMenu', 'DeepSeek Usage')}
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('ssh')}

@@ -70,6 +70,7 @@ export type StatusBarItem =
   | 'grok'
   | 'cursor'
   | 'zcode'
+  | 'deepseek'
   | 'muse'
   | 'ssh'
   | 'resource-usage'

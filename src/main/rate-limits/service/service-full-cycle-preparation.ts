@@ -5,6 +5,7 @@ import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
 import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
 import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
+import { fetchDeepSeekRateLimits, isDeepSeekAuthConfigured } from '../deepseek-fetcher'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../providers/antigravity/antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../providers/antigravity/antigravity-usage-snapshot'
@@ -51,7 +52,8 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
-  antigravityResultPromise: Promise<SettledProviderResult>
+  antigravityResultPromise: Promise<SettledProviderResult>,
+  deepseekResultPromise: Promise<SettledProviderResult>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceAntigravityAccounts {
@@ -171,12 +173,23 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      deepseek: this.withFetchingStatus(previousState.deepseek, 'deepseek'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
         : this.withFetchingStatus(previousState.zcode, 'zcode')
     })
 
     // Async Keychain/worker DB reads must not delay other providers.
+    // Why: the key is env-only, so the flag is known before the request and a
+    // thrown balance read must not reject the rest of the cycle.
+    this.deepseekAuthConfigured = isDeepSeekAuthConfigured()
+    const deepseekResultPromise = fetchDeepSeekRateLimits({ signal }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
+    // Why: the Cursor probe reads the macOS Keychain, so it is awaited inside the
+    // provider's own promise instead of blocking the rest of the cycle on it.
     const cursorResultPromise = readCursorAuthSession()
       .then((authReadResult) => {
         this.cursorAuthConfigured = authReadResult.status === 'ok'
@@ -320,6 +333,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
+      deepseekResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
     }

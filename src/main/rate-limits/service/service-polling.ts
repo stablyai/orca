@@ -81,6 +81,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       antigravity: this.state.antigravity,
       cursor: this.state.cursor,
       zcode: this.state.zcode,
+      deepseek: this.state.deepseek,
       muse: this.state.muse
     }
     // A hidden Muse meter keeps an idle snapshot, which must not force a full refresh on every focus.

@@ -144,6 +144,8 @@ export type PersistedUIState = {
   _cursorStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on ZCode status item. */
   _zcodeStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on DeepSeek status item. */
+  _deepseekStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Muse status item. */
   _museStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]

@@ -60,6 +60,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
+      deepseekResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
     } = prepared
@@ -216,12 +217,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, deepseekSettled, zcodeSettled, antigravitySettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        deepseekResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise
+      ])
     if (signal.aborted) {
       return
     }
@@ -242,6 +245,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
+    const deepseek = settleSiblingProviderResult('deepseek', deepseekSettled)
     const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
@@ -257,10 +261,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyAntigravity) {
       this.trackActiveFailureStreak('antigravity', antigravity)
     }
+    this.trackActiveFailureStreak('deepseek', deepseek)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      deepseek: this.applyStalePolicy(deepseek, previousState.deepseek),
       zcode: !shouldApplyZcode
         ? this.state.zcode
         : zcodeConfigChanged

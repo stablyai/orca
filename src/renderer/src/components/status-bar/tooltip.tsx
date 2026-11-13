@@ -4,7 +4,14 @@ import {
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import {
+  ClaudeIcon,
+  DeepSeekIcon,
+  GeminiIcon,
+  MiniMaxIcon,
+  OpenAIIcon,
+  OpenCodeGoIcon
+} from './icons'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -106,6 +113,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'cursor') {
     return <AgentIcon agent="cursor" size={13} />
+  }
+  if (provider === 'deepseek') {
+    return <DeepSeekIcon size={13} />
   }
   return <ClaudeIcon size={13} />
 }

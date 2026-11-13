@@ -44,6 +44,11 @@ vi.mock('../providers/muse/muse-usage-fetcher', () => ({
   fetchMuseRateLimits: vi.fn()
 }))
 
+vi.mock('../deepseek-fetcher', () => ({
+  fetchDeepSeekRateLimits: vi.fn(),
+  isDeepSeekAuthConfigured: vi.fn(() => false)
+}))
+
 vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))
