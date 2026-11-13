@@ -28032,7 +28032,6 @@
     },
     "setUpAgent": "Set up an agent",
     "personal": {
-      "description": "Only you get these, in every Orca Cloud workspace you start.",
       "emptyTitle": "No personal secrets yet",
       "emptyDetail": "Add one or paste a .env file. New terminals and agents in your cloud workspaces get them as environment variables.",
       "descriptionUnshared": "Only you get these, in cloud workspaces you haven’t shared. Shared workspaces don’t get them."

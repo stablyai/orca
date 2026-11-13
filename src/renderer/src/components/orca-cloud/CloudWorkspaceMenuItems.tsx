@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { toastSharedWithTeam } from '@/components/cloud-workspaces/shared-with-team-toast'
 import { isCloudSyncAvailable, requestCloudSyncFocus } from '@/lib/orca-cloud/cloud-sync-store'
 import {
   ConfirmationDialogContext,
@@ -179,16 +180,7 @@ async function setVisibility(
     return
   }
   if (visibility === 'team') {
-    // SEC-5: the owner's personal secrets stop being injected once teammates can open it.
-    toast.success(
-      t('auto.components.cloudWorkspaces.sharedWithYourTeam', 'Shared with your team'),
-      {
-        description: t(
-          'auto.components.cloudWorkspaces.sharedPersonalSecretsNote',
-          'Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are.'
-        )
-      }
-    )
+    toastSharedWithTeam(t)
   } else {
     toast.success(
       t(

@@ -32,6 +32,7 @@ import { useCloudReadPanel } from './use-cloud-read-panel'
 import type { MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
+import { toastSharedWithTeam } from './shared-with-team-toast'
 import { focusCloudChat } from './cloud-chat-focus'
 import * as homeArchive from './cloud-workspace-home-archive'
 import { focusedKind, frontCloudChat } from './cloud-workspace-links'
@@ -221,16 +222,7 @@ export function CloudWorkspacesHome({
         void refreshCloudMessageSenders().catch(() => undefined)
       }
       if (change.visibility === 'team') {
-        // SEC-5: the owner's personal secrets stop being injected once teammates can open it.
-        toast.success(
-          t('auto.components.cloudWorkspaces.sharedWithYourTeam', 'Shared with your team'),
-          {
-            description: t(
-              'auto.components.cloudWorkspaces.sharedPersonalSecretsNote',
-              'Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are.'
-            )
-          }
-        )
+        toastSharedWithTeam(t)
       } else if (change.visibility === 'private') {
         toast.success(
           t(
