@@ -1,7 +1,8 @@
-import { globSync, readFileSync } from 'node:fs'
+import { globSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { normalizePath, transformWithOxc, type Plugin } from 'vite'
+import { normalizePath, searchForWorkspaceRoot, transformWithOxc, type Plugin } from 'vite'
 import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
 import {
   UNIT_INCLUDE,
@@ -18,6 +19,7 @@ import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-r
 import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
 import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
 import { vitestReactCompiler } from './build-plugins/vitest-react-compiler'
+import { crossVersionFixtureCacheRoot } from '../tests/e2e/cross-version-wire/cross-version-fixture-cache'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
@@ -28,6 +30,14 @@ const gitEnv = { ...gitSigningOffEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
+  server: {
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        crossVersionFixtureCacheRoot(process.cwd(), realpathSync(tmpdir()))
+      ]
+    }
+  },
   // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
   tsconfig: resolve(import.meta.dirname, 'tsconfig.vitest-transform.json'),
   oxc: { exclude: [/\.js$/, phoneContractPattern] },

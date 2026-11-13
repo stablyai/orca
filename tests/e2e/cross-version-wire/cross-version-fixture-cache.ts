@@ -3,9 +3,13 @@ import { mkdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-export async function prepareCrossVersionFixtureCache(repoRoot: string): Promise<string> {
+export function crossVersionFixtureCacheRoot(repoRoot: string, temporaryRoot: string): string {
   const key = createHash('sha256').update(repoRoot).digest('hex').slice(0, 16)
-  const root = join(tmpdir(), 'orca-cross-version-checkouts', key)
+  return join(temporaryRoot, 'orca-cross-version-checkouts', key)
+}
+
+export async function prepareCrossVersionFixtureCache(repoRoot: string): Promise<string> {
+  const root = crossVersionFixtureCacheRoot(repoRoot, await realpath(tmpdir()))
   await mkdir(root, { recursive: true })
   const dependencies = join(repoRoot, 'node_modules')
   const linkedDependencies = join(root, 'node_modules')
