@@ -30,8 +30,9 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
+  // AgentHookServer restarts reopen WAL-backed status caches read-only, which Bun on macOS cannot.
+  'src/main/agent-hooks/server/testing/**/*.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
-  'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
   'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
@@ -76,7 +77,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
   'src/shared/own-retained-string.test.ts',
-  'src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
   // Worker TypeScript loads through node:module registerHooks, which Bun lacks.
@@ -148,8 +148,6 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
-  'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
-  'src/main/agent-hooks/server/testing/persistence/server-last-status-claude-model.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
