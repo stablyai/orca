@@ -4,6 +4,7 @@ import {
   WORKER_TERMINAL_RELEASABLE_ROW_SQL
 } from '../../terminal-authority/release/worker-terminal-ownership'
 import type {
+  WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
@@ -95,12 +96,25 @@ export function requestWorkerTerminalRelease(
   }
 }
 
+/** Settle a resource whose exact process is proven gone, recording where its output lives if nothing has yet. */
 export function settleDeadWorkerTerminalRelease(
   this: OrchestrationDb,
   params: {
     requestingDispatchId: string
     resourceId: string
     processIncarnation: string
+    /** The row the caller saw before its awaited proof; any change since voids that proof's intent. */
+    expected: Pick<
+      WorkerTerminalResourceRow,
+      'owner_dispatch_id' | 'host_scope' | 'release_state' | 'retained_reason'
+    >
+    /** Saved-state reference, written only when the owner has no archive yet. */
+    output: {
+      kind: WorkerTerminalArchiveKind
+      content: string
+      archiveSource: string
+      archiveStatus: WorkerTerminalArchiveStatus
+    }
   }
 ):
   | { disposition: 'released'; resource: WorkerTerminalResourceRow }
@@ -122,28 +136,41 @@ export function settleDeadWorkerTerminalRelease(
     const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
     const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
     const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
-    // Exit proves process death, not a recorded output location; require one whenever recording is reachable.
-    // Capture runs only while requested; an unrequested or retained owner settles unavailable instead.
+    const { expected } = params
+    const unchanged =
+      resource.owner_dispatch_id === expected.owner_dispatch_id &&
+      resource.host_scope === expected.host_scope &&
+      resource.release_state === expected.release_state &&
+      resource.retained_reason === expected.retained_reason
     const archive = this.getWorkerTerminalArchive(resource.owner_dispatch_id)
-    const archiveUnreachable =
-      resource.owner_dispatch_id === params.requestingDispatchId &&
-      (resource.release_state === 'not_requested' || resource.release_state === 'retained')
+    // Only the owner records a new reference; a prior owner settles only output already recorded.
+    const recordsOutput = !archive && resource.owner_dispatch_id === params.requestingDispatchId
     if (
       !priorOwners ||
       !requesterRelated ||
       !requesterSettled ||
       !ownerSettled ||
+      !unchanged ||
       resource.process_incarnation !== params.processIncarnation ||
-      (archive ? archive.resource_id !== resource.id : !archiveUnreachable) ||
+      (archive ? archive.resource_id !== resource.id : !recordsOutput) ||
       decideWorkerTerminalRelease(resource).action !== 'proceed'
     ) {
       this.db.exec('COMMIT')
       return { disposition: 'retained', resource }
     }
+    if (recordsOutput) {
+      this.storeWorkerTerminalArchive({
+        dispatchId: resource.owner_dispatch_id,
+        resourceId: resource.id,
+        kind: params.output.kind,
+        content: params.output.content
+      })
+    }
     this.db
       .prepare(
         `UPDATE worker_terminal_resources
          SET release_state = 'released', ownership_state = 'released', retained_reason = NULL,
+             archive_source = COALESCE(?, archive_source),
              archive_status = COALESCE(?, archive_status),
              release_requested_at = COALESCE(release_requested_at, datetime('now')),
              release_completed_at = datetime('now'), release_error = NULL,
@@ -151,7 +178,8 @@ export function settleDeadWorkerTerminalRelease(
          WHERE id = ? AND process_incarnation = ? AND ${WORKER_TERMINAL_RELEASABLE_ROW_SQL}`
       )
       .run(
-        archive ? null : ('unavailable' satisfies WorkerTerminalArchiveStatus),
+        recordsOutput ? params.output.archiveSource : null,
+        recordsOutput ? params.output.archiveStatus : null,
         params.resourceId,
         params.processIncarnation
       )

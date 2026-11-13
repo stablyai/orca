@@ -20,16 +20,18 @@ import type {
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-terminal-contracts'
 import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
+import { InProcessWorkerExitEvidence } from '../../orchestration/terminal-authority/release/in-process-worker-exit-evidence'
 import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
   reportWorkerTurnStop,
   type WorkerTurnStop
 } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
+  private readonly inProcessWorkerExits = new InProcessWorkerExitEvidence()
   subscribeToTerminalResize(
     ptyId: string,
     listener: (event: {
@@ -212,21 +214,40 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
-    if (!hostScope || !this.ptyController?.listProcesses) {
+    if (!hostScope) {
       return 'unverifiable'
     }
-    const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(
-        hostScope.kind === 'ssh'
-          ? toSshExecutionHostId(hostScope.targetId)
-          : LOCAL_EXECUTION_HOST_ID
-      ),
-      PTY_CONTROLLER_LIST_TIMEOUT_MS
-    )
+    const controller = this.ptyController
+    // An SSH relay answers only for its own host; locally, the provider that answered decides what silence means.
+    const listing =
+      hostScope.kind === 'ssh'
+        ? controller?.listProcesses
+          ? controller
+              .listProcesses(toSshExecutionHostId(hostScope.targetId))
+              .then((processes) => ({ processes, inProcessOwner: false }))
+          : null
+        : (controller?.listLocalProcessesForExitProof?.() ?? null)
+    if (!listing) {
+      return 'unverifiable'
+    }
+    const listed = await withTimeoutResult(listing, PTY_CONTROLLER_LIST_TIMEOUT_MS)
     if (!listed.ok) {
       return 'unverifiable'
     }
-    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
+    const { processes, inProcessOwner } = listed.value
+    // This process's own provider can vouch only for PTYs it saw exit; others may live in a daemon it never reached.
+    const absenceProvesExit =
+      !inProcessOwner ||
+      this.inProcessWorkerExits.has(this.getOrchestrationDbIfAvailable(), processIncarnation)
+    return classifyWorkerTerminalProcessIncarnation(
+      processIncarnation,
+      processes,
+      absenceProvesExit
+    )
+  }
+
+  recordInProcessPtyExit(processIncarnation: string): void {
+    this.inProcessWorkerExits.record(this.getOrchestrationDbIfAvailable(), processIncarnation)
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {

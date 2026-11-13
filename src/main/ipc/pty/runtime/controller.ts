@@ -39,13 +39,24 @@ import {
 } from './operations'
 import { supportsForegroundProcessEvidenceFromRuntimeController } from './foreground-process-evidence-capability'
 import {
+  listLocalProcessesForExitProofFromRuntimeController,
   listProcessesFromRuntimeController,
   listProcessesWithHostScopeFromRuntimeController
 } from './inventory-operations'
+import { onLocalPtyExit } from '../../../providers/local-pty/local-pty-session-operations'
+
+// Window reactivation reinstalls the controller; keep one exit observer.
+let stopObservingInProcessExits: (() => void) | null = null
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 
+  stopObservingInProcessExits?.()
+  stopObservingInProcessExits = onLocalPtyExit(({ id, incarnationId }) => {
+    if (incarnationId) {
+      runtime?.recordInProcessPtyExit(`${id}:${incarnationId}`)
+    }
+  })
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {
       const paneKey = makePaneKey(args.tabId, args.leafId)
@@ -102,6 +113,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     hasPty: (ptyId) => hasPtyFromRuntimeController(deps, ptyId),
     getPtyAvailability: (ptyId) => getPtyAvailabilityFromRuntimeController(deps, ptyId),
     listProcesses: (hostId, opts) => listProcessesFromRuntimeController(deps, hostId, opts),
+    listLocalProcessesForExitProof: () => listLocalProcessesForExitProofFromRuntimeController(deps),
     listProcessesWithHostScope: (opts) =>
       listProcessesWithHostScopeFromRuntimeController(deps, opts),
     supportsForegroundProcessEvidence: (hostId) =>

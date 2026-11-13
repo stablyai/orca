@@ -19,6 +19,11 @@ import {
   structuredWorkerAgent
 } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import type { StructuredWorkerIdentity } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
+import { readWorkerResumeSession } from '../../db/dispatch-context/worker-follow-up-lineage'
+import { parseWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { needsWslHostResolution } from '../../../../native-chat/transcript-discovery/host-readable-transcript-path'
 
 /** Where a released worker's output still lives; readers open the original, never a saved copy. */
 export type WorkerOutputReference = {
@@ -114,6 +119,64 @@ export function captureWorkerOutputReference(args: {
       sessionId: session.providerSession.id,
       ...(transcriptPath ? { transcriptPath } : {}),
       ...(session.wslDistro ? { wslDistro: session.wslDistro } : {})
+    }
+  }
+}
+
+/** Where a worker whose process is gone left its output, from what Orca saved while it ran. */
+export function deriveWorkerOutputReferenceFromSavedState(args: {
+  resource: Pick<WorkerTerminalResourceRow, 'resume_session' | 'host_scope'>
+  structuredWorker?: StructuredWorkerIdentity | null
+  platform?: NodeJS.Platform
+}): WorkerOutputArchiveCapture {
+  if (args.structuredWorker) {
+    return {
+      kind: 'structured_journal',
+      status: 'captured',
+      content: {
+        version: 3,
+        agent: structuredWorkerAgent(args.structuredWorker),
+        processIncarnation: args.structuredWorker.processIncarnation
+      }
+    }
+  }
+  const session = readWorkerResumeSession(args.resource)
+  const unavailable = (
+    fallbackReason: OrchestrationWorkerReadFallbackReason
+  ): WorkerOutputArchiveCapture => ({
+    kind: 'terminal_tail',
+    status: 'unavailable',
+    content: { version: 3, fallbackReason }
+  })
+  if (!session) {
+    return unavailable('session_not_reported')
+  }
+  if (!canReadWorkerTranscript(session.agent)) {
+    return unavailable('provider_unsupported')
+  }
+  const scope = parseWorkerTerminalHostScope(args.resource.host_scope)
+  const { id: sessionId, transcriptPath } = session.providerSession
+  const platform = args.platform ?? process.platform
+  // Resume state drops the WSL distro, so only the pane's own host scope can say which guest holds the file.
+  const readable =
+    session.captureHostId === LOCAL_EXECUTION_HOST_ID &&
+    (scope?.kind === 'wsl'
+      ? Boolean(transcriptPath)
+      : scope?.kind === 'local' &&
+        (transcriptPath ? !needsWslHostResolution(transcriptPath, platform) : platform !== 'win32'))
+  if (!readable) {
+    return unavailable('remote_capability_unavailable')
+  }
+  return {
+    kind: 'transcript_pin',
+    status: 'captured',
+    // No processIncarnation: a reopened worker may still carry its predecessor's conversation.
+    content: {
+      version: 3,
+      agent: session.agent,
+      sessionId,
+      ...(transcriptPath ? { transcriptPath } : {}),
+      ...(scope?.kind === 'wsl' ? { wslDistro: scope.distro } : {})
     }
   }
 }

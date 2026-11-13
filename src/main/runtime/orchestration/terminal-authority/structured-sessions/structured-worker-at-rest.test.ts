@@ -178,7 +178,14 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
       db.settleDeadWorkerTerminalRelease({
         requestingDispatchId: dispatch.id,
         resourceId: resource.id,
-        processIncarnation: resource.process_incarnation!
+        processIncarnation: resource.process_incarnation!,
+        expected: db.getWorkerTerminalResource(resource.id)!,
+        output: {
+          kind: 'terminal_tail',
+          content: '{"version":3}',
+          archiveSource: 'terminal',
+          archiveStatus: 'unavailable'
+        }
       })
     ).toMatchObject({ disposition: 'released' })
 

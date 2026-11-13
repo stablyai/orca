@@ -12,10 +12,14 @@ export function matchesProcessIncarnation(
   return `${ptyId}:${incarnationId}` === processIncarnation
 }
 
-/** Exact live match proves life; missing/dirty candidate incarnation remains unverifiable, otherwise classify exited. */
+// Current fences end in a minted UUID; legacy `runtimeId:ptyId:generation` ends in a number.
+const MINTED_INCARNATION_SUFFIX = /:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Exact live match proves life; absence proves exit only for a current fence the answering owner can vouch for. */
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
-  sessions: readonly PtyProcessInfo[]
+  sessions: readonly PtyProcessInfo[],
+  absenceProvesExit: boolean
 ): 'live' | 'exited' | 'unverifiable' {
   const possibleMatches = sessions.filter((session) =>
     processIncarnation.startsWith(`${session.id}:`)
@@ -26,6 +30,9 @@ export function classifyWorkerTerminalProcessIncarnation(
     )
   ) {
     return 'live'
+  }
+  if (!absenceProvesExit || !MINTED_INCARNATION_SUFFIX.test(processIncarnation)) {
+    return 'unverifiable'
   }
   return possibleMatches.some(
     (session) => !session.incarnationId || session.incarnationId !== session.incarnationId.trim()
