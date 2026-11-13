@@ -91,7 +91,6 @@ async function readLeadingSessionId(file: string): Promise<LeadingRead> {
       if (trailingPartial) {
         lines.pop()
       }
-      let sawRow = false
       for (const line of lines) {
         if (!line.trim()) {
           continue
@@ -102,7 +101,6 @@ async function readLeadingSessionId(file: string): Promise<LeadingRead> {
         } catch {
           return { kind: 'unreadable' }
         }
-        sawRow = true
         // Rows carry their own top-level session; nested message payloads can name another one.
         const sessionId =
           row && typeof row === 'object' && 'sessionId' in row ? row.sessionId : undefined
@@ -110,8 +108,9 @@ async function readLeadingSessionId(file: string): Promise<LeadingRead> {
           return { kind: 'session', id: sessionId }
         }
       }
-      // A window cut mid-row cannot establish this transcript's session.
-      return trailingPartial || !sawRow ? { kind: 'unreadable' } : { kind: 'none' }
+      // A window cut mid-row cannot establish the session; a readable file with no rows just has
+      // no history (#37707 review).
+      return trailingPartial ? { kind: 'unreadable' } : { kind: 'none' }
     } finally {
       await handle.close()
     }

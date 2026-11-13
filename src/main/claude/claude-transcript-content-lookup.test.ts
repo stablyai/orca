@@ -116,6 +116,25 @@ it('refuses to call an unreadable candidate absent in strict adoption', async ()
   }
 })
 
+it('treats a readable transcript with no rows as empty history, not unreadable, in strict adoption', async () => {
+  const rig = await makeProjects()
+  try {
+    await writeFile(join(rig.bucketDir, 'zero-byte.jsonl'), '')
+    await writeFile(join(rig.bucketDir, 'blank-only.jsonl'), ' \n\t\n')
+
+    await expect(
+      findClaudeTranscriptBySessionIdContent({
+        projectsDir: join(rig.root, 'projects'),
+        workspaceCwd: rig.workspaceCwd,
+        providerSessionId: 'session-1',
+        strictErrors: true
+      })
+    ).resolves.toBeNull()
+  } finally {
+    await rig.cleanup()
+  }
+})
+
 it('matches the row-level session id, not a nested payload session id', async () => {
   const rig = await makeProjects()
   try {
