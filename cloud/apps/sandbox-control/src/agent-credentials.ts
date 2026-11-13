@@ -193,10 +193,15 @@ export async function agentCredentialsView(db: D1Database, env: Env, userId: str
     // RS-2: "needs check" reads as expired (the Renew strip) on every desktop, old ones included; newer
     // desktops may read needsCheck. An unknown state would read as 'none' ("isn't set up") on old ones.
     const wire = state === 'suspect' ? { state: 'expired' as const, needsCheck: true } : { state }
-    return { ...wire, ...(row?.label ? { label: row.label } : {}), ...(row?.expires_at ? { expiresAt: row.expires_at } : {}) }
+    // RS-5: credentials saved before the fix carry an email or the Orca name; Claude's always reads true.
+    const label = agent === 'claude' && row ? CLAUDE_CREDENTIAL_LABEL : row?.label
+    return { ...wire, ...(label ? { label } : {}), ...(row?.expires_at ? { expiresAt: row.expires_at } : {}) }
   }
   return { claude: view('claude'), codex: view('codex'), providerEnabled: providerEnabled(env), providerState: providerStates(env) }
 }
+
+/** RS-5: what a stored Claude credential is called (the approved account itself can't be known). */
+export const CLAUDE_CREDENTIAL_LABEL = 'Claude subscription'
 
 // A Claude setup-token: `sk-ant-oat01-` then URL-safe characters. Shape-checked, never logged.
 const CLAUDE_TOKEN = /^sk-ant-oat01-[A-Za-z0-9_-]{20,500}$/
@@ -225,7 +230,10 @@ export async function putClaudeCredential(db: D1Database, keyring: Keyring, env:
       accountId: caller.accountId,
       agent: 'claude',
       value: token,
-      label: body.label?.trim() || caller.name || null,
+      // RS-5 (design-squad): a true label only. Neither this computer's Claude Code email nor the Orca
+      // name says which account approved the setup-token (it prints no email, and its inference-only
+      // scope can't read the profile), so a Claude credential is always "Claude subscription".
+      label: CLAUDE_CREDENTIAL_LABEL,
       expiresAt: Math.min(body.expiresAt ?? now + CLAUDE_SETUP_TOKEN_TTL_MS, now + CLAUDE_SETUP_TOKEN_TTL_MS)
     },
     now

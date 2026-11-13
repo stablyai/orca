@@ -29,8 +29,6 @@ import {
 export type OrcaCloudAgentsServiceDeps = {
   client: AgentCredentialsClient | null
   spawnSetupToken: SpawnSetupToken
-  /** The Claude account signed in on this computer, used as the stored credential's label. */
-  readClaudeEmail: () => string | null
   openExternal: (url: string) => Promise<void>
   broadcast: (setups: OrcaCloudAgentSetups) => void
   /**
@@ -161,7 +159,8 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       isSignInUrl: (url) => isProviderSignInUrl('claude', url),
       onSetup: (setup) => update('claude', setup),
       onToken: async (token) => {
-        await storeClaude(token, deps.readClaudeEmail(), owner)
+        // RS-5: no label: this computer's Claude Code email may be another account's; the server names it.
+        await storeClaude(token, null, owner)
       },
       onDone: () => {
         if (claudeRun === run) {

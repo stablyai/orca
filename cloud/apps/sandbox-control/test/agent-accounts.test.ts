@@ -108,7 +108,8 @@ describe('Orca-account credentials (D11)', () => {
     expect((await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: 'sk-ant-api03-not-a-setup-token' } })).body.reason).toBe('invalid_token')
     const put = await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN, label: 'mia@example.com' } })
     expect(put.status).toBe(200)
-    expect(put.body.claude).toMatchObject({ state: 'active', label: 'mia@example.com' })
+    // RS-5: never the email a client sends (it may be another account's): always "Claude subscription".
+    expect(put.body.claude).toMatchObject({ state: 'active', label: 'Claude subscription' })
     expect(put.body.providerEnabled).toEqual({ claude: true, codex: false })
     // Codex's flag was never turned on: `off`, which clients word differently from the kill switch.
     expect(put.body.providerState).toEqual({ claude: 'on', codex: 'off' })

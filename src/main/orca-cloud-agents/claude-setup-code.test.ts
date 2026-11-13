@@ -155,7 +155,6 @@ describe('service: the code from the strip, Settings or the chat UI', () => {
         children.push(child)
         return child
       },
-      readClaudeEmail: () => null,
       openExternal: vi.fn(async () => {}),
       broadcast: (setups) => broadcasts.push(setups),
       identity: () => 'p1:u1'
