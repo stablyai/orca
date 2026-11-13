@@ -11,6 +11,7 @@ import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
 import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
+import { AccountMfaRow } from './AccountMfaRow'
 import { GitHubIdentityRow } from './GitHubIdentityRow'
 
 function accountStatusCopy(
@@ -134,6 +135,9 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
 
         {/* The person's own GitHub for cloud commits; only signed in to Orca Cloud. */}
         {connected && cloudAvailable ? <GitHubIdentityRow /> : null}
+
+        {/* Their own second factor: status, and a link to the account page that manages it. */}
+        {connected && cloudAvailable ? <AccountMfaRow /> : null}
 
         {/* JA-16: with Orca Cloud the page is identity + Sign out only; plan, team and agents have
             their own entries in the Orca Cloud group right beside it. */}

@@ -78,7 +78,7 @@ export function useCloudStartSteps({
     onGranted: () => grantedRef.current?.(repoNameRef.current),
     ...(setupSessionId ? { setupSessionId } : {})
   })
-  const { state, access: grant, repoName, owner, loading, openInstall, installLink } = repoAccess
+  const { state, access: grant, repoName, owner, loading, openInstall } = repoAccess
   useEffect(() => {
     repoNameRef.current = repoName
   }, [repoName])
@@ -120,5 +120,5 @@ export function useCloudStartSteps({
       ),
     [access, agentRow, availability, github, githubOverride, session, state]
   )
-  return { steps, session, openInstall, installLink }
+  return { steps, session, openInstall }
 }

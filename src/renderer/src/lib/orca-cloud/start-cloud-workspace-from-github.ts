@@ -9,6 +9,7 @@
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { openCloudWorkspace } from '@/components/cloud-workspaces/open-cloud-workspace'
+import { refreshCloudWorktreeBindings } from '@/components/cloud-workspaces/cloud-workspace-identity'
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
@@ -87,7 +88,12 @@ export function startCloudWorkspaceFromGitHub(request: StartFromGitHubRequest): 
   })
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
-  return runGitHubCloudCreate(creationId)
+  return runTracked(creationId)
+}
+
+/** Cancel's "Deleting the sandbox…" waits for every step that may still own a sandbox. */
+function runTracked(creationId: string): Promise<boolean> {
+  return trackOrcaCloudCreateStep(creationId, runGitHubCloudCreate(creationId))
 }
 
 /** The sheet's Retry (and the plans page's retry after checkout) for a GitHub-only create. */
@@ -114,7 +120,7 @@ export function retryGitHubCloudCreate(creationId: string): void {
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
-  void runGitHubCloudCreate(creationId)
+  void runTracked(creationId)
 }
 
 function current(creationId: string) {
@@ -186,13 +192,27 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
     return false
   }
   if (!current(creationId)) {
-    // Cancelled while it started: main stopped the create and deleted what it had made.
-    startedSandboxes.delete(creationId)
+    // GH-CREATE-CANCEL: cancelled after the sandbox started but before it opened.
+    await discardSandbox(creationId, sandboxId)
     return false
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, { phase: 'creating' })
   const workspace = await window.api.cloudWorkspaces.get(sandboxId).catch(() => null)
-  const opened = workspace?.ok ? await openCloudWorkspace(workspace.value) : null
+  const opened = workspace?.ok
+    ? await openCloudWorkspace(workspace.value, {
+        // GH-CREATE-NO-ROW: that server's rows wait behind the pending row until the hand-off.
+        onHost: (hostId) =>
+          useAppStore
+            .getState()
+            .updatePendingWorktreeCreation(creationId, { pairingHostId: hostId })
+      })
+    : null
+  if (!current(creationId)) {
+    // GH-CREATE-CANCEL: cancelled while it opened. Opening can't be stopped half way, so the
+    // sandbox is deleted, which also drops this computer's pairing and its row.
+    await discardSandbox(creationId, sandboxId)
+    return false
+  }
   if (!opened?.ok) {
     // The sandbox exists from here on: Retry opens it and never creates it again.
     return fail(
@@ -218,4 +238,15 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
     hostId: opened.hostId
   })
   return true
+}
+
+/** A cancelled create's sandbox: deleted, so nothing keeps running (or billing) behind the cancel. */
+async function discardSandbox(creationId: string, sandboxId: string): Promise<void> {
+  startedSandboxes.delete(creationId)
+  forgetGitHubCreateKey(creationId)
+  const result = await window.api.cloudWorkspaces.destroy(sandboxId).catch(() => null)
+  if (!result?.ok) {
+    console.warn('[orca-cloud] cancelled GitHub create: could not delete sandbox', sandboxId)
+  }
+  void refreshCloudWorktreeBindings().catch(() => undefined)
 }

@@ -13,7 +13,12 @@ import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime
 import type { Repo } from '../../../../shared/repo-types'
 
 type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
-  Partial<Pick<AppState, 'orcaProfileAuthStatus' | 'cloudAccountIdByEnvironmentId'>>
+  Partial<
+    Pick<
+      AppState,
+      'orcaProfileAuthStatus' | 'cloudAccountIdByEnvironmentId' | 'pendingWorktreeCreations'
+    >
+  >
 
 /**
  * Every Orca Cloud server this desktop runs, `+host` when the active team owns it and `-host`
@@ -30,7 +35,12 @@ type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
 export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
   const active = orcaCloudAccountId(state.orcaProfileAuthStatus?.cloud)
   const owners = state.cloudAccountIdByEnvironmentId ?? {}
-  return (state.runtimeEnvironments ?? [])
+  // GH-CREATE-NO-ROW: a GitHub-only create's pending row stands for its server's rows until the
+  // hand-off removes it; both change in one store update, so the row never shows twice.
+  const handingOff = Object.values(state.pendingWorktreeCreations ?? {}).flatMap((entry) =>
+    entry.request.githubSource && entry.pairingHostId ? [`-${entry.pairingHostId}`] : []
+  )
+  const scoped = (state.runtimeEnvironments ?? [])
     .filter((environment) => isOrcaCloudRuntimeEnvironment(environment))
     .flatMap((environment) => {
       const hostId = toRuntimeExecutionHostId(environment.id)
@@ -41,7 +51,7 @@ export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
       const inTeam = active !== null && owners[environment.id] === active
       return [`${inTeam ? '+' : '-'}${hostId}`]
     })
-    .join('\n')
+  return [...scoped, ...handingOff].join('\n')
 }
 
 export function parseOrcaCloudHostScopeKey(key: string): {

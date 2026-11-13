@@ -21,6 +21,7 @@ import type { RowActions } from './CloudWorkspaceRowMenu'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
+import { toastSharedWithTeam } from './shared-with-team-toast'
 
 /** Names for every member id the rows show, and whether you are a team owner or admin. */
 export function useMemberDirectory(
@@ -130,9 +131,7 @@ export function useCloudWorkspaceRowActions({
         void refreshCloudMessageSenders().catch(() => undefined)
       }
       if (change.visibility === 'team') {
-        toast.success(
-          t('auto.components.cloudWorkspaces.sharedWithYourTeam', 'Shared with your team')
-        )
+        toastSharedWithTeam(t)
       } else if (change.visibility === 'private') {
         toast.success(
           t(

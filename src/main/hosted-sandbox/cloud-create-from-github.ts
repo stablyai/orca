@@ -73,11 +73,6 @@ export async function createCloudWorkspaceFromGitHub(
         onProgress: (progress) => io.onLog?.(hostedProgressLine(progress))
       }
     )
-    if (io.signal?.aborted) {
-      // Cancelled just as it answered: nothing will open it, so it must not keep running (and billing).
-      await client.destroy(ready.sandbox.id).catch(() => undefined)
-      return { ok: false, code: 'failed', message: 'Cancelled.' }
-    }
     return { ok: true, value: { sandboxId: ready.sandbox.id } }
   } catch (error) {
     const result = hostedCreateFailure(error)

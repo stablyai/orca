@@ -9,7 +9,7 @@
 //   singleSignOn   replaces the built-in single sign-on block   (sso-scim)
 //   policies       sign-in policies, e.g. "Require MFA"          (mfa)
 import { ExternalLink } from 'lucide-react'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { EnterpriseAuditLog, type EnterpriseAuditLogProps } from './EnterpriseAuditLog'
@@ -87,15 +87,15 @@ export function EnterpriseSettingsView({
                     )}
                   </p>
                 </div>
-                <OpenExternalSplitButton
+                <Button
+                  type="button"
                   variant="outline"
                   size="sm"
-                  link={contact.contactUrl}
                   onClick={() => onContactSales(contact.contactUrl)}
                 >
                   {t('settings.enterprise.contactUs', 'Contact us')}
                   <ExternalLink />
-                </OpenExternalSplitButton>
+                </Button>
               </div>
             ) : banner ? (
               <EnterpriseUpsellLine>{ssoUpsellBody}</EnterpriseUpsellLine>

@@ -201,8 +201,8 @@ export function CloudSecretsPane({
                 ) : null
               }
               description={t(
-                'cloudSecrets.personal.description',
-                'Only you get these, in every Orca Cloud workspace you start.'
+                'cloudSecrets.personal.descriptionUnshared',
+                'Only you get these, in cloud workspaces you haven’t shared. Shared workspaces don’t get them.'
               )}
               emptyTitle={t('cloudSecrets.personal.emptyTitle', 'No personal secrets yet')}
               emptyDetail={t(

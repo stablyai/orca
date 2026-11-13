@@ -1,4 +1,14 @@
 import type {
+  OrcaTeamMfaPendingResult,
+  OrcaTeamMfaPolicyArgs,
+  OrcaTeamMfaPolicyResult,
+  OrcaTeamMfaPolicySetArgs,
+  OrcaTeamMfaPolicySetResult,
+  OrcaTeamMfaRemindArgs,
+  OrcaTeamMfaRemindResult
+} from '../../shared/orca-team-mfa-policy'
+import type { OrcaAccountMfaResult } from '../../shared/orca-account-mfa'
+import type {
   CloudSetupGetResult,
   CloudSetupLinkResult,
   CloudSetupStartArgs,
@@ -45,7 +55,6 @@ import type {
 } from '../../shared/orca-profiles'
 import type {
   OrcaBillingCheckoutArgs,
-  OrcaBillingLinkResult,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
@@ -85,6 +94,13 @@ export type OrcaProfileApi = {
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>
+  /** The signed-in person's own two-factor state and where to manage it. */
+  accountMfa: () => Promise<OrcaAccountMfaResult>
+  /** The team's "require MFA" policy and the person's own state in it. */
+  teamMfaPolicy: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPolicyResult>
+  teamMfaPolicySet: (args: OrcaTeamMfaPolicySetArgs) => Promise<OrcaTeamMfaPolicySetResult>
+  teamMfaPending: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPendingResult>
+  teamMfaRemind: (args: OrcaTeamMfaRemindArgs) => Promise<OrcaTeamMfaRemindResult>
   orgMembersList: (args: OrcaProfileOrgMembersListArgs) => Promise<OrcaProfileOrgMembersListResult>
   orgMemberInvite: (
     args: OrcaProfileOrgMemberInviteArgs
@@ -130,10 +146,6 @@ export type OrcaProfileApi = {
   cloudSetupLink: (args: { sessionId: string }) => Promise<CloudSetupLinkResult>
   /** Opens the Stripe Customer Portal in the browser. */
   billingOpenPortal: () => Promise<OrcaBillingOpenResult>
-  /** "Copy link": a fresh Customer Portal URL, minted but not opened. */
-  billingPortalLink: () => Promise<OrcaBillingLinkResult>
-  /** "Copy link": the Checkout URL billingOpenCheckout would open, minted but not opened. */
-  billingCheckoutLink: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingLinkResult>
   /** The last 30 days of sandbox hours (breakdowns for owners and admins only). */
   billingUsageHistory: (args: {
     utcOffsetMinutes: number

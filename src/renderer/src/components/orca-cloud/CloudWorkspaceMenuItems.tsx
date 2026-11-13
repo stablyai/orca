@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { toastSharedWithTeam } from '@/components/cloud-workspaces/shared-with-team-toast'
 import { isCloudSyncAvailable, requestCloudSyncFocus } from '@/lib/orca-cloud/cloud-sync-store'
 import {
   ConfirmationDialogContext,
@@ -178,14 +179,16 @@ async function setVisibility(
     )
     return
   }
-  toast.success(
-    visibility === 'team'
-      ? t('auto.components.cloudWorkspaces.sharedWithYourTeam', 'Shared with your team')
-      : t(
-          'auto.components.cloudWorkspaces.nowPrivate',
-          'Now private. Teammates’ devices were disconnected.'
-        )
-  )
+  if (visibility === 'team') {
+    toastSharedWithTeam(t)
+  } else {
+    toast.success(
+      t(
+        'auto.components.cloudWorkspaces.nowPrivate',
+        'Now private. Teammates’ devices were disconnected.'
+      )
+    )
+  }
   reload()
 }
 

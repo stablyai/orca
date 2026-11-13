@@ -188,12 +188,18 @@ function repoOwner(accountId: string, repo: string): string {
   return `${accountId}#${repo}`
 }
 
-/** The owners whose secrets a sandbox session receives. */
-export function ownersForSandbox(row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url'>) {
+/**
+ * The owners whose secrets a sandbox session receives.
+ * SEC-5: a workspace shared with teammates runs their shells too, so anything in its env is theirs to
+ * read (and a placeholder is theirs to spend). It gets the team's and the repository's secrets only,
+ * never its owner's personal ones, the same rule as personal accounts (D13). Fails closed: only a row
+ * known to be private counts as unshared.
+ */
+export function ownersForSandbox(row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url' | 'visibility'>) {
   const repo = normalizeRepo(row.repo_url)
   return {
     org: ORG_ACCOUNT.test(row.account_id) ? row.account_id : null,
-    personal: personalOwner(row.user_id, row.account_id.startsWith('dev:')),
+    personal: row.visibility === 'private' ? personalOwner(row.user_id, row.account_id.startsWith('dev:')) : null,
     repo: repo ? repoOwner(row.account_id, repo) : null
   }
 }
@@ -352,15 +358,21 @@ export type ResolvedSecrets = { env: Record<string, string>; scopes: Record<stri
 export async function resolveSandboxSecrets(
   db: D1Database,
   keyring: Keyring,
-  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url'>
+  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility'>
 ): Promise<ResolvedSecrets> {
   const owners = ownersForSandbox(row)
-  const pairs: [SecretScope, string][] = [['personal', owners.personal]]
+  const pairs: [SecretScope, string][] = []
+  if (owners.personal) {
+    pairs.push(['personal', owners.personal])
+  }
   if (owners.org) {
     pairs.push(['org', owners.org])
   }
   if (owners.repo) {
     pairs.push(['repo', owners.repo])
+  }
+  if (pairs.length === 0) {
+    return { env: {}, scopes: {}, skipped: 0 }
   }
   const where = pairs.map(() => '(scope = ? AND owner_id = ?)').join(' OR ')
   const { results } = await db
