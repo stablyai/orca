@@ -272,6 +272,7 @@ export class JournalLegacyRetirement {
       return
     }
     const signal = AbortSignal.any([recycled.signal, this.stopped.signal])
+    let prepared = state
     try {
       const removed = await retireJournalLegacyMain(
         this.directory,
@@ -281,13 +282,13 @@ export class JournalLegacyRetirement {
         () => this.matches(proof),
         this.lock,
         async (manifest, destination) => {
-          state = { ...state, phase: 'prepared', manifest }
-          await this.save(state, true, destination)
+          prepared = { ...prepared, phase: 'prepared', manifest }
+          await this.save(prepared, true, destination)
         }
       )
       if (removed) {
         this.readers.releaseSourceReaders(recycled)
-        await this.removeCompanions(state)
+        await this.removeCompanions(prepared)
       }
     } finally {
       this.readers.releaseSourceReaders(recycled)
