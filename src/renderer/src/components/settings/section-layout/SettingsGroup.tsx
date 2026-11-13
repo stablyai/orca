@@ -1,5 +1,6 @@
 import type React from 'react'
 import { cn } from '@/lib/class-names'
+import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 
 // The card's side inset. Content that must span to the card edges cancels it with the bleed
 // class; a bleeding row restores the inset on its own content with the row bleed class.
@@ -87,6 +88,51 @@ export function SettingsGroupHeader({
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
+
+/** Sub-rows under a parent row, one fixed step in; they draw their own rules since rows nested in a row draw none. */
+export function SettingsGroupNestedRows({
+  children
+}: {
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        SETTINGS_GROUP_NESTED_INSET_CLASS,
+        'divide-y divide-border border-t border-border'
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+/** A titled block inside a group's card; its rows keep the card's inset and rules. */
+export function SettingsGroupSubsection({
+  id,
+  title,
+  description,
+  action,
+  children
+}: {
+  id?: string
+  title: React.ReactNode
+  description?: React.ReactNode
+  action?: React.ReactNode
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div id={id} className="border-t border-border pt-4">
+      <SettingsSubsectionHeader
+        className="items-center pb-3"
+        title={title}
+        description={description}
+        action={action}
+      />
+      {children}
     </div>
   )
 }
