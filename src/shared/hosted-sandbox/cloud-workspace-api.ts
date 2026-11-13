@@ -22,6 +22,9 @@ export type CloudWorkspaceErrorCode =
   | 'not_found'
   | 'failed'
 
+/** EP-5: the `reason` on a cancelled create whose sandbox the control plane didn't confirm deleted. */
+export const CANCEL_CLEANUP_UNCONFIRMED = 'cancelCleanupUnconfirmed'
+
 export type CloudWorkspaceResult<T> =
   | { ok: true; value: T }
   | {
@@ -143,6 +146,11 @@ export type OrcaCloudWorkspaceApi = {
     /** One per Create press; a retry after a lost answer reuses it and gets the same sandbox. */
     idempotencyKey?: string
   }) => Promise<CloudWorkspaceResult<{ sandboxId: string }>>
+  /**
+   * EP-5: Try again for a cancelled GitHub-only create whose sandbox wasn't confirmed deleted
+   * (`reason: 'cancelCleanupUnconfirmed'`). True once the control plane confirms the delete.
+   */
+  retryCancelledCreate: (args: { provisionId: string }) => Promise<boolean>
   onWakeProgress: (callback: (event: CloudWakeProgressEvent) => void) => () => void
   onOom: (callback: (event: CloudOomEvent) => void) => () => void
 }
@@ -164,6 +172,7 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   gitHubInstallRights: 'orcaCloudWorkspace:gitHubInstallRights',
   listGitHubRepositories: 'orcaCloudWorkspace:listGitHubRepositories',
   createFromGitHub: 'orcaCloudWorkspace:createFromGitHub',
+  retryCancelledCreate: 'orcaCloudWorkspace:retryCancelledCreate',
   wakeProgress: 'orcaCloudWorkspace:wakeProgress',
   oom: 'orcaCloudWorkspace:oom'
 } as const

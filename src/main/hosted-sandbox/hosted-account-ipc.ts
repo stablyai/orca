@@ -15,7 +15,8 @@ import type { GitHubInstallRights } from '../../shared/hosted-sandbox/cloud-work
 import {
   CLOUD_CREATE_IDEMPOTENCY_KEY,
   CLOUD_CREATE_PROVISION_ID,
-  createCloudWorkspaceFromGitHub
+  createCloudWorkspaceFromGitHub,
+  retryCancelledGitHubCreate
 } from './cloud-create-from-github'
 import { activeProvisionControllers } from '../ipc/provision-controllers'
 import {
@@ -33,6 +34,7 @@ export const HOSTED_ACCOUNT_CHANNELS = [
   CH.gitHubInstallRights,
   CH.listGitHubRepositories,
   CH.createFromGitHub,
+  CH.retryCancelledCreate,
   ...HOSTED_GITHUB_USER_CHANNELS
 ] as const
 
@@ -62,6 +64,7 @@ export function registerHostedAccountHandlers(
     | 'bootPlan'
     | 'cloneStatus'
     | 'destroy'
+    | 'list'
     | 'githubUser'
     | 'connectGitHubUser'
     | 'disconnectGitHubUser'
@@ -196,7 +199,13 @@ export function registerHostedAccountHandlers(
       }
     }
   })
+  ipcMain.handle(CH.retryCancelledCreate, async (_event, args?: RetryCancelledCreateArgs) => {
+    const provisionId = matching(args?.provisionId, CLOUD_CREATE_PROVISION_ID)
+    return provisionId ? retryCancelledGitHubCreate(client, provisionId) : false
+  })
 }
+
+type RetryCancelledCreateArgs = { provisionId?: unknown } | undefined
 
 type CreateFromGitHubArgs =
   | { repoUrl?: unknown; title?: unknown; provisionId?: unknown; idempotencyKey?: unknown }

@@ -1,6 +1,7 @@
 import { app, type BrowserWindow } from 'electron'
 import { registerAgentApiKeyHandlers } from '../agent-api-keys/agent-api-key-ipc'
-import { registerCloudWorkspacesHandlers } from '../ipc/cloud-workspaces'
+import { getCloudWorkspacesService, registerCloudWorkspacesHandlers } from '../ipc/cloud-workspaces'
+import { installCloudPairingRecovery } from '../cloud-workspaces/cloud-pairing-recovery-install'
 import { registerCloudApiHandlers } from '../cloud-api/cloud-api-ipc'
 import { registerCloudSecretsHandlers } from '../cloud-secrets/cloud-secrets-ipc'
 import { registerOrcaCloudAgentsHandlers } from '../orca-cloud-agents/orca-cloud-agents-ipc'
@@ -66,6 +67,8 @@ export function attachMainWindowCoreServices(
   holdLaunchReconnectOptOuts(store.getSshTargets())
   registerAgentApiKeyHandlers(app.getPath('userData'))
   registerCloudWorkspacesHandlers({ removedServerStore: store })
+  // EP-8: a cloud workspace server that refuses this computer's pairing gets one fresh grant.
+  installCloudPairingRecovery(getCloudWorkspacesService)
   registerCloudApiHandlers()
   registerCloudSecretsHandlers(app.getPath('userData'))
   registerOrcaCloudAgentsHandlers(app.getPath('userData'))

@@ -132,7 +132,7 @@ export type EphemeralVmApi = {
   preflightCloudDelete?: (args: {
     runtimeEnvironmentId: string
   }) => Promise<
-    | { ok: true; asleep?: boolean; gone?: boolean }
+    | { ok: true; asleep?: boolean; gone?: boolean; unreachable?: 'rejected' | 'no_answer' }
     | { ok: false; error: string; errorCode?: string }
   >
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>

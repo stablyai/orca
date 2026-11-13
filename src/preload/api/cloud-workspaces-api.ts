@@ -99,5 +99,12 @@ export type CloudWorkspacesApi = {
   setPokesEnabled: (enabled: boolean) => Promise<CloudWorkspacesResult<boolean>>
   markPokesSeen: (ids: string[]) => Promise<CloudWorkspacesResult<void>>
   onOpenLink: (callback: (link: string) => void) => () => void
+  /**
+   * EP-8: a cloud workspace's server refused this computer and Orca Cloud won't grant it again (the
+   * account can no longer open it).
+   */
+  onAccessLost: (
+    callback: (lost: { environmentId: string; sandboxId: string }) => void
+  ) => () => void
   consumePendingLink: () => Promise<string | null>
 }

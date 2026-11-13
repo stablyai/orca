@@ -4,6 +4,7 @@ import {
   cleanCloudServiceOrigin as cleanOrigin
 } from '../../../shared/cloud-service-url'
 import { resolvePushGatewayOrigin } from '../../runtime/push/push-gateway-origin'
+import { buildServiceUrlDefault } from '../../cloud-build-defaults'
 
 export type OrcaCloudAuthConfig = {
   apiBaseUrl: string
@@ -52,7 +53,7 @@ export function getOrcaCloudAuthConfig(
   const apiBaseUrl = configuredApiBaseUrl
     ? cleanEndpointUrl(configuredApiBaseUrl)
     : packaged
-      ? PRODUCTION_API_BASE_URL
+      ? buildServiceUrlDefault('authApiUrl', PRODUCTION_API_BASE_URL)
       : null
   const clientId = env.ORCA_CLOUD_CLIENT_ID?.trim() || (packaged ? PRODUCTION_CLIENT_ID : undefined)
   if (!apiBaseUrl || !clientId) {
@@ -94,7 +95,8 @@ export function getOrcaCloudAuthConfig(
         cleanEndpointUrl(env.ORCA_CLOUD_CONNECTOR_TOKEN_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/connector-token'),
       relayDirectorUrl:
-        cleanOrigin(env.ORCA_RELAY_URL, allowLoopbackHttp) ?? PRODUCTION_RELAY_DIRECTOR_URL,
+        cleanOrigin(env.ORCA_RELAY_URL, allowLoopbackHttp) ??
+        buildServiceUrlDefault('relayDirectorUrl', PRODUCTION_RELAY_DIRECTOR_URL),
       clientId,
       scope: env.ORCA_CLOUD_AUTH_SCOPE?.trim() || DEFAULT_SCOPE
     }

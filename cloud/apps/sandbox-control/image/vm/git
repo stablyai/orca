@@ -91,15 +91,20 @@ github_remote_slug() {
 no_access_line() {
   local owner="${github_slug%%/*}" verb='push to'
   [ "$sub" = push ] || verb='read'
-  printf '%s\n' "orca: Orca Cloud can't $verb $github_slug. Install the Orca GitHub App on $owner, or connect your GitHub in Settings → Account." >&2
+  printf '%s\n' "orca: Orca Cloud can't $verb $github_slug. Install the Orca GitHub App on $owner, or connect GitHub in Settings → Account." >&2
 }
 # GitHub's "not found" is a typo'd name or a private repo it won't confirm: say which half fits whom.
 not_found_line() {
   printf '%s\n' "orca: Orca Cloud can't find $github_slug. Check the name, or install the Orca GitHub App on ${github_slug%%/*} if it's private." >&2
 }
+# PUSH-CAP (E3): git to github.com goes through Orca's egress proxy, whose edge refuses request bodies over
+# ~100 MB with a bare 413. Say what happened and how to split the push instead.
+too_large_line() {
+  printf '%s\n' "orca: This push is over Orca Cloud's limit of about 100 MB per push. Push fewer commits at a time, for example git push origin HEAD~5:refs/heads/<branch>, then run git push again." >&2
+}
 # orca-git-as's own fallback line is replaced by the nudge; GitHub auth failures by the plain line.
 fallback_filter() {
-  local line said=0
+  local line said=0 said413=0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       'orca-git-as: no teammate identity'*) nudge_once ;;
@@ -117,6 +122,14 @@ fallback_filter() {
         if [ -n "$github_slug" ]; then
           [ "$said" = 1 ] || no_access_line
           said=1
+        else
+          printf '%s\n' "$line"
+        fi
+        ;;
+      *"RPC failed; HTTP 413"* | *"The requested URL returned error: 413"*)
+        if [ -n "$github_slug" ]; then
+          [ "$said413" = 1 ] || too_large_line
+          said413=1
         else
           printf '%s\n' "$line"
         fi

@@ -12,6 +12,7 @@ import { currentCloudChatId, focusCloudChat } from './cloud-chat-focus'
 import { cloudWorkspacesAvailable } from './use-cloud-workspaces'
 import { installCloudWorkspaceSync } from './cloud-workspace-sync'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
+import { installCloudAccessLostNotice } from './cloud-access-lost-toast'
 
 /** No input for this long and the desktop stops reporting presence (and renewing a lease). */
 const IDLE_MS = 15 * 60_000
@@ -113,6 +114,8 @@ export function installCloudWorkspaceLinks(): () => void {
     return () => {}
   }
   cleanups.push(installCloudWorkspaceSync())
+  // EP-8: a server that refuses this computer for good says so, with one fix.
+  cleanups.push(installCloudAccessLostNotice())
   cleanups.push(
     api.onOpenLink((link) => {
       // The push already delivered it; drain the pending copy so a reload does not replay it.

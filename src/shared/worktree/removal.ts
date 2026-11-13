@@ -121,6 +121,13 @@ const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
 export const CLOUD_ASLEEP_DELETE_REFUSAL =
   'This workspace is asleep, so Orca can’t check it for unsaved changes. Use Force delete to delete it and its disk without waking it.'
 
+/**
+ * EP-8: a running Orca Cloud sandbox this computer can't reach (its pairing was revoked, or its server
+ * doesn't answer) can't be checked for unsaved work either; Force delete deletes it through Orca Cloud.
+ */
+export const CLOUD_UNREACHABLE_DELETE_REFUSAL =
+  'Orca can’t reach this workspace’s sandbox from this computer, so it can’t check it for unsaved changes. Use Force delete to delete it and its disk through Orca Cloud.'
+
 export function classifyWorktreeForceDeleteReason(
   error: string,
   force = false,
@@ -154,6 +161,7 @@ export function classifyWorktreeForceDeleteReason(
   }
   if (
     error === CLOUD_ASLEEP_DELETE_REFUSAL ||
+    error === CLOUD_UNREACHABLE_DELETE_REFUSAL ||
     error.includes('Worktree has uncommitted or untracked changes') ||
     error.includes('contains modified or untracked files') ||
     FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)

@@ -48,6 +48,9 @@ function register(url: string) {
       destroy: async () => {
         throw new Error('unused')
       },
+      list: async () => {
+        throw new Error('unused')
+      },
       githubUser: async () => ({ connected: false as const }),
       connectGitHubUser,
       disconnectGitHubUser: async () => ({ connected: false as const })

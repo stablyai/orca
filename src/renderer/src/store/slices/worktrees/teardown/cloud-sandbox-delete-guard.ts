@@ -1,9 +1,15 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { ephemeralVmCleanupErrorText, ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
+import {
+  ephemeralVmCleanupErrorText,
+  ephemeralVmErrorText
+} from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { CLOUD_ASLEEP_DELETE_REFUSAL } from '../../../../../../shared/worktree/removal'
+import {
+  CLOUD_ASLEEP_DELETE_REFUSAL,
+  CLOUD_UNREACHABLE_DELETE_REFUSAL
+} from '../../../../../../shared/worktree/removal'
 import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -54,7 +60,10 @@ export async function cloudSandboxSkipsServer(
     return false
   }
   const result = await preflightCloudDelete(runtimeEnvironmentId)?.catch(() => null)
-  return result?.ok === true && (result.asleep === true || result.gone === true)
+  return (
+    result?.ok === true &&
+    (result.asleep === true || result.gone === true || result.unreachable !== undefined)
+  )
 }
 
 /**
@@ -108,11 +117,17 @@ export async function prepareCloudSandboxDelete(args: {
   if (!result.ok) {
     throw new Error(ephemeralVmErrorText(result))
   }
-  if (!result.asleep && !result.gone) {
+  // EP-8: running, but its server won't answer this computer (a revoked pairing): asking it would
+  // wait forever, so Delete goes through Orca Cloud like an asleep one, and says so.
+  const unreachable = result.unreachable !== undefined
+  if (!result.asleep && !result.gone && !unreachable) {
     return args.options
   }
   if (result.asleep && !args.force) {
     throw new Error(CLOUD_ASLEEP_DELETE_REFUSAL)
+  }
+  if (unreachable && !args.force) {
+    throw new Error(CLOUD_UNREACHABLE_DELETE_REFUSAL)
   }
   // forget-local skips the transport's own pre-send checks, so run them here.
   args.assertBeforeDispatch()

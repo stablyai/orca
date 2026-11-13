@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { HostedEntitlementDeniedError } from './hosted-environment-provider'
 import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import { CANCEL_CLEANUP_UNCONFIRMED } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import {
   createCloudWorkspaceFromGitHub,
   githubWorkspaceId,
+  retryCancelledGitHubCreate,
   type CreateFromGitHubClient
 } from './cloud-create-from-github'
 
@@ -26,6 +28,7 @@ function client(overrides: Partial<CreateFromGitHubClient> = {}): CreateFromGitH
     bootPlan: vi.fn(async () => 'clone' as const),
     cloneStatus: vi.fn(async () => ({ state: 'done' as const })),
     destroy: vi.fn(async (id: string) => ({ id, status: 'destroyed' as const })),
+    list: vi.fn(async () => []),
     ...overrides
   }
 }
@@ -127,5 +130,50 @@ describe('GitHub-only create on the build sheet (GH-CREATE-SHEET)', () => {
     const result = await createCloudWorkspaceFromGitHub(api, INPUT, { signal: controller.signal })
     expect(result).toMatchObject({ ok: false })
     expect(api.destroy).toHaveBeenCalledWith('sbx_1')
+  })
+})
+
+describe('EP-5: a cancel whose sandbox was not confirmed deleted', () => {
+  it('answers reason cancelCleanupUnconfirmed (never a plain cancel), and Try again deletes it', async () => {
+    const controller = new AbortController()
+    let down = true
+    const api = client({
+      create: vi.fn(async (_body, signal) => {
+        if (signal) {
+          controller.abort()
+          throw new EnvironmentProviderError('aborted', 'Cancelled.')
+        }
+        if (down) {
+          throw new EnvironmentProviderError('unavailable', 'down')
+        }
+        return READY
+      })
+    })
+    vi.useFakeTimers()
+    let result: Awaited<ReturnType<typeof createCloudWorkspaceFromGitHub>>
+    try {
+      const pending = createCloudWorkspaceFromGitHub(api, INPUT, { signal: controller.signal })
+      await vi.runAllTimersAsync()
+      result = await pending
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(result).toMatchObject({ ok: false, reason: CANCEL_CLEANUP_UNCONFIRMED })
+    expect(api.destroy).not.toHaveBeenCalled()
+
+    // Try again, once the control plane answers: the same body and key find the sandbox; it is deleted.
+    down = false
+    expect(
+      await retryCancelledGitHubCreate(api, INPUT.provisionId, { waitMs: 0, log: () => {} })
+    ).toBe(true)
+    expect(api.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ workspaceId: githubWorkspaceId(INPUT.slug, INPUT.provisionId) }),
+      undefined,
+      INPUT.idempotencyKey
+    )
+    expect(api.destroy).toHaveBeenCalledWith('sbx_1')
+    // Done: nothing left to retry.
+    expect(await retryCancelledGitHubCreate(api, INPUT.provisionId)).toBe(true)
+    expect(api.destroy).toHaveBeenCalledTimes(1)
   })
 })

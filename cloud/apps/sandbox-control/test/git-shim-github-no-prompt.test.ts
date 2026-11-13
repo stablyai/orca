@@ -27,7 +27,11 @@ case "$1" in
   config | symbolic-ref) exit 1 ;;
   push | pull | fetch)
     echo "GIT_TERMINAL_PROMPT=\${GIT_TERMINAL_PROMPT:-unset}" >&2
-    if [ -n "\${FAKE_NOT_FOUND:-}" ]; then
+    if [ -n "\${FAKE_413:-}" ]; then
+      echo "error: RPC failed; HTTP 413 curl 22 The requested URL returned error: 413" >&2
+      echo "send-pack: unexpected disconnect while reading sideband packet" >&2
+      echo "fatal: the remote end hung up unexpectedly" >&2
+    elif [ -n "\${FAKE_NOT_FOUND:-}" ]; then
       echo "remote: Repository not found." >&2
       echo "fatal: repository 'https://github.com/acme/typo.git/' not found" >&2
     elif [ "\${GIT_TERMINAL_PROMPT:-}" = 0 ]; then
@@ -63,7 +67,7 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
     expect(err).not.toContain("Username for 'https://github.com'")
     expect(err).not.toContain('could not read Username')
     expect(err).toContain(
-      "orca: Orca Cloud can't push to octocat/Hello-World. Install the Orca GitHub App on octocat, or connect your GitHub in Settings → Account."
+      "orca: Orca Cloud can't push to octocat/Hello-World. Install the Orca GitHub App on octocat, or connect GitHub in Settings → Account."
     )
   })
 
@@ -88,5 +92,23 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
     expect(err).toContain("orca: Orca Cloud can't find acme/typo. Check the name, or install the Orca GitHub App on acme if it's private.")
     expect(err).not.toContain('Repository not found')
     expect(err.split('\n').filter((l) => l.startsWith('orca:')).length).toBe(1)
+  })
+
+  it('PUSH-CAP: a push over the egress proxy\u2019s size cap says so in plain words, once, instead of a bare 413', () => {
+    const err = git(['push', 'origin', 'HEAD'], 'https://github.com/acme/app.git', { FAKE_413: '1' })
+    const line =
+      "orca: This push is over Orca Cloud's limit of about 100 MB per push. Push fewer commits at a time, for example git push origin HEAD~5:refs/heads/<branch>, then run git push again."
+    expect(err.split('\n').filter((l) => l === line)).toHaveLength(1)
+    expect(err).not.toContain('HTTP 413')
+    expect(err).not.toContain('returned error: 413')
+    // git's own follow-up lines stay, and nothing claims an access problem.
+    expect(err).toContain('fatal: the remote end hung up unexpectedly')
+    expect(err).not.toContain("can't push to")
+  })
+
+  it('PUSH-CAP: a 413 from a non-GitHub remote is left as git printed it', () => {
+    const err = git(['push', 'origin', 'HEAD'], 'https://gitlab.com/acme/app.git', { FAKE_413: '1' })
+    expect(err).toContain('HTTP 413')
+    expect(err).not.toContain('orca:')
   })
 })

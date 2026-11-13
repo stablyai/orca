@@ -62,4 +62,40 @@ describe('preflightCloudWorkspaceDelete', () => {
       gone: true
     })
   })
+
+  it("EP-8: a running sandbox whose server refuses or doesn't answer this computer is unreachable", async () => {
+    expect(
+      await preflightCloudWorkspaceDelete('sbx_1', answering('running'), async () => 'rejected')
+    ).toEqual({ ok: true, unreachable: 'rejected' })
+    expect(
+      await preflightCloudWorkspaceDelete('sbx_1', answering('running'), async () => 'no_answer')
+    ).toEqual({ ok: true, unreachable: 'no_answer' })
+    expect(
+      await preflightCloudWorkspaceDelete('sbx_1', answering('running'), async () => {
+        throw new Error('boom')
+      })
+    ).toEqual({ ok: true, unreachable: 'no_answer' })
+    expect(
+      await preflightCloudWorkspaceDelete('sbx_1', answering('running'), async () => 'ok')
+    ).toEqual({
+      ok: true
+    })
+  })
+
+  it('EP-8: never probes an asleep or destroyed sandbox', async () => {
+    let probed = 0
+    const probe = async (): Promise<'ok'> => {
+      probed += 1
+      return 'ok'
+    }
+    expect(await preflightCloudWorkspaceDelete('sbx_1', answering('suspended'), probe)).toEqual({
+      ok: true,
+      asleep: true
+    })
+    expect(await preflightCloudWorkspaceDelete('sbx_1', answering('destroyed'), probe)).toEqual({
+      ok: true,
+      gone: true
+    })
+    expect(probed).toBe(0)
+  })
 })
