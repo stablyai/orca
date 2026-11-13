@@ -301,12 +301,8 @@
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
-        "listMetaCount_one": "{{count}} workspace",
-        "listMetaCount_other": "{{count}} workspaces",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
-        "rowSandboxHours_other": "{{hours}} sandbox hours",
-        "sectionCount_one": "{{count}} workspace",
-        "sectionCount_other": "{{count}} workspaces"
+        "rowSandboxHours_other": "{{hours}} sandbox hours"
       },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
@@ -1841,6 +1837,12 @@
     }
   },
   "components": {
+    "cloudWorkspaces": {
+      "picker": {
+        "inSidebarNote_one": "{{count}} more is already in your sidebar.",
+        "inSidebarNote_other": "{{count}} more are already in your sidebar."
+      }
+    },
     "confirmation": {
       "itemList": {
         "showMore_one": "Show {{count}} more",

@@ -105,7 +105,9 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
   const client = config
     ? createCloudSecretsClient({
         baseUrl: config.controlPlaneUrl,
-        getAccessToken: config.getAccessToken
+        getAccessToken: config.getAccessToken,
+        // Admin-only writes need a token under a minute old; a stale one is re-minted once.
+        invalidateAccessToken: config.invalidateAccessToken
       })
     : null
   // Agent API keys saved while signed in are written to personal secrets through the same client.

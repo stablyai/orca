@@ -34,6 +34,42 @@ const VIEW = {
 }
 
 describe('createCloudSecretsClient', () => {
+  it('re-mints once on 401 stale_token (admin write window), and not for other 401s', async () => {
+    const tokens = ['old', 'new']
+    let invalidated = 0
+    const seen: string[] = []
+    let answers: Response[] = []
+    const client = createCloudSecretsClient({
+      baseUrl: 'https://control.test',
+      getAccessToken: async () => tokens[Math.min(invalidated, 1)]!,
+      invalidateAccessToken: () => {
+        invalidated++
+      },
+      fetch: async (_input, init) => {
+        seen.push(new Headers(init?.headers).get('authorization') ?? '')
+        return answers.shift()!
+      }
+    })
+    answers = [
+      Response.json({ error: 'unauthorized', reason: 'stale_token' }, { status: 401 }),
+      Response.json({ secret: VIEW })
+    ]
+    await client.put({ scope: 'org' }, 'DATABASE_URL', 'value-not-logged')
+    expect(seen).toEqual(['Bearer old', 'Bearer new'])
+    expect(invalidated).toBe(1)
+
+    answers = [
+      Response.json({ error: 'unauthorized', reason: 'stale_token' }, { status: 401 }),
+      Response.json({ error: 'unauthorized', reason: 'stale_token' }, { status: 401 })
+    ]
+    await expect(client.remove({ scope: 'org' }, 'DATABASE_URL')).rejects.toThrow()
+    expect(invalidated).toBe(2)
+
+    answers = [Response.json({ error: 'unauthorized' }, { status: 401 })]
+    await expect(client.remove({ scope: 'org' }, 'DATABASE_URL')).rejects.toThrow()
+    expect(invalidated).toBe(2)
+  })
+
   it('reads who owns a sandbox and whether it is shared, failing closed on an unknown owner', async () => {
     const answers = [
       { owner: { userId: 'u2', displayName: 'Ada', isCaller: false }, sharedWorkspace: true },

@@ -1,6 +1,7 @@
 # SEC-3: moving the secrets-store KEK behind a KMS (design, not implemented)
 
-Status: design and recommendation, 2026-11-12. Nothing here has been built or provisioned. No prod, no Terraform.
+Status: phase 1 Worker code is implemented behind `SECRETS_KEK_SOURCE=kms` (off by default; `src/secrets-kms.ts`, tested against a fake KMS only, never against Google). No KMS resources exist: provisioning and turn-on are in the launch runbook, for Neil. Phase 2 is design only.
+Differences from the plan below: the wrapped KEK is bound to its KEK id with KMS additional authenticated data; there is no cache window or stale-on-error (keys stay in memory for the isolate's life, so revocation needs a redeploy); a failed unwrap is retried at most every 10 seconds; with the flag on, `SECRETS_KEK` is never read (no fallback), and create/wake answer 503 `secrets_unavailable`.
 Prices, latencies and vendor feature claims are from memory of public docs and are **unmeasured**; check each before committing.
 
 ## Where we are after the SEC-3 PR

@@ -79,7 +79,7 @@ export const openFailed = fixture(
   T0 + 12_000,
   {
     error:
-      'Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.'
+      'Your cloud workspace started, but this computer couldn’t open it yet. Try again, or open it later from Open cloud workspace…'
   }
 )
 
@@ -100,6 +100,6 @@ export const refusedPlan = refused('no_subscription')
 export const refusedHoursUsed = refused('included_hours_exhausted')
 export const refusedSpendCap = refused('overage_cap_reached')
 export const refusedPayment = refused('payment_past_due')
-// A member can't fix billing: the card names who can, with no "See plans".
+// A member can't fix billing: the card names who can, with no "Compare plans".
 export const refusedPlanMember = refused('no_subscription', false)
 export const refusedHoursUsedMember = refused('included_hours_exhausted', false)

@@ -67,7 +67,9 @@ describe('destroyCloudPrimary', () => {
     await destroyCloudPrimary(row)
     expect(destroy).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledWith('Couldn’t delete ik-main', {
-      description: "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
+      description:
+        "Orca couldn't find this workspace's sandbox. Find it in Open cloud workspace… to delete it.",
+      action: { label: 'Open cloud workspace…', onClick: expect.any(Function) }
     })
   })
 

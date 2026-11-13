@@ -5,18 +5,12 @@ import {
   ArchiveRestore,
   Moon,
   Trash2,
-  ArrowDown,
-  ArrowUp,
   ArrowUpRight,
   BookOpen,
-  FolderInput,
-  FolderPlus,
   Link2,
   Lock,
   MessageSquare,
   MoreHorizontal,
-  Pin,
-  PinOff,
   Play,
   RotateCw,
   SquareTerminal,
@@ -77,19 +71,9 @@ export type RowActions = {
   restart?: (w: CloudWorkspace) => void
   /** Delete the sandbox and its disk, after a confirmation. */
   remove: (w: CloudWorkspace) => void
-  /** Pin to the top of Home, synced to your other devices (your own pins, not the team's). */
-  setPinned?: (w: CloudWorkspace, pinned: boolean) => void
-  /** Move one place up (-1) or down (1) within its group, synced like pins. */
-  move?: (w: CloudWorkspace, delta: number) => void
 }
 
-export type RowArrangement = { pinned: boolean; canMoveUp: boolean; canMoveDown: boolean }
-
-/** Placeholder replaced by the inline section editor in CloudWorkspacesHome. */
-export const NEW_SECTION = '\u0000new-section'
-// Radio value for "no section"; section names are user text, so a control character cannot clash.
-const NO_SECTION = '\u0000none'
-// Keeps submenus off the window edge when the row sits near the bottom of Home.
+// Keeps submenus off the window edge when the row sits near the bottom of the list.
 const SUBMENU_COLLISION_PADDING = 8
 
 /** An Asleep workspace this account can open: its row reads the saved copy instead of waking. */
@@ -106,27 +90,23 @@ export function CloudWorkspaceRowMenu({
   title,
   canOpen,
   canManage,
-  sections,
   members,
   directory,
   selfId,
   open,
   onOpenChange,
-  actions,
-  arrangement
+  actions
 }: {
   workspace: CloudWorkspace
   title: string
   canOpen: boolean
   canManage: boolean
-  sections: string[]
   members: { userId: string; name: string }[]
   directory: MemberDirectory
   selfId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
   actions: RowActions
-  arrangement?: RowArrangement
 }): React.JSX.Element {
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
@@ -138,9 +118,9 @@ export function CloudWorkspaceRowMenu({
     : []
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
   const openedByPointer = useRef(false)
-  // The same action list the sidebar menu renders (JA-14); this menu adds Home-only arrangement.
+  // The same action list the sidebar menu renders (JA-14).
   const groups = cloudWorkspaceActionGroups({
-    surface: 'home',
+    surface: 'list',
     status: w.status,
     archivedAt: w.archivedAt,
     visibility: w.visibility,
@@ -204,32 +184,6 @@ export function CloudWorkspaceRowMenu({
             {t('auto.components.cloudWorkspaces.open', 'Open')}
             <DropdownMenuShortcut>↵</DropdownMenuShortcut>
           </DropdownMenuItem>
-        )}
-        {arrangement && actions.setPinned && w.archivedAt === null && (
-          <DropdownMenuItem onSelect={() => actions.setPinned?.(w, !arrangement.pinned)}>
-            {arrangement.pinned ? <PinOff /> : <Pin />}
-            {arrangement.pinned
-              ? t('auto.components.cloudWorkspaces.unpin', 'Unpin')
-              : t('auto.components.cloudWorkspaces.pin', 'Pin')}
-          </DropdownMenuItem>
-        )}
-        {arrangement && actions.move && (arrangement.canMoveUp || arrangement.canMoveDown) && (
-          <>
-            <DropdownMenuItem
-              disabled={!arrangement.canMoveUp}
-              onSelect={() => actions.move?.(w, -1)}
-            >
-              <ArrowUp />
-              {t('auto.components.cloudWorkspaces.moveUp', 'Move up')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!arrangement.canMoveDown}
-              onSelect={() => actions.move?.(w, 1)}
-            >
-              <ArrowDown />
-              {t('auto.components.cloudWorkspaces.moveDown', 'Move down')}
-            </DropdownMenuItem>
-          </>
         )}
         <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
           <Link2 />
@@ -300,37 +254,6 @@ export function CloudWorkspaceRowMenu({
                 {t('auto.components.cloudWorkspaces.makePrivate', 'Make private')}
               </DropdownMenuItem>
             )}
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <FolderInput />
-                {t('auto.components.cloudWorkspaces.moveToSection', 'Move to section')}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-48" collisionPadding={SUBMENU_COLLISION_PADDING}>
-                <DropdownMenuRadioGroup
-                  value={w.section ?? NO_SECTION}
-                  onValueChange={(value) => {
-                    const section = value === NO_SECTION ? null : value
-                    if (section !== w.section) {
-                      actions.patch(w, { section })
-                    }
-                  }}
-                >
-                  {sections.map((section) => (
-                    <DropdownMenuRadioItem key={section} value={section}>
-                      <span className="truncate">{section}</span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                  <DropdownMenuRadioItem value={NO_SECTION}>
-                    {t('auto.components.cloudWorkspaces.noSection', 'No section')}
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => actions.patch(w, { section: NEW_SECTION })}>
-                  <FolderPlus />
-                  {t('auto.components.cloudWorkspaces.newSectionEllipsis', 'New section…')}
-                </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
             {members.length > 0 && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

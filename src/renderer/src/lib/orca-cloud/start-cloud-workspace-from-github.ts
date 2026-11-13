@@ -199,8 +199,8 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
       creationId,
       opened?.message ??
         translate(
-          'components.newWorkspace.cloudOnly.openLater',
-          'Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.'
+          'components.newWorkspace.cloudOnly.openLater2',
+          'Your cloud workspace started, but this computer couldn’t open it yet. Try again, or open it later from Open cloud workspace…'
         )
     )
   }

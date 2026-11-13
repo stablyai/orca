@@ -9,7 +9,9 @@ import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provid
 import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
+import { SecretsKmsError } from './secrets-kms'
 import type { SandboxRow } from './store'
+import { secretLog } from './secret-log'
 
 export type SessionSecrets = {
   env: Record<string, string>
@@ -80,9 +82,12 @@ function egressSwapOn(deps: Pick<LifecycleDeps, 'secrets' | 'config'>, row: Pick
 export type { AgentMode }
 
 export async function sessionSecretEnv(
-  deps: Pick<LifecycleDeps, 'db' | 'secrets' | 'config'>,
+  deps: Pick<LifecycleDeps, 'db' | 'secrets' | 'secretsUnavailable' | 'config'>,
   row: SandboxRow
 ): Promise<SessionSecrets> {
+  if (deps.secretsUnavailable) {
+    throw new SecretsKmsError(deps.secretsUnavailable)
+  }
   if (!deps.secrets) {
     return EMPTY
   }
@@ -105,7 +110,7 @@ export async function sessionSecretEnv(
   const scopes = deriveProviderScopes(stored, env, storedScopes)
   const egressAllowHosts = providerHosts(env).join(',') || null
   // Counts only.
-  console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
+  secretLog('session_secrets', { sandboxId: row.id, injected: Object.keys(env).length, skipped })
   if (!swap) {
     return { env, egressSecretHosts: null, egressAllowHosts }
   }

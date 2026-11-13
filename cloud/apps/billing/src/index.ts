@@ -454,7 +454,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!body.success) {
           return json({ error: 'invalid_request' }, 400)
         }
-        const outcome = await updateOverage(env, stripe, caller, body.data, now)
+        const outcome = await updateOverage(env, stripe, caller, body.data, now, deps.fetch)
         if (!outcome.ok) {
           return json({ error: outcome.error }, outcome.status)
         }

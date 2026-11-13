@@ -16,7 +16,12 @@ import type * as LaunchHoldModule from '@/lib/orca-cloud/cloud-agent-launch-hold
 
 const stub = vi.hoisted(() => {
   const state: {
-    hold: { agent: 'claude'; reason: 'notSetUp' | 'accountExpired'; prompt: string | null } | null
+    hold: {
+      agent: 'claude'
+      reason: 'notSetUp' | 'accountExpired' | 'awaitingStart'
+      awaiting?: 'setUp'
+      prompt: string | null
+    } | null
     setup: OrcaCloudAgentSetup
   } = { hold: null, setup: { phase: 'idle' } }
   return state
@@ -198,6 +203,14 @@ describe('the held-launch strip in the chat view', () => {
     expect(
       within(slot).getByText('Paste the newest code from the sign-in page, or open it again.')
     ).toBeTruthy()
+  })
+
+  it('HELD-STALE-COVERED: set up here: "is set up · Start", not "Set up once"', () => {
+    stub.hold = { agent: 'claude', reason: 'awaitingStart', awaiting: 'setUp', prompt: null }
+    const slot = inChat()
+    expect(within(slot).getByText('Claude is set up for Orca Cloud')).toBeTruthy()
+    expect(within(slot).getByRole('button', { name: /Start Claude|Start/ })).toBeTruthy()
+    expect(within(slot).queryByRole('button', { name: 'Set up once' })).toBeNull()
   })
 
   it('sign-in expired: Renew', () => {
