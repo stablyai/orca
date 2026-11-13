@@ -244,6 +244,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('../speech/speech.js')).SPEECH_HANDLERS
   },
   {
+    name: 'text',
+    keys: ['text generate'],
+    load: async () => (await import('../text/text.js')).TEXT_HANDLERS
+  },
+  {
     name: 'introspection',
     keys: ['agent-context'],
     load: async () =>
