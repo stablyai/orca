@@ -8,7 +8,7 @@ import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
-import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
 import type {
   CreateWorktreeArgs,
@@ -28,7 +28,7 @@ import type {
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
-import { getPRForBranch } from '../github/client'
+import { getPRForBranch } from '../github/client/lookup/get-pr-for-branch'
 import { addWorktree } from '../git/worktrees/creation/worktree-add'
 import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
 import type {
@@ -104,7 +104,7 @@ import {
 import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
-import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/cross-store-parent-params'
+import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/workspaces/cross-store-parent-params'
 import { assertParentInAnotherStore } from '../runtime/workspaces/lineage/cross-store-parent-store-check'
 import {
   crossStoreManualLineage,
@@ -172,7 +172,10 @@ import {
   retireGeneratedWorktreeName
 } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
+import {
+  assertNoPendingWorktreeRemovalConflict,
+  findPendingWorktreeRemovalConflict
+} from '../workspaces/removal/worktree-removal-table'
 import {
   exactNameBranchConflict,
   exactNameLateCollision,
@@ -1221,6 +1224,27 @@ async function performLocalWorktreeCreate(
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
   const exactName = args.branchIntent === 'create-exact'
+  if (args.nameWasGenerated !== true || args.branchNameOverride) {
+    assertNoPendingWorktreeRemovalConflict(repo.path, {
+      worktreePath:
+        args.nameWasGenerated === true
+          ? undefined
+          : ensurePathWithinWorkspace(
+              computeWorktreePath(sanitizedName, repo.path, worktreePathSettings, workspaceRoot),
+              workspaceRoot
+            ),
+      branch:
+        args.branchNameOverride ||
+        (await resolveCreateBranchName(
+          repo.path,
+          undefined,
+          sanitizedName,
+          settings,
+          username,
+          localWorktreeGitOptions
+        ))
+    })
+  }
   if (
     args.branchIntent === 'open-existing' &&
     args.branchNameOverride &&

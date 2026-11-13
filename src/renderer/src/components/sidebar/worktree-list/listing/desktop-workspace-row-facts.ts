@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -43,7 +44,7 @@ export function buildDesktopWorkspaceRowFactReader(
     return repo ? getWorktreeExecutionHostId(worktree, repo, inputs.defaultHostId) : null
   }
   return {
-    isArchived: (worktree) => worktree.isArchived,
+    isArchived: (worktree) => worktree.isArchived || isWorktreeRetiredByRemoval(worktree),
     ...hiddenProjectRowFacts(inputs.hiddenProjects),
     isFolderWorkspace: (worktree) => parseWorkspaceKey(worktree.id)?.type === 'folder',
     repoId: (worktree) => worktree.repoId,

@@ -221,9 +221,6 @@ export function useGlobalKeybindings(args: {
       }
 
       const handlers = createAppCommandHandlers(state, input, context)
-      if (matchAppShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
-        return
-      }
       if (
         matchAppShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()

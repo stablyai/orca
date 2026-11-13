@@ -1,14 +1,14 @@
 import type * as AppServerSession from './app-server/codex-app-server-session'
-import type * as LocalHistory from '../native-chat/codex-local-history'
-import type * as RolloutStream from '../native-chat/codex-rollout-history-stream'
-import { readCodexLocalHistory } from '../native-chat/codex-local-history'
-import { readCodexRolloutBytes } from '../native-chat/codex-rollout-history-stream'
+import type * as LocalHistory from '../native-chat/transcript-history/codex/codex-local-history'
+import type * as RolloutStream from '../native-chat/transcript-history/codex/codex-rollout-history-stream'
+import { readCodexLocalHistory } from '../native-chat/transcript-history/codex/codex-local-history'
+import { readCodexRolloutBytes } from '../native-chat/transcript-history/codex/codex-rollout-history-stream'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../native-chat/testing/agent-session-record-test-fixture'
 import { copyCodexConversation } from './codex-conversation-copy'
 import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import type { CodexAppServerRpc } from './app-server/codex-app-server-session'
@@ -26,14 +26,17 @@ const state = vi.hoisted(() => {
     session
   }
 })
-vi.mock('../native-chat/codex-local-history', async (importOriginal) => {
+vi.mock('../native-chat/transcript-history/codex/codex-local-history', async (importOriginal) => {
   const original = await importOriginal<typeof LocalHistory>()
   return { ...original, readCodexLocalHistory: vi.fn(original.readCodexLocalHistory) }
 })
-vi.mock('../native-chat/codex-rollout-history-stream', async (importOriginal) => {
-  const original = await importOriginal<typeof RolloutStream>()
-  return { ...original, readCodexRolloutBytes: vi.fn(original.readCodexRolloutBytes) }
-})
+vi.mock(
+  '../native-chat/transcript-history/codex/codex-rollout-history-stream',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof RolloutStream>()
+    return { ...original, readCodexRolloutBytes: vi.fn(original.readCodexRolloutBytes) }
+  }
+)
 vi.mock('../native-chat/session-file-resolver', () => ({
   resolveSessionFilePath: async (_agent: string, id: string) => state.paths.get(id) ?? null
 }))

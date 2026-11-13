@@ -1,4 +1,4 @@
-import type { PtySpawnOptions } from '../../../providers/pty-provider-contract'
+import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import {
   isDaemonEndpointGoneError,
   TerminalSessionOwnerUnverifiedError

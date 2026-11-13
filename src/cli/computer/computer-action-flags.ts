@@ -143,26 +143,43 @@ export async function getComputerTextActionFlags(flags: Map<string, string | boo
   return { text: await getTextPayload(flags, 'text') }
 }
 
+export async function getComputerTypeTextActionFlags(
+  flags: Map<string, string | boolean>
+): Promise<{ elementIndex?: number; text: string }> {
+  return {
+    elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
+    ...(await getComputerTextActionFlags(flags))
+  }
+}
+
 export function getComputerKeyActionFlags(flags: Map<string, string | boolean>): {
   key: string
+  allowSystemShortcut?: boolean
 } {
   const key = getRequiredStringFlag(flags, 'key')
   const message = computerUsePressKeyValidationMessage(key)
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
-  return { key }
+  return {
+    key,
+    ...(flags.get('allow-system-shortcut') === true ? { allowSystemShortcut: true } : {})
+  }
 }
 
 export function getComputerHotkeyActionFlags(flags: Map<string, string | boolean>): {
   key: string
+  allowSystemShortcut?: boolean
 } {
   const key = getRequiredStringFlag(flags, 'key')
   const message = computerUseHotkeyValidationMessage(key)
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
-  return { key }
+  return {
+    key,
+    ...(flags.get('allow-system-shortcut') === true ? { allowSystemShortcut: true } : {})
+  }
 }
 
 export async function getComputerSetValueActionFlags(

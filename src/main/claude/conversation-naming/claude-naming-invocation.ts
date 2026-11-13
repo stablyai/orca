@@ -4,7 +4,7 @@ import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/c
 import { applyClaudeEnvPatch } from '../../claude-accounts/runtime-auth/environment'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type { StructuredAgentLaunchSources } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   claudeChildEnv,
   resolveClaudeChildEnvSources,

@@ -6,74 +6,86 @@ import type {
   GrokAccountsApi,
   MinimaxCredentialsApi,
   ZcodePlanCredentialsApi
-} from './api/agent-account-api'
-import type { HooksApi } from './api/agent-hook-api'
-import type { SkillsApi } from './api/agent-skill-api'
-import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status-api'
+} from './api/agent-accounts/agent-account-api'
+import type { HooksApi } from './api/agent-hooks/agent-hook-api'
+import type { SkillsApi } from './api/skills/agent-skill-api'
+import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status/agent-status-api'
 import type {
   ClaudeUsageApi,
   CodexUsageApi,
   MuseUsageApi,
   OpenCodeUsageApi,
   RateLimitsApi
-} from './api/agent-usage-api'
-import type { AiVaultApi } from './api/ai-vault-api'
+} from './api/agent-usage/agent-usage-api'
+import type { AiVaultApi } from './api/ai-vault/ai-vault-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
-import type { AutomationsApi } from './api/automation-api'
+import type { AutomationsApi } from './api/automations/automation-api'
 import type { BrowserApi } from './api/browser/browser-api'
-import type { CliApi } from './api/cli-install-api'
-import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
-import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
-import type { DocPreviewApi } from './api/doc-preview-api'
-import type { EmulatorApi } from './api/emulator-api'
-import type { EphemeralVmApi } from './api/ephemeral-vm-api'
-import type { ExportApi, FilesystemApi } from './api/filesystem-api'
-import type { GitInspectionApi } from './api/git-inspection-api'
-import type { GitOperationApi } from './api/git-operation-api'
-import type { GithubAccountApi } from './api/github-account-api'
-import type { GithubPullRequestApi } from './api/github-pull-request-api'
-import type { GithubWorkItemApi } from './api/github-work-item-api'
-import type { GitLabApi } from './api/gitlab-api'
-import type { BitbucketApi, HostedReviewApi } from './api/hosted-review-api'
-import type { JiraApi } from './api/jira-api'
-import type { LinearApi } from './api/linear-api'
-import type { MobileApi } from './api/mobile-api'
-import type { NativeChatApi } from './api/native-chat-api'
-import type { OnboardingApi, StarNagApi } from './api/onboarding-api'
-import type { OrcaProfileApi } from './api/orca-profile-api'
+import type { CliApi } from './api/cli-install/cli-install-api'
+import type { CrashReportsApi, FeedbackApi } from './api/diagnostics/crash-report-api'
+import type { DashboardApi, TerminalPreviewApi } from './api/window-ui/dashboard-api'
+import type { DocPreviewApi } from './api/document-preview/doc-preview-api'
+import type { EmulatorApi } from './api/emulator/emulator-api'
+import type { EphemeralVmApi } from './api/cloud-workspaces/ephemeral-vm-api'
+import type { ExportApi, FilesystemApi } from './api/filesystem/filesystem-api'
+import type { GitInspectionApi } from './api/source-control/git-inspection-api'
+import type { GitOperationApi } from './api/source-control/git-operation-api'
+import type { GithubAccountApi } from './api/github/github-account-api'
+import type { GithubPullRequestApi } from './api/github/github-pull-request-api'
+import type { GithubWorkItemApi } from './api/github/github-work-item-api'
+import type { GitLabApi } from './api/gitlab/gitlab-api'
+import type { BitbucketApi, HostedReviewApi } from './api/hosted-review/hosted-review-api'
+import type { JiraApi } from './api/work-items/jira-api'
+import type { LinearApi } from './api/work-items/linear-api'
+import type { MobileApi } from './api/mobile/mobile-api'
+import type { NativeChatApi } from './api/native-chat/native-chat-api'
+import type { OnboardingApi, StarNagApi } from './api/onboarding/onboarding-api'
+import type { OrcaProfileApi } from './api/profiles/orca-profile-api'
 import type {
   ComputerUsePermissionsApi,
   DeveloperPermissionsApi,
   MacosTccPromptsApi,
   NotificationsApi
-} from './api/os-permission-api'
-import type { PetApi } from './api/pet-api'
-import type { AppIconApi } from './api/app-icon-api'
-import type { BrowserPasswordsApi } from './api/browser-passwords-api'
-import type { PluginsApi } from './api/plugin-host-api'
-import type { PreflightApi } from './api/preflight-api'
-import type { PtyApi } from './api/pty-api'
-import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/repository-api'
-import type { RuntimeApi } from './api/runtime-api'
-import type { WslMoveApi } from './api/wsl-move-bridge'
-import type { WslDriveProjectApi } from './api/wsl-drive-project-bridge'
-import type { WslDriveUncConversionApi } from './api/wsl-drive-unc-conversion-bridge'
-import type { KeybindingsApi, SettingsApi } from './api/settings-api'
-import type { ShellApi } from './api/shell-api'
-import type { SpeechApi } from './api/speech-api'
-import type { SshApi } from './api/ssh-api'
-import type { PlainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
-import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
-import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
-import type { UiCommandEventApi } from './api/ui-command-event-api'
-import type { UiWindowApi } from './api/ui-window-api'
-import type { UpdaterApi } from './api/updater-api'
-import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
-import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
-import type { LinkPreviewApi } from './api/link-preview-api'
-import type { WorkspaceSessionApi } from './api/workspace-session-api'
-import type { PerforceApi } from './api/perforce-api'
-import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
+} from './api/desktop-permissions/os-permission-api'
+import type { PetApi } from './api/pets/pet-api'
+import type { AppIconApi } from './api/window-ui/app-icon-api'
+import type { BrowserPasswordsApi } from './api/browser/browser-passwords-api'
+import type { PluginsApi } from './api/plugins/plugin-host-api'
+import type { PreflightApi } from './api/preflight/preflight-api'
+import type { PtyApi } from './api/terminal/pty-api'
+import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/projects/repository-api'
+import type { RuntimeApi } from './api/runtime/runtime-api'
+import type { WslMoveApi } from './api/wsl/wsl-move-bridge'
+import type { WslDriveProjectApi } from './api/wsl/wsl-drive-project-bridge'
+import type { WslDriveUncConversionApi } from './api/wsl/wsl-drive-unc-conversion-bridge'
+import type { KeybindingsApi, SettingsApi } from './api/preferences/settings-api'
+import type { ShellApi } from './api/terminal/shell-api'
+import type { SpeechApi } from './api/speech/speech-api'
+import type { SshApi } from './api/ssh/ssh-api'
+import type { PlainSshTerminalApi } from './api/terminal/plain-ssh-terminal-bridge'
+import type { LegacyRelayBridgeApi } from './api/mobile/legacy-relay-bridge-api'
+import type {
+  DiagnosticsApi,
+  MemoryApi,
+  StatsApi,
+  TelemetryApi
+} from './api/diagnostics/telemetry-api'
+import type { UiCommandEventApi } from './api/window-ui/ui-command-event-api'
+import type { UiWindowApi } from './api/window-ui/ui-window-api'
+import type { UpdaterApi } from './api/updater/updater-api'
+import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspaces/workspace-cleanup-api'
+import type {
+  LocalhostWorktreeLabelsApi,
+  WorkspacePortsApi
+} from './api/workspaces/workspace-port-api'
+import type { LinkPreviewApi } from './api/link-preview/link-preview-api'
+import type { WorkspaceSessionApi } from './api/workspaces/workspace-session-api'
+import type { PerforceApi } from './api/source-control/perforce-api'
+import type {
+  FolderWorkspacesApi,
+  SparsePresetsApi,
+  WorktreeApi
+} from './api/workspaces/worktree-api'
 
 // Flattens contracts that share one PreloadApi key: an intersection is not type-identical to the flat shape.
 type Merged<T> = { [K in keyof T]: T[K] }
@@ -180,68 +192,6 @@ export type PreloadApi = {
   mobile: MobileApi
   speech: SpeechApi
 }
-
-export type {
-  ClaudeUsageApi,
-  CodexUsageApi,
-  MuseUsageApi,
-  OpenCodeUsageApi
-} from './api/agent-usage-api'
-export type { AiVaultApi } from './api/ai-vault-api'
-export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
-export type { AppApi } from './api/app-api'
-export type {
-  BrowserApi,
-  DetectedBrowserInfo,
-  DetectedBrowserProfileInfo
-} from './api/browser/browser-api'
-export type { EmulatorApi } from './api/emulator-api'
-export type { ExportApi } from './api/filesystem-api'
-export type {
-  NativeChatApi,
-  NativeChatAppendedMessages,
-  NativeChatAppendedPayload,
-  NativeChatReadSessionResult,
-  NativeChatSubscribeArgs,
-  NativeChatSubscriptionFrame
-} from './api/native-chat-api'
-export type {
-  PluginAutoUpdateEvent,
-  PluginHostCustomEditor,
-  PluginHostNewFile,
-  PluginHostInstallResult,
-  PluginHostInstallSource,
-  PluginHostListEntry,
-  PluginHostLogLine,
-  PluginHostPanel,
-  PluginHostStatus,
-  PluginMarketplaceHostInstallPreview,
-  PluginMarketplaceHostListing,
-  PluginMarketplaceHostSourceState
-} from './api/plugin-host-api'
-export type {
-  PreflightApi,
-  PreflightRuntimeContext,
-  PreflightStatus,
-  RefreshAgentsResult
-} from './api/preflight-api'
-export type {
-  PtyManagementApi,
-  PtyManagementDaemonCwdClass,
-  PtyManagementFolderAccessMismatch,
-  PtyManagementMacTccAttributionHealth,
-  PtyManagementSession,
-  PtyManagementSeveredDaemon,
-  PtyManagementSeveredDaemonRestartResult
-} from './api/pty-management-api'
-
-export type {
-  DiagnosticsBundlePayload,
-  DiagnosticsStatusPayload,
-  DiagnosticsUploadPayload,
-  MemoryApi,
-  StatsApi
-} from './api/telemetry-api'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface

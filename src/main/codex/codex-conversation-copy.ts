@@ -4,7 +4,7 @@ import {
   AgentConversationCopyError,
   AgentConversationCopyStartError,
   agentConversationCopyRefusal
-} from '../native-chat/agent-conversation-copy-error'
+} from '../native-chat/conversation-adoption/agent-conversation-copy-error'
 import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'

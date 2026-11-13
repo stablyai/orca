@@ -37,7 +37,7 @@ const { encodeWorkerOutputCursor } = await import('../../workers/transcripts/wor
 const { stopStructuredWorker, readStructuredWorkerJournal } =
   await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
 await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session')
-await import('../../../rpc/methods/orchestration/worker/worker-observation')
+await import('../../../rpc/methods/orchestration/worker/observation/worker-observation')
 await import('../../addressing/groups/structured-worker-group-addressing')
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
   await import('../../workers/archives/structured-worker-journal-page')

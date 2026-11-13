@@ -12,7 +12,7 @@ import {
   createFakeWslHostConnector,
   readFakeWslHostsConfig
 } from '../../wsl/host-lifecycle/wsl-host-e2e-fake-connector'
-import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
+import { hasOrcadTemplate } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
 import type { WslHostAutomationWake } from '../../wsl/host-lifecycle/wsl-host-automation-wake'

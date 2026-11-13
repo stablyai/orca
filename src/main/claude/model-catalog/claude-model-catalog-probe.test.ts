@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
-import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 
 const AUTH_POLICY = { account: 'system' } as const
 

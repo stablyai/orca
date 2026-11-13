@@ -1,4 +1,4 @@
-import { exposeDispatchContext } from './dispatch-context-exposure'
+import { exposeDispatchContext } from './observation/dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/workers/lifecycle/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
@@ -8,22 +8,22 @@ import {
   inspectWorkerTerminal,
   projectFleetWorker,
   showContextOnlyWorker
-} from './worker-observation'
-import { resolvePinnedFederatedServer } from './pinned-federated-server'
-import { readArchivedWorkerOutput } from './worker-archive-read'
+} from './observation/worker-observation'
+import { resolvePinnedFederatedServer } from '../../../../orchestration/legacy-remote-home/pinned-federated-server'
+import { readArchivedWorkerOutput } from './output/worker-archive-read'
 import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { readExactWorkerOutput } from './worker-output'
-import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
+import { readExactWorkerOutput } from './output/worker-output'
+import { exposeWorkerTerminalResource } from './release/worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
 import {
   WorkerDispatchParams,
   WorkerReadParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineOrchestrationMethod({

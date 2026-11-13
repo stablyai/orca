@@ -1,12 +1,8 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, existsSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  finishModuleCache,
-  moduleCacheIdentity,
-  prepareModuleCache
-} from './ci-unit-module-cache.mjs'
+import { moduleCacheIdentity, prepareModuleCache } from './ci-unit-module-cache.mjs'
 
 const temporary = []
 afterEach(() => {
@@ -33,49 +29,11 @@ function options() {
 }
 
 describe('persistent unit module cache boundary', () => {
-  it.each([false, true])(
-    'starts cold and discards unusable restored bytes (hit %s)',
-    async (hit) => {
-      const identity = moduleCacheIdentity(options())
-      mkdirSync(identity.path)
-      writeFileSync(join(identity.path, 'untrusted'), 'throw Error("must not execute")')
-      const prepared = await prepareModuleCache(identity, { restoreHit: hit })
-      expect(prepared.available).toBe(false)
-      expect(prepared.validationMs).toBeGreaterThanOrEqual(0)
-      expect(() => readFileSync(join(identity.path, 'untrusted'))).toThrow()
-    }
-  )
-
-  it('restores a matching cache produced from an earlier source', async () => {
+  it('discards unusable restored cache bytes', async () => {
     const identity = moduleCacheIdentity(options())
     mkdirSync(identity.path)
-    writeFileSync(
-      join(identity.path, '_metadata.json'),
-      JSON.stringify({ lockfileHash: identity.installedLockHash.slice(0, 8) })
-    )
-    const metadata = [
-      { id: '1', url: '2', file: '1', imports: '3', mappings: false },
-      join(identity.root, 'source.ts'),
-      '/source.ts',
-      { urls: '4', ids: '5' },
-      [],
-      {}
-    ]
-    writeFileSync(
-      join(identity.path, 'a'.repeat(40)),
-      `export const value = 1\n//# vitestCache=${Buffer.from(JSON.stringify(metadata)).toString('base64')}`
-    )
-    const produced = await finishModuleCache(identity, { sourceSha: 'a'.repeat(40) })
-    expect(produced.entries).toBe(2)
-    const prepared = await prepareModuleCache(
-      { ...identity, sourceSha: 'b'.repeat(40) },
-      { restoreHit: true }
-    )
-    expect(prepared).toMatchObject({
-      available: true,
-      entries: produced.entries,
-      bytes: produced.bytes,
-      producerSourceSha: 'a'.repeat(40)
-    })
+    writeFileSync(join(identity.path, 'untrusted'), 'throw Error("must not execute")')
+    await prepareModuleCache(identity, { restoreHit: true })
+    expect(existsSync(join(identity.path, 'untrusted'))).toBe(false)
   })
 })

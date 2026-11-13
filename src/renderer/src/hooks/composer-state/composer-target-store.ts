@@ -5,7 +5,7 @@ import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-works
 import { resolveComposerSeedRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'

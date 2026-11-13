@@ -18,7 +18,7 @@ import {
   PerforceSubmit,
   PerforceUnshelveFrom,
   PerforceWorktree
-} from '../../../../../../shared/rpc-contract/perforce-params'
+} from '../../../../../../shared/rpc-contract/source-control/perforce-params'
 
 // Workspace methods are entries of the shared operation table, run where the workspace lives; copy
 // methods act on a Perforce folder project and its copies on this host.

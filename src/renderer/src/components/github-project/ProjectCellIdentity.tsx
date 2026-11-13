@@ -2,7 +2,10 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubIssueType, GitHubProjectRow } from '../../../../shared/github/project-types'
+import type {
+  GitHubIssueType,
+  GitHubProjectRow
+} from '../../../../shared/github/projects/project-types'
 import { ProjectIssueTypeCell } from './ProjectCellIssueType'
 
 export function ProjectTitleCell({

@@ -2,7 +2,7 @@ import { BrowserWindow, Menu, webContents as electronWebContents } from 'electro
 import type { Session, WebContents } from 'electron'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { setupGuestShortcutForwarding } from '../../../browser/guest-lifecycle/input/shortcuts/browser-guest-shortcut-forwarding'
-import { buildEditableContextMenuTemplate } from '../../../window/editable-context-menu'
+import { buildEditableContextMenuTemplate } from '../../../window/editing/editable-context-menu'
 import { isAllowedPluginFrameNavigation } from './plugin-frame-request-policy'
 
 /** `did-attach-webview`: per-guest fences the session cannot express, plus Orca's own input. */

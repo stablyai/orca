@@ -1,5 +1,5 @@
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
-import { normalizeQoderEvent } from './providers/qoder-events'
+
 import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
 import type { ParsedAgentStatusPayload } from '../agent-status/contracts/agent-status-types'
 import type { AgentHookSource } from './transport/agent-hook-relay'
@@ -12,28 +12,29 @@ import type { HookListenerState } from './listener-state'
 import type { ExtractedPromptText } from './prompt-fields'
 import { isNewTurnEvent } from './provider-event-routing'
 import { readLastUserPromptFromTranscript } from './transcript-lines'
-import { readJcodeTurnPrompt } from './providers/jcode-turn-prompt'
-import { normalizeAntigravityEvent } from './providers/antigravity-events'
-import { normalizeAmpEvent } from './providers/amp-events'
-import { normalizeClaudeEvent } from './providers/claude-events'
-import { codexHookEventForEndedTurn, normalizeCodexEvent } from './providers/codex-events'
-import { codexHookEventForEphemeralThread } from './providers/codex-ephemeral-threads'
-import { normalizeGeminiEvent } from './providers/gemini-events'
-import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family-events'
-import { normalizeCursorEvent } from './providers/cursor-events'
-import { normalizePiCompatibleEvent } from './providers/pi-family-events'
-import { normalizeDroidEvent } from './providers/droid-events'
-import { normalizeCommandCodeEvent } from './providers/command-code-events'
-import { normalizeGrokEvent } from './providers/grok-events'
-import { normalizeCopilotEvent } from './providers/copilot-events'
-import { normalizeHermesEvent } from './providers/hermes-events'
-import { normalizeDevinEvent } from './providers/devin-events'
-import { normalizeKimiEvent } from './providers/kimi-events'
-import { normalizeMuseEvent } from './providers/muse-events'
-import { normalizeDshEvent } from './providers/dsh-events'
-import { normalizeZCodeEvent } from './providers/zcode-events'
-import { normalizeJcodeEvent } from './providers/jcode-events'
-import { normalizeKiroEvent } from './providers/kiro-events'
+import { readJcodeTurnPrompt } from './providers/jcode/jcode-turn-prompt'
+import { normalizeAntigravityEvent } from './providers/antigravity/antigravity-events'
+import { normalizeAmpEvent } from './providers/amp/amp-events'
+import { normalizeClaudeEvent } from './providers/claude/claude-events'
+import { normalizeCodexEvent } from './providers/codex/codex-events'
+import { codexHookEventForEndedTurn } from './providers/codex/codex-ended-turn-event'
+import { codexHookEventForEphemeralThread } from './providers/codex/codex-ephemeral-threads'
+import { normalizeGeminiEvent } from './providers/gemini/gemini-events'
+import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family/opencode-family-events'
+import { normalizeCursorEvent } from './providers/cursor/cursor-events'
+import { normalizePiCompatibleEvent } from './providers/pi-family/pi-family-events'
+import { normalizeDroidEvent } from './providers/droid/droid-events'
+import { normalizeCommandCodeEvent } from './providers/command-code/command-code-events'
+import { normalizeGrokEvent } from './providers/grok/grok-events'
+import { normalizeCopilotEvent } from './providers/copilot/copilot-events'
+import { normalizeHermesEvent } from './providers/hermes/hermes-events'
+import { normalizeDevinEvent } from './providers/devin/devin-events'
+import { normalizeKimiEvent } from './providers/kimi/kimi-events'
+import { normalizeMuseEvent } from './providers/muse/muse-events'
+import { normalizeDshEvent } from './providers/dsh/dsh-events'
+import { normalizeZCodeEvent } from './providers/zcode/zcode-events'
+import { normalizeJcodeEvent } from './providers/jcode/jcode-events'
+import { normalizeKiroEvent } from './providers/kiro/kiro-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -209,7 +210,14 @@ export function normalizeProviderEvent(input: {
       break
     }
     case 'qoder':
-      payload = normalizeQoderEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalizeCompatibleLifecycleEvent(
+        'qoder',
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload
+      )
       break
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)

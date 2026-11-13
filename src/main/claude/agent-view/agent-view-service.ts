@@ -7,7 +7,7 @@ import { getAgentLaunchExecutableName } from '../../../shared/agent-launch/start
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
-import { resolveLoginShellEnvironment } from '../../startup/login-shell-environment'
+import { resolveLoginShellEnvironment } from '../../startup/shell-environment/login-shell-environment'
 import { reconcileClaudeAgentViewConfig } from './agent-view-config'
 import { ensureClaudeAgentViewPluginAsync } from './agent-view-plugin'
 
