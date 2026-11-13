@@ -153,4 +153,71 @@ describe('a start that never produced a process', () => {
     expect(savedMeta()).toMatchObject({ endedAt: null, exitCode: null })
     await host.dispose()
   })
+
+  // A same-ID start attempted while the rollback's rename is in flight waits behind it: canceling
+  // it then starts nothing, and a start that keeps waiting runs over the restored predecessor.
+  it('holds a same-ID start until a never-forked start has restored its predecessor', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-hold-rollback-'))
+    historyRoots.push(root)
+    const sessionId = 'hold-rollback-successor'
+    const dir = join(root, getHistorySessionDirName(sessionId))
+    mkdirSync(dir, { recursive: true })
+    const ended = {
+      ...newTerminalHistoryMeta({ cwd: '/tmp', cols: 80, rows: 24 }, null),
+      endedAt: '2026-11-01T11:00:00.000Z',
+      exitCode: 0
+    }
+    writeTerminalHistoryMeta(dir, ended)
+    const savedMeta = () => JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'))
+    let rollingBack = false
+    const rollback = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const rename = fsPromises.rename
+    vi.spyOn(fsPromises, 'rename').mockImplementation(async (from, to) => {
+      if (rollingBack) {
+        rollingBack = false
+        rollback.resolve()
+        await release.promise
+      }
+      return rename(from, to)
+    })
+    let fail = true
+    const startedOver: unknown[] = []
+    const host = new TerminalHost({
+      historyJournals: new TerminalHistoryJournals(root),
+      spawnSubprocess: async (opts) => {
+        if (fail) {
+          rollingBack = true
+          opts.onCreationDisposition?.({ kind: 'no-fork' })
+          throw new Error('spawn failed')
+        }
+        startedOver.push(savedMeta())
+        return mockSubprocess()
+      }
+    })
+
+    const failed = host.createOrAttach(createOptions(sessionId)).then(
+      () => 'started',
+      () => savedMeta()
+    )
+    // Sync point only: the rollback's restore rename is issued and held.
+    await rollback.promise
+    fail = false
+    const abort = new AbortController()
+    const canceled = host.createOrAttach({
+      ...createOptions(sessionId),
+      cancelSignal: abort.signal
+    })
+    const waiting = host.createOrAttach(createOptions(sessionId))
+    abort.abort()
+
+    await expect(canceled).rejects.toThrow('Attach canceled')
+    expect(startedOver).toEqual([])
+    release.resolve()
+    expect(await failed).toEqual(ended)
+    await waiting
+    expect(startedOver).toEqual([expect.objectContaining({ endedAt: null, exitCode: null })])
+    expect(savedMeta()).toMatchObject({ endedAt: null, exitCode: null })
+    await host.dispose()
+  })
 })

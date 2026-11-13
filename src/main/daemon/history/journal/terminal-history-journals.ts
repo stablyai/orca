@@ -1,16 +1,14 @@
 import { promises as fsPromises } from 'node:fs'
 import { join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
 import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
 import { ensurePrivateDirAsync } from '../../endpoint/publication/daemon-private-file-modes'
 import { DAEMON_HISTORY_RESIZE_MODEL } from '../../protocol/daemon-history-replay-pty'
 import { TerminalHistoryUnavailableError } from '../../protocol/daemon-history-protocol'
 import { getHistorySessionDirName } from '../storage/history-paths'
 import { LOG_HEADER_BYTES } from '../storage/terminal-history-log'
-import { mayHaveTerminalHistoryRecoveryProtection } from '../storage/terminal-history-recovery-quarantine'
-import {
-  provesTerminalHistoryPathAbsent,
-  terminalHistoryPathMayExist
-} from '../storage/terminal-history-session-files'
+import { hasTerminalHistoryRecoveryProtectionAsync } from '../storage/terminal-history-recovery-quarantine'
+import { terminalHistoryPathExists } from '../storage/terminal-history-session-files'
 import {
   createTerminalHistoryMetaOwned,
   newTerminalHistoryMeta,
@@ -54,7 +52,9 @@ export class TerminalHistoryJournals {
   /**
    * Before any fresh physical spawn: wait for the predecessor's actual I/O, then make the shared
    * root's metadata hold the ID for prior-stable readers. Throws rather than start unmarked. The
-   * caller's pending creation owns every step, so its file work is exclusive for this ID.
+   * caller's pending creation owns every step, so its file work is exclusive for this ID. Only an
+   * actual marker or saved metadata that cannot be read preserves recovery without a write; a
+   * lookup that cannot tell refuses this start and changes nothing.
    */
   async prepareHold(
     sessionId: string,
@@ -81,7 +81,7 @@ export class TerminalHistoryJournals {
     }
     const dir = join(this.root, getHistorySessionDirName(sessionId))
     try {
-      if (await mayHaveTerminalHistoryRecoveryProtection(this.root, sessionId)) {
+      if (await hasTerminalHistoryRecoveryProtectionAsync(this.root, sessionId)) {
         return { sessionId, preservesRecovery: true }
       }
       const meta = await readTerminalHistoryMetaInDirAsync(dir)
@@ -242,17 +242,20 @@ export class TerminalHistoryJournals {
   }
 }
 
-// Only a confirmed missing file is absent; one that cannot be read may still be recovery.
+// Only ENOENT is absence; a lookup that cannot tell throws and refuses the start.
 async function hasReplayableFiles(dir: string): Promise<boolean> {
   if (
-    (await terminalHistoryPathMayExist(join(dir, 'checkpoint.json'))) ||
-    (await terminalHistoryPathMayExist(join(dir, 'scrollback.bin')))
+    (await terminalHistoryPathExists(join(dir, 'checkpoint.json'))) ||
+    (await terminalHistoryPathExists(join(dir, 'scrollback.bin')))
   ) {
     return true
   }
   try {
     return (await fsPromises.stat(join(dir, 'output.log'))).size > LOG_HEADER_BYTES
   } catch (error) {
-    return !provesTerminalHistoryPathAbsent(error)
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
+      return false
+    }
+    throw error
   }
 }

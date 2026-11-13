@@ -54,25 +54,25 @@ export async function readTerminalHistoryLogHeader(
   }
 }
 
-/** The kernel's proof a path does not exist; access and read failures prove nothing. */
-export function provesTerminalHistoryPathAbsent(error: unknown): boolean {
-  const code = errnoCodeOrUnknown(error)
-  return code === 'ENOENT' || code === 'ENOTDIR'
-}
-
-/** Only a confirmed missing path is absent; one that cannot be read may still be recovery. */
-export async function terminalHistoryPathMayExist(path: string): Promise<boolean> {
+/**
+ * Whether a path exists. Only ENOENT is absence; a lookup that cannot tell throws, so no caller
+ * mistakes uncertainty for either a missing file or a confirmed one.
+ */
+export async function terminalHistoryPathExists(path: string): Promise<boolean> {
   try {
     await fsPromises.stat(path)
     return true
   } catch (error) {
-    return !provesTerminalHistoryPathAbsent(error)
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
+      return false
+    }
+    throw error
   }
 }
 
 export async function hasReplayableTerminalHistorySessionFiles(dir: string): Promise<boolean> {
   for (const name of REPLAYABLE_SESSION_FILE_NAMES) {
-    if (await terminalHistoryPathMayExist(join(dir, name))) {
+    if (await terminalHistoryPathExists(join(dir, name))) {
       return true
     }
   }

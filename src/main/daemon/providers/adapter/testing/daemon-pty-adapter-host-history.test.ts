@@ -1,6 +1,13 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
-import { afterEach, describe, expect, it } from 'vitest'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  existsSync,
+  mkdirSync,
+  promises as fsPromises,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { HeadlessEmulator } from '../../../emulation/headless-emulator'
@@ -171,6 +178,47 @@ describe('daemon-owned terminal history', () => {
 
     rmSync(root)
     mkdirSync(root)
+    const { id } = await adapter.spawn(request)
+    expect(spawned).toBe(1)
+    expect(new HistoryReader(root).probeRestorableHistory(id).status).toBe('restorable')
+  }, 30_000)
+
+  // AIO-C3: a recovery marker lookup that cannot tell used to start the process with no hold.
+  it('starts no process while the recovery marker cannot be checked, then starts normally', async () => {
+    let spawned = 0
+    harness = await startDaemonAdapterHarness(
+      () => {
+        spawned += 1
+        return createMockSubprocess()
+      },
+      {},
+      { hostHistory: true }
+    )
+    const root = join(harness.dir, 'history')
+    adapter = new DaemonPtyAdapter({
+      socketPath: harness.socketPath,
+      tokenPath: harness.tokenPath,
+      historyPath: root
+    })
+    const request = { sessionId: 'host-history-uncertain', cols: 80, rows: 24, cwd: '/tmp' }
+    const dir = join(root, getHistorySessionDirName(request.sessionId))
+    const stat = fsPromises.stat
+    const lookup = vi.spyOn(fsPromises, 'stat').mockImplementation(async (...args) => {
+      if (String(args[0]).endsWith('.unreadable-recovery')) {
+        throw Object.assign(new Error('i/o error'), { code: 'EIO' })
+      }
+      return stat(...args)
+    })
+    try {
+      await expect(adapter.spawn(request)).rejects.toThrow('terminal_history_unavailable')
+      expect(spawned).toBe(0)
+      // Nothing was reset, marked or fabricated for the ID.
+      expect(existsSync(join(dir, 'meta.json'))).toBe(false)
+      expect(existsSync(join(dir, '.unreadable-recovery'))).toBe(false)
+    } finally {
+      lookup.mockRestore()
+    }
+
     const { id } = await adapter.spawn(request)
     expect(spawned).toBe(1)
     expect(new HistoryReader(root).probeRestorableHistory(id).status).toBe('restorable')

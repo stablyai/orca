@@ -13,7 +13,7 @@ import {
   PRIVATE_FILE_MODE
 } from '../../endpoint/publication/daemon-private-file-modes'
 import { getHistorySessionDirName } from './history-paths'
-import { terminalHistoryPathMayExist } from './terminal-history-session-files'
+import { terminalHistoryPathExists } from './terminal-history-session-files'
 
 const QUARANTINE_DIR_NAME = '.recovery-quarantine'
 const RECOVERY_PROTECTION_MARKER = '.unreadable-recovery'
@@ -72,12 +72,12 @@ export function hasTerminalHistoryRecoveryProtection(basePath: string, sessionId
   return existsSync(join(basePath, getHistorySessionDirName(sessionId), RECOVERY_PROTECTION_MARKER))
 }
 
-/** A daemon hold's check: a marker that cannot be confirmed missing still protects recovery. */
-export function mayHaveTerminalHistoryRecoveryProtection(
+/** A daemon hold's check of an actual marker; a lookup that cannot tell throws instead. */
+export function hasTerminalHistoryRecoveryProtectionAsync(
   basePath: string,
   sessionId: string
 ): Promise<boolean> {
-  return terminalHistoryPathMayExist(
+  return terminalHistoryPathExists(
     join(basePath, getHistorySessionDirName(sessionId), RECOVERY_PROTECTION_MARKER)
   )
 }

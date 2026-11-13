@@ -1,33 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, promises as fsPromises, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TerminalHistoryJournals } from '../terminal-history-journals'
 import type { TerminalSessionJournal } from '../terminal-session-journal'
 import type { TerminalHistoryReads } from '../terminal-history-read-admission'
-import type * as FileReaderModule from '../../storage/terminal-history-file-reader'
 import { gateAppends, gateReconstruction } from './terminal-history-read-fixture'
-
-const sourceRead = vi.hoisted(() => ({ during: async (): Promise<void> => {} }))
-// A reader's issued source file read can still be in flight when its terminal exits.
-vi.mock('../../storage/terminal-history-file-reader', async (importOriginal) => {
-  const actual = await importOriginal<typeof FileReaderModule>()
-  return {
-    ...actual,
-    readTerminalHistoryBufferAsync: async (
-      ...args: Parameters<typeof actual.readTerminalHistoryBufferAsync>
-    ) => {
-      await sourceRead.during()
-      return actual.readTerminalHistoryBufferAsync(...args)
-    }
-  }
-})
 
 const roots: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
-  sourceRead.during = async () => {}
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -136,16 +119,25 @@ describe('host-wide read pressure', () => {
     const old = await open(sessionId)
     old.record({ kind: 'output', data: 'OLD_ROW\r\n' })
     expect(await old.flush()).toBe(true)
-    const reading = Promise.withResolvers<void>()
+    // The next file handle to close, the reader's source log, finishes only when released.
+    const probe = await fsPromises.open(join(old.dir, 'meta.json'), 'r')
+    const handles = Object.getPrototypeOf(probe)
+    await probe.close()
+    const close = handles.close
+    const closing = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
-    sourceRead.during = async () => {
-      reading.resolve()
-      await release.promise
-    }
+    let held = false
+    vi.spyOn(handles, 'close').mockImplementation(async function (this: unknown) {
+      if (!held) {
+        held = true
+        closing.resolve()
+        await release.promise
+      }
+      return close.call(this)
+    })
     const read = readThrough(journals.reads, old)
-    // Sync point only: the read holds its replay lease and its source read is issued.
-    await reading.promise
-    sourceRead.during = async () => {}
+    // Sync point only: the read holds its replay lease and its source file is still closing.
+    await closing.promise
     let settled = false
     void old.settled.then(() => {
       settled = true
@@ -153,12 +145,17 @@ describe('host-wide read pressure', () => {
     old.finish(0)
     // The final pump, its clean end included, has finished.
     await old.flush()
+    const ended = readFileSync(join(old.dir, 'meta.json'), 'utf8')
+    const successor = journals.prepareHold(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
 
     expect(settled).toBe(false)
+    expect(JSON.parse(ended).endedAt).not.toBeNull()
+    expect(readFileSync(join(old.dir, 'meta.json'), 'utf8')).toBe(ended)
     release.resolve()
     expect(await read).toContain('OLD_ROW')
-    await old.settled
-    const hold = await journals.prepareHold(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+    const hold = await successor
+    expect(settled).toBe(true)
     expect(hold.preservesRecovery).toBe(false)
+    expect(JSON.parse(readFileSync(join(old.dir, 'meta.json'), 'utf8')).endedAt).toBeNull()
   }, 30_000)
 })

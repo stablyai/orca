@@ -1,7 +1,6 @@
 import { existsSync, promises as fsPromises, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
-import { provesTerminalHistoryPathAbsent } from './terminal-history-session-files'
 import { getHistorySessionDirName } from './history-paths'
 import { isValidTerminalHistorySize } from '../restoration/terminal-history-dimensions'
 import {
@@ -60,7 +59,10 @@ export function readTerminalHistoryMetaInDir(dir: string): SessionMetaRead {
   }
 }
 
-/** Bounded and awaited: only a confirmed missing file is missing; any other failure is unreadable. */
+/**
+ * Bounded and awaited. Only ENOENT is missing; saved content that cannot be read is unreadable;
+ * a filesystem lookup that cannot tell either way throws.
+ */
 export async function readTerminalHistoryMetaInDirAsync(dir: string): Promise<SessionMetaRead> {
   let meta: unknown
   try {
@@ -69,7 +71,14 @@ export async function readTerminalHistoryMetaInDirAsync(dir: string): Promise<Se
       TERMINAL_HISTORY_META_MAX_BYTES
     )
   } catch (error) {
-    return provesTerminalHistoryPathAbsent(error) ? { status: 'missing' } : { status: 'unreadable' }
+    const code = errnoCodeOrUnknown(error)
+    if (code === 'ENOENT') {
+      return { status: 'missing' }
+    }
+    if (code !== 'unknown') {
+      throw error
+    }
+    return { status: 'unreadable' }
   }
   return validatedMetaRead(meta)
 }
@@ -178,7 +187,7 @@ async function publishTerminalHistoryMetaOwned(
     }
     current = read
   } catch (error) {
-    if (!create || !provesTerminalHistoryPathAbsent(error)) {
+    if (!create || errnoCodeOrUnknown(error) !== 'ENOENT') {
       return 'unavailable'
     }
   }

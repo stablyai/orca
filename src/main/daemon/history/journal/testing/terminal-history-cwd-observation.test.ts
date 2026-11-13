@@ -321,6 +321,8 @@ describe('one admitted operation and its source lineage', () => {
     await renaming.reached
     journal.gap('storage_failed')
     renaming.open()
+    // The pump still owns the issued rename; its fence returns once that rename has settled.
+    expect(await journal.flush()).toBe(false)
 
     expect(await preflight).toBe(false)
     expect(await sleep.outcome.promise).toEqual({ phase: 'preflight', reason: 'gap' })

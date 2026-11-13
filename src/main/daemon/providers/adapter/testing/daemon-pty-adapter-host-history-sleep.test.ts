@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { HistoryReader } from '../../../history/restoration/history-reader'
 import type * as CheckpointReaderModule from '../../../history/restoration/terminal-history-checkpoint-reader'
+import type * as FileReaderModule from '../../../history/storage/terminal-history-file-reader'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import {
   createMockSubprocess,
@@ -41,6 +42,22 @@ vi.mock(
   }
 )
 
+// The final Sleep readback of a published checkpoint can still be in flight when its caller leaves.
+const finalReadback = vi.hoisted(() => ({ during: async (_path: string): Promise<void> => {} }))
+vi.mock('../../../history/storage/terminal-history-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileReaderModule>()
+  return {
+    ...actual,
+    readTerminalHistoryBufferAsync: async (
+      ...args: Parameters<typeof actual.readTerminalHistoryBufferAsync>
+    ) => {
+      const bytes = await actual.readTerminalHistoryBufferAsync(...args)
+      await finalReadback.during(args[0])
+      return bytes
+    }
+  }
+})
+
 type MockChild = ReturnType<typeof createMockSubprocess>
 let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 const adapters: DaemonPtyAdapter[] = []
@@ -51,6 +68,7 @@ afterEach(async () => {
   probe.cwd = null
   probe.during = () => {}
   sourceChange.during = () => {}
+  finalReadback.during = async () => {}
   for (const adapter of adapters.splice(0)) {
     adapter.dispose()
   }
@@ -186,6 +204,47 @@ describe('host Sleep through disk-only Wake', () => {
     expect(successor.coldRestore?.scrollback).toContain('LATE_EXIT')
     adapter.write(sessionId, 'successor-input')
     await waitFor(() => child().write.mock.calls.some(([data]) => data === 'successor-input'))
+    expect(child().kill).not.toHaveBeenCalled()
+  }, 30_000)
+
+  // The caller leaves while the final checkpoint's readback is in flight, and a same-ID start
+  // arrives then too: the readback finishes, and the start sees the whole final cut.
+  it('finishes its final readback after the caller leaves, before a same-ID start', async () => {
+    const { open, child } = await startHost()
+    const sessionId = 'sleep-held-readback'
+    const adapter = open()
+    await adapter.spawn(request(sessionId))
+    const slept = child()
+    slept._simulateData('HELD_ROW\r\n')
+    exitAfterOutput(slept, 'HELD_EXIT\r\n')
+    const readback = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    finalReadback.during = async (path) => {
+      if (path.endsWith('checkpoint.json')) {
+        finalReadback.during = async () => {}
+        readback.resolve()
+        await release.promise
+      }
+    }
+
+    const sleeping = adapter.shutdown(sessionId, {
+      keepHistory: true,
+      // ast-grep-ignore: test-no-wall-clock -- Sleep's deadline is an absolute epoch the real daemon compares against.
+      deadlineMs: Date.now() + 3_000
+    })
+    // Sync point only: the physical exit happened and its final checkpoint is being read back.
+    await readback.promise
+    await expect(sleeping).rejects.toThrow()
+    const successor = open().spawn(request(sessionId))
+    release.resolve()
+
+    const woken = await successor
+    expect(woken.coldRestore?.scrollback).toContain('HELD_ROW')
+    expect(woken.coldRestore?.scrollback).toContain('HELD_EXIT')
+    adapters.at(-1)!.write(sessionId, 'successor-input')
+    await waitFor(() => child().write.mock.calls.some(([data]) => data === 'successor-input'))
+    expect(child()).not.toBe(slept)
+    expect(slept.kill).toHaveBeenCalledTimes(1)
     expect(child().kill).not.toHaveBeenCalled()
   }, 30_000)
 
