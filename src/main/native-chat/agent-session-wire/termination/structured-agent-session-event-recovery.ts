@@ -13,10 +13,10 @@ import { settleStructuredAgentSessionOptionsReported } from '../startup/structur
 import {
   endExitedStructuredAgentSessionChildUnderSerialize,
   settleStructuredAgentSessionChildExit,
-  type StructuredAgentSessionChildExit,
   type StructuredAgentSessionChildExitContext,
   type StructuredAgentSessionGenerationEnded
 } from './structured-agent-session-child-exit'
+import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit-record'
 import type { StructuredAgentSessionHostRuntimeState } from '../host/structured-agent-session-host-runtime-state'
 import {
   openStructuredAgentSessionProviderChild,

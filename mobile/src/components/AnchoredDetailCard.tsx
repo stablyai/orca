@@ -1,9 +1,9 @@
 import type { ReactNode, RefObject } from 'react'
-import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Animated, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
 import { DetailCardFocusBoundary, DetailCardLayer } from './detail-card-host'
 import type { AnchoredDetailCardState } from './use-anchored-detail-card'
 import { useDetailCardMotion } from './use-detail-card-motion'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -38,7 +38,7 @@ export function AnchoredDetailCardLayer({
   card: AnchoredDetailCardState
   obscured: boolean
   /** Replaces the hook's layer ref, for a caller that also needs the node. */
-  layerRef?: (view: View | null) => void
+  layerRef?: (view: HostInstance | null) => void
 }): React.JSX.Element {
   const reducedMotion = useReducedMotionEnabled()
   return (
@@ -69,7 +69,7 @@ export function AnchoredDetailCardLayer({
   )
 }
 
-const layerStyle = { ...StyleSheet.absoluteFillObject, zIndex: 1000 }
+const layerStyle = { ...StyleSheet.absoluteFill, zIndex: 1000 }
 
 /** Only the current motion may release the retained exit presentation. */
 function AnchoredDetailCard({
@@ -95,7 +95,7 @@ function AnchoredDetailCard({
   motion: number
   bounds: { left: number; top: number; right: number; bottom: number }
   layerHeight: number
-  contentRef: RefObject<View | null>
+  contentRef: RefObject<HostInstance | null>
   boundaryRefs: RefObject<unknown[]>
   active: boolean
   obscured: boolean

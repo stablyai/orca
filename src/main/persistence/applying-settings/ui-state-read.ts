@@ -1,11 +1,8 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
-import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import {
-  getDefaultUIState,
-  normalizeAgentActivityDisplayMode,
-  normalizeWorktreeCardProperties
-} from '../../../shared/constants'
+import { getDefaultUIState, normalizeAgentActivityDisplayMode } from '../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../shared/worktree/row-display/card-properties'
 import {
   normalizeWorkspaceStatuses,
   clampWorkspaceBoardColumnWidth,
@@ -13,6 +10,7 @@ import {
 } from '../../../shared/workspace-statuses'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
@@ -59,6 +57,7 @@ export function getPersistedUI(
     syncTaskStatusFromWorkspaceBoard: state.ui?.syncTaskStatusFromWorkspaceBoard === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(state.ui?.usagePercentageDisplay),
     statusBarUsageMode: normalizeStatusBarUsageMode(state.ui?.statusBarUsageMode),
+    statusBarUsageFormat: normalizeStatusBarUsageFormat(state.ui?.statusBarUsageFormat),
     statusBarCompactChangeNoticeDismissed:
       state.ui?.statusBarCompactChangeNoticeDismissed !== false,
     trayMinimizeNoticeShown: state.ui?.trayMinimizeNoticeShown === true,

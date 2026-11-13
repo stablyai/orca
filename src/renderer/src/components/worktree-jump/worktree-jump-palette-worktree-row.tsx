@@ -7,9 +7,8 @@ import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/workspace/display/worktree-default-display-name'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId
@@ -23,7 +22,7 @@ import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import type { WorktreePaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { getWorkspaceLastActiveAt } from '../../../../shared/workspace-last-active'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   getPaletteSupportingTextLabel,
   HighlightedText,
@@ -39,6 +38,7 @@ export function WorktreeJumpPaletteWorktreeRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     repoMap,
     activeWorktreeId,
@@ -64,7 +64,8 @@ export function WorktreeJumpPaletteWorktreeRow({
           worktree.lastActivityAt,
           getWorktreeVisitTimestamp(controller.lastVisitedAtByWorktreeId, worktree)
         ),
-    controller.paletteNowMs
+    controller.paletteNowMs,
+    t
   )
   const sshConnectionId =
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId) ? repo.connectionId : null
@@ -83,10 +84,7 @@ export function WorktreeJumpPaletteWorktreeRow({
       value={renderKey}
       onSelect={() => handleSelectItem(entry)}
       data-current={isCurrentWorktree ? 'true' : undefined}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
         <PaletteWorktreeStatusDot worktree={worktree} />
@@ -99,11 +97,8 @@ export function WorktreeJumpPaletteWorktreeRow({
                 <span
                   aria-label={
                     isSshDisconnected
-                      ? translate(
-                          'auto.components.WorktreeJumpPalette.63c2be1914',
-                          'SSH disconnected'
-                        )
-                      : translate('auto.components.WorktreeJumpPalette.34c8fbb46e', 'SSH remote')
+                      ? t('auto.components.WorktreeJumpPalette.63c2be1914', 'SSH disconnected')
+                      : t('auto.components.WorktreeJumpPalette.34c8fbb46e', 'SSH remote')
                   }
                   className="shrink-0 inline-flex items-center"
                 >
@@ -119,7 +114,7 @@ export function WorktreeJumpPaletteWorktreeRow({
               </span>
               {sessionAge ? (
                 <span
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.WorktreeJumpPalette.lastActiveTime',
                     'Last active {{value0}} ago',
                     { value0: sessionAge }
@@ -131,12 +126,12 @@ export function WorktreeJumpPaletteWorktreeRow({
               ) : null}
               {isCurrentWorktree && (
                 <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                  {translate('auto.components.WorktreeJumpPalette.556e7232ca', 'Current')}
+                  {t('auto.components.WorktreeJumpPalette.556e7232ca', 'Current')}
                 </span>
               )}
               {worktree.isMainWorktree && (
                 <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
-                  {translate('auto.components.WorktreeJumpPalette.739bda980c', 'primary')}
+                  {t('auto.components.WorktreeJumpPalette.739bda980c', 'primary')}
                 </span>
               )}
               {branch.trim().length > 0 ? (
@@ -151,7 +146,7 @@ export function WorktreeJumpPaletteWorktreeRow({
             {entry.match.supportingText && (
               <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] leading-5 text-muted-foreground/88">
                 <span className="inline-flex h-[18px] shrink-0 items-center rounded border border-border bg-foreground/[0.04] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {getPaletteSupportingTextLabel(entry.match.supportingText.labelKind)}
+                  {getPaletteSupportingTextLabel(entry.match.supportingText.labelKind, t)}
                 </span>
                 <span className="truncate">
                   <HighlightedText

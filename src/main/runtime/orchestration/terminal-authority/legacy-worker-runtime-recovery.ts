@@ -2,11 +2,15 @@ import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree
 import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from './structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { RuntimeWorkspaceSessionFlush } from '../../workspaces/session-hosts/runtime-workspace-session-flush'
+import { StartupWorkerAuthorityRestore } from './startup-worker-authority-restore'
+import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport as StructuredSessionStartup } from '../../session-tabs/structured-session-create-support'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
-
-  protected abstract getLeafKey(tabId: string, leafId: string): string
+  readonly startupWorkerAuthority = new StartupWorkerAuthorityRestore()
+  abstract prepareStructuredAgentSessionStartupRestoration(
+    ...args: Parameters<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
+  ): ReturnType<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
 
   async reconcileLegacyWorkerTerminals(
     options: { connectionId?: string; materializeRenderer?: boolean } = {}
@@ -27,8 +31,14 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   }
 
   async refreshRestoredOrchestrationAuthority(connectionId: string | null = null): Promise<void> {
-    if (connectionId === null && !this.canRecoverPersistentLocalPtysFn()) {
-      return
+    if (connectionId === null) {
+      // Why: until restart leases are reconciled, a chat worker that died with the last run reads as unverifiable.
+      await this.prepareStructuredAgentSessionStartupRestoration().catch((error: unknown) => {
+        console.warn('[orchestration] chat worker restart reconcile failed', error)
+      })
+      if (!this.canRecoverPersistentLocalPtysFn()) {
+        return
+      }
     }
     const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
       [...(await this.getResolvedWorktreeMap()).values()],

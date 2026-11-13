@@ -1,7 +1,7 @@
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { AutoRenameFailedDialog } from '../identity/AutoRenameFailedDialog'
 import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
@@ -141,6 +141,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
           onAssignWorkspaceStatus={onAssignWorkspaceStatus}
+          onOpenChange={card.detailsHoverControl.setContextMenuOpen}
         >
           {cardBody}
         </WorktreeContextMenu>

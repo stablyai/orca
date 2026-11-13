@@ -3,7 +3,7 @@ import { Animated, BackHandler, Easing, Text, View, type LayoutChangeEvent } fro
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
-import { ensureNotificationPermissions } from '../src/notifications/mobile-notifications'
+import { ensureNotificationPermissions } from '../src/notifications/delivery-policy/notification-permissions'
 import {
   MobileOnboardingPage,
   type MobileOnboardingBusyChoice,
@@ -11,7 +11,7 @@ import {
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
 import { PUSH_CURVE, PUSH_SLIDE_MS } from '../src/navigation/push-motion'
-import { useReducedMotionEnabled } from '../src/platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../src/platform/accessibility/use-reduced-motion'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
 import {

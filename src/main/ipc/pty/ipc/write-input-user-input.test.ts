@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
+import { TerminalRunFactsRegister } from '../../../runtime/terminal/lifecycle/terminal-run-facts'
 import { ptyOwnership } from '../provider/ownership-state'
 import { createPtyWriteInput } from './write-input'
 

@@ -12,9 +12,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
@@ -41,6 +41,7 @@ function isForgetModalData(data: unknown): data is ForgetSshWorkspaceModalData {
 }
 
 export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
+  const t = useTranslate()
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const hostLabel = useAppStore((s) => {
@@ -139,7 +140,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
         <DialogHeader className="gap-1">
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
             <ServerOff className="size-4 text-muted-foreground" />
-            {translate(
+            {t(
               'auto.components.sidebar.ForgetSshWorkspaceDialog.removeTitle',
               'Remove “{{name}}” from Orca?',
               { name: displayName }
@@ -147,12 +148,12 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
           </DialogTitle>
           <DialogDescription className="text-xs">
             {resolution.kind === 'saved'
-              ? translate(
+              ? t(
                   'auto.components.sidebar.ForgetSshWorkspaceDialog.savedHostBody',
                   'This workspace’s project isn’t served by Orca’s server on {{host}}, so Orca can’t delete it there. You can remove it from Orca; files, the Git worktree, and branches on {{host}} are left untouched.',
                   { host: hostLabel }
                 )
-              : translate(
+              : t(
                   'auto.components.sidebar.ForgetSshWorkspaceDialog.ghostBody',
                   '{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.',
                   { host: hostLabel }
@@ -169,14 +170,11 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" size="sm" onClick={() => closeModal()} disabled={busy}>
-            {translate('auto.components.sidebar.ForgetSshWorkspaceDialog.cancel', 'Cancel')}
+            {t('auto.components.sidebar.ForgetSshWorkspaceDialog.cancel', 'Cancel')}
           </Button>
           <Button size="sm" onClick={() => void handleForget()} disabled={busy}>
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {translate(
-              'auto.components.sidebar.ForgetSshWorkspaceDialog.forget',
-              'Remove from Orca'
-            )}
+            {t('auto.components.sidebar.ForgetSshWorkspaceDialog.forget', 'Remove from Orca')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,12 +4,12 @@ import type { AgentSessionRecordStore } from '../records/agent-session-record-st
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { AcpLaunchSpec } from '../../../acp/acp-launch-specs'
-import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
+import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
+import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
   acpStructuredLaunchPart,
   type AcpStructuredLaunchPartDeps
-} from '../../../acp/acp-structured-launch-resolution'
+} from '../../../acp/launch/acp-structured-launch-resolution'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import type { ClaudeEnvDeps } from '../../../claude/structured/launch/claude-structured-child-env'
 import {
@@ -21,10 +21,13 @@ import {
   codexStructuredLaunchPart,
   type CodexStructuredLaunchPartDeps
 } from '../../../codex/structured/launch/codex-structured-launch-resolution'
-import type { PrepareNativeChatVisuals } from '../../../native-chat/native-chat-visuals-delivery'
-import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
+import type { PrepareNativeChatVisuals } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../../../pi/rpc-agent-definition'
-import { piRpcLaunchPart, type PiRpcLaunchPartDeps } from '../../../pi/rpc-launch-resolution'
+import {
+  piRpcLaunchPart,
+  type PiRpcLaunchPartDeps
+} from '../../../pi/rpc/launch/rpc-launch-resolution'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import {
   composeStructuredLaunch,

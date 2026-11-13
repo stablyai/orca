@@ -2,7 +2,7 @@ import { lstat, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StagedRuntimeUploadFileIdentity } from '../../shared/runtime-upload-staging-contract'
+import type { StagedRuntimeUploadFileIdentity } from '../../shared/file-import/runtime-upload-staging-contract'
 import type * as RuntimeImportLimits from './runtime-import-limits'
 
 type RuntimeImportLimitsModule = typeof RuntimeImportLimits
@@ -31,7 +31,7 @@ const callRuntimeEnvironment =
     ) => unknown
   >()
 
-vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: Parameters<typeof callRuntimeEnvironment>) =>
     callRuntimeEnvironment(...args)
 }))
@@ -43,7 +43,7 @@ vi.mock('./runtime-import-limits', async (importOriginal) => ({
 
 const { RUNTIME_UPLOAD_SLICE_BYTES, streamExternalFileToRuntime } =
   await import('./runtime-upload-file-stream')
-await import('./runtime-environments/runtime-environment-manual-disconnect')
+await import('./runtime-environments/connectivity/runtime-environment-manual-disconnect')
 
 let workDir: string
 

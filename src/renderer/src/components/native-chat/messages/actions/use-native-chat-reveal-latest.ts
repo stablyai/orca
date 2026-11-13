@@ -1,5 +1,7 @@
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
+import { useAppStore } from '@/store'
 import { hasAskAnswer } from '../../../../../../shared/native-chat/input/native-chat-ask-answer'
+import { nativeChatScrollsToLatestOnSend } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatInteractiveSend } from '../../session/terminal/send/use-native-chat-interactive-send'
@@ -27,11 +29,11 @@ export function useNativeChatInteractiveSendReveal(
         return sendAnswer(prompt, selections, onDeliverySettled)
       },
       sendRaw,
-      sendRawVerified: (raw) => {
+      sendRawVerified: (raw, requireStartupDialog) => {
         if (targetPtyId) {
           revealLatest()
         }
-        return sendRawVerified(raw)
+        return sendRawVerified(raw, requireStartupDialog)
       },
       cancelPending,
       cancelAsk,
@@ -56,10 +58,8 @@ export type NativeChatMessageListHandle = {
   readerAtEnd: () => boolean
   /** Bring a find match into view, clear of the find bar; the reader stops following the latest. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
-  /** What the row drawing this message copies from its hover button; null when none draws it. */
+  /** What the row drawing this message copies from its Copy button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
-  /** Open a subagent's activity where it sits in the conversation and bring it into view. */
-  revealSubagent: (agentId: string) => void
 }
 
 /** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
@@ -86,31 +86,43 @@ export function useNativeChatRevealLatest(): {
   return { messageListRef, revealLatest, captureRevealLatest }
 }
 
-function ignoreFindMatch(): void {}
-
-function alwaysAtEnd(): boolean {
-  return true
-}
-
-function ignoreSubagent(): void {}
-
+/** Own sends follow the latest; with that setting off, only a reader who was at the end does. */
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
-  revealLatest: NativeChatMessageListHandle['revealLatest'],
-  revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
-  slots: readonly NativeChatTranscriptSlot[] = [],
-  readerAtEnd: NativeChatMessageListHandle['readerAtEnd'] = alwaysAtEnd,
-  revealSubagent: NativeChatMessageListHandle['revealSubagent'] = ignoreSubagent
+  {
+    readerAtEnd,
+    beginNavigation,
+    scrollToBottom,
+    onSent,
+    revealFindMatch,
+    slots
+  }: Pick<NativeChatMessageListHandle, 'readerAtEnd' | 'revealFindMatch'> & {
+    beginNavigation: () => void
+    scrollToBottom: (reason: 'send') => void
+    /** The reader answered, whether or not the view moves. */
+    onSent: () => void
+    slots: readonly NativeChatTranscriptSlot[]
+  }
 ): void {
+  const revealLatest = useCallback(
+    (readerWasAtEnd = readerAtEnd()) => {
+      onSent()
+      if (!nativeChatScrollsToLatestOnSend(useAppStore.getState().settings) && !readerWasAtEnd) {
+        return
+      }
+      beginNavigation()
+      scrollToBottom('send')
+    },
+    [beginNavigation, onSent, readerAtEnd, scrollToBottom]
+  )
   useImperativeHandle(
     ref,
     () => ({
       revealLatest,
       readerAtEnd,
       revealFindMatch,
-      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId),
-      revealSubagent
+      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
     }),
-    [readerAtEnd, revealLatest, revealFindMatch, revealSubagent, slots]
+    [readerAtEnd, revealLatest, revealFindMatch, slots]
   )
 }

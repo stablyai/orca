@@ -9,6 +9,7 @@ import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screen
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
 import { runStackMotion } from './host-stack-motion.web'
 import { useShellOpenTarget } from './use-shell-open-target.web'
+import { useReportedPageLocation } from './use-reported-page-location.web'
 import {
   RouteScreenPaintProvider,
   reportAfterFirstPaint,
@@ -19,15 +20,20 @@ import {
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
   useMobileTranslation()
-  const router = useShellOpenTarget()
+  useReportedPageLocation()
   return (
-    <Navigator router={router}>
+    <Navigator>
       {HOST_STACK_SCREENS.map(({ name, title }) => (
         <Navigator.Screen key={name} name={name} options={{ title }} />
       ))}
-      <HostStackView animation={animation} />
+      <HostStackContent animation={animation} />
     </Navigator>
   )
+}
+
+// Mount the view on the stack the shell's open target leaves, so it starts with only the target drawn.
+function HostStackContent({ animation }: { animation: HostStackAnimation }) {
+  return useShellOpenTarget() ? null : <HostStackView animation={animation} />
 }
 
 type NavigatorContext = ReturnType<typeof Navigator.useContext>
@@ -98,7 +104,11 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const underKey = transition?.kind === 'push' ? transition.underKey : null
   // Keep one keyed sibling list so moving the leaving screen to the end preserves its mount.
   const slots = transition?.kind === 'pop' ? [...routes, transition.leaving] : routes
-  const drawn = released ? slots : slots.filter((route) => route.key === topKey)
+  // A Back before the gate releases still slides the leaving screen off, so the motion settles and taps come back.
+  const leavingKey = transition?.kind === 'pop' ? transition.leaving.key : null
+  const drawn = released
+    ? slots
+    : slots.filter((route) => route.key === topKey || route.key === leavingKey)
 
   // Start before paint so screens never flash at rest before sliding.
   useLayoutEffect(() => {
@@ -188,7 +198,7 @@ const styles = themedStyleSheet(() => ({
     overflow: 'hidden'
   },
   screen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.bgBase
   },
   transparent: {

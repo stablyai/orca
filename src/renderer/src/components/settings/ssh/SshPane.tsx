@@ -1,7 +1,6 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import type { SshTarget } from '../../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -10,6 +9,7 @@ import { SshTargetsEmptyState } from './targets/SshTargetsEmptyState'
 import { SshTargetDestructiveActions } from './targets/SshTargetDestructiveActions'
 import { SshHostsHeaderActions, SshHostsListToolbar } from './SshPaneToolbar'
 import { SshHostsHeaderPortal } from './ssh-hosts-header-slot'
+import { SSH_SETTING_ANCHORS } from './ssh-search'
 import { useSshTargetTests } from './targets/use-ssh-target-tests'
 import { SshRestoreRemovedHostsDialog } from './targets/SshRestoreRemovedHostsDialog'
 import { useSshConfigSync } from './targets/use-ssh-config-sync'
@@ -22,29 +22,29 @@ import {
 } from './targets/ssh-target-list-model'
 import { useSshBulkRemove } from './targets/use-ssh-bulk-remove'
 import { SshTargetForm } from './targets/SshTargetForm'
-import {
-  EMPTY_FORM,
-  type EditingTarget,
-  getEditingTargetForSshTarget
-} from './targets/ssh-target-draft'
-
+import { EMPTY_FORM, getEditingTargetForSshTarget } from '../../ssh-host-form/ssh-target-draft'
+import type { EditingTarget } from '../../ssh-host-form/ssh-target-draft'
 import { buildSshTargetSavePayload } from './targets/ssh-target-save-payload'
+import { formatSshUserFacingError } from './targets/ssh-user-facing-error'
 import { HostRemoveDialog } from '../../sidebar/HostRemoveDialog'
 import {
   isManagedServerSshHost,
   SshManagedHostRemoveDialog
 } from './targets/SshManagedHostRemoveDialog'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { resolveSshHostRemoval } from '../../sidebar/ssh-host-remove-resolution'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { toSshExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useSshAddTargetIntent } from './targets/use-ssh-add-target-intent'
-import { syncSshConfigTargetsPassively } from '../../../lib/ssh-config-passive-sync'
+import { syncSshConfigTargetsPassively } from '../../../runtime/hosts/ssh/ssh-config-passive-sync'
+import type { SshTarget } from '../../../../../shared/ssh-types'
 
 type SshPaneProps = { addTargetIntentSignal?: number }
 
 export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const [targets, setTargets] = useState<SshTarget[]>([])
   // Reuse globally hydrated SSH state instead of duplicate listeners and per-target IPC reads.
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -150,8 +150,8 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       }
       toast.success(
         editingId
-          ? translate('auto.components.settings.SshPane.b4ba0ce33d', 'Target updated')
-          : translate('auto.components.settings.SshPane.f602009125', 'Target added')
+          ? t('auto.components.settings.SshPane.b4ba0ce33d', 'Target updated')
+          : t('auto.components.settings.SshPane.f602009125', 'Target added')
       )
       setShowForm(false)
       setEditingId(null)
@@ -161,8 +161,8 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       if (mountedRef.current) {
         toast.error(
           err instanceof Error
-            ? err.message
-            : translate('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
+            ? formatSshUserFacingError(err.message)
+            : t('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
         )
       }
     } finally {
@@ -201,7 +201,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     try {
       await removeTargetQuietly(id)
       if (mountedRef.current) {
-        toast.success(translate('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
+        toast.success(t('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
       }
       await loadTargets()
     } catch (err) {
@@ -209,7 +209,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
         toast.error(
           extractIpcErrorMessage(
             err,
-            translate('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
+            t('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
           )
         )
       }
@@ -238,7 +238,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       toastSshConnectFailure(
         targetId,
         err,
-        translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
+        t('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
       )
     }
   }
@@ -250,8 +250,8 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
-          : translate('auto.components.settings.SshPane.a43de1d3ee', 'Disconnect failed')
+          ? formatSshUserFacingError(err.message)
+          : t('auto.components.settings.SshPane.a43de1d3ee', 'Disconnect failed')
       )
     }
   }
@@ -263,7 +263,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   }
 
   return (
-    <div className="space-y-3">
+    <div id={SSH_SETTING_ANCHORS.hosts} className="space-y-3">
       <SshHostsHeaderPortal>
         <SshHostsHeaderActions
           syncing={syncing}
@@ -302,7 +302,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
               <SshTargetsEmptyState />
             ) : visibleTargets.length === 0 ? (
               <p className="px-1 py-4 text-center text-xs text-muted-foreground">
-                {translate('auto.components.settings.SshPane.noFilterMatch', 'No hosts match.')}
+                {t('auto.components.settings.SshPane.noFilterMatch', 'No hosts match.')}
               </p>
             ) : (
               <SshTargetList

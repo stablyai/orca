@@ -3,18 +3,18 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from '../slices/hosted-review/hosted-review'
 import type { AppState } from '../types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
-} from '../../../../shared/github/pull-request-refresh-types'
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>

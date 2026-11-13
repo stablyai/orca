@@ -45,4 +45,30 @@ describe('StatusPorcelainParser', () => {
       }
     ])
   })
+
+  it('splices expanded untracked directories in place and cuts at the limit like -uall', () => {
+    const parser = new StatusPorcelainParser()
+    parser.update(
+      '1 .M N... 100644 100644 100644 aa bb tracked.ts\n? a/\n? b.txt\n? c/\n? d.txt\n',
+      0
+    )
+    parser.finish()
+    const exceeded = parser.expandUntrackedDirectories(
+      new Map([
+        ['a/', ['a/1', 'a/x/2']],
+        ['c/', ['c/3', 'c/4']]
+      ]),
+      5
+    )
+    expect(exceeded).toBe(true)
+    expect(parser.statusLength).toBe(6)
+    expect(parser.entries.map((entry) => entry.path)).toEqual([
+      'tracked.ts',
+      'a/1',
+      'a/x/2',
+      'b.txt',
+      'c/3',
+      'c/4'
+    ])
+  })
 })

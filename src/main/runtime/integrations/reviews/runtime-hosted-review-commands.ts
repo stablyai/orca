@@ -1,24 +1,30 @@
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  CreateStackedHostedReviewInput,
-  CreateStackedHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewForBranchReply
-} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import {
+  getPRForBranchOutcome,
+  readRecentPhonePROutcome
+} from '../../../github/client/lookup/pr-for-branch-outcome'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type {
   GitHubPRRefreshReason,
   PRRefreshOutcome
-} from '../../../../shared/github/pull-request-refresh-types'
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getPRForBranchOutcome } from '../../../github/client/lookup/pr-for-branch-outcome'
+import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
+import { admissionTierForRefreshReason } from '../../../github/pull-requests/refresh/pr-refresh-candidate-policy'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
-import { admissionTierForRefreshReason } from '../../../github/pr-refresh-candidate-policy'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
-import { hostedReviewForBranchReply } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { runHostedPRRead } from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import {
+  type CreateHostedReviewInput,
+  type CreateHostedReviewResult,
+  type CreateStackedHostedReviewInput,
+  type CreateStackedHostedReviewResult,
+  type HostedReviewCreationEligibility,
+  type HostedReviewCreationEligibilityArgs,
+  type HostedReviewForBranchReply,
+  hostedReviewForBranchReply
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
+
 import { readHostedReviewForBranch } from '../../../source-control/hosted-review'
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'
@@ -71,7 +77,8 @@ export class RuntimeHostedReviewCommands {
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null,
     reason?: GitHubPRRefreshReason,
-    userRefresh?: boolean
+    userRefresh?: boolean,
+    clientKind?: DeviceScope
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -91,13 +98,41 @@ export class RuntimeHostedReviewCommands {
     }
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
-    return getPRForBranchOutcome(
-      repo.path,
-      branch,
-      linkedPRNumber ?? null,
-      hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo)),
-      linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-      ...lookupOptionArgs
+    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
+    // Desktop callers and reason-carrying refreshes keep their own GitHub read.
+    if (clientKind === 'mobile' && reason === undefined) {
+      const recent = await readRecentPhonePROutcome(
+        repo.path,
+        branch,
+        linkedPRNumber ?? null,
+        connectionId,
+        fallbackPRNumber ?? null,
+        lookupOptions
+      )
+      if (recent) {
+        return recent
+      }
+    }
+    // Through the coordinator, so a client's read also serves this server's CI-line watches.
+    return runHostedPRRead(
+      {
+        cacheKey: `${repo.path}::${branch}`,
+        repoKind: repo.kind ?? 'git',
+        repoId: repo.id,
+        repoPath: repo.path,
+        branch,
+        connectionId,
+        linkedPRNumber: linkedPRNumber ?? null
+      },
+      () =>
+        getPRForBranchOutcome(
+          repo.path,
+          branch,
+          linkedPRNumber ?? null,
+          connectionId,
+          linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
+          ...lookupOptionArgs
+        )
     )
   }
 

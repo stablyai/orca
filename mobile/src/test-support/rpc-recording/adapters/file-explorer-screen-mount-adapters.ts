@@ -1,10 +1,11 @@
+import type * as FileExplorerScreenModule from '../../../files/explorer/MobileFileExplorerPanel'
 import { createElement } from 'react'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
+import type { RpcClientContextValue } from '../../../transport/connection/rpc-client-context-contract'
 
 const HOST = 'host-1'
 const WORKTREE = 'wt-files'
@@ -19,8 +20,8 @@ export function fileExplorerScreenMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'files.explorer-screen': ({ client, effect }) => {
-      const Panel = modules.load<typeof import('../../../files/MobileFileExplorerPanel')>(
-        'mobile/src/files/MobileFileExplorerPanel.tsx'
+      const Panel = modules.load<typeof FileExplorerScreenModule>(
+        'mobile/src/files/explorer/MobileFileExplorerPanel.tsx'
       ).MobileFileExplorerPanel
       const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({

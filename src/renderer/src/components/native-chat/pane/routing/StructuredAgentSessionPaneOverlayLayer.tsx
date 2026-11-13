@@ -2,11 +2,11 @@ import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import { useAppStore } from '@/store'
-import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
+import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { RetainedPaneHost } from '../../../tab-group/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -37,7 +37,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   // Resolve from the tab’s recorded host because workspace ids can collide across hosts.
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
-  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
+  const backdropActive = useWindowBackdropActive()
   if (!target) {
     return null
   }
@@ -45,8 +45,8 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
     <RetainedPaneHost
       groupId={groupId}
       isVisible={isActive}
-      // Why not over a theme image: the chat is translucent there, so a dim would bleed the image in.
-      dimmed={hasSplitGroups && !isFocusedGroup && !themeBackgroundActive}
+      // Why not over a backdrop: dimming the translucent chat also dims its text.
+      dimmed={hasSplitGroups && !isFocusedGroup && !backdropActive}
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >

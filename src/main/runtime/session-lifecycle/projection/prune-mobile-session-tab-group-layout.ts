@@ -1,13 +1,15 @@
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
+import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/saved-conversation-title-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionTerminalTab
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
@@ -27,26 +29,10 @@ import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressin
 import {
   retitleStructuredConversationTab,
   titleStructuredConversationTabs
-} from '../../structured-conversation-tab-title'
+} from '../../session-tabs/structured-conversation-tab-title'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 
-export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {
-  constructor(
-    ...args: ConstructorParameters<typeof OrcaRuntimeWithScheduleMobileSessionTabsChanged>
-  ) {
-    super(...args)
-    // Desktop chat renames reach main through saved window sessions only.
-    this.store?.onWorkspaceSessionWritten?.(() => {
-      for (const [workspaceId, snapshot] of this.mobileSessionTabsByWorktree) {
-        for (const tab of snapshot.tabs) {
-          if (tab.type === 'agent-session') {
-            this.refreshStructuredConversationTabTitle(workspaceId, tab.sessionId)
-          }
-        }
-      }
-    })
-  }
-
+export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
   protected pruneMobileSessionTabGroupLayout(
     layout: TabGroupLayoutNode | null | undefined,
     validGroupIds: ReadonlySet<string>

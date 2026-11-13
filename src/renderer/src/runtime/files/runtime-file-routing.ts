@@ -4,10 +4,10 @@ import {
   normalizeRelativePath
 } from '../../../../shared/cross-platform-path'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
-import { chatScratchFileAddress } from '../runtime-chat-scratch-file-address'
-import type { LocalFileAccess } from '../../../../shared/local-file-access'
+import { chatScratchFileAddress } from './addressing/runtime-chat-scratch-file-address'
+import type { LocalFileAccess } from '../../../../shared/file-access/local-file-access'
 
 // Why local only: an SSH read is the remote host's to check, and its relay never sees this field.
 export function localAccess(
@@ -69,6 +69,18 @@ export function canReadRelativeRuntimeFile(
   relativePath: string | undefined
 ): relativePath is string {
   return Boolean(relativePath && relativePath.trim() && !isAbsolutePathLike(relativePath))
+}
+
+/** A workspace file by its relative path, else a chat's scratch file by its absolute path. */
+export function workspaceOrScratchFileAddress(
+  worktreeId: string,
+  relativePath: string | undefined,
+  filePath: string
+): { worktreeSelector: string; relativePath: string } | null {
+  if (canReadRelativeRuntimeFile(relativePath)) {
+    return { worktreeSelector: toRuntimeWorktreeSelector(worktreeId), relativePath }
+  }
+  return chatScratchFileAddress(filePath)
 }
 
 function isAbsolutePathLike(value: string): boolean {

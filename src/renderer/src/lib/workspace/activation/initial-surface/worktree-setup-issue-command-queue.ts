@@ -1,5 +1,5 @@
-import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/launch-types'
-import { buildSetupRunnerCommand } from '../../../setup-runner'
+import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
+import { buildSetupRunnerCommand } from '../../creation/setup/setup-runner'
 import { translate } from '@/i18n/i18n'
 import type {
   InitialTerminalOptions,

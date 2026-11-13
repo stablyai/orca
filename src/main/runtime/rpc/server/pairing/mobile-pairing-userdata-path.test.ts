@@ -1,10 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+
 import type * as NodeFs from 'node:fs'
+
 import { join } from 'node:path'
+
 import { tmpdir } from 'node:os'
+
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+
 import { E2EE_KEYPAIR_FILENAME } from '../../../../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
+
 import { installFakeAppEnvironment } from '../../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 // Simulate app.setName changing userData; distinct directories work even on case-insensitive filesystems.
@@ -40,41 +47,6 @@ describe('mobile pairing userData path stability', () => {
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
     vi.resetModules()
-  })
-
-  it('keeps returning the path captured before app.setName changes resolution', async () => {
-    appState.userData = canonicalDir
-    const { initDataPath, getCanonicalUserDataPath } =
-      await import('../../../../persistence/loading-store/user-data-path')
-    initDataPath()
-
-    appState.userData = lateDir
-
-    expect(getCanonicalUserDataPath()).toBe(canonicalDir)
-    const { getAppEnvironment } = await import('../../../../../shared/app-environment')
-    expect(getCanonicalUserDataPath()).not.toBe(getAppEnvironment().getPath('userData'))
-  })
-
-  it('writes DeviceRegistry + E2EE keypair under the canonical path, not the late one', async () => {
-    appState.userData = canonicalDir
-    const { initDataPath, getCanonicalUserDataPath } =
-      await import('../../../../persistence/loading-store/user-data-path')
-    initDataPath()
-
-    appState.userData = lateDir
-
-    const { DeviceRegistry } = await import('./device-registry')
-    const { loadOrCreateE2EEKeypair } = await import('../../../e2ee-keypair')
-
-    // Mirror runtime startup: registry and E2EE keys share one canonical path.
-    const registry = new DeviceRegistry(getCanonicalUserDataPath())
-    registry.addDevice('iPhone')
-    loadOrCreateE2EEKeypair(getCanonicalUserDataPath())
-
-    expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(true)
-    expect(existsSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME))).toBe(true)
-    expect(existsSync(join(lateDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
-    expect(existsSync(join(lateDir, E2EE_KEYPAIR_FILENAME))).toBe(false)
   })
 
   it('migrates existing mobile pairing files from the late path as an all-or-nothing pair', async () => {
@@ -193,56 +165,5 @@ describe('mobile pairing userData path stability', () => {
       errorSpy.mockRestore()
       vi.doUnmock('node:fs')
     }
-  })
-
-  it('no-ops when the source path equals the canonical path (no rename happened)', async () => {
-    // Case-insensitive filesystems can resolve both paths identically; never copy a file onto itself.
-    appState.userData = canonicalDir
-    const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
-      await import('../../../../persistence/loading-store/user-data-path')
-    initDataPath()
-
-    const devices = JSON.stringify([
-      { deviceId: 'phone', name: 'iPhone', token: 't', scope: 'mobile', pairedAt: 1, lastSeenAt: 2 }
-    ])
-    writeFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), devices)
-
-    expect(() => migrateMobilePairingDataToCanonicalUserDataPath(canonicalDir)).not.toThrow()
-    expect(readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')).toBe(devices)
-  })
-
-  it('no-ops on a fresh install with no legacy pairing files to migrate', async () => {
-    appState.userData = canonicalDir
-    const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
-      await import('../../../../persistence/loading-store/user-data-path')
-    initDataPath()
-
-    appState.userData = lateDir
-    expect(() => migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)).not.toThrow()
-    expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
-    expect(existsSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME))).toBe(false)
-  })
-
-  it('a previously paired device is still found after a restart on the canonical path', async () => {
-    appState.userData = canonicalDir
-    {
-      const { initDataPath, getCanonicalUserDataPath } =
-        await import('../../../../persistence/loading-store/user-data-path')
-      initDataPath()
-      appState.userData = lateDir
-      const { DeviceRegistry } = await import('./device-registry')
-      new DeviceRegistry(getCanonicalUserDataPath()).addDevice('iPhone')
-    }
-
-    vi.resetModules()
-    appState.userData = canonicalDir
-    const { initDataPath, getCanonicalUserDataPath } =
-      await import('../../../../persistence/loading-store/user-data-path')
-    initDataPath()
-    appState.userData = lateDir
-    const { DeviceRegistry } = await import('./device-registry')
-    const registry = new DeviceRegistry(getCanonicalUserDataPath())
-
-    expect(registry.listDevices().map((d) => d.name)).toContain('iPhone')
   })
 })

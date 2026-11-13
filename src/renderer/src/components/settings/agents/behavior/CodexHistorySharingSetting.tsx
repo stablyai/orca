@@ -10,6 +10,7 @@ import {
   getCodexHistorySharingUnsupported
 } from './codex-history-sharing-copy'
 import { useCodexHistorySharingHostSetting } from './use-codex-history-sharing-host-setting'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CodexHistorySharingSetting({
   settings,
@@ -21,6 +22,7 @@ export function CodexHistorySharingSetting({
   /** The host whose Codex launches write the history links. */
   hostScope: SettingsHostScope
 }): React.JSX.Element {
+  const t = useTranslate()
   const environmentId = runtimeTargetEnvironmentId(hostScope.target)
   const hostName = useAppStateValue((state) =>
     environmentId
@@ -37,11 +39,11 @@ export function CodexHistorySharingSetting({
   const enabled = setting.state === 'ready' ? setting.enabled : true
   return (
     <SettingsSwitchRow
-      label={getCodexHistorySharingTitle()}
+      label={getCodexHistorySharingTitle(t)}
       description={
         setting.state === 'unsupported'
-          ? getCodexHistorySharingUnsupported(hostLabel)
-          : getCodexHistorySharingDescription()
+          ? getCodexHistorySharingUnsupported(hostLabel, t)
+          : getCodexHistorySharingDescription(t)
       }
       checked={enabled}
       disabled={setting.state !== 'ready' || !hostScope.available}

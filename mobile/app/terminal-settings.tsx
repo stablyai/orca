@@ -12,10 +12,10 @@ import { colors, spacing } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { loadHosts, peekHosts } from '../src/transport/host-store'
-import type { HostProfile } from '../src/transport/types'
-import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
-import type { RpcClient } from '../src/transport/rpc-client'
+import { loadHosts, peekHosts } from '../src/host-catalog/host-store'
+import type { HostProfile } from '../src/host-catalog/host-profile'
+import { useFocusedSettingsHostClients } from '../src/settings/settings-host-client-connections'
+import type { RpcClient } from '../src/transport/rpc/rpc-client-contract'
 import { LIST_LEADING_INSET, ListRow } from '../src/components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
@@ -23,9 +23,9 @@ import {
   readTerminalAutoRestoreFitMs,
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
-} from '../src/terminal/terminal-auto-restore-fit-state'
-import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
-import { useTerminalTextScaleSetting } from '../src/terminal/use-terminal-text-scale-setting'
+} from '../src/terminal/viewport/terminal-auto-restore-fit-state'
+import { setTerminalSettingsScrollEnabled } from '../src/terminal/preferences/terminal-settings-scroll-lock'
+import { useTerminalTextScaleSetting } from '../src/terminal/preferences/use-terminal-text-scale-setting'
 import {
   SettingsEmptyRow,
   SettingsNavBar,

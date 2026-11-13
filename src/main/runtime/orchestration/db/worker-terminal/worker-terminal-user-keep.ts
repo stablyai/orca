@@ -10,7 +10,7 @@ import {
   WORKER_TERMINAL_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { WorkerAutoCloseState } from '../../../../../shared/worker-auto-close'
+import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
 import { OrchestrationError } from '../../orchestration-error'
 import { retainTerminalResourceInTransaction } from './worker-terminal-archive'

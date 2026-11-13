@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../../../shared/claude-account-switch-settings'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
@@ -18,11 +18,12 @@ export function ClaudeRunningSessionSwitchSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
-  const title = translate(
+  const t = useTranslate()
+  const title = t(
     'accounts.claude.switchSessions.settingTitle',
     'When you switch accounts while Claude is running in terminals'
   )
-  const description = translate(
+  const description = t(
     'accounts.claude.switchSessions.settingDescription',
     'Restarting continues each terminal conversation on the new account.'
   )
@@ -50,13 +51,13 @@ export function ClaudeRunningSessionSwitchSetting({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ask">
-            {translate('accounts.claude.switchSessions.settingAsk', 'Ask')}
+            {t('accounts.claude.switchSessions.settingAsk', 'Ask')}
           </SelectItem>
           <SelectItem value="restart">
-            {translate('accounts.claude.switchSessions.settingRestart', 'Always restart')}
+            {t('accounts.claude.switchSessions.settingRestart', 'Always restart')}
           </SelectItem>
           <SelectItem value="keep">
-            {translate('accounts.claude.switchSessions.settingKeep', 'Never restart')}
+            {t('accounts.claude.switchSessions.settingKeep', 'Never restart')}
           </SelectItem>
         </SelectContent>
       </Select>

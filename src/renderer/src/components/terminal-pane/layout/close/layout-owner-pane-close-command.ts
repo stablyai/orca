@@ -1,7 +1,7 @@
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
+import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { expectPaneToClose } from '@/runtime/layout-owner-pane-intents'
+import { expectPaneToClose } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { closeAfterLastPaneRefusal } from './layout-owner-last-pane-refusal'
 
 /** Main closes first and its frame removes the pane; false delegates paired-server ownership to the caller. */
@@ -14,6 +14,7 @@ function sendPaneCloseToLayoutOwner(
     lastPane: () => void
     /** Close locally if main already removed the pane or no frame stream can deliver its removal. */
     closeHere: () => void
+    accepted?: () => void
   }
 ): boolean {
   const { tabId, leafId } = pane
@@ -23,6 +24,7 @@ function sendPaneCloseToLayoutOwner(
     { type: 'closePane', tabId, leafId },
     {
       apply: (result) => {
+        on.accepted?.()
         // Already gone from main's copy (a workspace it lacks): no frame will drop it.
         if (result.alreadyClosed || !layoutFramesFlowing()) {
           forget()
@@ -53,12 +55,14 @@ export function sendUserPaneCloseToLayoutOwner(
     getManager: () => PaneManager | null
     closeTab: () => void
     closePaneLocally: (paneId: number, committedLeafId?: string) => void
+    onAcceptedClose?: () => void
   }
 ): boolean {
   const { tabId, leafId, paneId } = pane
   return sendPaneCloseToLayoutOwner(
     { worktreeId: pane.worktreeId, tabId, leafId },
     {
+      accepted: tab.onAcceptedClose,
       asToday: () => tab.closePaneLocally(paneId),
       lastPane: () =>
         closeAfterLastPaneRefusal(

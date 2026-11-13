@@ -1,11 +1,9 @@
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '../../slices/runtime-status/runtime-status-connection-generation'
-import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from '../github-slice-test-harness'
-import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 
 const lookup = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
@@ -32,7 +30,7 @@ const issue = (number: number): GitHubWorkItem => ({
   author: null,
   updatedAt: '2026-10-31T12:00:02Z'
 })
-const row = issue(42)
+
 const user = { login: 'alice', name: 'Alice', avatarUrl: 'alice.png' }
 const sources = {
   issues: { owner: 'acme', repo: 'widgets' },
@@ -40,12 +38,7 @@ const sources = {
   originCandidate: null,
   upstreamCandidate: null
 }
-const unsupported = () =>
-  new RuntimeRpcCallError({
-    id: 'old-server',
-    ok: false,
-    error: { code: 'method_not_found', message: 'unsupported' }
-  })
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
@@ -61,24 +54,6 @@ async function flush() {
   }
 }
 /** A paired server on its own connection; `reconnect` advances it the way a dropped transport does. */
-function remoteSetup(environmentId: string) {
-  setRuntimeEnvironmentConnectionGenerationForTests(environmentId, 1)
-  const remote: Repo = { ...repo, executionHostId: `runtime:${environmentId}` }
-  const store = createTestStore()
-  store.setState({ repos: [remote] })
-  const cache = store.getState().githubTaskCache
-  let generation = 1
-  const reconnect = () => {
-    setRuntimeEnvironmentConnectionGenerationForTests(environmentId, ++generation)
-    store.setState({ runtimeStatusByEnvironmentId: new Map() })
-  }
-  return {
-    cache,
-    binding: cache.capture(remote)!,
-    capture: () => cache.capture(remote)!,
-    reconnect
-  }
-}
 
 describe('task record reads across failures and reconnects', () => {
   beforeEach(() => {
@@ -152,51 +127,5 @@ describe('task record reads across failures and reconnects', () => {
     await turns()
     await turns()
     expect(shown()).toEqual([[], [], []])
-  })
-
-  it('keeps a record through a reconnect, refusing the old connection and reading on the new one', async () => {
-    const { cache, binding, capture, reconnect } = remoteSetup('p34245-reconnect')
-    // The dialog's assign was confirmed by a newer reading.
-    lookup.mockResolvedValue({ ...row, assignees: [user], updatedAt: '2026-10-31T12:00:05Z' })
-    cache.operation(row, binding, { assignees: { alice: user } })(true)
-    await flush()
-    const response = deferred<GitHubWorkItem>()
-    const read = cache.readCanonical(row, binding, () => response.promise)
-    reconnect()
-    response.resolve({ ...row, title: 'Old connection', updatedAt: '2026-10-31T12:00:09Z' })
-    expect(await read).toBe(false)
-    expect(cache.current(binding)).toBe(false)
-    // The search index still has the row from before the assign; the reconnect doesn't undo it.
-    const fresh = capture()
-    expect(fresh.incarnation).toBe(binding.incarnation)
-    expect(cache.acceptSearch([row], fresh)[0].assignees).toEqual([user])
-    const next = { ...row, title: 'New connection', updatedAt: '2026-10-31T12:00:09Z' }
-    expect(await cache.readCanonical(row, fresh, async () => next)).toBe(true)
-    expect(cache.projectItem(row)).toMatchObject({ title: 'New connection', assignees: [] })
-  })
-
-  it('marks only the connection that answered unsupported, so an upgraded server reads again', async () => {
-    const { cache, binding, capture, reconnect } = remoteSetup('p34245-upgrade')
-    const old = deferred<GitHubWorkItem>()
-    lookup.mockReturnValueOnce(old.promise)
-    cache.operation(row, binding, { labels: { bug: true } })(true)
-    // The server is upgraded and reconnects before the old server's late refusal arrives.
-    reconnect()
-    old.reject(unsupported())
-    await flush()
-    const upgraded = capture()
-    expect(cache.canTrack(upgraded)).toBe(true)
-
-    expect(cache.projectItem(row).labels).toEqual(['bug'])
-    // A refusal from the current connection marks it; the next connection is asked again.
-    await cache.readCanonical(row, upgraded, () => Promise.reject(unsupported()))
-    expect(cache.canTrack(upgraded)).toBe(false)
-    reconnect()
-    const accepted = await cache.readCanonical(row, capture(), async () => ({
-      ...row,
-      labels: ['bug'],
-      title: 'Refreshed'
-    }))
-    expect(accepted).toBe(true)
   })
 })

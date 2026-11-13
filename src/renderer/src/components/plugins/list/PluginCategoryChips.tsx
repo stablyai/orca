@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ToggleGroup, ToggleGroupItem } from '../../ui/toggle-group'
 import { pluginCategoryLabel } from './plugin-category-label'
 import { PluginCategoryIcon } from './PluginCategoryBadge'
@@ -15,6 +15,7 @@ export function PluginCategoryChips({
   filter: PluginListFilter
   onChange: (filter: PluginListFilter) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const categories = pluginFilterCategories(entries).map(([category]) => category)
   if (categories.length === 0) {
     return null
@@ -27,13 +28,13 @@ export function PluginCategoryChips({
       spacing={1}
       value={[...filter.categories][0] ?? ''}
       onValueChange={(next) => onChange({ ...filter, categories: new Set(next ? [next] : []) })}
-      aria-label={translate('auto.components.settings.PluginFilterPopover.kind', 'Category')}
+      aria-label={t('auto.components.settings.PluginFilterPopover.kind', 'Category')}
       className="flex-wrap"
     >
       {categories.map((category) => (
         <ToggleGroupItem key={category} value={category}>
           <PluginCategoryIcon category={category} />
-          {pluginCategoryLabel(category)}
+          {pluginCategoryLabel(category, t)}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

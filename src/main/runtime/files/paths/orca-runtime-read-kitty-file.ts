@@ -1,7 +1,7 @@
 import { RuntimeWorkspaceSelectors } from '../../workspaces/workspace-selectors'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { getProviderForPty } from '../../../ipc/pty/provider/registry'
-import { readTerminalKittyFile } from '../../terminal-kitty-file-read'
+import { readTerminalKittyFile } from '../../terminal/output/terminal-kitty-file-read'
 import type {
   TerminalKittyFileRequest,
   TerminalKittyFileResult

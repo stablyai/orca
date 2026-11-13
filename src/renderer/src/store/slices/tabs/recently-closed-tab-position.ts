@@ -1,6 +1,6 @@
-import { recordLayoutApply } from '@/runtime/layout-apply-send'
+import { recordLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { tabOrderAnchor } from '../../../../../shared/workspace-layout/tab-order'
+import { tabOrderAnchor } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { AppState } from '../../types'
 
 export type RecentlyClosedTabPosition = {

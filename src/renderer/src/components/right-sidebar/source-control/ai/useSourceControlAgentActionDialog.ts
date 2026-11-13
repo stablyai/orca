@@ -29,6 +29,7 @@ import {
 } from './source-control-agent-action-dialog-support'
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 import { useSourceControlActionAgentChoice } from './use-source-control-action-agent-choice'
+import { useTranslate } from '@/i18n/use-translate'
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
 
@@ -55,6 +56,7 @@ export function useSourceControlAgentActionDialog({
   onLaunched,
   onStart
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
+  const t = useTranslate()
   const settings = useSourceControlState((state) => state.settings)
   const repo = useSourceControlState((state) =>
     selectRepoByIdForActiveWorkspace(state, repoId ?? null)
@@ -168,13 +170,16 @@ export function useSourceControlAgentActionDialog({
     selection.ready &&
     !isStarting
 
-  const statusCopy = buildSourceControlAgentStatusCopy({
-    selectedAgent,
-    selectedAgentUnavailable: choice.selectedAgentUnavailable,
-    connectionUnavailable,
-    hasEnabledAgents: choice.hasEnabledAgents,
-    detecting
-  })
+  const statusCopy = buildSourceControlAgentStatusCopy(
+    {
+      selectedAgent,
+      selectedAgentUnavailable: choice.selectedAgentUnavailable,
+      connectionUnavailable,
+      hasEnabledAgents: choice.hasEnabledAgents,
+      detecting
+    },
+    t
+  )
 
   // Why: editing any launch field invalidates the previewed delivery plan.
   const resetPlanAfter = useCallback(

@@ -1,7 +1,8 @@
+import type * as MobileDiffReviewLoadersModule from '../../../source-control/review/mobile-diff-review-loaders'
 import type { MountAdapter } from '../recording-scenario'
-import type * as CommitLoader from '../../../session/mobile-diff-review-commit-loader'
-import type * as SnapshotLoader from '../../../session/mobile-diff-review-snapshot-loader'
-import type * as GitStatusQuery from '../../../source-control/mobile-git-status-query'
+import type * as CommitLoader from '../../../source-control/review/mobile-diff-review-commit-loader'
+import type * as SnapshotLoader from '../../../source-control/review/mobile-diff-review-snapshot-loader'
+import type * as GitStatusQuery from '../../../source-control/changes/mobile-git-status-query'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKTREE = 'repo-9::/w'
@@ -28,8 +29,8 @@ export function diffReviewMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.diff-review-load': ({ client }) => {
-      const loaders = modules.load<typeof import('../../../session/mobile-diff-review-loaders')>(
-        'mobile/src/session/mobile-diff-review-loaders.ts'
+      const loaders = modules.load<typeof MobileDiffReviewLoadersModule>(
+        'mobile/src/source-control/review/mobile-diff-review-loaders.ts'
       )
       let snapshot: unknown = 'unloaded'
       let branchCompare: unknown = 'unloaded'
@@ -63,18 +64,19 @@ export function diffReviewMountAdapters(
         action(name, args) {
           if (name === 'snapshot') {
             const statusQuery = modules.load<typeof GitStatusQuery>(
-              'mobile/src/source-control/mobile-git-status-query.ts'
+              'mobile/src/source-control/changes/mobile-git-status-query.ts'
             ).gitStatusQuery
             return modules
               .load<typeof SnapshotLoader>(
-                'mobile/src/session/mobile-diff-review-snapshot-loader.ts'
+                'mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts'
               )
               .loadMobileDiffReviewSnapshot(client, WORKTREE, {
                 status: statusQuery.fetch(
                   client,
                   { exec: 'local', worktree: WORKTREE },
                   {},
-                  undefined
+                  undefined,
+                  { live: false, previousFromStore: false }
                 ),
                 compareAgainstUpstream: false
               })
@@ -85,7 +87,9 @@ export function diffReviewMountAdapters(
           }
           if (name === 'commit-snapshot') {
             return modules
-              .load<typeof CommitLoader>('mobile/src/session/mobile-diff-review-commit-loader.ts')
+              .load<typeof CommitLoader>(
+                'mobile/src/source-control/review/mobile-diff-review-commit-loader.ts'
+              )
               .loadMobileDiffReviewCommitSnapshot(client, WORKTREE, COMMIT_OID)
               .then((value) => {
                 snapshot = value

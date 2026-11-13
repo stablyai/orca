@@ -2,8 +2,8 @@
 
 import type { Tab } from '../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import type { AppState } from '../../types'
 import { patchTab } from './tab-group-state'
 

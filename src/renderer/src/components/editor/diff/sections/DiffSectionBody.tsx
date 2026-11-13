@@ -1,15 +1,15 @@
 import { DiffTooLargeNotice } from '../large-files/DiffTooLargeNotice'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { editor } from 'monaco-editor'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { combinedDiffSectionScrollbarOptions } from '../monaco-view/diff-editor-scrollbar-options'
 import { isCombinedDiffSizeUnknown } from '../../combined-diff/load-sections/combined-diff-on-demand-load'
 import type { DiffSection } from './diff-section-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
 import { LargeDiffLoadPrompt } from '../large-files/LargeDiffLoadPrompt'
 import { buildDiffEditorWhitespaceOptions } from '../monaco-view/diff-editor-whitespace-options'
@@ -19,7 +19,7 @@ import {
 } from '../monaco-view/diff-editor-word-wrap-options'
 import { monacoFindOptions } from '../../monaco-find-options'
 import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
-import { installDiffEditorShiftWheelScroll } from '../monaco-view/diff-editor-shift-wheel-scroll'
+import { installDiffEditorHorizontalWheelScroll } from '../monaco-view/diff-editor-horizontal-wheel-scroll'
 import { installCombinedDiffCursorReveal } from '../../combined-diff/scroll-viewport/combined-diff-cursor-reveal'
 import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
 import {
@@ -28,7 +28,8 @@ import {
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { wholeFileDiffTintClass } from '../monaco-view/whole-file-diff-tint'
-import { monacoTypographyOptions, type EditorTypography } from '@/lib/editor-typography'
+import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
+import type { EditorTypography } from '../../../../../../shared/editor/editor-typography'
 
 const ImageDiffViewer = lazy(() => import('../large-files/ImageDiffViewer'))
 
@@ -71,6 +72,7 @@ export function DiffSectionBody({
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
+  const t = useTranslate()
   const language = usePluginSyntaxLanguage(section.path, coreLanguage)
   const monacoTheme = useMonacoTheme(isDark)
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
@@ -113,10 +115,10 @@ export function DiffSectionBody({
   const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
     diffEditorRef.current = diffEditor
     applyModelLanguage([diffEditor.getModel()?.original, diffEditor.getModel()?.modified], language)
-    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
+    const cleanupHorizontalWheelScroll = installDiffEditorHorizontalWheelScroll(diffEditor)
     const cleanupCursorReveal = installCombinedDiffCursorReveal(diffEditor)
     diffEditor.getModifiedEditor().onDidDispose(() => {
-      cleanupShiftWheelScroll()
+      cleanupHorizontalWheelScroll()
       cleanupCursorReveal()
       if (diffEditorRef.current !== diffEditor) {
         return
@@ -170,9 +172,7 @@ export function DiffSectionBody({
       ) : section.loading ? (
         <div className="flex h-full items-center gap-2 bg-muted/10 px-3 text-[11px] text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-          <span>
-            {translate('auto.components.editor.DiffSectionBody.f5cf81cec2', 'Loading diff...')}
-          </span>
+          <span>{t('auto.components.editor.DiffSectionBody.f5cf81cec2', 'Loading diff...')}</span>
         </div>
       ) : section.error ? (
         <div className="flex h-full items-center justify-between gap-3 bg-muted/10 px-3 text-[11px] text-muted-foreground">
@@ -191,7 +191,7 @@ export function DiffSectionBody({
             }}
           >
             <RefreshCw className="size-3" />
-            {translate('auto.components.editor.DiffSectionBody.cef4cf0ff5', 'Retry')}
+            {t('auto.components.editor.DiffSectionBody.cef4cf0ff5', 'Retry')}
           </Button>
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
@@ -214,18 +214,15 @@ export function DiffSectionBody({
           <div className="flex h-full items-center justify-center px-6 text-center">
             <div className="space-y-2">
               <div className="text-sm font-medium text-foreground">
-                {translate(
-                  'auto.components.editor.DiffSectionBody.35d6afb5be',
-                  'Binary file changed'
-                )}
+                {t('auto.components.editor.DiffSectionBody.35d6afb5be', 'Binary file changed')}
               </div>
               <div className="text-xs text-muted-foreground">
                 {isBranchMode
-                  ? translate(
+                  ? t(
                       'auto.components.editor.DiffSectionBody.7ce8436458',
                       'Text diff is unavailable for this file in branch compare.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.editor.DiffSectionBody.72f71f52eb',
                       'Text diff is unavailable for this file.'
                     )}
@@ -240,8 +237,8 @@ export function DiffSectionBody({
           action={
             isEditable && section.dirty
               ? {
-                  label: translate('auto.components.editor.DiffSectionBody.b5675b0694', 'Save'),
-                  description: translate(
+                  label: t('auto.components.editor.DiffSectionBody.b5675b0694', 'Save'),
+                  description: t(
                     'auto.components.editor.DiffSectionBody.593f2193f6',
                     'This draft crossed the safe display limit, but it can still be saved.'
                   ),

@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
-      "reconnecting": "Yeniden bağlanılıyor…",
       "waitingForTerminal": "Terminal bekleniyor…"
     },
     "diffCard": {
@@ -301,12 +300,18 @@
       "plan": "Plan",
       "stoppedManually": "Elle durduruldu",
       "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+      "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
       "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
       "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
       "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}.",
       "signIn": "Oturum aç",
       "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar",
       "forkedFrom": "Çatallandığı kaynak"
+    },
+    "ciResultLine": {
+      "failingLead": "CI başarısız:",
+      "greenLead": "CI başarılı:",
+      "at": "commit"
     },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",
@@ -351,8 +356,14 @@
       "pausedState": "Duraklatıldı",
       "queuedState": "Sıraya alındı",
       "resume": "Devam ettir",
-      "resumeSending": "Kuyruktaki mesajları göndermeye devam et",
-      "title": "Kuyruktaki mesajlar"
+      "resumeSending": "Kuyruktaki mesajları göndermeye devam et"
+    },
+    "offlineQueue": {
+      "failed": "Gönderilemedi — yeniden denemek için Gönder'e dokunun",
+      "waitingFor": "{{host}} geri geldiğinde gönderilecek",
+      "waiting": "Masaüstü geri geldiğinde gönderilecek",
+      "behind": "Bekliyor — öndeki bir mesajın ilgilenilmesi gerekiyor",
+      "closed": "Orca kapanmadan önce gönderilmedi"
     },
     "receipt": {
       "cancelled": "İptal edildi",
@@ -591,6 +602,7 @@
       "fullCopySaveUpdate": "Bu ek için Tümünü Kopyala ve Kaydet özellikleri bir telefon güncellemesiyle kullanılabilecek."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} çevrimdışı · {{time}} itibarıyla",
       "reconnecting": "{{hostName}} yeniden bağlanıyor…",
       "stopped": "{{hostName}} durduruldu. Bilgisayarınızda başlatın.",
       "server": "Sunucu",
@@ -1291,6 +1303,62 @@
       "sessionLimit": "Bu bilgisayarda çok fazla cihaz dikte ediyor. Biri bitince tekrar deneyin.",
       "sessionLost": "Diktenin bilgisayarla bağlantısı kesildi. Yeniden deneyin.",
       "updateFailed": "Dikte ayarları güncellenemedi"
+    },
+    "controls": {
+      "start": "Dikte et",
+      "starting": "Dikte başlatılıyor",
+      "stop": "Durdur ve ekle",
+      "finishing": "Dikte tamamlanıyor",
+      "cancel": "Dikteyi iptal et",
+      "meterOnPhone": "Kaydediliyor, {{duration}}, bu telefonda",
+      "meterOn": "Kaydediliyor, {{duration}}, {{computer}} üzerinde",
+      "meterOnComputer": "Kaydediliyor, {{duration}}, bilgisayarda",
+      "meter": "Kaydediliyor, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} saniye",
+      "durationSeconds_other": "{{count}} saniye",
+      "durationMinutes_one": "{{count}} dakika",
+      "durationMinutes_other": "{{count}} dakika",
+      "discard": "Kaydı sil",
+      "retry": "Dikteyi yeniden dene",
+      "retryShort": "Yeniden dene"
+    },
+    "status": {
+      "finishingOn": "{{computer}} üzerinde tamamlanıyor",
+      "finishingOnComputer": "Bilgisayarda tamamlanıyor",
+      "movedTo": "{{computer}} cihazına geçildi",
+      "movedToComputer": "Bilgisayara geçildi"
+    },
+    "failure": {
+      "connectionLost": "Bağlantı kesildi",
+      "connectionSlow": "Bağlantı çok yavaş",
+      "phoneStopped": "Bu telefonda durdu",
+      "stopped": "Dikte durdu",
+      "recordingKept": "Kayıt saklandı"
+    },
+    "announce": {
+      "typedInto": "{{target}} içine yazıldı",
+      "insertedIn": "{{target}} içine eklendi",
+      "listeningOnPhone": "Dinleniyor. Bu telefonda yazıya dökülüyor.",
+      "listeningOn": "Dinleniyor. {{computer}} üzerinde yazıya dökülüyor.",
+      "listeningOnComputer": "Dinleniyor. Bilgisayarda yazıya dökülüyor.",
+      "finishing": "Tamamlanıyor.",
+      "inserted": "Eklendi.",
+      "cancelled": "Dikte iptal edildi.",
+      "movedTo": "Bu telefon yazıya dökmeyi bıraktı. {{computer}} üzerinde devam ediliyor.",
+      "movedToComputer": "Bu telefon yazıya dökmeyi bıraktı. Bilgisayarda devam ediliyor.",
+      "stoppedKept": "Dikte durdu. {{reason}}. Kaydınız saklandı.",
+      "stoppedKeptGeneric": "Dikte durdu. Kaydınız saklandı.",
+      "stillListening": "Dinlemeye devam ediliyor."
+    },
+    "pill": {
+      "open": "Aç",
+      "listening": "Dinleniyor",
+      "starting": "Başlatılıyor",
+      "finishing": "Tamamlanıyor",
+      "stopped": "Dikte durdu",
+      "label": "{{target}} için dikte, {{duration}}",
+      "hint": "Geri dönmek için iki kez dokunun"
     }
   },
   "files": {
@@ -1307,10 +1375,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
       "loadFolderFailed": "Klasör yüklenemedi",
+      "loadedOfTotal": "{{loaded}} / {{total}}",
       "loading": "Yükleniyor…",
       "openFolder": "{{name}} klasörünü aç",
       "previewFile": "{{name}} dosyasını önizle",
       "retryLoading": "{{path}} klasörünü yüklemeyi yeniden dene",
+      "searchAll": "Tümünü ara",
+      "searchAllIn": "{{folder}} içinde tümünü ara",
+      "searched": "{{folder}} içinde {{total}} öğenin {{loaded}} tanesi arandı.",
+      "searching": "{{folder}} aranıyor… {{loaded}} / {{total}}",
+      "showMore": "{{rows}} tane daha göster",
       "unavailable": "Mobilde kullanılamıyor"
     },
     "fileExplorerRowActions": {
@@ -1384,15 +1458,16 @@
       "openFailed": "Bu PDF açılamadı",
       "opening": "PDF açılıyor…",
       "updateRequired": "PDF'leri açmak için Orca Mobile'ı güncelleyin"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Düzenlemelerinizden ({{time}}) sonra masaüstünde değişti",
+      "copyMyEdits": "Düzenlemelerimi kopyala",
+      "discard": "Vazgeç",
+      "restore": "Geri yükle",
+      "unsavedFrom": "Kaydedilmemiş düzenlemeler ({{time}})"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} etkin",
-      "heading": "Ajanlar",
-      "showAll": "Tümünü göster ({{count}})",
-      "showFewer": "Daha az göster"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",
@@ -1516,7 +1591,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "“{{name}}” ({{branch}}) silinsin mi?",
-      "deleteWorktree": "Worktree'yi Sil",
+      "deleteDestroysEnvironment": "Orca'nın bunun için oluşturduğu \"{{environment}}\" ortamı da, içindeki commit edilmemiş değişiklikler ve çalışan terminallerle birlikte yok edilir.",
+      "deleteKeepsEnvironment": "Orca'nın bunun için oluşturduğu \"{{environment}}\" ortamı çalışmaya devam eder: tarifinde yok etme adımı yok.",
       "pin": "Sabitle",
       "primaryWorktreeDeleteHint": "Birincil worktree, silinemez. Bunun yerine projeyi kaldırın.",
       "removeHost": "Sunucuyu Kaldır",
@@ -1688,7 +1764,6 @@
       "daysAgo_one": "{{count}} gün önce",
       "daysAgo_other": "{{count}} gün önce",
       "deleteConfirmMessage": "Bu işlem GitHub'daki yorumu kalıcı olarak siler.",
-      "deleteConfirmTitle": "Yorum silinsin mi?",
       "editPlaceholder": "Yorumu düzenleyin…",
       "hoursAgo_one": "{{count}} saat önce",
       "hoursAgo_other": "{{count}} saat önce",
@@ -2086,6 +2161,10 @@
       "providerExitedRejection": "Bu mesaj gönderilmeden önce {{agent}} durdu.",
       "providerExitedRow": "Bu yanıt hazırlanırken {{agent}} durdu. Bu konuşmada devam edebilirsiniz.",
       "providerRateLimited": "{{agent}} istek hızı sınırına ulaştı ve yeniden deniyor.",
+      "providerUnavailable": "Hizmet meşgul olduğu için {{agent}} yanıt veremedi. Başka bir model seçin veya biraz bekleyip yeniden gönderin.",
+      "providerSafetyStopped": "{{agent}}, bir güvenlik kontrolünden sonra bu yanıtı durdurdu. İsteğinizi gözden geçirip yeniden gönderin.",
+      "providerResponseFailed": "{{agent}} bu yanıtı tamamlayamadı. Daha fazla bilgi için ayrıntıları açın.",
+      "selectedModel": "seçilen modeli",
       "providerRejected": "{{agent}} bu mesajı kabul etmedi.",
       "providerRejectedQuoted": "{{agent}} bu mesajı kabul etmedi: {{detail}}.",
       "providerRetryLastError": "Son hata: {{detail}}.",
@@ -2175,8 +2254,7 @@
       "copyPathLabel": "Markdown yolunu kopyala",
       "copySource": "Markdown kaynağını kopyala",
       "discard": "Vazgeç",
-      "dismissKeyboard": "Klavyeyi gizle",
-      "dismissKeyboardHint": "Ekran klavyesini gizler ve Markdown düzenleyicisini açık tutar.",
+      "previewTruncated": "Önizleme kısaltıldı.",
       "readOnly": "Salt okunur"
     },
     "nativeChatAttachActions": {
@@ -2240,20 +2318,16 @@
       "loadFailed": "Pull request yüklenemedi"
     },
     "queuedCardText": {
-      "showLess": "Daha az göster",
       "showLessHint": "Mesajın daha azını gösterir",
-      "showMore": "Daha fazla göster",
       "showMoreHint": "Mesajın tamamını gösterir"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Sıraya alınmış bu mesajı sil",
       "images_one": "{{count}} görsel",
       "images_other": "{{count}} görsel",
       "moreActions": "Diğer işlemler",
       "send": "Gönder",
       "sendAgainHint": "Bu mesajı yeniden gönder",
       "sendHint": "Bu mesajı gönder",
-      "showLessHint": "Mesajın daha azını gösterir",
       "steer": "Yönlendir",
       "steerHint": "Modeli kesintiye uğratmadan gönder"
     },
@@ -2310,7 +2384,6 @@
       "addTitle": "Hızlı Komut Ekle",
       "chooseAgentTitle": "Ajan Seç",
       "deleteConfirmMessage": "Bu hızlı komut kayıtlı listenizden kaldırılacak.",
-      "deleteConfirmTitle": "“{{label}}” silinsin mi?",
       "editTitle": "Hızlı Komutu Düzenle",
       "editorDescription": "Hızlı erişim için terminal komutlarını veya ajan istemlerini kaydedin.",
       "title": "Hızlı Komutlar",
@@ -2373,8 +2446,7 @@
     "tabStrip": {
       "checkingCapabilities": "Masaüstü özellikleri kontrol ediliyor — birazdan tekrar deneyin",
       "newTab": "Yeni sekme",
-      "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminali Temizle",
@@ -2385,11 +2457,7 @@
     "terminalInputActions": {
       "attachFileHint": "Fotoğraf yerine dosya eklemek için basılı tutun",
       "attachPhoto": "Fotoğraf ekle",
-      "sendingImage": "Görsel gönderiliyor",
-      "startDictation": "Sesli dikteyi başlat",
-      "startingDictation": "Sesli dikte başlatılıyor",
-      "stopDictation": "Sesli dikteyi durdur",
-      "transcribingDictation": "Sesli dikte yazıya dökülüyor"
+      "sendingImage": "Görsel gönderiliyor"
     },
     "terminalLiveInputStatus": {
       "listening": "Dinliyor",
@@ -2398,8 +2466,6 @@
       "processing": "İşleniyor",
       "releaseMicHint": "Durdurmak için mikrofonu bırakın",
       "startingMic": "Mikrofon başlatılıyor",
-      "stopHint": "Durdurmak için mikrofona dokunun",
-      "transcribing": "Masaüstünde yazıya dökülüyor",
       "uploadingImage": "Görsel sunucuya yükleniyor",
       "uploadingImageTitle": "Görsel yükleniyor"
     },
@@ -2423,6 +2489,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Eklenemedi (yeniden bağlanılıyor)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Sekme kapatılamadı. Tekrar deneyin.",
+      "closeFailedDesktopNotReady": "Sekme kapatılamadı. Orca bilgisayarınızda hâlâ yükleniyor. Birazdan tekrar deneyin."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Tarayıcı komutu çalıştırılamadı",
@@ -2493,7 +2563,8 @@
       "insertFailed": "Dikte metni eklenemedi",
       "insertFailedCopied": "Dikte metni eklenemediği için panoya kopyalandı",
       "inserted": "Dikte metni eklendi",
-      "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu"
+      "stoppedAtCloudLimit": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
+      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
     },
     "useNativeChatStop": {
       "stopNotSent": "Durdurma isteği gönderilemedi",
@@ -2814,6 +2885,8 @@
       "dictationHeading": "DİKTE",
       "dictationMode": "Dikte Modu",
       "dictationModeDescription": "Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın. Basılı tut: basılı tuttuğunuz sürece dikte edin.",
+      "dictationModeWithAutoDescription": "Otomatik: başlatmak ve durdurmak için dokunun; bilgisayarınızda kısayolu basılı tutmak bırakana kadar kaydeder. Basılı tut: basılı tuttuğunuz sürece dikte edin. Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın.",
+      "autoMode": "Otomatik",
       "downloadFailed": "İndirme tamamlanamadı",
       "enableDictation": "Sesli Dikteyi Etkinleştir",
       "holdMode": "Basılı Tut",
@@ -3286,6 +3359,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} birleştirilsin mi?",
+      "confirmGitHubSquash": "PR #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitHubRebase": "PR #{{number}} yeniden temellendirilip birleştirilsin mi?",
+      "confirmGitLabMerge": "Birleştirme isteği #{{number}} birleştirilsin mi?",
+      "confirmGitLabSquash": "Birleştirme isteği #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?",
+      "merged": "Birleştirildi",
+      "closed": "Kapatıldı",
+      "conflicts": "Çakışmalar",
+      "behind": "Geride",
+      "blocked": "Engellendi",
+      "checksPending": "Kontroller bekleniyor",
+      "ableToMerge": "Birleştirilebilir",
+      "unknown": "Bilinmiyor"
+    },
+    "pagination": {
+      "pageUnreachable": "{{page}}. sayfa GitHub aramasının döndürebileceği aralığın dışında.",
+      "loadPageFailed": "{{page}}. sayfa GitHub’dan yüklenemedi.",
+      "noMoreResults": "{{page}}. sayfada başka sonuç yok."
+    },
     "composerSource": {
       "baseFailed": "Temel branch çözümlenemedi.",
       "forkPushWarning": "Bu PR'da “Allow edits from maintainers” kapalı; fork'a push işlemi GitHub tarafından reddedilebilir."
@@ -4013,7 +4107,6 @@
       "outcome": "Sonuç",
       "allOutcomes": "Tüm sonuçlar",
       "couldNotStart": "Başlatılamadı",
-      "deleteAutomationTitle": "Otomasyon silinsin mi?",
       "deleteRetained": "“{{name}}” ve saklanan çalıştırmaları silinsin mi?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Özgün aracı bölmesi doğrulanamadı. Yeniden bağlanıp tekrar deneyin.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Özgün aracı bölmesi artık açılamıyor. Kaydedilen çıktı burada kalır.",

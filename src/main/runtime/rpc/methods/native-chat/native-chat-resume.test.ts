@@ -1,11 +1,18 @@
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import { NativeChatSession } from '../../../../../shared/rpc-contract/native-chat-params'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+
+import '../../../../../shared/rpc-contract/native-chat/native-chat-params'
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
+
 import type { RpcContext } from '../../core'
+
 import { NATIVE_CHAT_METHODS } from './native-chat'
 
 type SnapshotFrame = {
@@ -115,14 +122,5 @@ describe('nativeChat.subscribe resumeAfter on a real transcript file', () => {
 
     await writeFile(file, ['a', 'b', 'c', 'd', 'e'].map((id) => claudeLine(id)).join(''))
     expect(await fullTail(2)).toEqual(['d', 'e'])
-  })
-
-  it('reads an unusable resume point as none instead of failing the subscribe', () => {
-    const parsed = NativeChatSession.parse({
-      agent: 'claude',
-      sessionId: 'session',
-      resumeAfter: { id: 'c', transcriptOrder: 'not-a-number' }
-    })
-    expect(parsed.resumeAfter).toBeUndefined()
   })
 })

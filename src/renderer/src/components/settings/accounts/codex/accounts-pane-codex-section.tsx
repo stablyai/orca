@@ -1,5 +1,6 @@
 import { AlertTriangle, Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
@@ -7,7 +8,7 @@ import { Label } from '../../../ui/label'
 import { OpenAIIcon } from '../../../status-bar/icons'
 import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { getAccountsCodexSearchEntries } from '../accounts-search'
+import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'
 import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
@@ -20,7 +21,11 @@ import {
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
-export function renderCodexAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
+export function renderCodexAccountsSection(
+  model: AccountsPaneSectionModel,
+  t: Translate = translate,
+  intlLocale?: string
+): React.JSX.Element {
   const {
     accountRuntime,
     accountRuntimeSentenceLabel,
@@ -42,30 +47,30 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
     wslCapabilitiesLoading
   } = model
   return (
-    <div key="codex-accounts" id="accounts-codex" className="scroll-mt-6">
+    <div key="codex-accounts" id={ACCOUNTS_SECTION_IDS.codex} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">
             <OpenAIIcon size={16} />
-            {translate('auto.components.settings.AccountsPane.ef91cfa06b', 'Codex')}
+            {t('auto.components.settings.AccountsPane.ef91cfa06b', 'Codex')}
           </span>
         }
         description={
           <>
             <span className="block">
-              {translate(
+              {t(
                 'auto.components.settings.AccountsPane.cedfab35ab',
                 'Optional. Orca can use your normal Codex login; add accounts only if you want quick switching in Orca.'
               )}
             </span>
             <span className="block">
               {isRemoteAccountScope
-                ? translate(
+                ? t(
                     'auto.components.settings.AccountsPane.remoteScopeAuthContext',
                     'Each account keeps its own sign-in context on {{value0}}.',
                     { value0: accountRuntimeSentenceLabel }
                   )
-                : translate(
+                : t(
                     'auto.components.settings.AccountsPane.340d6f7a85',
                     'Each account keeps its own local sign-in context in Orca. Account auth stays on this device.'
                   )}
@@ -74,8 +79,8 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
         }
       >
         <SearchableSetting
-          title={translate('auto.components.settings.AccountsPane.3180536c7a', 'Codex Accounts')}
-          description={translate(
+          title={t('auto.components.settings.AccountsPane.bd16d363ed', 'Codex accounts')}
+          description={t(
             'auto.components.settings.AccountsPane.d0d53b7eb0',
             'Manage which Codex account Orca uses for live rate limit fetching.'
           )}
@@ -93,17 +98,17 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {systemCodexMissingSignIn
-                  ? translate(
+                  ? t(
                       'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
                       'No Codex sign-in was found for {{value0}}.',
                       { value0: accountRuntimeSentenceLabel }
                     )
                   : activeCodexAccountId
-                    ? translate(
+                    ? t(
                         'auto.components.settings.AccountsPane.75ca9b718e',
                         'Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.'
                       )
-                    : translate(
+                    : t(
                         'auto.components.settings.AccountsPane.e4a28e8894',
                         'Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.',
                         { value0: accountRuntimeSentenceLabel }
@@ -116,23 +121,23 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {codexConfigSyncWarning === 'managed-home-unavailable'
-                  ? translate(
+                  ? t(
                       'auto.components.settings.AccountsPane.codexConfigSyncManagedHomeUnavailable',
                       'Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.'
                     )
                   : codexConfigSyncWarning === 'missing-source'
-                    ? translate(
+                    ? t(
                         'auto.components.settings.AccountsPane.codexConfigSyncMissingSource',
                         'Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.',
                         { value0: codexConfigSync?.systemConfigPath ?? '' }
                       )
                     : codexConfigSyncWarning === 'blank-source'
-                      ? translate(
+                      ? t(
                           'auto.components.settings.AccountsPane.codexConfigSyncBlankSource',
                           'Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.',
                           { value0: codexConfigSync?.systemConfigPath ?? '' }
                         )
-                      : translate(
+                      : t(
                           'auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource',
                           "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
                           { value0: codexConfigSync?.systemConfigPath ?? '' }
@@ -142,17 +147,15 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
           ) : null}
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
-              <Label>
-                {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
-              </Label>
+              <Label>{t('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}</Label>
               <p className="text-xs text-muted-foreground">
                 {isRemoteAccountScope
-                  ? translate(
+                  ? t(
                       'accounts.remoteScopeAccountsAddHere',
                       'Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.',
                       { value0: accountRuntimeSentenceLabel }
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.AccountsPane.c0a52abfc5',
                       'Showing accounts for {{value0}}. New accounts are added there.',
                       { value0: accountRuntimeSentenceLabel }
@@ -186,7 +189,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                 ) : (
                   <Plus className="size-3" />
                 )}
-                {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+                {t('auto.components.settings.AccountsPane.7e9977b560', 'Add account')}
               </Button>
               {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
               {codexAction === 'adding' && !accountAdditionShownInPrompt('codex', accountOwner) ? (
@@ -201,7 +204,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                   className="gap-1.5"
                 >
                   <X />
-                  {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+                  {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
                 </Button>
               ) : null}
             </div>
@@ -242,17 +245,14 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-medium">
-                    {translate(
-                      'auto.components.settings.AccountsPane.f2a265f8c7',
-                      'System default'
-                    )}
+                    {t('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
                   </span>
                   {systemCodexActive ? (
                     <Badge
                       variant="outline"
                       className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
                     >
-                      {translate('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
+                      {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
                     </Badge>
                   ) : null}
                   {systemCodexNeedsSignIn ? (
@@ -260,10 +260,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                       variant="destructive"
                       className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
                     >
-                      {translate(
-                        'auto.components.settings.AccountsPane.93c47b333a',
-                        'Needs sign-in'
-                      )}
+                      {t('auto.components.settings.AccountsPane.93c47b333a', 'Needs sign-in')}
                     </Badge>
                   ) : null}
                 </div>
@@ -274,19 +271,20 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                 >
                   {systemCodexNeedsSignIn
                     ? systemCodexMissingSignIn
-                      ? translate(
+                      ? t(
                           'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
                           'No Codex sign-in was found for {{value0}}.',
                           { value0: accountRuntimeSentenceLabel }
                         )
-                      : translate(
+                      : t(
                           'auto.components.settings.AccountsPane.fd62f37c24',
                           'Codex reported this {{value0}} login is out of date.',
                           { value0: accountRuntimeSentenceLabel }
                         )
                     : getCodexSystemDefaultSubtitle(
                         systemCodexIdentity,
-                        accountRuntimeSentenceLabel
+                        accountRuntimeSentenceLabel,
+                        t
                       )}
                 </span>
               </div>
@@ -294,19 +292,21 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
             {visibleCodexAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
                 {isRemoteAccountScope
-                  ? translate(
+                  ? t(
                       'auto.components.settings.AccountsPane.remoteEmptyCodexAccounts',
                       'No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server.',
                       { value0: accountRuntimeSentenceLabel }
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.AccountsPane.b4c9450319',
                       "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
                       { value0: accountRuntimeSentenceLabel }
                     )}
               </div>
             ) : (
-              visibleCodexAccounts.map((account) => renderCodexAccountRow(account, model))
+              visibleCodexAccounts.map((account) =>
+                renderCodexAccountRow(account, model, t, intlLocale)
+              )
             )}
           </div>
         </SearchableSetting>

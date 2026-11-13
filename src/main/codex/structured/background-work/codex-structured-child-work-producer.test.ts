@@ -1,3 +1,4 @@
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import {
   acquireReadyCodexForTest,
   fakeCodex,
@@ -19,11 +20,6 @@ import {
 } from '../../../../shared/agent-status/child-work/agent-status-child-work-display'
 import { projectAgentChildWorkViews } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { createAgentStatusStore } from '../../../../shared/agent-status/store/agent-status-store'
-import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type {
-  AgentJournalItemBody,
-  AgentJournalProducerLinkage
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
@@ -40,9 +36,7 @@ const parent = makeStructuredAgentStatusSubject(
 const REVIEWER = 'thread-reviewer'
 
 type Frame = { method: string; params: Record<string, unknown> }
-type Delivery = { kind: 'journal' | 'publish' | 'evidence'; detail: string }
 type Liveness = ReturnType<typeof agentChildWorkLiveness>
-type JournalMoment = { recorded: Liveness; commandLive: boolean }
 
 const turn = (
   method: 'turn/started' | 'turn/completed',
@@ -85,19 +79,9 @@ async function producer() {
   const admission = createAgentChildWorkAdmission(store, {
     mintChildWorkId: () => `child-${++minted}`
   })
-  const deliveries: Delivery[] = []
-  const moments: JournalMoment[] = []
   const records = (): AgentChildWorkRecord[] => store.getChildren(parent)
   const recordedLiveness = () =>
     agentChildWorkLiveness(records().filter((record) => record.membership === 'live'))
-  // Journal writes expose parent state, so sample child records at each write.
-  const moment = () =>
-    moments.push({
-      recorded: recordedLiveness(),
-      commandLive: records().some(
-        (record) => record.kind === 'command' && record.membership === 'live'
-      )
-    })
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
@@ -111,23 +95,13 @@ async function producer() {
     now: () => 1_700_000_000_500,
     onChildWorkEvidence: (sessionId, evidence) => {
       expect(sessionId).toBe('session-1')
-      deliveries.push({ kind: 'evidence', detail: evidence.map((edge) => edge.type).join(',') })
       reconcileAgentChildWorkEvidence({ store, admission, parent, provider: 'codex', evidence })
     }
   })
-  const rows: { body: AgentJournalItemBody; linkage: AgentJournalProducerLinkage }[] = []
   const journal: StructuredAgentSessionEventSink = {
-    appendItem: (identity, body, options) => {
-      deliveries.push({ kind: 'journal', detail: JSON.stringify(identity) })
-      rows.push({ body, linkage: agentJournalLinkageFields(options) })
-      moment()
-    },
+    appendItem: () => {},
     appendTombstone: () => {},
-    // Match the host's parent-row publication point.
-    publish: () => {
-      deliveries.push({ kind: 'publish', detail: '' })
-      moment()
-    }
+    publish: () => {}
   }
   await acquireReadyCodexForTest(adapter, {
     identity: identityFor('session-1'),
@@ -135,15 +109,8 @@ async function producer() {
     spawnToken: 'spawn-9',
     events: journal
   })
-  const send = (frame: Frame): Delivery[] => {
-    const from = deliveries.length
+  const send = (frame: Frame): void => {
     codex.connections[0]!.handlers.onNotification?.(frame.method, frame.params)
-    return deliveries.slice(from)
-  }
-  const momentsOf = (frame: Frame): JournalMoment[] => {
-    const from = moments.length
-    send(frame)
-    return moments.slice(from)
   }
   const byDescription = (description: string) =>
     records().find((record) => record.description === description)
@@ -156,18 +123,14 @@ async function producer() {
     const view = views.find((candidate) => candidate.description === description)
     return view && deriveAgentChildDisplayState(view, agentChildWorkOwnedLiveness(views, view.id))
   }
-  const stampOf = (text: string) =>
-    rows.findLast((row) => JSON.stringify(row.body).includes(text))?.linkage
   return {
     adapter,
     codex,
     send,
-    momentsOf,
     records,
     recordedLiveness,
     byDescription,
-    display,
-    stampOf
+    display
   }
 }
 
@@ -193,21 +156,64 @@ const shellFrame = (
   })
 
 describe('Codex structured child-work producer', () => {
-  it('delivers evidence only after the journal wrote and published the frame', async () => {
-    const { send, records } = await producer()
-    const deliveries = [
-      ...send(turn('turn/started', THREAD_ID, 'p1')),
-      ...send(turn('turn/started', REVIEWER, 'r1')),
-      ...send(spawned(REVIEWER, 'review', 'p1'))
-    ]
-    const kinds = deliveries.map((delivery) => delivery.kind)
-    expect(kinds.filter((kind) => kind === 'journal').length).toBeGreaterThan(0)
-    expect(kinds.lastIndexOf('publish')).toBeGreaterThan(kinds.lastIndexOf('journal'))
-    expect(kinds.at(-1)).toBe('evidence')
-    expect(kinds.filter((kind) => kind === 'evidence')).toHaveLength(1)
-    expect(records()).toEqual([
-      expect.objectContaining({ description: 'review', membership: 'live' })
+  it('delivers pending previews once across late announcements and verdict refinements', () => {
+    const tracker = new CodexBackgroundTaskTracker(THREAD_ID)
+    const send = (frame: Frame) => {
+      tracker.observe({ ...frame, threadId: String(frame.params.threadId) })
+      return tracker.drainChildWorkEvidence(100)
+    }
+    const message = (turnId: string, text: string) =>
+      item('item/completed', REVIEWER, turnId, {
+        type: 'agentMessage',
+        id: `reply-${text}`,
+        text
+      })
+    send(turn('turn/started', REVIEWER, 'r1'))
+    send(message('r1', 'before announcement'))
+    expect(send({ method: 'thread/closed', params: { threadId: REVIEWER } })).toEqual([])
+    expect(send(spawned(REVIEWER, 'review', 'p1'))).toEqual([
+      expect.objectContaining({ type: 'ended', lastMessage: 'before announcement' })
     ])
+    expect(send(message('r1', 'refined reply'))).toEqual([])
+    expect(send(turn('turn/completed', REVIEWER, 'r1'))).toEqual([
+      expect.objectContaining({ type: 'ended', outcome: 'succeeded', lastMessage: 'refined reply' })
+    ])
+    send(message('r2', 'future reply'))
+    expect(send(turn('turn/started', REVIEWER, 'r2'))).toEqual([
+      expect.objectContaining({
+        type: 'live',
+        child: expect.objectContaining({ lastMessage: 'future reply' })
+      })
+    ])
+    expect(send({ method: 'thread/closed', params: { threadId: REVIEWER } })).toEqual([
+      expect.objectContaining({ type: 'ended', lastMessage: 'future reply' })
+    ])
+    expect(send(turn('turn/completed', REVIEWER, 'r2'))).toEqual([
+      {
+        type: 'ended',
+        observedAt: 100,
+        handle: { idKind: 'thread_id', id: REVIEWER, runId: 'r2' },
+        outcome: 'succeeded'
+      }
+    ])
+  })
+
+  it('records the model and reasoning effort Codex resolved for the child', async () => {
+    const { send, records } = await producer()
+    send(turn('turn/started', THREAD_ID, 'p1'))
+    send(
+      item('item/completed', THREAD_ID, 'p1', {
+        type: 'subAgentActivity',
+        id: 'spawn-reviewer',
+        kind: 'started',
+        agentThreadId: REVIEWER,
+        agentPath: '/root/inspect_folder',
+        model: 'gpt-6.1-sol',
+        reasoning_effort: 'xhigh'
+      })
+    )
+    send(turn('turn/started', REVIEWER, 'r1'))
+    expect(records()).toEqual([expect.objectContaining({ model: 'gpt-6.1-sol', effort: 'xhigh' })])
   })
 
   it('ends an approval left unanswered when its turn ends: Codex never ran the command', async () => {

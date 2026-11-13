@@ -1,17 +1,17 @@
 import { expect } from '@stablyai/playwright-test'
 import type { Page } from '@stablyai/playwright-test'
-import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
-import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
-import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
-import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
+import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
+import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/catalog/sidebar-feed-catalog'
+import { buildHostFeedView } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-inputs'
+import { buildHostFeedSections } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-sections'
 import { NO_WORKTREE_HOST_CONTEXT } from '../../../mobile/src/worktree/worktree-host-context-labels'
 import {
   readHostSidebarFeed,
   type HostSidebarFeedRead
-} from '../../../mobile/src/host-screen/use-host-sidebar-feed'
-import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
-import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
-import type { SharedClientEventsClient } from '../../../mobile/src/transport/shared-client-events'
+} from '../../../mobile/src/host-screen/sidebar-feed/use-host-sidebar-feed'
+import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-connection'
+import { readHostMethodReply } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-operations'
+import type { SharedClientEventsClient } from '../../../mobile/src/transport/connection/shared-client-events'
 import {
   hostPlatformRead,
   hostViewSettingsRead
@@ -22,8 +22,8 @@ import {
   applyDesktopViewSettings,
   type WorkspaceViewSettings
 } from '../../../mobile/src/worktree/workspace-view-settings'
-import type { RpcResponse } from '../../../mobile/src/transport/types'
-import { NODE_PLATFORM_NAMES } from '../../../mobile/src/transport/mobile-runtime-host-platform'
+import type { RpcResponse } from '../../../mobile/src/transport/rpc/rpc-wire-types'
+import { NODE_PLATFORM_NAMES } from '../../../mobile/src/transport/connection/mobile-runtime-host-platform'
 import type { LastVisitedWorktreeOnHost } from '../../../mobile/src/worktree/host-list-highlight'
 import type { Section } from '../../../mobile/src/worktree/workspace-list-types'
 import type { PairedMobileClient, PairedMobileSocket } from './paired-mobile-client'
@@ -75,6 +75,7 @@ function socketEventClient(socket: PairedMobileSocket): SharedClientEventsClient
     // One socket for the helper's life: always connected, no reconnects to tell apart.
     getState: () => 'connected',
     getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
     subscribe: (method: string, params: unknown, onData: (payload: unknown) => void) => {
       const id = 'phone-list-events'
       socket.send(id, method, params)
@@ -132,8 +133,7 @@ export async function openPhoneFeedList(
   const stop = startHostWorktreeRefresh({
     client: socketEventClient(socket),
     // The list reads rows and catalog from the feed alone; worktree.ps adds only card content.
-    fetchWorktrees: async () => {},
-    fetchRepoMetadata: async () => {},
+    refreshWorktrees: () => {},
     syncViewSettings,
     sidebarFeed: {
       refresh: () => reader.refresh(),

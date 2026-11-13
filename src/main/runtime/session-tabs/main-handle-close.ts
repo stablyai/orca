@@ -1,6 +1,6 @@
 // Main-owned handle close commits pane/tab retirement before stopping ended terminals; no window or phone row is required.
 
-import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
+import type { RuntimeTerminalClose } from '../../../shared/runtime-terminal-contracts'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'

@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
+import { assertMacExecutableUuid } from './macos-executable-uuid.cjs'
 
 const ARCHITECTURES = [1, 3] // electron-builder: x64, arm64.
 
@@ -138,6 +139,10 @@ export async function main(args = process.argv.slice(2)) {
     verify: (appPath) => {
       execFileSync('codesign', ['--verify', '--deep', '--strict', appPath], { stdio: 'inherit' })
       execFileSync('xcrun', ['stapler', 'validate', appPath], { stdio: 'inherit' })
+      assertMacExecutableUuid(
+        join(appPath, 'Contents', 'MacOS', basename(appPath, '.app')),
+        config.appId
+      )
     },
     targets: new Map([
       [

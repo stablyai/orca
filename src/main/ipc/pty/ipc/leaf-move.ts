@@ -1,13 +1,13 @@
 import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { rekeyMovedPaneOwners } from '../../../runtime/moved-pane-owner-rekey'
-import { commitRelayedPaneMove } from '../../../window/terminal-pane-move-commit-fence'
+import { rekeyMovedPaneOwners } from '../../../runtime/terminal/identity/moved-pane-owner-rekey'
+import { commitRelayedPaneMove } from '../../../window/renderer-relays/terminal-pane-move-commit-fence'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
-} from '../../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 
 /** Durable move first; agent-status and orchestration keys follow only a committed move. */
 export async function commitLeafMoveAndRekey(

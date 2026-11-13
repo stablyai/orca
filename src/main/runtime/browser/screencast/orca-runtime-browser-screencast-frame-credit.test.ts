@@ -3,7 +3,7 @@ import {
   BrowserScreencastOpcode,
   decodeBrowserScreencastFrame,
   encodeBrowserScreencastFrame
-} from '../../../../shared/browser-screencast-protocol'
+} from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { acknowledgeBrowserScreencastFrame } from './browser-screencast-frame-credit'
 import {
   createSinglePageBrowserCommandsHost,
@@ -25,13 +25,13 @@ vi.mock('../../../browser/cdp/screencast/browser-screencast-stream', () => ({
 
 const PHONE = 'phone-1'
 
-function frame(seq: number): Uint8Array {
+function frame(seq: number, image = new Uint8Array([seq])): Uint8Array {
   return encodeBrowserScreencastFrame({
     opcode: BrowserScreencastOpcode.Frame,
     seq,
     format: 'jpeg',
     metadata: {},
-    image: new Uint8Array([seq])
+    image
   })
 }
 
@@ -86,6 +86,29 @@ describe('screencast frame credit', () => {
 
     expect(ack(1)).toBe(true)
     expect(sent).toEqual([0, 1, 3])
+    subscription.session.stop()
+  })
+
+  it('drops frames too large to send without charging credit, whether sent or held', async () => {
+    const { subscription, onFrame, sent, ack } = await subscribe(true)
+    const oversize = new Uint8Array(9 * 1024 * 1024)
+    onFrame(frame(0, oversize))
+    onFrame(frame(1, oversize))
+    onFrame(frame(2))
+    onFrame(frame(3))
+    expect(sent).toEqual([2, 3])
+
+    // Held for credit, then dropped when the ack opens credit: the next held frame still goes on its ack.
+    onFrame(frame(4, oversize))
+    ack(3)
+    onFrame(frame(5))
+    onFrame(frame(6))
+    // Past the queue-delay allowance, without running timers.
+    vi.setSystemTime(Date.now() + 1_000)
+    onFrame(frame(7))
+    expect(sent).toEqual([2, 3, 5, 6])
+    ack(6)
+    expect(sent).toEqual([2, 3, 5, 6, 7])
     subscription.session.stop()
   })
 })

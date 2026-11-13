@@ -1,11 +1,11 @@
-import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
+import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { AppState } from '../../types'
-import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
+import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
 import type { GitHubSlice } from '../github-slice-contract'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from '../cache/cache-model'
 import {
   withDirectPRRefreshSettlement,
@@ -15,11 +15,11 @@ import {
 import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
-} from '../../../../../shared/github/pull-request-refresh-types'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   normalizeGitHubPRForBranchOutcome,
   githubPRTransportFailureOutcome
-} from '../../../../../shared/github/pull-request-for-branch-outcome'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-for-branch-outcome'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
@@ -32,7 +32,7 @@ import { findWorktreeById, isStaleExactLinkedPRLookup } from '../refresh/worktre
 import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../../shared/github/linked-pr-staleness'
+} from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
+import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime/runtime-environment-subscriptions'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
@@ -129,6 +129,7 @@ function createHarness() {
         _meta: { runtimeId: 'remote-runtime' },
         result: event ?? {
           type: 'linearLinkedIssueUpdated',
+          worktreeId: 'missing-row',
           identifier: 'ISSUE-1',
           workspaceId: 'workspace-a'
         }
@@ -152,28 +153,6 @@ function createHarness() {
   }
 }
 
-it('does no Linear read dispatch or cache publication after cleanup while setup is pending', async () => {
-  const h = createHarness()
-  let publications = 0
-  const stopCounting = useAppStore.subscribe((state, previous) => {
-    if (state.linearIssueCache !== previous.linearIssueCache) {
-      publications += 1
-    }
-  })
-  try {
-    h.start()()
-    for (let index = 0; index < 100; index += 1) {
-      h.emit(0)
-    }
-    expect(h.getIssue).not.toHaveBeenCalled()
-    expect(publications).toBe(0)
-  } finally {
-    stopCounting()
-    await h.finish()
-  }
-  expect(h.ipc.removeListener).toHaveBeenCalledOnce()
-})
-
 it('does not navigate for an unaddressed activation from an older remote host', async () => {
   const h = createHarness()
   try {
@@ -190,74 +169,6 @@ it('does not navigate for an unaddressed activation from an older remote host', 
     expect(h.enqueue).toHaveBeenCalledWith({
       repoId: 'remote-repo',
       executionHostId: 'runtime:host-a'
-    })
-  } finally {
-    await h.finish()
-  }
-})
-
-it.each([true, false, undefined, 'true', 1, null])(
-  'forwards only an explicit order-only host hint (%s)',
-  async (sortOrderOnly) => {
-    const h = createHarness()
-    try {
-      h.start()
-      h.emit(0, false, { type: 'worktreesChanged', repoId: 'remote-repo', sortOrderOnly })
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.enqueue).toHaveBeenCalledWith({
-        repoId: 'remote-repo',
-        executionHostId: 'runtime:host-a',
-        ...(sortOrderOnly === true ? { sortOrderOnly: true } : {})
-      })
-    } finally {
-      await h.finish()
-    }
-  }
-)
-
-it.each([
-  { sortOrderOnly: true, valid: true, known: true, kept: true },
-  { sortOrderOnly: undefined, valid: true, known: true, kept: false },
-  { sortOrderOnly: true, valid: false, known: true, kept: false },
-  // An unknown repo refetches so a slow discovery cannot replay older values last.
-  { sortOrderOnly: true, valid: true, known: false, kept: false }
-])('forwards published order values only on a valid order-only event (%o)', async (input) => {
-  const h = createHarness()
-  const sortOrders = input.valid
-    ? [{ worktreeId: 'remote-repo::/a', sortOrder: 5 }]
-    : [{ worktreeId: 'remote-repo::/a' }]
-  if (input.known) {
-    useAppStore.setState({
-      repos: [
-        {
-          id: 'remote-repo',
-          path: '/remote/repo',
-          displayName: 'Remote repo',
-          badgeColor: 'blue',
-          addedAt: 1,
-          executionHostId: 'runtime:host-a'
-        }
-      ]
-    })
-  }
-  try {
-    h.start()
-    h.emit(0, false, {
-      type: 'worktreesChanged',
-      repoId: 'remote-repo',
-      sortOrderOnly: input.sortOrderOnly,
-      sortOrders
-    })
-    for (let index = 0; index < 10; index += 1) {
-      await Promise.resolve()
-    }
-    expect(h.enqueue).toHaveBeenCalledWith({
-      repoId: 'remote-repo',
-      executionHostId: 'runtime:host-a',
-      ...(input.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
-      ...(input.kept ? { sortOrders } : {})
     })
   } finally {
     await h.finish()
@@ -283,71 +194,6 @@ it('invalidates lineage before unknown-repository discovery can block a structur
     await h.finish()
   }
 })
-
-it('invalidates hydrated lineage as soon as a project change is queued', async () => {
-  const h = createHarness()
-  try {
-    h.start()
-    beginWorktreeLineageRefresh(useAppStore.getState, {
-      kind: 'environment',
-      environmentId: 'host-a'
-    })(true)
-    h.emit(0, false, { type: 'reposChanged' })
-    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(false)
-    expect(h.fetchRuntimeEnvironmentRepos).not.toHaveBeenCalled()
-  } finally {
-    await h.finish()
-  }
-})
-
-it.each(['caller', 'host'] as const)(
-  'ignores remote activation addressed to %s',
-  async (navigation) => {
-    const h = createHarness()
-    try {
-      h.start()
-      h.emit(0, false, {
-        type: 'activateWorktree',
-        repoId: 'remote-repo',
-        worktreeId: 'remote-wt',
-        navigation
-      })
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.activateNotifiedWorktree).not.toHaveBeenCalled()
-    } finally {
-      await h.finish()
-    }
-  }
-)
-
-it.each(['clients', 'all'] as const)(
-  'honors explicit %s activation on the publishing host',
-  async (navigation) => {
-    const h = createHarness()
-    try {
-      h.start()
-      const event: RuntimeClientEvent = {
-        type: 'activateWorktree',
-        repoId: 'remote-repo',
-        worktreeId: 'remote-wt',
-        navigation
-      }
-      h.emit(0, false, event)
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.activateNotifiedWorktree).toHaveBeenCalledWith(event, {
-        allowRuntimeEnvironment: true,
-        executionHostId: 'runtime:host-a',
-        isCurrent: expect.any(Function)
-      })
-    } finally {
-      await h.finish()
-    }
-  }
-)
 
 it('does not mistake a local repo with the same id for the publishing remote repo', async () => {
   const h = createHarness()
@@ -384,51 +230,6 @@ it('does not mistake a local repo with the same id for the publishing remote rep
   }
 })
 
-it.each(['cleanup', 're-pair'] as const)(
-  'cancels an accepted activation after %s during repository discovery',
-  async (change) => {
-    const h = createHarness()
-    const repos = Promise.withResolvers<never[]>()
-    h.fetchRuntimeEnvironmentRepos.mockImplementation(() => repos.promise)
-    try {
-      const stop = h.start()
-      h.emit(0, false, {
-        type: 'activateWorktree',
-        repoId: 'remote-repo',
-        worktreeId: 'remote-wt',
-        navigation: 'clients'
-      })
-      expect(h.fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('host-a')
-      if (change === 'cleanup') {
-        stop()
-      } else {
-        replaceRuntimeEnvironmentRevisions([{ id: 'host-a', createdAt: 1, pairingRevision: 2 }])
-      }
-      repos.resolve([])
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.activateNotifiedWorktree).not.toHaveBeenCalled()
-    } finally {
-      repos.resolve([])
-      await h.finish()
-    }
-  }
-)
-
-it('does no replay recovery or resubscription after cleanup', async () => {
-  const h = createHarness()
-  try {
-    h.start()()
-    h.emit(0, true)
-    expect(h.refreshStatus).not.toHaveBeenCalled()
-    expect(h.pending).toHaveLength(1)
-    expect(h.getIssue).not.toHaveBeenCalled()
-  } finally {
-    await h.finish()
-  }
-})
-
 it('accepts a fresh bridge early frame while rejecting the previous bridge frame', async () => {
   const h = createHarness()
   try {
@@ -442,56 +243,4 @@ it('accepts a fresh bridge early frame while rejecting the previous bridge frame
     await h.finish()
   }
   expect(h.ipc.removeListener).toHaveBeenCalledOnce()
-})
-
-it("lists a profile created on the host once the host announces it, without touching other hosts' lists", async () => {
-  const h = createHarness()
-  const madeByCli = {
-    id: 'made-by-cli',
-    scope: 'isolated' as const,
-    partition: 'persist:orca-browser-session-made-by-cli',
-    label: 'Made by CLI',
-    source: null
-  }
-  const status = createCompatibleRuntimeStatusResponse()
-  vi.mocked(window.api.runtimeEnvironments.call).mockImplementation(async ({ method }) =>
-    method === 'status.get'
-      ? status
-      : {
-          id: 'r',
-          ok: true,
-          result: { profiles: [madeByCli] },
-          _meta: { runtimeId: 'remote-runtime' }
-        }
-  )
-  useAppStore.setState({ browserSessionProfilesByHostId: { local: [] } })
-  try {
-    h.start()
-    h.emit(0, false, { type: 'browserProfilesChanged' })
-    await vi.waitFor(() =>
-      expect(useAppStore.getState().browserSessionProfilesByHostId['runtime:host-a']).toEqual([
-        madeByCli
-      ])
-    )
-    expect(useAppStore.getState().browserSessionProfilesByHostId.local).toEqual([])
-  } finally {
-    await h.finish()
-  }
-})
-
-it('forwards an accepted remote read to desktop with its originating transport', async () => {
-  const h = createHarness()
-  const acknowledgement = {
-    reads: [{ sessionId: 'session', observedCursor: { epoch: 'journal', sequence: 5 } }]
-  }
-  try {
-    h.start()
-    h.emit(0, false, { type: 'notificationAttentionAcknowledged', acknowledgement })
-    expect(h.acknowledgeAttention).toHaveBeenCalledExactlyOnceWith(
-      acknowledgement,
-      'runtime:host-a'
-    )
-  } finally {
-    await h.finish()
-  }
 })

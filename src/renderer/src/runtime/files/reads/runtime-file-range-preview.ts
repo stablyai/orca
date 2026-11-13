@@ -1,5 +1,5 @@
-import { filePreviewForPath } from '../../../../../shared/file-preview-kind'
-import { remoteFilePath } from '../../../../../shared/remote-file-locator'
+import { filePreviewForPath } from '../../../../../shared/file-preview/file-preview-kind'
+import { remoteFilePath } from '../../../../../shared/file-access/remote-file-locator'
 import type { RuntimeRemoteFileAddress } from './runtime-file-range-client'
 import type { RuntimeReadableFileContent } from '../runtime-file-client-types'
 

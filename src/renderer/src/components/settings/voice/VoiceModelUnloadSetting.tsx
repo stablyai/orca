@@ -22,11 +22,12 @@ function choiceLabel(
   t: Translate = translate,
   intlLocale?: string
 ): string {
+  // The row asks how long to keep the model, so never unloading reads Always and unloading at once Never.
   if (minutes === null) {
-    return t('components.settings.voice.modelUnload.never', 'Never')
+    return t('components.settings.voice.keepLoaded.always', 'Always')
   }
   if (minutes === 0) {
-    return t('components.settings.voice.modelUnload.immediately', 'Immediately')
+    return t('components.settings.voice.keepLoaded.never', 'Never')
   }
   return formatMinutesDuration(minutes, intlLocale)
 }
@@ -45,12 +46,12 @@ export function VoiceModelUnloadSetting({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const labelId = useId()
-  const isCloudModel = selectedModel?.provider === 'openai'
+  const isCloudModel = selectedModel !== undefined && selectedModel.provider !== 'local'
   const current = unloadModelAfterMinutes(voiceSettings)
 
   return (
     <SettingsRow
-      label={t('components.settings.voice.modelUnload.title', 'Unload Speech Model')}
+      label={t('components.settings.voice.keepLoaded.label', 'Keep model loaded')}
       description={
         isCloudModel
           ? t(
@@ -58,8 +59,8 @@ export function VoiceModelUnloadSetting({
               'Cloud models run on the provider’s servers, so nothing stays loaded here.'
             )
           : t(
-              'components.settings.voice.modelUnload.description',
-              'How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.'
+              'components.settings.voice.keepLoaded.description',
+              'Dictation starts at once while it’s loaded.'
             )
       }
       labelId={labelId}

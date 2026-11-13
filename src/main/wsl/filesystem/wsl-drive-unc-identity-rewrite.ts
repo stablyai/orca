@@ -16,11 +16,11 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   parseEditorFileId,
   WSL_MOVE_FREE_TEXT_KEYS
-} from '../../persistence/moving-wsl-projects/wsl-move-canonical-form'
+} from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-canonical-form'
 import {
   rewriteOrcadMigrationPathValue,
   type OrcadMigrationPathRewriter
-} from '../../ssh/orcad-migration-path-rewrite'
+} from '../../persistence/migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 
 export type WslDriveUncRewriteScope = {

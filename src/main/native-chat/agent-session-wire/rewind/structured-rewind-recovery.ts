@@ -1,5 +1,11 @@
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { usableJournalHistoryOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import { remapForkChildBoundary } from './agent-session-fork-boundary-remap'
-import { persistRewindRecord, settleUnsupportedClaudeRewind } from './structured-rewind-record'
+import {
+  inheritForkName,
+  persistRewindRecord,
+  settleUnsupportedClaudeRewind
+} from './structured-rewind-record'
 
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { renderJournalStatus } from '../../agent-session-journal/projection/journal-public-read'
@@ -18,9 +24,8 @@ import {
   claudeProviderHandle
 } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { isDeepStrictEqual } from 'node:util'
-import { structuredRewindCut, type StructuredRewindCut } from './structured-rewind-cut'
+import { legacyRewindTurns, rewindJournalCut } from './structured-rewind-cut'
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -41,28 +46,9 @@ type RecoveredRewind = Awaited<
 /** Read provider evidence outside serialization; apply journal/record changes inside it. */
 export type StructuredRewindRecoveryEvidence = {
   rewind: AgentSessionRewindRecord
-  turns?: { beforeTurnId: string; keptTurnId: string | null }
+  turns?: { beforeTurnId: string; keptTurnId: string | null; threadId?: string }
   recovered?: RecoveredRewind
 } | null
-
-// Only rewind replaces an existing epoch, so a changed epoch proves replacement committed.
-function rewindJournalCut(
-  record: AgentSessionRecord | null,
-  journal: AgentSessionJournal,
-  rewind: AgentSessionRewindRecord
-): { alreadyReplaced: boolean; cut: StructuredRewindCut | null } {
-  const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
-  const head = record && agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-  const cut =
-    alreadyReplaced || !record || !head
-      ? null
-      : structuredRewindCut(journal, {
-          itemId: rewind.itemId,
-          provider: record.provider,
-          nativeId: head.nativeId
-        })
-  return { alreadyReplaced, cut }
-}
 
 /** Recovery observes provider state; it never repeats an ambiguous native mutation. */
 export async function recoverStructuredRewind(
@@ -117,7 +103,10 @@ export async function readStructuredRewindRecovery(
   ) {
     return { rewind }
   }
-  const turns = { beforeTurnId: cut.beforeTurnId, keptTurnId: cut.keptTurnId }
+  const turns =
+    rewind.providerRevert ??
+    legacyRewindTurns(journal, cut, target?.provider === 'codex' ? target.threadId : '')!
+
   const read = adapter?.recoverRewind?.({
     sessionId,
     fence,
@@ -170,8 +159,11 @@ export async function applyStructuredRewindRecovery(
       throw new Error('agent_session_rewind:outcome-unknown')
     }
     if (
-      evidence.turns?.beforeTurnId !== cut.beforeTurnId ||
-      evidence.turns.keptTurnId !== cut.keptTurnId
+      !isDeepStrictEqual(
+        evidence.turns,
+        rewind.providerRevert ??
+          legacyRewindTurns(journal, cut, target?.provider === 'codex' ? target.threadId : '')
+      )
     ) {
       throw new Error('agent_session_rewind:stale-evidence')
     }
@@ -204,39 +196,57 @@ export async function applyStructuredRewindRecovery(
           journal.context.floor()?.sequence
         )
       : oldBoundary
+  const completed = rewind
+  const record = store.getRecord(sessionId)!
+  const providerHandle = completed.providerFork
+    ? claudeProviderHandle(
+        completed.providerFork.sessionId,
+        completed.providerFork.resumeCursor ?? null
+      )
+    : (agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null)
+  const journalHandle = agentSessionJournalProviderHandle({
+    agent: record.provider,
+    providerHandle
+  })
+  const historyOrigin =
+    completed.providerFork?.coverage !== undefined &&
+    usableJournalHistoryOrigin(journal.historyOrigin())?.kind === 'native_copy'
+      ? {
+          version: 1,
+          kind: 'native_copy',
+          agent: 'claude',
+          unit: 'claude-entry',
+          providerHandle: journalHandle,
+          ids: completed.providerFork.coverage
+        }
+      : undefined
   if (rewind.contextClearOperationId && rewind.contextClearSequence) {
     if (
-      store.getRecord(sessionId)?.providerContextBoundary?.operationId !==
-        rewind.contextClearOperationId ||
+      record.providerContextBoundary?.operationId !== rewind.contextClearOperationId ||
       journal.cursor().epoch !== rewind.expectedEpoch ||
       journal.context.floor()?.sequence !== rewind.contextClearSequence
     ) {
       throw new Error('agent_session_rewind:stale-context')
     }
-    const completed = rewind
     await journal.context.rewind(
       { epoch: completed.expectedEpoch, sequence: completed.contextClearSequence! },
       fence,
       cut!.kept,
-      (cursor) => inheritForkName(deps, sessionId, completion(completed, cursor))
+      (cursor) => inheritForkName(deps, sessionId, completion(completed, cursor)),
+      historyOrigin
+        ? { reason: 'handle_forked', providerHandle: journalHandle, historyOrigin }
+        : undefined
     )
     return
   }
   if (!alreadyReplaced) {
-    const completed = rewind
-    const record = store.getRecord(sessionId)!
-    const providerHandle = completed.providerFork
-      ? claudeProviderHandle(
-          completed.providerFork.sessionId,
-          completed.providerFork.resumeCursor ?? null
-        )
-      : (agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null)
     await journal.replaceEpochItems(
       'handle_forked',
       fence,
       cut!.kept,
       (cursor) => inheritForkName(deps, sessionId, completion(completed, cursor)),
-      agentSessionJournalProviderHandle({ agent: record.provider, providerHandle })
+      journalHandle,
+      historyOrigin
     )
     return
   }
@@ -289,23 +299,5 @@ export async function settleInterruptedStructuredAgentSessionCommands(
       sessionId,
       error
     })
-  }
-}
-
-function inheritForkName(
-  deps: RewindRecoveryDeps,
-  sessionId: string,
-  receipt: JournalOperationReceipt
-): JournalOperationReceipt {
-  return {
-    fold: receipt.fold,
-    write: receipt.write,
-    committed: () => {
-      receipt.committed()
-      const record = deps.store.getRecord(sessionId)
-      if (record?.rewind?.providerFork?.materialized) {
-        deps.nameProviderConversation?.(record)
-      }
-    }
   }
 }

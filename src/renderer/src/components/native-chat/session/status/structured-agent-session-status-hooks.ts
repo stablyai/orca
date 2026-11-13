@@ -4,7 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import {
   getStructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedOwner
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { structuredAgentSessionOptionStamp } from '../../../../../../shared/agent-session/options/structured-agent-session-option-state'
 import { runtimePermissionReport } from '../../../../../../shared/agent-session/options/structured-agent-session-permission-option'
 

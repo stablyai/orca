@@ -28,8 +28,6 @@ export class Session extends SessionProcessInspection {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
-  readonly processNameIsSpawnFile: boolean
-  readonly shellIsRootChild: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   exitCause: TerminalExitCause | undefined
@@ -51,8 +49,6 @@ export class Session extends SessionProcessInspection {
     this.terminalHandle = opts.terminalHandle ?? null
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
-    this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
-    this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
     const isAlive = () => !this._disposed && this._state !== 'exited'
     const pipeline = createSessionOutputPipeline(opts, isAlive)
@@ -73,6 +69,7 @@ export class Session extends SessionProcessInspection {
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+      readForegroundGroup: this.subprocess.readForegroundGroup,
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
@@ -269,7 +266,7 @@ export class Session extends SessionProcessInspection {
 
   prepareForFinalSnapshot(): string {
     const held = this.shellReady.releaseHeldBytes()
-    this.startupIngress.snapshotBarrier()
+    this.startupIngress.snapshotBarrier(true)
     // Flush last: the ingress snapshot barrier can emit more held bytes into recovery.
     this.recoveryBarrier.flushPending()
     return held

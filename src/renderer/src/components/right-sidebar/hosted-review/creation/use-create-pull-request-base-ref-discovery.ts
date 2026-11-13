@@ -7,7 +7,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefDetails
-} from '@/runtime/runtime-repo-client'
+} from '@/runtime/source-control/references/runtime-repo-client'
 import {
   normalizeHostedReviewBaseRef as stripBaseRef,
   normalizeCreateReviewBaseSearchResults

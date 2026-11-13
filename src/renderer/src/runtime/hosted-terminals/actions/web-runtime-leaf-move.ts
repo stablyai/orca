@@ -1,18 +1,18 @@
-import type { TerminalLeafMoveRequest } from '../../../../../shared/workspace-layout/terminal-leaf-move'
+import type { TerminalLeafMoveRequest } from '../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { isRecoverableRemoteRuntimeConnectionError } from '../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive
-} from '../../web-runtime-session-environment'
-import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-runtime-session-snapshot'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 /** The runtime that commits this worktree's pane moves itself; null keeps the move in this window. */
 export async function resolvePaneMoveHost(worktreeId: string): Promise<string | null> {

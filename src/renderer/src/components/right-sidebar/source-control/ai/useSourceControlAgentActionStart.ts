@@ -12,7 +12,7 @@ import type {
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import {

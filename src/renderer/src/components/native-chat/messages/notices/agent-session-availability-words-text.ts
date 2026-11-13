@@ -7,6 +7,12 @@ import {
 
 type AvailabilityCopyId = Extract<
   AgentSessionFailureCopyId,
+  | 'forkOriginalMissing'
+  | 'forkOriginalUnavailable'
+  | 'forkOriginalMissingNamed'
+  | 'forkOriginalUnavailableNamed'
+  | 'forkOriginalLatestOnly'
+  | 'forkOriginalLatestOnlyNamed'
   | 'claudeSystemNotSignedIn'
   | 'claudeManagedNotSignedIn'
   | 'codexSystemNotSignedIn'
@@ -29,6 +35,42 @@ export const AVAILABILITY_PIECES: Record<
   AvailabilityCopyId,
   (values: AgentSessionFailureCopyValues) => string
 > = {
+  forkOriginalMissing: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalMissing',
+      COPY.forkOriginalMissing,
+      values
+    ),
+  forkOriginalUnavailable: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalUnavailable',
+      COPY.forkOriginalUnavailable,
+      values
+    ),
+  forkOriginalMissingNamed: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalMissingNamed',
+      COPY.forkOriginalMissingNamed,
+      values
+    ),
+  forkOriginalUnavailableNamed: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalUnavailableNamed',
+      COPY.forkOriginalUnavailableNamed,
+      values
+    ),
+  forkOriginalLatestOnly: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalLatestOnly',
+      COPY.forkOriginalLatestOnly,
+      values
+    ),
+  forkOriginalLatestOnlyNamed: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalLatestOnlyNamed',
+      COPY.forkOriginalLatestOnlyNamed,
+      values
+    ),
   agentCommandNotSignedIn: (values) =>
     translate(
       'components.native-chat.failureWords.agentCommandNotSignedIn',

@@ -11,7 +11,10 @@ import {
   type RuntimeCapabilityProof
 } from '../rpc/compatibility/runtime-capability-proof'
 import { captureRuntimeEnvironmentRequestRevision } from '../rpc/environment-revisions/runtime-environment-revision'
-import { forgeCredentialTarget, type ForgeRepoSelector } from '../forge-credential-target'
+import {
+  forgeCredentialTarget,
+  type ForgeRepoSelector
+} from '../source-control/forge/forge-credential-target'
 
 // Why: job logs outlive main's 60s `glab` timeout so its classified error reaches the caller.
 export const JOB_TRACE_TIMEOUT_MS = 65_000

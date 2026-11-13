@@ -1,4 +1,4 @@
-import type { TerminalTabCloseReason } from '@/store/terminals/terminal-tab-retirement'
+import type { TerminalTabCloseReason } from '@/store/terminals/retirement/terminal-tab-retirement'
 import type { RuntimeSessionTabCloseReason } from '../../../../shared/runtime-types'
 
 /**

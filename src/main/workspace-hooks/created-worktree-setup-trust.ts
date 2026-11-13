@@ -4,8 +4,8 @@ import { getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupDecision, SetupTrustMismatch } from '../../shared/worktree/create-types'
-import type { ApprovedSetupHashes } from '../../shared/worktree/approved-setup-hashes'
-import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
+import type { ApprovedSetupHashes } from '../../shared/worktree/creation/approved-setup-hashes'
+import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
 import { shouldRunSetupForCreate } from './effective-hook-config'
 
 /** Same digest as the renderer's hashOrcaHookScript, so host and prompt hashes compare. */
@@ -37,6 +37,28 @@ export function checkCreatedWorktreeSetupTrust(
   const contentHash = hashOrcaHookTrustContent(scriptContent)
   const matches = contentHash === approvedSetupHash || approvedSetupHashes?.includes(contentHash)
   return matches ? undefined : { contentHash, scriptContent }
+}
+
+/**
+ * Older clients send no approval hash. A folder's shared setup never ran before folder setup
+ * existed, so it needs an approval or an explicit run rather than starting unseen.
+ */
+export function folderSharedSetupLacksApproval(
+  repo: Repo,
+  createdYamlHooks: OrcaHooks | null,
+  decision: SetupDecision | undefined,
+  approved: ApprovedSetupHashes
+): boolean {
+  if (approved.approvedSetupHash !== undefined || approved.approvedSetupHashes !== undefined) {
+    return false
+  }
+  if (decision === 'run') {
+    return false
+  }
+  const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
+    hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
+  })
+  return policy !== 'local-only' && Boolean(getSetupTrustContent(createdYamlHooks))
 }
 
 function wouldRunSetup(repo: Repo, decision: SetupDecision | undefined): boolean {

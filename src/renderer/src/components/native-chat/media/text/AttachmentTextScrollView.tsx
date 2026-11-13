@@ -1,9 +1,9 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
-import { AttachmentTextViewport } from '../../../../../../shared/attachment-text-viewport'
+import { AttachmentTextViewport } from '../../../../../../shared/attachment-text/attachment-text-viewport'
 import type {
   AttachmentTextSource,
   AttachmentTextWindow
-} from '../../../../../../shared/attachment-text-source'
+} from '../../../../../../shared/attachment-text/attachment-text-source'
 
 export function AttachmentTextScrollView(props: {
   source: AttachmentTextSource

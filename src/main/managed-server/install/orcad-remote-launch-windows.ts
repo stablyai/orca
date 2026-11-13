@@ -9,7 +9,7 @@ import {
   WINDOWS_BREAKAWAY_STDERR_KEEP_PREVIOUS_FLAG,
   WINDOWS_BREAKAWAY_STDOUT_FLAG
 } from '../../../shared/windows-breakaway-launch'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   orcadWindowsNodeCommandLine,
   orcadWindowsSlotOpCommand,
@@ -25,7 +25,7 @@ import {
   ORCAD_WINDOWS_PROCESS_FILENAME
 } from './orcad-remote-host-support'
 import { orcadManagedLaunchEnv, type OrcadLaunchSpec } from './orcad-remote-launch'
-import { ORCAD_WINDOWS_LAUNCH_REFUSED_CODE } from '../../orcad/orcad-host-unavailable'
+import { ORCAD_WINDOWS_LAUNCH_REFUSED_CODE } from '../../orcad/diagnostics/orcad-host-unavailable'
 
 export class OrcadWindowsLaunchRefusedError extends Error {
   readonly code = ORCAD_WINDOWS_LAUNCH_REFUSED_CODE

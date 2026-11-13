@@ -5,7 +5,7 @@ import {
   assessSecretProtection,
   type SecretProtectionAssessment
 } from '../host/electron-secret-store'
-import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
+import { isUnreadableError, writeSecureFile } from '../../shared/secure-storage/secure-file'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
   PLUGIN_STORAGE_TOTAL_MAX_BYTES

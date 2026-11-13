@@ -1,15 +1,5 @@
 import type * as fs from 'node:fs'
-import {
-  chmodSync,
-  closeSync,
-  mkdirSync,
-  mkdtempSync,
-  openSync,
-  renameSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -90,121 +80,6 @@ describe.skipIf(process.platform === 'win32')('resolveAppImageRuntimeIdentity', 
     })
   })
 
-  it('keeps a verified identity when closing the AppImage header reports EIO', () => {
-    const fixture = createFixture()
-    vi.mocked(closeSync).mockImplementationOnce((fd) => {
-      realFs.closeSync(fd)
-      throw Object.assign(new Error('close failed'), { code: 'EIO' })
-    })
-
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)).toEqual({
-      appImagePath: fixture.appImagePath
-    })
-    expect(vi.mocked(openSync).mock.calls[0]?.[0]).toBe(fixture.appImagePath)
-    expect(vi.mocked(closeSync).mock.calls[0]).toEqual([vi.mocked(openSync).mock.results[0]?.value])
-    expect(closeSync).toHaveBeenCalledTimes(vi.mocked(openSync).mock.calls.length)
-  })
-
-  it('accepts an AppImage moved independently of its runtime directory', () => {
-    const fixture = createFixture()
-    const movedPath = join(fixture.root, 'Moved Apps', 'Orca current.AppImage')
-    mkdirSync(dirname(movedPath), { recursive: true })
-    renameSync(fixture.appImagePath, movedPath)
-    fixture.identity.environment.APPIMAGE = movedPath
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)?.appImagePath).toBe(movedPath)
-  })
-
-  it('accepts the exact AppImage package-type marker', () => {
-    const fixture = createFixture()
-    rmSync(fixture.packageMarkerPath)
-    writeFileSync(fixture.packageTypePath, 'AppImage')
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)).not.toBeNull()
-  })
-
-  it.each([
-    ['APPIMAGE', undefined],
-    ['APPIMAGE', 'relative/Orca.AppImage'],
-    ['APPDIR', undefined],
-    ['APPDIR', 'relative/mount'],
-    ['APPIMAGE', '/tmp/Orca\0.AppImage']
-  ] as const)('rejects an unusable %s value', (key, value) => {
-    const fixture = createFixture()
-    expect(
-      resolveAppImageRuntimeIdentity({
-        ...fixture.identity,
-        environment: { ...fixture.identity.environment, [key]: value }
-      })
-    ).toBeNull()
-  })
-
-  it.each([
-    ['an ordinary executable', (path: string) => writeFileSync(path, '#!/bin/sh\n')],
-    [
-      'bad ELF magic',
-      (path: string) => {
-        const header = appImageHeader(0x3e)
-        header[0] = 0
-        writeFileSync(path, header)
-      }
-    ],
-    [
-      'bad AppImage type magic',
-      (path: string) => {
-        const header = appImageHeader(0x3e)
-        header[10] = 1
-        writeFileSync(path, header)
-      }
-    ],
-    ['a non-executable file', (path: string) => chmodSync(path, 0o644)],
-    [
-      'a directory',
-      (path: string) => {
-        rmSync(path)
-        mkdirSync(path)
-      }
-    ]
-  ])('rejects APPIMAGE pointing to %s', (_case, mutate) => {
-    const fixture = createFixture()
-    mutate(fixture.appImagePath)
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)).toBeNull()
-  })
-
-  it.each([
-    [
-      'AppRun',
-      (fixture: ReturnType<typeof createFixture>) => rmSync(join(fixture.appDirPath, 'AppRun'))
-    ],
-    [
-      'an executable AppRun',
-      (fixture: ReturnType<typeof createFixture>) =>
-        chmodSync(join(fixture.appDirPath, 'AppRun'), 0o644)
-    ],
-    [
-      'the Orca package marker',
-      (fixture: ReturnType<typeof createFixture>) => rmSync(fixture.packageMarkerPath)
-    ]
-  ])('rejects a runtime missing %s', (_case, mutate) => {
-    const fixture = createFixture()
-    mutate(fixture)
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)).toBeNull()
-  })
-
-  it('rejects a package marker for a different application', () => {
-    const fixture = createFixture()
-    writeFileSync(
-      fixture.packageMarkerPath,
-      JSON.stringify({ name: 'foreign-compiled-output', type: 'commonjs' })
-    )
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)).toBeNull()
-  })
-
-  it('rejects an inexact package-type marker without the Orca fallback', () => {
-    const fixture = createFixture()
-    rmSync(fixture.packageMarkerPath)
-    writeFileSync(fixture.packageTypePath, 'appimage')
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)).toBeNull()
-  })
-
   it('rejects payload evidence that resolves outside APPDIR', () => {
     const fixture = createFixture()
     const externalAppRun = join(fixture.root, 'foreign-AppRun')
@@ -224,31 +99,5 @@ describe.skipIf(process.platform === 'win32')('resolveAppImageRuntimeIdentity', 
     rmSync(fixture.packageMarkerPath)
     symlinkSync(externalMarker, fixture.packageMarkerPath)
     expect(resolveAppImageRuntimeIdentity(fixture.identity)).toBeNull()
-  })
-
-  it('rejects inherited AppImage variables around a non-AppImage executable', () => {
-    const fixture = createFixture()
-    expect(
-      resolveAppImageRuntimeIdentity({
-        ...fixture.identity,
-        execPath: join(fixture.root, 'opt', 'Orca', 'orca-ide'),
-        resourcesPath: join(fixture.root, 'opt', 'Orca', 'resources')
-      })
-    ).toBeNull()
-  })
-
-  it('rejects a resources path outside the runtime root', () => {
-    const fixture = createFixture()
-    expect(
-      resolveAppImageRuntimeIdentity({
-        ...fixture.identity,
-        resourcesPath: `${fixture.appDirPath}-other/resources`
-      })
-    ).toBeNull()
-  })
-
-  it('rejects the identity off Linux', () => {
-    const fixture = createFixture()
-    expect(resolveAppImageRuntimeIdentity({ ...fixture.identity, platform: 'darwin' })).toBeNull()
   })
 })

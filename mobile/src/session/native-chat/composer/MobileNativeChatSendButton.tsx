@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, Text } from 'react-native'
+import { Pressable } from 'react-native'
 import { CornerDownRight, ListEnd } from 'lucide-react-native'
 import type {
   NativeChatFollowUpBehavior,
@@ -13,10 +13,10 @@ import {
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useKeyboardPersistingTaps } from '../../../platform/keyboard-persisting-taps'
+import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
@@ -92,9 +92,9 @@ export function MobileNativeChatSteerPreviewButton({
       ref={keepsField}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [inputStyles.sendPreviewButton, pressed && inputStyles.pressed]}
+      style={({ pressed }) => [inputStyles.sendButton, pressed && inputStyles.pressed]}
       onPress={(event) => {
-        // As desktop: the label can change between a double-click's presses (Steer, then Steer queued).
+        // As desktop: the action can change between a double-click's presses (Steer, then Steer queued).
         const native = event.nativeEvent
         const detail = 'detail' in native ? native.detail : undefined
         if (typeof detail !== 'number' || detail <= 1) {
@@ -103,10 +103,7 @@ export function MobileNativeChatSteerPreviewButton({
       }}
       hitSlop={COMPOSER_CONTROL_HIT_SLOP}
     >
-      <Icon size={14} color={colors.bgBase} strokeWidth={2.4} />
-      <Text style={{ color: colors.bgBase }} numberOfLines={1}>
-        {label}
-      </Text>
+      <Icon size={19} color={colors.bgBase} strokeWidth={2.4} />
     </Pressable>
   )
 }

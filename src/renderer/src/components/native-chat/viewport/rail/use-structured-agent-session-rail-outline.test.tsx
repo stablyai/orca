@@ -6,7 +6,7 @@ import type { AgentSessionConversationOutline } from '../../../../../../shared/a
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/journal/structured-agent-session-journal-reads', () => ({
   readStructuredAgentSessionConversationOutline: mocks.read
 }))
 
@@ -32,6 +32,7 @@ function loaded(oldest: number): AgentJournalRenderItem[] {
 function outline(through: number, epoch = 'epoch-1'): AgentSessionConversationOutline {
   return {
     sessionId: 'session-1',
+    humanMessagesOnly: true,
     cursor: { epoch, sequence: through },
     entries: [
       { itemId: 'user-2', sequence: 2, preview: 'first prompt', imageCount: 0 },
@@ -89,6 +90,19 @@ describe('structured rail outline fetch', () => {
       expect(result.current).toEqual([{ id: 'user-2', text: 'first prompt', hasImages: false }])
     )
     expect(mocks.read).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps old-host history out of the rail without refetching as the window moves', async () => {
+    const { humanMessagesOnly: _marker, ...legacy } = outline(120)
+    mocks.read.mockResolvedValue(legacy)
+    const { result, rerender } = renderOutline(VISIBLE)
+    await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(1))
+    expect(result.current).toBeNull()
+    for (const oldest of [51, 70, 100, 130]) {
+      rerender({ ...VISIBLE, oldest })
+    }
+    expect(result.current).toBeNull()
+    expect(mocks.read).toHaveBeenCalledTimes(1)
   })
 
   describe('after a failed read', () => {

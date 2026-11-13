@@ -2,7 +2,7 @@ import type {
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../repositories/runtime-remote-fetch-controller'
-import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
+import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
@@ -62,6 +62,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
+        matchFolderWorkspaces?: boolean
         crossStoreParent?: CrossStoreParentRef
         noParent?: boolean
       }
@@ -76,13 +77,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       store: this.store,
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
-        resolveFolderParent: async (selector) => {
-          const parent = await this.worktreeLineage.resolveParent(selector)
-          if (parent.type !== 'folder') {
-            throw new Error('selector_not_found')
-          }
-          return { folderWorkspaceId: parent.folderWorkspace.id }
-        },
+        resolveParent: (selector, options) => this.worktreeLineage.resolveParent(selector, options),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
         readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),

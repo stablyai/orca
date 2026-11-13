@@ -2,7 +2,10 @@
 
 import type { StructuredHostStatus } from '../../agent-hook-listener/listener-event'
 import type { ProgramStatusFacet } from '../../program-status/facet'
-import type { AgentProviderSessionMetadata } from '../../agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../agent-session/lifecycle/agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
   AgentStatusExecutionId,
@@ -40,6 +43,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Live host acknowledgement of this renderer’s exact pane retirement. */
   authorityRestartId?: string
   launchToken?: string
+  /** The host's statement on the Orca launch in this pane: its note, or null for none; absent says nothing. */
+  launchConfig?: SleepingAgentLaunchConfig | null
   terminalHandle?: string
   tabId?: string
   worktreeId?: string
@@ -67,6 +72,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   programStatus?: ProgramStatusFacet
   /** Only `programStatus` changed: readers patch the facet and treat nothing else as news. */
   programStatusOnly?: true
+  /** The terminal agent's Orca id on its execution host; null when that host can name this
+   *  conversation but has not yet (Copy retries); absent from older hosts and unnameable rows. */
+  orcaSessionId?: string | null
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
   /** The pane's owning agent session on its execution host; absent from older hosts. */

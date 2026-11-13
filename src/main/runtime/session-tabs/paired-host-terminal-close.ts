@@ -1,5 +1,5 @@
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
+import type { RuntimeTerminalClose } from '../../../shared/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { findUnifiedTerminalTabs } from '../../../shared/workspace-session/workspace-session-terminal-tab-close'
 

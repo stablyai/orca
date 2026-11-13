@@ -15,14 +15,15 @@ import {
 } from '../../form-controls/SettingsSearchableSelect'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import { PluginThemeSwatch, ThemeColorSwatch } from '../../../plugins/page/PluginThemeSwatch'
 import {
   isPluginTerminalThemeSelected,
   terminalThemeUpdate
 } from '../../../plugins/state/plugin-theme-apply'
-import { findCodeEditorTheme } from '@/lib/code-editor-theme'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { findCodeEditorTheme } from '@/lib/editor/appearance/code-editor-theme'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { requestPluginBrowse } from '@/store/plugins/navigation/plugin-preview-request'
 import { useCatalogAppThemes, type CatalogAppTheme } from './use-catalog-app-themes'
 import {
@@ -35,36 +36,36 @@ type BuiltInTheme = GlobalSettings['theme']
 const BUILT_IN = 'built-in'
 const FOLLOW_APP = 'follow-app'
 
-function browseThemesLabel(): string {
-  return translate('auto.components.settings.AppearanceThemeControl.browseThemes', 'Browse themes')
+function browseThemesLabel(t: Translate = translate): string {
+  return t('auto.components.settings.AppearanceThemeControl.browseThemes', 'Browse themes')
 }
 
-function builtInLabel(): string {
-  return translate(
+function builtInLabel(t: Translate = translate): string {
+  return t(
     'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
     'Built-in'
   )
 }
 
-function searchThemesLabel(): string {
-  return translate('auto.components.settings.AppearanceThemeControl.searchThemes', 'Search themes…')
+function searchThemesLabel(t: Translate = translate): string {
+  return t('auto.components.settings.AppearanceThemeControl.searchThemes', 'Search themes…')
 }
 
-function noThemesLabel(): string {
-  return translate(
+function noThemesLabel(t: Translate = translate): string {
+  return t(
     'auto.components.settings.AppearanceThemeControl.noThemes',
     'No themes match your search.'
   )
 }
 
 /** Desktop only: the web client has no plugin catalog to open. */
-function browseThemesActions(): SettingsSearchableSelectAction[] {
+function browseThemesActions(t?: Translate): SettingsSearchableSelectAction[] {
   return isWebClientLocation()
     ? []
     : [
         {
           key: 'browse-themes',
-          label: browseThemesLabel(),
+          label: browseThemesLabel(t),
           icon: <Store className="size-3.5" />,
           onSelect: () => requestPluginBrowse('themes')
         }
@@ -74,9 +75,10 @@ function browseThemesActions(): SettingsSearchableSelectAction[] {
 /** `labels` holds every theme the picker lists, so two sharing a name show their publishers. */
 function pluginThemeGroups(
   themes: readonly PluginThemeRegistration[],
-  labels: ReadonlyMap<string, string> = themeOptionLabels(themes)
+  labels: ReadonlyMap<string, string> = themeOptionLabels(themes),
+  t?: Translate
 ): SettingsSearchableSelectGroup[] {
-  const pluginNames = disambiguatedContentPluginNames(themes)
+  const pluginNames = disambiguatedContentPluginNames(themes, t)
   return [...Map.groupBy(themes, (theme) => theme.pluginKey).values()].map((group) => ({
     key: group[0].pluginKey,
     heading: pluginNames.get(group[0].pluginKey) ?? group[0].pluginName,
@@ -91,16 +93,21 @@ function pluginThemeGroups(
 
 function themeOptionLabels(
   themes: readonly PluginThemeRegistration[],
-  catalogThemes: readonly CatalogAppTheme[] = []
+  catalogThemes: readonly CatalogAppTheme[] = [],
+  t?: Translate
 ): ReadonlyMap<string, string> {
-  return disambiguatedPluginContentLabels([
-    ...themes,
-    ...catalogThemes.map((theme) => ({
-      id: theme.value,
-      pluginKey: theme.listing.pluginKey,
-      label: theme.label
-    }))
-  ])
+  return disambiguatedPluginContentLabels(
+    [
+      ...themes,
+      ...catalogThemes.map((theme) => ({
+        id: theme.value,
+        pluginKey: theme.listing.pluginKey,
+        label: theme.label
+      }))
+    ],
+    undefined,
+    t
+  )
 }
 
 /** System, Dark or Light; the Light theme and Dark theme slots pick the colors for each. */
@@ -115,13 +122,14 @@ export function AppearanceThemeControl({
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: BuiltInTheme) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center gap-2">
       {/* Why desktop only: the web client has no plugin catalog to open. */}
       {isWebClientLocation() ? null : (
         <Button variant="outline" size="sm" onClick={() => requestPluginBrowse('themes')}>
           <Store />
-          {browseThemesLabel()}
+          {browseThemesLabel(t)}
         </Button>
       )}
       <SettingsSegmentedControl
@@ -134,15 +142,15 @@ export function AppearanceThemeControl({
         options={[
           {
             value: 'system',
-            label: translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
+            label: t('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
           },
           {
             value: 'dark',
-            label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
+            label: t('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
           },
           {
             value: 'light',
-            label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
+            label: t('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
           }
         ]}
       />
@@ -163,6 +171,7 @@ export function AppearanceThemeSlotSelect({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const allThemes = usePluginThemes()
   const themes = allThemes.filter((theme) => theme.base === base)
   const catalog = useCatalogAppThemes(base, allThemes, settings.pluginSystemEnabled === true)
@@ -179,14 +188,14 @@ export function AppearanceThemeSlotSelect({
     : undefined
   const terminalInUse =
     terminal !== undefined && isPluginTerminalThemeSelected(settings, terminal, base === 'dark')
-  const labels = themeOptionLabels(themes, catalog.themes)
+  const labels = themeOptionLabels(themes, catalog.themes, t)
   return (
     <div className="flex flex-col items-end gap-1">
       <SettingsSearchableSelect
         ariaLabel={label}
         value={value}
-        searchPlaceholder={searchThemesLabel()}
-        emptyText={noThemesLabel()}
+        searchPlaceholder={searchThemesLabel(t)}
+        emptyText={noThemesLabel(t)}
         onOpenChange={(open) => {
           if (open) {
             catalog.open()
@@ -209,32 +218,26 @@ export function AppearanceThemeSlotSelect({
           {
             key: BUILT_IN,
             options: [
-              { value: BUILT_IN, label: builtInLabel() },
+              { value: BUILT_IN, label: builtInLabel(t) },
               {
                 value: MATCH_TERMINAL_APP_THEME,
-                label: translate(
-                  'auto.components.settings.AppearanceThemeControl.matchTerminal',
-                  'Match Terminal'
+                label: t(
+                  'auto.components.settings.AppearanceThemeControl.7ad388ec82',
+                  'Match terminal'
                 ),
                 detail: (
                   <>
                     <Zap className="mr-1 size-3" aria-hidden />
-                    {translate(
-                      'auto.components.settings.AppearanceThemeControl.dynamic',
-                      'dynamic'
-                    )}
+                    {t('auto.components.settings.AppearanceThemeControl.dynamic', 'dynamic')}
                   </>
                 )
               }
             ]
           },
-          ...pluginThemeGroups(themes, labels),
+          ...pluginThemeGroups(themes, labels, t),
           {
             key: 'catalog',
-            heading: translate(
-              'auto.components.settings.AppearanceThemeControl.moreThemes',
-              'More themes'
-            ),
+            heading: t('auto.components.settings.AppearanceThemeControl.moreThemes', 'More themes'),
             options: catalog.themes.map((theme) => ({
               value: theme.value,
               label: labels.get(theme.value) ?? theme.label,
@@ -248,19 +251,19 @@ export function AppearanceThemeSlotSelect({
           catalog.loading ? (
             <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
-              {translate(
+              {t(
                 'auto.components.settings.AppearanceThemeControl.moreThemesLoading',
                 'Loading themes…'
               )}
             </div>
           ) : null
         }
-        actions={browseThemesActions()}
+        actions={browseThemesActions(t)}
       />
       {catalog.installing ? (
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
-          {translate(
+          {t(
             'auto.components.settings.AppearanceThemeControl.installingTheme',
             'Installing {{value0}}…',
             { value0: labels.get(catalog.installing.value) ?? catalog.installing.label }
@@ -282,7 +285,7 @@ export function AppearanceThemeSlotSelect({
             )
           }
         >
-          {translate(
+          {t(
             'auto.components.settings.AppearanceThemeControl.useTerminalTheme',
             'Use its terminal colors'
           )}
@@ -304,6 +307,7 @@ export function CodeEditorThemeSelect({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const themes = usePluginThemes()
   const selected = findCodeEditorTheme(
     base === 'dark' ? settings.editorThemeDark : settings.editorThemeLight,
@@ -313,8 +317,8 @@ export function CodeEditorThemeSelect({
     <SettingsSearchableSelect
       ariaLabel={label}
       value={selected === null ? FOLLOW_APP : typeof selected === 'string' ? selected : selected.id}
-      searchPlaceholder={searchThemesLabel()}
-      emptyText={noThemesLabel()}
+      searchPlaceholder={searchThemesLabel(t)}
+      emptyText={noThemesLabel(t)}
       onValueChange={(value) =>
         updateSettings(
           editorThemeSlotUpdate(
@@ -331,25 +335,25 @@ export function CodeEditorThemeSelect({
           options: [
             {
               value: FOLLOW_APP,
-              label: translate('settings.appearance.editorTheme.followApp', 'Same as app theme')
+              label: t('settings.appearance.editorTheme.followApp', 'Same as app theme')
             }
           ]
         },
         {
           key: BUILT_IN,
-          heading: builtInLabel(),
+          heading: builtInLabel(t),
           options: [
             {
               value: 'light',
-              label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
+              label: t('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
             },
             {
               value: 'dark',
-              label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
+              label: t('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
             }
           ]
         },
-        ...pluginThemeGroups(themes)
+        ...pluginThemeGroups(themes, undefined, t)
       ]}
     />
   )

@@ -12,13 +12,22 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toast } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
-  callStructuredAgentSession: mocks.call,
-  supportsStructuredAgentSessionQuietRepeatedStop: async () => true,
-  supportsStructuredAgentSessionPromptCancel: mocks.promptCancelSupported,
-  supportsStructuredAgentSessionQuestionAnswers: mocks.questionAnswersSupported
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
 }))
+
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    supportsStructuredAgentSessionQuietRepeatedStop: async () => true,
+    supportsStructuredAgentSessionPromptCancel: mocks.promptCancelSupported,
+    supportsStructuredAgentSessionQuestionAnswers: mocks.questionAnswersSupported
+  })
+)
 vi.mock('../session/structured/read/use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
     state: {

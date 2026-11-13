@@ -15,6 +15,7 @@ export function getPluginPanelActivityItems(
 ): ActivityBarItem[] {
   return panels.map((panel) => ({
     id: panel.tabKey,
+    pluginKey: panel.pluginKey,
     icon: resolvePluginPanelIcon(panel.icon),
     // Manifest titles are plugin-owned and render without app-catalog translation.
     title: panel.title,

@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,
@@ -18,8 +17,8 @@ import {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession
 } from './orchestration-structured-worker-session'
-import { deliverWorkerDispatchPreamble } from '../worker/deliver-worker-dispatch-preamble'
-import { tearDownFailedWorkerStart } from '../worker/failed-worker-start-teardown'
+import { deliverWorkerDispatchPreamble } from '../worker/start/readiness/deliver-worker-dispatch-preamble'
+import { tearDownFailedWorkerStart } from '../worker/start/readiness/failed-worker-start-teardown'
 import { structuredWorkerIdentities } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { rpcContext, runtimeStub } from '../../agent-launch/agent-launch.test-fixture'
 
@@ -119,7 +118,8 @@ async function createWorker() {
       coordinatorHandle: 'term_coordinator',
       devMode: false,
       requestId: 'request-retry',
-      readinessTimeoutMs: 2000
+      // Why: real-time budget; five refused opens can outlast 2s on a loaded host and turn refusal into a timeout.
+      readinessTimeoutMs: 20_000
     })
   return { runtime, created, workerRuntime, deliverPreamble }
 }

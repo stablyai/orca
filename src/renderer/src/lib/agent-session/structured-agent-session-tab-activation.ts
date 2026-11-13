@@ -7,8 +7,8 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-
 import {
   executionHostIdForStructuredTarget,
   structuredAgentSessionOwnerForTab
-} from '@/runtime/structured-agent-session-owner'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { Tab } from '../../../../shared/tab-types'
 
 export function findStructuredAgentSessionTab(

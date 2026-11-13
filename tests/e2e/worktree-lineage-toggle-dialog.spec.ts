@@ -62,9 +62,9 @@ test('locally controlled project-group modal keeps child-toggle input', async ({
   await orcaPage.keyboard.press('ControlOrMeta+Alt+KeyH')
   expect(await orcaPage.evaluate(() => window.__store?.getState().collapsedGroups.size)).toBe(0)
   await orcaPage.getByRole('menuitem', { name: /Delete/i }).click()
-  const dialog = orcaPage.getByRole('dialog', { name: 'Delete Project Group' })
+  const dialog = orcaPage.getByRole('dialog', { name: 'Delete' })
   await expect(dialog).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Delete Group', exact: true })).toBeFocused()
+  await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toBeFocused()
   expect(await orcaPage.evaluate(() => window.__store?.getState().activeModal)).toBe('none')
   const before = await orcaPage.evaluate(() =>
     [...(window.__store?.getState().collapsedGroups ?? [])].sort()

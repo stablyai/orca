@@ -1,5 +1,5 @@
 import '../../../../shared/git/admission/git-admission-state'
-import '../../../crash-reporting/main-process-lifecycle-identity'
+import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
 import {
   assertAgentSkillSharingAllowed,
@@ -16,8 +16,8 @@ import {
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { SharingUnavailableOnHostError } from '../../../../shared/sharing-unavailable-on-host'
 import { SKILL_SHARE_NAME_TAKEN_ERROR } from '../../../../shared/skill-sharing-contract'
-import { selectDiscoveredSkills } from '../../../skills/agent-skill-selection'
-import { SkillSharePreparationService } from '../../../skills/skill-share-preparation-service'
+import { selectDiscoveredSkills } from '../../../skills/sharing/agent-skill-selection'
+import { SkillSharePreparationService } from '../../../skills/sharing/skill-share-preparation'
 import { RuntimeSkillInstallQueries } from './runtime-skill-install-queries'
 import type {
   RuntimeSkillCommandSurface,
@@ -27,7 +27,7 @@ import type {
   SkillCloudOptions,
   SkillCloudPublishRequest
 } from '../../../../shared/skill-cloud-contract'
-import type { SkillCloudService } from '../../../skills/skill-cloud-service'
+import type { SkillCloudService } from '../../../skills/cloud/skill-cloud-package-service'
 
 export class RuntimeSkillCommands
   extends RuntimeSkillInstallQueries

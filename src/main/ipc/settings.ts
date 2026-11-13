@@ -14,17 +14,18 @@ import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
-import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { applyAgentStatusHooksEnabled } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
+import { recordManagedHookInstallFailure } from '../agent-hooks/installation/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/sessions/browser-session-proxy'
+import { applyBrowserSessionProxies } from '../browser/sessions/proxy/browser-session-proxy'
 import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
+import { registerCustomAppIconHandlers } from './custom-app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal/appearance/terminal-line-height-settings'
@@ -32,7 +33,7 @@ import { prepareLocalWorktreeRootsForRepos } from '../workspaces/creation/worktr
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktrees/creation/worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/catalog/runtime-environment-preference'
 import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
@@ -44,7 +45,7 @@ import {
 } from '../../shared/computer-awake-mode'
 import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
 const registryRoot = getRuntimeEnvironmentRegistryRoot
@@ -61,6 +62,7 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  registerCustomAppIconHandlers(store)
   ipcMain.handle(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }

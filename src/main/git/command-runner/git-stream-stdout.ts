@@ -2,15 +2,13 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import { createAbortError } from './abort-error'
-import { killSpawnedCommandTree } from './spawned-command-tree-kill'
-import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
-import type { ResolvedCommand } from './wsl-command-resolution'
-import {
-  DEFAULT_GIT_MAX_BUFFER,
-  type GitAdmissionTier,
-  type GitExecOptions
-} from './git-exec-options'
+import { createAbortError } from './process-capture/abort-error'
+import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-kill'
+import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
+import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
+import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
+
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
@@ -18,17 +16,17 @@ import {
   invalidateMissingDirectWslGit,
   resolveGitCommand,
   resolveGitCommandWithoutProbe
-} from './git-command-resolution'
-import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
+} from './host-routing/git-command-resolution'
+import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
+import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { gitSpawn } from './git-spawn'
-import { acquireGitAdmission } from './git-subprocess-admission'
+import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
   gitCommandTimeoutMs
 } from '../../../shared/git/commands/git-command-timeout'
-import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
-import { gitRunsIn } from './git-runs-in'
+import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
+import { gitRunsIn } from './host-routing/git-runs-in'
 
 /** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
 export type GitStreamResult = { stoppedEarly: boolean }
@@ -43,6 +41,8 @@ export type GitStreamOptions = {
   signal?: AbortSignal
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
+  /** Independent stderr cap for parsers that stream an arbitrarily large population. */
+  maxStderrBuffer?: number
   /** Explicit wall-clock deadline; read commands default to the production backstop. */
   timeoutMs?: number
   /** Overrides only the default read deadline in tests. */
@@ -69,7 +69,8 @@ function streamInSpan(
   maxBuffer: number,
   timeoutMs: number | undefined
 ): Promise<GitStreamResult> {
-  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
+  const meta = { args, cwd: options.cwd, admissionTier: options.admissionTier }
+  return withGitSpan(meta, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
     if (checkoutRoutingReady) {
       await checkoutRoutingReady
@@ -214,7 +215,7 @@ function streamInSpan(
         }
         function onStderrData(chunk: Buffer): void {
           stderrBytes += chunk.byteLength
-          if (stderrBytes > maxBuffer) {
+          if (stderrBytes > (options.maxStderrBuffer ?? maxBuffer)) {
             void killSpawnedCommandTree(child)
             finish(new Error('git stderr exceeded maxBuffer.'))
             return

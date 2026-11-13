@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
-import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-explorer-display-root'
+import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-listing/file-explorer-display-root'
 import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
 
 export type ExplorerRootOption = { value: string; label: string }
@@ -10,7 +11,8 @@ export function getExplorerDisplayRootOptions(
   worktree: {
     isSparse?: boolean
     sparseDirectories?: string[]
-  } | null
+  } | null,
+  t: Translate = translate
 ): ExplorerRootOption[] | null {
   if (!worktree?.isSparse) {
     return null
@@ -31,7 +33,7 @@ export function getExplorerDisplayRootOptions(
     ? [
         {
           value: FILE_EXPLORER_FULL_ROOT,
-          label: translate('fileExplorer.root.full', 'Repository root')
+          label: t('fileExplorer.root.full', 'Repository root')
         },
         ...dirs.map((dir) => ({ value: dir, label: dir }))
       ]

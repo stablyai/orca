@@ -1,8 +1,11 @@
 // Which source addresses `orca serve` accepts, decided once at startup.
 import { classifyRemotePairingHostname } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
-import { resolveAdvertisedPairingHostname } from '../../pairing-endpoint'
-import { classifyNetworkSource } from '../network-source-class'
-import { PublicSourceRefusal, type WebSocketSourceGuard } from '../ws-network-source-guard'
+import { resolveAdvertisedPairingHostname } from './pairing/network/pairing-endpoint'
+import { classifyNetworkSource } from '../transports/websocket/source-admission/network-source-class'
+import {
+  PublicSourceRefusal,
+  type WebSocketSourceGuard
+} from '../transports/websocket/source-admission/ws-network-source-guard'
 import type { DeviceEntry } from './pairing/device-entry'
 import {
   ensureNetworkSourceGuardSince,

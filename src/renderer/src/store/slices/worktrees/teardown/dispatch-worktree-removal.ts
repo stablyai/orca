@@ -3,14 +3,14 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../sh
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import {
   isWorktreeRemovalReplyLost,
   settleLostWorktreeRemovalReply
 } from './host-worktree-removal-state'
-import { worktreeRemovalReplyTimeoutMs } from '../../../../../../shared/worktree/archive-hook-removal-gate'
+import { worktreeRemovalReplyTimeoutMs } from '../../../../../../shared/worktree/removal/archive-hook-removal-gate'
 
 /** Carry hostId across every removal transport: repoId::path alone repeats across hosts and cannot identify the confirmed copy (STA-4343). */
 export async function dispatchWorktreeRemoval(args: {
@@ -72,11 +72,6 @@ async function requestWorktreeRemoval(
       ...snapshotPruneBatch
     })
   }
-  if (options?.approvedNestedWorktrees) {
-    throw new Error(
-      'Nested worktree deletion is not supported by this runtime. Delete its children individually first.'
-    )
-  }
   const effectiveHostId =
     options?.sameIdSurvivingHostId != null ? hostId : qualifyRuntimeCallHost(target, hostId)
   return callRuntimeRpc<RemoveWorktreeResult>(
@@ -89,18 +84,24 @@ async function requestWorktreeRemoval(
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       // Send waiver only when true; older hosts silently strip unknown params at this version boundary.
       ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
+      ...(options?.approvedNestedWorktrees
+        ? { approvedNestedWorktrees: options.approvedNestedWorktrees }
+        : {}),
       runHooks: !skipArchive
     },
     {
       // Why (#19334): the host may run an archive hook before it decides anything, then waits for
       // Git's delete before it replies; outlast both when a hook can run.
-      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive),
+      timeoutMs: worktreeRemovalReplyTimeoutMs(
+        !skipArchive,
+        options?.approvedNestedWorktrees?.length
+      ),
       beforeSend
     }
   )
 }
 
-function qualifyRuntimeCallHost(
+export function qualifyRuntimeCallHost(
   target: RuntimeClientTarget,
   hostId: ExecutionHostId | undefined
 ): ExecutionHostId | undefined {

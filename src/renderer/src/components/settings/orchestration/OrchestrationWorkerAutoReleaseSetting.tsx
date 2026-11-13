@@ -4,6 +4,7 @@ import {
   getWorkerAutoReleaseDescription,
   getWorkerAutoReleaseTitle
 } from './worker-auto-release-copy'
+import { useTranslate } from '../../../i18n/use-translate'
 
 type OrchestrationWorkerAutoReleaseSettingProps = {
   settings: GlobalSettings
@@ -14,13 +15,14 @@ export function OrchestrationWorkerAutoReleaseSetting({
   settings,
   updateSettings
 }: OrchestrationWorkerAutoReleaseSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const enabled = settings.orchestrationWorkerAutoReleaseEnabled !== false
   return (
     <SettingsSwitchRow
-      label={getWorkerAutoReleaseTitle()}
-      description={getWorkerAutoReleaseDescription()}
+      label={getWorkerAutoReleaseTitle(t)}
+      description={getWorkerAutoReleaseDescription(t)}
       checked={enabled}
-      ariaLabel={getWorkerAutoReleaseTitle()}
+      ariaLabel={getWorkerAutoReleaseTitle(t)}
       onChange={() => {
         void updateSettings({ orchestrationWorkerAutoReleaseEnabled: !enabled })
       }}

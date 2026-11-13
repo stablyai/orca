@@ -10,18 +10,26 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
+vi.mock(
+  '../../../../../runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
+  })
+)
+
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
-vi.mock('@/runtime/local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
+vi.mock('@/runtime/native-chat/local-sessions/local-structured-chats', () => ({
+  localStructuredChatsInUse: async () => true
+}))
 vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilityObservation: () => () => {},
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => ['agent-session.model-catalog.saved-only.v1'],
   readLocalRuntimeCapabilitiesOrUnknown: () => ['agent-session.model-catalog.saved-only.v1']
 }))
-vi.mock('@/runtime/host-structured-agents', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/host-structured-agents', () => ({
   readHostStructuredAgentsForRuntime: (hostId: string) =>
     mocks.agentsKnown && hostId === 'local' ? REGISTERED : undefined,
   subscribeHostStructuredAgents: (listener: () => void) => {
@@ -41,8 +49,8 @@ import type { AgentSessionModelCatalogResult } from '../../../../../../../shared
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { getDefaultSettings } from '../../../../../../../shared/constants'
 import { useAppStore } from '@/store/index'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
-import { installHostModelCatalogSnapshotsSync } from '@/runtime/host-model-catalog-snapshots-sync'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import { installHostModelCatalogSnapshotsSync } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots-sync'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
 // Previously used agents without saved picks should paint cached host models immediately.

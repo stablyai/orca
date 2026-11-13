@@ -1,13 +1,10 @@
-import {
-  WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
-  type WakeHibernatedAgentsWorktreeDetail
-} from '@/constants/terminal'
+import { WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT } from '@/constants/terminal'
+import type { WakeHibernatedAgentsWorktreeDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { useAppStore } from '@/store/index'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
-import { getSleepingRecordTabId } from '../../sleeping-agent-wake-requests'
+import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from '../../workspace/activation/worktree-activation-pty-inventory'
 import { gateWorktreeAgentActivation } from '../../workspace/activation/worktree-agent-activation-gate'
 import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
@@ -16,6 +13,8 @@ import {
   isStrandedWorkspaceSleepRecord,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 type BackgroundSleepingAgentWakeDispatcherOptions = {
   isWorkspaceSessionReady?: () => boolean
@@ -132,9 +131,9 @@ function getCanonicalPassiveWakeRecords(
 
 /** Wake mobile-visible sleepers without desktop navigation: wake mounted hibernated panes and collect claims; target-mount unmounted passive hibernation tabs; resume other records without navigation, skipping claims; mount those activate:false resume tabs so startup reaches PTYs. Skip restoreOnTabOpenOnly records to preserve explicit sleep. PTYs republish automatically, so await no spawn. */
 export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
-  const sleptRecords = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey).filter(
-    (record) => record.worktreeId === worktreeId
-  )
+  const sleptRecords = sleepingAgentRecordIndex
+    .entries(useAppStore.getState().sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
   // No sleepers means no mounting: phone browsing must not accumulate desktop workspaces/PTYS.
   if (sleptRecords.length === 0) {
     return

@@ -1,7 +1,7 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { GhAccountBinding } from '../../../../shared/github/account-binding'
-import { GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
+import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import { GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/web-runtime-request-registry'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -9,9 +9,9 @@ import { emitGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 
 export function addIssueCommentForRepo(args: {
   repoId?: string

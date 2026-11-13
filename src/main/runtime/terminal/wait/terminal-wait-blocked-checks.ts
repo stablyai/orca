@@ -6,7 +6,7 @@ import {
   readWaitBlockedCarry,
   resetWaitBlockedCarry,
   type WaitBlockedCheckState
-} from '../../wait-blocked-check-state'
+} from './wait-blocked-check-state'
 import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason

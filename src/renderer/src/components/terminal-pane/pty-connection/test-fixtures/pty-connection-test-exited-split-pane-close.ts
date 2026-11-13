@@ -7,7 +7,7 @@ export async function expectMainFrameClosesExitedSplitPaneOnce(
   manager: MockPaneManager
 ): Promise<void> {
   const { layoutApplyTestTransport } =
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   const { reconcileMountedPanesToLayout } =
     await import('../../layout/reconciliation/terminal-pane-frame-reconciliation')
   await layoutApplyTestTransport.settle()

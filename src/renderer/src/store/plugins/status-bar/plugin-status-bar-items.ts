@@ -11,6 +11,7 @@ import {
   ensurePluginPanelsLoaded,
   type ActivePluginCommand
 } from '../catalog/plugin-contribution-catalog'
+import type { Translate } from '../../../i18n/use-translate'
 
 /** A status bar item of an enabled plugin, with its worker's changes applied. */
 export type ActivePluginStatusBarItem = {
@@ -46,7 +47,8 @@ function watchPluginStatusBar(): void {
 
 export function collectPluginStatusBarItems(
   plugins: readonly PluginHostListEntry[],
-  overrides: PluginStatusBarOverrides
+  overrides: PluginStatusBarOverrides,
+  t?: Translate
 ): ActivePluginStatusBarItem[] {
   return plugins.filter(isLivePlugin).flatMap((plugin) =>
     (plugin.statusBarItems ?? []).flatMap((declared) => {
@@ -55,7 +57,7 @@ export function collectPluginStatusBarItems(
         return []
       }
       const command = plugin.commands.find((candidate) => candidate.id === declared.command)
-      const names = installedPluginDisplayNames(plugins)
+      const names = installedPluginDisplayNames(plugins, t)
       const pluginName = names.get(plugin.pluginKey) ?? plugin.name
       return [
         {

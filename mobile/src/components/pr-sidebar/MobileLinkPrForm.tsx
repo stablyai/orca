@@ -3,13 +3,13 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { RpcClient } from '../../transport/rpc-client'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
-} from '../../../../src/shared/github/links'
-import { linkMobilePr } from '../../source-control/mobile-pr-link'
+} from '../../../../src/shared/github/repositories/links'
+import { linkMobilePr } from '../../source-control/review/mobile-pr-link'
 import { TextField } from '../composer-input/TextField'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 

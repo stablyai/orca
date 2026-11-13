@@ -8,7 +8,7 @@ import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
-import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
 import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { CODEX_STRUCTURED_AGENT } from '../launch/codex-structured-agent-definition'
@@ -20,7 +20,7 @@ import {
 import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import type { CodexSession } from './codex-structured-session-state'
 

@@ -1,3 +1,4 @@
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 // Build slices without set: pending window commands keep tabs as drawn (including removal/placement); other tabs and order follow main, retaining hidden chat launch slots.
 
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
@@ -238,8 +239,14 @@ export function withHeldTabsAsDrawn(
       browserPagesByWorkspace: Object.fromEntries(
         Object.entries(next.browserPagesByWorkspace).filter(([id]) => !closedBrowsers.includes(id))
       ),
-      remoteBrowserPageHandlesByPageId: Object.fromEntries(
-        Object.entries(next.remoteBrowserPageHandlesByPageId).filter(([id]) => !closedPages.has(id))
+      remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+        Object.fromEntries(
+          Object.entries(next.remoteBrowserPageHandlesByPageId).filter(
+            ([id]) => !closedPages.has(id)
+          )
+        ),
+        closedPages,
+        next.remoteBrowserPageHandlesByPageId
       ),
       openFiles: next.openFiles.filter(
         (file) => file.worktreeId !== key || !files.has(file.id) || drawnFiles.has(file.id)

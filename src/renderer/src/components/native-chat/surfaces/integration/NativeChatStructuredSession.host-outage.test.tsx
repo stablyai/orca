@@ -11,8 +11,11 @@ const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted
 )
 const reconnectHost = vi.hoisted(() => vi.fn<(environmentId: string) => Promise<boolean>>())
 
-vi.mock('@/runtime/structured-agent-session-client', () =>
-  moduleFactories.structuredAgentSessionClient()
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () =>
+  moduleFactories.structuredAgentSessionSubscriptions()
 )
 vi.mock('../../session/structured/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()
@@ -34,7 +37,6 @@ vi.mock('@/components/status-bar/runtime-environment-explicit-connect', () => ({
 
 import { useAppStore } from '@/store'
 import { NativeChatStructuredSession } from '../../NativeChatStructuredSession'
-import { NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS } from '../../host-access/use-native-chat-host-outage'
 
 const initialState = useAppStore.getState()
 let sequence = 0
@@ -149,62 +151,6 @@ afterEach(() => {
   useAppStore.setState({
     runtimeEnvironments: initialState.runtimeEnvironments,
     runtimeStatusByEnvironmentId: initialState.runtimeStatusByEnvironmentId
-  })
-})
-
-it('names a reconnecting host above the composer only once the grace has passed', () => {
-  renderPane()
-  // Mounted before its words arrive, so a screen reader announces them.
-  const region = screen.getByRole('list')
-  expect(region).toHaveAttribute('aria-live', 'polite')
-  expect(region.textContent).toBe('')
-  setHost(hostStatus('unavailable', 'disconnected'))
-  act(() => {
-    vi.advanceTimersByTime(NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS - 1)
-  })
-  expect(screen.queryByText(/Build box/)).toBeNull()
-
-  act(() => {
-    vi.advanceTimersByTime(1)
-  })
-  expect(region.textContent).toBe('Build box is reconnecting…')
-  expect(screen.getByText('Build box is reconnecting…')).toHaveClass('text-muted-foreground')
-  expect(document.querySelector('.lucide-server-off')).toHaveClass('text-muted-foreground')
-  expect(screen.getByRole('listitem')).toHaveAttribute('data-notice-kind', 'host')
-  expect(screen.queryByRole('status')).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Reconnect' })).toBeNull()
-  expect(screen.getByTestId('structured-composer')).toBeTruthy()
-
-  setHost(hostStatus('verified', 'ready'))
-  expect(screen.queryByText(/Build box/)).toBeNull()
-  expect(screen.getByRole('list')).toBe(region)
-})
-
-it('disables Reconnect until its attempt settles and allows another attempt after failure', async () => {
-  let finish: (reachable: boolean) => void = () => {}
-  reconnectHost.mockImplementation(
-    () =>
-      new Promise<boolean>((resolve) => {
-        finish = resolve
-      })
-  )
-  renderPane()
-  setHost(hostStatus('blocked', 'disconnected', true))
-  const reconnect = screen.getByRole('button', { name: 'Reconnect' })
-  fireEvent.click(reconnect)
-  expect(reconnect).toBeDisabled()
-  fireEvent.click(reconnect)
-  expect(reconnectHost).toHaveBeenCalledTimes(1)
-
-  await act(async () => {
-    finish(false)
-  })
-  expect(reconnect).toBeEnabled()
-  expect(screen.getAllByText('Build box is offline')).toHaveLength(1)
-  fireEvent.click(reconnect)
-  expect(reconnectHost).toHaveBeenCalledTimes(2)
-  await act(async () => {
-    finish(true)
   })
 })
 

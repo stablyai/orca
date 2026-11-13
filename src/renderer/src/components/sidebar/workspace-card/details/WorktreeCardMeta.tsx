@@ -17,7 +17,7 @@ import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { WorktreeCardLinkedReviewActions } from '../review/WorktreeCardReviewActions'
 import type { WorktreeCardDetailsHoverProps } from '../metadata/worktree-card-meta-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeCardReviewDetailSection } from '../review/WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
@@ -65,10 +65,12 @@ export function WorktreeCardDetailsHover({
   onOpenAutomationRun,
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
+  const t = useTranslate()
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const detailsHoverControl = hoverControl ?? internalHoverControl
   const {
     hoverOpen,
+    contextMenuOpen,
     reviewMenuOpen,
     handleHoverOpenChange,
     handleIssueMenuOpenChange,
@@ -140,7 +142,7 @@ export function WorktreeCardDetailsHover({
 
   return (
     <HoverCard
-      open={hoverOpen || workspaceTitleEditing}
+      open={workspaceTitleEditing || (!contextMenuOpen && hoverOpen)}
       onOpenChange={handleEffectiveHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}
@@ -239,14 +241,11 @@ export function WorktreeCardDetailsHover({
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
-                label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+                label={t('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
                 actions={
                   onEditComment ? (
                     <MetadataActionIcon
-                      label={translate(
-                        'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                        'Edit notes'
-                      )}
+                      label={t('auto.components.sidebar.WorktreeCardMeta.c7fa72ead0', 'Edit notes')}
                       onClick={onEditComment}
                     >
                       <Pencil className="size-3" />

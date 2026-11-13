@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2]
@@ -20,7 +22,31 @@ async function load(file, contents, name) {
     format: 'esm',
     write: false,
     logLevel: 'silent',
-    tsconfigRaw: {}
+    tsconfigRaw: {},
+    plugins: [
+      {
+        name: 'historical-source-control-owners',
+        setup(plugin) {
+          plugin.onResolve(
+            { filter: /^\.\.\/(?:mobile-git-status|git-status-reply-schema)$/ },
+            (args) => {
+              if (
+                file !== 'mobile/src/source-control/review/mobile-diff-review-queue.ts' ||
+                args.importer !== '<stdin>' ||
+                args.resolveDir !== dirname(resolve(file))
+              ) {
+                return
+              }
+              const target =
+                args.path === '../mobile-git-status'
+                  ? 'mobile/src/source-control/changes/mobile-git-status.ts'
+                  : 'mobile/src/source-control/git/git-status-reply-schema.ts'
+              return { path: resolve(target) }
+            }
+          )
+        }
+      }
+    ]
   })
   return (
     await import(
@@ -34,18 +60,44 @@ const paths = execFileSync('git', ['ls-files', '-z'], { maxBuffer: 16 * 1024 * 1
   .split('\0')
   .filter(Boolean)
 const results = []
-for (const [file, name] of [
-  ['mobile/src/source-control/mobile-git-status.ts', 'buildMobileSourceControlSections'],
-  ['mobile/src/source-control/mobile-branch-compare.ts', 'buildMobileBranchCompareSection'],
-  ['mobile/src/session/mobile-diff-review-queue.ts', 'buildMobileDiffReviewQueue']
+for (const { baselineLegacy, current, name } of [
+  {
+    baselineLegacy: 'mobile/src/source-control/mobile-git-status.ts',
+    current: 'mobile/src/source-control/changes/mobile-git-status.ts',
+    name: 'buildMobileSourceControlSections'
+  },
+  {
+    baselineLegacy: 'mobile/src/source-control/mobile-branch-compare.ts',
+    current: 'mobile/src/source-control/branches/mobile-branch-compare.ts',
+    name: 'buildMobileBranchCompareSection'
+  },
+  {
+    baselineLegacy: 'mobile/src/source-control/review/mobile-diff-review-queue.ts',
+    current: 'mobile/src/source-control/review/mobile-diff-review-queue.ts',
+    name: 'buildMobileDiffReviewQueue'
+  }
 ]) {
+  const historicalFile = [...new Set([current, baselineLegacy])].find((file) => {
+    const probe = runProcessSync({
+      program: 'git',
+      args: ['cat-file', '-t', `${baseline}:${file}`],
+      cwd: process.cwd(),
+      timeoutMs: 30_000,
+      maxOutputBytes: 2 * 1024 * 1024
+    })
+    if (probe.timedOut || probe.outputTruncated || ![0, 128].includes(probe.code)) {
+      throw new Error(describeProcessFailure(probe))
+    }
+    return probe.code === 0 && probe.stdout.trim() === 'blob'
+  })
+  assert(historicalFile, `Missing baseline entry: ${baselineLegacy}`)
   const arms = {
     before: await load(
-      file,
-      execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' }),
+      historicalFile,
+      execFileSync('git', ['show', `${baseline}:${historicalFile}`], { encoding: 'utf8' }),
       name
     ),
-    after: await load(file, readFileSync(file, 'utf8'), name)
+    after: await load(current, readFileSync(current, 'utf8'), name)
   }
   for (const count of [0, 1, 17, 63, 1000]) {
     const step = Math.max(1, Math.floor(paths.length / Math.max(1, count)))

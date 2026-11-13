@@ -12,56 +12,59 @@ import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-i
 import { IntegrationCardPresentationProvider } from '../../integrations/presentation/integration-card-presentation'
 import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { translate } from '@/i18n/i18n'
+import { INTEGRATION_SETTING_TARGET_IDS } from './integrations-search'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Flat presentation turns each provider into one row: -mx-4 cancels its inset, and inner rules are dropped so only rows divide.
-function ProviderRow({ children }: { children: React.ReactNode }): React.JSX.Element {
+function ProviderRow({
+  id,
+  children
+}: {
+  /** Search anchor; task-provider cards carry their own. */
+  id?: string
+  children: React.ReactNode
+}): React.JSX.Element {
   return (
-    <div data-settings-row="" className="[&_.border-t]:border-t-0 [&>*]:-mx-4">
+    <div id={id} data-settings-row="" className="scroll-mt-6 [&_.border-t]:border-t-0 [&>*]:-mx-4">
       {children}
     </div>
   )
 }
 
 export function IntegrationsPane(): React.JSX.Element {
+  const t = useTranslate()
   useIntegrationProviderStatusRefresh()
 
   return (
     <IntegrationCardPresentationProvider value="setup-guide">
       <div className="space-y-8">
         <SettingsGroup
-          title={translate(
-            'auto.components.settings.IntegrationsPane.298c65ecac',
-            'Review providers'
-          )}
-          description={translate(
+          title={t('auto.components.settings.IntegrationsPane.298c65ecac', 'Review providers')}
+          description={t(
             'auto.components.settings.IntegrationsPane.1683acbac4',
             'Connect the source hosts Orca can use for pull requests, merge requests, checks, and review status.'
           )}
         >
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.github}>
             <GitHubIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.gitlab}>
             <GitLabIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.bitbucket}>
             <BitbucketIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.azuredevops}>
             <AzureDevOpsIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.gitea}>
             <GiteaIntegrationCard />
           </ProviderRow>
         </SettingsGroup>
 
         <SettingsGroup
-          title={translate(
-            'auto.components.settings.IntegrationsPane.70e885705b',
-            'Task providers'
-          )}
-          description={translate(
+          title={t('auto.components.settings.IntegrationsPane.70e885705b', 'Task providers')}
+          description={t(
             'auto.components.settings.IntegrationsPane.3ba07f933b',
             'Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.'
           )}

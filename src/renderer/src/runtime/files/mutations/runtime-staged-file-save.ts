@@ -8,12 +8,12 @@ import {
   parseFileWriteResult,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../../../shared/file-write-disk-precondition'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
 import {
   STAGED_FILE_SAVE_CHUNK_BYTES,
   STAGED_FILE_SAVE_METHODS,
   STAGED_FILE_SAVE_RUNTIME_CAPABILITY
-} from '../../../../../shared/staged-file-save'
+} from '../../../../../shared/file-write/staged-file-save'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'

@@ -1,5 +1,5 @@
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
+import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
@@ -37,6 +37,7 @@ import {
   type InstalledAgentDetectionOptions
 } from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -154,13 +155,6 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
   }
 }
 
-const agentRefreshListeners = new Set<() => void>()
-
-export function onAgentsRefreshedOnHost(listener: () => void): () => void {
-  agentRefreshListeners.add(listener)
-  return () => agentRefreshListeners.delete(listener)
-}
-
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
   options?: InstalledAgentDetectionOptions
@@ -175,7 +169,7 @@ export async function refreshAgentsOnHost(
         ? refreshShellPathAndDetectAgents(host.context, options)
         : refreshShellPathAndDetectAgents(host.context)
     const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
-    agentRefreshListeners.forEach((listener) => listener())
+    notifyAgentsRefreshedOnHost()
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)

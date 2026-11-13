@@ -6,20 +6,20 @@ import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { RuntimeHostDescriptor } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
-import type { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
-import type { MobileSocketWiring } from '../mobile-socket-wiring'
+import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-throttle'
+import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
-import { RelayRevokeOutbox } from '../../mobile-cloud-relay/relay-revoke-outbox'
+import { RelayRevokeOutbox } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
-import { RuntimeBinaryMessageRouter } from '../../runtime-binary-message-router'
+import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 import {
   type RuntimeMetadataOwnershipWatch,
   RUNTIME_METADATA_OWNERSHIP_POLL_MS
-} from '../../runtime-metadata-ownership-watch'
+} from './runtime-metadata-ownership-watch'
 import {
   ASK_LONG_POLL_SHARE,
   BROWSER_HOST_LONG_POLL_SHARE,
@@ -35,10 +35,10 @@ import {
   type PairingOfferUnavailable,
   DEFAULT_WS_PORT
 } from './runtime-rpc-pairing-types'
-import { DeclaredDesktopClients } from '../../declared-desktop-clients'
+import { DeclaredDesktopClients } from './pairing/declared-desktop-clients'
 import { AuthenticatedSourceRecorder } from './network-source-policy-store'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
-import type { WebSocketSourceGuard } from '../ws-network-source-guard'
+import type { WebSocketSourceGuard } from '../transports/websocket/source-admission/ws-network-source-guard'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -86,6 +86,7 @@ export class RuntimeRpcState {
   protected mobileDesktopRelay: MobileDesktopRelay | null = null
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
   protected detachPairedServerRows: (() => void) | null = null
+  protected detachRelayHostsChanges: (() => void) | null = null
   protected readonly declaredDesktopClients = new DeclaredDesktopClients()
   protected readonly authenticatedSourceRecorder: AuthenticatedSourceRecorder
   // Why: lets an automatic mint install a provider whose launch-time construction failed.

@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { AgentStatusStructuredSessionSubject } from '../../../../../shared/agent-status/contracts/agent-status-subject'
-import { AgentHookServer } from '../../../../agent-hooks/server'
-import { runClaudeControl } from '../../../../claude/claude-agent-sdk-control-requests'
+import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
+import { runClaudeControl } from '../../../../claude/sdk-transport/claude-agent-sdk-control-requests'
 import { ClaudeStructuredSessionAdapter } from '../../../../claude/structured/claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from '../../../../claude/structured/claude-structured-session-event'
 import {
@@ -26,7 +26,10 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import {
+  claudeAndCodexAgents,
+  NO_STRUCTURED_AGENTS
+} from '../../providers/testing/structured-agent-session-adapter-router-test-support'
 
 export const CALLER = { callerKey: 'client-1' }
 // Claude Code 2.1.280 system/init capabilities.
@@ -56,6 +59,13 @@ let logs: ReturnType<typeof recordingStructuredAgentSessionLogger>
 let server: AgentHookServer
 
 let statusSubject: AgentStatusStructuredSessionSubject | undefined
+
+let declaresClaude = false
+
+/** Call at module scope: hosts then declare Claude's real capabilities. */
+export function declareClaudeCapabilities(): void {
+  declaresClaude = true
+}
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-stop-ends-session-'))
@@ -103,7 +113,9 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
-    agents: NO_STRUCTURED_AGENTS,
+    agents: declaresClaude
+      ? claudeAndCodexAgents({ claude: adapter, codex: adapter })
+      : NO_STRUCTURED_AGENTS,
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalDatabase: openTestJournalHostDatabase(root),

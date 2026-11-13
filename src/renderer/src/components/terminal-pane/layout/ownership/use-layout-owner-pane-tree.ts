@@ -1,23 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
-import { pairedServerMirrors } from '@/runtime/paired-server-workspace'
+import { pairedServerMirrors } from '@/runtime/workspace-layout/frames/paired-server-workspace'
 import {
   isTabPaneTreeHeld,
   onTabPaneTreeRedraw,
   requestTabPaneTreeRedraw
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-tree-holds'
 import { isHostAuthoritativeLayout } from '../reconciliation/terminal-live-layout-reconciliation'
 import { reconcileMountedPanesToLayout } from '../reconciliation/terminal-pane-frame-reconciliation'
-import type { TerminalPaneCloseController } from '../close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../../mounting/use-terminal-pane-lifecycle-stage'
 
 /** Local tabs follow main’s framed tree; paired tabs use host reconciliation, and pending local commands hold their tab until answered. */
-export function useLayoutOwnerPaneTree(controller: TerminalPaneCloseController): void {
+export function useLayoutOwnerPaneTree(controller: TerminalPaneMountedController): void {
   const {
     closePaneLocally,
     expandedPaneIdRef,
     isolatedPaneKey,
     managerRef,
+    terminalManager,
     persistLayoutSnapshot,
     restoredLayout,
     tabId,
@@ -45,7 +46,8 @@ export function useLayoutOwnerPaneTree(controller: TerminalPaneCloseController):
   useEffect(() => {
     const manager = managerRef.current
     if (
-      !manager ||
+      !terminalManager ||
+      manager !== terminalManager ||
       isTabPaneTreeHeld(tabId) ||
       // By host kind, as frames decide it: a paired-server tab may not have bound a remote PTY yet.
       pairedServerMirrors(useAppStore.getState())(worktreeId) ||
@@ -74,5 +76,14 @@ export function useLayoutOwnerPaneTree(controller: TerminalPaneCloseController):
       persistLayoutSnapshot()
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- closePaneLocally/persistLayoutSnapshot change with tab callbacks; re-reconciling on that would replay layout writes.
-  }, [restoredLayout, redraws, zoomed, tabId, worktreeId, managerRef, expandedPaneIdRef])
+  }, [
+    restoredLayout,
+    redraws,
+    zoomed,
+    tabId,
+    worktreeId,
+    terminalManager,
+    managerRef,
+    expandedPaneIdRef
+  ])
 }

@@ -7,11 +7,10 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import { NumberField, SettingsSwitch } from '../form-controls/SettingsFormControls'
-import { translate } from '@/i18n/i18n'
+import { NumberField } from '../form-controls/SettingsFormControls'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
-import { BrowserExtensionsExperimentalSetting } from '../browser/extensions/BrowserExtensionsExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../sidebar/use-wsl-hosts-enabled'
 import {
@@ -34,6 +33,7 @@ export function ExperimentalPane({
   updateSettings,
   hiddenExperimentalUnlocked = false
 }: ExperimentalPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
@@ -64,8 +64,8 @@ export function ExperimentalPane({
 
         {showPet ? (
           <SearchableSetting
-            title={translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
-            description={translate(
+            title={t('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
+            description={t(
               'auto.components.settings.ExperimentalPane.0e89a574ae',
               'Floating animated pet in the bottom-right corner.'
             )}
@@ -75,21 +75,16 @@ export function ExperimentalPane({
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 shrink space-y-1.5">
-                <Label>
-                  {translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
-                </Label>
+                <Label>{t('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.ca2219fe5e',
                     'Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.'
                   )}
                 </p>
               </div>
               <Switch
-                aria-label={translate(
-                  'auto.components.settings.ExperimentalPane.dd6f0a1d45',
-                  'Pet'
-                )}
+                aria-label={t('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
                 checked={settings.experimentalPet}
                 onCheckedChange={(checked) => {
                   updateSettings({ experimentalPet: checked })
@@ -101,11 +96,8 @@ export function ExperimentalPane({
 
         {showTerminalAttention ? (
           <SearchableSetting
-            title={translate(
-              'auto.components.settings.ExperimentalPane.ec897e8d89',
-              'Terminal attention'
-            )}
-            description={translate(
+            title={t('auto.components.settings.ExperimentalPane.ec897e8d89', 'Terminal attention')}
+            description={t(
               'auto.components.settings.ExperimentalPane.88b7613afb',
               'Persistent pane highlight for terminal bell and agent-completion events.'
             )}
@@ -115,20 +107,17 @@ export function ExperimentalPane({
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
-                  {translate(
-                    'auto.components.settings.ExperimentalPane.ec897e8d89',
-                    'Terminal attention'
-                  )}
+                  {t('auto.components.settings.ExperimentalPane.ec897e8d89', 'Terminal attention')}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.a20d5ea365',
                     'Keeps a pane-level highlight visible after terminal bell or agent-completion events until you interact with that pane. Experimental while we tune the signal.'
                   )}
                 </p>
               </div>
               <Switch
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.ExperimentalPane.ec897e8d89',
                   'Terminal attention'
                 )}
@@ -145,11 +134,11 @@ export function ExperimentalPane({
 
         {showAgentHibernation ? (
           <SearchableSetting
-            title={translate(
+            title={t(
               'auto.components.settings.ExperimentalPane.agentHibernation.title',
               'Agent sleep'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.ExperimentalPane.agentHibernation.description',
               'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.'
             )}
@@ -160,25 +149,25 @@ export function ExperimentalPane({
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.agentHibernation.title',
                     'Agent sleep'
                   )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.agentHibernation.copy',
                     'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Agent sleep preserves launch options for agents started by Orca. Manually started agents may resume with your current Orca defaults. Experimental while we tune the safety model.'
                   )}
                 </p>
               </div>
-              <SettingsSwitch
+              <Switch
                 checked={agentHibernationEnabled}
-                ariaLabel={translate(
+                aria-label={t(
                   'auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel',
                   'Toggle agent sleep'
                 )}
-                onChange={() =>
+                onCheckedChange={() =>
                   updateSettings({
                     experimentalAgentHibernation: !agentHibernationEnabled
                   })
@@ -189,11 +178,11 @@ export function ExperimentalPane({
               <div className="ml-4 space-y-3 border-l border-border pl-4">
                 <NumberField
                   className="py-0"
-                  label={translate(
+                  label={t(
                     'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
                     'Sleep after'
                   )}
-                  description={translate(
+                  description={t(
                     'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
                     'How many idle minutes a completed background agent must wait before Orca can sleep it.'
                   )}
@@ -201,7 +190,7 @@ export function ExperimentalPane({
                   min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
                   max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
                   step={1}
-                  suffix={translate(
+                  suffix={t(
                     'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
                     'minutes'
                   )}
@@ -218,11 +207,11 @@ export function ExperimentalPane({
 
         {showNewWorktreeCardStyle ? (
           <SearchableSetting
-            title={translate(
+            title={t(
               'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
               'New card style'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description',
               'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
             )}
@@ -233,25 +222,25 @@ export function ExperimentalPane({
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
                     'New card style'
                   )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
                     'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
                   )}
                 </p>
               </div>
-              <SettingsSwitch
+              <Switch
                 checked={newWorktreeCardStyleEnabled}
-                ariaLabel={translate(
+                aria-label={t(
                   'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.toggleLabel',
                   'Toggle new card style'
                 )}
-                onChange={() =>
+                onCheckedChange={() =>
                   updateSettings({
                     experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
                   })
@@ -262,8 +251,6 @@ export function ExperimentalPane({
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
-
-        <BrowserExtensionsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
         {wslHostsAvailable() ? (
           <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />

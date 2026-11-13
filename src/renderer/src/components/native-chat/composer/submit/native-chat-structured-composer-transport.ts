@@ -12,6 +12,7 @@ import type { NativeChatOptionPickerRequest } from '../../session/options/contro
 import type { AgentSessionSlashCommand } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentContextUsage } from '../../../../../../shared/agent-session/structured-agent-session-context-usage'
 import type { NativeChatComposerErrorDetail } from '../controls/native-chat-composer-error-detail'
+import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-side-chat'
 
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
@@ -28,7 +29,11 @@ export type NativeChatStructuredComposerTransport = {
   sendBlockedReason?: string
   /** What a plain send does now, and whether Cmd/Ctrl+Enter would send it the other way. */
   sendFollowUp?: NativeChatSendFollowUp
-  dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
+  /** `onSent` fires once a conversation command leaves for the host, before its reply. */
+  dispatchCommand: (
+    text: string,
+    onSent?: () => void
+  ) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null
@@ -37,6 +42,8 @@ export type NativeChatStructuredComposerTransport = {
   /** Request command refresh; updated choices arrive through sessionCommands. */
   refreshCommands?: () => void
   setCommandsMenuOpen?: (open: boolean) => void
+  /** The open menu's host read is in flight; an empty filter may still fill in. */
+  commandsChecking?: boolean
   /** False when the agent takes no image input, as its host registered it. */
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
@@ -44,6 +51,8 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
+  /** `/btw`; absent where Orca can't fork this chat, so the command stays the agent's. */
+  sideChat?: NativeChatSideChat
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
   /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */

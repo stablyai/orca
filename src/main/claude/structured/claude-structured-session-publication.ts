@@ -8,8 +8,8 @@ import type {
   StructuredAgentSessionAcquireInput
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
-import type { ClaudePromptRegistry } from '../claude-prompt-registry'
-import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
+import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
+import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
 import type {
   ClaudeSession,
   ClaudeSessionExit,
@@ -18,12 +18,12 @@ import type {
   ClaudeStructuredSessionEvent,
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
-import { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
-import { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
-import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
+import { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
+import { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
 import type { ClaudeAcquisitionLaunch } from './launch/claude-structured-acquisition-launch'
-import type { ClaudeNamingGeneration } from '../claude-naming-generation'
+import type { ClaudeNamingGeneration } from '../conversation-naming/claude-naming-generation'
 import { readClaudeStartupFacts } from './claude-structured-session-startup'
 
 function claudeSessionInitialization(input: {
@@ -93,6 +93,7 @@ export function createClaudeSessionPublication(input: {
   leafUuid: string | null
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
+  delivery: ClaudeAcquisitionAttempt['delivery']
   unbindReadingControl?: () => void
   process: AgentSessionAcquisition['process']
   initialization: Omit<
@@ -130,7 +131,7 @@ export function createClaudeSessionPublication(input: {
       retiredDispatchWaiters: [],
       replayContentFallbackBlocked: false,
       backgroundTasks: new ClaudeBackgroundTaskTracker(),
-      childWork: new ClaudeChildWorkDecoder(),
+      childWork: new ClaudeChildWorkDecoder(input.translator?.taskInvocations),
       // An unread catalog is unavailable, not empty.
       commands: new ClaudeSlashCommandCatalog(),
       dispatchSequence: 0,
@@ -148,6 +149,7 @@ export function createClaudeSessionPublication(input: {
       ),
       fastModeAtStart: false,
       translator: input.translator,
+      delivery: input.delivery,
       events: input.request.events,
       ...(input.unbindReadingControl ? { unbindReadingControl: input.unbindReadingControl } : {}),
       link,
@@ -208,9 +210,7 @@ export async function publishClaudeSessionAttempt({
   await withAgentSessionCreatePhase('publish', recordPhase, async () => {
     callbacks.publish(session)
     attempt.published = true
-    for (const event of attempt.buffered.splice(0)) {
-      event()
-    }
+    attempt.delivery.flush()
   })
   // Buffered exit delivery can remove the session during publication.
   if (sessions.get(sessionId) !== session) {

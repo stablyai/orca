@@ -5,8 +5,8 @@ import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { useAppStore } from '@/store/index'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useTranslate } from '@/i18n/use-translate'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
 
 type HowToStep = { key: string; title: string; description: string }
@@ -18,6 +18,7 @@ export function ArtifactsSettingsPane({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const openArtifactsPage = useAppStore((state) => state.openArtifactsPage)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const signedIn = authStatus?.state === 'connected'
@@ -33,16 +34,16 @@ export function ArtifactsSettingsPane({
       : [
           {
             key: 'enable',
-            title: translate(
+            title: t(
               'auto.components.settings.artifacts.enableStepTitle',
               'Enable artifact sharing'
             ),
             description: isWebClient
-              ? translate(
+              ? t(
                   'auto.components.settings.artifacts.enableStepWebDescription',
                   'Open Settings → Artifacts in the Orca desktop app on the host device and enable publishing.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.artifacts.enableStepDescription',
                   'Turn on “Allow publishing public artifact links” above.'
                 )
@@ -50,27 +51,24 @@ export function ArtifactsSettingsPane({
         ]),
     {
       key: 'share',
-      title: translate(
-        'auto.components.settings.artifacts.shareStepTitle',
-        'Choose a file to share'
-      ),
-      description: translate(
+      title: t('auto.components.settings.artifacts.shareStepTitle', 'Choose a file to share'),
+      description: t(
         'auto.components.settings.artifacts.shareStepDescription',
         'Open an HTML or Markdown file and select Share as artifact, or ask an agent to share it.'
       )
     },
     {
       key: 'link',
-      title: translate('auto.components.settings.artifacts.linkStepTitle', 'Copy the public link'),
-      description: translate(
+      title: t('auto.components.settings.artifacts.linkStepTitle', 'Copy the public link'),
+      description: t(
         'auto.components.settings.artifacts.linkStepDescription',
         'After publishing, copy the link and send it to your team.'
       )
     },
     {
       key: 'manage',
-      title: translate('auto.components.settings.artifacts.manageStepTitle', 'Manage it in Orca'),
-      description: translate(
+      title: t('auto.components.settings.artifacts.manageStepTitle', 'Manage it in Orca'),
+      description: t(
         'auto.components.settings.artifacts.manageStepDescription',
         'Open Artifacts from the sidebar to preview or remove links.'
       )
@@ -81,17 +79,17 @@ export function ArtifactsSettingsPane({
     <div className="space-y-8">
       <SettingsGroup>
         <SettingsSwitchRow
-          label={translate(
+          label={t(
             'auto.components.settings.artifacts.allowPublishing',
             'Allow publishing public artifact links'
           )}
           description={
             isWebClient
-              ? translate(
+              ? t(
                   'auto.components.settings.artifacts.allowPublishingWebDescription',
                   'Desktop only. Open Settings → Artifacts on the host device to change this setting.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.artifacts.allowPublishingDescription',
                   'Publish HTML and Markdown files as links anyone with the URL can open. Existing links remain until you delete them from Artifacts.'
                 )
@@ -101,11 +99,8 @@ export function ArtifactsSettingsPane({
           onChange={() => void updateSettings({ artifactSharingEnabled: !sharingEnabled })}
         />
         <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.artifacts.showButton',
-            'Show Artifacts Button'
-          )}
-          description={translate(
+          label={t('auto.components.settings.artifacts.09f41ce46c', 'Show artifacts button')}
+          description={t(
             'auto.components.settings.artifacts.showButtonDescription',
             'Show the Artifacts shortcut in the sidebar.'
           )}
@@ -118,13 +113,10 @@ export function ArtifactsSettingsPane({
           <section data-settings-row="" className="flex flex-wrap items-center gap-4 py-3">
             <div className="min-w-0 flex-1 space-y-1">
               <h3 className="text-sm font-medium">
-                {translate(
-                  'auto.components.settings.artifacts.signInTitle',
-                  'Sign in to share artifacts'
-                )}
+                {t('auto.components.settings.artifacts.signInTitle', 'Sign in to share artifacts')}
               </h3>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.artifacts.signInDescription',
                   'Use your Orca account to upload artifacts and manage their public links.'
                 )}
@@ -132,22 +124,22 @@ export function ArtifactsSettingsPane({
             </div>
             <OrcaSignInButton size="sm" disabled={authStatus?.configured !== true}>
               {authStatus?.state === 'reconnect-required'
-                ? translate('auto.components.settings.artifacts.signInAgain', 'Sign in again')
-                : translate('auto.components.settings.artifacts.signIn', 'Sign in to Orca')}
+                ? t('auto.components.settings.artifacts.signInAgain', 'Sign in again')
+                : t('auto.components.settings.artifacts.signIn', 'Sign in to Orca')}
             </OrcaSignInButton>
             <OrcaSignInWaitNotice className="basis-full" />
           </section>
         ) : null}
       </SettingsGroup>
       <SettingsGroup
-        title={translate('auto.components.settings.artifacts.howToTitle', 'How to use Artifacts')}
+        title={t('auto.components.settings.artifacts.howToTitle', 'How to use Artifacts')}
         description={
           sharingEnabled
-            ? translate(
+            ? t(
                 'auto.components.settings.artifacts.howToDescription',
                 'Publish HTML or Markdown files as public links, then share them with your team.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.artifacts.howToDescriptionDisabled',
                 'Enable artifact sharing above to publish HTML or Markdown files as public links.'
               )
@@ -182,10 +174,10 @@ export function ArtifactsSettingsPane({
             </span>
             <span className="min-w-0 flex-1 space-y-0.5">
               <span className="block text-sm font-medium text-foreground">
-                {translate('auto.components.settings.artifacts.openArtifacts', 'Open Artifacts')}
+                {t('auto.components.settings.artifacts.7b2b114099', 'Open artifacts')}
               </span>
               <span className="block text-xs font-normal text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.artifacts.openArtifactsDescriptionV2',
                   'Preview, copy, and manage links shared through your account.'
                 )}

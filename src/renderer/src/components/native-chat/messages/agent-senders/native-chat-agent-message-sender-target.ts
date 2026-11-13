@@ -3,7 +3,7 @@ import type { AppState } from '@/store/types'
 import {
   resolveAgentMessageSender,
   type AgentSenderResolution
-} from '@/runtime/agent-sender-associations'
+} from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { sameAgentIdentity } from '../../../../../../shared/agent-status/title/agent-title-owner'

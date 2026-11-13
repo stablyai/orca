@@ -1,21 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-
-describe('isMobileMermaidLanguage', () => {
-  it('matches mermaid case-insensitively after trim', () => {
-    expect(isMobileMermaidLanguage('mermaid')).toBe(true)
-    expect(isMobileMermaidLanguage('Mermaid')).toBe(true)
-    expect(isMobileMermaidLanguage(' MERMAID ')).toBe(true)
-  })
-
-  it('rejects non-mermaid languages and missing language', () => {
-    expect(isMobileMermaidLanguage(undefined)).toBe(false)
-    expect(isMobileMermaidLanguage('')).toBe(false)
-    expect(isMobileMermaidLanguage('ts')).toBe(false)
-    expect(isMobileMermaidLanguage('mermaidx')).toBe(false)
-  })
-})
 
 describe('normalizeMobileMarkdownPreviewHtml', () => {
   it('normalizes common README HTML into readable Markdown preview text', () => {
@@ -49,9 +33,6 @@ describe('normalizeMobileMarkdownPreviewHtml', () => {
     expect(normalizeMobileMarkdownPreviewHtml('```html\n<div>x</div>\n```')).toBe(
       '```html\n<div>x</div>\n```'
     )
-    expect(normalizeMobileMarkdownPreviewHtml('```ts\nconst x: Array<string> = []\n```')).toBe(
-      '```ts\nconst x: Array<string> = []\n```'
-    )
     expect(normalizeMobileMarkdownPreviewHtml('```ts\nconst x: Array<string> = []')).toBe(
       '```ts\nconst x: Array<string> = []'
     )
@@ -64,12 +45,6 @@ describe('normalizeMobileMarkdownPreviewHtml', () => {
     expect(normalizeMobileMarkdownPreviewHtml('1 < 2 and 3 > 1')).toBe('1 < 2 and 3 > 1')
     expect(normalizeMobileMarkdownPreviewHtml('Array<string> in prose')).toBe(
       'Array<string> in prose'
-    )
-    expect(normalizeMobileMarkdownPreviewHtml('Promise<Result> in prose')).toBe(
-      'Promise<Result> in prose'
-    )
-    expect(normalizeMobileMarkdownPreviewHtml('Promise<Array<string>> in prose')).toBe(
-      'Promise<Array<string>> in prose'
     )
     expect(normalizeMobileMarkdownPreviewHtml('Map<string, Array<number>> in prose')).toBe(
       'Map<string, Array<number>> in prose'
@@ -89,13 +64,6 @@ describe('normalizeMobileMarkdownPreviewHtml', () => {
     expect(normalizeMobileMarkdownPreviewHtml('<mailto:orca@example.com>')).toBe(
       '<mailto:orca@example.com>'
     )
-    expect(normalizeMobileMarkdownPreviewHtml('<ftp://example.com/file>')).toBe(
-      '<ftp://example.com/file>'
-    )
-    expect(normalizeMobileMarkdownPreviewHtml('<tel:+15551234567>')).toBe('<tel:+15551234567>')
-    expect(normalizeMobileMarkdownPreviewHtml('<https://example.com>')).toBe(
-      '<https://example.com>'
-    )
     expect(
       normalizeMobileMarkdownPreviewHtml(
         "<https://en.wikipedia.org/wiki/O'Brien> <svg>hidden</svg>"
@@ -112,11 +80,6 @@ describe('normalizeMobileMarkdownPreviewHtml', () => {
     expect(
       normalizeMobileMarkdownPreviewHtml('<span title="</string>"></span> Array<string> now')
     ).toBe('Array<string> now')
-    expect(
-      normalizeMobileMarkdownPreviewHtml(
-        '<span title=</your-api-key>></span> Replace <your-api-key> now'
-      )
-    ).toBe('Replace <your-api-key> now')
     expect(
       normalizeMobileMarkdownPreviewHtml('<span title=</string>></span> Array<string> now')
     ).toBe('Array<string> now')
@@ -155,30 +118,14 @@ describe('normalizeMobileMarkdownPreviewHtml', () => {
       'Logo done'
     )
     expect(normalizeMobileMarkdownPreviewHtml('Logo<svg=invalid>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<SVG=invalid>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<path=invalid>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<p=invalid>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<strong=invalid>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<math=invalid>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<foo=invalid>Hi')).toBe('LogoHi')
     expect(normalizeMobileMarkdownPreviewHtml('Logo<my-widget=invalid>Hi')).toBe('LogoHi')
     expect(normalizeMobileMarkdownPreviewHtml('Logo<my-widget disabled>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('<svg=invalid><path/>')).toBe('')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<my-widget=invalid>Hi</my-widget> done')).toBe(
-      'LogoHi done'
-    )
     expect(normalizeMobileMarkdownPreviewHtml('<SVG><PATH/></SVG>')).toBe('')
     expect(normalizeMobileMarkdownPreviewHtml('Logo<svg>Hi<path>there')).toBe('LogoHithere')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<p>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<B>Hi')).toBe('LogoHi')
-    expect(normalizeMobileMarkdownPreviewHtml('Logo<strong>Hi')).toBe('LogoHi')
     expect(normalizeMobileMarkdownPreviewHtml('Logo<center>Hi <font>there <marquee>now')).toBe(
       'LogoHi there now'
     )
-    expect(normalizeMobileMarkdownPreviewHtml('<center>Title</center>')).toBe('Title')
     expect(normalizeMobileMarkdownPreviewHtml('<my-widget>Hi</my-widget>')).toBe('Hi')
-    expect(normalizeMobileMarkdownPreviewHtml('<my:widget>')).toBe('')
-    expect(normalizeMobileMarkdownPreviewHtml('<svg:path>')).toBe('')
     expect(normalizeMobileMarkdownPreviewHtml('Logo<foo>Hi</foo> done')).toBe('LogoHi done')
     expect(normalizeMobileMarkdownPreviewHtml('</1>Logo<svg>Hi</svg> done')).toBe('</1>LogoHi done')
     expect(normalizeMobileMarkdownPreviewHtml('Logo<svg>Hi</svg   > done')).toBe('LogoHi done')

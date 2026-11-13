@@ -20,8 +20,12 @@ export async function retireRuntimeBrowserClientPage(
   clientPage: RuntimeBrowserClientPage
 ): Promise<{ closed: true }> {
   const authority = host.getBrowserHostLeaseRegistry()
+  const initializing = authority.cancelClientPageInitialization(
+    clientPage.browserPageId,
+    clientPage.placement
+  )
   // Retained tabs outlive placements; requiring an absent host would make them impossible to dismiss.
-  if (authority.getPlacement(clientPage.browserPageId)) {
+  if (!initializing && authority.getPlacement(clientPage.browserPageId)) {
     await closeRuntimeBrowserClientPage(authority, {
       browserPageId: clientPage.browserPageId,
       placement: clientPage.placement

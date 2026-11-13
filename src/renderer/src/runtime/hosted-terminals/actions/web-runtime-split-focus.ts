@@ -1,16 +1,16 @@
-import { activateTabAndFocusPane } from '../../../lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '../../../lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '../../../store/index'
-import { matchesWebSessionIntentOwner } from '../../web-runtime-session-environment'
-import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-runtime-session-snapshot'
+import { matchesWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
   webSessionIntentOwnerKey,
   type WebSessionIntentOwner
-} from '../../web-session-intent-owner'
+} from '../../web-session-tabs-sync/identity/web-session-intent-owner'
 import {
   clearWebSessionFocusIntentIfMatches,
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
-} from '../../web-session-focus-intent'
+} from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
@@ -96,7 +96,7 @@ export function captureWebRuntimeSplitFocusTarget(
 function matchesWebRuntimeSplitFocusTarget(
   target: WebRuntimeSplitFocusTarget,
   hostTabId: string,
-  newLeafId?: string
+  newLeafId: string
 ): boolean {
   const state = useAppStore.getState()
   if (
@@ -112,17 +112,18 @@ function matchesWebRuntimeSplitFocusTarget(
   const currentTabId = target.expectedActiveWorktreeId
     ? resolveWebSessionVisibleTabId(state, target.expectedActiveWorktreeId)
     : null
-  if (currentTabId === target.expectedCurrentLocalTabId) {
-    const currentLeafId = currentTabId
-      ? (state.terminalLayoutsByTabId?.[currentTabId]?.activeLeafId ?? null)
-      : null
-    return currentLeafId === target.expectedCurrentLocalLeafId
+  const currentLeafId = currentTabId
+    ? (state.terminalLayoutsByTabId?.[currentTabId]?.activeLeafId ?? null)
+    : null
+  if (
+    currentTabId === target.expectedCurrentLocalTabId &&
+    currentLeafId === target.expectedCurrentLocalLeafId
+  ) {
+    return true
   }
+  // An active new leaf is this split's own focus intent applied by the replayed snapshot, not the viewer moving away.
   return Boolean(
-    currentTabId &&
-    newLeafId &&
-    toHostSessionTabId(currentTabId) === hostTabId &&
-    state.terminalLayoutsByTabId?.[currentTabId]?.activeLeafId === newLeafId
+    currentTabId && toHostSessionTabId(currentTabId) === hostTabId && currentLeafId === newLeafId
   )
 }
 
@@ -140,7 +141,7 @@ export async function focusSplitWebRuntimeTerminalPane(
     !target ||
     !isLatestWebRuntimeSplitFocusRequest(request) ||
     !matchesWebSessionIntentOwner(owner) ||
-    !matchesWebRuntimeSplitFocusTarget(target, hostTabId)
+    !matchesWebRuntimeSplitFocusTarget(target, hostTabId, leafId)
   ) {
     return
   }
@@ -149,7 +150,8 @@ export async function focusSplitWebRuntimeTerminalPane(
     target.worktreeId,
     hostTabId,
     leafId,
-    target.expectedCurrentLocalTabId
+    target.expectedCurrentLocalTabId,
+    target.expectedCurrentLocalLeafId
   )
   await refreshWebRuntimeSessionTabsSnapshot(owner.environmentId, target.worktreeId, {
     expectedEnvironmentPairingRevision: owner.pairingRevision,

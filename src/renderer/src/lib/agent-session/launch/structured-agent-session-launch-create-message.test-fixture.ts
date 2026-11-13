@@ -7,7 +7,7 @@ import {
   CreateIntentParams,
   SetOptionParams,
   SendParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 import { useAppStore } from '../../../store/index'
@@ -17,9 +17,10 @@ import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agen
 import { resetStructuredAgentSessionSendsForTests } from '../../../components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import '../../../components/native-chat/session/structured/read/structured-agent-session-read-owner'
 import { resetStructuredAgentSessionReadOwnersForTests } from '../../../components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
-import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/host-model-catalog-snapshots'
+import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
-import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '../../../components/native-chat/drafts/native-chat-draft-reset'
 import { readNativeChatDraftCache } from '../../../components/native-chat/drafts/native-chat-draft-views'
 import { structuredAgentSessionDraftScopeKey } from '../../../components/native-chat/drafts/native-chat-draft-scope'
@@ -67,7 +68,7 @@ vi.mock('../../../../../shared/layout-owner-switch', () => ({
 vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.rpc
 }))
-vi.mock('../../../runtime/structured-agent-session-status-feed', () => {
+vi.mock('../../../runtime/native-chat/status/structured-agent-session-status-feed', () => {
   const idle = { status: 'idle', hostExecutionPhase: 'idle' }
   const working = { status: 'working', hostExecutionPhase: 'idle' }
   const feed = {
@@ -79,8 +80,11 @@ vi.mock('../../../runtime/structured-agent-session-status-feed', () => {
   }
   return { getStructuredAgentSessionStatusFeed: () => feed }
 })
-vi.mock('../../../runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-support', () => ({
   supportsStructuredAgentSessionCreateOptionsMode: mocks.supportsMode,
   supportsStructuredAgentSessionCreateMessage: mocks.supports,
   structuredAgentSessionHostSupports: mocks.exactSupport,
@@ -90,7 +94,7 @@ vi.mock('../../../runtime/structured-agent-session-client', () => ({
 vi.mock('./structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.admit
 }))
-vi.mock('../../../runtime/structured-session-tab-inventory', () => ({
+vi.mock('../../../runtime/native-chat/tab-inventory/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: mocks.inventory
 }))
 vi.mock('../../../store/index', () => {
@@ -112,7 +116,7 @@ vi.mock('../../../store/index', () => {
   }
 })
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('../../../runtime/structured-chat-host-permission', () => ({
+vi.mock('../../../runtime/native-chat/host-capabilities/structured-chat-host-permission', () => ({
   readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
 }))
 
@@ -197,7 +201,7 @@ function created(params = createParams()) {
 const target = { kind: 'local' } as const
 const start = () =>
   startStructuredAgentLaunch('workspace-1', 'codex', {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     executionHostId: 'local',
     prompt: 'opening text'
   })
@@ -229,7 +233,7 @@ function startLegacyActionLaunch(
     return { ok: true, value: { clientMessageId, submission: submission(clientMessageId) } }
   })
   const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     executionHostId: 'local',
     prompt: 'opening text',
     launchOptions
@@ -282,7 +286,7 @@ export function legacyAction(
     }
   })
   const launch = startStructuredAgentLaunch('workspace-1', agent, {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     executionHostId,
     prompt: 'opening text',
     ...(explicit ? { launchOptions: explicit } : {}),

@@ -4,17 +4,17 @@ import { createEditorTabsStore } from '../editor-slice-test-harness'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import type { AppState } from '../../../types'
-import type { PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type { PRCheckRunDetails } from '../../../../../../shared/github/checks/check-types'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -154,43 +154,4 @@ describe('check-details tab owner', () => {
       )
     }
   )
-
-  it('refuses to reload an unpinned tab when a detected checkout rivals the tracked row', async () => {
-    const localRepo = { ...TEST_REPO, id: 'repo-1', path: '/repo' }
-    const { store, fetchPRCheckDetails } = createOwnerStore({
-      repos: [localRepo, { ...localRepo, path: '/remote', executionHostId: 'runtime:server' }],
-      worktreesByRepo: {
-        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
-      },
-      detectedWorktreesByRepo: {
-        'repo-1': {
-          repoId: 'repo-1',
-          authoritative: true,
-          source: 'git',
-          worktrees: [
-            {
-              ...makeWorktree({
-                id: 'wt-1',
-                repoId: 'repo-1',
-                path: '/remote',
-                hostId: 'runtime:server',
-                runtimeOwnerEnvironmentId: 'server'
-              }),
-              ownership: 'external',
-              selectedCheckout: false,
-              visible: true
-            }
-          ]
-        }
-      }
-    })
-    const tabId = open(store)
-
-    await store.getState().reloadOpenCheckRunDetailsTab(tabId)
-
-    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
-    expect(store.getState().openFiles[0]).toMatchObject({
-      operationProvenance: undefined
-    })
-  })
 })

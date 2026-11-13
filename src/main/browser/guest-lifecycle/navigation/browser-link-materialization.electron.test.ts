@@ -7,7 +7,7 @@ import {
   buildPopupIdentityProbe,
   createPopupIdentityProbeRoot,
   launchPopupIdentityProbe
-} from '../popups/popup-identity-electron-probe'
+} from '../../electron-fixtures/popup-identity-electron-probe'
 
 const root = createPopupIdentityProbeRoot()
 let probe: Awaited<ReturnType<typeof launchPopupIdentityProbe>>

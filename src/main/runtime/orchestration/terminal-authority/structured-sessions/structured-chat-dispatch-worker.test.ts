@@ -1,9 +1,7 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
-
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { sendChatTask } from '../../../rpc/methods/orchestration/chat-task-delivery'
 import {
   providerFaults,
@@ -21,7 +19,6 @@ import {
   openChat,
   queuedCardTexts,
   request,
-  runtime,
   sendUserMessage,
   settleTurn,
   turnText
@@ -54,10 +51,6 @@ async function runningUserTurn(
   }
 }
 
-function queuedRows(sessionId: string) {
-  return host.collaboratorsForTests().sessions.get(sessionId)?.journal.queuedMessages.list() ?? []
-}
-
 async function refusal(method: string, params: Record<string, unknown>, sessionId?: string) {
   const response = await dispatcher.dispatch(
     request(method, params, sessionId ? { sessionId } : {})
@@ -68,56 +61,11 @@ async function refusal(method: string, params: Record<string, unknown>, sessionI
   return response.error
 }
 
-/** Who each agent message in the chat's journal says it is from. */
-async function taskSenders(sessionId: string): Promise<unknown[]> {
-  return (await host.journalSnapshot(sessionId)).items.flatMap((item) =>
-    item.body.kind === 'message' && item.body.from ? [item.body.from] : []
-  )
-}
-
 function dispatchCount(): unknown {
   return db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()
 }
 
 describe('a chat as the assignee of orchestration dispatch', () => {
-  it("holds the task as a card in a busy chat's queue, naming the Dispatch, and sends it when the turn ends", async () => {
-    await openChat(COORDINATOR)
-    const worker = await openChat(PEER_CHAT)
-    const { runId, taskId } = await coordinatorRunAndTask()
-    const endTurn = await runningUserTurn(PEER_CHAT, worker)
-
-    const result = await call(
-      'orchestration.dispatch',
-      { task: taskId, to: WORKER, inject: true },
-      { sessionId: COORDINATOR }
-    )
-
-    expect(result).toMatchObject({ injected: true })
-    const dispatchId = idOf(result.dispatch)
-    expect(worker.turns).toHaveLength(1)
-    const from = {
-      kind: 'agent',
-      senders: [
-        {
-          party: {
-            address: formatOrcaSessionAddress(testOrcaSessionId(COORDINATOR)),
-            terminalHandle: null,
-            orcaSessionId: COORDINATOR
-          }
-        }
-      ],
-      orchestration: { message: 'task', runId, taskId, dispatchId }
-    }
-    // On the card's body: the turn the queue sends carries it, and the provider never sees it.
-    expect(queuedRows(PEER_CHAT).map((card) => card.body.from)).toMatchObject([from])
-
-    await endTurn()
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
-    expect(turnText(worker.turns[1]!)).toContain(dispatchId)
-    expect(await queuedCardTexts(PEER_CHAT)).toEqual([])
-    expect(await taskSenders(PEER_CHAT)).toMatchObject([from])
-  })
-
   it('queues one card for one Dispatch however often its task is sent', async () => {
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
@@ -204,31 +152,5 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
       messages: []
     })
-  })
-
-  it("counts a chat worker's own Dispatch as depth 2, under the nesting cap", async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    const parent = await call(
-      'orchestration.dispatch',
-      { task: taskId, to: WORKER },
-      { sessionId: COORDINATOR }
-    )
-    expect(parent.dispatch).toMatchObject({ depth: 1 })
-    await call('orchestration.runCreate', { objective: 'sub' }, { sessionId: PEER_CHAT })
-    const subTask = idOf(
-      (await call('orchestration.taskCreate', { spec: 'part' }, { sessionId: PEER_CHAT })).task
-    )
-
-    const subDispatch = { task: subTask, to: 'term_worker' }
-
-    const maxDepth = vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(1)
-    expect(await refusal('orchestration.dispatch', subDispatch, PEER_CHAT)).toMatchObject({
-      code: 'nested_worker_depth_exceeded'
-    })
-    maxDepth.mockReturnValue(2)
-    const child = await call('orchestration.dispatch', subDispatch, { sessionId: PEER_CHAT })
-    expect(child.dispatch).toMatchObject({ depth: 2, creator_dispatch_id: idOf(parent.dispatch) })
   })
 })

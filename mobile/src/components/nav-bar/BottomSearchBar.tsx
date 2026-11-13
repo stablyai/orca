@@ -4,13 +4,14 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { X } from 'lucide-react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BOTTOM_DRAWER_EASING } from '../bottom-drawer/bottom-drawer-constants'
 import { MobileSearchField } from '../MobileSearchField'
+import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
 
 const FADE_ID = 'bottom-search-bar-fade'
 const BUTTON_SIZE = 44
@@ -76,6 +77,7 @@ export function BottomSearchBar({
   useEffect(() => {
     onCoveredHeightChange?.(coveredHeight)
   }, [coveredHeight, onCoveredHeightChange])
+  useMobileDictationClearance(coveredHeight)
   // Close stays until the keyboard is down: iOS's late click at the tapped spot would otherwise hit the primary action that replaced it.
   const searching = focused || keyboardUp || (hasSearch ?? value.trim() !== '')
 

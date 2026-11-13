@@ -1,29 +1,23 @@
-import { requestNotificationCatchup } from './push-dismissal-reconciliation'
-import { dismissHostPushNotification } from './push-socket-dismissal'
-import type { DismissNotificationEvent } from './desktop-notification-events'
-import type { RpcClient } from '../transport/rpc-client'
-import { waitForPushFallback } from './push-fallback'
+import { requestNotificationCatchup } from './dismissal/push-dismissal-reconciliation'
+import { dismissHostPushNotification } from './dismissal/push-socket-dismissal'
+import type { DismissNotificationEvent } from './dismissal/desktop-notification-events'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { waitForPushFallback } from './push-registration/push-fallback'
 import { getHostPushSupported, getHostPushSupportCompletion } from './push-registration'
-import { loadHostCatalog } from '../transport/host-store'
-import { deriveHostFingerprint } from './push-host-fingerprint'
-import { presentForegroundPush } from './android-foreground-push'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import { deriveHostFingerprint } from './payload-identity/push-host-fingerprint'
+import { presentForegroundPush } from './foreground-delivery/android-foreground-push'
 import {
   DESKTOP_NOTIFICATION_CHANNEL_ID,
   ensureDesktopNotificationChannel
-} from './desktop-notification-channel'
-import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
+} from './foreground-delivery/desktop-notification-channel'
+import { loadNotificationDeliveryPreferences } from './delivery-policy/notification-delivery-preferences'
 import {
   allowsMobilePushDelivery,
   mobilePushAlertContent
 } from '../../../src/shared/mobile-push-alert'
 import { reserveNotificationCooldown } from '../../../src/shared/notification-burst-cooldown'
 import type { MobileNotificationDispatchEvent } from '../../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
-
-export {
-  ensureNotificationPermissions,
-  getNotificationPermissionState,
-  type NotificationPermissionState
-} from './notification-permissions'
 
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
   let disposed = false

@@ -6,10 +6,13 @@ import {
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
-import type { DiffContent, FileContent } from './editor-panel-content-types'
+import type {
+  DiffContent,
+  FileContent,
+  EditorPanelFileContentLoader
+} from './editor-panel-content-types'
 import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 import type { EditorPanelDiffContentLoader } from './useEditorPanelDiffContentLoader'
-import type { EditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
 import { useQuickOpenHistoryVisit } from './use-quick-open-history-visit'
 
 // Showing a tab is a user act: its first load may start a stopped WSL distro. Re-runs from

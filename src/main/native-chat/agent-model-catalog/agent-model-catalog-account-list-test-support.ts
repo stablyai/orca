@@ -1,8 +1,8 @@
-import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../lib/hidden-probe-cwd'
 import { onTestFinished, vi } from 'vitest'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogScopeFingerprint

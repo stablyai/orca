@@ -7,16 +7,16 @@ import {
   annotateManagedOrcadExecutionHosts,
   indexExecutionHostsById,
   type ManagedOrcadEnvironmentSummary
-} from '../../../../../../shared/managed-orcad-execution-host'
+} from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo,
   type ProjectGroupingModel
 } from '../../../../../../shared/project-section-grouping'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { getHostContextLabel } from '../../../../../../shared/worktree/host-context-labels'
-import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { getHostContextLabel } from '../../../../../../shared/worktree/row-display/host-context-labels'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import type { SshConnectionState } from '../../../../../../shared/ssh-types'
 
 export type ProjectHeaderHostContext = {

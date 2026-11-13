@@ -6,7 +6,7 @@ import type { StructuredAgentSessionHostWork } from '../../session/structured/us
 
 type NativeChatTranscriptRowContextInput = Omit<
   NativeChatTranscriptRowContext,
-  'agentName' | 'actionablePromptIds'
+  'agentName' | 'actionablePromptIds' | 'timedRows'
 > & {
   agent: NativeChatLiveSession['agent']
   hostWork: StructuredAgentSessionHostWork | undefined
@@ -24,7 +24,7 @@ export function useNativeChatTranscriptRowContext({
   runtimeContext,
   structuredAttachments,
   onToggleExpandedTurn,
-  subagentDisclosure,
+  onOpenSubagent,
   onScrollMessageToTop,
   onRevealDiff
 }: NativeChatTranscriptRowContextInput): NativeChatTranscriptRowContext {
@@ -41,7 +41,7 @@ export function useNativeChatTranscriptRowContext({
       runtimeContext,
       structuredAttachments,
       onToggleExpandedTurn,
-      subagentDisclosure,
+      onOpenSubagent,
       onScrollMessageToTop,
       onRevealDiff
     }),
@@ -58,7 +58,7 @@ export function useNativeChatTranscriptRowContext({
       structuredAttachments,
       onScrollMessageToTop,
       taskListPredecessors,
-      subagentDisclosure,
+      onOpenSubagent,
       onToggleExpandedTurn
     ]
   )

@@ -4,10 +4,19 @@ import { readFileSync } from 'node:fs'
 import { stripTypeScriptTypes } from 'node:module'
 import { performance } from 'node:perf_hooks'
 
-// Run from the worktree root: node config/scripts/benchmark-browser-tunnel-framing.mjs [base-ref]
-const path = 'src/shared/browser-network-tunnel-stream-framing.ts'
+// Run from the worktree root: node config/scripts/performance/transport/benchmark-browser-tunnel-framing.mjs [base-ref]
+const path = 'src/shared/browser/network/tunnels/browser-network-tunnel-stream-framing.ts'
+const historicalPath = 'src/shared/browser-network-tunnel-stream-framing.ts'
 const baselineRef = process.argv[2] ?? 'HEAD'
-const beforeSource = execFileSync('git', ['show', `${baselineRef}:${path}`], {
+const baselinePaths = execFileSync(
+  'git',
+  ['ls-tree', '--name-only', baselineRef, '--', path, historicalPath],
+  { encoding: 'utf8' }
+)
+  .trim()
+  .split('\n')
+const baselinePath = baselinePaths.includes(path) ? path : historicalPath
+const beforeSource = execFileSync('git', ['show', `${baselineRef}:${baselinePath}`], {
   encoding: 'utf8'
 })
 const afterSource = readFileSync(path, 'utf8')

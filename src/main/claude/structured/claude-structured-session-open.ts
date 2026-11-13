@@ -1,3 +1,4 @@
+import { usableJournalHistoryOrigin } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
@@ -5,7 +6,7 @@ import type {
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { readClaudeStructuredSessionSettings } from './launch/claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
-import { catchUpClaudeTranscript } from '../claude-transcript-catch-up'
+import { catchUpClaudeTranscript } from '../transcripts/claude-transcript-catch-up'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps,
@@ -86,11 +87,14 @@ async function openStartingClaudeSession(
   // The stored leaf is set only on a resume, and is the chat's last completed turn.
   const history = session.initialization.history
   const leafUuid = history.leafUuid
-  if (resumesTranscript && leafUuid && session.events) {
+  const origin = usableJournalHistoryOrigin(
+    session.events?.journalHistory?.()?.historyOrigin() ?? null
+  )
+  if (resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && session.events) {
     const catchUp = catchUpClaudeTranscript({
       sessionId: request.sessionId,
       providerSessionId: session.providerSessionId,
-      leafUuid,
+      leafUuid: leafUuid ?? '',
       claudeConfigDir: session.initialization.claudeConfigDir,
       cwd: session.initialization.cwd,
       sink: session.events,

@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
@@ -52,7 +52,8 @@ export function NativeChatAssistantMessageRow({
     trailingRun,
     continuesTurn = false,
     endsResponse,
-    inSubagentSection = false,
+    latestResponse = true,
+    actionsHang = false,
     runtimeContext,
     fork
   } = props
@@ -74,18 +75,12 @@ export function NativeChatAssistantMessageRow({
     message.role === 'assistant' &&
     message.source === 'transcript' &&
     !message.agentStart &&
-    !inSubagentSection &&
     isRootAgentJournalItem(message)
-  // A row whose fork is opening keeps its controls up so the spinner stays visible.
-  const revealOnHover =
-    fork?.pendingItemId === message.id
-      ? 'mt-1 w-fit select-none'
-      : 'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
   return (
     <div
       ref={rowRef}
-      // The context menu offers Copy message only where the hover controls offer Copy.
+      // The context menu offers Copy message only where the row's controls offer Copy.
       data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
@@ -126,9 +121,13 @@ export function NativeChatAssistantMessageRow({
             ) : null
           }
           className={cn(
-            revealOnHover,
-            // They hang into the gap below; a section keeps them inside its border instead.
-            !inSubagentSection && '-mb-5'
+            'mt-1 w-fit select-none',
+            !latestResponse &&
+              fork?.pendingItemId !== message.id &&
+              'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+            // They hang into the gap below only when nothing left-side starts there. Never in a
+            // section, which keeps them inside its border.
+            actionsHang && '-mb-5'
           )}
         />
       ) : null}
@@ -156,8 +155,7 @@ function toolRunProps(
     revealedDiff: run ? run.revealedDiff : props.revealedDiff,
     onRevealDiff: props.onScrollMessageToTop,
     subagentGroups: content.subagentGroups,
-    subagentRoster: props.subagentRoster,
-    subagentDisclosure: props.subagentDisclosure,
+    onOpenSubagent: props.onOpenSubagent,
     backgroundTasks: content.backgroundTasks,
     followsProse: content.markdown.length > 0 || content.hasImages,
     expandSignal: props.expandSignal,

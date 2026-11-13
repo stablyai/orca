@@ -8,8 +8,8 @@ import type {
 } from './remote-browser-stream-tokens'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import { browserPageExists } from '../describe-page/browser-page-load-error'
 import {
@@ -23,6 +23,8 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { javaScriptDialogPrompt } from '../browser-javascript-dialog-prompt'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -68,6 +70,8 @@ export function useRemoteBrowserPageLifecycle({
   const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  // Stable for the provider's life, so the once-built lifecycle may hold it.
+  const confirm = useConfirmationDialog()
 
   useLayoutEffect(() => {
     currentBrowserTabIdRef.current = browserTab.id
@@ -113,7 +117,8 @@ export function useRemoteBrowserPageLifecycle({
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
-      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId)
+      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
+      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
     })
   }
   const lifecycle = lifecycleRef.current

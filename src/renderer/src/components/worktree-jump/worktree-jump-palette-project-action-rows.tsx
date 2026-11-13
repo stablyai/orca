@@ -3,8 +3,7 @@ import { FolderTree } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   ProjectTargetPaletteItem,
   QuickActionPaletteItem,
@@ -24,6 +23,7 @@ export function WorktreeJumpPaletteProjectRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const result = entry.result
   const isProject = result.kind === 'project'
   const hostBadge = isProject
@@ -34,17 +34,14 @@ export function WorktreeJumpPaletteProjectRow({
       )
     : null
   const badgeLabel = isProject
-    ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
-    : translate('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
+    ? t('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
+    : t('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
 
   return (
     <CommandItem
       value={renderKey}
       onSelect={() => controller.handleSelectItem(entry)}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
         <FolderTree className="size-3.5" aria-hidden="true" />
@@ -85,24 +82,22 @@ export function WorktreeJumpPaletteActionRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const result = entry.result
   const Icon = result.icon
   const kindLabel =
     entry.type === 'settings'
-      ? translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
+      ? t('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
       : result.id === BROWSER_NAVIGATION_ACTION_ID
-        ? translate('worktreeJumpPalette.websiteBadge', 'Website')
-        : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
+        ? t('worktreeJumpPalette.websiteBadge', 'Website')
+        : t('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
 
   return (
     <CommandItem
       value={renderKey}
       disabled={entry.type === 'quick-action' && entry.result.disabled}
       onSelect={() => controller.handleSelectItem(entry)}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
         <Icon className="size-3.5" aria-hidden="true" />

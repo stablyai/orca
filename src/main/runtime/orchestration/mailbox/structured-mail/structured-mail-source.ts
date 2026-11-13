@@ -13,12 +13,13 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { agentMessageRelation } from '../senders/agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agent-message-sender'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
+import { completionReportFollowUp } from '../../workers/reports/report-follow-up-action'
 import {
   formatMessageBanner,
   formatMessageBannerWithContent,
   formatMessagePointer
 } from '../formatting/message-formatting'
-import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 
 export type MailSourceMessage = Pick<
   MessageRow,
@@ -117,7 +118,10 @@ export function structuredMailMessage(input: {
   senderSnapshot: SenderSnapshotResolver
 }): { body: AgentJournalMessageItem; whole: boolean } {
   const from = structuredMailSource({ ...input, batch: [input.message] })
-  const formatted = formatMessageBannerWithContent(input.message, { cliCommand: input.cliCommand })
+  const formatted = formatMessageBannerWithContent(input.message, {
+    cliCommand: input.cliCommand,
+    followUp: completionReportFollowUp(input.db, input.message)
+  })
   const whole = [{ type: 'text' as const, text: formatted.text }]
   if (!structuredAgentSessionBlocksTooLarge(whole)) {
     return {
@@ -148,17 +152,15 @@ export function structuredMailMessage(input: {
 
 /** Whether a message goes to a chat whole, rather than as a pointer at `check`. */
 export function structuredMailFitsWhole(
+  db: OrchestrationDb,
   message: MessageRow,
   cliCommand: OrchestrationCliCommand
 ): boolean {
-  return !structuredAgentSessionBlocksTooLarge(wholeMailBlocks(message, cliCommand))
-}
-
-function wholeMailBlocks(
-  message: MessageRow,
-  cliCommand: OrchestrationCliCommand
-): AgentJournalMessageItem['blocks'] {
-  return [{ type: 'text', text: formatMessageBanner(message, { cliCommand }) }]
+  const text = formatMessageBanner(message, {
+    cliCommand,
+    followUp: completionReportFollowUp(db, message)
+  })
+  return !structuredAgentSessionBlocksTooLarge([{ type: 'text', text }])
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }

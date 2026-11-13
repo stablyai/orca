@@ -33,12 +33,16 @@ function cachedFormatter<T>(
   return formatter
 }
 
-export function uiDateTimeFormat(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+export function uiDateTimeFormat(
+  options: Intl.DateTimeFormatOptions,
+  intlLocale?: string
+): Intl.DateTimeFormat {
   return cachedFormatter(
     dateTimeFormats,
     options,
     Intl.DateTimeFormat,
-    (locale) => new Intl.DateTimeFormat(locale, options)
+    (locale) => new Intl.DateTimeFormat(locale, options),
+    intlLocale
   )
 }
 
@@ -74,23 +78,25 @@ export function formatMinutesDuration(minutes: number, intlLocale?: string): str
     : uiNumberFormat(MINUTE_UNIT_FORMAT, intlLocale).format(minutes)
 }
 
-export function uiCollator(options: Intl.CollatorOptions): Intl.Collator {
+export function uiCollator(options: Intl.CollatorOptions, intlLocale?: string): Intl.Collator {
   return cachedFormatter(
     collators,
     options,
     Intl.Collator,
-    (locale) => new Intl.Collator(locale, options)
+    (locale) => new Intl.Collator(locale, options),
+    intlLocale
   )
 }
 
-export function languageDisplayName(locale: string): string {
+export function languageDisplayName(locale: string, intlLocale?: string): string {
   try {
     return (
       cachedFormatter(
         displayNames,
         LANGUAGE_NAMES,
         Intl.DisplayNames,
-        (uiLocale) => new Intl.DisplayNames(uiLocale, LANGUAGE_NAMES)
+        (uiLocale) => new Intl.DisplayNames(uiLocale, LANGUAGE_NAMES),
+        intlLocale
       ).of(locale) ?? locale
     )
   } catch {

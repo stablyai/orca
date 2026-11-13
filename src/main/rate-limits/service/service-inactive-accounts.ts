@@ -1,11 +1,14 @@
-import { fetchManagedAccountUsage } from '../claude-fetcher'
-import { fetchCodexRateLimits } from '../codex-fetcher'
+import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return
+    }
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
@@ -21,7 +24,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
-    const signal = controller.signal
+    const signal = this.claudeUsageFetchSignal(controller.signal)
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -43,7 +46,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           continue
         }
         try {
-          const fresh = await fetchManagedAccountUsage(account, {
+          const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal

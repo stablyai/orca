@@ -1,10 +1,10 @@
-import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
+import { revealTerminalPane } from '@/lib/workspace/activation/reveal-terminal-pane'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForTab
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store'
 import type { DashboardRevealAgentArgs } from '../../../../shared/dashboard-snapshot'
 

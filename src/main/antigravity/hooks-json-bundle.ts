@@ -1,12 +1,14 @@
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  hookDefinitionHasManagedCommand,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  removeManagedCommands,
   type HookDefinition,
   type HooksConfig
-} from '../agent-hooks/installer-utils'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  hookDefinitionHasManagedCommand,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
 import {
   ANTIGRAVITY_EVENTS,
   ANTIGRAVITY_HOOK_BUNDLE_NAME,

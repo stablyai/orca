@@ -63,6 +63,8 @@ export function createRetainedHostFixture(): RetainedHostFixture {
       const webview = webviews.at(-1)!
       webview.dataset.attached = 'true'
       webview.dispatchEvent(new Event('did-attach'))
+      webview.dispatchEvent(new Event('did-finish-load'))
+      webview.dispatchEvent(new Event('did-stop-loading'))
       await mounting
     },
     attach: (identity = RETAINED_FIXTURE_PAGE) => registry.attachPage(identity, container)

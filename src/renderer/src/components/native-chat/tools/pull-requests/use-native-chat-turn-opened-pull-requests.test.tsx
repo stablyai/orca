@@ -12,8 +12,14 @@ import { useNativeChatTurnOpenedPullRequests } from './use-native-chat-turn-open
 
 const host = vi.hoisted(() => ({ capability: vi.fn(), read: vi.fn() }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  structuredAgentSessionHostCapabilityState: host.capability,
+vi.mock(
+  '../../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    structuredAgentSessionHostCapabilityState: host.capability
+  })
+)
+
+vi.mock('../../../../runtime/native-chat/journal/structured-agent-session-journal-reads', () => ({
   readStructuredAgentSessionItem: host.read
 }))
 vi.mock('@/store', () => ({

@@ -1,6 +1,6 @@
 import { ExternalLink, ShieldCheck } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { FeatureInteractionId } from '../../../../../../shared/feature-interaction-catalog'
 import type { ProviderRateLimits } from '../../../../../../shared/rate-limit-types'
 import { Label } from '../../../ui/label'
@@ -17,6 +17,7 @@ import {
 } from './usage-credential-host'
 import type { UsageHostSettingsModel } from './use-usage-host-settings'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 
 export function MiniMaxAccountsSection({
   host,
@@ -30,6 +31,7 @@ export function MiniMaxAccountsSection({
   miniMaxRateLimits: ProviderRateLimits | null
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const credentials = useMiniMaxCredentials(host.owner)
   const { miniMaxConfigured, miniMaxApiKeyConfigured, miniMaxCredentialBusy } = credentials
   const settings = usageSettings.settings
@@ -38,7 +40,7 @@ export function MiniMaxAccountsSection({
       ? 'https://platform.minimaxi.com/console/usage'
       : 'https://platform.minimax.io/console/usage'
   const configured = miniMaxConfigured || miniMaxApiKeyConfigured
-  const accessNotice = usageCredentialAccessNotice(host, credentials.access)
+  const accessNotice = usageCredentialAccessNotice(host, credentials.access, t)
   const settingsUnavailable = settings === null
   const handleMiniMaxEndpointChange = (value: string): void => {
     if ((value !== 'overseas' && value !== 'cn') || value === settings?.minimaxEndpoint) {
@@ -48,15 +50,15 @@ export function MiniMaxAccountsSection({
     void usageSettings.update({ minimaxEndpoint: value })
   }
   return (
-    <div id="accounts-minimax" className="scroll-mt-6">
+    <div id={ACCOUNTS_SECTION_IDS.minimax} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">
             <MiniMaxIcon size={16} />
-            {translate('auto.components.settings.AccountsPane.5d63bbfbec', 'MiniMax')}
+            {t('auto.components.settings.AccountsPane.5d63bbfbec', 'MiniMax')}
           </span>
         }
-        description={translate(
+        description={t(
           'auto.components.settings.AccountsPane.usageTracking',
           'Configure MiniMax usage tracking for your account.'
         )}
@@ -67,7 +69,7 @@ export function MiniMaxAccountsSection({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate('auto.components.settings.AccountsPane.0d8e77bc40', 'Open console')}
+            {t('auto.components.settings.AccountsPane.0d8e77bc40', 'Open console')}
             <ExternalLink className="size-3" />
           </a>
         }
@@ -85,20 +87,20 @@ export function MiniMaxAccountsSection({
             ) : (
               <p className="text-xs font-medium">
                 {configured
-                  ? usageCredentialStoredLabel(host)
-                  : translate(
+                  ? usageCredentialStoredLabel(host, t)
+                  : t(
                       'auto.components.settings.AccountsPane.credentialsNotSet',
                       'Credentials not set'
                     )}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">{miniMaxStorageHelp(host)}</p>
+            <p className="text-xs text-muted-foreground">{miniMaxStorageHelp(host, t)}</p>
           </div>
         </div>
 
         <SearchableSetting
-          title={translate('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
-          description={translate(
+          title={t('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
+          description={t(
             'auto.components.settings.AccountsPane.0b3a9f6c2e',
             'Pick the host that matches your account. Both overseas (platform.minimax.io) and China (platform.minimaxi.com) accept either a session cookie or an API key.'
           )}
@@ -106,7 +108,7 @@ export function MiniMaxAccountsSection({
           className="space-y-2 py-3"
         >
           <Label htmlFor="minimax-endpoint">
-            {translate('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
+            {t('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
           </Label>
           <Select
             value={settings?.minimaxEndpoint ?? ''}
@@ -120,14 +122,14 @@ export function MiniMaxAccountsSection({
               {[
                 {
                   value: 'overseas',
-                  label: translate(
+                  label: t(
                     'auto.components.settings.AccountsPane.endpointOverseas',
                     'Overseas (platform.minimax.io)'
                   )
                 },
                 {
                   value: 'cn',
-                  label: translate(
+                  label: t(
                     'auto.components.settings.AccountsPane.endpointChina',
                     'China (platform.minimaxi.com)'
                   )
@@ -152,10 +154,10 @@ export function MiniMaxAccountsSection({
           <div className="flex items-center justify-between gap-3 pt-4 pb-3">
             <div className="space-y-1">
               <h4 className="text-xs font-semibold text-muted-foreground">
-                {translate('auto.components.settings.AccountsPane.9dd50d3f75', 'Advanced')}
+                {t('auto.components.settings.AccountsPane.9dd50d3f75', 'Advanced')}
               </h4>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.AccountsPane.174fb408f9',
                   'Leave these defaults alone unless MiniMax usage refresh points at the wrong workspace or model.'
                 )}
@@ -164,11 +166,8 @@ export function MiniMaxAccountsSection({
           </div>
 
           <SearchableSetting
-            title={translate(
-              'auto.components.settings.AccountsPane.bf160bb6c0',
-              'Group ID override'
-            )}
-            description={translate(
+            title={t('auto.components.settings.AccountsPane.bf160bb6c0', 'Group ID override')}
+            description={t(
               'auto.components.settings.AccountsPane.b1e2743313',
               'Optional. Leave blank to use minimax_group_id_v2 from the cookie.'
             )}
@@ -176,14 +175,14 @@ export function MiniMaxAccountsSection({
             className="space-y-2 py-3"
           >
             <Label>
-              {translate('auto.components.settings.AccountsPane.bf160bb6c0', 'Group ID override')}
+              {t('auto.components.settings.AccountsPane.bf160bb6c0', 'Group ID override')}
             </Label>
             <DebouncedSettingsTextInput
               type="text"
               value={settings?.minimaxGroupId ?? ''}
               commit={(minimaxGroupId) => void usageSettings.update({ minimaxGroupId })}
               disabled={settingsUnavailable}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.settings.AccountsPane.0747d6391a',
                 'Use group ID from cookie'
               )}
@@ -193,11 +192,8 @@ export function MiniMaxAccountsSection({
           </SearchableSetting>
 
           <SearchableSetting
-            title={translate(
-              'auto.components.settings.AccountsPane.4ff2af7524',
-              'Usage model names'
-            )}
-            description={translate(
+            title={t('auto.components.settings.AccountsPane.4ff2af7524', 'Usage model names')}
+            description={t(
               'auto.components.settings.AccountsPane.5cf4b0f85f',
               'Optional comma-separated model names. Leave as general unless MiniMax returns a model-specific error.'
             )}
@@ -205,14 +201,14 @@ export function MiniMaxAccountsSection({
             className="space-y-2 py-3"
           >
             <Label>
-              {translate('auto.components.settings.AccountsPane.4ff2af7524', 'Usage model names')}
+              {t('auto.components.settings.AccountsPane.4ff2af7524', 'Usage model names')}
             </Label>
             <DebouncedSettingsTextInput
               type="text"
               value={settings?.minimaxUsageModels ?? ''}
               commit={(minimaxUsageModels) => void usageSettings.update({ minimaxUsageModels })}
               disabled={settingsUnavailable}
-              placeholder={translate('auto.components.settings.AccountsPane.3c92b0d31c', 'general')}
+              placeholder={t('auto.components.settings.AccountsPane.3c92b0d31c', 'general')}
               spellCheck={false}
               className="text-xs"
             />

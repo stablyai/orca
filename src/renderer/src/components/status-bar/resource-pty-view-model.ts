@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { recentStamp } from '../../../../shared/sidebar-list/stamp-order'
+import { recentStamp } from '../../../../shared/sidebar-list/sorting/stamp-order'
 import {
   buildResourceSessionBindingIndex,
   type ResourceSessionBindingInputs

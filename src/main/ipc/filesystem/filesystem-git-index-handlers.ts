@@ -6,8 +6,11 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   stageWorktreeChanges
-} from '../../git/source-control/staging'
-import { discardChanges, bulkDiscardChanges } from '../../git/source-control/discard-changes'
+} from '../../git/source-control/mutations/staging'
+import {
+  discardChanges,
+  bulkDiscardChanges
+} from '../../git/source-control/mutations/discard-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRegisteredWorktree,

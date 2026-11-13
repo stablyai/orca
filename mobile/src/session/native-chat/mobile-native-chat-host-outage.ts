@@ -1,7 +1,11 @@
-import { isConnectionOutage, type ConnectionVerdict } from '../../transport/connection-health'
-import type { ConnectionState } from '../../transport/types'
+import {
+  isConnectionOutage,
+  type ConnectionVerdict
+} from '../../transport/connection/connection-health'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { ServerHostDesktopReach } from '../../worktree/server-workspaces'
 import { translate, type Translate } from '../../i18n/mobile-i18n'
+import { formatOfflineAsOfTime } from '../../components/offline-as-of-time'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
 /** The composer's status line while the chat's host is out, with Reconnect only when redialing can help. */
@@ -16,6 +20,10 @@ export function mobileNativeChatHostOutage(
     hostName: string
     /** The session header's Reconnect when it offers one, so the composer offers the same. */
     reconnect: (() => void) | null
+    /** Before this page's first connect (a relaunch), the header covers connecting until an offline verdict. */
+    neverConnected?: boolean
+    /** When the chat on screen was saved, while it is a stored copy no read has confirmed. */
+    savedAt?: number | null
     server?: {
       state: ConnectionState
       name?: string | null
@@ -28,13 +36,22 @@ export function mobileNativeChatHostOutage(
     offline
       ? t('connection.connectionHealth.hostOffline', '{{host}} is offline', { host })
       : t('chat.hostOutage.reconnecting', '{{hostName}} is reconnecting…', { hostName: host })
-  const { pairedVerdict: verdict } = args
+  const { pairedVerdict: verdict, savedAt } = args
   if (args.pairedHostState !== 'connected') {
     if (verdict.kind === 'auth-failed') {
       return { text: verdict.label }
     }
     const offline = isConnectionOutage(verdict)
-    const text = linkText(args.hostName, offline)
+    if (!offline && args.neverConnected) {
+      return null
+    }
+    const text =
+      offline && savedAt != null
+        ? t('chat.hostOutage.offlineAsOf', '{{host}} is offline · as of {{time}}', {
+            host: args.hostName,
+            time: formatOfflineAsOfTime(savedAt)
+          })
+        : linkText(args.hostName, offline)
     return offline && args.reconnect ? { text, onReconnect: args.reconnect } : { text }
   }
   const { server } = args
@@ -74,6 +91,8 @@ export function mobileSessionNativeChatHostOutage(
     | 'showConnectionRetry'
     | 'forceReconnectHost'
     | 'workspaceServer'
+    | 'lastConnectedAt'
+    | 'nativeChatController'
   >,
   hostName: string,
   t: Translate
@@ -91,6 +110,8 @@ export function mobileSessionNativeChatHostOutage(
         session.showConnectionRetry && hostId && forceReconnect
           ? () => void forceReconnect(hostId)
           : null,
+      neverConnected: session.lastConnectedAt === null,
+      savedAt: session.nativeChatController.nativeChatSession.savedAt,
       server: session.workspaceServer
     },
     t

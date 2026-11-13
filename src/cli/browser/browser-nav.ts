@@ -1,4 +1,4 @@
-import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser-observation-params'
+import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser/browser-observation-params'
 import type {
   BrowserBackResult,
   BrowserEvalResult,
@@ -9,15 +9,15 @@ import type {
   BrowserScrollResult,
   BrowserSnapshotResult,
   BrowserWaitResult
-} from '../../shared/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { formatScreenshot, formatSnapshot, saveBrowserScreenshot } from './browser-format'
-import { printResult } from '../format'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'

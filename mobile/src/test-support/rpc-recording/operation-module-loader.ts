@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path'
 import ts from 'typescript-api'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 import { observeSalvagedReads } from './salvage-observation'
-import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
+import * as deliveryAmbiguity from '../../transport/rpc/rpc-delivery-ambiguity'
 import { compiledOperationModule } from './compiled-operation-module'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -19,7 +19,7 @@ export type OperationMutation = {
 export type OperationExposure = readonly [suffix: string, source: string]
 
 // Share delivery ambiguity’s WeakSet registry; evaluating another copy would turn marked unknown deliveries into definite failures.
-const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
+const SHARED_MODULE = 'mobile/src/transport/rpc/rpc-delivery-ambiguity.ts'
 
 // Only mounting boundaries are substituted; every operation and projection is loaded from source.
 export function operationModuleLoader(

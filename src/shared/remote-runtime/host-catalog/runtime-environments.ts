@@ -277,7 +277,7 @@ type PreferredEndpointSource = Pick<
   'name' | 'endpoints' | 'preferredEndpointId' | 'pairedDeviceId'
 >
 
-function preferredEndpoint(environment: PreferredEndpointSource) {
+export function preferredEndpoint(environment: PreferredEndpointSource) {
   const endpoint =
     environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
     environment.endpoints[0]

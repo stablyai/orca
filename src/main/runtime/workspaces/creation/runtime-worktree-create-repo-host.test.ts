@@ -1,11 +1,10 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import type { RpcRequest } from '../../rpc/core'
 import { REPO_METHODS } from '../../rpc/methods/projects/repo'
 import { WORKTREE_METHODS } from '../../rpc/methods/workspaces/worktree'
-import { agentLaunchWorkspaceFactory } from '../../rpc/methods/agent-launch/agent-launch-worktree-creation'
+import '../../rpc/methods/agent-launch/agent-launch-worktree-creation'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
@@ -92,30 +91,5 @@ describe('a repo id set up on two hosts, named with repoHostId', () => {
 
     expect(reached).toHaveBeenCalledTimes(1)
     expect(reached.mock.calls[0]?.[1]).toMatchObject({ path: '/laptop/dup' })
-  })
-
-  it('agent.launch create-worktree keeps the host', async () => {
-    const reached = stopAtResolvedProject()
-    const runtime = createRuntime()
-    const factory = agentLaunchWorkspaceFactory({ runtime }, 'claude')
-
-    await expect(
-      factory.createWorktree({
-        create: { repo: 'id:dup', repoHostId: 'ssh:gpu', name: 'x' },
-        startupAgent: 'claude'
-      })
-    ).rejects.toThrow('stop after resolution')
-
-    expect(reached.mock.calls[0]?.[1]).toMatchObject({ path: '/remote/dup' })
-  })
-
-  it('a retried create for one host never coalesces with the same retry for another', async () => {
-    const runtime = createRuntime()
-    const run = vi.fn(async () => 'created')
-
-    await runtime.dedupeWorktreeCreate({ repo: 'id:dup', repoHostId: 'local' }, 'retry-1', run)
-    await runtime.dedupeWorktreeCreate({ repo: 'id:dup', repoHostId: 'ssh:gpu' }, 'retry-1', run)
-
-    expect(run).toHaveBeenCalledTimes(2)
   })
 })

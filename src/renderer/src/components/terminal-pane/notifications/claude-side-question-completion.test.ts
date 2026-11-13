@@ -169,7 +169,9 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
       dispatchNotification: (event: Parameters<typeof dispatchTerminalNotification>[1]) =>
         dispatchTerminalNotification('wt-1', event)
     })
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
 
     await connectMockPanePty(
       createPane(1),

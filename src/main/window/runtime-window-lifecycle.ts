@@ -3,19 +3,22 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/creation/launch-types'
+import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-session-contracts'
+import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
-import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
+import { requestAgentLaunchTabPublishFromRenderer } from './renderer-relays/agent-launch-tab-publish-relay'
+import { requestAgentPaneActivityFromRenderer } from './renderer-relays/agent-pane-activity-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { registerRendererDocumentNavigation } from './renderer-document-navigation'
-import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
-import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
-import { requestTerminalPaneMoveFromRenderer } from './terminal-pane-move-request-relay'
-import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
-import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { registerRendererDocumentNavigation } from './security/renderer-document-navigation'
+import { createRuntimeRendererNotificationSender } from './renderer-relays/runtime-renderer-notification-sender'
+import { requestSessionTabCloseFromRenderer } from './renderer-relays/session-tab-close-request-relay'
+import { requestTerminalPaneMoveFromRenderer } from './renderer-relays/terminal-pane-move-request-relay'
+import { revealTerminalPaneInWindow } from './renderer-relays/terminal-pane-reveal-relay'
+import { requestTerminalTabCloseFromRenderer } from './renderer-relays/terminal-tab-close-request-relay'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import type { AgentListPublication } from '../../shared/agent-status/presentation/agent-list-status'
+import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -42,6 +45,8 @@ export function registerRuntimeWindowLifecycle(
       }
       send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
     },
+    // Why: interim transport for the workspaceMetadata set record; the record shape, not this channel, is the contract.
+    workspaceMetadataSet: (set) => send('worktrees:metadataSet', set),
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
@@ -179,7 +184,8 @@ export function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
-    focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
+    focusEditorTab: (tabId, worktreeId, options) =>
+      send('ui:focusEditorTab', { tabId, worktreeId, ...options }),
     closeSessionTab: (tabId, worktreeId) =>
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
@@ -219,6 +225,7 @@ export function registerRuntimeWindowLifecycle(
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
+    applyAgentPaneActivity: (change) => requestAgentPaneActivityFromRenderer(mainWindow, change),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
@@ -233,23 +240,38 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:clientHostedBrowserRowsChanged', event),
     claudeAccountSelected: (change) => send('claudeAccounts:selectedElsewhere', change)
   })
-  // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
-  const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? runtime.onClientEvent(
-        (event) => {
-          if (event.type === 'sidebarInputsChanged') {
-            send('runtime:sidebarInputsChanged', event)
-          }
-        },
-        { consumesTerminalSideEffects: false }
-      )
-    : null
+  const detachClientNotices = runtime.onClientEvent(
+    (event) => {
+      if (event.type === 'linearLinkedIssueUpdated') {
+        send('linear:linkedIssueUpdated', event)
+      } else if (ORCA_SIDEBAR_INPUTS_IS_MAIN && event.type === 'sidebarInputsChanged') {
+        send('runtime:sidebarInputsChanged', event)
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
+  // Only this window's live document speaks for the Agents list; a gone one leaves no verdicts behind.
+  const releaseAgentListVerdicts = addFanoutListener(
+    ipcMain,
+    'agentStatus:listVerdicts',
+    (event: Electron.IpcMainEvent, publication: AgentListPublication | null) => {
+      if (event.sender === mainWebContents && event.senderFrame === mainWebContents.mainFrame) {
+        runtime.setAgentListPublication(publication)
+      }
+    }
+  )
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
+    const agentListBeforeReload = runtime.readAgentListPublication()
+    runtime.setAgentListPublication(null)
     const fence = runtime.markRendererReloading(mainWindow.id)
     return () => {
       if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
         rendererNotifications.onMainFrameReloadCancelled()
+      }
+      // The surviving document only re-sends on change.
+      if (runtime.readAgentListPublication() === null) {
+        runtime.setAgentListPublication(agentListBeforeReload)
       }
     }
   })
@@ -258,9 +280,12 @@ export function registerRuntimeWindowLifecycle(
   })
   mainWebContents.on('render-process-gone', () => {
     rendererNotifications.onRendererProcessGone()
+    runtime.setAgentListPublication(null)
   })
   mainWindow.on('closed', () => {
-    detachSidebarInputsNotices?.()
+    detachClientNotices()
+    releaseAgentListVerdicts()
+    runtime.setAgentListPublication(null)
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

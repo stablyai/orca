@@ -1,26 +1,21 @@
-import { resolveHiddenProbeCwd } from '../../../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../../../lib/hidden-probe-cwd'
 import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import '../../../unused-default-rpc-methods.test-fixture'
+
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../../../ipc/desktop-renderer-runtime-capabilities'
 import { createAgentModelCatalogService } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-service'
-import {
-  AgentModelCatalogStore,
-  type AgentModelCatalogSuccess
-} from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createCodexModelCatalogProbe } from '../../../../../codex/structured/catalog/codex-model-catalog-probe'
-import type { runCodexAppServerSession } from '../../../../../codex/app-server/codex-app-server-session'
+import { AgentModelCatalogStore } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { AgentModelCatalogSuccess } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import '../../../../../codex/structured/catalog/codex-model-catalog-probe'
+
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+
+import { agentSessionRecordFixture } from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
+import '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   agentModelCatalogFingerprintForRecord,
   agentModelCatalogScopeFingerprint
@@ -31,10 +26,7 @@ import {
   hostStub
 } from '../protocol/structured-agent-session-rpc.test-fixture'
 
-import {
-  SESSION,
-  STRUCTURED_CLIENT as OLD_STRUCTURED_CLIENT
-} from '../protocol/structured-agent-session-rpc-client.test-fixture'
+import '../protocol/structured-agent-session-rpc-client.test-fixture'
 
 const STRUCTURED_CLIENT = {
   clientKind: 'runtime' as const,
@@ -86,207 +78,6 @@ describe('agentSession.modelCatalog', () => {
     )
   })
 
-  it("lists the local desktop catalog under its pinned account and launch arguments, from Orca's folder rather than the chat's", async () => {
-    record = {
-      ...agentSessionRecordFixture(),
-      provider: 'codex',
-      accountHome: { variable: 'CODEX_HOME', path: '/account/work' },
-      launchDirectory: '/repo/work'
-    }
-    const listed = vi.fn()
-    const runSession: typeof runCodexAppServerSession = async (invocation, body) => {
-      listed(invocation)
-      expect(invocation).toMatchObject({
-        command: '/installed/codex',
-        cwd: resolveHiddenProbeCwd(),
-        env: { CODEX_HOME: '/account/work' }
-      })
-      expect(invocation.args).toEqual(expect.arrayContaining(['-c', 'model_provider="work"']))
-      return body({
-        notify: () => {},
-        request: async (method) =>
-          method === 'model/list'
-            ? {
-                data: [{ model: 'work-model', isDefault: true, supportedReasoningEfforts: [] }],
-                nextCursor: null
-              }
-            : { config: {} }
-      })
-    }
-    const catalog = createAgentModelCatalogService({
-      store: new AgentModelCatalogStore(),
-      getConversation: () => {
-        const saved = record ?? undefined
-        return saved ? agentSessionConversationView(saved) : undefined
-      },
-      getRecord: () => record ?? undefined,
-      drivesRecord: () => true,
-      recordWorkspacePath: async () => '/repo/work',
-      resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account/other' }),
-      probes: {
-        codex: createCodexModelCatalogProbe({
-          resolveCommand: () => ({ command: '/installed/codex', prefixArgs: [] }),
-          resolveEnvironment: async () => ({}),
-          resolveLaunchArgs: () => ['-c', 'model_provider="work"'],
-          runSession
-        })
-      }
-    })
-    setStructuredAgentSessionHost(
-      Object.assign(catalogHost(), {
-        deps: {
-          modelCatalog: catalog,
-          store: {
-            getRecord: () => record,
-            getConversation: () => (record ? agentSessionConversationView(record) : null),
-            requireWritableRecord: () => record
-          },
-          adapter: {}
-        }
-      })
-    )
-    try {
-      const reply = await call(
-        'agentSession.modelCatalog',
-        { agent: 'codex', sessionId: record.sessionId, waitForListing: true },
-        STRUCTURED_CLIENT
-      )
-      expect(reply).toMatchObject({
-        ok: true,
-        result: { origin: 'probe', models: [{ id: 'work-model' }] }
-      })
-      expect(listed).toHaveBeenCalledTimes(1)
-    } finally {
-      catalog.stop()
-    }
-  })
-
-  it("reads a floating chat's catalog in the folder it was created in", async () => {
-    const fixture = agentSessionRecordFixture()
-    record = {
-      ...fixture,
-      location: { ...fixture.location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
-      launchDirectory: '/home/me/floating-a'
-    }
-    // The floating setting has since moved to another folder.
-    const resolveStructuredAgentCatalogWorkspacePath = vi.fn(async () => '/home/me/floating-b')
-    await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', sessionId: SESSION, worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}` },
-      STRUCTURED_CLIENT,
-      { resolveStructuredAgentCatalogWorkspacePath }
-    )
-    expect(resolveStructuredAgentCatalogWorkspacePath).not.toHaveBeenCalled()
-    expect(read).toHaveBeenCalledWith({
-      agent: 'codex',
-      sessionId: SESSION,
-      workspacePath: '/home/me/floating-a'
-    })
-  })
-
-  it('reads the catalog for the directory the named worktree runs in on this host', async () => {
-    const resolveStructuredAgentCatalogWorkspacePath = vi.fn(async () => '/repo/wt')
-    await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', sessionId: SESSION, worktree: 'id:wt-1' },
-      STRUCTURED_CLIENT,
-      { resolveStructuredAgentCatalogWorkspacePath }
-    )
-    expect(resolveStructuredAgentCatalogWorkspacePath).toHaveBeenCalledExactlyOnceWith('id:wt-1')
-    expect(read).toHaveBeenCalledWith({
-      agent: 'codex',
-      sessionId: SESSION,
-      workspacePath: '/repo/wt'
-    })
-  })
-
-  it('reads for an unplaced workspace when the worktree does not resolve', async () => {
-    await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', worktree: 'id:missing' },
-      STRUCTURED_CLIENT,
-      { resolveStructuredAgentCatalogWorkspacePath: vi.fn(async () => null) }
-    )
-    expect(read).toHaveBeenCalledWith({ agent: 'codex', workspacePath: null })
-  })
-
-  it('answers at once for a floating workspace whose folder is slow, and lists it once resolved', async () => {
-    // Nothing advances a timer here: a read that does not wait never waits on the filesystem.
-    const folder = Promise.withResolvers<string>()
-    const resolver = { resolveStructuredAgentCatalogWorkspacePath: () => folder.promise }
-    const floating = `id:${FLOATING_TERMINAL_WORKTREE_ID}`
-    const first = await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', worktree: floating },
-      STRUCTURED_CLIENT,
-      resolver
-    )
-    // The picker follows with a waiting read, which answers for the resolved folder.
-    expect(first).toMatchObject({ result: { listingInProgress: true } })
-    await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', worktree: floating, savedOnly: true },
-      STRUCTURED_CLIENT,
-      resolver
-    )
-    expect(read.mock.calls).toEqual([
-      [{ agent: 'codex', workspacePath: null }],
-      [{ agent: 'codex', workspacePath: null, savedOnly: true }]
-    ])
-    expect(demand).not.toHaveBeenCalledWith(expect.objectContaining({ workspacePath: '/float' }))
-    folder.resolve('/float')
-    // The listing it starts keeps the read's own deadline and retirement.
-    await vi.waitFor(() =>
-      expect(demand).toHaveBeenCalledWith({
-        agent: 'codex',
-        workspacePath: '/float',
-        deadline: expect.any(Number),
-        operation: captureRead.mock.results[0]?.value
-      })
-    )
-    // The passive saved-only read never starts a listing.
-    expect(demand).not.toHaveBeenCalledWith(expect.objectContaining({ savedOnly: true }))
-  })
-
-  it('starts no listing for a floating folder that resolves after its read was retired', async () => {
-    const folder = Promise.withResolvers<string>()
-    await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}` },
-      STRUCTURED_CLIENT,
-      { resolveStructuredAgentCatalogWorkspacePath: () => folder.promise }
-    )
-    // The account or CLI changed while the folder was resolving.
-    readCurrent = false
-    folder.resolve('/float')
-    await new Promise((settled) => setTimeout(settled, 0))
-    expect(demand).not.toHaveBeenCalledWith(expect.objectContaining({ workspacePath: '/float' }))
-  })
-
-  it("waits for a floating folder within the read's own budget, which the catalog keeps", async () => {
-    vi.useFakeTimers()
-    try {
-      const folder = Promise.withResolvers<string>()
-      const reply = call(
-        'agentSession.modelCatalog',
-        { agent: 'codex', worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}`, waitForListing: true },
-        STRUCTURED_CLIENT,
-        { resolveStructuredAgentCatalogWorkspacePath: () => folder.promise }
-      )
-      await vi.advanceTimersByTimeAsync(10_000)
-      folder.resolve('/float')
-      await reply
-      expect(read).toHaveBeenCalledWith({
-        agent: 'codex',
-        waitForListing: true,
-        workspacePath: '/float',
-        deadline: Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS - 10_000
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it("keeps a moved floating workspace's list apart from the old folder's late answer", async () => {
     const late = Promise.withResolvers<AgentModelCatalogSuccess>()
     const listed = (id: string): AgentModelCatalogSuccess => ({
@@ -334,25 +125,6 @@ describe('agentSession.modelCatalog', () => {
       late.resolve(listed('a-model'))
       catalog.stop()
     }
-  })
-
-  it('reads as before when no worktree is named', async () => {
-    await call('agentSession.modelCatalog', { agent: 'claude' }, STRUCTURED_CLIENT)
-    expect(read).toHaveBeenCalledWith({ agent: 'claude' })
-  })
-
-  it('passes a wait for the listing through to the catalog', async () => {
-    await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', sessionId: SESSION, waitForListing: true },
-      STRUCTURED_CLIENT
-    )
-    expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION, waitForListing: true })
-  })
-
-  it('passes a saved-only read through to the catalog', async () => {
-    await call('agentSession.modelCatalog', { agent: 'grok', savedOnly: true }, STRUCTURED_CLIENT)
-    expect(read).toHaveBeenCalledWith({ agent: 'grok', savedOnly: true })
   })
 
   it('answers cold saved-only without resolution and reuses prepared memory for another equivalent chat', async () => {
@@ -435,158 +207,4 @@ describe('agentSession.modelCatalog', () => {
       catalog.stop()
     }
   })
-})
-
-describe('agentSession.modelCatalog before anything built the host', () => {
-  const read = vi.fn(async () => ({
-    origin: 'probe' as const,
-    models: [{ id: 'gpt-host', label: 'GPT Host', isDefault: true, efforts: [] }],
-    fetchedAt: 1
-  }))
-  const installHost = vi.fn(async () => {
-    setStructuredAgentSessionHost(
-      Object.assign(catalogHost(), {
-        deps: {
-          modelCatalog: { read, demand: vi.fn(async () => {}) },
-          store: { getRecord: () => null, getConversation: () => null },
-          adapter: {}
-        }
-      })
-    )
-  })
-
-  beforeEach(() => {
-    read.mockClear()
-    installHost.mockClear()
-    clearStructuredHostStub()
-  })
-
-  // New-chat pickers may be the first host caller; refusing before installation leaves only client-built-in models.
-  it('builds the host for a structured chat and answers from its catalog', async () => {
-    const reply = await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', sessionId: SESSION },
-      STRUCTURED_CLIENT,
-      { ensureStructuredAgentSessionHost: installHost }
-    )
-    expect(installHost).toHaveBeenCalledTimes(1)
-    expect(reply).toMatchObject({ ok: true, result: { origin: 'probe' } })
-    expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION })
-  })
-
-  // Session-less terminal-chat reads must use CLI listing without opening a structured journal.
-  it('reads without a host or journal for a read that names no session', async () => {
-    const reply = await call('agentSession.modelCatalog', { agent: 'codex' }, STRUCTURED_CLIENT, {
-      ensureStructuredAgentSessionHost: installHost,
-      structuredAgentModelCatalog: async () => ({ read, demand: vi.fn(async () => {}) })
-    })
-    expect(installHost).not.toHaveBeenCalled()
-    expect(reply).toMatchObject({ ok: true, result: { origin: 'probe' } })
-    expect(read).toHaveBeenCalledWith({ agent: 'codex' })
-  })
-
-  it('does not build the host for a client that cannot read structured sessions', async () => {
-    const reply = await call(
-      'agentSession.modelCatalog',
-      { agent: 'codex', sessionId: SESSION },
-      { clientKind: 'runtime', clientCapabilities: [] },
-      { ensureStructuredAgentSessionHost: installHost }
-    )
-    expect(installHost).not.toHaveBeenCalled()
-    expect(reply).toMatchObject({ ok: false })
-  })
-})
-
-describe('agentSession.modelCatalog for a chat on a model its CLI stopped listing', () => {
-  const opus = { id: 'opus', label: 'Opus', isDefault: true, efforts: [] }
-  const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({
-    origin: 'probe',
-    fetchedAt: 1,
-    models: [opus]
-  }))
-  const record: AgentSessionRecord = {
-    ...agentSessionRecordFixture(),
-    provider: 'claude',
-    options: { model: 'opus[1m]', effort: 'max' }
-  }
-
-  beforeEach(() => {
-    setStructuredAgentSessionHost(
-      Object.assign(catalogHost(), {
-        deps: {
-          modelCatalog: { read, demand: vi.fn(async () => {}) },
-          store: {
-            getRecord: () => record,
-            getConversation: () => (record ? agentSessionConversationView(record) : null),
-            requireWritableRecord: () => record
-          },
-          adapter: {}
-        }
-      })
-    )
-  })
-
-  it("lists the chat's own model, so an older client that replaces an unlisted one keeps it", async () => {
-    const own = {
-      id: 'opus[1m]',
-      label: 'Opus (1M context)',
-      description: 'opus[1m]',
-      isDefault: false,
-      efforts: [],
-      effortsKnown: false
-    }
-    const forChat = { agent: 'claude', sessionId: record.sessionId }
-    expect(await call('agentSession.modelCatalog', forChat, OLD_STRUCTURED_CLIENT)).toMatchObject({
-      ok: true,
-      result: { models: [opus, own] }
-    })
-    // A new chat's read, which seeds the next new chat's list, and the account's name only the CLI's.
-    const newChat = { ...forChat, worktree: 'id:wt-1' }
-    const runtime = { resolveStructuredAgentCatalogWorkspacePath: async () => '/repo' }
-    for (const reply of [
-      await call('agentSession.modelCatalog', newChat, STRUCTURED_CLIENT, runtime),
-      await call('agentSession.modelCatalog', { agent: 'claude' }, STRUCTURED_CLIENT)
-    ]) {
-      expect(reply).toMatchObject({ ok: true, result: { models: [opus] } })
-    }
-  })
-})
-
-it('observes never-started after a delayed options read, including acquisition at the founding fence', async () => {
-  const record = agentSessionRecordFixture(
-    agentSessionLeaseFixture({
-      sessionId: SESSION,
-      runtimeFence: 1,
-      claimStatus: 'released',
-      ownerProcess: null,
-      reservedSpawnToken: null,
-      handoffStage: null
-    })
-  )
-  record.providerHandleChain = []
-  const host = hostStub()
-  host.deps.store.getConversation = () => agentSessionConversationView(record)
-  setStructuredAgentSessionHost(host)
-  expect(
-    await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
-  ).toMatchObject({
-    ok: true,
-    result: { sessionNeverStarted: true }
-  })
-  let finish!: (value: Awaited<ReturnType<typeof host.readOptions>>) => void
-  let started!: () => void
-  const reading = new Promise<void>((resolve) => {
-    started = resolve
-  })
-  host.readOptions = () => {
-    started()
-    return new Promise((resolve) => {
-      finish = resolve
-    })
-  }
-  const pending = call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
-  await reading
-  record.lease = { ...record.lease, claimStatus: 'live' }
-  finish({ models: [], current: { defaulted: [], acceptedInputSources: {} } })
-  expect(await pending).toMatchObject({ ok: true, result: { sessionNeverStarted: false } })
 })

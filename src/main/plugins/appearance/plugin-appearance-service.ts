@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { writeSecureFile } from '../../../shared/secure-file'
+import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import type {
@@ -14,7 +14,10 @@ import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../plugin-discover
 import { getPluginsDataDir, isInvalidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginService } from '../plugin-service'
 import { pluginDataDir } from '../plugin-storage-store'
-import { PluginHostCallError, type PluginHostCallScope } from '../workers/plugin-host-call-scope'
+import {
+  PluginHostCallError,
+  type PluginHostCallScope
+} from '../workers/host-api/plugin-host-call-scope'
 import {
   preparePluginAppearanceColors,
   type PreparedPluginAppearance

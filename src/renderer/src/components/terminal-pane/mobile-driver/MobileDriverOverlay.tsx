@@ -1,19 +1,19 @@
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { Minimize2, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
 import {
   createMobileDriverOverlayCollapseState,
   getMobileDriverOverlayCollapseState
 } from './mobile-driver-overlay-collapse'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
-  driver: DriverState
+  driver: RuntimeTerminalDriverState
   hasFitOverride: boolean
   onAction: () => void | Promise<void>
   onAllAction?: () => void | Promise<void>
@@ -29,6 +29,7 @@ export function MobileDriverOverlay({
   onAllAction,
   rootClassName
 }: Props): ReactElement | null {
+  const t = useTranslate()
   const isMobileDriving = driver.kind === 'mobile'
   const isHeldAtPhoneFit = !isMobileDriving && hasFitOverride
   const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
@@ -91,20 +92,17 @@ export function MobileDriverOverlay({
   if (isHeldAtPhoneFit) {
     return (
       <LoudOverlay
-        title={translate(
+        title={t(
           'auto.components.terminal.pane.MobileDriverOverlay.4b7e1c9a20',
           'Still sized for your phone'
         )}
-        body={translate(
+        body={t(
           'auto.components.terminal.pane.MobileDriverOverlay.9d2f6a3e58',
           'Your phone session ended. Restore to fit this window.'
         )}
-        actionLabel={translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.1e5c8b7d43',
-          'Restore'
-        )}
+        actionLabel={t('auto.components.terminal.pane.MobileDriverOverlay.1e5c8b7d43', 'Restore')}
         actionPending={actionPending}
-        allActionLabel={translate(
+        allActionLabel={t(
           'auto.components.terminal.pane.MobileDriverOverlay.6a3d9f2c71',
           'Restore all'
         )}
@@ -132,20 +130,17 @@ export function MobileDriverOverlay({
 
   return (
     <LoudOverlay
-      title={translate(
+      title={t(
         'auto.components.terminal.pane.MobileDriverOverlay.c7e4a2b8f1',
         'Your phone is in control'
       )}
-      body={translate(
+      body={t(
         'auto.components.terminal.pane.MobileDriverOverlay.8c1a5e9f36',
         'Desktop typing is paused. Output keeps streaming.'
       )}
-      actionLabel={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.c6460cf584',
-        'Take back'
-      )}
+      actionLabel={t('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}
       actionPending={actionPending}
-      allActionLabel={translate(
+      allActionLabel={t(
         'auto.components.terminal.pane.MobileDriverOverlay.2f7b4d1e95',
         'Take back all'
       )}
@@ -189,8 +184,9 @@ function LoudOverlay({
   rootRef: outerRootRef,
   rootClassName
 }: LoudOverlayProps): ReactElement {
+  const t = useTranslate()
   const titleId = useId()
-  const collapseLabel = translate(
+  const collapseLabel = t(
     'auto.components.terminal.pane.MobileDriverOverlay.3a9c5f7e12',
     'Minimize'
   )
@@ -305,6 +301,7 @@ function LockChip({
   rootRef,
   rootClassName
 }: ChipProps): ReactElement {
+  const t = useTranslate()
   return (
     <div
       ref={rootRef}
@@ -321,10 +318,10 @@ function LockChip({
         className="px-1 font-medium"
         onClick={onExpand}
       >
-        {translate('auto.components.terminal.pane.MobileDriverOverlay.c44659e09f', 'Phone driving')}
+        {t('auto.components.terminal.pane.MobileDriverOverlay.c44659e09f', 'Phone driving')}
       </Button>
       <Button type="button" variant="default" size="xs" onClick={onAction} disabled={actionPending}>
-        {translate('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}
+        {t('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}
       </Button>
     </div>
   )

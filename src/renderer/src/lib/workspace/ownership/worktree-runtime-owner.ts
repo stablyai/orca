@@ -13,20 +13,20 @@ import {
   findIndexedWorktreeOwner as findWorktreeRecord,
   hasIndexedDetectedWorktree
 } from './worktree-runtime-owner-index'
-import { getActiveWorkspaceExecutionHostId } from '../../active-workspace-host'
-import { getSingleFocusedRuntimeEnvironmentId } from '../../single-runtime-legacy-owner'
+import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
+import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
-import { getPairedWebClientEnvironmentId } from '../../paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '../../../app-shell/platform/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
-} from '../../folder-workspace-runtime-owner'
-import { namedHostForOwnerRef, resolveOwner, type WorkspaceOwnerRef } from '../../resolve-owner'
+} from './folder-workspace-runtime-owner'
+import { namedHostForOwnerRef, resolveOwner, type WorkspaceOwnerRef } from './resolve-owner'
 import { SELF_LOCAL_AUTHORITY, type HostAuthority } from '../../../../../shared/host-authority'
-import type { ExecutionHostOwnerMatch } from '../../../../../shared/worktree-execution-host-resolution'
-import { getFloatingWorkspaceOperationRoute } from '../../worktree-operation-route'
-import { resolveExplicitWorktreeOperationRouteResult } from '../../worktree-operation-catalog-route'
+import type { ExecutionHostOwnerMatch } from '../../../../../shared/execution-host/worktree-execution-host-resolution'
+import { getFloatingWorkspaceOperationRoute } from './worktree-operation-route'
+import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 function getExecutionHostIdFromWorktreeHost(
@@ -113,6 +113,18 @@ export function getExecutionHostIdForWorktree(
   return setupEnvironmentId
     ? toRuntimeExecutionHostId(setupEnvironmentId)
     : getUnstampedExecutionHostId(state)
+}
+
+/**
+ * The host an existing workspace runs on: its owner, else where this client runs an unstamped row.
+ * Unlike {@link getExecutionHostIdForWorktree}, never the focused default a row-less setup terminal
+ * is created on, so it reads no settings.
+ */
+export function getResourceExecutionHostIdForWorktree(
+  state: Omit<WorktreeRuntimeOwnerState, 'settings'>,
+  worktreeId: string
+): ExecutionHostId {
+  return getKnownExecutionHostIdForWorktree(state, worktreeId) ?? getUnstampedExecutionHostId(state)
 }
 
 /**

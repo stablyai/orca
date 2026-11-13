@@ -10,12 +10,14 @@ import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-s
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
+import { SubagentEntry } from './agent-session-journal-subagent-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalResolution,
   AgentJournalRenderItem
 } from './agent-session-journal-types'
+import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
 
 const BoundedPayload = z.object({
   head: z.string(),
@@ -41,16 +43,6 @@ const ToolMetadata = {
 const ProviderCallId = z
   .string()
   .refine((value) => value.trim().length > 0, 'callId must contain a non-whitespace character')
-
-/** Keep lifecycle strings open so newer states do not make persisted rows malformed. */
-const SubagentEntry = z.object({
-  id: z.string(),
-  label: z.string(),
-  state: z.string().min(1),
-  tokens: z.number().optional(),
-  startedAt: z.number().optional(),
-  settledAt: z.number().optional()
-})
 
 /** Skip unknown block types, but reject malformed payloads of known types. */
 const Block = openDiscriminatedUnion(
@@ -116,7 +108,9 @@ const Block = openDiscriminatedUnion(
 const PromptOption = z.object({
   id: z.string(),
   label: z.string(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  preview: z.string().optional(),
+  intent: z.enum(AGENT_JOURNAL_PROMPT_INTENTS).optional()
 })
 
 const FreeTextInput = z.object({
@@ -234,6 +228,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     blockedPath: z.string().optional(),
     matchedAskRule: ApprovalMatchedAskRule.optional(),
     subject: ApprovalSubject.optional(),
+    personOnly: z.literal(true).optional(),
     detail: z.string().nullable(),
     options: z.array(PromptOption),
     resolution: Resolution

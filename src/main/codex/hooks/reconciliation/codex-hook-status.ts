@@ -3,8 +3,8 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
   assertLoadableHookTrustConfig,
   isCodexConfigTomlRefusedError,
@@ -198,6 +198,7 @@ function describeInlineApprovals(
   const slots = findOrcaEntrySlots(hooks, command)
   const probes: CodexTrustEntry[] = CODEX_EVENTS.flatMap((eventName) => {
     const label = CODEX_EVENT_LABEL[eventName]
+    const hook = buildCodexManagedHook(command, eventName)
     const hash = answer?.kind === 'hashes' ? answer.hashes[label] : 'probe'
     const definitions = hooks?.[eventName]
     const slot = slots.get(eventName) ?? {
@@ -210,7 +211,8 @@ function describeInlineApprovals(
             sourcePath: home.keySourcePaths[0],
             eventLabel: label,
             command,
-            timeoutSec: buildCodexManagedHook(command, eventName).timeout,
+            timeoutSec: hook.timeout,
+            statusMessage: hook.statusMessage,
             trustedHash: hash,
             enabled: true,
             ...slot

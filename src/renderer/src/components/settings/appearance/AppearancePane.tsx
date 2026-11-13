@@ -1,19 +1,17 @@
 import type React from 'react'
-import { useLayoutEffect, useState } from 'react'
-import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
+import { useLayoutEffect } from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
-import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
+import { getAppIconEntries } from './appearance-app-icon-search'
 import {
-  getAppIconEntries,
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getLayoutEntries,
@@ -36,12 +34,10 @@ import type { UseTerminalConfigImportReturn } from '../terminal/configuration/us
 import type { UseWarpThemeImportReturn } from '../terminal/themes/useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
 import { normalizeAppIconId } from '../../../../../shared/app-icon'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
-import { translate } from '@/i18n/i18n'
-
-import { resolveInterfaceSectionSummary } from './appearance-interface-summary'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AppearancePaneProps = {
   settings: GlobalSettings
@@ -55,14 +51,6 @@ type AppearancePaneProps = {
   warpThemes: UseWarpThemeImportReturn
 }
 
-type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
-
-const ALL_APPEARANCE_SECTIONS = [
-  'interface',
-  'terminal',
-  'window'
-] as const satisfies readonly AppearanceSectionKey[]
-
 export function AppearancePane({
   settings,
   updateSettings,
@@ -74,37 +62,22 @@ export function AppearancePane({
   terminalConfigImport,
   warpThemes
 }: AppearancePaneProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const appearanceAccordionDeepLink = useAppStore((state) => state.appearanceAccordionDeepLink)
   const clearAppearanceAccordionDeepLink = useAppStore(
     (state) => state.clearAppearanceAccordionDeepLink
   )
-  const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const isWebClient = isWebClientLocation()
   // Windows web clients have no local system tray; require desktop Electron.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
 
-  // Expand by default so Terminal/Window controls remain discoverable; sections still collapse independently.
-  const [openSections, setOpenSections] = useState<ReadonlySet<AppearanceSectionKey>>(
-    () => new Set(ALL_APPEARANCE_SECTIONS)
-  )
-
-  // Expand deep-link parents before scrolling so the target row is visible.
   useLayoutEffect(() => {
     if (!appearanceAccordionDeepLink) {
       return
     }
-    setOpenSections((current) => {
-      if (current.has(appearanceAccordionDeepLink)) {
-        return current
-      }
-      const next = new Set(current)
-      next.add(appearanceAccordionDeepLink)
-      return next
-    })
     clearAppearanceAccordionDeepLink()
-    // Scroll next frame after synchronous expansion so the target has nonzero height.
     const frameId = requestAnimationFrame(() => {
       document
         .getElementById(USAGE_PERCENTAGE_DISPLAY_SETTING_ID)
@@ -114,19 +87,13 @@ export function AppearancePane({
       cancelAnimationFrame(frameId)
     }
   }, [appearanceAccordionDeepLink, clearAppearanceAccordionDeepLink])
-  const interfaceTitle = translate(
-    'auto.components.settings.AppearancePane.interfaceTitle',
-    'Interface'
+  const interfaceTitle = t('auto.components.settings.AppearancePane.interfaceTitle', 'Interface')
+  const terminalTitle = t('auto.components.settings.AppearancePane.terminalTitle', 'Terminal')
+  const windowSidebarTitle = t(
+    'auto.components.settings.AppearancePane.e90c5d745a',
+    'Window & sidebar'
   )
-  const terminalTitle = translate(
-    'auto.components.settings.AppearancePane.terminalTitle',
-    'Terminal'
-  )
-  const windowSidebarTitle = translate(
-    'auto.components.settings.AppearancePane.windowSidebarTitle',
-    'Window & Sidebar'
-  )
-  const windowSidebarSummary = translate(
+  const windowSidebarSummary = t(
     'auto.components.settings.AppearancePane.windowSidebarSummary',
     'Sidebar, status bar, and file explorer'
   )
@@ -172,48 +139,10 @@ export function AppearancePane({
   })
   const appIconMatches = matchesSettingsSearch(searchQuery, getAppIconEntries())
 
-  // Search reveals matching sections, including advanced controls, without replacing saved disclosure state.
-  function isSectionOpen(key: AppearanceSectionKey): boolean {
-    if (isSearching) {
-      return key === 'interface'
-        ? interfaceMatches
-        : key === 'terminal'
-          ? terminalMatches
-          : windowMatches
-    }
-    return openSections.has(key)
-  }
-
-  function toggleSection(key: AppearanceSectionKey): void {
-    setOpenSections((current) => {
-      const next = new Set(current)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next
-    })
-  }
-
-  const interfaceSummary = resolveInterfaceSectionSummary(settings)
-  const terminalSummary = `${
-    settings.terminalFontFamily ||
-    translate('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')
-  } · ${settings.terminalFontSize}px`
-
   return (
-    <div className="space-y-2.5">
+    <>
       {interfaceMatches ? (
-        <AppearanceSection
-          id="interface"
-          icon={<AppWindow aria-hidden="true" />}
-          title={interfaceTitle}
-          summary={interfaceSummary}
-          open={isSectionOpen('interface')}
-          onToggle={() => toggleSection('interface')}
-          toggleDisabled={isSearching}
-        >
+        <SettingsGroup title={interfaceTitle}>
           <AppearanceInterfaceSection
             settings={settings}
             updateSettings={updateSettings}
@@ -224,19 +153,11 @@ export function AppearancePane({
             isDesktopWindows={isDesktopWindows}
             forceVisiblePrimary={interfaceLabelMatches}
           />
-        </AppearanceSection>
+        </SettingsGroup>
       ) : null}
 
       {terminalMatches ? (
-        <AppearanceSection
-          id="terminal"
-          icon={<TerminalSquare aria-hidden="true" />}
-          title={terminalTitle}
-          summary={terminalSummary}
-          open={isSectionOpen('terminal')}
-          onToggle={() => toggleSection('terminal')}
-          toggleDisabled={isSearching}
-        >
+        <SettingsGroup title={terminalTitle}>
           <TerminalAppearanceSection
             settings={settings}
             updateSettings={updateSettings}
@@ -247,33 +168,25 @@ export function AppearancePane({
             warpThemes={warpThemes}
             forceVisiblePrimary={terminalLabelMatches}
           />
-        </AppearanceSection>
+        </SettingsGroup>
       ) : null}
 
       {windowMatches ? (
-        <AppearanceSection
-          id="window"
-          icon={<PanelLeft aria-hidden="true" />}
-          title={windowSidebarTitle}
-          summary={windowSidebarSummary}
-          open={isSectionOpen('window')}
-          onToggle={() => toggleSection('window')}
-          toggleDisabled={isSearching}
-        >
+        <SettingsGroup title={windowSidebarTitle}>
           <AppearanceWindowSidebarSection
             settings={settings}
             updateSettings={updateSettings}
             forceVisiblePrimary={windowLabelMatches}
           />
-        </AppearanceSection>
+        </SettingsGroup>
       ) : null}
 
       {/* Keep the App Icon easter egg at the bottom instead of inside Interface advanced. */}
       {appIconMatches ? (
         <SettingsGroup>
           <SearchableSetting
-            title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
-            description={translate(
+            title={t('auto.components.settings.AppearancePane.907888cd09', 'App icon')}
+            description={t(
               'auto.components.settings.AppearancePane.0cd9b8228f',
               'Choose the app icon shown in the Dock and window switcher.'
             )}
@@ -291,6 +204,6 @@ export function AppearancePane({
           </SearchableSetting>
         </SettingsGroup>
       ) : null}
-    </div>
+    </>
   )
 }

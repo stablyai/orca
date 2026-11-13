@@ -5,7 +5,7 @@ import {
   useStructuredAgentSessionHostEditsQueuedImages,
   useStructuredAgentSessionHostEditsQueuedSkills,
   useStructuredAgentSessionHostReordersQueuedMessages
-} from '@/runtime/structured-agent-session-host-capability'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { StructuredAgentSessionWrite } from '../../session/structured/writes/use-structured-agent-session-mutate'
 
 export function useQueuedMessageEditTransport(

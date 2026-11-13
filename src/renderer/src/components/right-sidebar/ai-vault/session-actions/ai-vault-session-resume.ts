@@ -13,6 +13,7 @@ import {
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import '../session-list/ai-vault-session-worktree'
 import { aiVaultResumeInSessionWorkspaceLabel } from '../session-list/ai-vault-session-worktree-affordances'
@@ -253,13 +254,11 @@ export function aiVaultSessionRowResumeGating(
 
 export function aiVaultSessionResumeLabel(
   state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'> &
-    Partial<Pick<AiVaultSessionResumeState, 'worktreeId'>>
+    Partial<Pick<AiVaultSessionResumeState, 'worktreeId'>>,
+  t: Translate = translate
 ): string {
   if (state.usesSessionWorktree) {
-    return aiVaultResumeInSessionWorkspaceLabel(state.worktreeId)
+    return aiVaultResumeInSessionWorkspaceLabel(state.worktreeId, t)
   }
-  return translate(
-    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-    'Resume in New Tab'
-  )
+  return t('auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab', 'Resume in New Tab')
 }

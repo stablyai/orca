@@ -65,7 +65,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, platform: () => 'darwin' }
 })
 import { EmulatorBridge } from './emulator-bridge'
-import { RuntimeEmulatorCommands } from '../runtime/orca-runtime-emulator'
+import { RuntimeEmulatorCommands } from '../runtime/emulator/runtime-emulator-commands'
 
 function session(deviceUdid: string): EmulatorSessionInfo {
   return {

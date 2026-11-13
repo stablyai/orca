@@ -1,4 +1,4 @@
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
@@ -10,8 +10,9 @@ import '../../../../../../shared/project-groups'
 import '../../../../../../shared/repo-kind'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import './folder-workspace-source-repos'
 
 export function toFolderWorkspaceLinkedTask(
@@ -43,9 +44,6 @@ export function getLinkedItemDisplayName(item: LinkedWorkItemSummary): string | 
   return getWorkspaceSourceName(item).displayName || null
 }
 
-export function getFolderWorkspacePrimaryActionLabel(): string {
-  return translate(
-    'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
-    'Create workspace'
-  )
+export function getFolderWorkspacePrimaryActionLabel(t: Translate = translate): string {
+  return t('auto.components.sidebar.FolderWorkspaceComposerDialog.create', 'Create workspace')
 }

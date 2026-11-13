@@ -1,10 +1,11 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode
 } from '../../../../../shared/markdown-default-view-mode'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Label } from '../../ui/label'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -17,19 +18,21 @@ type MarkdownDefaultViewSettingProps = {
 export function MarkdownDefaultViewSetting({
   settings
 }: MarkdownDefaultViewSettingProps): React.JSX.Element {
+  const t = useTranslate()
   // Why: the store action keeps already-open Markdown tabs on the view they show.
   const setMarkdownDefaultViewMode = useAppStore((s) => s.setMarkdownDefaultViewMode)
-  const title = translate(
-    'auto.components.settings.GeneralEditorSettingsSection.markdownDefaultView',
-    'Default Markdown View'
+  const title = t(
+    'auto.components.settings.GeneralEditorSettingsSection.1dd79964bf',
+    'Default Markdown view'
   )
-  const description = translate(
+  const description = t(
     'auto.components.settings.GeneralEditorSettingsSection.markdownDefaultViewDesc',
     'The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.'
   )
 
   return (
     <SearchableSetting
+      id={GENERAL_SETTING_ANCHORS.markdownView}
       title={title}
       description={description}
       keywords={['markdown', 'default', 'view', 'source', 'rich', 'editor', 'raw']}
@@ -46,11 +49,11 @@ export function MarkdownDefaultViewSetting({
         options={[
           {
             value: 'source',
-            label: translate('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source')
+            label: t('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source')
           },
           {
             value: 'rich',
-            label: translate('auto.components.editor.EditorViewToggle.aff15f94f5', 'Rich Editor')
+            label: t('auto.components.editor.EditorViewToggle.bcaccaddf1', 'Rich editor')
           }
         ]}
       />

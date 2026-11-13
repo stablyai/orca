@@ -1,5 +1,6 @@
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** A clear confirmation on the copy shown when it opened; `count` stands in once that copy is gone. */
 export type PendingDiffCommentsClear =
@@ -42,19 +43,20 @@ export function resolvePendingDiffCommentsClear(args: {
 
 export function formatPendingDiffCommentsClearDescription(
   pending: PendingDiffCommentsClear | null,
-  count: number
+  count: number,
+  t: Translate = translate
 ): string {
   if (!pending) {
     return ''
   }
   if (pending.kind === 'all') {
-    return translate(
+    return t(
       'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace',
       'Clear {{count}} notes from this workspace?',
       { count, defaultValue_one: 'Clear {{count}} note from this workspace?' }
     )
   }
-  return translate(
+  return t(
     'auto.components.right.sidebar.SourceControl.clearNotesFromFile',
     'Clear {{count}} notes from {{path}}?',
     { count, path: pending.filePath, defaultValue_one: 'Clear {{count}} note from {{path}}?' }

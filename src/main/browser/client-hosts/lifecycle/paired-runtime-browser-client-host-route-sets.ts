@@ -1,5 +1,5 @@
 import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { BrowserClientPageNetworkRoute } from '../../client-pages/lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
 import { sameBrowserClientHostLeaseAuthority } from '../commands/browser-client-host-command-authority'
 
 export type ComposedBrowserClientNetworkRoutes = {

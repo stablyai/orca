@@ -1,4 +1,6 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { recomputeOn } from '@/lib/recompute-on'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-chat/transcript/native-chat-background-task-run'
@@ -10,7 +12,11 @@ export function NativeChatBackgroundTaskRun({
 }: {
   block: NativeChatBackgroundTaskBlock
 }): React.JSX.Element {
-  const row = nativeChatBackgroundTaskRun(block, sayBackgroundTaskTranslated)
+  const t = useTranslate()
+  // The sayer reads translate(); key the row on `t` so its words follow the UI language.
+  const row = recomputeOn([t], () =>
+    nativeChatBackgroundTaskRun(block, sayBackgroundTaskTranslated)
+  )
   const Icon = KIND_ICONS[row.kind]
   return (
     <div className="min-w-0 py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">

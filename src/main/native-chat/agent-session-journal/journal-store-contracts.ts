@@ -1,3 +1,5 @@
+import type { JournalRow } from './durable-rows/journal-row-schema'
+import type Database from '../../sqlite/sync-database'
 import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
@@ -33,6 +35,9 @@ export type AgentSessionJournalOptions = {
   mintEpoch?: () => string
   /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
   withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
+  /** Runs in every write's transaction with the rows, the commit clock and each item's prior body;
+   *  must not throw. */
+  captureCommittedRows?: JournalCommittedRowsCapture
 }
 
 export type JournalReadSince =
@@ -67,6 +72,14 @@ export type JournalAppendResult = {
   itemId: string
   revision: number
 }
+
+export type JournalCommittedRowsCapture = (
+  db: Database.Database,
+  sessionId: string,
+  rows: readonly JournalRow[],
+  committedAt: number,
+  previous: (itemId: string) => AgentJournalItemBody | undefined
+) => void
 
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
   echoOf?: JournalItemEcho['echoOf']

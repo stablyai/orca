@@ -1,13 +1,13 @@
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/file-content/runtime-file-read'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeFileDownloadResult } from '../runtime-file-client-types'
 import type { getRemoteFileArgs } from '../runtime-file-routing'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
@@ -55,6 +55,19 @@ export async function readRemoteDownloadChunk(
       length: REMOTE_DOWNLOAD_CHUNK_BYTES
     },
     { timeoutMs: 60_000 }
+  )
+}
+
+/** A workspace file on a paired host, streamed in pages, or in one reply from hosts that can't page. */
+export async function downloadRemoteRuntimeFile(
+  remoteArgs: RemoteFileDownloadArgs,
+  suggestedName: string
+): Promise<RuntimeFileDownloadResult> {
+  if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
+    return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
+  }
+  return streamDownloadedFile(suggestedName, (offset) =>
+    readRemoteDownloadChunk(remoteArgs, offset)
   )
 }
 
@@ -142,7 +155,7 @@ export async function downloadRemoteFileViaPreview(
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }
-    return window.api.fs.saveDownloadedFile({
+    return await window.api.fs.saveDownloadedFile({
       suggestedName,
       content: result.content,
       encoding: result.isBinary ? 'base64' : 'utf8'

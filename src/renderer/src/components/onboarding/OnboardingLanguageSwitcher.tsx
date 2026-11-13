@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { i18n, translate, loadRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getUiLanguageNativeLabel } from '@/i18n/supported-languages'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
-import { track } from '@/lib/telemetry'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { useAppStore } from '@/store'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useAppStore } from '@/store/index'
 import {
   SUPPORTED_UI_LOCALES,
   type SupportedUiLocale,
@@ -25,7 +26,7 @@ export function OnboardingLanguageSwitcher({
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element | null {
-  const cohort = useAppStore((state) => state.settings?.telemetry?.onboardingLanguageCohort)
+  const t = useTranslate()
   const language = useAppStore((state) => state.settings?.uiLanguage ?? 'system')
   const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const catalogError = useLanguageReadiness((state) => state.error)
@@ -125,10 +126,7 @@ export function OnboardingLanguageSwitcher({
     }
   }
 
-  if (
-    cohort === 'control' ||
-    (!open && !shouldShowLanguageSwitcher(detection) && !catalogError && !recoveryVisible)
-  ) {
+  if (!open && !shouldShowLanguageSwitcher(detection) && !catalogError && !recoveryVisible) {
     return null
   }
 
@@ -144,7 +142,7 @@ export function OnboardingLanguageSwitcher({
       <PopoverContent
         ref={contentRef}
         align="end"
-        aria-label={translate('onboarding.language.title', 'Display language')}
+        aria-label={t('onboarding.language.title', 'Display language')}
         className="z-[110] w-80 max-w-[calc(100vw-2rem)]"
         wheelScroll
         onOpenAutoFocus={(event) => {
@@ -179,10 +177,10 @@ export function OnboardingLanguageSwitcher({
                 }}
               >
                 <ArrowLeft />
-                {translate('onboarding.language.back', 'Languages')}
+                {t('onboarding.language.back', 'Languages')}
               </Button>
               <Label htmlFor="onboarding-language-request">
-                {translate(
+                {t(
                   'onboarding.language.requestPrompt',
                   'Which language would you like Orca to support?'
                 )}
@@ -200,7 +198,7 @@ export function OnboardingLanguageSwitcher({
               />
               {requestState === 'success' ? (
                 <p role="status" className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'onboarding.language.requestSuccess',
                     'Language request recorded. You can continue onboarding.'
                   )}
@@ -209,7 +207,7 @@ export function OnboardingLanguageSwitcher({
                 <>
                   {requestState === 'error' && (
                     <p role="alert" className="text-xs text-destructive">
-                      {translate(
+                      {t(
                         'onboarding.language.requestError',
                         'Could not record your request. Try again.'
                       )}
@@ -223,8 +221,8 @@ export function OnboardingLanguageSwitcher({
                     }
                   >
                     {requestState === 'error'
-                      ? translate('onboarding.language.retry', 'Retry')
-                      : translate('onboarding.language.requestAction', 'Request language')}
+                      ? t('onboarding.language.retry', 'Retry')
+                      : t('onboarding.language.requestAction', 'Request language')}
                   </Button>
                 </>
               )}
@@ -233,20 +231,20 @@ export function OnboardingLanguageSwitcher({
             <div className="space-y-3">
               <div className="space-y-1">
                 <p className="text-sm font-medium">
-                  {translate('onboarding.language.title', 'Display language')}
+                  {t('onboarding.language.title', 'Display language')}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {detection.status === 'supported'
-                    ? translate('onboarding.language.device', 'System language: {{language}}', {
+                    ? t('onboarding.language.device', 'System language: {{language}}', {
                         language: getUiLanguageNativeLabel(detection.locale)
                       })
                     : detection.status === 'unsupported'
-                      ? translate(
+                      ? t(
                           'onboarding.language.unsupported',
                           'System language: {{language}}. This language is not supported yet.',
                           { language: detection.detectedTag }
                         )
-                      : translate(
+                      : t(
                           'onboarding.language.unknown',
                           'Your system language could not be detected. Choose a language below.'
                         )}
@@ -280,7 +278,7 @@ export function OnboardingLanguageSwitcher({
                     void chooseLanguage(locale)
                   }
                 }}
-                aria-label={translate('onboarding.language.title', 'Display language')}
+                aria-label={t('onboarding.language.title', 'Display language')}
               >
                 {SUPPORTED_UI_LOCALES.map((locale) => (
                   <div key={locale} className="rounded-md px-2 py-2 hover:bg-accent">
@@ -300,20 +298,20 @@ export function OnboardingLanguageSwitcher({
               </RadioGroup>
               <p role="status" className="h-4 text-xs text-muted-foreground">
                 {selectionPhase === 'save'
-                  ? translate('onboarding.language.saving', 'Saving language…')
+                  ? t('onboarding.language.saving', 'Saving language…')
                   : busy
-                    ? translate('onboarding.language.loading', 'Loading language…')
+                    ? t('onboarding.language.loading', 'Loading language…')
                     : null}
               </p>
               {(selectionFailure !== null || catalogError) && (
                 <div role="alert" className="space-y-2">
                   <p className="text-xs text-destructive">
                     {selectionFailure?.stage === 'save'
-                      ? translate(
+                      ? t(
                           'onboarding.language.saveError',
                           'Could not save your language preference. Try again.'
                         )
-                      : translate(
+                      : t(
                           'onboarding.language.loadError',
                           'Could not load this language. Try again.'
                         )}
@@ -331,7 +329,7 @@ export function OnboardingLanguageSwitcher({
                       }
                     }}
                   >
-                    {translate('onboarding.language.retry', 'Retry')}
+                    {t('onboarding.language.retry', 'Retry')}
                   </Button>
                 </div>
               )}
@@ -344,7 +342,7 @@ export function OnboardingLanguageSwitcher({
                     disabled={busy}
                     onClick={() => setRequestView(true)}
                   >
-                    {translate('onboarding.language.other', 'Other language…')}
+                    {t('onboarding.language.other', 'Other language…')}
                   </Button>
                 </div>
               )}
