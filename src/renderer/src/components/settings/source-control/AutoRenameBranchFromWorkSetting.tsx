@@ -20,9 +20,11 @@ import { Label } from '../../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import { Switch } from '../../ui/switch'
 import {
+  AUTO_RENAME_BRANCH_TEMPLATE_SETTING_ID,
   getAutoRenameBranchAdvancedSearchEntries,
   getWorkspaceTitleLanguageSearchEntry
 } from './auto-rename-branch-search'
+import { useSettingsTargetReveal } from '../section-layout/settings-target-highlight'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { Trans } from 'react-i18next'
@@ -69,6 +71,7 @@ export function AutoRenameBranchFromWorkSetting({
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSourceControlSettings(settings)
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const advancedRevealRef = useSettingsTargetReveal<HTMLDivElement>(() => setOptionsOpen(true))
   const advancedSearchOpen = shouldOpenAutoRenameBranchAdvanced(searchQuery)
   const advancedOpen = optionsOpen || advancedSearchOpen
   const persistedBranchNameTemplate = resolveSourceControlActionCommandTemplate(
@@ -186,7 +189,7 @@ export function AutoRenameBranchFromWorkSetting({
 
       <WorkspaceTitleLanguageSetting settings={settings} updateSettings={updateSettings} />
 
-      <Collapsible open={advancedOpen} onOpenChange={setOptionsOpen}>
+      <Collapsible ref={advancedRevealRef} open={advancedOpen} onOpenChange={setOptionsOpen}>
         <CollapsibleTrigger asChild>
           <Button
             type="button"
@@ -200,9 +203,10 @@ export function AutoRenameBranchFromWorkSetting({
             />
           </Button>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        {/* Mounted while closed so a settings jump can find and reveal the template. */}
+        <CollapsibleContent forceMount className="data-[state=closed]:hidden">
           <div className="mt-2 space-y-3 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-            <div className="space-y-2">
+            <div id={AUTO_RENAME_BRANCH_TEMPLATE_SETTING_ID} className="space-y-2">
               <div className="space-y-0.5">
                 <Label htmlFor="git-auto-rename-branch-name-template">
                   {t(

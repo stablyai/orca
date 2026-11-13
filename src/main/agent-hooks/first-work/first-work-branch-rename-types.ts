@@ -1,9 +1,9 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { getConfiguredBranchPrefix } from '../../ipc/worktree-branch-name'
-import type { resolveTextGenerationParams } from '../../text-generation/commit-message-text-generation'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
-import type { AgentGenerationFailureOutput } from '../../text-generation/agent-failure-output'
+import type { resolveCommitMessageSettings as resolveTextGenerationParams } from '../../text-generation/commit-message-text-generation'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
+import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 
 export type FirstWorkBranchRenameEvent = {
   paneKey: string

@@ -23,7 +23,10 @@ import { agentStateLabel, type AgentDotState } from '../../worktree/agent-row-di
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { buildMobileSessionTabRow, type MobileSessionTabRow } from './mobile-session-tab-rows'
+import {
+  buildMobileSessionTabSummary,
+  type MobileSessionTabSummary
+} from './mobile-session-tab-rows'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
 import type { MobileSessionController } from '../use-mobile-session-controller'
@@ -84,11 +87,11 @@ export function MobileSessionTabBar({
   const keepsKeyboard = useKeyboardPersistingTaps('handled')
   const now = useNow(60_000)
   const rows = useMemo(
-    () => visibleTabs.map((tab) => buildMobileSessionTabRow(tab, terminals, now)),
+    () => visibleTabs.map((tab) => buildMobileSessionTabSummary(tab, terminals, now)),
     [visibleTabs, terminals, now]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
-  const active: MobileSessionTabRow | undefined = rows[activeIndex]
+  const active: MobileSessionTabSummary | undefined = rows[activeIndex]
   const previous = activeIndex > 0 ? rows[activeIndex - 1] : undefined
   const next = activeIndex !== -1 ? rows[activeIndex + 1] : undefined
   const othersNeedYou = rows.some(
@@ -108,7 +111,7 @@ export function MobileSessionTabBar({
         ? { duration: 0, reduceMotion: ReduceMotion.Never }
         : { duration: SWIPE_SETTLE_MS, easing: Easing.bezier(...SHEET_CURVE) }
     )
-  const step = (target: MobileSessionTabRow | undefined, direction: 1 | -1) => {
+  const step = (target: MobileSessionTabSummary | undefined, direction: 1 | -1) => {
     if (!target) {
       offset.value = settle(0)
       return
@@ -269,7 +272,7 @@ export function MobileSessionTabBar({
       ) : null}
       <MobileSessionTabsSheet
         controller={controller}
-        rows={rows}
+        tabs={rows}
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
       />

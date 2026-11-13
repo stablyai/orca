@@ -1,8 +1,9 @@
 import { z } from 'zod'
-import { ghExecFileAsync } from '../../gh-utils'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
 import {

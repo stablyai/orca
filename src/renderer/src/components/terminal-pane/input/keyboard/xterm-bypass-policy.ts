@@ -230,6 +230,14 @@ export function shouldSuppressTerminalModifierKeyboardEvent(event: XtermBypassEv
   return isXtermHandledKeyEvent(event.type) && TERMINAL_MODIFIER_KEYS.has(event.key)
 }
 
+// Key equivalents of the native macOS menu items (src/main/menu/); no page handler claims them.
+const MAC_NATIVE_MENU_CHORDS = ['Mod+H', 'Mod+Alt+H', 'Mod+M', 'Mod+Q', 'Mod+Ctrl+F', 'Mod+Alt+I']
+
+/** Kitty encoding would cancel these keydowns, so the menu never sees them (#20837). */
+export function isMacNativeMenuChord(event: XtermBypassEvent): boolean {
+  return MAC_NATIVE_MENU_CHORDS.some((binding) => keybindingMatchesInput(binding, event, 'darwin'))
+}
+
 /** Bypass xterm encoding for native clipboard/menu handling or layout-aware text events. */
 export function shouldBypassXtermKeyboardEvent(
   event: XtermBypassEvent,
@@ -268,10 +276,11 @@ export function shouldBypassXtermKeyboardEvent(
   }
 
   if (isMac) {
-    // Electron consumes other Cmd chords earlier; web paste still needs Chromium’s native event.
+    // Orca's own Cmd chords are claimed earlier; web paste still needs Chromium’s native event.
     return (
       matchesClipboardBinding('Mod+C', event, 'darwin') ||
-      matchesClipboardBinding('Mod+V', event, 'darwin')
+      matchesClipboardBinding('Mod+V', event, 'darwin') ||
+      (!options.isIosWeb && isMacNativeMenuChord(event))
     )
   }
 

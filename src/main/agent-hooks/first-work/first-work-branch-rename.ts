@@ -21,7 +21,7 @@ import {
 } from '../../git/worktrees/checkout/branch-rename'
 import {
   generateBranchNameFromContext,
-  resolveTextGenerationParams
+  resolveCommitMessageSettings as resolveTextGenerationParams
 } from '../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import * as workspaceNaming from './first-work-workspace-title-rename'

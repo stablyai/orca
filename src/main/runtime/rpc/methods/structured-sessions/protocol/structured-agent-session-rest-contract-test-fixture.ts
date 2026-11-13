@@ -14,7 +14,7 @@ import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../../../dispatch/dispatcher-stream-options'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
 import type * as fileOperations from 'node:fs/promises'
-import * as contextSnapshots from '../../../../../native-chat/agent-session-context-snapshots'
+import * as contextSnapshots from '../../../../../native-chat/conversation-context/agent-session-context-snapshots'
 
 vi.mock('node:fs/promises', { spy: true })
 export const actualFiles = await vi.importActual<typeof fileOperations>('node:fs/promises')

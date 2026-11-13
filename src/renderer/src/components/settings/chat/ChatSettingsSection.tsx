@@ -4,13 +4,12 @@ import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
 import { SettingsSection } from '../section-layout/SettingsSection'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 
 import { useAppStore } from '../../../store/index'
-import { Card, CardContent } from '../../ui/card'
 import { getChatAppearanceSearchEntries } from '../appearance/chat/chat-appearance-search'
 import { ChatTurnActivitySetting } from './ChatTurnActivitySetting'
 import { getChatTurnActivityTitle } from './chat-turn-activity-search'
@@ -61,10 +60,9 @@ export function ChatSettingsSection({
       description={t('settings.chat.description', 'Choose how chats look and behave.')}
       searchEntries={searchEntries}
       forceVisible={hasUnsavedChatPromptChanges}
-      bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
     >
       {isMounted ? (
-        <div className="space-y-5">
+        <>
           {showDesktopOnlySettings ? (
             <>
               <SearchableSetting
@@ -86,23 +84,18 @@ export function ChatSettingsSection({
             </>
           ) : null}
           {matchesSettingsSearch(query, [{ title }, ...getChatAppearanceSearchEntries(t)]) ? (
-            <section id="chat-appearance" className="space-y-3">
-              <SettingsSubsectionHeader title={appearanceTitle} />
-              <Card>
-                <CardContent>
-                  <AppearanceChatSection
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    fontSuggestions={fontSuggestions}
-                    onRequestFontSuggestions={onRequestFontSuggestions}
-                    forceVisiblePrimary={matchesSettingsSearch(query, [
-                      { title },
-                      { title: appearanceTitle }
-                    ])}
-                  />
-                </CardContent>
-              </Card>
-            </section>
+            <SettingsGroup id="chat-appearance" title={appearanceTitle}>
+              <AppearanceChatSection
+                settings={settings}
+                updateSettings={updateSettings}
+                fontSuggestions={fontSuggestions}
+                onRequestFontSuggestions={onRequestFontSuggestions}
+                forceVisiblePrimary={matchesSettingsSearch(query, [
+                  { title },
+                  { title: appearanceTitle }
+                ])}
+              />
+            </SettingsGroup>
           ) : null}
           <ChatTurnActivitySetting
             settings={settings}
@@ -136,7 +129,7 @@ export function ChatSettingsSection({
               }
             />
           ) : null}
-        </div>
+        </>
       ) : null}
     </SettingsSection>
   )

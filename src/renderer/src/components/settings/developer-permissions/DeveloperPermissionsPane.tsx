@@ -28,11 +28,12 @@ import {
 } from './developer-permission-status'
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
-
-type DeveloperPermissionsPaneProps = {
-  highlightedSettingId?: string | null
-}
+import { SETTINGS_GROUP_ROW_BLEED_CLASS, SettingsGroup } from '../section-layout/SettingsGroup'
+import { cn } from '@/lib/class-names'
+import {
+  DEVELOPER_PERMISSIONS_OVERVIEW_ID,
+  getDeveloperPermissionSettingId
+} from './developer-permissions-search'
 
 type PermissionDefinition = {
   id: DeveloperPermissionId
@@ -222,9 +223,7 @@ const PERMISSIONS: PermissionDefinition[] = [
   }
 ]
 
-export function DeveloperPermissionsPane({
-  highlightedSettingId = null
-}: DeveloperPermissionsPaneProps): React.JSX.Element {
+export function DeveloperPermissionsPane(): React.JSX.Element {
   const t = useTranslate()
   const [states, setStates] = useState<DeveloperPermissionState[]>([])
   const [loading, setLoading] = useState(true)
@@ -317,6 +316,7 @@ export function DeveloperPermissionsPane({
     <div className="space-y-8">
       <TerminalTccAttributionNotice />
       <SettingsGroup
+        id={DEVELOPER_PERMISSIONS_OVERVIEW_ID}
         title={
           <span className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
@@ -341,14 +341,16 @@ export function DeveloperPermissionsPane({
           const state = stateById.get(permission.id)
           const status = state?.status
           const pending = pendingId === permission.id
-          const settingId = `developer-permissions-${permission.id}`
+          const settingId = getDeveloperPermissionSettingId(permission.id)
 
           return (
             <div key={permission.id} data-settings-row="">
               <div
                 data-settings-section={settingId}
-                data-highlighted={highlightedSettingId === settingId ? 'true' : undefined}
-                className="-mx-5 flex items-center justify-between gap-4 px-5 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
+                className={cn(
+                  SETTINGS_GROUP_ROW_BLEED_CLASS,
+                  'flex items-center justify-between gap-4 py-3'
+                )}
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>

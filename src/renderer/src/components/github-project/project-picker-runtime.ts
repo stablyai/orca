@@ -1,12 +1,12 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { githubProjectHost } from '../../../../shared/github/project-identity'
-import type { GitHubProjectOwnerType } from '../../../../shared/github/project-types'
+import { githubProjectHost } from '../../../../shared/github/projects/project-identity'
+import type { GitHubProjectOwnerType } from '../../../../shared/github/projects/project-types'
 import type {
   ListAccessibleProjectsResult,
   ListProjectViewsResult,
   ResolveProjectRefResult
-} from '../../../../shared/github/project-result-types'
+} from '../../../../shared/github/projects/project-result-types'
 
 /** `target` is the board's row-less source host, never the focused server. */
 export function getProjectPickerRuntimeScope(target: RuntimeClientTarget, host: string): string {

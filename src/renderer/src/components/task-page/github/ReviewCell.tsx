@@ -1,5 +1,5 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useMemo, useRef, useCallback } from 'react'
@@ -16,7 +16,7 @@ import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewerRows,
   getGitHubPRReviewLabel
-} from '../../../../../shared/github/pr-reviewer-display'
+} from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 import { cn } from '@/lib/class-names'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger } from '@/components/ui/popover'

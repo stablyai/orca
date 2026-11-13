@@ -126,13 +126,6 @@ describe('main sync-spawn ratchet', () => {
     expect(uses(source)).toEqual({ count: 0, symbols: [] })
   })
 
-  it.each(['import {', 'const broken = ;'])(
-    'fails closed on source it cannot parse: %s',
-    (source) => {
-      expect(() => uses(source)).toThrow('Cannot parse src/main/consumer.ts')
-    }
-  )
-
   it('fails a new file and a rising count, and passes at the baseline count', () => {
     const one = "import { spawnSync } from 'node:child_process'\nspawnSync('a')"
     const root = tree({

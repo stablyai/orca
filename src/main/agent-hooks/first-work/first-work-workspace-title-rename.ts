@@ -12,7 +12,7 @@ import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orch
 import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-environment'
 import {
   generateBranchNameFromContext,
-  resolveTextGenerationParams
+  resolveCommitMessageSettings as resolveTextGenerationParams
 } from '../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'

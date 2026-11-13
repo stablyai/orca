@@ -130,10 +130,10 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
 ]
 
 const ORCAD_BROWSER_PREFIXES = [
-  'src/main/orcad/external-chromium-',
-  'src/main/orcad/orcad-browser-provider',
-  'src/main/orcad/orcad-agent-browser-binary',
-  'src/main/orcad/electron-serve-browser-process'
+  'src/main/orcad/browser-providers/chromium/external-chromium-',
+  'src/main/orcad/browser-providers/orcad-browser-provider',
+  'src/main/orcad/browser-providers/orcad-agent-browser-binary',
+  'src/main/orcad/browser-providers/electron/electron-serve-browser-process'
 ]
 
 // Include page build/verification/manifest/packaging, entry/routes/imported mobile sources and render-check shell policy.
@@ -241,7 +241,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
   'src/shared/agent-session/journal/',
-  'src/main/ai-vault/structured-session-ownership.ts',
+  'src/main/ai-vault/structured-sessions/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
   // The released phone contract runs the current discovery owner and Claude producer.

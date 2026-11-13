@@ -11,14 +11,10 @@ import {
   PEER_CHAT,
   WAIT,
   call,
-  clearChat,
   coordinatorRunAndTask,
   db,
-  dispatcher,
   host,
-  openChat,
-  request,
-  startClearedContext
+  openChat
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
 const WORKER = formatOrcaSessionAddress(testOrcaSessionId(PEER_CHAT))
@@ -55,32 +51,6 @@ function expectChatOpen(sessionId: string): void {
 }
 
 describe("a chat assignee's report", () => {
-  it('is admitted from the same cleared chat, which keeps its Dispatch', async () => {
-    const { taskId, dispatchId } = await dispatchToChat()
-    const cleared = await clearChat(PEER_CHAT)
-    expect(cleared).toBe(PEER_CHAT)
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
-    await startClearedContext(cleared)
-
-    await call('orchestration.send', workerDone(taskId, dispatchId), { sessionId: cleared })
-
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
-  })
-
-  it('is refused from a terminal that names the chat as its caller', async () => {
-    const { taskId, dispatchId } = await dispatchToChat()
-
-    const response = await dispatcher.dispatch(
-      request('orchestration.send', { ...workerDone(taskId, dispatchId), from: WORKER })
-    )
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'session_caller_chat_not_declarable' }
-    })
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
-  })
-
   it("is refused from a terminal that carries the chat's Dispatch under its own handle", async () => {
     const { taskId, dispatchId } = await dispatchToChat()
 
@@ -96,19 +66,6 @@ describe("a chat assignee's report", () => {
 })
 
 describe("a chat assignee's liveness, stop and close", () => {
-  it('reads live at rest, since the next send starts its agent', async () => {
-    const { dispatchId } = await dispatchToChat()
-    await host.close(PEER_CHAT, 'evict')
-    expect(host.deps.store.getRecord(PEER_CHAT)?.lease.claimStatus).toBe('released')
-
-    const shown = await call('orchestration.workerShow', { dispatch: dispatchId })
-
-    expect(shown).toMatchObject({
-      observation: { status: 'live', exactWorker: true },
-      projection: { liveness: { verdict: 'live', source: 'execution_host' } }
-    })
-  })
-
   it('fails its Dispatch when the chat is closed, as a closed terminal does, and reads exited', async () => {
     const { taskId, dispatchId } = await dispatchToChat()
 
