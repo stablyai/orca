@@ -1,3 +1,4 @@
+import { withTerminalChatCallDeadline } from './runtime-environments/terminal-chat-call-deadline'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
@@ -92,22 +93,29 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
-      return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
-        {
-          id: 'desktop-ipc',
-          authToken: 'desktop-ipc',
-          // The renderer ships with this main process, so it always speaks the current contract.
-          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-          method: args.method,
-          params: args.params
-        },
-        {
-          clientId: 'desktop-renderer',
-          caller: DESKTOP_RPC_CALLER,
-          clientKind: 'runtime',
-          connectionId: desktopSenders.connectionIdFor(event.sender),
-          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-        }
+      return withTerminalChatCallDeadline(
+        args,
+        (signal, budget) =>
+          new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
+            {
+              id: 'desktop-ipc',
+              authToken: 'desktop-ipc',
+              // The renderer ships with this main process, so it always speaks the current contract.
+              orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+              method: args.method,
+              params: args.params
+            },
+            {
+              signal,
+              terminalChatSchedule: budget?.schedule,
+              clientId: 'desktop-renderer',
+              caller: DESKTOP_RPC_CALLER,
+              clientKind: 'runtime',
+              connectionId: desktopSenders.connectionIdFor(event.sender),
+              clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+            }
+          ),
+        runtime.getRuntimeId()
       )
     }
   )

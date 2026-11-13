@@ -4,6 +4,7 @@ import { normalizedNativeChatUserMessageText } from './native-chat-image-transcr
 import {
   nativeChatReceiptWindow,
   canClaimNativeChatReceipt,
+  mayUseLegacyNativeChatReceipt,
   type NativeChatReceiptSnapshot,
   type NativeChatReceiptRow,
   liveNativeChatReceiptDependencies
@@ -142,7 +143,8 @@ export function nativeChatPendingWitnesses(
   }
   const ranks = new Map<string, number>()
   const legacy = pending.flatMap((entry, index) =>
-    eligible[index] && (!entry.sourceAgent || (options.prospective && entry.evidenceModePending))
+    eligible[index] &&
+    (!entry.sourceAgent || (options.prospective && mayUseLegacyNativeChatReceipt(entry)))
       ? [{ entry: { ...entry, sourceAgent: undefined }, index }]
       : []
   )
@@ -184,7 +186,7 @@ export function nativeChatPendingWitnesses(
         offer(row, [index], 'source')
       }
       if (
-        (!entry.sourceAgent || (options.prospective && entry.evidenceModePending)) &&
+        (!entry.sourceAgent || (options.prospective && mayUseLegacyNativeChatReceipt(entry))) &&
         nativeChatUserMessageContentKey(row.message, entry.imagePaths) ===
           nativeChatPendingContentKey(projected)
       ) {

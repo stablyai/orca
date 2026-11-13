@@ -1,3 +1,8 @@
+import { readRuntimeElapsedClock } from '../../hosts/runtime-elapsed-clock'
+import {
+  terminalChatPromptSchedule,
+  type TerminalChatPromptSchedule
+} from '../../../../shared/terminal/input/terminal-chat-prompt-budget'
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
 import {
   assertLegacyAiVaultResumeCommandAllowed,
@@ -18,11 +23,7 @@ import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
 } from '../../../../shared/native-chat/input/native-chat-paste-bytes'
-import {
-  agentPromptSubmitJoinsPasteFrame,
-  getTerminalPasteIngestMs,
-  resolveAgentPromptSubmitDelayForAgent
-} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { agentPromptSubmitJoinsPasteFrame } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../../../shared/terminal/input/terminal-input'
 import type {
   RuntimeTerminalSend,
@@ -67,7 +68,9 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
   sendTerminalChatPrompt(
     handle: string,
     prompt: TerminalChatPrompt,
-    expectedIncarnationId?: string
+    expectedIncarnationId?: string,
+    signal?: AbortSignal,
+    preparedSchedule?: TerminalChatPromptSchedule
   ): Promise<RuntimeTerminalSend> {
     const refused: RuntimeTerminalSend = {
       handle,
@@ -91,8 +94,24 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
     if (rawBytes > TERMINAL_INPUT_MAX_BYTES || !prompt.text) {
       return Promise.resolve(refused)
     }
+    const schedule = preparedSchedule ?? terminalChatPromptSchedule(prompt.text)
     const pty = this.ptysById.get(binding.ptyId)
     const agent = pty?.foregroundAgent ?? pty?.launchAgent ?? prompt.agent
+    const gate = ['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')
+    const requiredMs = schedule.scheduleMs(this.getPtyWriteHostPlatform(binding.ptyId), agent, gate)
+    const clock = prompt.expiry ? readRuntimeElapsedClock() : null
+    if (
+      prompt.expiry &&
+      (prompt.expiry.runtimeId !== this.getRuntimeId() ||
+        !clock ||
+        prompt.expiry.expiresAtMs <= clock.upper ||
+        prompt.expiry.expiresAtMs - clock.lower > schedule.lifetimeMs)
+    ) {
+      return Promise.resolve(refused)
+    }
+    if (!prompt.expiry && requiredMs + 5000 > 30000) {
+      return Promise.resolve(refused)
+    }
     const body = buildNativeChatPasteBytes(prompt.text)
     const frames = [prompt.text, AGENT_TUI_CLEAR_INPUT_MAX, body]
     const byteLength =
@@ -102,20 +121,36 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
       binding.generation,
       frames,
       byteLength,
-      this.getPtyLifecycleSignal(binding.ptyId)
+      this.getPtyLifecycleSignal(binding.ptyId),
+      prompt.expiry
+        ? {
+            expiresAtMs: prompt.expiry.expiresAtMs,
+            executionMs: schedule.executionMs(requiredMs)
+          }
+        : undefined,
+      signal
     )
     if (!entry) {
       return Promise.resolve(refused)
     }
     // Only the bounded entry retains frames while a preceding generated prompt owns the serializer.
-    return this.runChatPrompt(handle, binding, entry, agent).catch(() => refused)
+    return this.runChatPrompt(
+      handle,
+      binding,
+      entry,
+      prompt.agent,
+      schedule,
+      prompt.expiry?.expiresAtMs
+    ).catch(() => refused)
   }
 
   private async runChatPrompt(
     handle: string,
     binding: AgentPromptExpectedBinding & { generation: number },
     entry: TerminalChatInput,
-    agent: TerminalAgent
+    agentHint: TerminalAgent,
+    schedule: TerminalChatPromptSchedule,
+    expiresAtMs?: number
   ): Promise<RuntimeTerminalSend> {
     let bytesWritten = 0
     let effectPossible = false
@@ -127,6 +162,7 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
       writeSettlement: writeSettlement ?? writeRefused('provider_refused_write')
     })
     const assertWritable = (): void => {
+      entry.assertActive()
       assertAgentPromptRequestActive(entry.signal)
       this.assertAgentPromptGeneration(binding.ptyId, binding.generation)
       this.assertAgentPromptExpectedBinding(handle, binding)
@@ -178,11 +214,27 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
       binding.ptyId,
       binding.generation,
       async () => {
-        entry.start()
         try {
           assertWritable()
           const frames = entry.frames!
           const scheduleText = frames[0]
+          const pty = this.ptysById.get(binding.ptyId)
+          const agent = pty?.foregroundAgent ?? pty?.launchAgent ?? agentHint
+          const requiredMs = schedule.scheduleMs(
+            this.getPtyWriteHostPlatform(binding.ptyId),
+            agent,
+            ['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')
+          )
+          const clock = expiresAtMs === undefined ? null : readRuntimeElapsedClock()
+          if (
+            expiresAtMs === undefined
+              ? requiredMs + 5000 > 30000
+              : !clock || expiresAtMs - clock.upper < requiredMs + 5000
+          ) {
+            throw new Error('Chat input request expired')
+          }
+          entry.start(schedule.executionMs(requiredMs))
+          assertWritable()
           const platform = this.getPtyWriteHostPlatform(binding.ptyId)
           if (
             hasLegacyAiVaultResumeCommand(scheduleText) &&
@@ -214,23 +266,22 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
             ? null
             : this.createAgentPromptRenderGate(
                 binding.ptyId,
-                getTerminalPasteIngestMs(platform, Buffer.byteLength(frames[2])),
-                scheduleText
+                schedule.ingestMs(platform),
+                scheduleText,
+                () => performance.now()
               )
           try {
             gate?.arm()
             await write(frames[2] + (joined ? NATIVE_CHAT_SUBMIT : ''))
             if (gate) {
               await waitForAgentPromptPromise(gate.wait(), entry.signal)
+              assertWritable()
             }
           } finally {
             gate?.dispose()
           }
           if (!joined) {
-            await waitForAgentPromptDelay(
-              resolveAgentPromptSubmitDelayForAgent(platform, scheduleText, agent),
-              entry.signal
-            )
+            await waitForAgentPromptDelay(schedule.submitDelayMs(platform, agent), entry.signal)
             await write(NATIVE_CHAT_SUBMIT)
           }
           return weak

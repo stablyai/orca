@@ -19,6 +19,10 @@ export function canClaimNativeChatReceipt(
   )
 }
 
+export function mayUseLegacyNativeChatReceipt(entry: NativeChatPendingSend): boolean {
+  return !entry.sourceAgent || !!(entry.evidenceModePending || entry.dispatchPending)
+}
+
 export function nativeChatSourcePosition(
   message: NativeChatMessage
 ): NativeChatSourcePosition | undefined {
@@ -167,7 +171,7 @@ export function liveNativeChatReceiptDependencies(
             member.sourceReceipt?.sessionId !== dependency.receipt.sessionId &&
             (dependency.proof === 'source'
               ? !!member.sourceAgent
-              : !member.sourceAgent || member.evidenceModePending)
+              : mayUseLegacyNativeChatReceipt(member))
           )
         })
       ) {

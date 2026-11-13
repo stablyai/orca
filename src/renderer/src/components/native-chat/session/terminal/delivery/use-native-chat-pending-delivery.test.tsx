@@ -573,3 +573,116 @@ it('keeps the raw original when a source row precedes a definite refusal and can
     mounted.result.current.pending.map((entry) => [entry.id, entry.text, entry.delivery])
   ).toEqual([[id, 'repeat ', 'rejected']])
 })
+
+it('keeps a spent normalized row unavailable through source selection and actual-socket legacy fallback', async () => {
+  const mounted = mountOwned()
+  const completion = Promise.withResolvers<'submitted'>()
+  let first = '',
+    second = ''
+  act(() => {
+    first = mounted.result.current.record('a b', undefined, false, 'opencode')
+    second = mounted.result.current.record('a  b', undefined, false, 'opencode', completion.promise)
+    mounted.result.current.setSourceEvidence(first, true)
+    mounted.result.current.setSourceEvidence(second, true)
+  })
+  const spent = [boundary, sourceRow('a b', 'spent'), { ...boundary, id: 'spent-answer' }]
+  mounted.rerender({ messages: spent })
+  expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([second])
+  act(() => mounted.result.current.setSourceEvidence(second, false))
+  await act(async () => {
+    completion.resolve('submitted')
+    await completion.promise
+  })
+  mounted.rerender({ messages: [...spent] })
+  expect(
+    mounted.result.current.pending.map((entry) => [
+      entry.id,
+      entry.text,
+      entry.sourceAgent,
+      entry.dispatchPending
+    ])
+  ).toEqual([[second, 'a  b', undefined, undefined]])
+  mounted.rerender({ messages: [...spent, userRow('a b'), { ...boundary, id: 'legacy-answer' }] })
+  expect(mounted.result.current.pending).toEqual([])
+})
+
+it.each(['submitted', 'uncertain'] as const)(
+  'keeps actual %s disposition distinct while a ready source delays its receipt',
+  async (outcome) => {
+    const mounted = mountOwned()
+    const completion = Promise.withResolvers<typeof outcome>()
+    let id = ''
+    act(() => {
+      id = mounted.result.current.record(
+        'delayed',
+        undefined,
+        false,
+        'opencode',
+        completion.promise
+      )
+      mounted.result.current.setSourceEvidence(id, true)
+    })
+    await act(async () => {
+      completion.resolve(outcome)
+      await completion.promise
+    })
+    act(() => vi.advanceTimersByTime(20001))
+    expect(
+      mounted.result.current.pending.map((entry) => [entry.id, entry.text, entry.delivery])
+    ).toEqual([[id, 'delayed', outcome === 'submitted' ? undefined : 'unconfirmed']])
+    mounted.rerender({
+      messages: [
+        boundary,
+        sourceRow('delayed', 'actual-receipt'),
+        { ...boundary, id: 'actual-answer' }
+      ]
+    })
+    expect(mounted.result.current.pending).toEqual([])
+  }
+)
+
+it('starts actual uncertainty after the original composer callback and preserves its deadline through updates and remount', async () => {
+  const completion = Promise.withResolvers<'uncertain'>()
+  let mounted = mountOwned()
+  let id = ''
+  act(() => {
+    id = mounted.result.current.record('waiting', undefined, false, 'opencode', completion.promise)
+    const finish = mounted.result.current.finishDispatch
+    void completion.promise.then((outcome) => finish(id, completion.promise, outcome))
+  })
+  mounted.unmount()
+  mounted = mountOwned()
+  await act(async () => {
+    completion.resolve('uncertain')
+    await completion.promise
+  })
+  act(() => vi.advanceTimersByTime(10000))
+  mounted.rerender({ messages: [boundary] })
+  act(() => mounted.result.current.record('other', undefined, false, 'opencode'))
+  mounted.unmount()
+  mounted = mountOwned()
+  act(() => vi.advanceTimersByTime(10001))
+  expect(mounted.result.current.pending.map((entry) => [entry.text, entry.delivery])).toEqual([
+    ['waiting', 'unconfirmed'],
+    ['other', undefined]
+  ])
+  mounted.rerender({
+    messages: [boundary, sourceRow('waiting', 'receipt'), { ...boundary, id: 'answer' }]
+  })
+  expect(mounted.result.current.pending.map((entry) => entry.text)).toEqual(['other'])
+})
+
+it('settles an empty uncached not-ready owner without publishing observation work', () => {
+  const write = vi.spyOn(pendingOwner, 'writePendingSendCache')
+  const mounted = renderHook(() =>
+    useNativeChatPendingDelivery({
+      paneKey: 'uncached',
+      agent: 'opencode',
+      session: { messages: [], readPhase: 'loading', sessionId: null }
+    })
+  )
+  mounted.rerender()
+  act(() => vi.advanceTimersByTime(20001))
+  expect(mounted.result.current.pending).toEqual([])
+  expect(write).not.toHaveBeenCalled()
+})

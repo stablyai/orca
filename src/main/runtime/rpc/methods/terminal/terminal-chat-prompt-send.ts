@@ -1,3 +1,4 @@
+import type { TerminalChatPromptSchedule } from '../../../../../shared/terminal/input/terminal-chat-prompt-budget'
 import type { z } from 'zod'
 import type { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -7,7 +8,9 @@ import { InvalidArgumentError } from '../../core'
 export function sendTerminalChatPrompt(
   runtime: OrcaRuntimeService,
   params: z.infer<typeof TerminalSend>,
-  inputSource: TerminalInputSource
+  inputSource: TerminalInputSource,
+  signal?: AbortSignal,
+  schedule?: TerminalChatPromptSchedule
 ) {
   if (
     !params.chatPrompt ||
@@ -26,6 +29,12 @@ export function sendTerminalChatPrompt(
     throw new InvalidArgumentError('invalid_terminal_send')
   }
   return runtime
-    .sendTerminalChatPrompt(params.terminal, params.chatPrompt, params.expectedIncarnationId)
+    .sendTerminalChatPrompt(
+      params.terminal,
+      params.chatPrompt,
+      params.expectedIncarnationId,
+      signal,
+      schedule
+    )
     .then((send) => ({ send }))
 }

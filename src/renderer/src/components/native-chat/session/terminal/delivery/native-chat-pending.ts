@@ -186,7 +186,9 @@ export function resolvePendingSendEvidence(
   agent: AgentType,
   source?: boolean
 ): NativeChatPendingSend[] {
-  const index = entries.findIndex((entry) => entry.id === id && entry.evidenceModePending)
+  const index = entries.findIndex(
+    (entry) => entry.id === id && (entry.evidenceModePending || entry.dispatchPending)
+  )
   if (index === -1) {
     return entries
   }
@@ -240,7 +242,13 @@ export function finishPendingSendDispatch(
           evidenceModePending: undefined,
           ...(outcome === 'not-submitted'
             ? { delivery: 'rejected' as const }
-            : { writeUnconfirmedAt: entry.writeUnconfirmedAt ?? Date.now() })
+            : outcome === 'uncertain'
+              ? { writeUnconfirmedAt: entry.writeUnconfirmedAt ?? Date.now() }
+              : {
+                  writeUnconfirmedAt: undefined,
+                  writeUnconfirmedSessionId: undefined,
+                  delivery: undefined
+                })
         }
   )
 }

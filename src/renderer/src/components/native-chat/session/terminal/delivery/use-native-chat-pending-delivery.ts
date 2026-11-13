@@ -187,6 +187,13 @@ export function useNativeChatPendingDelivery(args: {
     [authoritative, workingEpoch]
   )
   useEffect(() => {
+    if (
+      !pending.some(
+        (entry) => entry.sourceAgent && entry.writeUnconfirmedAt !== undefined && !entry.delivery
+      )
+    ) {
+      return
+    }
     save((entries) => {
       let changed = false
       const next = entries.map((entry) => {
@@ -206,7 +213,7 @@ export function useNativeChatPendingDelivery(args: {
       })
       return changed ? next : entries
     })
-  }, [observing, save, sessionId])
+  }, [observing, pending, save, sessionId])
 
   // Only lost acknowledgments trigger uncertainty; acknowledged/queued sends wait for their transcript row.
   const nextHoldDeadline = useMemo(() => {

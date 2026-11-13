@@ -1,3 +1,4 @@
+import * as RuntimeClock from '../hosts/runtime-elapsed-clock'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -248,6 +249,116 @@ describe('host-owned Chat input', () => {
       writeSettlement: { outcome: 'unverifiable' }
     })
     await vi.runAllTimersAsync()
+    expect(writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), 'body'])
+  })
+
+  it('admits a large Windows Chat paste through the late-marker ceiling and sends exactly one Enter', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(RuntimeClock, 'readRuntimeElapsedClock').mockImplementation(() => ({
+      lower: 100000 + Math.floor(performance.now()),
+      upper: 100001 + Math.floor(performance.now())
+    }))
+    const bodyStarted = Promise.withResolvers<void>()
+    const text = 'x'.repeat(2000000)
+    const framed = `\x1b[200~${text}\x1b[201~`
+    const { runtime, handle, writes } = await createRuntime((data) => {
+      if (data === framed) {
+        bodyStarted.resolve()
+      }
+      return { outcome: 'accepted' }
+    }, 'claude')
+    Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'win32' })
+    const pending = runtime.sendTerminalChatPrompt(handle, {
+      agent: 'claude',
+      text,
+      expiry: { runtimeId: runtime.getRuntimeId(), expiresAtMs: 200000 }
+    })
+    await bodyStarted.promise
+    await vi.advanceTimersByTimeAsync(39000)
+    vi.setSystemTime(-100000000)
+    runtime.onPtyData('pty-prompt', '\x1b[?25h', Date.now())
+    for (let i = 0; i < 16; i++) {
+      await vi.advanceTimersByTimeAsync(500)
+      runtime.onPtyData('pty-prompt', '.', Date.now())
+    }
+    await vi.advanceTimersByTimeAsync(31000)
+    expect(writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), framed])
+    await vi.advanceTimersByTimeAsync(1000)
+    await expect(pending).resolves.toMatchObject({ accepted: true })
+    expect(writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), framed, '\r'])
+  })
+
+  it('keeps old no-grant scheduling bounded before effects and allows a qualified no-gate large paste', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(RuntimeClock, 'readRuntimeElapsedClock').mockImplementation(() => ({
+      lower: 100000 + Math.floor(performance.now()),
+      upper: 100001 + Math.floor(performance.now())
+    }))
+    const body = Promise.withResolvers<void>()
+    const text = 'x'.repeat(2000000)
+    const framed = `\x1b[200~${text}\x1b[201~`
+    const { runtime, handle, writes } = await createRuntime((data) => {
+      if (data === framed) {
+        body.resolve()
+      }
+      return { outcome: 'accepted' }
+    }, 'grok')
+    Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'win32' })
+    await expect(
+      runtime.sendTerminalChatPrompt(handle, { agent: 'grok', text })
+    ).resolves.toMatchObject({ accepted: false, bytesWritten: 0 })
+    expect(writes).toEqual([])
+    const pending = runtime.sendTerminalChatPrompt(handle, {
+      agent: 'grok',
+      text,
+      expiry: { runtimeId: runtime.getRuntimeId(), expiresAtMs: 200000 }
+    })
+    await body.promise
+    await vi.advanceTimersByTimeAsync(31750)
+    expect(writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), framed])
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(pending).resolves.toMatchObject({ accepted: true })
+    expect(writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), framed, '\r'])
+  })
+
+  it('rejects delayed or foreign-runtime grants before clear and suppresses an expired suffix without a timer wake', async () => {
+    vi.useFakeTimers()
+    let hostNow = 100000
+    vi.spyOn(RuntimeClock, 'readRuntimeElapsedClock').mockImplementation(() => ({
+      lower: hostNow,
+      upper: hostNow + 1
+    }))
+    const bodyStarted = Promise.withResolvers<void>()
+    const acceptBody = Promise.withResolvers<WriteSettlement>()
+    const { runtime, handle, writes } = await createRuntime((data) => {
+      if (data === 'body') {
+        bodyStarted.resolve()
+        return acceptBody.promise
+      }
+      return { outcome: 'accepted' }
+    }, 'claude')
+    for (const expiry of [
+      { runtimeId: 'replaced-runtime', expiresAtMs: 150000 },
+      { runtimeId: runtime.getRuntimeId(), expiresAtMs: 100001 }
+    ]) {
+      await expect(
+        runtime.sendTerminalChatPrompt(handle, { agent: 'claude', text: 'body', expiry })
+      ).resolves.toMatchObject({ accepted: false, bytesWritten: 0 })
+    }
+    expect(writes).toEqual([])
+    const pending = runtime.sendTerminalChatPrompt(handle, {
+      agent: 'claude',
+      text: 'body',
+      expiry: { runtimeId: runtime.getRuntimeId(), expiresAtMs: 150000 }
+    })
+    await bodyStarted.promise
+    hostNow = 150001
+    acceptBody.resolve({ outcome: 'accepted' })
+    await vi.advanceTimersByTimeAsync(8001)
+    await expect(pending).resolves.toMatchObject({
+      accepted: false,
+      writeSettlement: { outcome: 'unverifiable' }
+    })
     expect(writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), 'body'])
   })
 })

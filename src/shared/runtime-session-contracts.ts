@@ -62,6 +62,8 @@ export function browserUnavailableMessage(
 }
 
 export type RuntimeStatus = {
+  /** Lower bound from this runtime's suspend-inclusive elapsed clock. */
+  elapsedClockMs?: number
   runtimeId: string
   /** Authenticated requester identity. Missing for in-process callers and older hosts. */
   pairedDeviceId?: string

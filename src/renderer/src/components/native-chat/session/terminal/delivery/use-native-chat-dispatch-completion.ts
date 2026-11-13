@@ -30,17 +30,21 @@ export function useNativeChatDispatchCompletion({
     ) => save((entries) => finishPendingSendDispatch(entries, id, promise, outcome)),
     [save]
   )
-  const dispatchObservers = useMemo(
+  const dispatchObservers = useMemo<{
+    scope: NativeChatPendingSendScope
+    seen: WeakSet<Promise<NativeChatPendingDispatchOutcome>>
+    reconcile:
+      | null
+      | ((
+          id: string,
+          promise: Promise<NativeChatPendingDispatchOutcome>,
+          outcome: NativeChatPendingDispatchOutcome
+        ) => void)
+  }>(
     () => ({
       scope,
       seen: new WeakSet<Promise<NativeChatPendingDispatchOutcome>>(),
-      reconcile: null as
-        | null
-        | ((
-            id: string,
-            promise: Promise<NativeChatPendingDispatchOutcome>,
-            outcome: NativeChatPendingDispatchOutcome
-          ) => void)
+      reconcile: null
     }),
     [scope]
   )
