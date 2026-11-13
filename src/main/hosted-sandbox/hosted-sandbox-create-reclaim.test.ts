@@ -134,13 +134,13 @@ describe('createSandboxWithProgress cancel', () => {
   it('EP-5: a cancel whose sandbox could not be confirmed deleted says so (reason), not a plain cancel', async () => {
     const api = client()
     const controller = new AbortController()
-    api.create.mockImplementation(async (_body, signal) => {
+    api.create.mockImplementation((async (_body: unknown, signal?: AbortSignal) => {
       if (signal) {
         controller.abort()
         throw new EnvironmentProviderError('aborted', 'Cancelled.')
       }
       throw new EnvironmentProviderError('unavailable', 'down')
-    })
+    }) as never)
     vi.useFakeTimers()
     try {
       const outcome = expect(

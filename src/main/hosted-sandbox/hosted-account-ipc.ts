@@ -64,6 +64,7 @@ export function registerHostedAccountHandlers(
     | 'bootPlan'
     | 'cloneStatus'
     | 'destroy'
+    | 'list'
     | 'githubUser'
     | 'connectGitHubUser'
     | 'disconnectGitHubUser'
