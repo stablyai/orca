@@ -16,10 +16,11 @@ import { useCloudWorkspacesAvailable } from './use-cloud-workspaces'
 
 /**
  * Follow is offered on a teammate's team workspace; never on your own (it is yours already), and not
- * by a control plane that predates follows (`following` absent).
+ * by a control plane that predates follows (`following` absent). "Your own" is the CURRENT owner:
+ * after a hand-off the new owner gets no Follow and the creator does (FOLLOW-OWN-AFTER-TRANSFER).
  */
 export function followOffer(workspace: CloudWorkspace, selfId: string | null): boolean | null {
-  if (workspace.following === undefined || workspace.createdBy === selfId) {
+  if (workspace.following === undefined || workspace.ownerUserId === selfId) {
     return null
   }
   return workspace.following

@@ -63,15 +63,18 @@ export function followedWorkspaces(
   workspaces: readonly CloudWorkspace[] | null,
   selfId: string | null
 ): SidebarFollowedWorkspace[] {
-  return (workspaces ?? [])
-    .filter((w) => w.following === true && w.createdBy !== selfId)
-    .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
-    .map((w) => ({
-      sandboxId: w.id,
-      title: workspaceDisplayLabel(w),
-      numberLabel: w.number ? formatWorkspaceNumber(w.number) : null,
-      creatorId: w.createdBy,
-      status: followedStatus(w),
-      hereNow: new Set(w.presence.map((p) => p.userId).filter((id) => id !== selfId)).size
-    }))
+  return (
+    (workspaces ?? [])
+      // Your own is the current owner's: a workspace handed to you leaves Following (FOLLOW-OWN-AFTER-TRANSFER).
+      .filter((w) => w.following === true && w.ownerUserId !== selfId)
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+      .map((w) => ({
+        sandboxId: w.id,
+        title: workspaceDisplayLabel(w),
+        numberLabel: w.number ? formatWorkspaceNumber(w.number) : null,
+        creatorId: w.createdBy,
+        status: followedStatus(w),
+        hereNow: new Set(w.presence.map((p) => p.userId).filter((id) => id !== selfId)).size
+      }))
+  )
 }
