@@ -24,11 +24,12 @@ export async function readWorkspaceCleanupMergeEvidence(
   worktree: Worktree,
   repo: Repo,
   prCache: PRCacheView<PRInfo>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  coordinatorBranch?: string | null
 ): Promise<WorkspaceCleanupMergeEvidence | undefined> {
   try {
     return await withWorkspaceCleanupTimeout(
-      (signal) => readMergeEvidence(worktree, repo, prCache, signal),
+      (signal) => readMergeEvidence(worktree, repo, prCache, signal, coordinatorBranch),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
       'Timed out reading merge evidence.',
       signal
@@ -45,7 +46,8 @@ async function readMergeEvidence(
   worktree: Worktree,
   repo: Repo,
   prCache: PRCacheView<PRInfo>,
-  signal: AbortSignal
+  signal: AbortSignal,
+  coordinatorBranch: string | null | undefined
 ): Promise<WorkspaceCleanupMergeEvidence | undefined> {
   const git: CleanupGit = (argv) => gitExecFileAsync(argv, { cwd: worktree.path, signal })
   const baseOid = await resolveWorkspaceCleanupBaseOid(worktree, repo, git)
@@ -63,34 +65,48 @@ async function readMergeEvidence(
   }
   const branchName = worktree.branch.replace(/^refs\/heads\//, '')
   // The proof reads the branch ref, so it only speaks for HEAD while HEAD is still that branch.
-  // Prove against the base alone: the default target list includes the worktree's HEAD, the branch itself.
-  const headInDefaultBranch =
-    aheadOfDefault === 0 ||
-    (branchName.length > 0 &&
-      (await resolveCommitOid(git, `refs/heads/${branchName}`)) === headOid &&
-      (await localBranchHasNoUnmergedChanges({
-        cwd: worktree.path,
-        branchName,
-        targetRefs: [baseOid],
-        refreshRemoteTargets: false,
-        options: { signal }
-      })))
+  // Prove against the target alone: the default target list includes the worktree's HEAD, the branch itself.
+  let branchAtHead: Promise<boolean> | undefined
+  const headLandedIn = async (targetOid: string): Promise<boolean> =>
+    branchName.length > 0 &&
+    (await (branchAtHead ??= resolveCommitOid(git, `refs/heads/${branchName}`).then(
+      (oid) => oid === headOid
+    ))) &&
+    localBranchHasNoUnmergedChanges({
+      cwd: worktree.path,
+      branchName,
+      targetRefs: [targetOid],
+      refreshRemoteTargets: false,
+      options: { signal }
+    })
+  const headInDefaultBranch = aheadOfDefault === 0 || (await headLandedIn(baseOid))
   const review = readWorkspaceReviewPR(worktree, repo, prCache)
   const head = headOid.toLowerCase()
+  const mergedReview =
+    review?.state === 'merged'
+      ? {
+          number: review.number,
+          provider: 'github' as const,
+          containsHead: [review.headSha, review.confirmedContainedHeadOid].some(
+            (oid) => oid?.trim().toLowerCase() === head
+          )
+        }
+      : undefined
+  // Only worth proving when HEAD has not already landed another way.
+  const coordinatorOid =
+    coordinatorBranch && !headInDefaultBranch && mergedReview?.containsHead !== true
+      ? await resolveCommitOid(git, `refs/heads/${coordinatorBranch}`)
+      : null
+  const headInCoordinatorBranch =
+    coordinatorOid === null
+      ? undefined
+      : (await git(['rev-list', '--count', `${coordinatorOid}..${headOid}`])).stdout.trim() ===
+          '0' || (await headLandedIn(coordinatorOid))
   return {
     headInDefaultBranch,
     aheadOfDefault,
-    ...(review?.state === 'merged'
-      ? {
-          mergedReview: {
-            number: review.number,
-            provider: 'github' as const,
-            containsHead: [review.headSha, review.confirmedContainedHeadOid].some(
-              (oid) => oid?.trim().toLowerCase() === head
-            )
-          }
-        }
-      : {})
+    ...(headInCoordinatorBranch !== undefined ? { headInCoordinatorBranch } : {}),
+    ...(mergedReview ? { mergedReview } : {})
   }
 }
 
