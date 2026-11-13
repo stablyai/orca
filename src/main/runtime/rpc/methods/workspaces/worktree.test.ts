@@ -3,7 +3,7 @@ import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
-import { createAutomationDispatchToken } from '../../../../automations/dispatch-tokens'
+import { createAutomationDispatchToken } from '../../../../automations/ownership/dispatch-tokens'
 import { rpcContext, runtimeStub } from '../agent-launch/agent-launch.test-fixture'
 
 const repo = {

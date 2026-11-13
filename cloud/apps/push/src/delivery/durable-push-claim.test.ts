@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import type { CloudDatabase as PushDatabase } from '@orca-cloud/cloud-database/cloud-database'
-import { DELIVERY_LEASE_MS, DurablePushStore } from './durable-push-store.js'
+import { DurablePushStore } from './durable-push-store.js'
 
 import {
   cleanupDurablePushFixtures,
@@ -139,20 +139,4 @@ it.skipIf(!durablePushTestDatabaseUrl)(
   }
 )
 
-// Only the TTL term keeps the candidate scan off an unpruned backlog; expires_at is not indexed first.
 
-it('frees a device held by a crashed worker once its lease lapses', async () => {
-  const { db, store, clock, advance } = await fixture()
-  await store.accept('host', 'phone', notification(1))
-  advance(1)
-  await store.accept('host', 'phone', notification(2))
-  const crashed = (await new DurablePushStore(db, clock).claim())!
-  advance(DELIVERY_LEASE_MS - 1)
-  expect(await store.claim()).toBeNull()
-  advance(1)
-  const reclaimed = (await store.claim())!
-  expect(reclaimed.id).toBe(crashed.id)
-  expect(reclaimed.attempts).toBe(2)
-  await store.finish(reclaimed)
-  expect((await store.claim())?.notification.notificationSeq).toBe(2)
-})

@@ -7,7 +7,7 @@ src/cli/runtime/launch.ts
 src/main/agent-hooks/installation/locking/managed-hook-owner-identity.ts
 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 src/main/window/desktop-integration/app-icon.ts
-src/main/automations/precheck-runner.ts
+src/main/automations/dispatch/precheck-runner.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-execution.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-raw-process.ts
 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
@@ -56,7 +56,7 @@ src/main/network/macos-tailscale-dns-diagnostic.ts
 src/main/plugins/workers/parent-process/plugin-host-process.ts
 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 src/main/ports/port-scan-command-execution.ts
-src/main/providers/process-cwd.ts
+src/main/providers/working-directory/process-cwd.ts
 src/main/pty/process-retirement/pty-descendant-fresh-table.ts
 src/main/rate-limits/providers/gemini/gemini-cli-oauth-extractor.ts
 src/main/runtime/rpc/server/pairing/network/windows-default-route-interfaces.ts
@@ -73,4 +73,4 @@ src/shared/fish-binary-requirement.ts
 src/shared/process-table-ps-capture.ts
 src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts
 src/shared/terminal/pty/native-process/shell-process-readiness.ts
-src/wsl-guest/preflight-handler.ts
+src/wsl-guest/commands/preflight-handler.ts

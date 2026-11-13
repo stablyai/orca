@@ -341,7 +341,7 @@ export function PluginsSettingsSection({
       {...sectionPresentation}
       description={<PluginsSectionDescription text={sectionPresentation.description} />}
       hideHeader={featureEnabled && page.openKey !== null}
-      bodyClassName="space-y-6 rounded-none border-0 bg-transparent p-0 shadow-none"
+      bodyClassName="gap-6"
       headerAction={
         <PluginsHeaderActions
           featureEnabled={featureEnabled}

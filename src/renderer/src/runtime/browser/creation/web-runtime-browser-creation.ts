@@ -45,7 +45,15 @@ export async function createWebRuntimeSessionBrowserTab(
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
-  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+  return environmentId ? createWebRuntimeSessionBrowserTabOnHost(args, environmentId) : false
+}
+
+/** Creates the tab on the named runtime, for callers that already route by the page's owner. */
+export async function createWebRuntimeSessionBrowserTabOnHost(
+  args: CreateWebRuntimeSessionBrowserTabArgs,
+  environmentId: string
+): Promise<boolean> {
+  if (!isWebRuntimeSessionActive(environmentId)) {
     return false
   }
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)

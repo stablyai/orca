@@ -141,6 +141,9 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           args.sourceContext
         ))
       : null
+  if (args.accepts?.() === false) {
+    return null
+  }
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(

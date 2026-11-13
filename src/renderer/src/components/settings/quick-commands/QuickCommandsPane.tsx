@@ -15,6 +15,7 @@ import { getSettingOwnershipSummary } from '../page/setting-ownership'
 import { useTranslate } from '@/i18n/use-translate'
 import { QuickCommandsList } from './QuickCommandsList'
 import { QuickCommandsToolbar } from './QuickCommandsToolbar'
+import { QUICK_COMMANDS_SETTINGS_TARGET_ID } from './quick-commands-search'
 import { GLOBAL_SCOPE_KEY } from './QuickCommandsScopeFilter'
 import {
   getRepoExecutionHostId,
@@ -251,13 +252,14 @@ export function QuickCommandsPane({
 
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
     const confirmed = await confirm({
-      title: t('auto.components.settings.QuickCommandsPane.3edf3deaf8', 'Delete "{{value0}}"?', {
-        value0: command.label || 'Untitled'
-      }),
-      description: t(
-        'auto.components.settings.QuickCommandsPane.3d9dc558e8',
-        'This quick command will be removed from your saved list.'
-      ),
+      title: t('common.delete', 'Delete'),
+      description: [
+        command.label || 'Untitled',
+        t(
+          'auto.components.settings.QuickCommandsPane.3d9dc558e8',
+          'This quick command will be removed from your saved list.'
+        )
+      ].join('\n'),
       confirmLabel: t('auto.components.settings.QuickCommandsPane.ec1ed99e70', 'Delete'),
       confirmVariant: 'destructive'
     })
@@ -276,7 +278,7 @@ export function QuickCommandsPane({
     })
 
   return (
-    <div className="space-y-4">
+    <div id={QUICK_COMMANDS_SETTINGS_TARGET_ID} className="space-y-4">
       {shouldShowTerminalQuickCommandHostOwnership(hostOptions) ? (
         <p className="text-xs text-muted-foreground">{ownership.description}</p>
       ) : null}

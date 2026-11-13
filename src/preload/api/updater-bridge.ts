@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { UpdateStatus } from '../../shared/update-status-types'
-import { prepareAndInvokeUpdaterInstall } from '../renderer-restart-wiring'
-import { awaitBeforeUnloadCheckpoint, updaterQuitAbortRelay } from '../preload-runtime-support'
+import { prepareAndInvokeUpdaterInstall } from '../renderer/restart/renderer-restart-wiring'
+import { awaitBeforeUnloadCheckpoint, updaterQuitAbortRelay } from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
 
 export const updaterApi = {

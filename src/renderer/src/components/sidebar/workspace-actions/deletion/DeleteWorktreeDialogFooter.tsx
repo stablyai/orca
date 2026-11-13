@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
-import { deleteWorkspacesCountLabel } from '../context-menu/workspace-batch-action-labels'
 
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
@@ -13,10 +12,6 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren = false,
   deleteDisabled = false,
   canForceDelete,
-  isBatchDelete,
-  worktreeCount,
-  canDeleteAllLineage,
-  lineageDeleteTargetCount,
   onCancel,
   onForceDelete,
   onSavingChange,
@@ -29,10 +24,6 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren?: boolean
   deleteDisabled?: boolean
   canForceDelete: boolean
-  isBatchDelete: boolean
-  worktreeCount: number
-  canDeleteAllLineage: boolean
-  lineageDeleteTargetCount: number
   onCancel: () => void
   onForceDelete: () => void
   onSavingChange: (saving: boolean) => void
@@ -48,16 +39,7 @@ export function DeleteWorktreeDialogFooter({
       ? canForceDelete
         ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting', 'Force Deleting...')
         : t('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
-      : isBatchDelete
-        ? deleteWorkspacesCountLabel(worktreeCount, t)
-        : canDeleteAllLineage
-          ? deleteWorkspacesCountLabel(lineageDeleteTargetCount, t)
-          : canForceDelete
-            ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete', 'Force Delete')
-            : t(
-                'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
-                'Delete Workspace'
-              )
+      : t('common.delete', 'Delete')
 
   return (
     <>
