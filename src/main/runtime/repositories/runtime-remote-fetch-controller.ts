@@ -1,7 +1,7 @@
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { GitExecOptions } from '../../git/command-runner/git-exec-options'
 import type { LocalGitExecOptions } from '../../git/refs/resolution/repo-default-base-ref'
-import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../../shared/git/fetch/git-fetch-auto-maintenance'
+import { runRemoteTrackingBaseFetch } from './runtime-remote-tracking-base-fetch'
 import { getCanonicalRepoKey } from '../../git/repositories/canonical-repo-key'
 import type { CanonicalRepoKeyOptions } from '../../git/repositories/canonical-repo-key'
 import {
@@ -10,6 +10,7 @@ import {
 } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { setBoundedMapEntry } from './remote-fetch-cache'
+import { withRepositoryGitCause } from '../../git/repository-git-cause'
 
 export type RemoteFetchResult = { ok: true } | { ok: false; errorKind: 'git_error' }
 
@@ -120,11 +121,17 @@ export class RuntimeRemoteFetchController {
       return existing
     }
     const promise = this.enqueueRemoteFetch(key, () =>
-      gitExecFileAsync(['fetch', remote], {
-        cwd: repoPath,
-        ...gitOptions,
-        timeout: REMOTE_FETCH_TIMEOUT_MS
-      })
+      withRepositoryGitCause(
+        repoPath,
+        gitOptions,
+        { family: 'fetch', reason: 'remote-fetch', cache: 'miss' },
+        () =>
+          gitExecFileAsync(['fetch', remote], {
+            cwd: repoPath,
+            ...gitOptions,
+            timeout: REMOTE_FETCH_TIMEOUT_MS
+          })
+      )
         .then((): RemoteFetchResult => {
           this.rememberFreshFetchCompletedAt(key)
           return { ok: true }
@@ -208,7 +215,12 @@ export class RuntimeRemoteFetchController {
         if (this.getFreshFetchCompletedAt(key) !== null) {
           return Promise.resolve<RemoteFetchResult>({ ok: true })
         }
-        return this.runExactBaseRefresh(repoPath, base, key, previewOptions, remainingMs)
+        return withRepositoryGitCause(
+          repoPath,
+          gitOptions,
+          { family: 'fetch', reason: 'conflict-preview', cache: 'refresh' },
+          () => this.runExactBaseRefresh(repoPath, base, key, previewOptions, remainingMs)
+        )
       }).finally(() => this.armRefMaintenance(repoPath, gitOptions))
     })()
     try {
@@ -227,21 +239,7 @@ export class RuntimeRemoteFetchController {
     gitOptions: LocalGitExecOptions & Pick<GitExecOptions, 'signal' | 'canStart'>,
     timeout = REMOTE_FETCH_TIMEOUT_MS
   ): Promise<RemoteFetchResult> {
-    return gitExecFileAsync(
-      [
-        ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
-        'fetch',
-        '--no-tags',
-        base.remote,
-        `+refs/heads/${base.branch}:${base.ref}`
-      ],
-      {
-        cwd: repoPath,
-        ...gitOptions,
-        useConfiguredSshCommandForNetwork: true,
-        timeout
-      }
-    )
+    return runRemoteTrackingBaseFetch(repoPath, base, gitOptions, timeout)
       .then((): RemoteFetchResult => {
         this.rememberFreshFetchCompletedAt(key)
         return { ok: true }

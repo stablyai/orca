@@ -198,6 +198,8 @@ export function createStructuredAgentSessionConversationLifetime(
     stopAgent: (sessionId) => stopAgent(sessionId, { cause: 'evict', resting: true }),
     // Word handed-over and queued startup failures from the same hostStopped fact.
     stopStartingAgent: (sessionId) => stopAgent(sessionId, { cause: 'host-stop' }),
+    startTimed: (sessionId, child) =>
+      host.context().runtimeState.startupAttempts.onClock(sessionId, child),
     closeConversation: (sessionId) => closeConversation(sessionId, true),
     logger: deps().logger,
     ...deps().idleSweep

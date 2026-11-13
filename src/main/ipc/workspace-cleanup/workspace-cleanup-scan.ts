@@ -38,6 +38,7 @@ import {
   throwIfWorkspaceCleanupScanAborted
 } from './workspace-cleanup-scan-primitives'
 import { listWorkspaceCleanupFolderWorkspaces } from './workspace-cleanup-folder-workspaces'
+import { createWorkspaceCleanupRepoRefs } from './workspace-cleanup-merge-evidence'
 import {
   createWorkspaceCleanupProgressEmitter,
   type WorkspaceCleanupScanOptions
@@ -237,6 +238,7 @@ async function scanRepoWorkspaces(
   // Stat cannot cancel: after one timeout, use persisted activity rather than queueing more work on a hung mount.
   let activityStatsUnavailable = false
   const fsActivityCache: WorkspaceCleanupFsActivityCache = new Map()
+  const repoRefs = createWorkspaceCleanupRepoRefs(repo, signal)
   const candidatesWithSkipped = await mapWorkspaceCleanupWithConcurrency(
     candidateWorktrees,
     WORKTREE_SCAN_CONCURRENCY,
@@ -279,7 +281,8 @@ async function scanRepoWorkspaces(
         forceGitCheck: Boolean(targetWorktreeIds),
         findAutomationRun,
         releasedWorker: findReleasedWorker(worktreeWithActivity, mergedWorktrees),
-        signal
+        signal,
+        repoRefs
       }).catch((error) => {
         if (error instanceof WorkspaceCleanupScanCancelledError) {
           throw error

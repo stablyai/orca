@@ -4,20 +4,17 @@ import type {
 } from '../../../shared/automations/history/automation-run'
 import { automationRunRecency } from '../../../shared/automations/history/automation-session-reuse'
 import type { Store } from '../../persistence/loading-store/store'
-import { runOwnHandle } from '../launch/automation-terminal-launch'
+import { runOwnHandle, type RunOwnHandleRuntime } from '../launch/automation-terminal-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   type AutomationRunTerminalHost
 } from '../observation/runtime-terminal-run-observer'
 
-type HookReviewTerminalHost = Pick<
-  AutomationRunTerminalHost,
-  'getTerminalHandleForPaneKey' | 'waitForTerminal'
-> & {
-  getTerminalPtyIdForHandle(handle: string): string | null
-  readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown'
-  closeTerminal(handle: string): Promise<unknown>
-}
+type HookReviewTerminalHost = Pick<AutomationRunTerminalHost, 'waitForTerminal'> &
+  RunOwnHandleRuntime & {
+    readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown'
+    closeTerminal(handle: string): Promise<unknown>
+  }
 
 async function isStillOnHookReview(
   runtime: HookReviewTerminalHost,

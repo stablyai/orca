@@ -168,18 +168,15 @@ describe('useEditorExternalWatch subscriptions', () => {
       await act(async () => root.render(createElement(WatchProbe)))
       await act(async () => subscriptionState.contacts.get('runtime-1')?.())
       expect(subscriptionState.subscribeRuntimeFileChanges).toHaveBeenCalledTimes(2)
-      const ready: unknown = subscriptionState.subscribeRuntimeFileChanges.mock.calls[1]?.[3]
-      if (typeof ready !== 'function') {
-        throw new Error('recovered watch registered no ready callback')
-      }
-      await act(async () => ready())
       expect(subscriptionState.handleFsChanged).toHaveBeenCalledWith(
         {
           worktreePath: '/runtime/repo',
           events: [{ kind: 'overflow', absolutePath: '/runtime/repo' }],
+          connectionId: 'nested-ssh',
           resync: true
         },
-        'runtime-1'
+        'runtime-1',
+        runtimeTarget()
       )
     } finally {
       warning.mockRestore()

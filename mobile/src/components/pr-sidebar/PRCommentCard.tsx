@@ -308,7 +308,7 @@ export const PRCommentCard = memo(function PRCommentCard({
       {actions ? (
         <ConfirmModal
           visible={confirmDelete}
-          title={t('pullRequest.commentCard.deleteConfirmTitle', 'Delete comment?')}
+          title={t('common.delete', 'Delete')}
           message={t(
             'pullRequest.commentCard.deleteConfirmMessage',
             'This permanently deletes the comment on GitHub.'

@@ -108,7 +108,10 @@ export class PRWatchJobRunner {
   }
 
   noteBudgetedStart(entry: PRRefreshQueueEntry): void {
-    this.lastBudgetedStartWasWatch = entry.watch !== undefined
+    // Selected list reads have their own reserved turn; preserve the watch/list alternation.
+    if (entry.reason !== 'visible' || entry.candidate.isSelected !== true) {
+      this.lastBudgetedStartWasWatch = entry.watch !== undefined
+    }
   }
 
   /** Re-ranks watch entries before each pick, so aging needs no change to the queue's order. */

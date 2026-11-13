@@ -61,9 +61,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           {state.confirmDelete ? (
             <View>
               <View style={styles.confirmContent}>
-                <Text style={styles.confirmTitle}>
-                  {t('hostScreen.hostScreenOverlays.deleteWorktree', 'Delete Worktree')}
-                </Text>
+                <Text style={styles.confirmTitle}>{t('common.delete', 'Delete')}</Text>
                 <Text style={styles.confirmMessage}>
                   {t(
                     'hostScreen.hostScreenOverlays.deleteConfirmMessage',
@@ -225,7 +223,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               actions.archiveHookFailure?.item.displayName || actions.archiveHookFailure?.item.repo
           })}
           message={actions.archiveHookFailure?.message}
-          confirmLabel={t('hostScreen.hostScreenOverlays.deleteAnyway', 'Delete Anyway')}
+          confirmLabel={t('common.delete', 'Delete')}
           destructive
           onConfirm={actions.deleteDespiteArchiveHookFailure}
           onCancel={actions.dismissArchiveHookFailure}

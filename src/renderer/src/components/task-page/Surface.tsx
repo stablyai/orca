@@ -1,6 +1,6 @@
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 import { TaskPageFrame } from './Frame'
-import { TaskPageGitHubIssueDialog } from './github/IssueDialog'
+import { TaskPageGitHubIssueDialog } from './github/issue-creation/IssueDialog'
 import { TaskPageLinearProjectDialog } from './linear/ProjectDialog'
 import { TaskPageLinearIssueDialog } from './linear/IssueDialog'
 import { TaskPageJiraIssueDialog } from './jira/IssueDialog'

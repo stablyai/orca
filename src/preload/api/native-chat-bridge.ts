@@ -2,9 +2,9 @@ import { ipcRenderer } from 'electron'
 import type {
   NativeChatAppendedPayload,
   NativeChatReadSessionResult,
-  NativeChatSubscriptionFrame,
-  PreloadApi
-} from '../api-types'
+  NativeChatSubscriptionFrame
+} from './native-chat-api'
+import type { PreloadApi } from '../api-types'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH,

@@ -19,7 +19,7 @@ import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
-} from '../text-generation/agent-failure-output'
+} from '../text-generation/failures/agent-failure-output'
 import type {
   StructuredAgentSessionConversationNaming,
   StructuredChatNamingFailure

@@ -38,6 +38,12 @@ async function stopEvents() {
     ).values()
   ]
 }
+/** As the startup ceiling expiring the start in flight. */
+async function failStartAtCeiling(): Promise<void> {
+  const { lifetime, serialize, sessions } = rig.host.collaboratorsForTests()
+  lifetime.stopStartingChild(SESSION, sessions.get(SESSION)?.child ?? null)
+  await serialize(SESSION, async () => {})
+}
 async function queuedDraft(text: string) {
   const queued = await rig.send(text, 'queue-if-active').result
   if (!queued.ok || !('queued' in queued.value)) {
@@ -109,7 +115,7 @@ it('a failed personal start retains Stop after its returned input is deleted', a
     expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
   )
 
-  await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
+  await failStartAtCeiling()
   await personal.result
 
   expect((await stopEvents()).map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
@@ -154,7 +160,7 @@ it('an unattended failed start preserves a manual Stop without returning the mai
     expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
   )
 
-  await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
+  await failStartAtCeiling()
   await mail.result
 
   expect(await journal().queuedMessages.get(mail.id)).toBeNull()
