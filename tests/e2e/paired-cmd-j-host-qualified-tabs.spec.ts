@@ -408,16 +408,16 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     expect(remoteBrowserAfterOpen.browserCount).toBe(2)
     expect(remoteBrowserAfterOpen.owner).toBe(remoteHostId)
     await input.fill('New Tab')
-    await expect(
-      palette.locator(`[role="option"][data-value="${remoteBrowserIdentity}"]`)
-    ).toHaveCount(1)
+    await expect(palette.locator(`[cmdk-item][data-value="${remoteBrowserIdentity}"]`)).toHaveCount(
+      1
+    )
     await expect(palette.getByText('Local browser proof', { exact: true })).toHaveCount(0)
     await testInfo.attach('cmd-j-host-qualified-browser.png', {
       body: await page.screenshot(),
       contentType: 'image/png'
     })
     await expectSameIdCollisionIntact('remote browser page click')
-    await palette.locator(`[role="option"][data-value="${remoteBrowserIdentity}"]`).click()
+    await palette.locator(`[cmdk-item][data-value="${remoteBrowserIdentity}"]`).click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {
@@ -456,11 +456,11 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       'Search chats, terminals, workspaces, tasks, settings, and actions...'
     )
     await input.fill('local.example.test')
-    await expect(
-      palette.locator(`[role="option"][data-value="${localBrowserIdentity}"]`)
-    ).toHaveCount(1)
+    await expect(palette.locator(`[cmdk-item][data-value="${localBrowserIdentity}"]`)).toHaveCount(
+      1
+    )
     await expectSameIdCollisionIntact('local browser page click')
-    await palette.locator(`[role="option"][data-value="${localBrowserIdentity}"]`).click()
+    await palette.locator(`[cmdk-item][data-value="${localBrowserIdentity}"]`).click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {
@@ -494,7 +494,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       contentType: 'image/png'
     })
     await expectSameIdCollisionIntact('remote simulator click')
-    await palette.locator(`[role="option"][data-value="${remoteSimulatorIdentity}"]`).click()
+    await palette.locator(`[cmdk-item][data-value="${remoteSimulatorIdentity}"]`).click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {
@@ -523,9 +523,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       'Search chats, terminals, workspaces, tasks, settings, and actions...'
     )
     await input.fill('Local emulator proof')
-    const localSimulatorRow = palette.locator(
-      `[role="option"][data-value="${localSimulatorIdentity}"]`
-    )
+    const localSimulatorRow = palette.locator(`[cmdk-item][data-value="${localSimulatorIdentity}"]`)
     await expect(localSimulatorRow).toHaveCount(1)
     await expectSameIdCollisionIntact('local simulator click')
     await localSimulatorRow.click()

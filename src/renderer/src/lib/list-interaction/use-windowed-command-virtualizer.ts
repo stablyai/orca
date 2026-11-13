@@ -44,10 +44,7 @@ export function useWindowedCommandVirtualizer({
   estimateSize,
   activeIndex,
   overscan,
-  enabled = true,
-  initialRect,
-  initialOffset,
-  scrollMargin
+  initialRect
 }: {
   /** One unique key per row, in order; the row count is its length. */
   itemKeys: readonly string[]
@@ -55,10 +52,7 @@ export function useWindowedCommandVirtualizer({
   estimateSize: (index: number) => number
   activeIndex: number
   overscan: number
-  enabled?: boolean
-  initialRect?: Rect
-  initialOffset?: () => number
-  scrollMargin?: number
+  initialRect: Rect
 }): Virtualizer<HTMLDivElement, Element> {
   const keys = useRetainedKeySequence(itemKeys)
   const count = keys.length
@@ -76,15 +70,12 @@ export function useWindowedCommandVirtualizer({
   )
   return useVirtualizer({
     count,
-    enabled,
     getScrollElement: scrollElement,
     estimateSize,
     getItemKey,
     overscan,
     rangeExtractor,
     initialRect,
-    initialOffset,
-    scrollMargin,
     scrollPaddingStart: COMMAND_LIST_SCROLL_PADDING,
     scrollPaddingEnd: COMMAND_LIST_SCROLL_PADDING
   })

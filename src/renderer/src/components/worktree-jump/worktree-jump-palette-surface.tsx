@@ -1,6 +1,6 @@
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { WorktreeJumpPaletteTaskSearchStatus } from './worktree-jump-palette-task-search-status'
-import React, { useCallback, useRef, useState } from 'react'
+import type React from 'react'
 import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import PaletteFilterMenu from '@/components/cmd-j/PaletteFilterMenu'
@@ -10,12 +10,7 @@ import { getPaletteFilterSelectionCount } from '@/components/cmd-j/palette-filte
 import { useTranslate } from '@/i18n/use-translate'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
-import { useCommandInputActiveDescendant } from '@/lib/list-interaction/windowed-command-navigation'
-import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
-import {
-  handleWorktreeJumpPaletteListKeyDown,
-  WorktreeJumpPaletteResultList
-} from './worktree-jump-palette-result-list'
+import { WorktreeJumpPaletteEntry } from './worktree-jump-palette-entry'
 import { FooterKey, PaletteState } from './worktree-jump-palette-primitives'
 import {
   getWorktreeJumpPaletteEmptyState,
@@ -34,17 +29,6 @@ export function WorktreeJumpPaletteSurface({
   const modKey = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
   const emptyState = getWorktreeJumpPaletteEmptyState(controller, t)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
-  const { listRef } = controller
-  const revealRef = useRef<(itemId: string) => void>(() => {})
-  const [listElement, setListElement] = useState<HTMLDivElement | null>(null)
-  const setListNode = useCallback(
-    (node: HTMLDivElement | null) => {
-      listRef.current = node
-      setListElement(node)
-    },
-    [listRef]
-  )
-  useCommandInputActiveDescendant(controller.inputRef, controller.activeOptionId)
   const paletteDialog = (
     <CommandDialog
       open={controller.visible}
@@ -60,12 +44,14 @@ export function WorktreeJumpPaletteSurface({
       surface="palette"
       contentClassName="top-[min(10%,4rem)] w-[900px] max-w-[96vw] max-h-[min(90vh,calc(100vh-1.5rem))] overflow-hidden"
       commandProps={{
+        loop: true,
+        value: controller.commandSelectedItemId,
+        onValueChange: controller.handleCommandSelectionChange,
         className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
           if (
             selectedTask &&
             event.key === 'Enter' &&
-            !isImeOwnedKeyboardEvent(event) &&
             (navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey)
           ) {
             event.preventDefault()
@@ -92,11 +78,7 @@ export function WorktreeJumpPaletteSurface({
         onValueChange={controller.emojiInput.handleValueChange}
         onClick={(event) => controller.emojiInput.syncCursor(event.currentTarget)}
         onSelect={(event) => controller.emojiInput.syncCursor(event.currentTarget)}
-        onKeyDown={(event) => {
-          if (!controller.emojiInput.handleKeyDown(event)) {
-            handleWorktreeJumpPaletteListKeyDown(event, controller, revealRef)
-          }
-        }}
+        onKeyDown={(event) => controller.emojiInput.handleKeyDown(event)}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 min-w-0 flex-1"
@@ -131,7 +113,7 @@ export function WorktreeJumpPaletteSurface({
         onFilterChange={controller.setFilter}
       />
       <CommandList
-        ref={setListNode}
+        ref={controller.listRef}
         onPointerDownCapture={() => {
           controller.selectionMovedByUserRef.current = true
         }}
@@ -152,11 +134,16 @@ export function WorktreeJumpPaletteSurface({
             <PaletteState title={emptyState.title} subtitle={emptyState.subtitle} />
           </CommandEmpty>
         ) : (
-          <WorktreeJumpPaletteResultList
-            controller={controller}
-            scrollElement={listElement}
-            revealRef={revealRef}
-          />
+          <>
+            {controller.listEntries.map((entry, index) => (
+              <WorktreeJumpPaletteEntry
+                key={controller.listEntryRenderKeys[index] ?? entry.id}
+                entry={entry}
+                renderKey={controller.listEntryRenderKeys[index] ?? entry.id}
+                controller={controller}
+              />
+            ))}
+          </>
         )}
         <WorktreeJumpPaletteTaskSearchStatus
           loading={controller.taskSearchLoading}

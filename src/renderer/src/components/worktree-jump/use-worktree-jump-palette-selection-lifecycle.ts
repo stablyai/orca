@@ -150,7 +150,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     wasVisibleRef
   ])
   const commandSelectedItemId =
-    (selectedItemId === CREATE_WORKTREE_ITEM_ID &&
+    selectedItemId === CREATE_WORKTREE_ITEM_ID &&
     !selectionMovedByUserRef.current &&
     taskItems.length
       ? (taskItems[0]?.id ?? selectedItemId)
@@ -161,9 +161,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
           defaultSelectableItemId: defaultSelectionItemId,
           showCreateAction,
           autoSelectCreateAction: taskSourceUrl !== null
-        })) ||
-    // cmdk highlighted the first row whenever nothing was chosen; keep that now the list owns selection.
-    (selectionItemIds[0] ?? '')
+        })
   const handleCommandSelectionChange = useCallback(
     (nextItemId: string) => {
       setSelectedItemId(nextItemId)

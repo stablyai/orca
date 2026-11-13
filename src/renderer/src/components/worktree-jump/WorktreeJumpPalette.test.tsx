@@ -69,8 +69,21 @@ vi.mock('@/lib/workspace/search/tabs/workspace-tab-palette-activation', () => ({
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
   return {
-    CommandDialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) => {
-      return open ? <div data-command-dialog="true">{children}</div> : null
+    // Pass controlled cmdk value through so Enter-target assertions reflect actual selection.
+    CommandDialog: ({
+      children,
+      open,
+      commandProps
+    }: {
+      children: React.ReactNode
+      open?: boolean
+      commandProps?: { value?: string; onValueChange?: (next: string) => void }
+    }) => {
+      return open ? (
+        <div data-command-dialog="true" data-command-value={commandProps?.value ?? ''}>
+          {children}
+        </div>
+      ) : null
     },
     Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -129,19 +142,6 @@ vi.mock('@/components/ui/command', async () => {
       value?: string
     }) => (
       <button data-command-item={value ?? ''} onClick={() => onSelect?.(value ?? '')} type="button">
-        {children}
-      </button>
-    ),
-    CommandOption: ({
-      children,
-      onSelect,
-      value
-    }: {
-      children: React.ReactNode
-      onSelect?: () => void
-      value?: string
-    }) => (
-      <button data-command-item={value ?? ''} onClick={() => onSelect?.()} type="button">
         {children}
       </button>
     )

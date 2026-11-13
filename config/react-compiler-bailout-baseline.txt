@@ -680,7 +680,7 @@
 2 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-store-state.ts
 2 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-task-search.ts
 2 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-task-url.ts
-9 src/renderer/src/components/worktree-jump/worktree-jump-palette-surface.tsx
+10 src/renderer/src/components/worktree-jump/worktree-jump-palette-surface.tsx
 1 src/renderer/src/hooks/composer-state/async-composer-state.ts
 1 src/renderer/src/hooks/composer-state/folder-submit-orchestration.ts
 1 src/renderer/src/hooks/composer-state/github-submit-resolution.ts

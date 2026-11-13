@@ -17,24 +17,15 @@ function key(
 }
 
 describe('getWindowedCommandNavigation', () => {
-  it('steps through the full list, stopping at the ends unless looping', () => {
+  it('steps through the full list and stops at the ends', () => {
     expect(getWindowedCommandNavigation(key('ArrowDown'), ids, 'b')).toEqual({ targetId: 'c' })
     expect(getWindowedCommandNavigation(key('ArrowUp'), ids, 'b')).toEqual({ targetId: 'a' })
     expect(getWindowedCommandNavigation(key('ArrowDown'), ids, 'd')).toEqual({ targetId: null })
-    expect(getWindowedCommandNavigation(key('ArrowDown'), ids, 'd', { loop: true })).toEqual({
-      targetId: 'a'
-    })
-    expect(getWindowedCommandNavigation(key('ArrowUp'), ids, 'a', { loop: true })).toEqual({
-      targetId: 'd'
-    })
   })
 
-  it('matches cmdk when nothing is highlighted: down goes first, up only wraps when looping', () => {
+  it('matches cmdk when nothing is highlighted: down goes first, up goes nowhere', () => {
     expect(getWindowedCommandNavigation(key('ArrowDown'), ids, null)).toEqual({ targetId: 'a' })
     expect(getWindowedCommandNavigation(key('ArrowUp'), ids, null)).toEqual({ targetId: null })
-    expect(getWindowedCommandNavigation(key('ArrowUp'), ids, null, { loop: true })).toEqual({
-      targetId: 'd'
-    })
   })
 
   it('jumps to the ends with Home/End and Meta+Arrow', () => {
@@ -76,8 +67,6 @@ describe('getWindowedCommandNavigation', () => {
 
   it('claims movement keys on an empty list without a target', () => {
     expect(getWindowedCommandNavigation(key('End'), [], null)).toEqual({ targetId: null })
-    expect(getWindowedCommandNavigation(key('ArrowDown'), [], null, { loop: true })).toEqual({
-      targetId: null
-    })
+    expect(getWindowedCommandNavigation(key('ArrowDown'), [], null)).toEqual({ targetId: null })
   })
 })

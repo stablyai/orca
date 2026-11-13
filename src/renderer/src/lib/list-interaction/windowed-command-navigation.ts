@@ -15,8 +15,7 @@ type CommandNavigationKeyEvent = {
 export function getWindowedCommandNavigation(
   event: CommandNavigationKeyEvent,
   itemIds: readonly string[],
-  activeItemId: string | null | undefined,
-  options: { loop?: boolean } = {}
+  activeItemId: string | null | undefined
 ): { targetId: string | null } | null {
   if (event.defaultPrevented || isImeOwnedKeyboardEvent(event)) {
     return null
@@ -28,9 +27,6 @@ export function getWindowedCommandNavigation(
     }
     const currentIndex = activeItemId ? itemIds.indexOf(activeItemId) : -1
     const next = currentIndex + delta
-    if (options.loop) {
-      return next < 0 ? last : next > last ? 0 : next
-    }
     return next < 0 || next > last ? null : next
   }
   let targetIndex: number | null

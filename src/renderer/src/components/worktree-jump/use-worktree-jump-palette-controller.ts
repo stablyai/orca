@@ -11,7 +11,6 @@ import { useWorktreeJumpPaletteSections } from './use-worktree-jump-palette-sect
 import { useWorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
 import { useWorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 import { useWorktreeJumpPaletteSelectionActions } from './use-worktree-jump-palette-selection-actions'
-import { useWorktreeJumpPaletteOptions } from './use-worktree-jump-palette-options'
 import { useWorktreeJumpPaletteCreateAction } from './use-worktree-jump-palette-create-action'
 import { useWorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { useWorktreeJumpPaletteTaskUrl } from './use-worktree-jump-palette-task-url'
@@ -140,7 +139,6 @@ export function useWorktreeJumpPaletteController({
     ...taskSearch,
     ...taskUrl
   })
-  const options = useWorktreeJumpPaletteOptions({ ...listEntries, ...selectionLifecycle })
   const selectionActions = useWorktreeJumpPaletteSelectionActions({
     ...storeState,
     ...localState,
@@ -180,7 +178,6 @@ export function useWorktreeJumpPaletteController({
     ...sections,
     ...listEntries,
     ...selectionLifecycle,
-    ...options,
     ...selectionActions,
     paletteNowMs: worktrees.hasQuery ? paletteSearchContext.nowMs : storeState.paletteNowMs,
     emojiInput,

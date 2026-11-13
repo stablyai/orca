@@ -1,6 +1,6 @@
 import type React from 'react'
 import { FolderTree } from 'lucide-react'
-import { CommandOption } from '@/components/ui/command'
+import { CommandItem } from '@/components/ui/command'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { useTranslate } from '@/i18n/use-translate'
@@ -38,8 +38,8 @@ export function WorktreeJumpPaletteProjectRow({
     : t('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
 
   return (
-    <CommandOption
-      {...controller.getOptionProps(renderKey)}
+    <CommandItem
+      value={renderKey}
       onSelect={() => controller.handleSelectItem(entry)}
       shape="palette-row"
     >
@@ -69,7 +69,7 @@ export function WorktreeJumpPaletteProjectRow({
           ) : null}
         </div>
       </div>
-    </CommandOption>
+    </CommandItem>
   )
 }
 
@@ -93,8 +93,8 @@ export function WorktreeJumpPaletteActionRow({
         : t('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
 
   return (
-    <CommandOption
-      {...controller.getOptionProps(renderKey)}
+    <CommandItem
+      value={renderKey}
       disabled={entry.type === 'quick-action' && entry.result.disabled}
       onSelect={() => controller.handleSelectItem(entry)}
       shape="palette-row"
@@ -115,6 +115,6 @@ export function WorktreeJumpPaletteActionRow({
           {result.description}
         </div>
       </div>
-    </CommandOption>
+    </CommandItem>
   )
 }

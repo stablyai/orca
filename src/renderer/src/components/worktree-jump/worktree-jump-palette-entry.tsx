@@ -1,7 +1,7 @@
 import { WorktreeJumpPaletteTaskRow } from './worktree-jump-palette-task-row'
 import type React from 'react'
 import { flushSync } from 'react-dom'
-import { CommandOption } from '@/components/ui/command'
+import { CommandItem } from '@/components/ui/command'
 import { cn } from '@/lib/class-names'
 import { PaletteCreateWorktreeRow } from '@/components/cmd-j/PaletteCreateWorktreeRow'
 import type { PaletteListEntry } from './worktree-jump-palette-model'
@@ -18,34 +18,6 @@ import {
 } from './worktree-jump-palette-browser-simulator-rows'
 import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeJumpPaletteExtraRow } from './worktree-jump-palette-extra-row'
-
-/** One activation path for click and Enter; Enter may target a row the window has unmounted. */
-export function activateWorktreeJumpPaletteEntry(
-  entry: PaletteListEntry,
-  renderKey: string,
-  controller: WorktreeJumpPaletteController
-): void {
-  if (entry.type === 'section-header') {
-    return
-  }
-  if (entry.type === 'hint') {
-    const previousIndex = controller.selectionItemIds.indexOf(renderKey)
-    flushSync(() => entry.onSeeMore?.())
-    // The first revealed row takes the hint's place in the committed keyboard order.
-    const expandedItemId = controller.selectionItemIdsRef.current[previousIndex]
-    if (expandedItemId) {
-      controller.revealRequestRef.current = expandedItemId
-      controller.setSelectedItemId(expandedItemId)
-    }
-    controller.inputRef.current?.focus()
-    return
-  }
-  if (entry.type === 'create-worktree') {
-    controller.handleCreateWorktree()
-    return
-  }
-  controller.handleSelectItem(entry)
-}
 
 export function WorktreeJumpPaletteEntry({
   entry,
@@ -66,9 +38,19 @@ export function WorktreeJumpPaletteEntry({
   }
   if (entry.type === 'hint') {
     return (
-      <CommandOption
-        {...controller.getOptionProps(renderKey)}
-        onSelect={() => activateWorktreeJumpPaletteEntry(entry, renderKey, controller)}
+      <CommandItem
+        value={renderKey}
+        onSelect={() => {
+          const previousIndex = controller.selectionItemIds.indexOf(renderKey)
+          flushSync(() => entry.onSeeMore?.())
+          const expandedItemId = Array.from(
+            controller.listRef.current?.querySelectorAll<HTMLElement>('[cmdk-item]') ?? []
+          )[previousIndex]?.getAttribute('data-value')
+          if (expandedItemId) {
+            controller.setSelectedItemId(expandedItemId)
+          }
+          controller.inputRef.current?.focus()
+        }}
         className={cn(
           'group mx-0.5 mt-1 min-h-0 gap-2 py-1.5 text-[12px] text-muted-foreground',
           'data-[selected=true]:bg-accent/60'
@@ -80,14 +62,13 @@ export function WorktreeJumpPaletteEntry({
             {t('worktreeJumpPalette.seeMore', 'See more')}
           </span>
         ) : null}
-      </CommandOption>
+      </CommandItem>
     )
   }
   if (entry.type === 'create-worktree') {
     const linearPreview = controller.currentLinearIssuePreview
     return (
       <PaletteCreateWorktreeRow
-        optionProps={controller.getOptionProps(renderKey)}
         className="group mx-0.5 mt-1 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground"
         createWorktreeName={controller.createWorktreeName}
         linearIdentifier={controller.linearIssueUrlIntent?.identifier ?? null}

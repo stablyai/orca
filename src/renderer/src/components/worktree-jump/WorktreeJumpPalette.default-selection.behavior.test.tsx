@@ -24,10 +24,10 @@ const initialAppState = useAppStore.getInitialState()
 let testRoot: Root
 
 function selectedRowText(): string | undefined {
-  return document.querySelector('[role="option"][aria-selected="true"]')?.textContent ?? undefined
+  return document.querySelector('[cmdk-item][aria-selected="true"]')?.textContent ?? undefined
 }
 
-// Real cmdk input and list: the Enter target is the selected option the palette renders, not a mocked value.
+// Real cmdk: the Enter target is cmdk's own selected row, not a mocked value.
 describe('WorktreeJumpPalette default selection', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true

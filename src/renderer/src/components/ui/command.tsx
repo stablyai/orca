@@ -27,9 +27,6 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
       menu: '[&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px]',
       model:
         '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]',
-      // Why the slot, not `cmdk-item`: windowed dialogs render options outside cmdk's registry.
-      dialog:
-        '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[data-slot=command-item]]:px-2 [&_[data-slot=command-item]]:py-3',
       // Why: a flat launcher card (split-pane landing): field on a divider over a fixed-height list of 36px rows.
       card: [
         'rounded-[12px] border border-border',
@@ -125,8 +122,10 @@ function CommandDialog({
             </DialogPrimitive.Description>
             <Command
               shouldFilter={shouldFilter}
-              density="dialog"
-              className={commandClassName}
+              className={cn(
+                '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
+                commandClassName
+              )}
               {...commandRootProps}
             >
               {children}

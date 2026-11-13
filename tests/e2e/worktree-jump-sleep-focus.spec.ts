@@ -49,7 +49,7 @@ test('Cmd+J focuses the terminal after waking a sleeping workspace', async ({
   const dialog = orcaPage.getByRole('dialog', { name: 'Jump to...' })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('combobox').fill(targetName)
-  await expect(dialog.locator('[role="option"][data-selected="true"]')).toContainText(targetName)
+  await expect(dialog.locator('[cmdk-item][data-selected="true"]')).toContainText(targetName)
   const cdp = await orcaPage.context().newCDPSession(orcaPage)
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 })
   await orcaPage.keyboard.press('Enter')

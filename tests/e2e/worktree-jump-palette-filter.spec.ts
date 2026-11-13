@@ -102,7 +102,7 @@ function worktreeRow(page: Page, worktreeId: string, hostId: ExecutionHostId = '
     'worktree',
     getPaletteWorktreeIdentity({ id: worktreeId, hostId })
   ])
-  return palette(page).locator(`[role="option"][data-value=${JSON.stringify(rowId)}]`)
+  return palette(page).locator(`[cmdk-item][data-value=${JSON.stringify(rowId)}]`)
 }
 
 function palette(page: Page) {
@@ -147,9 +147,7 @@ async function openComposerFromTypedName(page: Page): Promise<Locator> {
   await openPalette(page)
   const input = palette(page).getByPlaceholder(SEARCH_PLACEHOLDER)
   await input.fill(`cmd-j-enter-${Date.now()}`)
-  await expect(
-    palette(page).locator('[role="option"][data-value="__create_worktree__"]')
-  ).toBeVisible()
+  await expect(palette(page).locator('[cmdk-item][data-value="__create_worktree__"]')).toBeVisible()
 
   await input.press('Enter')
 

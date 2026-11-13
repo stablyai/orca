@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   getWorktreePaletteSelectionItemIds,
   CREATE_WORKTREE_ITEM_ID
@@ -28,11 +28,6 @@ type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
   Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl'> &
   Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'>
-
-// cmdk skipped disabled actions; keyboard order and default highlight must too.
-function isDisabledPaletteEntry(entry: PaletteListEntry): boolean {
-  return entry.type === 'quick-action' && entry.result.disabled === true
-}
 
 export function useWorktreeJumpPaletteListEntries({
   hasQuery,
@@ -274,23 +269,16 @@ export function useWorktreeJumpPaletteListEntries({
     [listEntries]
   )
   const selectionItemIds = useMemo(
-    () =>
-      getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys, isDisabledPaletteEntry),
+    () => getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys),
     [listEntries, listEntryRenderKeys]
   )
-  // See more expands inside flushSync; its focus handoff reads the committed order from here.
-  const selectionItemIdsRef = useRef(selectionItemIds)
-  useLayoutEffect(() => {
-    selectionItemIdsRef.current = selectionItemIds
-  }, [selectionItemIds])
   // null keeps the shared rule: first row, never an unasked Create.
   const defaultSelectionItemId = useMemo(
     () =>
       defaultSelectionStart > 0
         ? (getWorktreePaletteSelectionItemIds(
             listEntries.slice(defaultSelectionStart),
-            listEntryRenderKeys.slice(defaultSelectionStart),
-            isDisabledPaletteEntry
+            listEntryRenderKeys.slice(defaultSelectionStart)
           )[0] ?? null)
         : null,
     [defaultSelectionStart, listEntries, listEntryRenderKeys]
@@ -303,7 +291,6 @@ export function useWorktreeJumpPaletteListEntries({
     listEntryRenderKeys,
     selectableItems,
     selectionItemIds,
-    selectionItemIdsRef,
     defaultSelectionItemId
   }
 }

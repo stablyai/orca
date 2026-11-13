@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Smartphone } from 'lucide-react'
-import { CommandOption } from '@/components/ui/command'
+import { CommandItem } from '@/components/ui/command'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserPaletteItem, SimulatorPaletteItem } from './worktree-jump-palette-model'
@@ -48,8 +48,8 @@ export function WorktreeJumpPaletteSimulatorRow({
   )
 
   return (
-    <CommandOption
-      {...controller.getOptionProps(renderKey)}
+    <CommandItem
+      value={renderKey}
       onSelect={() => controller.handleSelectItem(entry)}
       shape="palette-row"
     >
@@ -103,7 +103,7 @@ export function WorktreeJumpPaletteSimulatorRow({
           </div>
         </div>
       </div>
-    </CommandOption>
+    </CommandItem>
   )
 }
 
@@ -139,8 +139,8 @@ export function WorktreeJumpPaletteBrowserRow({
   )
 
   return (
-    <CommandOption
-      {...controller.getOptionProps(renderKey)}
+    <CommandItem
+      value={renderKey}
       onSelect={() => controller.handleSelectItem(entry)}
       shape="palette-row"
     >
@@ -190,6 +190,6 @@ export function WorktreeJumpPaletteBrowserRow({
           </div>
         </div>
       </div>
-    </CommandOption>
+    </CommandItem>
   )
 }
