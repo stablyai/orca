@@ -27,7 +27,7 @@ describe.skipIf(process.platform !== 'linux')('Linux daemon process naming', () 
         ].join(' '))
       `
       const child = spawnProcess({
-        program: process.execPath,
+        program: process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath,
         args: [
           ...(denyWrites ? ['--permission', '--allow-fs-read=*'] : []),
           '--input-type=module',
