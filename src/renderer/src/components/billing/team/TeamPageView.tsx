@@ -231,6 +231,14 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             </Button>
           ) : null}
         </div>
+        {roster?.directoryManaged ? (
+          <p role="note" className="text-xs text-muted-foreground text-pretty">
+            {t(
+              'auto.components.billing.team.managedByIdpNote',
+              'Managed by your identity provider. Add or remove people and change roles there.'
+            )}
+          </p>
+        ) : null}
         {roster ? (
           <TeamMemberList
             rows={rows}

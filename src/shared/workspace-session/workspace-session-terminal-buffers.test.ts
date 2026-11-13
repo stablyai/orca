@@ -209,9 +209,7 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
 
     const buffer = result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId?.['pane:1'] ?? ''
     expect(buffer.length).toBeGreaterThan(0)
-    expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
-      TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT
-    )
+    expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT)
     expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT / 2)
   })
 

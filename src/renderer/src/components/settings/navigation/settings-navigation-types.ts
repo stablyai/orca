@@ -49,6 +49,7 @@ const SETTINGS_NAV_TARGETS = [
   'cloud-billing',
   'cloud-team',
   'cloud-enterprise',
+  'cloud-workspaces',
   'cloud-secrets',
   'cloud-environments',
   'cloud-mcp',

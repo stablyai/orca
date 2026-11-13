@@ -6,6 +6,7 @@ export const cloudWorkspacesApi = {
   list: (query) => ipcRenderer.invoke('cloudWorkspaces:list', query),
   get: (id) => ipcRenderer.invoke('cloudWorkspaces:get', { id }),
   patch: (id, patch) => ipcRenderer.invoke('cloudWorkspaces:patch', { id, patch }),
+  follow: (id, follow) => ipcRenderer.invoke('cloudWorkspaces:follow', { id, follow }),
   resolveLink: (target, chatId) =>
     ipcRenderer.invoke('cloudWorkspaces:resolveLink', { target, chatId }),
   openGrant: (id) => ipcRenderer.invoke('cloudWorkspaces:openGrant', { id }),

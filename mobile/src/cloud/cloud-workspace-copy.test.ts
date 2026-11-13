@@ -13,9 +13,14 @@ vi.mock('./cloud-workspace-attach', () => ({
 import type { Translate } from '../i18n/mobile-i18n'
 import { CloudRequestError } from './cloud-control-plane-request'
 import { CloudAttachError } from './cloud-workspace-attach'
-import { attachErrorMessage, readSnapshotRefusedMessage } from './cloud-workspace-copy'
+import {
+  attachErrorMessage,
+  createErrorMessage,
+  readSnapshotRefusedMessage
+} from './cloud-workspace-copy'
 
-const t: Translate = (_key, fallback) => fallback
+const t: Translate = (_key, fallback, options) =>
+  fallback.replace(/{{(\w+)}}/g, (_match, name: string) => String(options?.[name] ?? ''))
 
 describe('cloud workspace copy', () => {
   it('says a failed wake plainly, and keeps the generic line for anything else', () => {
@@ -38,5 +43,24 @@ describe('cloud workspace copy', () => {
     )
     expect(readSnapshotRefusedMessage('unsigned', t)).toBe(unsigned)
     expect(readSnapshotRefusedMessage('bad_signature', t)).toBe(unsigned)
+  })
+
+  it('names the repo and the fix when Orca can’t access it (github_not_connected)', () => {
+    const denied = new CloudRequestError('conflict', 409, 'github_not_connected')
+    expect(createErrorMessage(denied, t, null, 'https://github.com/stablyai/orca-cloud')).toBe(
+      'Orca can’t access stablyai/orca-cloud. Check the name. If it’s private, give Orca access to it from Orca on your computer. Nothing was created, and you weren’t charged.'
+    )
+    expect(createErrorMessage(denied, t)).toContain('Orca can’t access this repository.')
+    // Never the generic line it used to fall back to.
+    expect(createErrorMessage(denied, t, null, 'https://github.com/a/b')).not.toContain(
+      'Couldn’t start'
+    )
+  })
+
+  it('names the repo when its clone fails', () => {
+    const clone = new CloudRequestError('provider_unavailable', 503, 'orcad_start_failed')
+    expect(createErrorMessage(clone, t, null, 'https://github.com/octocat/Hello-World')).toMatch(
+      /^Couldn’t clone octocat\/Hello-World\. /
+    )
   })
 })

@@ -4,6 +4,7 @@
 //   GET   /v1/team/workspaces/:id
 //   PATCH /v1/team/workspaces/:id {title?, branch?, visibility?, section?, archived?, ownerUserId?, tokenUsdMicros?}
 //   POST  /v1/team/workspaces/:id/presence {clientId, state: viewing|typing|left, chatId?}
+//   PUT|DELETE /v1/team/workspaces/:id/follow   (workspace-follows.ts)
 //   GET   /v1/team/links/resolve?w=<sandboxId>&c=<chatId>  or  ?org=<slug>&n=<number>&c=<chatId>
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
@@ -15,6 +16,7 @@ import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './st
 import { memberNamesFor } from './member-names'
 import { recordTokenSpend } from './member-usage'
 import { readSnapshotTimes } from './read-snapshots'
+import { followersFor, visibleFollowers } from './workspace-follows'
 import { sandboxView } from './wire'
 import { accountForSlug, orgIdOf, slugForAccount } from './org-slugs'
 import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
@@ -172,15 +174,17 @@ function repoView(row: SandboxRow) {
 
 export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number) {
   const ids = rows.map((r) => r.id)
-  const [presence, compute, granted, readAt, slug] = await Promise.all([
+  const [presence, compute, granted, readAt, slug, follows] = await Promise.all([
     presenceFor(db, ids, now),
     computeMsFor(db, ids),
     activeGrantUsers(db, ids, caller.userId),
     readSnapshotTimes(db, ids),
-    rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null)
+    rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null),
+    followersFor(db, ids)
   ])
+  const followersOf = (row: SandboxRow) => visibleFollowers(row, canSee(caller, row), follows.get(row.id) ?? [])
   const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
-    [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id)].filter(
+    [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id), ...followersOf(row)].filter(
       (id): id is string => typeof id === 'string'
     )
   const names = await memberNamesFor(
@@ -193,6 +197,7 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
     // Private rows an admin sees for management show who/what, never live presence.
     const showPresence = access !== 'none'
     const live = showPresence ? (presence.get(row.id) ?? []) : []
+    const followers = followersOf(row)
     const memberNames = Object.fromEntries(
       referenced(row, live).flatMap((id) => (names.has(id) ? [[id, names.get(id)!]] : []))
     )
@@ -214,6 +219,9 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       cost: costView(row, compute.get(row.id) ?? 0, now),
       access,
       presence: live.map((p) => ({ userId: p.user_id, clientId: p.client_id, state: p.state, chatId: p.chat_id, at: p.updated_at })),
+      // Who follows it (oldest first), and whether the caller does (PARITY-FOLLOW).
+      followers,
+      following: followers.includes(caller.userId),
       // Display names (token `name` claim) for the ids above; the roster wins where it has one.
       memberNames,
       // When its sleeping read-only copy was saved ("As of"); only for those who may read it.

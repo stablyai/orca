@@ -82,7 +82,14 @@ function RoleControl({
   const member = row.member
   if (!row.manageable) {
     return (
-      <span className="w-28 shrink-0 pl-3 text-left text-sm text-muted-foreground">
+      <span
+        className="w-28 shrink-0 pl-3 text-left text-sm text-muted-foreground"
+        title={
+          row.managedByDirectory
+            ? t('auto.components.billing.team.managedByIdp', 'Managed by your identity provider')
+            : undefined
+        }
+      >
         {roleLabel(member.role, t)}
       </span>
     )

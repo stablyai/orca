@@ -58,6 +58,8 @@ describe('automatic environments', () => {
     expect(environments()).toMatchObject([{ kind: 'auto', name: 'acme/web', active_build_id: null }])
     const command = [...h.vercel.buildCommands.values()].at(-1)!
     expect(command.env.ORCA_CLONE_FILTER).toBe('blob:none')
+    // PARITY-AUTO-ENV-DEPS: its lockfile's dependencies too, so creates start warm.
+    expect(command.env.ORCA_AUTO_INSTALL).toBe('1')
     const { buildId } = await finishBuild()
 
     h.vercel.commands.length = 0
@@ -103,6 +105,19 @@ describe('automatic environments', () => {
     await h.call('POST', '/v1/sandboxes', { bearer: admin, body: { workspaceId: 'c1', machineSize: 'standard', repo: { url: REPO } } })
     await settle()
     expect(environments().filter((row) => row.kind === 'auto')).toHaveLength(2)
+  })
+
+  it("an admin's environment never installs automatically, with or without its own script", async () => {
+    const { h } = await setup()
+    const admin = await h.token('carol', 'acme', 'sandbox', { orgRole: 'admin' })
+    const created = await h.call('POST', '/v1/environments', {
+      bearer: admin,
+      body: { name: 'Web', repos: [{ url: 'acme/web' }], installScript: '' }
+    })
+    expect(created.status).toBe(200)
+    expect((await h.call('POST', `/v1/environments/${created.body.environment.id}/builds`, { bearer: admin })).status).toBe(200)
+    const command = [...h.vercel.buildCommands.values()].at(-1)!
+    expect(command.env.ORCA_AUTO_INSTALL).toBeUndefined()
   })
 
   it('boot-plan says clone before the environment exists and update after (PC-4)', async () => {
