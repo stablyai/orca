@@ -31,7 +31,7 @@ class FakeDataSocket extends EventEmitter {
 
 function setup() {
   const sockets: FakeDataSocket[] = []
-  const outcomes: [string, boolean][] = []
+  const outcomes: [string, number | null][] = []
   const transport = new CloudRelayTransport({
     cellUrl: 'https://relay-c1.example',
     relayHostId: 'host',
@@ -71,8 +71,8 @@ describe('CloudRelayTransport data dial outcome', () => {
     sockets[1].emit('error', new Error('ECONNRESET'))
     await expect(errored).rejects.toThrow('ECONNRESET')
     expect(outcomes).toEqual([
-      ['conn-1', false],
-      ['conn-2', false]
+      ['conn-1', null],
+      ['conn-2', null]
     ])
   })
 
@@ -92,9 +92,18 @@ describe('CloudRelayTransport data dial outcome', () => {
       await phoneBehaviour(socket)
     }
     expect(outcomes).toEqual([
-      ['conn-1', true],
-      ['conn-2', true],
-      ['conn-3', true]
+      ['conn-1', 0],
+      ['conn-2', 0],
+      ['conn-3', 0]
     ])
+  })
+
+  it('reports how long the dial took to open', async () => {
+    const { sockets, outcomes, open } = setup()
+    const opening = open()
+    await vi.advanceTimersByTimeAsync(7_000)
+    sockets[0].open()
+    await opening
+    expect(outcomes).toEqual([['conn-1', 7_000]])
   })
 })

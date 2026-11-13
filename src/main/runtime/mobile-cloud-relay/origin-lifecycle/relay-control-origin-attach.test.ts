@@ -112,6 +112,36 @@ describe('RelayControlOrigin data-path health', () => {
     await origin.close()
   })
 
+  it('reports dials that open too late for the relay window, then see the 4401', async () => {
+    const { origin, open, onDataPathUnhealthy } = await originWithDataPath()
+    // conn-open reached us late and the dial opened at 7s: host-data-auth misses the relay's
+    // window, the phone gets 4404 attach-timeout and the relay closes 4401 first-frame timeout.
+    for (const connId of ['conn-1', 'conn-2']) {
+      const socket = open(connId)
+      await vi.advanceTimersByTimeAsync(7_000)
+      socket.open()
+      socket.closeWith(4401)
+    }
+    expect(onDataPathUnhealthy).toHaveBeenCalledWith(origin)
+    await origin.close()
+  })
+
+  it('lets a fast open clear a slow one', async () => {
+    const { origin, open, onDataPathUnhealthy } = await originWithDataPath()
+    for (const [connId, openAfterMs] of [
+      ['conn-1', 7_000],
+      ['conn-2', 500],
+      ['conn-3', 7_000]
+    ] as const) {
+      const socket = open(connId)
+      await vi.advanceTimersByTimeAsync(openAfterMs)
+      socket.open()
+      socket.closeWith(4401)
+    }
+    expect(onDataPathUnhealthy).not.toHaveBeenCalled()
+    await origin.close()
+  })
+
   it('does not count dials its own close tore down', async () => {
     const { origin, open, onDataPathUnhealthy } = await originWithDataPath()
     open('conn-1')

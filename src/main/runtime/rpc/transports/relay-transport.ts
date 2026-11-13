@@ -28,11 +28,12 @@ type CloudRelayTransportOptions = {
   createSocket?: (url: string) => WebSocket
   onConnectionClosed?: (connectionId: string) => void
   /**
-   * Whether this host's own data dial reached the cell (WS open) before the attach deadline. Only
-   * a failure before open is path evidence: after open, closes and timeouts are phone behaviour
-   * (a phone leaving mid-attach yields 4401/4408; a quiet phone trips the deadline).
+   * How long this host's own data dial took to reach the cell (WS open), or null if it never did
+   * before the attach deadline. Only the dial is path evidence: after open, closes and timeouts
+   * are phone behaviour (a phone leaving mid-attach yields 4401/4408; a quiet phone trips the
+   * deadline).
    */
-  onDataDialSettled?: (connectionId: string, opened: boolean) => void
+  onDataDialSettled?: (connectionId: string, openedAfterMs: number | null) => void
 }
 
 function relayWebSocketOrigin(cellUrl: string): string {
@@ -164,11 +165,12 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       let attached = false
       let finalized = false
       let dialSettled = false
+      const dialStartedAt = Date.now()
       // Terminating a connecting socket also emits error; report each dial once.
       const settleDial = (didOpen: boolean): void => {
         if (!dialSettled) {
           dialSettled = true
-          this.onDataDialSettled?.(connection.connId, didOpen)
+          this.onDataDialSettled?.(connection.connId, didOpen ? Date.now() - dialStartedAt : null)
         }
       }
       const deadline = setTimeout(() => {
