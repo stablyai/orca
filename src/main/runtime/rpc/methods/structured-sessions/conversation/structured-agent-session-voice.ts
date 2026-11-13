@@ -57,7 +57,11 @@ export const STRUCTURED_AGENT_SESSION_VOICE_METHODS = [
           stream.close()
         }
       }
-      // The router answers for every agent: a resting chat or another agent is refused there.
+      // A chat at rest has no agent to talk to; wake it, then the router answers for every agent.
+      await host.entry.wakeForVoice(params.sessionId).catch(() => undefined)
+      if (stream.isClosed()) {
+        return
+      }
       handle = host.deps.adapter.startVoiceConversation?.({
         sessionId: params.sessionId,
         offerSdp: params.offerSdp,

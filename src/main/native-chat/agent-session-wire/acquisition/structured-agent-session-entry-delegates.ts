@@ -6,6 +6,7 @@ import {
   createStructuredAgentSession,
   type StructuredAgentSessionCreateOptions
 } from './structured-agent-session-create'
+import { wakeStructuredAgentSessionForVoice } from '../startup/structured-agent-session-voice-wake'
 
 export function structuredAgentSessionEntryDelegates(
   context: () => StructuredAgentSessionAttachContext
@@ -20,6 +21,7 @@ export function structuredAgentSessionEntryDelegates(
       caller: StructuredAgentSessionCaller,
       params: AgentSessionAttachParams,
       options?: StructuredAgentSessionCreateOptions
-    ) => createStructuredAgentSession(context(), caller, params, options)
+    ) => createStructuredAgentSession(context(), caller, params, options),
+    wakeForVoice: (sessionId: string) => wakeStructuredAgentSessionForVoice(context(), sessionId)
   }
 }
