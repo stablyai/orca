@@ -32,7 +32,7 @@ import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-
 import { structuredMailSource } from '../structured-mail/structured-mail-source'
 
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import '../../../rpc/methods/orchestration/worker/worker-earlier-work'
+import '../../../rpc/methods/orchestration/worker/follow-up/worker-earlier-work'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock(

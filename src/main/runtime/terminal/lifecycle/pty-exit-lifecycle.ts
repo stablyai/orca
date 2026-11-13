@@ -27,9 +27,11 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
   protected abstract failActiveDispatchOnExit(
     handle: string,
     paneKey: string | null,
-    exitCode: number,
-    cause: TerminalExitCause
+    cause: TerminalExitCause,
+    lastOutput?: string
   ): void
+
+  protected abstract readPtyLastOutput(ptyId: string | null | undefined): string | undefined
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -78,6 +80,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
     const exitCause: TerminalExitCause =
       stopRequested && !stopNeverConfirmed ? OPERATOR_CLOSE_EXIT_CAUSE : observedCause
     this.stopRequestedPtyIds.delete(ptyId)
+    // Read before the transcript prune below empties it: a worker gone without reporting is told with it.
+    const lastOutput = this.readPtyLastOutput(ptyId)
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&
       pty?.connectionId != null &&
@@ -323,10 +327,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
         paneKey: closedPane?.paneKey ?? this.paneOfPty(pty).paneKey
       })
     }
-    if (!preservesAbnormalSshSurface) {
-      for (const surface of exitedSurfaces) {
-        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
-      }
+    for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
+      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput)
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {

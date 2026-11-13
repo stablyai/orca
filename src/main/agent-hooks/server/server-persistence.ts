@@ -20,7 +20,7 @@ import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
 import { StatusCacheExpiry } from './status-cache-expiry'
-import { rowsOf } from './last-status-saved-rows'
+import { rowsOf, selectedStatusEntries } from './last-status-saved-rows'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
@@ -42,7 +42,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     const conflictedCommitments = new Set<string>()
     // Restart drops anything older than the TTL, so saving it would only carry dead rows forward.
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
-    for (const [paneKey, commitment] of selectedEntries(
+    for (const [paneKey, commitment] of selectedStatusEntries(
       this.persistedAuthorityCommitmentsByPaneKey,
       keys
     )) {
@@ -54,7 +54,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         authorityCommitments[paneKey] = { ...commitment }
       }
     }
-    for (const [paneKey, payload] of selectedEntries(this.state.lastStatusByPaneKey, keys)) {
+    for (const [paneKey, payload] of selectedStatusEntries(this.state.lastStatusByPaneKey, keys)) {
       // Why: never persist invalid keys (matches the hydrate-path invariant).
       if (!isValidPaneKey(paneKey)) {
         continue
@@ -78,6 +78,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // Facets are stitched at publication; discard any copy that reached the map.
         programStatus: _programStatus,
         programStatusOnly: _programStatusOnly,
+        agentIdentity: _agentIdentity,
         // Hydration restamps restoredUnconfirmed.
         restoredUnconfirmed: _restoredUnconfirmed,
         // Observation sequences belong to this runtime.
@@ -321,18 +322,5 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
 
   _resetConnectionTimestampWatermarksForTests(): void {
     this.connectionTimestampWatermarkById.clear()
-  }
-}
-
-function* selectedEntries<K, V>(map: ReadonlyMap<K, V>, keys?: readonly K[]): Iterable<[K, V]> {
-  if (!keys) {
-    yield* map
-    return
-  }
-  for (const key of keys) {
-    const value = map.get(key)
-    if (value !== undefined) {
-      yield [key, value]
-    }
   }
 }

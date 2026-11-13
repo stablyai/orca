@@ -9,16 +9,17 @@ import { defineOrchestrationMethod } from '../access/orchestration-method-access
 import {
   decodeWorkerListCursor,
   encodeWorkerListCursor,
-  type WorkerListCursor
-} from './worker-list-cursor'
+  type WorkerListCursor,
+  type WorkerListInventory
+} from './fleet/worker-list-cursor'
 import {
   createWorkerListSnapshot,
   ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS,
   pinWorkerListSnapshot,
   readWorkerListSnapshot
-} from './worker-list-snapshot-store'
-import { projectWorkerListFleet, type WorkerListPageParams } from './worker-list-projection'
-import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
+} from './fleet/worker-list-snapshot-store'
+import { projectWorkerListFleet, type WorkerListPageParams } from './fleet/worker-list-projection'
+import { exposeWorkerTerminalResource } from './release/worker-terminal-resource-presentation'
 import { withRemoteWorkerRows } from '../../../../orchestration/federation/remote-owned/remote-owned-reads'
 import {
   WORKER_TERMINAL_LIST_STATES,
@@ -209,14 +210,21 @@ async function projectWorkerListPageWithFilteredSnapshot(
   })
   // Derive totals and counts from the same pinned membership; live filter scans can count rows the cursor cannot reach.
   const pinnedCount = filteredSnapshot?.dispatchIds.length
-  const inventory =
+  const carried = snapshotCursor?.version === 3 ? undefined : snapshotCursor?.inventory
+  const inventory: WorkerListInventory =
     pinnedCount !== undefined && params.terminalState
       ? { total: pinnedCount, counts: { [params.terminalState]: pinnedCount } }
-      : db.countWorkerTerminalInventory({
-          runId: params.run,
-          terminalState: params.terminalState,
-          snapshot: args.snapshot
-        })
+      : carried && carried.runId === params.run && carried.terminalState === params.terminalState
+        ? carried
+        : {
+            ...db.countWorkerTerminalInventory({
+              runId: params.run,
+              terminalState: params.terminalState,
+              snapshot: args.snapshot
+            }),
+            ...(params.run ? { runId: params.run } : {}),
+            ...(params.terminalState ? { terminalState: params.terminalState } : {})
+          }
   const nextRow = pageRows.at(-1)
   fleet.page = {
     limit,
@@ -238,7 +246,8 @@ async function projectWorkerListPageWithFilteredSnapshot(
                       createdAt: nextRow.createdAt,
                       dispatchId: nextRow.dispatchId,
                       databaseId: nextRow.databaseId
-                    }
+                    },
+                    inventory
                   }
                 : {
                     version: 1,
@@ -247,7 +256,8 @@ async function projectWorkerListPageWithFilteredSnapshot(
                       createdAt: nextRow.createdAt,
                       dispatchId: nextRow.dispatchId,
                       databaseId: nextRow.databaseId
-                    }
+                    },
+                    inventory
                   }
             )
         : null

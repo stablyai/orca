@@ -5,7 +5,7 @@ import {
   getTaskPageRepoCacheRows,
   createTaskPageWorkItemsCacheSelector
 } from '@/components/task-page/task-page-cache-selectors'
-import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items-query-bounds'
+import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items/work-items-query-bounds'
 import type { Repo } from '../../../../../shared/repo-types'
 import { getTaskPageRepoCacheInput } from '../task-page-source-context'
 

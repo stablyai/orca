@@ -277,11 +277,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
-    this.lastStatusFilePath = null
+    this.setStatusFilePath(null)
     this.closeStatusSnapshotWriter()
-    this.runtimeObservedStatusPaneKeys.clear()
-    this.paneKeyByTerminalHandle.clear()
-    this.statusQueryIndex = null
+    this.agentIdentities.close()
+    this.clearRuntimeStatusQueries()
     this.hydratedAuthorityCommitments = Object.freeze([])
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()

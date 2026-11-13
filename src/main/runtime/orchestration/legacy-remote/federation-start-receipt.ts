@@ -1,8 +1,8 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { isFederationEffectUnknown } from './federation-effects'
-import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/worker-topology'
-import type { OrchestrationWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/worker-launch-preferences'
+import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
+import type { OrchestrationWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 
 export function failFederatedAttachmentWithReceipt(args: {
   db: OrchestrationDb

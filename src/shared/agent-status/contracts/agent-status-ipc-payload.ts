@@ -95,6 +95,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   programStatus?: ProgramStatusFacet
   /** Only `programStatus` changed: readers patch the facet and treat nothing else as news. */
   programStatusOnly?: true
+  /** The terminal agent's Orca id on its execution host; null when that host can name this
+   *  conversation but has not yet (Copy retries); absent from older hosts and unnameable rows. */
+  orcaSessionId?: string | null
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
   /** The pane's owning agent session on its execution host; absent from older hosts. */

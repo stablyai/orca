@@ -211,7 +211,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options?: { claimsHygiene?: boolean }
   ): Promise<RuntimeWorktreeScanResult>
   protected abstract listKnownExecutionHostIds(
     additionalHostIds?: Iterable<ExecutionHostId>,

@@ -1,3 +1,4 @@
+import '../../memory-agent-identity-store.test-fixture'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

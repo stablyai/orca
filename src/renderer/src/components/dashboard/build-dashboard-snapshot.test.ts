@@ -1,10 +1,14 @@
-import { buildDashboardSnapshotFixture as buildDashboardSnapshot } from './dashboard-snapshot.test-fixture'
+import {
+  buildDashboardSnapshotFixture as buildDashboardSnapshot,
+  buildDashboardBucketCountsFixture as buildDashboardBucketCounts
+} from './dashboard-snapshot.test-fixture'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it, vi } from 'vitest'
 import type { DashboardSnapshotInput as DashboardSnapshotState } from './build-dashboard-snapshot'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -127,6 +131,31 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it('counts a remote row in its host workspace when a local tab ID collides', () => {
+    const workspaceId = folderWorkspaceKey('folder-1')
+    const state = baseState({
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces: [{
+        id: 'folder-1', projectGroupId: 'group-1', name: 'Docs workspace',
+        folderPath: '/workspace/docs', connectionId: 'ssh-1', linkedTask: null,
+        comment: '', isArchived: false, isUnread: false, isPinned: false,
+        sortOrder: 0, lastActivityAt: NOW, createdAt: NOW, updatedAt: NOW
+      }],
+      projectGroups: [{
+        id: 'group-1', name: 'Documentation', parentPath: '/workspace',
+        connectionId: 'ssh-1', parentGroupId: null, createdFrom: 'folder-scan',
+        tabOrder: 0, isCollapsed: false, color: null, createdAt: NOW, updatedAt: NOW
+      }],
+      tabsByWorktree: { local: [tab(TAB_ID, 'local')] },
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [PANE_KEY, entry({ connectionId: 'ssh-1', worktreeId: workspaceId })]
+      ])
+    })
+    expect(buildDashboardSnapshot(state, NOW).cards.map((card) => card.worktreeId)).toEqual([workspaceId])
+    expect(buildDashboardBucketCounts(state, NOW)).toEqual({ attention: 0, working: 1, done: 0, idle: 0 })
+  })
+
   it('names each pane of a split tab from its own title', () => {
     const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
     const snapshot = buildDashboardSnapshot(
@@ -178,6 +207,21 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     expect(snapshot.cards[0].ptyId).toBeNull()
+  })
+
+  it('labels a waiting agent with its question, not the prompt envelope JSON', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [{ question: 'Which database?', options: [{ label: 'Postgres' }] }]
+    })
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'waiting', toolName: 'AskUserQuestion', interactivePrompt })
+        }
+      }),
+      NOW
+    )
+    expect(snapshot.cards[0].askSummary).toBe('Which database?')
   })
 
   it('skips card-only context for count snapshots', () => {

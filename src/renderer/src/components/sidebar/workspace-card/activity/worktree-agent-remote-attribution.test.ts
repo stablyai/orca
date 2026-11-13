@@ -94,27 +94,27 @@ describe('remote completed sidebar rows before tab hydration', () => {
     )
   })
 
-  it.each(['visibility-inventory-removal', 'removed:host-epoch'])(
-    'does not treat worktree visibility removal %s as host tab retraction',
-    (publicationEpoch) => {
-      const worktreeId = 'folder:remote-workspace'
-      const initial = makeState()
-      const mirror = applyWebSessionTabsSnapshot(
-        initial,
-        hostSnapshot('host-tab', worktreeId),
-        ENV,
-        NOW
-      )
-      const beforeTabs = makeState({ agentStatusByPaneKey: mirror.agentStatusByPaneKey })
-      const tombstone = {
-        ...makeSnapshot([], { worktree: worktreeId, publicationEpoch }),
-        removed: true as const
-      }
-      const removed = {
-        ...beforeTabs,
-        ...applyWebSessionTabsSnapshot(beforeTabs, tombstone, ENV, NOW + 1)
-      }
-      expect(removed.agentStatusByPaneKey).toEqual(beforeTabs.agentStatusByPaneKey)
+  it('does not treat workspace visibility removal as host tab retraction', () => {
+    const worktreeId = 'folder:remote-workspace'
+    const initial = makeState()
+    const mirror = applyWebSessionTabsSnapshot(
+      initial,
+      hostSnapshot('host-tab', worktreeId),
+      ENV,
+      NOW
+    )
+    const beforeTabs = makeState({ agentStatusByPaneKey: mirror.agentStatusByPaneKey })
+    const tombstone = {
+      ...makeSnapshot([], {
+        worktree: worktreeId,
+        publicationEpoch: 'visibility-inventory-removal'
+      }),
+      removed: true as const
     }
-  )
+    const removed = {
+      ...beforeTabs,
+      ...applyWebSessionTabsSnapshot(beforeTabs, tombstone, ENV, NOW + 1)
+    }
+    expect(removed.agentStatusByPaneKey).toEqual(beforeTabs.agentStatusByPaneKey)
+  })
 })

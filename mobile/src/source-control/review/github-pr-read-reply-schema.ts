@@ -1,10 +1,10 @@
 import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../src/shared/github/work-item-types'
+} from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import {
   CHECK_STATUS,

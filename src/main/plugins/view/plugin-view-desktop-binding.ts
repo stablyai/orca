@@ -5,7 +5,7 @@ import type { PluginService } from '../plugin-service'
 import {
   livePluginFrameGuests,
   setPluginFrameGuestLogSink
-} from '../panels/plugin-frame-guest-diagnostics'
+} from '../panels/guest-isolation/plugin-frame-guest-diagnostics'
 import { createPluginViewDesktop } from './plugin-view-desktop'
 import { isPluginShotWindowShown } from './plugin-shot-policy'
 import { setPluginHostRendererRequest } from './plugin-host-renderer-actions'

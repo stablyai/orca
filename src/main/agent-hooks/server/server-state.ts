@@ -144,6 +144,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
     isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey),
+    ...this.legacyRowHooks,
     onMutation: (key, before, after) => {
       if (this.tracksStatusPersistence()) {
         this.statusPersistDirtyKeys.add(key)
@@ -159,6 +160,9 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   protected readonly statusPersistDirtyKeys = new Set<string>()
   protected readonly statusPersistRemovedKeys = new Set<string>()
   protected statusAuthorityRevision = 0
+  protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
+    return {}
+  }
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
   protected transportInterference = createHookTransportInterferenceTracker(

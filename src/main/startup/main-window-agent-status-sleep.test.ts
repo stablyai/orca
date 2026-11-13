@@ -30,7 +30,7 @@ import { getConnectionExecutionHostId } from '../../shared/execution-host'
 import {
   installMainWindowAgentStatusListeners,
   clearMainWindowAgentStatusListeners
-} from './main-window-agent-status'
+} from './main-window/main-window-agent-status'
 
 const frames = vi.hoisted(() => ({ send: vi.fn(), popout: vi.fn() }))
 vi.mock('./main-process-state', () => ({
@@ -39,7 +39,9 @@ vi.mock('./main-process-state', () => ({
 vi.mock('../window/dashboard-popout-window', () => ({
   getDashboardPopoutWindow: () => ({ webContents: { send: frames.popout } })
 }))
-vi.mock('./synthetic-title-runtime', () => ({ stopSyntheticTitleSpinnerTimer: () => {} }))
+vi.mock('./main-window/synthetic-title-runtime', () => ({
+  stopSyntheticTitleSpinnerTimer: () => {}
+}))
 
 const PANE = `host-tab:${HEADLESS_LEAF_ID}`
 const INCARNATION = 'initial-incarnation'

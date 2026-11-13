@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { NotificationDeliverySection } from '../notifications/NotificationDeliverySection'
+import { NotificationDeliverySection } from '../notifications/delivery-policy/NotificationDeliverySection'
 import {
   DEFAULT_NOTIFICATION_DELIVERY,
   loadNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
-} from '../notifications/notification-delivery-preferences'
+} from '../notifications/delivery-policy/notification-delivery-preferences'
 import { setNotificationDeliveryPreferences } from '../notifications/push-registration'
-import { useRemotePushCapableHosts } from '../notifications/use-remote-push-capable-hosts'
+import { useRemotePushCapableHosts } from '../notifications/push-registration/use-remote-push-capable-hosts'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote } from './settings-screen-frame'

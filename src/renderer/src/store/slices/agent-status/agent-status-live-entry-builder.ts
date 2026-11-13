@@ -1,28 +1,15 @@
-import {
-  type SleepingAgentSessionRecord,
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
-import type { AppState } from '../../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status/lifecycle/agent-status-live-entry-state-history'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../../shared/agent-status/identity/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../../shared/command-code-turn-boundary'
-import type {
-  AgentStatusMetadata,
-  AgentStatusPayload,
-  AgentStatusRouting,
-  AgentStatusTiming
-} from './agent-status-contract'
 import {
   invocationLaunchConfig,
   ownerLaunchAttested,
@@ -41,44 +28,16 @@ import {
   statusRetainsResumableIdentity
 } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 
-export type AgentStatusLiveEntryBuild = {
-  entry: AgentStatusEntry
-  conversationSource: ReturnType<typeof localAgentConversationAcceptance>['source']
-  existing: AgentStatusEntry | undefined
-  existingSleepingRecord: SleepingAgentSessionRecord | undefined
-  liveRecoveryRecord: SleepingAgentSessionRecord | null
-  launchConfigSource: SleepingAgentLaunchConfig | undefined
-  registryEntry: AppState['agentLaunchConfigByPaneKey'][string] | undefined
-  registryMatched: boolean
-  providerSession: AgentProviderSessionMetadata | undefined
-  providerSessionChanged: boolean
-  retainsResumableRecoveryIdentity: boolean
-  migrationUnsupported: {
-    next: Record<string, MigrationUnsupportedPtyEntry>
-    changed: boolean
-  }
-  commandCodeNewTurn: boolean
-  sortRelevantChange: boolean
-  aggregateRelevantChange: boolean
-  completionRefreshWorktreeId: string | null
-  boundaryResolved: boolean
-}
-
-export type AgentStatusLiveEntryRejection = {
-  entry: null
-  reason: 'stale' | 'suppressed-inherited-terminal'
-}
-
-export type AgentStatusLiveEntryArgs = {
-  state: AppState
-  paneKey: string
-  payload: AgentStatusPayload
-  terminalTitle?: string
-  timing?: AgentStatusTiming
-  routing?: AgentStatusRouting
-  metadata?: AgentStatusMetadata
-  updatedAt: number
-}
+import type {
+  AgentStatusLiveEntryArgs,
+  AgentStatusLiveEntryBuild,
+  AgentStatusLiveEntryRejection
+} from './agent-status-live-entry-contract'
+export type {
+  AgentStatusLiveEntryArgs,
+  AgentStatusLiveEntryBuild,
+  AgentStatusLiveEntryRejection
+} from './agent-status-live-entry-contract'
 
 /** Build one accepted live row and the derived map-update facts, or say why the frame was rejected. */
 export function buildAgentStatusLiveEntry(
@@ -199,6 +158,21 @@ export function buildAgentStatusLiveEntry(
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
+  // Only the host names conversations. Its row naming the conversation is authoritative, a missing
+  // stamp included (a settled miss clears a pending null); an ID-less local update keeps the
+  // id only for the very same agent, owner and provider key (locator included).
+  const keepsExistingId =
+    existing?.orcaSessionId !== undefined &&
+    existing.agentType === identity.agentType &&
+    (routing?.connectionId === undefined ||
+      routing.connectionId === (existing.connectionId ?? null)) &&
+    agentProviderSessionsEqual(identity.agentType, existing.providerSession, providerSession)
+  const orcaSessionId =
+    metadata?.providerSession || metadata?.orcaSessionId !== undefined
+      ? metadata.orcaSessionId
+      : keepsExistingId
+        ? existing?.orcaSessionId
+        : undefined
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -245,6 +219,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(orcaSessionId !== undefined ? { orcaSessionId } : {}),
     ...(launchAttested !== undefined ? { launchAttested } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

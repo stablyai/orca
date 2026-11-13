@@ -65,8 +65,6 @@ function ws(
     displayName: name,
     branch: name,
     path: `/Users/me/code/${repoName}/${name}`,
-    tier: 'review',
-    selectedByDefault: false,
     reasons: [],
     blockers: [],
     lastActivityAt: NOW,

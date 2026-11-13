@@ -1,4 +1,4 @@
-import '../../unused-default-rpc-methods.test-fixture'
+import '../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { OrcaRuntimeService } from '../../../orca-runtime'

@@ -94,6 +94,10 @@ export type AgentStatusLegacyAdapterOptions = {
   ) => void
   nextListingOrder?: () => number
   isCanonicalPaneKey?: (paneKey: string) => boolean
+  /** Owner-derived runtime fields, stamped on a row before it is frozen. */
+  prepareRow?: (entry: AgentHookEventPayload, previous: AgentHookEventPayload | undefined) => void
+  /** Every row entering or leaving a key, so owners can keep derived indexes exact. */
+  rowChanged?: (key: string, entry: AgentHookEventPayload | undefined) => void
 }
 
 function freezeRecursively(value: unknown, seen: WeakSet<object>): void {
@@ -171,6 +175,9 @@ export function createAgentStatusLegacyAdapter(
         }
         listingOrderByPaneKey.set(entry.paneKey, order)
       }
+      if (!Object.isFrozen(entry)) {
+        options.prepareRow?.(entry, entries.get(entry.paneKey))
+      }
       freezeStatusEntry(entry)
       if (admitOptions.moveToEnd) {
         options.onMutation?.(entry.paneKey, entries.get(entry.paneKey), undefined)
@@ -179,6 +186,7 @@ export function createAgentStatusLegacyAdapter(
       const before = entries.get(entry.paneKey)
       entries.set(entry.paneKey, entry)
       options.onMutation?.(entry.paneKey, before, entry)
+      options.rowChanged?.(entry.paneKey, entry)
       return true
     },
     delete: (paneKey) => {
@@ -187,6 +195,7 @@ export function createAgentStatusLegacyAdapter(
       const deleted = entries.delete(paneKey)
       if (deleted) {
         options.onMutation?.(paneKey, before, undefined)
+        options.rowChanged?.(paneKey, undefined)
       }
       return deleted
     },
@@ -194,8 +203,12 @@ export function createAgentStatusLegacyAdapter(
       for (const [key, before] of entries) {
         options.onMutation?.(key, before, undefined)
       }
+      const keys = [...entries.keys()]
       entries.clear()
       listingOrderByPaneKey.clear()
+      for (const key of keys) {
+        options.rowChanged?.(key, undefined)
+      }
     },
     move: (fromPaneKey, toPaneKey) => {
       if (fromPaneKey === toPaneKey) {
@@ -210,11 +223,13 @@ export function createAgentStatusLegacyAdapter(
         entries.delete(key)
         options.onMutation?.(key, value, undefined)
         listingOrderByPaneKey.delete(key)
+        options.rowChanged?.(key, undefined)
         if (isCanonicalPaneKey(movedKey)) {
           continue
         }
         entries.set(movedKey, value)
         options.onMutation?.(movedKey, undefined, value)
+        options.rowChanged?.(movedKey, value)
         if (priorTargetOrder !== undefined) {
           listingOrderByPaneKey.set(movedKey, priorTargetOrder)
         } else {

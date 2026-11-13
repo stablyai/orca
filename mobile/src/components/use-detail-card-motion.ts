@@ -1,9 +1,9 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
-import { Animated, Easing, type View } from 'react-native'
+import { Animated, Easing, type HostInstance } from 'react-native'
 import { commitDetailCardExit } from './detail-card-host'
 
 export type DetailCardMotionOptions = {
-  contentRef: RefObject<View | null>
+  contentRef: RefObject<HostInstance | null>
   motion: number
   target: 0 | 1
   slide: boolean

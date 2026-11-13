@@ -9,15 +9,13 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import {
-  pickHostTurnEnd,
-  pickParsedAgentStatusPayload,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import type { HookLiveAgentRow } from '../../workspaces/process-listing/hook-live-agent-row'
+import {
+  toHookLiveAgentRow,
+  type HookLiveAgentRow
+} from '../../workspaces/process-listing/hook-live-agent-row'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { codexAsyncQuestionOutlivesWorkingTitle } from './codex-async-question-title-hold'
 
@@ -71,6 +69,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
     ...(status.providerSession ? { providerSession: status.providerSession } : {}),
+    ...(status.orcaSessionId !== undefined ? { orcaSessionId: status.orcaSessionId } : {}),
     ...(state === 'done' ? completedTurnFields(status) : {})
   })
   const titleConfirmsState =
@@ -131,6 +130,8 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
 
 export type RuntimeHookAgentRowLookup = {
   providerSession: AgentProviderSessionMetadata | null
+  /** The host's Orca id for that provider session's conversation (see `AgentStatusEntry`). */
+  orcaSessionId: string | null | undefined
   providerSessionAgentType: string | null
   providerSessionReceivedAt: number | null
   agentType: string | null
@@ -194,25 +195,13 @@ export function selectRuntimeHookAgentRowForPane(
   }
   return {
     providerSession: session?.providerSession ?? null,
+    orcaSessionId: session?.orcaSessionId,
     providerSessionAgentType: session?.agentType ?? null,
     providerSessionReceivedAt: session?.receivedAt ?? null,
     agentType: agent?.agentType ?? null,
     agentIsLive: agent != null && agent.state !== 'done',
     live: live ? toHookLiveAgentRow(live) : null,
     restored: restored ? toHookLiveAgentRow(restored) : null
-  }
-}
-
-function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
-  return {
-    payload: pickParsedAgentStatusPayload(row),
-    updatedAt: row.receivedAt,
-    ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
-    stateStartedAt: row.stateStartedAt ?? row.receivedAt,
-    ...pickHostTurnEnd(row),
-    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
-    ...(row.programStatus ? { programStatus: row.programStatus } : {}),
-    ...(row.paneSleep ? { paneSleep: row.paneSleep } : {})
   }
 }
 

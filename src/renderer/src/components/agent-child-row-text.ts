@@ -49,5 +49,5 @@ export function agentChildRowName(row: AgentChildRowModel): string {
 }
 
 export function agentChildRowText(row: AgentChildRowModel, now: number): AgentChildRowText {
-  return agentChildRowLeadTrail(row, agentChildRowName(row), agentChildRowDetailText(row, now))
+  return agentChildRowLeadTrail(agentChildRowName(row), agentChildRowDetailText(row, now))
 }

@@ -1,5 +1,5 @@
-import { parseJsonObject } from '../../../ai-vault/session-scanner-values'
-import { asRecord } from '../../../ai-vault/session-scanner-record-value'
+import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
+import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 

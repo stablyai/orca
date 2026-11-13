@@ -65,7 +65,7 @@ import {
   stopTransactionIncumbent
 } from './orcad-transaction-incumbent'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
-import { orcadCandidateLaunchFailureCode } from '../../orcad/orcad-host-unavailable'
+import { orcadCandidateLaunchFailureCode } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { errorMessage } from '../../../shared/error-message'
 
 type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }>

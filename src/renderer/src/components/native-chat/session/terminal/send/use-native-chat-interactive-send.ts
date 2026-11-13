@@ -23,6 +23,7 @@ import {
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
 import { inferQuestionAnsweredFromCurrentStatus } from '../../../../terminal-pane/agent-status/input-inference/agent-question-answered-inference'
+import { createAgentInterruptInference } from '../../../../terminal-pane/agent-status/input-inference/agent-interrupt-inference'
 
 // Agent TUIs use Escape to cancel questions or deny approvals.
 const ESC = '\x1b'
@@ -36,8 +37,8 @@ export type NativeChatInteractiveSend = {
   ) => { settleAfterMs: number }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
-  /** `sendRaw` that resolves to whether the write was acknowledged; unknown delivery is false. */
-  sendRawVerified: (raw: string) => Promise<boolean>
+  /** `sendRaw` that resolves to whether the write was acknowledged; unknown delivery is false. A startup-dialog choice names its card so the host can refuse a stale one. */
+  sendRawVerified: (raw: string, requireStartupDialog?: string) => Promise<boolean>
   /** Stop delayed writes without interrupting the agent. */
   cancelPending: () => void
   /** Reject the question without interrupting the session; resolve true only for acknowledged Escape. */
@@ -71,10 +72,11 @@ export function useNativeChatInteractiveSend(
   )
 
   const sendRawVerified = useCallback(
-    (raw: string): Promise<boolean> =>
+    (raw: string, requireStartupDialog?: string): Promise<boolean> =>
       targetPtyId
         ? sendRuntimePtyInputVerified(targetPtyId, raw, 'driving', {
-            requireWriteSettlement: true
+            requireWriteSettlement: true,
+            ...(requireStartupDialog !== undefined ? { requireStartupDialog } : {})
           }).catch(() => false)
         : Promise.resolve(false),
     [targetPtyId]
@@ -157,8 +159,23 @@ export function useNativeChatInteractiveSend(
       inFlightRef.current = sendNativeChatAskAnswer(targetPtyId, [{ raw: ESC }, { raw: ESC }])
       return
     }
-    sendRaw(ESC)
-  }, [agent, cancelInFlight, sendRaw, targetPtyId])
+    // Why: this Escape bypasses xterm.onData; infer like an acknowledged typed Escape, from the status before it.
+    const statusBeforeEscape = useAppStore.getState().agentStatusByPaneKey[paneKey] ?? null
+    void sendRawVerified(ESC).then((accepted) => {
+      if (!accepted) {
+        return
+      }
+      void createAgentInterruptInference({
+        paneKey,
+        getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+        inferInterrupt: (request) =>
+          window.api.agentStatus.inferInterrupt(request).catch((err) => {
+            console.warn('[agent-interrupt] native-chat inference failed:', err)
+            return false
+          })
+      }).observeInputIntent('plain-escape', statusBeforeEscape)
+    })
+  }, [agent, cancelInFlight, paneKey, sendRawVerified, targetPtyId])
 
   return { sendAnswer, sendRaw, sendRawVerified, cancelPending: cancelInFlight, cancelAsk, cancel }
 }

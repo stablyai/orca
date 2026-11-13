@@ -1,5 +1,5 @@
 import { useCallback, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import {
   getTerminalLiveAccessoryBytesDecision,
   getTerminalLiveAccessoryLocalEditText,
@@ -26,7 +26,7 @@ type TerminalLiveAccessoryInputCommitOptions = {
   readonly endLiveInputSessionThenSend: (handle: string, bytes: string) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TextInputInstance | null>
   readonly liveInputTextRef: RefObject<string>
   readonly onInteraction: () => void
   readonly pendingLiveInputHandleRef: RefObject<string | null>
@@ -38,7 +38,7 @@ type TerminalLiveAccessoryInputCommitOptions = {
 // The RN-Web ref is the field itself, so its caret is current even when an edit kept the offsets
 // and fired no selection event; native refs expose no caret, so edit at the end.
 export function readLiveInputSelection(
-  node: TextInput | null,
+  node: TextInputInstance | null,
   fieldText: string
 ): TerminalLiveInputSelection | null {
   if (

@@ -155,6 +155,24 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     this.notifyStatusRowMutationListeners({ before: identity, after: identity })
   }
 
+  protected publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void {
+    // An id is no provider event: drop the row's last hook signals so no reader re-acts on them.
+    const {
+      hookEventName: _hookEventName,
+      hasExplicitPrompt: _hasExplicitPrompt,
+      promptInteractionKey: _promptInteractionKey,
+      authorityRestartId: _authorityRestartId,
+      ...projection
+    } = row
+    this.onAgentStatus?.({
+      ...this.programStatusFacets.stitch(projection),
+      isReplay: true,
+      identityOnly: true
+    })
+    const identity = toMutationIdentity(row)
+    this.notifyStatusRowMutationListeners({ before: identity, after: identity })
+  }
+
   private notifyStatusRowMutationListeners(mutation: AgentHookStatusRowMutation): void {
     for (const listener of this.statusRowMutationListeners) {
       try {

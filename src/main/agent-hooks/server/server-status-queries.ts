@@ -11,6 +11,12 @@ export abstract class AgentHookServerStatusQueries extends AgentHookServerState 
 
   protected statusQueryIndex: AgentStatusQueryIndex | null = null
 
+  protected clearRuntimeStatusQueries(): void {
+    this.runtimeObservedStatusPaneKeys.clear()
+    this.paneKeyByTerminalHandle.clear()
+    this.statusQueryIndex = null
+  }
+
   private queryIndex(): AgentStatusQueryIndex {
     if (!this.statusQueryIndex) {
       this.statusQueryIndex = new AgentStatusQueryIndex()

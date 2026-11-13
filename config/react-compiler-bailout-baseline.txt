@@ -109,7 +109,6 @@
 1 src/renderer/src/components/editor/editor-header-file-rename.ts
 1 src/renderer/src/components/editor/external-changes/ExternalFileChangeCompareDialog.tsx
 1 src/renderer/src/components/editor/git-graph/git-graph-filter.tsx
-1 src/renderer/src/components/editor/git-graph/git-graph-tab.tsx
 1 src/renderer/src/components/editor/markdown-preview/render-tree/use-markdown-preview-components.tsx
 1 src/renderer/src/components/editor/markdown-preview/review/MarkdownPreviewAnnotationComposer.tsx
 1 src/renderer/src/components/editor/markdown-preview/surface/MarkdownPreview.tsx
@@ -206,7 +205,6 @@
 2 src/renderer/src/components/mobile/use-mobile-page-paired-devices.ts
 1 src/renderer/src/components/mobile/use-mobile-pairing-generation.ts
 1 src/renderer/src/components/native-chat-recovery/offers/native-chat-restart-runtimes.ts
-1 src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx
 8 src/renderer/src/components/native-chat/attachments/chips/use-native-chat-composer-attachments.ts
 2 src/renderer/src/components/native-chat/attachments/intake/use-native-chat-resolved-path-attachments.ts
 2 src/renderer/src/components/native-chat/composer/controls/NativeChatComposerToolbar.tsx
@@ -227,7 +225,6 @@
 6 src/renderer/src/components/native-chat/messages/actions/use-native-chat-fork.ts
 4 src/renderer/src/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-source.ts
 6 src/renderer/src/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts.ts
-1 src/renderer/src/components/native-chat/pane/actions/NativeChatCopyOrcaSessionIdMenuItem.tsx
 1 src/renderer/src/components/native-chat/pane/actions/use-native-chat-hand-off.tsx
 1 src/renderer/src/components/native-chat/pane/actions/use-native-chat-session-context-actions.tsx
 1 src/renderer/src/components/native-chat/paste/native-chat-paste-destination.ts
@@ -632,7 +629,7 @@
 1 src/renderer/src/components/terminal-pane/controller/TerminalPaneCodexRestartPortals.tsx
 1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-context-actions.ts
 3 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-foundation.ts
-10 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-projection.ts
+2 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-projection.ts
 3 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-startup-actions.ts
 1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-store-actions.ts
 1 src/renderer/src/components/terminal-pane/errors/TerminalErrorToast.tsx

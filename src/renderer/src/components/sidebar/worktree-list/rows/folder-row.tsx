@@ -155,6 +155,7 @@ export function renderFolderWorkspaceOption(args: {
           worktree={folderWorktree}
           repo={undefined}
           isActive={isActiveWorktree}
+          isMultiSelected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
           // A child-active folder looks active without the active card's side effects.
           isActiveSurface={lineage?.childIsActive === true || isActiveWorktree}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}

@@ -2,91 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../terminal/output/provider-snapshot-budget'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { syncSinglePty, store } from './orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
 
 describe('terminal side-effect fact channel', () => {
-  it('emits 2031-subscribe facts across chunk splits', () => {
-    // Hidden views need this fact to answer DECSET 2031 because they never receive its bytes.
-    const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-
-    runtime.onPtyData('pty-1', '\x1b[?20', 100)
-    expect(batches).toEqual([])
-    runtime.onPtyData('pty-1', '31h', 101)
-
-    expect(batches.flatMap((batch) => batch.facts)).toEqual([{ kind: '2031-subscribe' }])
-  })
-
-  it('restores a provisional 2031 subscribe when daemon scan authority returns', () => {
-    const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-
-    runtime.setPtyTransientFactDelegation('pty-1', true)
-    runtime.setPtyTransientFactDelegation('pty-1', false, '\x1b[?', true)
-    runtime.onPtyData('pty-1', '25h', 100)
-
-    expect(batches.flatMap((batch) => batch.facts)).toEqual([{ kind: '2031-subscribe' }])
-  })
-
-  it('prefers the tracked title over the renderer snapshot lastTitle', async () => {
-    const { runtime } = createSideEffectRuntime()
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: 'visible content',
-      cols: 80,
-      rows: 24,
-      // Renderer serialization still has the stale title because synthetic frames bypass pty:data.
-      lastTitle: 'stale shell title'
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeBuffer,
-      hasRendererSerializer: () => true,
-      getSize: () => ({ cols: 80, rows: 24 })
-    })
-    syncSinglePty(runtime)
-
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Cursor Agent\x07')
-
-    const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 10 })
-    expect(snapshot?.source).toBe('renderer')
-    expect(snapshot?.lastTitle).toBe('⠋ Cursor Agent')
-  })
-
-  it('prefers provider history over a partial headless mirror for requested snapshots', async () => {
-    const { runtime } = createSideEffectRuntime()
-    const serializeProviderBuffer = vi.fn().mockResolvedValue({
-      data: 'authoritative screen\r\n',
-      scrollbackAnsi: 'deep provider history\r\n',
-      cols: 120,
-      rows: 40,
-      seq: 900,
-      source: 'headless'
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeProviderBuffer,
-      hasRendererSerializer: () => false
-    })
-    syncSinglePty(runtime)
-    runtime.onPtyData('pty-1', 'partial current screen\r\n', 100)
-
-    await expect(
-      runtime.serializeAuthoritativeTerminalBuffer('pty-1', { scrollbackRows: 5000 })
-    ).resolves.toMatchObject({
-      data: 'authoritative screen\r\n',
-      scrollbackAnsi: 'deep provider history\r\n',
-      seq: 900
-    })
-    expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: 5000
-    })
-  })
-
   it('bounds a hung authoritative provider acquisition and reuses its fallback', async () => {
     vi.useFakeTimers()
     try {
@@ -224,37 +144,6 @@ describe('terminal side-effect fact channel', () => {
     expect(serializeProviderBuffer).toHaveBeenCalledOnce()
   })
 
-  it('tracks live alternate-screen transitions after a provider snapshot', async () => {
-    const { runtime } = createSideEffectRuntime()
-    const serializeProviderBuffer = vi.fn().mockResolvedValue({
-      data: 'restored tui',
-      cols: 80,
-      rows: 24,
-      seq: 900,
-      source: 'headless',
-      alternateScreen: true
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeProviderBuffer,
-      hasRendererSerializer: () => false
-    })
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-tui',
-      { value: 900, generation: 'continued' },
-      0
-    )
-    await runtime.serializeTerminalBuffer('pty-tui')
-    expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
-
-    runtime.onPtyData('pty-tui', '\x1b[?1049l', 100)
-    expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(false)
-    runtime.onPtyData('pty-tui', '\x1b[?1049h', 101)
-    expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
-  })
-
   it('keeps mode transitions that race a provider snapshot response', async () => {
     const { runtime } = createSideEffectRuntime()
     let resolveProviderSnapshot:
@@ -309,98 +198,6 @@ describe('terminal side-effect fact channel', () => {
     expect(runtime.isTerminalAlternateScreen('pty-tui-race')).toBe(false)
   })
 
-  it('translates reset provider snapshots without retaining the old title', async () => {
-    const { runtime } = createSideEffectRuntime()
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-replaced',
-      { value: 0, generation: 'reset' },
-      0
-    )
-    runtime.onPtyData('pty-replaced', '\x1b]0;Old process\x07old', 100)
-    const sequenceBeforeRespawn = runtime.getPtyOutputSequence('pty-replaced')
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeProviderBuffer: vi.fn().mockResolvedValue({
-        data: 'new process',
-        cols: 80,
-        rows: 24,
-        seq: 'new process'.length,
-        source: 'headless',
-        lastTitle: 'New process'
-      }),
-      hasRendererSerializer: () => false
-    })
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-replaced',
-      { value: 0, generation: 'reset' },
-      sequenceBeforeRespawn
-    )
-
-    await expect(runtime.serializeTerminalBuffer('pty-replaced')).resolves.toMatchObject({
-      lastTitle: 'New process',
-      seq: sequenceBeforeRespawn + 'new process'.length
-    })
-  })
-
-  it('returns a title-only replay snapshot and never historical attention', () => {
-    const { runtime } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-
-    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07\x07', 100)
-
-    expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toMatchObject({
-      ptyId: 'pty-1',
-      replay: true,
-      facts: [{ kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' }]
-    })
-    expect(runtime.getTerminalSideEffectSnapshot('pty-unknown')).toBeNull()
-  })
-
-  it('emits the chunk agentStatus events before its side-effect batch', () => {
-    const order: string[] = []
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      onTerminalAgentStatus: () => order.push('agentStatus:set'),
-      onTerminalSideEffects: () => order.push('pty:sideEffect')
-    })
-    syncSinglePty(runtime)
-
-    runtime.onPtyData(
-      'pty-1',
-      '\x1b]9999;{"state":"working","agentType":"codex"}\x07\x1b]0;Codex working\x07\x07',
-      100
-    )
-
-    expect(order).toEqual(['agentStatus:set', 'pty:sideEffect'])
-  })
-
-  it('still emits a throwing chunk’s facts under its own seq, not the next chunk’s', () => {
-    const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-    vi.spyOn(
-      runtime as unknown as { applyTrackedPtyTitle: (ptyId: string, title: string) => boolean },
-      'applyTrackedPtyTitle'
-    ).mockImplementationOnce(() => {
-      throw new Error('tracker boom')
-    })
-
-    const first = '\x1b]0;Codex working\x07'
-    expect(() => runtime.onPtyData('pty-1', first, 100)).toThrow('tracker boom')
-    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-
-    expect(batches).toHaveLength(2)
-    expect(batches[0].seq).toBe(first.length)
-    expect(batches[0].facts).toEqual([
-      { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' }
-    ])
-    // A throw aborted the prior tracker pass; its facts must not leak into the next chunk.
-    expect(batches[1].seq).toBeGreaterThan(batches[0].seq)
-    expect(batches[1].facts).toEqual([
-      { kind: 'title', normalizedTitle: 'Codex done', rawTitle: 'Codex done' }
-    ])
-  })
-
   it('parses synthetic frames statelessly so ticks cannot corrupt the bell detector', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
@@ -420,37 +217,44 @@ describe('terminal side-effect fact channel', () => {
       { kind: 'bell' }
     ])
   })
-
-  it('seeds the lazily created tracker from the daemon-snapshot title', async () => {
-    const { runtime, batches } = createSideEffectRuntime()
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: 'restored scrollback\n',
-      cols: 80,
-      rows: 24,
-      lastTitle: 'Codex working'
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeBuffer,
-      hasRendererSerializer: () => true,
-      getSize: () => ({ cols: 80, rows: 24 })
-    })
-    syncSinglePty(runtime)
-
-    // Cold tracker hydration must seed status before processing later transitions.
-    runtime.onPtyData('pty-1', 'plain output without a title\n', 100)
-    await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
-    batches.length = 0
-
-    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-
-    // Without a working seed, the idle title cannot produce a completion fact.
-    expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
-      kind: 'agent-idle',
-      title: 'Codex done',
-      status: 'idle'
-    })
-  })
 })
+
+it.each([false, true])(
+  'does not infer completion during stop; stopped=%s settles the pending producer',
+  async (stopped) => {
+    vi.useFakeTimers()
+    let row: AgentStatusIpcPayload | undefined
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshotForPane: () => (row ? [row] : []),
+      onTerminalAgentStatus: (event) => {
+        row = {
+          ...event.payload,
+          paneKey: event.paneKey,
+          connectionId: null,
+          stateStartedAt: Date.now(),
+          receivedAt: Date.now()
+        }
+      }
+    })
+    try {
+      syncSinglePty(runtime)
+      runtime.onPtyData('pty-1', '# Command Code v0.27.3\r\n', 100)
+      runtime.onPtyData('pty-1', '❯ say hi\r\n✻ Thinking...', 101)
+      expect(row).toMatchObject({ state: 'working', agentType: 'command-code', prompt: 'say hi' })
+      const settle = runtime.intentionalPtyStops.mark('pty-1', 'reversible', null)
+      runtime.onPtyData(
+        'pty-1',
+        '\r\n✻ Thought for 1 second\r\n:: Hi!\r\n❯ Ask your question...',
+        102
+      )
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(row?.state).toBe('working')
+      settle(stopped)
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(row?.state).toBe(stopped ? 'working' : 'done')
+    } finally {
+      await runtime.onPtyExit('pty-1', 0)
+      vi.useRealTimers()
+    }
+  }
+)

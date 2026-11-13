@@ -42,12 +42,19 @@ function cards() {
   }
   return (
     <div className="space-y-4 p-4">
-      <MessageRow
-        message={started}
-        expandSignal={false}
-        onScrollMessageToTop={() => {}}
-        runtimeContext={{ worktreeId: workspace, worktreePath: null, target: { kind: 'local' } }}
-      />
+      {[
+        started,
+        { ...started, id: 'reopened', agentFollowUp: 'reopened' as const },
+        { ...started, id: 'followed-up', agentFollowUp: 'fresh' as const }
+      ].map((message) => (
+        <MessageRow
+          key={message.id}
+          message={message}
+          expandSignal={false}
+          onScrollMessageToTop={() => {}}
+          runtimeContext={{ worktreeId: workspace, worktreePath: null, target: { kind: 'local' } }}
+        />
+      ))}
       {(['task', 'coordinator', 'worker', 'generic'] as const).map((kind, i) => {
         const from: AgentMessageSource = {
           kind: 'agent',

@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { isolatedScanRoots } from '../../session-scanner-test-fixtures'
+import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
-import { dedupeScannedSessions, ScannedSessionCollection } from '../../session-root-dedup'
+import { dedupeScannedSessions, ScannedSessionCollection } from '../../parsing/session-root-dedup'
 
 const roots: string[] = []
 afterEach(async () => {

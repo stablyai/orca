@@ -90,6 +90,7 @@ export function demoteRuntimeMobileAgentStatus(
     stateHistory: [],
     agentType: status.agentType,
     ...completedTurnFields(status),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+    ...(status.providerSession ? { providerSession: status.providerSession } : {}),
+    ...(status.orcaSessionId !== undefined ? { orcaSessionId: status.orcaSessionId } : {})
   }
 }

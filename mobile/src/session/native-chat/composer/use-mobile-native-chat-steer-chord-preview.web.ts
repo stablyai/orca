@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { hostOs } from '../../../platform/host-os'
+import { primaryModifierKey } from '../../../platform/primary-modifier-key'
 import { createNativeChatSteerChordPreviewHook } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
 import type { MobileNativeChatSteerChordPreviewInput } from './use-mobile-native-chat-steer-chord-preview'
 
@@ -36,8 +36,7 @@ export function useMobileNativeChatSteerChordPreview({
     steerHead && (() => steerHead.run(alternateSteers)),
     sendAlternate,
     pickerOpen,
-    // The field's own submit chord: Cmd on an iPhone or iPad keyboard, Ctrl elsewhere.
-    hostOs() === 'ios' ? 'Meta' : 'Control'
+    primaryModifierKey()
   )
   const lit = chord.preview === 'steer-queued'
   const light = steerHead?.light

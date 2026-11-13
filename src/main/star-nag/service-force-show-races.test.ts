@@ -32,7 +32,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../github/client', () => ({
+vi.mock('../github/client/fetch/orca-star', () => ({
   checkOrcaStarred: mocks.checkOrcaStarredMock,
   starOrca: mocks.starOrcaMock
 }))

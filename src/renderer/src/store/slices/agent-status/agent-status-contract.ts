@@ -92,6 +92,7 @@ export type AgentStatusMetadata = {
   /** Structured status rows remain fresh while the host owns the session; cleared on feed loss. */
   structuredHostOwned?: true
   providerSession?: AgentProviderSessionMetadata
+  orcaSessionId?: string | null
   /** Null is a host statement that no Orca launch runs; absent says nothing. */
   launchConfig?: SleepingAgentLaunchConfig | null
   launchToken?: string
