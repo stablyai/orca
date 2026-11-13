@@ -6,7 +6,7 @@ import { timestampMs } from '../../../ai-vault/parsing/session-record-time'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
 import Database from '../../../sqlite/sync-database'
-import { decodeOmpTranscriptLine } from '../../transcript-line-decoders-omp'
+import { decodeOmpTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-omp'
 
 function closePiImportDatabase(db: Database.Database | null): void {
   try {

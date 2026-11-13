@@ -44,6 +44,7 @@ import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
 import { keybindingValidationErrorText } from './keybinding-diagnostic-text'
 import { KeybindingFileDiagnostics } from './KeybindingFileDiagnostics'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import type {
   KeybindingActionId,
   KeybindingDefinition,
@@ -316,11 +317,13 @@ export function ShortcutsPane(): React.JSX.Element {
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
       <section className="flex min-h-0 flex-1 flex-col space-y-3">
         {showPolicy ? (
-          <ShortcutTerminalPolicyControl
-            terminalShortcutPolicy={terminalShortcutPolicy}
-            keywords={getTerminalShortcutPolicySearchEntry().keywords}
-            updateSettings={updateSettings}
-          />
+          <SettingsGroup>
+            <ShortcutTerminalPolicyControl
+              terminalShortcutPolicy={terminalShortcutPolicy}
+              keywords={getTerminalShortcutPolicySearchEntry().keywords}
+              updateSettings={updateSettings}
+            />
+          </SettingsGroup>
         ) : null}
 
         <SettingsSubsectionHeader

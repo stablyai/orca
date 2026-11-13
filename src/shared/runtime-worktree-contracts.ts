@@ -34,6 +34,8 @@ export type RuntimeWorktreeSetResult = {
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
+  /** The host's Orca id for this terminal agent's conversation; old hosts omit it. */
+  orcaSessionId?: string
   parentPaneKey: string | null
   state: AgentStatusState
   workingMode?: AgentWorkingMode
@@ -137,6 +139,8 @@ export type RuntimeWorktreePsSummary = {
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
+  /** The owning host committed removal intent before publishing this row. */
+  removalRecorded?: true
   /** See `GitWorktreeInfo.removalError`. */
   removalError?: string
   /** Host-derived workspace kinds. Missing defaultBranch retains reader guesses; other missing flags show the row.

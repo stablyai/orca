@@ -31,22 +31,25 @@ import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-recovery/gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
-import type { getDevInstanceIdentity } from './dev-instance-identity'
+import type { getDevInstanceIdentity } from './profile-startup/dev-instance-identity'
 import type { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 import type { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { createWindowsShellPathHydration } from './shell-environment/windows-shell-path-hydration'
 import type { ServeOptions } from './serve-launch/serve-options'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
-import { PluginInstallLinkState, SkillShareDeepLinkState } from './skill-share-deep-link-state'
-import { OsOpenedDocumentState } from './os-opened-documents'
+import {
+  PluginInstallLinkState,
+  SkillShareDeepLinkState
+} from './open-routing/skill-share-deep-link-state'
+import { OsOpenedDocumentState } from './open-routing/os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker
 } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/capture/gpu-crash-diagnostics'
-import { createWebContentsTimedFlag } from './web-contents-timed-flag'
+import { createWebContentsTimedFlag } from './main-window/web-contents-timed-flag'
 import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
 import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 

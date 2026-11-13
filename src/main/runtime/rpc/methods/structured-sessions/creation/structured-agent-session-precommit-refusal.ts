@@ -10,7 +10,7 @@ import {
   type AgentSessionWireRefusalCode
 } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import { AgentConversationCopyError } from '../../../../../native-chat/agent-conversation-copy-error'
+import { AgentConversationCopyError } from '../../../../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import { tuiAgentDisplayName } from '../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }

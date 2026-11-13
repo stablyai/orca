@@ -302,6 +302,7 @@ export class PeerMailRelay {
       return undefined
     }
     const handle = peerMailLocalRecipient(this.runtime, conversation)
+    // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
     const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
     const presented = presentImportedPeerItem({
       kind: 'peer_mail',

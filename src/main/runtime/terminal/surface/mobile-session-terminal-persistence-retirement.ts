@@ -7,7 +7,7 @@ import {
 } from './mobile-session-terminal-retirement'
 import { retireLeavesFromTerminalLayout } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-leaf-retirement'
 import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
-import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 function visibleTypeForContentType(
   contentType: string | undefined

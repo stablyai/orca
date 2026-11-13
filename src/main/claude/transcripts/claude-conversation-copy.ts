@@ -1,7 +1,7 @@
 import { basename, dirname, join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
-import { AgentConversationCopyError } from '../../native-chat/agent-conversation-copy-error'
+import { AgentConversationCopyError } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { materializeClaudeConversationTranscript } from './claude-rewind-transcript'

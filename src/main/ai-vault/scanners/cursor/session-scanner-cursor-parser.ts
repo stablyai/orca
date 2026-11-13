@@ -2,7 +2,7 @@ import {
   remoteSessionContentLines,
   type RemoteSessionContent
 } from '../../transcripts/remote-session-content-lines'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

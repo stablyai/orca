@@ -1,4 +1,4 @@
-import { isClosedPaneFenced } from '../../../persistence/terminal-topology/closed-pane-binding-fence'
+import { isClosedPaneFenced } from '../../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 import type { Store } from '../../../persistence/loading-store/store'
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
