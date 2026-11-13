@@ -18,11 +18,12 @@ export type NativeChatTranscriptScrollOptions = {
   reconcileReaderScroll: (isTakingOver: boolean) => void
   onLeaveEnd?: () => void
   onReturnToEnd?: (reason?: 'send') => void
+  onReaderScrollDown?: (element: HTMLElement) => void
 }
 
 export type NativeChatTranscriptScroll = {
   showJump: boolean
-  recordReaderScroll: () => void
+  recordReaderScroll: (reason?: 'navigation') => void
   onScroll: UIEventHandler<HTMLDivElement>
   scrollToBottom: (reason?: 'send') => void
   /** Following, or close enough to the end that Jump to latest stays hidden. */

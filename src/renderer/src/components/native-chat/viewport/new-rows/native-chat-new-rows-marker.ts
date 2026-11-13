@@ -11,6 +11,7 @@ import {
   nativeChatSlotKey
 } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import { nativeChatScrollOffsetWithin } from '../virtualization/use-native-chat-viewport-align'
 
 /** Use journal positions for conversation rows, including folded-turn bars; terminal-backed rows have none and remain unmarked. */
 function rowPosition(slot: NativeChatTranscriptSlot): AgentJournalPosition | undefined {
@@ -158,8 +159,9 @@ export function useNativeChatNewRowsMarker(
   marker: NativeChatNewRowsMarkerState | undefined
   /** The slot drawing the marker, or -1. */
   index: number
-  /** The reader answered the conversation, so nothing in it is news to them. */
+  /** The reader read or answered the conversation, so nothing in it is news to them. */
   dismiss: () => void
+  dismissReadRows: (scroller: HTMLElement) => void
 } {
   // Off tracks nothing, so nothing is ever marked.
   const enabled = useAppStore((state) => nativeChatMarksNewMessages(state.settings))
@@ -169,7 +171,7 @@ export function useNativeChatNewRowsMarker(
     watching: boolean
     /** While the reader is away: where they had read to. */
     left: NativeChatLeftAt | null
-    /** Stands until the reader answers. */
+    /** Stands until the reader reads past it or answers. */
     missed: NativeChatMissedRows | null
     arriving: boolean
   }>({ watching, left: null, missed: null, arriving: false })
@@ -183,7 +185,7 @@ export function useNativeChatNewRowsMarker(
       const missed = seen.left ? nativeChatMissedRows(all, seen.left) : seen.missed
       setSeen({ watching, left: null, missed, arriving: seen.left !== null && missed !== null })
     } else {
-      // An unanswered marker whose row still stands is kept: the reader may be midway through it.
+      // An unread marker whose row still stands is kept: the reader may be midway through it.
       const marked = nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
       setSeen({ ...seen, watching, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) })
     }
@@ -199,6 +201,24 @@ export function useNativeChatNewRowsMarker(
   const onArrived = useCallback(() => {
     setSeen((held) => (held.arriving ? { ...held, arriving: false } : held))
   }, [])
+  const dismissReadRows = useCallback(
+    (scroller: HTMLElement) => {
+      if (!watching || !placement || seen.arriving) {
+        return
+      }
+      const element = scroller.querySelector<HTMLElement>('[data-native-chat-new-rows-marker]')
+      const top = element && nativeChatScrollOffsetWithin(element, scroller)
+      if (
+        element &&
+        top !== null &&
+        top !== undefined &&
+        scroller.scrollTop > top + element.offsetHeight
+      ) {
+        dismiss()
+      }
+    },
+    [watching, placement, seen.arriving, dismiss]
+  )
   const { key, place } = placement ?? {}
   const marker = useMemo(
     () =>
@@ -207,5 +227,5 @@ export function useNativeChatNewRowsMarker(
         : undefined,
     [key, place, seen.arriving, onArrived, dismiss]
   )
-  return { marker, index: nativeChatSlotIndexOf(slots, key), dismiss }
+  return { marker, index: nativeChatSlotIndexOf(slots, key), dismiss, dismissReadRows }
 }

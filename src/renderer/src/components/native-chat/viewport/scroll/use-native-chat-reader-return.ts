@@ -12,9 +12,9 @@ export function useNativeChatReaderReturn(
   followingRef: React.RefObject<boolean>,
   previousGeometryRef: React.RefObject<ScrollGeometry | null>
 ) {
-  const input = useRef(false)
-  const recordReaderScroll = useCallback(() => {
-    input.current = true
+  const input = useRef<false | 'scroll' | 'navigation'>(false)
+  const recordReaderScroll = useCallback((reason?: 'navigation') => {
+    input.current = reason ?? 'scroll'
   }, [])
   const observeGeometry = useCallback(
     (geometry: ScrollGeometry, programmatic: boolean): ScrollGeometry | null => {
@@ -68,15 +68,20 @@ export function useNativeChatReaderReturn(
     },
     [observeGeometry, scrollRef]
   )
-  const readerReturned = (geometry: ScrollGeometry, programmatic: boolean): boolean => {
+  const readerReturned = (
+    geometry: ScrollGeometry,
+    programmatic: boolean,
+    onReaderScrollDown?: (element: HTMLElement) => void
+  ): boolean => {
     const start = observeGeometry(geometry, programmatic)
-    if (
-      !start ||
-      !input.current ||
-      programmatic ||
-      !followingRef.current ||
-      geometry.scrollTop <= start.scrollTop
-    ) {
+    if (!start || !input.current || programmatic || geometry.scrollTop <= start.scrollTop) {
+      return false
+    }
+    const element = scrollRef.current
+    if (element && input.current === 'scroll') {
+      onReaderScrollDown?.(element)
+    }
+    if (!followingRef.current) {
       return false
     }
     input.current = false

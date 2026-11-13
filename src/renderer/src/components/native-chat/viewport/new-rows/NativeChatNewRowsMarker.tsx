@@ -58,6 +58,7 @@ export function NativeChatNewRowsMarker({
   return (
     <div
       ref={ref}
+      data-native-chat-new-rows-marker=""
       role="separator"
       aria-label={label}
       className="flex items-center gap-3 text-2xs font-semibold uppercase tracking-[0.05em] text-chat-unread transition-opacity duration-300 ease-out starting:opacity-0 motion-reduce:transition-none"

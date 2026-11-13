@@ -35,7 +35,8 @@ export function useNativeChatTranscriptScroll({
   consumeProgrammaticScroll,
   reconcileReaderScroll,
   onLeaveEnd,
-  onReturnToEnd
+  onReturnToEnd,
+  onReaderScrollDown
 }: NativeChatTranscriptScrollOptions): NativeChatTranscriptScroll {
   const [showJump, setShowJump] = useState(false)
   const followingRef = useRef(true)
@@ -201,7 +202,8 @@ export function useNativeChatTranscriptScroll({
       reconcileReaderScroll(false)
       previousDistanceFromEndRef.current = distanceFromBottom(geometry)
       syncScrollState()
-      if (readerReturn.readerReturned(geometry, programmatic)) {
+      const onRead = isAlignPending() ? undefined : onReaderScrollDown
+      if (readerReturn.readerReturned(geometry, programmatic, onRead)) {
         onReturnToEnd?.()
       }
     },
@@ -209,6 +211,7 @@ export function useNativeChatTranscriptScroll({
       consumeProgrammaticScroll,
       isAlignPending,
       observeForwardedMovement,
+      onReaderScrollDown,
       onReturnToEnd,
       readerReturn,
       reconcileReaderScroll,

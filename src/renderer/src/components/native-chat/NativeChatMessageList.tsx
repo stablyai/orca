@@ -1,8 +1,5 @@
 import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
-import {
-  nativeChatTranscriptOuterClass,
-  NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
-} from './appearance/native-chat-appearance-style'
+import * as chatAppearance from './appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
@@ -272,11 +269,11 @@ export function NativeChatMessageList({
     consumeProgrammaticScroll: transcriptWindow.consumeProgrammaticScroll,
     reconcileReaderScroll: transcriptWindow.reconcileReaderScroll,
     onLeaveEnd: historyRetention.leaveEnd,
-    onReturnToEnd: historyRetention.returnToEnd
+    onReturnToEnd: historyRetention.returnToEnd,
+    onReaderScrollDown: newRows.dismissReadRows
   })
-  const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
-    transcriptScroll
-  const { recordReaderScroll } = transcriptScroll
+  const { showJump, onScroll, scrollToBottom, readerAtEnd } = transcriptScroll
+  const { scrollMessageToTop, readerLeavesEnd, recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
     historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
@@ -321,11 +318,14 @@ export function NativeChatMessageList({
     },
     [onScroll, sustainRail]
   )
-  const onReaderScroll = useCallback(() => {
-    beginNavigation()
-    recordReaderScroll()
-    wakeRail()
-  }, [beginNavigation, recordReaderScroll, wakeRail])
+  const onReaderScroll = useCallback(
+    (reason?: 'navigation') => {
+      beginNavigation()
+      recordReaderScroll(reason)
+      wakeRail()
+    },
+    [beginNavigation, recordReaderScroll, wakeRail]
+  )
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
@@ -382,12 +382,12 @@ export function NativeChatMessageList({
                   loadingEarlier={loadingEarlier}
                 />
               ) : null}
-              <div className={nativeChatTranscriptOuterClass(rail.visible)}>
+              <div className={chatAppearance.nativeChatTranscriptOuterClass(rail.visible)}>
                 <div
                   ref={measureContent}
                   data-native-chat-transcript-column
                   // Shares the composer's maximum width; rail clearance and the 5px inner inset narrow constrained panes.
-                  className={NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS}
+                  className={chatAppearance.NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS}
                 >
                   <NativeChatTranscriptItems
                     slots={slots}

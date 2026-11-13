@@ -70,7 +70,7 @@ function gestureLeavesEnd(gesture: ReaderGesture, transcript: HTMLElement): bool
 }
 
 type ReaderScrollCallbacks = {
-  onReaderScroll: () => void
+  onReaderScroll: (reason?: 'navigation') => void
   /** The same gesture, for whatever was still moving the transcript to yield to it. */
   onTakeScroll?: () => void
   onLeaveEnd: () => void
@@ -168,10 +168,13 @@ export function useNativeChatReaderScrollInput(
   /** A find step moves the transcript for the reader, so it ends following like a gesture. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
 } {
-  const onReaderScroll = useCallback(() => {
-    onScrollInput()
-    onTakeScroll?.()
-  }, [onScrollInput, onTakeScroll])
+  const onReaderScroll = useCallback(
+    (reason?: 'navigation') => {
+      onScrollInput(reason)
+      onTakeScroll?.()
+    },
+    [onScrollInput, onTakeScroll]
+  )
   const scrollerProps = useMemo(
     () =>
       nativeChatReaderScrollInputHandlers({
@@ -224,7 +227,7 @@ export function useNativeChatReaderScrollInput(
       if (Math.abs(target - transcript.scrollTop) < 1) {
         return
       }
-      onReaderScroll()
+      onReaderScroll('navigation')
       onLeaveEnd()
       transcript.scrollTop = target
     },

@@ -188,6 +188,38 @@ describe('useNativeChatNewRowsMarker', () => {
     expect(view.result.current.marker).toMatchObject({ key: 'newer', arriving: true })
   })
 
+  it('clears a fully passed marker after arrival and marks only a later away period', () => {
+    const scroller = document.createElement('div')
+    const marker = document.createElement('div')
+    marker.dataset.nativeChatNewRowsMarker = ''
+    scroller.append(marker)
+    Object.defineProperties(marker, {
+      offsetParent: { value: scroller },
+      offsetTop: { value: 300 },
+      offsetHeight: { value: 20 }
+    })
+    const view = leaveAndReturn(SEEN, LATER)
+    scroller.scrollTop = 350
+    act(() => view.result.current.dismissReadRows(scroller))
+    expect(view.result.current.marker?.key).toBe('answer')
+
+    act(() => view.result.current.marker?.onArrived())
+    scroller.scrollTop = 310
+    act(() => view.result.current.dismissReadRows(scroller))
+    expect(view.result.current.marker?.key).toBe('answer')
+
+    scroller.scrollTop = 350
+    act(() => view.result.current.dismissReadRows(scroller))
+    expect(view.result.current.marker).toBeUndefined()
+    view.rerender({ messages: LATER, showing: false })
+    view.rerender({ messages: LATER, showing: true })
+    expect(view.result.current.marker).toBeUndefined()
+
+    view.rerender({ messages: LATER, showing: false })
+    view.rerender({ messages: [...LATER, row('newer', 5)], showing: true })
+    expect(view.result.current.marker?.key).toBe('newer')
+  })
+
   it('marks the next time away afresh when the row it marked has gone', () => {
     const view = leaveAndReturn(SEEN, LATER)
     view.rerender({ messages: SEEN, showing: true })
