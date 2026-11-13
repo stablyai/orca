@@ -67,7 +67,9 @@ export function CloudCardPrimaryAction({
       ) : null
     case 'restart':
       return actions.onRestart ? (
-        <Button size="xs" {...busyProps(restarting, anyBusy, actions.onRestart)}>
+        // CLOUD-CARD-RESTARTING-CLICK: "Restarting…" is inert. A restart main runs (rollover, Restart
+        // now) leaves anyBusy false, and a click then started a second restart.
+        <Button size="xs" {...busyProps(restarting, anyBusy || restarting, actions.onRestart)}>
           {restarting ? <Loader2 className="animate-spin" /> : <RotateCw />}
           {restarting
             ? t('orcaCloudWorkspace.restarting', 'Restarting…')
