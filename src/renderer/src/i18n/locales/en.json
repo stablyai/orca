@@ -721,6 +721,18 @@
         },
         "026624e2ec": "Show menu bar icon"
       },
+      "windowTitle": {
+        "title": "Show Workspace in Window Title",
+        "description": "Puts the project, workspace and linked issue in the window title so time trackers can tell them apart. Screen shares and window switchers show it too.",
+        "templateLabel": "Title template",
+        "templateDescription": "Variables: {{variables}}. {{separator}} adds “ — ” only between filled parts. Leave empty for the default.",
+        "preview": "Current title: {{title}}",
+        "keyword": {
+          "title": "title",
+          "timeTracking": "time tracking",
+          "template": "template"
+        }
+      },
       "chat": {
         "fontFamily": "Font family",
         "fontFamilyDescription": "Font used for messages, activity, and the message box.",

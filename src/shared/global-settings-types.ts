@@ -245,6 +245,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
+  /** Opt-in: the native window title names the focused workspace for time trackers; screen shares and window switchers show it too. Absent reads as off. */
+  showWorkspaceInWindowTitle?: boolean
+  /** Window title template used while showWorkspaceInWindowTitle is on. Empty or absent uses the default. */
+  windowTitle?: string
   /** Hides the Tasks sidebar button (also removes it from keyboard navigation). */
   showTasksButton: boolean
   /** Only toggles the sidebar shortcut; Automations stay reachable from Settings/View menu. */

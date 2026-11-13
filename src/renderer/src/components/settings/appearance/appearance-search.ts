@@ -10,6 +10,7 @@ import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import { getWindowTitleEntries } from './appearance-window-title-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
 
@@ -258,6 +259,20 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+/** Settings inside the Interface section's Advanced disclosure; a search hit on any of them reveals it. */
+export function getAppearanceAdvancedEntries(options: {
+  isDesktopWindows: boolean
+  isDesktopMac: boolean
+}): SettingsSearchEntry[] {
+  return [
+    ...getTitlebarEntries(),
+    ...getWindowTitleEntries(),
+    ...getReduceVisualEffectsEntries(),
+    ...getSystemTrayEntries({ showSystemTray: options.isDesktopWindows }),
+    ...getMenuBarIconEntries({ showMenuBarIcon: options.isDesktopMac })
+  ]
+}
+
 type AppearancePaneSearchOptions = {
   showDesktopThemeImports?: boolean
   showSystemTray?: boolean
@@ -277,6 +292,7 @@ export function getAppearancePaneSearchEntries(
     ...getTerminalAppearanceSearchEntries(options),
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
+    ...getWindowTitleEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),

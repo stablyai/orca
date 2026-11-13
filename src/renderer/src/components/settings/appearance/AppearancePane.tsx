@@ -14,22 +14,20 @@ import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
 import {
+  getAppearanceAdvancedEntries,
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getLayoutEntries,
   getStatusBarEntries,
   getThemeEntries,
-  getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
-import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
 import { TerminalAppearanceSection } from '../terminal/appearance/TerminalAppearanceSection'
 import type { UseTerminalConfigImportReturn } from '../terminal/configuration/useTerminalConfigImport'
@@ -133,10 +131,7 @@ export function AppearancePane({
     ...getZoomEntries(),
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
-    ...getTitlebarEntries(),
-    ...getReduceVisualEffectsEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+    ...getAppearanceAdvancedEntries({ isDesktopWindows, isDesktopMac })
   ]
   const terminalSearchEntries = [
     { title: terminalTitle },

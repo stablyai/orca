@@ -94,7 +94,8 @@ export function buildWorktreeAutomationEvidence(
   })
 }
 
-function resolveLinkedTaskIdentifier(worktree: Worktree): string {
+/** Linked task key: Linear, then Jira, then `#<number>`; empty when none is linked. */
+export function resolveLinkedTaskIdentifier(worktree: Worktree): string {
   const item = worktree.linkedWorkItem
   if (item?.linearIdentifier) {
     return item.linearIdentifier
