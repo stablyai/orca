@@ -961,6 +961,10 @@
           "workspacesMatch_one": "{{matchCount}} of {{count}} workspace matches",
           "workspacesMatch_other": "{{matchCount}} of {{count}} workspaces match"
         },
+        "WorktreeCardChangesStripe": {
+          "changeCount_one": "{{count}} uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes"
+        },
         "WorktreeCardPorts": {
           "livePorts_one": "{{count}} live port",
           "livePorts_other": "{{count}} live ports"
