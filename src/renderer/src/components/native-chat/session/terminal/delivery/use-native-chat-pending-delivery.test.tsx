@@ -674,11 +674,12 @@ it('starts actual uncertainty after the original composer callback and preserves
 
 it('settles an empty uncached not-ready owner without publishing observation work', () => {
   const write = vi.spyOn(pendingOwner, 'writePendingSendCache')
+  const messages: NativeChatMessage[] = []
   const mounted = renderHook(() =>
     useNativeChatPendingDelivery({
       paneKey: 'uncached',
       agent: 'opencode',
-      session: { messages: [], readPhase: 'loading', sessionId: null }
+      session: { messages, readPhase: 'loading', sessionId: null }
     })
   )
   mounted.rerender()
