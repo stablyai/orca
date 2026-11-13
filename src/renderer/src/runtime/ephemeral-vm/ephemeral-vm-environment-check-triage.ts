@@ -14,7 +14,12 @@ const FATAL_CHECK_IDS: ReadonlySet<string> = new Set([
   'tool.git'
 ])
 
-export type CloudSetupNoticeKind = 'push' | 'fetch' | 'setup' | 'check'
+/**
+ * Each kind has its own plain words (CloudSetupNotices). `disk`: little free space; `tool`: a CLI the
+ * repository needs isn't installed. A check with no kind of its own never shows as the doctor's
+ * bare label (ENV-NOTICE-ACTIONS).
+ */
+export type CloudSetupNoticeKind = 'push' | 'fetch' | 'setup' | 'disk' | 'tool'
 
 /** One problem the opened workspace shows as a single dismissible line. */
 export type CloudSetupNotice = {
@@ -82,7 +87,23 @@ function noticeKind(
     case 'setup.script':
     case 'git.remote':
       return null
+    case 'disk.free':
+      // "Couldn't read free disk space" (no code) says nothing anyone can act on.
+      return (check.code === 'diskLow' || check.code === 'diskVeryLow') && check.params?.free
+        ? 'disk'
+        : null
     default:
-      return 'check'
+      // tool.git is fatal above; every other tool.<command> is one the repository's files need.
+      if (check.id.startsWith('tool.') && check.id.length > 'tool.'.length) {
+        return 'tool'
+      }
+      // A check this desktop doesn't know yet (a newer doctor): hidden rather than shown as a bare
+      // English label with nothing to do. The create still goes ahead, as it did before.
+      return null
   }
+}
+
+/** The CLI a `tool` notice names: the doctor's param, else the id's suffix (older servers). */
+export function missingToolCommand(check: EnvironmentDoctorCheck): string {
+  return check.params?.command || check.id.slice('tool.'.length)
 }

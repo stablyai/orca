@@ -291,7 +291,7 @@ describe('after a restart', () => {
 })
 
 describe('in session (not restored)', () => {
-  it('in-session (not restored), an expired hold still starts on Renew as before', async () => {
+  it('CHAT-RENEW-INPLACE (B): in session, a renewed hold waits for Start: no create until Start', async () => {
     mocks.coverage = 'expired'
     setTabs([TAB])
     const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
@@ -307,6 +307,13 @@ describe('in session (not restored)', () => {
     for (const listener of mocks.listeners) {
       listener()
     }
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))).toMatchObject({
+      reason: 'awaitingStart',
+      awaiting: 'renewed'
+    })
+    expect(create).not.toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude' }))
+    releaseCloudAgentHold(cloudTabHoldKey(TAB), 'proceed')
     await launch
     expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ agent: 'claude' }))
   })
@@ -332,7 +339,7 @@ describe('in session (not restored)', () => {
     expect(create).toHaveBeenCalledTimes(1)
   })
 
-  it('a paused (kill switch) agent never starts the expired hold; a real renewal does', async () => {
+  it('a paused (kill switch) agent never starts the expired hold; a real renewal waits for Start (B)', async () => {
     mocks.coverage = 'expired'
     setTabs([TAB])
     const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
@@ -354,6 +361,10 @@ describe('in session (not restored)', () => {
     for (const listener of mocks.listeners) {
       listener()
     }
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))).toMatchObject({ awaiting: 'renewed' })
+    expect(create).toHaveBeenCalledTimes(1)
+    releaseCloudAgentHold(cloudTabHoldKey(TAB), 'proceed')
     await launch
     expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ agent: 'claude' }))
   })

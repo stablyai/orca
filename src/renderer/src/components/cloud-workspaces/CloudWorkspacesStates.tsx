@@ -104,7 +104,7 @@ export function PickerEmptyState({
   onCreate
 }: {
   reason: PickerEmptyReason
-  /** Offered only when there are none at all: start one. */
+  /** Start one: primary with none at all, secondary when all are in the sidebar. */
   onCreate?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -128,13 +128,10 @@ export function PickerEmptyState({
         ]
       case 'all-in-sidebar':
         return [
+          t('components.cloudWorkspaces.picker.emptyNothingElseTitle', 'Nothing else to open'),
           t(
-            'components.cloudWorkspaces.picker.emptyAllInSidebarTitle',
-            'Your cloud workspaces are already in the sidebar'
-          ),
-          t(
-            'components.cloudWorkspaces.picker.emptyAllInSidebarBody',
-            'Workspaces teammates share, and ones you start on another computer, show up here.'
+            'components.cloudWorkspaces.picker.emptyNothingElseBody',
+            'Every cloud workspace you can open is already in your sidebar.'
           )
         ]
       case 'none-running':
@@ -159,10 +156,10 @@ export function PickerEmptyState({
         ]
       case 'none':
         return [
-          t('components.cloudWorkspaces.emptyFirstTitle', 'Start your first cloud workspace'),
+          t('components.cloudWorkspaces.picker.emptyNoneTitle', 'No cloud workspaces yet'),
           t(
-            'components.cloudWorkspaces.emptyStartBody',
-            'It runs in a sandbox, so your agents keep working even when this computer is off.'
+            'components.cloudWorkspaces.picker.emptyNoneBody',
+            'Start one and it shows up in your sidebar.'
           )
         ]
     }
@@ -171,8 +168,15 @@ export function PickerEmptyState({
     <div className="flex flex-col items-center gap-1 px-6 py-8 text-center">
       <p className="text-sm font-medium text-foreground">{title}</p>
       <p className="max-w-sm text-xs text-muted-foreground">{body}</p>
-      {reason.kind === 'none' && onCreate ? (
-        <Button type="button" size="sm" className="mt-3" onClick={onCreate}>
+      {(reason.kind === 'none' || reason.kind === 'all-in-sidebar') && onCreate ? (
+        // Primary when there are none at all; secondary when everything is already in the sidebar.
+        <Button
+          type="button"
+          size="sm"
+          variant={reason.kind === 'none' ? 'default' : 'outline'}
+          className="mt-3"
+          onClick={onCreate}
+        >
           <Cloud className="size-3.5" />
           {t('components.cloudWorkspaces.newCloudWorkspace', 'New cloud workspace')}
         </Button>

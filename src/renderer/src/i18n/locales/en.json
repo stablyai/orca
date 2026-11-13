@@ -21370,6 +21370,8 @@
           "perSeatMonthValue": "{{value0}}/mo",
           "seatRulesShort": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal.",
           "inviteSeatRule": "Each invite uses a seat once accepted.",
+          "enterpriseRowTitle": "Single sign-on, directory sync and the audit log",
+          "openEnterpriseSettings": "Open Enterprise settings",
           "mfaSso": "2FA via SSO"
         },
         "manageBilling": "Manage billing",
@@ -21713,7 +21715,8 @@
         "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
-        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again."
+        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
+        "sharedPersonalSecretsNote": "Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -24499,8 +24502,6 @@
     },
     "cloudWorkspaces": {
       "newCloudWorkspace": "New cloud workspace",
-      "emptyStartBody": "It runs in a sandbox, so your agents keep working even when this computer is off.",
-      "emptyFirstTitle": "Start your first cloud workspace",
       "picker": {
         "title": "Open cloud workspace",
         "description": "Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.",
@@ -24516,8 +24517,6 @@
         "inSidebarNote_other": "{{count}} more are already in your sidebar.",
         "emptySearchTitle": "Nothing matches your search",
         "emptySearchBody": "Try a title, repository, branch, owner or W-number.",
-        "emptyAllInSidebarTitle": "Your cloud workspaces are already in the sidebar",
-        "emptyAllInSidebarBody": "Workspaces teammates share, and ones you start on another computer, show up here.",
         "emptyRunningTitle": "None of yours are running",
         "emptyRunningBody": "Teammates’ running workspaces can count toward the limit too. Try again in a moment.",
         "emptyTeammateTitle": "{{name}} has no cloud workspaces you can see",
@@ -24529,7 +24528,11 @@
           "sharedWorkspace": "shared workspace",
           "teammate": "teammate",
           "orcaCloud": "orca cloud"
-        }
+        },
+        "emptyNothingElseTitle": "Nothing else to open",
+        "emptyNothingElseBody": "Every cloud workspace you can open is already in your sidebar.",
+        "emptyNoneTitle": "No cloud workspaces yet",
+        "emptyNoneBody": "Start one and it shows up in your sidebar."
       }
     },
     "worktreeCreation": {
@@ -28226,9 +28229,9 @@
     },
     "setUpAgent": "Set up an agent",
     "personal": {
-      "description": "Only you get these, in every Orca Cloud workspace you start.",
       "emptyTitle": "No personal secrets yet",
-      "emptyDetail": "Add one or paste a .env file. New terminals and agents in your cloud workspaces get them as environment variables."
+      "emptyDetail": "Add one or paste a .env file. New terminals and agents in your cloud workspaces get them as environment variables.",
+      "descriptionUnshared": "Only you get these, in cloud workspaces you haven’t shared. Shared workspaces don’t get them."
     },
     "org": {
       "description": "Everyone on your team gets these in their Orca Cloud workspaces.",
@@ -28462,6 +28465,9 @@
       "setUpNotStarted": "{{agent}} is set up. Open the workspace to start it.",
       "notStartedRow": "{{agent}} hasn’t started"
     },
+    "chatSend": {
+      "renewAbove": "Renew {{agent}} sign-in above to send"
+    },
     "chatSignIn": {
       "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again."
     },
@@ -28512,7 +28518,21 @@
       "fetchFailedNoRepo": "This workspace can’t reach its Git remote right now.",
       "checking": "Checking…",
       "checkAgain": "Check again",
-      "fetchFailedMeaning": "Pulls and pushes won’t work until it can."
+      "fetchFailedMeaning": "Pulls and pushes won’t work until it can.",
+      "toolMissing": "{{command}} isn’t installed in this sandbox, but {{reason}} needs it.",
+      "toolMissingNoReason": "{{command}} isn’t installed in this sandbox.",
+      "toolMissingMeaning": "Install it from a terminal here, or add it to your project’s setup script so new workspaces have it.",
+      "diskLow": "Only {{free}} GB of disk space is free in this sandbox.",
+      "diskVeryLowMeaning": "Installs and builds may fail. Delete caches or build output you don’t need.",
+      "diskLowMeaning": "Large dependency installs may run out of space.",
+      "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
+      "copied": "Copied",
+      "copyRequest": "Copy request for an owner",
+      "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
+      "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
+      "pushRequestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
+      "pushRequestCopyFailed": "Couldn’t copy it."
     },
     "toast": {
       "dismiss": "Dismiss"
@@ -29064,6 +29084,10 @@
     "nothingNeedsAttention": "Nothing needs attention."
   },
   "agentSignInStrip": {
+    "renewInSettings": "Renew in Settings",
+    "finishRenewing": "Finish renewing",
+    "expiredHeldDetail": "Renew to start {{agent}}.",
+    "expiredHeldAnnounce": "Your {{agent}} sign-in expired. Renew to start {{agent}}.",
     "rowNeedsSignIn": "Needs sign-in",
     "rowNeedsSignInTooltip": "Set up once for Orca Cloud",
     "rowExpired": "Sign-in expired",
@@ -29083,9 +29107,7 @@
     "useMySignIn": "Use my {{agent}} sign-in",
     "signIn": "Sign in",
     "expired": "Your {{agent}} sign-in expired",
-    "expiredDetail": "Sign in once to fix every workspace.",
     "renew": "Renew",
-    "expiredAnnounce": "Your {{agent}} sign-in expired. Renew it once to fix every workspace.",
     "waiting": "Approve on {{site}}",
     "openAgain": "Open again",
     "waitingAnnounce": "Waiting for you to approve in your browser.",

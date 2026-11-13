@@ -58,19 +58,27 @@ it('at the running limit, Show cloud workspaces opens the picker on your running
   closeCloudWorkspacePicker()
 })
 
-it('with none at all, invites the first cloud workspace with one button (JA-30)', () => {
+it('with none at all, says so and offers New cloud workspace as the primary action', () => {
   const onCreate = vi.fn()
   render(<PickerEmptyState reason={{ kind: 'none' }} onCreate={onCreate} />)
-  expect(screen.getByText('Start your first cloud workspace')).toBeTruthy()
+  expect(screen.getByText('No cloud workspaces yet')).toBeTruthy()
+  expect(screen.getByText('Start one and it shows up in your sidebar.')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'New cloud workspace' }))
   expect(onCreate).toHaveBeenCalledTimes(1)
 })
 
-it('every other empty list keeps its own copy and offers no create button', () => {
+it('with everything in the sidebar, says there is nothing else and keeps a secondary New', () => {
   render(<PickerEmptyState reason={{ kind: 'all-in-sidebar' }} onCreate={vi.fn()} />)
-  expect(screen.getByText('Your cloud workspaces are already in the sidebar')).toBeTruthy()
-  expect(screen.queryByRole('button')).toBeNull()
-  cleanup()
+  expect(screen.getByText('Nothing else to open')).toBeTruthy()
+  expect(
+    screen.getByText('Every cloud workspace you can open is already in your sidebar.')
+  ).toBeTruthy()
+  expect(
+    screen.getByRole('button', { name: 'New cloud workspace' }).getAttribute('data-variant')
+  ).toBe('outline')
+})
+
+it('a search with no match keeps its own copy and offers no create button', () => {
   render(<PickerEmptyState reason={{ kind: 'search' }} onCreate={vi.fn()} />)
   expect(screen.getByText('Nothing matches your search')).toBeTruthy()
   expect(screen.queryByRole('button')).toBeNull()

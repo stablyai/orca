@@ -112,11 +112,7 @@ type HoldRequest = Omit<CloudAgentHold, 'reason' | 'awaiting'> & {
   restored?: boolean
 }
 
-type Entry = CloudAgentHold & {
-  release: (outcome: 'proceed' | 'cancel') => void
-  /** Renewed or covered, it waits for the person's Start instead of starting (restored, or setup). */
-  askFirst: boolean
-}
+type Entry = CloudAgentHold & { release: (outcome: 'proceed' | 'cancel') => void }
 
 const holds = new Map<string, Entry>()
 /** Each live hold's outcome, so a second launch for the same key joins it instead of holding twice. */
@@ -298,8 +294,7 @@ async function placeCloudAgentHold({
       ...hold,
       reason,
       ...(awaiting ? { awaiting } : {}),
-      release: finish,
-      askFirst: Boolean(restored) || reason !== 'accountExpired'
+      release: finish
     })
     notify()
   })
@@ -315,14 +310,7 @@ function redecide(entry: Entry, accounts: OrcaCloudAgentAccountsState): void {
   const now = cloudAgentHoldReason(entry.agent, accounts)
   if (now !== null) {
     if (now !== entry.reason) {
-      // A removed sign-in becomes the one-time setup, which never starts unasked (PC-3b), even
-      // for a hold placed on an expired sign-in in this session.
-      holds.set(entry.paneKey, {
-        ...entry,
-        reason: now,
-        awaiting: undefined,
-        askFirst: entry.askFirst || now === 'notSetUp'
-      })
+      holds.set(entry.paneKey, { ...entry, reason: now, awaiting: undefined })
       notify()
     }
     return
@@ -339,11 +327,9 @@ function redecide(entry: Entry, accounts: OrcaCloudAgentAccountsState): void {
     }
     return
   }
-  if (!entry.askFirst) {
-    // Renewed in this session: every pane held on recovery starts.
-    entry.release('proceed')
-    return
-  }
+  // CHAT-RENEW-INPLACE (team-lead, B): covered again, every held launch waits for its Start, in
+  // this session or restored, in every tab: "{{agent}} sign-in renewed · Start {{agent}}" after a
+  // renewal, "is set up · Start" after the one-time setup. Nothing launches unasked.
   const awaiting = entry.reason === 'notSetUp' ? 'setUp' : 'renewed'
   holds.set(entry.paneKey, { ...entry, reason: 'awaitingStart', awaiting })
   notify()
@@ -373,12 +359,7 @@ export async function startCloudAgentHold(paneKey: string): Promise<'started' | 
   const coverage = orcaCloudAgentCoverageFromAccounts(entry.agent, accounts)?.kind
   if (now !== null || (coverage !== 'account' && coverage !== 'key')) {
     if (now !== null && now !== entry.reason) {
-      holds.set(paneKey, {
-        ...entry,
-        reason: now,
-        awaiting: undefined,
-        askFirst: entry.askFirst || now === 'notSetUp'
-      })
+      holds.set(paneKey, { ...entry, reason: now, awaiting: undefined })
       notify()
     }
     return 'held'

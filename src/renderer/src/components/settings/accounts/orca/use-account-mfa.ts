@@ -8,8 +8,7 @@ export const ACCOUNT_MFA_WATCH_MAX_MS = 5 * 60_000
 
 export type AccountMfaState =
   /** Not read yet, every read failed, or this deployment has no MFA status: the row is hidden. */
-  | { kind: 'unknown' }
-  | ({ kind: 'known' } & OrcaAccountMfa)
+  { kind: 'unknown' } | ({ kind: 'known' } & OrcaAccountMfa)
 
 export type AccountMfa = {
   state: AccountMfaState

@@ -219,7 +219,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     expect(readCloudAgentHold(key)).toBeNull()
   })
 
-  it('expired: holds, then starts on Renew', async () => {
+  it('expired: holds; Renew turns it to "renewed · Start", and Start launches it (B)', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'revoked' }))
     const create = hostCreate()
     const args = { ...CREATE_AGENT, prompt: 'fix the bug' }
@@ -231,9 +231,14 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
       prompt: 'fix the bug'
     })
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    await flush()
+    // A renewal never launches by itself (team-lead, B): it waits for Start.
+    expect(readCloudAgentHold(key)).toMatchObject({ reason: 'awaitingStart', awaiting: 'renewed' })
+    expect(create).toHaveBeenCalledOnce()
+    releaseCloudAgentHold(key, 'proceed')
     await expect(result).resolves.toBe(AGENT)
-    // Renew's auto-start: the original args, no focus taken (the tab may be in the background).
-    expect(create).toHaveBeenLastCalledWith(args)
+    // The person's Start: the original args, with its tab brought forward.
+    expect(create).toHaveBeenLastCalledWith({ ...args, activate: true })
   })
 
   it('cancel leaves the plain shell and never starts the agent', async () => {

@@ -219,3 +219,30 @@ it('reads the config once, and again after a failed read', async () => {
   await handlers.get(CH.getConfig)?.()
   expect(config).toHaveBeenCalledTimes(2)
 })
+
+it("reads the person's install rights with their gh login, for GitHub repositories only", async () => {
+  const installRights = vi.fn(async () => ({ admin: false, ownerType: 'User' as const }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
+      githubRepoAccess: async () => ({ access: 'public', owner: 'octocat', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create: unusedCreate,
+      ...githubUser
+    },
+    { repoIds: async () => null, installRights }
+  )
+  const rights = handlers.get(CH.gitHubInstallRights)
+  expect(await rights?.({}, { repoUrl: 'https://github.com/octocat/Hello-World.git' })).toEqual({
+    ok: true,
+    value: { admin: false, ownerType: 'User' }
+  })
+  expect(installRights).toHaveBeenCalledWith('https://github.com/octocat/Hello-World')
+  expect(await rights?.({}, { repoUrl: 'https://gitlab.com/acme/web' })).toMatchObject({
+    ok: false
+  })
+  // gh failing reads as "can't tell", never as an error the notice has to handle.
+  installRights.mockRejectedValueOnce(new Error('gh: not logged in'))
+  expect(await rights?.({}, { repoUrl: REPO })).toEqual({ ok: true, value: null })
+})

@@ -21,6 +21,11 @@ import {
   cloudAgentSetupStripModel
 } from './cloud-agent-setup-strip-model'
 import { cloudSetupStripActions } from './cloud-setup-strip-actions'
+import {
+  cloudRenewInPlaceActions,
+  cloudRenewInPlaceModel,
+  openOrcaCloudAccountsSettings
+} from './cloud-renew-in-place'
 
 export type CloudHeldStrip = {
   model: CloudStripModel
@@ -70,7 +75,7 @@ export function useCloudHeldStrip(
   const setupHold = hold?.reason === 'notSetUp' || awaiting !== null
   const setup = accounts.setups[agent]
   // HELD-STALE-COVERED: the setup just finished here: "is set up · Start" (the account, read fresh).
-  const model =
+  const shownBeforeRenew =
     awaiting === 'setUp'
       ? cloudAgentSetupStripModel({ agent, setup: accounts.setups[agent], ready: true, t })
       : awaiting
@@ -95,6 +100,11 @@ export function useCloudHeldStrip(
               hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
               t
             })
+  // CHAT-RENEW-INPLACE: a launch held on an expired sign-in renews right here (steps 1-4).
+  const renewing = hold?.reason === 'accountExpired'
+  const model = renewing
+    ? cloudRenewInPlaceModel({ agent, expired: shownBeforeRenew, setup, t })
+    : shownBeforeRenew
   const setupRunning = setup.phase !== 'idle' && setup.phase !== 'saved' && setup.phase !== 'failed'
   const holdActions: CloudStripActions | null = setupHold
     ? cloudSetupStripActions({
@@ -107,7 +117,7 @@ export function useCloudHeldStrip(
         keepHoldOnCancel: chat
       })
     : null
-  const actions: CloudStripActions = holdActions ?? {
+  const gateOrRecovery: CloudStripActions = {
     primary: (action) => {
       // RA-11's restart belongs to the running-pane strip; a held launch never offers it.
       if (
@@ -152,9 +162,21 @@ export function useCloudHeldStrip(
       }
     }
   }
+  const actions: CloudStripActions =
+    holdActions ??
+    (renewing
+      ? cloudRenewInPlaceActions({
+          agent,
+          setup,
+          surface: gateOrRecovery,
+          openSettings: openOrcaCloudAccountsSettings,
+          copyText: gateActions.copyText,
+          openLink: gateActions.openLink
+        })
+      : gateOrRecovery)
   // A held chat's strip has nothing to cancel unless a setup is running: no × (Escape is a no-op).
   const shownModel =
-    chat && hold && !(setupHold && setupRunning) ? { ...model, noClose: true } : model
+    chat && hold && !((setupHold || renewing) && setupRunning) ? { ...model, noClose: true } : model
   return {
     key,
     active,
