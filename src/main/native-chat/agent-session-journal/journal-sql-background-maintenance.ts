@@ -1,3 +1,4 @@
+import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -29,6 +30,19 @@ export class JournalSqlBackgroundMaintenance {
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void
   ) {}
+
+  private legacyRetirement?: JournalLegacyRetirement
+
+  ownLegacySource(directory: string, readers: JournalSqlReaderPool): void {
+    this.legacyRetirement = new JournalLegacyRetirement(
+      directory,
+      this.writer,
+      readers,
+      this.conversions,
+      () => this.boundary(),
+      this.onError
+    )
+  }
 
   start(): Promise<void> {
     if (this.stopped.signal.aborted) {
@@ -75,13 +89,15 @@ export class JournalSqlBackgroundMaintenance {
   }
 
   stop(): void {
+    this.legacyRetirement?.stop()
     this.stopped.abort()
     clearTimeout(this.timer)
     this.timer = undefined
   }
 
-  settled(): Promise<void> {
-    return this.running ?? Promise.resolve()
+  async settled(): Promise<void> {
+    await this.running
+    await this.legacyRetirement?.flushCredit()
   }
 
   private async boundary(): Promise<boolean> {
@@ -102,6 +118,7 @@ export class JournalSqlBackgroundMaintenance {
   private async run(): Promise<void> {
     while (!this.stopped.signal.aborted && (this.discover || this.sweep || this.periodic)) {
       await this.runOrdinaryWork()
+      await this.legacyRetirement?.run()
       if (this.discover) {
         this.discover = false
         try {

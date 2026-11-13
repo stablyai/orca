@@ -207,3 +207,21 @@ it('correlates interleaved replies and resumes current bodies after writer closu
   })
   expect(reset.page.items).toHaveLength(1)
 })
+
+it('serves domain reads while source recycling yields to a new chat', async () => {
+  const { filename, root } = await fixture()
+  const pool = new JournalSqlReaderPool(
+    filename,
+    join(root, 'absent-legacy.db'),
+    journalSqlReaderPath()
+  )
+  readers.push(pool)
+  await pool.importState('session')
+  const lease = await pool.recycleSourceReaders()
+  expect(lease).not.toBeNull()
+  const conversion = pool.prepareConversion('new-current-chat')
+  expect(await pool.importState('session')).toMatchObject({ state: 'ready' })
+  pool.releaseSourceReaders(lease!)
+  expect(await conversion).toBeNull()
+  expect(await pool.importState('session')).toMatchObject({ state: 'ready' })
+})

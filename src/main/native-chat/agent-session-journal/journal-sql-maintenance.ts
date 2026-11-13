@@ -1,3 +1,4 @@
+import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
@@ -26,6 +27,13 @@ import { installAgentSessionStoreRows } from '../../runtime/agent-session/record
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
 export type JournalSqlMaintenance =
+  | { kind: 'legacy-retirement-state' }
+  | {
+      kind: 'legacy-retirement-save'
+      value: string
+      durable: boolean
+      destination?: LegacyDestinationIdentity
+    }
   | { kind: 'records-install' }
   | { kind: 'wsl-workspace-rekey'; worktreeIds: readonly (readonly [string, string])[] }
   | JournalForkStageOperation
@@ -44,6 +52,7 @@ export type JournalSqlMaintenance =
 export type JournalSqlProjectionState = JournalDomainImportState
 
 export type JournalSqlMaintenanceResult =
+  | { kind: 'legacy-retirement-state'; receipt: string | null; retirement: string | null }
   | { kind: 'records'; records: JournalSqlStoredRecords }
   | JournalForkStageResult
   | JournalSqlProjectionState
@@ -59,6 +68,25 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
+    case 'legacy-retirement-state': {
+      const value = (key: string) =>
+        db
+          .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+          .get(key)
+          ?.value?.toString() ?? null
+      return {
+        kind: 'legacy-retirement-state',
+        receipt: value('journal.legacy-source-copy.v1'),
+        retirement: value('journal.legacy-retirement.v1')
+      }
+    }
+    case 'legacy-retirement-save':
+      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
+        'journal.legacy-retirement.v1',
+        operation.value
+      )
+      return true
+
     case 'wsl-workspace-rekey':
       return rekeyWslDriveUncChats(db, operation.worktreeIds)
     case 'records-install': {

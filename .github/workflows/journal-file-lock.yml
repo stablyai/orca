@@ -1,0 +1,30 @@
+name: Journal file lock
+on:
+  pull_request:
+    paths:
+      - 'native/journal-file-lock/**'
+      - 'config/scripts/native-build/build-journal-file-lock.mjs'
+      - 'src/main/native-chat/agent-session-journal/journal-legacy*'
+      - '.github/workflows/journal-file-lock.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lock:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+      - run: node config/scripts/native-build/build-journal-file-lock.mjs
+      - run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/native-chat/agent-session-journal/journal-legacy-file-lock.test.ts
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
