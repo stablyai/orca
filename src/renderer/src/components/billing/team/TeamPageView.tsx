@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
-import { ExternalLink, LogOut, RefreshCw } from 'lucide-react'
+import { LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
@@ -50,8 +49,6 @@ export type TeamPageViewProps = {
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
-  /** Opens the Enterprise contact page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
-  onContactSales: (url: string) => void
   /** Settings → Team renders the page inline: seats and invoices stay on Plan & billing (linked). */
   inline?: { onOpenPlanBilling: () => void }
   /** Owners in Settings › Team: "Delete <team>", after "Leave <team>" (TEAM-DELETE). */
@@ -115,7 +112,6 @@ function SkeletonRows(): React.JSX.Element {
 export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
   const t = useTranslate()
   const inviteInput = useRef<HTMLInputElement>(null)
-  const ssoTitleId = useId()
   const hasRoster = props.roster !== null
   const inline = props.inline ?? null
   useEffect(() => {
@@ -142,7 +138,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   const roster = props.roster?.status === 'ok' ? props.roster.roster : null
   const entitlement = props.billing?.status === 'ok' ? props.billing.entitlement : null
-  const enterprise = entitlement?.offers?.enterprise ?? null
   const rows = roster ? teamRows(roster, props.viewerUserId) : []
   const selfRow = rows.find((row) => row.self)
   const viewerRole = roster?.viewerRole ?? 'member'
@@ -313,33 +308,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {(roster?.canManageMembers && enterprise) || selfRow ? (
+      {selfRow ? (
         <div className="divide-y divide-border/60 rounded-xl border border-border">
-          {roster?.canManageMembers && enterprise ? (
-            <section aria-labelledby={ssoTitleId} className="flex flex-wrap items-center gap-3 p-4">
-              <div className="min-w-[14rem] flex-1 space-y-0.5">
-                <h3 id={ssoTitleId} className="text-sm font-medium">
-                  {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
-                </h3>
-                <p className="text-xs text-muted-foreground text-pretty">
-                  {t(
-                    'auto.components.billing.team.ssoBody',
-                    'SAML SSO and SCIM user provisioning are part of {{value0}}.',
-                    { value0: enterprise.label }
-                  )}
-                </p>
-              </div>
-              <OpenExternalSplitButton
-                variant="outline"
-                size="sm"
-                link={enterprise.contactUrl}
-                onClick={() => props.onContactSales(enterprise.contactUrl)}
-              >
-                {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
-                <ExternalLink />
-              </OpenExternalSplitButton>
-            </section>
-          ) : null}
           {selfRow ? (
             <section
               aria-labelledby={leaveTitleId}

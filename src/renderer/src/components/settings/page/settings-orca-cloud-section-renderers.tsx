@@ -1,4 +1,5 @@
 import {
+  OrcaCloudEnterprisePane,
   OrcaCloudEnvironmentsPane,
   OrcaCloudLocalCommandsSettingsPane,
   OrcaCloudMcpPane,
@@ -23,8 +24,10 @@ export function renderOrcaCloudSettingsSections(
     return null
   }
   // Titles and descriptions come from the nav metadata so the pane and the sidebar never disagree.
-  const sections = [
+  const sections: { id: string; pane: React.JSX.Element; navOnly?: boolean }[] = [
     { id: 'cloud-team', pane: <OrcaCloudTeamPane /> },
+    // Listed in the nav for team owners and admins only; without the entry there is no page.
+    { id: 'cloud-enterprise', pane: <OrcaCloudEnterprisePane />, navOnly: true },
     { id: 'cloud-secrets', pane: <OrcaCloudSecretsPane /> },
     { id: 'cloud-skills', pane: <OrcaCloudSkillsSyncPane /> },
     { id: 'cloud-environments', pane: <OrcaCloudEnvironmentsPane /> },
@@ -33,8 +36,11 @@ export function renderOrcaCloudSettingsSections(
   ]
   return (
     <>
-      {sections.map(({ id, pane }) => {
+      {sections.map(({ id, pane, navOnly }) => {
         const meta = navigation.navSections.find((section) => section.id === id)
+        if (navOnly && !meta) {
+          return null
+        }
         return (
           <SettingsSection
             key={id}

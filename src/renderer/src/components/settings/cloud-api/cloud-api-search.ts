@@ -13,7 +13,6 @@ export const getCloudApiKeysSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.cloudApi.keywordToken', 'token'),
       ...translateSearchKeyword('auto.components.settings.cloudApi.keywordMcp', 'mcp'),
       ...translateSearchKeyword('auto.components.settings.cloudApi.keywordCli', 'cli'),
-      ...translateSearchKeyword('auto.components.settings.cloudApi.keywordAudit', 'audit log'),
       ...translateSearchKeyword('auto.components.settings.cloudApi.keywordCloud', 'cloud')
     ]
   }
