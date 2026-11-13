@@ -35,14 +35,9 @@ export class JournalRunningTools {
         ? [row.itemId]
         : row.kind === 'lifecycle-batch'
           ? row.mutations.map((mutation) => mutation.itemId)
-          : row.kind === 'dispatch' && row.providerItemId
-            ? [row.providerItemId]
-            : []
+          : []
     for (const raw of ids) {
       const id = state.aliases.get(raw) ?? raw
-      if (raw !== id) {
-        this.refresh(state, raw)
-      }
       this.refresh(state, id, state.items.get(id))
     }
   }
@@ -52,10 +47,7 @@ export class JournalRunningTools {
     const body = item?.body
     const fence = journalItemExecutionFence(state, id)
     const key =
-      !state.aliases.has(id) &&
-      body?.kind === 'tool-call' &&
-      body.state === 'running' &&
-      scope?.kind === 'turn'
+      body?.kind === 'tool-call' && body.state === 'running' && scope?.kind === 'turn'
         ? JSON.stringify([scope.turnItemId, fence])
         : undefined
     const previous = this.owners.get(id)

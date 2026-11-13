@@ -7,9 +7,6 @@ import { agentJournalItemKey } from '../../../../../shared/agent-session/journal
 import type { JournalItemRow } from '../../../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import { createStructuredAgentSessionConversationReads } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversation-reads'
 
-import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-
 const fixture = runtimeFixture()
 const { chat } = fixture
 const journals = createFixture()
@@ -113,50 +110,5 @@ it.each([
     expect(chat.progress).not.toHaveBeenCalled()
     expect(visited).toBe(0)
     expect(journal.lastProviderActivityAt(2)).toBeUndefined()
-  }
-)
-
-it.each(['echo', 'acceptance'] as const)(
-  'retires a running tool whose provider id becomes an input alias through %s',
-  async (alias) => {
-    const journal = await journals.open()
-    const turn = { provider: 'orca', clientMessageId: 'turn' } as const
-    const turnItemId = agentJournalItemKey(turn)
-    const scope = { kind: 'turn', turnItemId } as const
-    await journal.appendItem(
-      turn,
-      { kind: 'turn', turnId: 'turn', state: 'running', startedAt: 1 },
-      { fence: 2, turnScope: scope }
-    )
-    const identity = journals.item(0)
-    await journal.appendItem(
-      identity,
-      { kind: 'tool-call', name: 'Bash', input: {}, state: 'running' },
-      { fence: 2, turnScope: scope, observedAt: 0 }
-    )
-    expect(journal.runningTool(turnItemId, 2)).toEqual({ name: 'Bash', startedAt: 0 })
-    const body: AgentJournalMessageItem = {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'continue' }]
-    }
-    await journal.appendSubmission({
-      clientMessageId: 'send-1',
-      payloadFingerprint: agentSessionSendBodyFingerprint('session-1', body),
-      body,
-      fence: 2
-    })
-    await (alias === 'echo'
-      ? journal.appendItem(identity, body, { fence: 2, turnScope: scope })
-      : journal.resolveDispatch({
-          clientMessageId: 'send-1',
-          state: 'accepted',
-          providerIdentity: identity,
-          fence: 2
-        }))
-    expect(journal.runningTool(turnItemId, 2)).toBeUndefined()
-    await journals.journals.closeAll()
-    const restored = await journals.open()
-    expect(restored.runningTool(turnItemId, 2)).toBeUndefined()
   }
 )
