@@ -1,3 +1,4 @@
+import { withProjectAgentLaunchDefaults } from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import { OrcaRuntimeWithForegroundInspection } from './workspace-foreground-inspection'
 import {
   type RuntimeNavigationTarget,
@@ -133,7 +134,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     }
     return resolveWorktreeStartupDraftAgent({
       repo,
-      settings: this.store.getSettings(),
+      settings: withProjectAgentLaunchDefaults(this.store.getSettings(), repo),
       ...(requestedAgent ? { requestedAgent } : {})
     })
   }
@@ -163,7 +164,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
       ...(requestedAgent ? { requestedAgent } : {}),
       ...(launchSource ? { launchSource } : {}),
-      settings: this.store.getSettings(),
+      settings: withProjectAgentLaunchDefaults(this.store.getSettings(), repo),
       getLaunchRuntime: (agent) => this.resolveStartupAgentLaunchRuntime(repo, agent)
     })
   }
@@ -198,7 +199,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
       ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
-      settings: this.store.getSettings(),
+      settings: withProjectAgentLaunchDefaults(this.store.getSettings(), repo),
       getLaunchRuntime: (agent) =>
         this.resolveStartupAgentLaunchRuntime(repo, agent, launchInputs?.launchScope),
       toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)

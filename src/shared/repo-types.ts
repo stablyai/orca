@@ -1,3 +1,4 @@
+import type { ProjectAgentLaunchDefaults } from './agent-launch/choices/project-agent-launch-defaults'
 import type { DictationTerm } from './dictation-dictionary'
 import type { RepoIcon } from './repo-icon'
 import type { GhAccountBinding } from './github/accounts/account-binding'
@@ -42,6 +43,7 @@ export type WorktreeVisibilityDefaults = {
 }
 
 export type Repo = {
+  agentLaunchDefaults?: ProjectAgentLaunchDefaults
   id: string
   path: string
   displayName: string

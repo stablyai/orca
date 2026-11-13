@@ -1,3 +1,4 @@
+import { withProjectAgentLaunchDefaults } from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
@@ -71,7 +72,7 @@ export async function resolveAgentTerminalCreateOptions(
     (!callerSuppliedLaunch && store && opts.command && workspace.repo
       ? resolveBareAgentLaunchCommand({
           command: opts.command,
-          settings: store.getSettings(),
+          settings: withProjectAgentLaunchDefaults(store.getSettings(), workspace.repo),
           platform: agentLaunchPlatformForScope(store, workspace),
           isRemote: Boolean(workspace.connectionId)
         })
@@ -128,7 +129,7 @@ export async function resolveAgentTerminalCreateOptions(
           workspace,
           opts,
           plannedAgent,
-          store.getSettings(),
+          withProjectAgentLaunchDefaults(store.getSettings(), workspace.repo),
           runtime,
           host,
           sessionOptions

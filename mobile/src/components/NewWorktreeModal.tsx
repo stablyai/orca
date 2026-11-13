@@ -150,9 +150,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     repoIsGit: selectedRepoIsGit,
     selection: composer.createSelection
   })
+  const projectDefaultAgent = selectedRepo?.agentLaunchDefaults?.defaultTuiAgent
   const agentSelection = useNewWorkspaceAgentSelection({
     visible,
-    runtimeSettings: runtime.runtimeSettings,
+    runtimeSettings:
+      projectDefaultAgent && runtime.runtimeSettings
+        ? { ...runtime.runtimeSettings, defaultTuiAgent: projectDefaultAgent }
+        : runtime.runtimeSettings,
     detectedAgentIds: executionTarget.detectedAgentIds
   })
   const retiredNamesRefreshKey = useMemo(

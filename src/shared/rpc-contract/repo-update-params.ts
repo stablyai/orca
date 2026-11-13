@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeProjectAgentLaunchDefaults } from '../agent-launch/choices/project-agent-launch-defaults'
 import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
@@ -94,6 +95,10 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       hiddenAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
+      agentLaunchDefaults: z
+        .unknown()
+        .optional()
+        .transform((value) => (value === null ? null : normalizeProjectAgentLaunchDefaults(value))),
       sourceControlAi: RepoSourceControlAiOverrides,
       workspaceCleanupPolicy: RepoWorkspaceCleanupPolicyParam.optional()
     })

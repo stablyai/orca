@@ -17,6 +17,7 @@ import {
   getRepositoryGitWorktreeSearchMetadata
 } from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
+import { getRepositoryAgentDefaultsSearchEntry } from './RepositoryAgentDefaultsSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 
 type RepositoryPaneSearchOptions = {
@@ -228,6 +229,7 @@ export function getRepositoryPaneSearchEntries(
   const parts = getRepositorySearchParts(repo, options, t)
   const entries = [
     getRepositoryFormatterSearchEntry(t),
+    getRepositoryAgentDefaultsSearchEntry(t),
     parts.agentTrust,
     parts.jira,
     parts.displayName,

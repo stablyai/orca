@@ -1,3 +1,4 @@
+import { withProjectAgentLaunchDefaults } from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
@@ -129,7 +130,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const settings = this.store.getSettings()
+    const settings = withProjectAgentLaunchDefaults(this.store.getSettings(), workspace.repo)
     if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }

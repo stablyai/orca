@@ -67,6 +67,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           projectGroupOrder?: number | null
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
+          agentLaunchDefaults?: Repo['agentLaunchDefaults'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
           workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
           externalWorktreeDiscoverySuppressedAt?:

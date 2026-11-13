@@ -1,3 +1,4 @@
+import { normalizeProjectAgentLaunchDefaults } from '../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
@@ -33,6 +34,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     repoIcon: rawRepoIcon,
     upstream: rawUpstream,
     gitRemoteIdentity: rawGitRemoteIdentity,
+    agentLaunchDefaults: rawAgentLaunchDefaults,
     sourceControlAi: rawSourceControlAi,
     workspaceCleanupPolicy: rawWorkspaceCleanupPolicy,
     projectHostSetupMethod: rawProjectHostSetupMethod,
@@ -48,6 +50,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const repoIcon = sanitizeRepoIcon(rawRepoIcon)
   const upstream = sanitizeRepoUpstream(rawUpstream)
   const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
+  const agentLaunchDefaults = normalizeProjectAgentLaunchDefaults(rawAgentLaunchDefaults)
   const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
   const workspaceCleanupPolicy = normalizeRepoWorkspaceCleanupPolicy(rawWorkspaceCleanupPolicy)
   const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
@@ -69,6 +72,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
 
   return {
     ...repoWithoutIcon,
+    ...(agentLaunchDefaults ? { agentLaunchDefaults } : {}),
     ...(typeof folderUpgradeGitRootPath === 'string' && folderUpgradeGitRootPath
       ? { folderUpgradeGitRootPath }
       : {}),
