@@ -243,7 +243,10 @@ it.each([
       getLaunchRuntime: () => ({
         platform: 'linux' as const,
         shell: 'posix' as const,
-        launchRuntime: { platform: 'linux' as const, pty: {} }
+        launchRuntime: {
+          platform: 'linux' as const,
+          pty: { shellOverride: undefined, terminalWindowsWslDistro: null }
+        }
       })
     }
     const createFolderWorkspace = vi.fn(
