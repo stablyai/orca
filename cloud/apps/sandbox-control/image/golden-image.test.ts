@@ -120,18 +120,6 @@ describe('golden image build', () => {
     }
   })
 
-  it('PARITY-DOCKER: installs the pinned Docker packages and ships the lazy `docker` shim', () => {
-    expect(provisionEnv(inputs())).not.toHaveProperty('DOCKER_APT_PACKAGES')
-    const docker = { 'docker.io': '29.1.3-0ubuntu4.1', 'docker-compose-v2': '2.40.3+ds1-0ubuntu1' }
-    expect(provisionEnv(inputs({ manifest: { ...manifest, docker } })).DOCKER_APT_PACKAGES).toBe(
-      'docker.io=29.1.3-0ubuntu4.1 docker-compose-v2=2.40.3+ds1-0ubuntu1'
-    )
-    expect(() => ManifestSchema.parse({ ...manifest, docker: { 'docker-ce': '1.0' } })).toThrow()
-    const committed = JSON.parse(readFileSync(fileURLToPath(new URL('./golden-image.manifest.json', import.meta.url).href), 'utf8'))
-    expect(Object.keys(ManifestSchema.parse(committed).docker ?? {}).sort()).toEqual(['docker-buildx', 'docker-compose-v2', 'docker.io'])
-    expect(VM_SCRIPTS).toContain('docker')
-  })
-
   it('passes the remote desktop pins only when the manifest asks for the desktop', () => {
     expect(provisionEnv(inputs())).not.toHaveProperty('NOVNC_VERSION')
     const desktop = {

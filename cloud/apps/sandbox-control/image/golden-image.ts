@@ -53,16 +53,6 @@ export const ManifestSchema = z
       .strict()
       .nullable()
       .optional(),
-    /**
-     * PARITY-DOCKER: Ubuntu's Docker packages, version-pinned (`package: version`, apt `pkg=version`).
-     * dockerd starts on first use (image/vm/docker); absent = an image without Docker.
-     */
-    docker: z
-      .partialRecord(
-        z.enum(['docker.io', 'docker-compose-v2', 'docker-buildx']),
-        z.string().regex(/^[0-9][A-Za-z0-9.+:~-]*$/)
-      )
-      .optional(),
     /** Optional remote desktop (noVNC + websockify tarballs); absent = an image without it. */
     desktop: z
       .object({
@@ -154,11 +144,6 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
   if (manifest.cursorAgent) {
     env.CURSOR_AGENT_VERSION = manifest.cursorAgent.version
     env.CURSOR_AGENT_SHA256 = manifest.cursorAgent.sha256
-  }
-  if (manifest.docker && Object.keys(manifest.docker).length > 0) {
-    env.DOCKER_APT_PACKAGES = Object.entries(manifest.docker)
-      .map(([name, version]) => `${name}=${version}`)
-      .join(' ')
   }
   if (manifest.desktop) {
     env.NOVNC_VERSION = manifest.desktop.novnc.version
