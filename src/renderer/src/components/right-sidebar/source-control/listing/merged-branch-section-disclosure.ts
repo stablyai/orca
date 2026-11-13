@@ -1,8 +1,9 @@
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
-  getAuthoritativelyRemovedWorktreeIds,
-  subscribeToAuthoritativeWorktreeRemovals
+  isWorktreeInstanceAuthoritativelyRemoved,
+  subscribeToAuthoritativeWorktreeRemovals,
+  type RemovedWorktreeInstance
 } from '@/store/slices/worktrees/listing/authoritative-worktree-removal-memory'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -143,13 +144,13 @@ const recordsByOwner = new Map<
   string,
   { owner: MergedBranchSectionOwner; record: MergedBranchSectionRecord }
 >()
-const ownerKeysByHostIdentity = new Map<string, Set<string>>()
+const ownerKeysByHostIdentity = new Map<string, Map<string | null, string>>()
 
 function dropOwnerRecord(key: string, owner: MergedBranchSectionOwner): void {
   recordsByOwner.delete(key)
   const hostIdentity = getWorktreeHostIdentity(owner)
   const ownerKeys = ownerKeysByHostIdentity.get(hostIdentity)
-  ownerKeys?.delete(key)
+  ownerKeys?.delete(owner.instanceId ?? null)
   if (ownerKeys?.size === 0) {
     ownerKeysByHostIdentity.delete(hostIdentity)
   }
@@ -174,7 +175,7 @@ function isCheckoutPositivelyGone(
   }
   // Remote rows can vanish from a partial listing; only an authoritative removal proves deletion.
   return owner.hostId !== undefined
-    ? (getAuthoritativelyRemovedWorktreeIds(owner.hostId)?.has(owner.id) ?? false)
+    ? isWorktreeInstanceAuthoritativelyRemoved(owner.hostId, owner)
     : false
 }
 
@@ -204,14 +205,14 @@ function pruneRecordsOfRemovedCheckouts(keep: string): void {
 
 function dropRecordsOfRemovedCheckouts(
   hostId: ExecutionHostId,
-  worktreeIds: readonly string[]
+  worktrees: readonly RemovedWorktreeInstance[]
 ): void {
-  for (const id of worktreeIds) {
+  for (const { id, instanceId } of worktrees) {
     const hostIdentity = composeWorktreeHostIdentity(hostId, id)
-    for (const key of ownerKeysByHostIdentity.get(hostIdentity) ?? []) {
-      recordsByOwner.delete(key)
+    const key = ownerKeysByHostIdentity.get(hostIdentity)?.get(instanceId ?? null)
+    if (key) {
+      dropOwnerRecord(key, { id, hostId, instanceId })
     }
-    ownerKeysByHostIdentity.delete(hostIdentity)
   }
 }
 
@@ -242,8 +243,8 @@ export function writeMergedBranchSectionRecord(
     record
   })
   const hostIdentity = getWorktreeHostIdentity(owner)
-  const ownerKeys = ownerKeysByHostIdentity.get(hostIdentity) ?? new Set<string>()
-  ownerKeys.add(key)
+  const ownerKeys = ownerKeysByHostIdentity.get(hostIdentity) ?? new Map<string | null, string>()
+  ownerKeys.set(owner.instanceId ?? null, key)
   ownerKeysByHostIdentity.set(hostIdentity, ownerKeys)
   if (recordsByOwner.size > pruneThreshold) {
     pruneRecordsOfRemovedCheckouts(key)

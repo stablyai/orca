@@ -1,9 +1,9 @@
 import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/terminal-notice-removal'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
-import type { Worktree } from '../../../../../../shared/worktree/types'
 import { routeListingBranchSwitchesThroughGitIdentity } from './worktree-listing-branch-switch'
 import {
   areDetectedWorktreeResultsEqual,
@@ -29,113 +29,17 @@ import {
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
-import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
-import { branchName } from '@/lib/source-control/branches/branch-name'
 import {
   forgetAuthoritativelyRemovedWorktrees,
   forgetPersistedWorktreeMetaForRemovals,
-  rememberAuthoritativelyRemovedWorktrees
+  rememberAuthoritativelyRemovedWorktrees,
+  type RemovedWorktreeInstance
 } from './authoritative-worktree-removal-memory'
 import type { FencedWorktreeMergeArgs } from './worktree-slice-types'
-
-export function preserveConcurrentManualOrder<T extends Worktree>(
-  incoming: readonly T[],
-  requestStarted: readonly Worktree[] | undefined,
-  current: readonly Worktree[] | undefined,
-  matchesRefreshHost: (worktree: Worktree) => boolean
-): T[] {
-  if (!requestStarted || !current) {
-    return [...incoming]
-  }
-  const startedById = new Map(
-    requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  const currentById = new Map(
-    current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  return incoming.map((worktree) => {
-    const started = startedById.get(worktree.id)
-    const latest = currentById.get(worktree.id)
-    if (!started || !latest || started.manualOrder === latest.manualOrder) {
-      return worktree
-    }
-    // Why: a refresh response may predate a completed drag; the renderer's optimistic rank is newer.
-    return { ...worktree, manualOrder: latest.manualOrder }
-  })
-}
-
-export function preserveConcurrentDisplayName<T extends Worktree>(
-  incoming: readonly T[],
-  requestStarted: readonly Worktree[] | undefined,
-  current: readonly Worktree[] | undefined,
-  matchesRefreshHost: (worktree: Worktree) => boolean
-): T[] {
-  if (!requestStarted || !current) {
-    return [...incoming]
-  }
-  const startedById = new Map(
-    requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  const currentById = new Map(
-    current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  return incoming.map((worktree) => {
-    const started = startedById.get(worktree.id)
-    const latest = currentById.get(worktree.id)
-    if (!started || !latest) {
-      return worktree
-    }
-    if (isDisplayNamePersistencePending(worktree.id, latest.hostId)) {
-      return {
-        ...worktree,
-        displayName: latest.displayName,
-        ...(latest.displayNameMode !== undefined
-          ? { displayNameMode: latest.displayNameMode }
-          : { displayNameMode: undefined })
-      }
-    }
-    const latestChanged =
-      latest.displayName !== started.displayName ||
-      latest.displayNameMode !== started.displayNameMode
-    // The label is the stable stale-response marker; mode may be absent on an
-    // older host or newly projected by a newer one.
-    const incomingIsStale = worktree.displayName === started.displayName
-    const latestDisplayNameIsPinned =
-      latest.displayNameMode === 'fixed' ||
-      (latest.displayNameMode === undefined && latest.cliProvenance?.kind === 'created-by-cli')
-    const incomingBranchShort = branchName(worktree.branch)
-    // Old hosts re-derive automatic labels from branch (or path basename when detached);
-    // any other label in their response is explicit meta a peer wrote there.
-    const incomingLooksAutomatic =
-      worktree.displayName === incomingBranchShort ||
-      (incomingBranchShort === '' &&
-        worktree.displayName === (worktree.path.split(/[\\/]/).pop() ?? ''))
-    if (
-      worktree.displayNameMode === undefined &&
-      latestDisplayNameIsPinned &&
-      incomingLooksAutomatic
-    ) {
-      // Older hosts omit provenance; never let their re-derived label replace a pinned one.
-      return {
-        ...worktree,
-        displayName: latest.displayName,
-        ...(latest.displayNameMode !== undefined
-          ? { displayNameMode: latest.displayNameMode }
-          : { displayNameMode: undefined })
-      }
-    }
-    if (!latestChanged || !incomingIsStale) {
-      return worktree
-    }
-    return {
-      ...worktree,
-      displayName: latest.displayName,
-      ...(latest.displayNameMode !== undefined
-        ? { displayNameMode: latest.displayNameMode }
-        : { displayNameMode: undefined })
-    }
-  })
-}
+import {
+  preserveConcurrentManualOrder,
+  preserveConcurrentDisplayName
+} from './worktree-listing-user-edits'
 
 export function mergeFetchedWorktrees(
   _set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
@@ -163,6 +67,7 @@ export function mergeFetchedWorktrees(
   // Why a holder: the updater decides the outcome, and a narrowed `let` would hide that assignment.
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
+  let removedWorktrees: readonly RemovedWorktreeInstance[] = []
   let authoritativelySeenIds: readonly string[] = []
   get().updateAgentStatusState((s, changedPaneKeys) => {
     // Check live applied catalog before any row/detection/purge merge so in-flight listings cannot undo newer create/remove replies.
@@ -247,6 +152,18 @@ export function mergeFetchedWorktrees(
             args.hostId
           )
     authoritativelyRemovedIds = removedIds
+    if (removedIds.length > 0) {
+      const removed = new Map<string, RemovedWorktreeInstance>(removedIds.map((id) => [id, { id }]))
+      for (const worktree of [
+        ...(selectDetectedWorktreesByRepo(s)[args.repoId]?.worktrees ?? []),
+        ...currentForHost
+      ]) {
+        if (removed.has(worktree.id) && worktreeMatchesHost(worktree, args.hostId, matchOptions)) {
+          removed.set(worktree.id, { id: worktree.id, instanceId: worktree.instanceId })
+        }
+      }
+      removedWorktrees = [...removed.values()]
+    }
     if (args.refresh.result.authoritative) {
       authoritativelySeenIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
     }
@@ -304,7 +221,11 @@ export function mergeFetchedWorktrees(
     retireNotices?.(get())
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
-    rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)
+    rememberAuthoritativelyRemovedWorktrees(
+      args.hostId,
+      authoritativelyRemovedIds,
+      removedWorktrees
+    )
     // Retire metadata only on real scans; legacy session-fallback claims authority but truncates/filter rows, so omissions prove no deletion.
     forgetPersistedWorktreeMetaForRemovals(
       args.repoId,

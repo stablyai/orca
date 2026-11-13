@@ -4,7 +4,8 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../sh
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   announceAuthoritativeWorktreeRemovals,
-  rememberAuthoritativelyRemovedWorktrees
+  rememberAuthoritativelyRemovedWorktrees,
+  type RemovedWorktreeInstance
 } from '../listing/authoritative-worktree-removal-memory'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
@@ -59,6 +60,7 @@ export function dropConfirmedHostRow(
   set: WorktreeSliceSet,
   worktreeId: string,
   requiredExecutionHostId: ExecutionHostId,
+  removedWorktree: RemovedWorktreeInstance,
   fallbackSurvivingHostId: ExecutionHostId | null = null,
   ignoreWorkspaceCleanupScanSurvivors = false
 ): boolean {
@@ -138,9 +140,13 @@ export function dropConfirmedHostRow(
     }
   })
   if (parseExecutionHostId(requiredExecutionHostId)?.kind === 'ssh') {
-    rememberAuthoritativelyRemovedWorktrees(requiredExecutionHostId, [worktreeId])
+    rememberAuthoritativelyRemovedWorktrees(
+      requiredExecutionHostId,
+      [worktreeId],
+      [removedWorktree]
+    )
   } else {
-    announceAuthoritativeWorktreeRemovals(requiredExecutionHostId, [worktreeId])
+    announceAuthoritativeWorktreeRemovals(requiredExecutionHostId, [removedWorktree])
   }
   return sameIdSurvives
 }
@@ -149,6 +155,7 @@ export function prepareHostScopedRemovalCompletion(
   set: WorktreeSliceSet,
   worktreeId: string,
   requiredExecutionHostId: ExecutionHostId,
+  removedWorktree: RemovedWorktreeInstance,
   fallbackSurvivingHostId: ExecutionHostId | null,
   ignoreWorkspaceCleanupScanSurvivors = false
 ): boolean {
@@ -156,6 +163,7 @@ export function prepareHostScopedRemovalCompletion(
     set,
     worktreeId,
     requiredExecutionHostId,
+    removedWorktree,
     fallbackSurvivingHostId,
     ignoreWorkspaceCleanupScanSurvivors
   )

@@ -114,7 +114,23 @@ it('drops a paired workspace the user deleted', () => {
   }
   markBranchSectionToggledByUser(deleted)
 
-  announceAuthoritativeWorktreeRemovals('runtime:env', [deleted.id])
+  announceAuthoritativeWorktreeRemovals('runtime:env', [deleted])
 
   expect(readMergedBranchSectionRecord(deleted).disclosure.kind).toBe('untouched')
+})
+
+it('keeps a successor’s choice when its predecessor’s removal is announced late', () => {
+  const removed: MergedBranchSectionOwner = {
+    id: 'repo-1::/paired/recreated',
+    hostId: 'runtime:env',
+    instanceId: 'predecessor'
+  }
+  const successor = { ...removed, instanceId: 'successor' }
+  markBranchSectionToggledByUser(removed)
+  markBranchSectionToggledByUser(successor)
+
+  rememberAuthoritativelyRemovedWorktrees('runtime:env', [removed.id], [removed])
+
+  expect(readMergedBranchSectionRecord(removed).disclosure.kind).toBe('untouched')
+  expect(readMergedBranchSectionRecord(successor).disclosure.kind).toBe('user')
 })
