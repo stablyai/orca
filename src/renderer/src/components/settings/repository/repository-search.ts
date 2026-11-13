@@ -274,14 +274,8 @@ export function getRepositoryPaneSearchMetadata(
 ) {
   const parts = getRepositorySearchParts(repo, options, t)
   const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
-  const identity = [
-    parts.agentTrust,
-    parts.browserProfile,
-    parts.defaultAgent,
-    parts.jira,
-    parts.displayName,
-    parts.icon
-  ]
+  const { agentTrust, browserProfile, defaultAgent, jira, displayName, icon } = parts
+  const identity = [agentTrust, browserProfile, defaultAgent, jira, displayName, icon]
   if (parts.github) {
     identity.push(parts.github)
   }

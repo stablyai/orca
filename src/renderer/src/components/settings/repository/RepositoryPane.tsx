@@ -1,8 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import type {
-  OrcaHooks,
-  RepoHookSettings
-} from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type {
   Project,
   ProjectHostSetup,
