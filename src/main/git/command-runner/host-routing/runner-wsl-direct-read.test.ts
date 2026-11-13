@@ -1,6 +1,9 @@
 import * as processHost from '@orca/process-host'
 import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
-import { removeLocalWorktreePath } from '../../../workspaces/removal/local-worktree-filesystem'
+import {
+  getLocalWorktreePathAccess,
+  removeLocalWorktreePath
+} from '../../../workspaces/removal/local-worktree-filesystem'
 import { removeWorktree } from '../../worktrees/removal/worktree-removal'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeSpawnedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
@@ -288,6 +291,50 @@ describe('WSL direct Git reads', () => {
           expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('setsid --wait')
         } finally {
           processSeam.mockRestore()
+          vi.useRealTimers()
+        }
+      })
+    }
+  )
+
+  it.each([false, true])(
+    'waits beyond30s for WSL filesystem deletion to finish with checkout signal=%s',
+    async (withSignal) => {
+      await withPlatform('win32', async () => {
+        vi.useFakeTimers()
+        try {
+          const command = createMockChild()
+          spawnMock.mockReturnValue(command)
+          let finished = false
+          const controller = new AbortController()
+          const pending = removeLocalWorktreePath(
+            String.raw`C:\repo\feature`,
+            { wslDistro: DISTRO },
+            withSignal ? controller.signal : undefined
+          ).then(() => {
+            finished = true
+          })
+          await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+          await vi.advanceTimersByTimeAsync(31_000)
+          expect(finished).toBe(false)
+          expect(command.kill).not.toHaveBeenCalled()
+          command.emit('close', 0, null)
+          await pending
+          expect(finished).toBe(true)
+          if (!withSignal) {
+            const read = createMockChild()
+            read.kill.mockImplementation(() => {
+              queueMicrotask(() => read.emit('close', null, 'SIGTERM'))
+              return true
+            })
+            spawnMock.mockReturnValue(read)
+            const rejected = expect(
+              getLocalWorktreePathAccess({ wslDistro: DISTRO }).statPath('/mnt/c/repo/missing')
+            ).rejects.toThrow('timed out after 30000ms')
+            await vi.advanceTimersByTimeAsync(30_000)
+            await rejected
+          }
+        } finally {
           vi.useRealTimers()
         }
       })

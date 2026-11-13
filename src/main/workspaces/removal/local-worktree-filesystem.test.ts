@@ -143,7 +143,7 @@ it('does not start a WSL recursive delete when already cancelled', async () => {
   })
 })
 
-it.each(['normal', 'no-spawn', 'cancel', 'unverified-timeout'] as const)(
+it.each(['normal', 'no-spawn', 'cancel', 'unverified-stop'] as const)(
   'joins WSL recursive delete outcome with qualified proof: %s',
   async (mode) => {
     await withPlatform('win32', async () => {
@@ -192,7 +192,7 @@ it.each(['normal', 'no-spawn', 'cancel', 'unverified-timeout'] as const)(
         signal: null,
         stdout: '',
         stderr: '',
-        timedOut: mode === 'unverified-timeout'
+        timedOut: false
       }
       if (mode === 'normal') {
         spec.onChildTerminated?.()
@@ -201,7 +201,7 @@ it.each(['normal', 'no-spawn', 'cancel', 'unverified-timeout'] as const)(
         expect(await outcome).toBeUndefined()
         return
       }
-      if (mode === 'cancel') {
+      if (mode === 'cancel' || mode === 'unverified-stop') {
         controller.abort()
       }
       if (typeof spec.terminationBarrier !== 'object') {

@@ -139,7 +139,8 @@ export async function removeLocalWorktreePath(
       group.wrapGuestArgs(['sh', '-c', `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`])
     ),
     cwd: resolveWslInteropSpawnCwd(),
-    timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS,
+    // A deadline can lose the completion observer while a large guest delete is still running.
+    timeoutMs: null,
     signal,
     terminationBarrier: proof.barrier,
     onChildTerminated: proof.onChildTerminated
@@ -150,7 +151,7 @@ export async function removeLocalWorktreePath(
   }
   const cleanResult = { ...result, stderr: group.stripControlOutput(result.stderr) }
   if (result.timedOut || proof.stopping) {
-    throw new Error(`WSL filesystem command timed out after ${WSL_FILE_OPERATION_TIMEOUT_MS}ms`)
+    throw new Error('Workspace deletion stopped before it finished. Retry deletion.')
   }
   if (result.code !== 0) {
     throw new Error(describeWslProcessFailure(cleanResult))
