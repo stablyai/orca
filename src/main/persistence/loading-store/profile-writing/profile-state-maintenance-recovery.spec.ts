@@ -44,7 +44,7 @@ export function registerProfileStateMaintenanceRecoveryTests(): void {
       store.updateSettings({ theme: 'dark' })
       vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async () => {
         const writer = peer()
-        writer.writePreparedState([{ domain: 'peer', payload: '{"preserved":true}' }])
+        writer.writeSerializedDomains([{ domain: 'peer', payload: '{"preserved":true}' }])
         writer.close()
         throw new Error('disk refused')
       })

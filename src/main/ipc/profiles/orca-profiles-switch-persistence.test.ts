@@ -49,13 +49,9 @@ describe('plain profile switch persistence', () => {
       await release.promise
       await write()
     }
-    const selective = authority.writeSerializedDomains.bind(authority)
-    const complete = authority.writeCompleteSerializedDomains.bind(authority)
-    vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce((domains) =>
-      hold(() => selective(domains))
-    )
-    vi.spyOn(authority, 'writeCompleteSerializedDomains').mockImplementationOnce((domains) =>
-      hold(() => complete(domains))
+    const write = authority.writePreparedState.bind(authority)
+    vi.spyOn(authority, 'writePreparedState').mockImplementationOnce((prepared) =>
+      hold(() => write(prepared))
     )
     store.updateSettings({ theme: 'dark' })
     registerOrcaProfileHandlers(store)
