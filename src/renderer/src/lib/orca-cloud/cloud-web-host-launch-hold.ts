@@ -116,13 +116,22 @@ export async function settleHeldPlaceholder({
   decided?: boolean
   restored?: boolean
 }): Promise<CreatedWebRuntimeSessionTerminal | null> {
-  const outcome = await holdCloudAgentLaunch({
-    paneKey: cloudTabHoldKey(tabId),
-    agent,
-    prompt: args.prompt?.trim() || null,
-    decided,
-    restored
-  }).finally(() => forgetHeldCloudLaunch(tabId))
+  const paneKey = cloudTabHoldKey(tabId)
+  const prompt = args.prompt?.trim() || null
+  let outcome: 'proceed' | 'cancel'
+  try {
+    outcome = await holdCloudAgentLaunch({ paneKey, agent, prompt, decided, restored })
+    // V3-01-DOUBLE-SHELL: the agent's create below goes through the account hold too, so a launch
+    // released while its account still can't run it (a restored 'unread' hold on an account that
+    // isn't set up) would hold again in a SECOND placeholder. Hold again in this one instead, on the
+    // same read that decided it (decided: the hold takes the cached reason, so this can't spin).
+    while (outcome === 'proceed' && (await cloudAgentLaunchDecision(agent)) === 'hold') {
+      takeCloudAgentHoldStartedByPerson(paneKey)
+      outcome = await holdCloudAgentLaunch({ paneKey, agent, prompt, decided: true, restored })
+    }
+  } finally {
+    forgetHeldCloudLaunch(tabId)
+  }
   if (outcome === 'cancel') {
     // NOACCT-MISLABEL: the confirmation answers the person's own Cancel, while the shell is still
     // there. A hold that ended because its tab or workspace went away (deleted, archived, closed)
