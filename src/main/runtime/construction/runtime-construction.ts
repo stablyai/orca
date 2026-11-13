@@ -135,7 +135,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     super()
     this.store = store
     installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
-    this.legacyStructuredSessionTabIds = collectLocalSavedStructuredAgentSessionIds(store)
+    this.legacyStructuredSessionTabIds =
+      deps?.legacyStructuredSessionTabIds ?? collectLocalSavedStructuredAgentSessionIds(store)
     this.machineName.start()
     this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth

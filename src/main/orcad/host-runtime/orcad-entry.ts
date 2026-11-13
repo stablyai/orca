@@ -169,7 +169,7 @@ async function activateOrcadRuntime(
   )
 
   // Boots the chat writer during the daemon wait, after login env; restoration consumes this attempt.
-  const agentSessionStartupOpen = await startOrcadAgentSessionRecordStoreOpen(profileStore)
+  const chatJournal = await startOrcadAgentSessionRecordStoreOpen(profileStore)
 
   // Install the daemon provider before PTY handlers can route their first call.
   await daemonStartup
@@ -199,6 +199,7 @@ async function activateOrcadRuntime(
   const { createOrcadPairedEnvironmentOptions } = await import('./orcad-paired-environment-options')
   const pairedEnvironments = createOrcadPairedEnvironmentOptions()
   const runtime = new OrcaRuntimeService(profileStore, stats, {
+    legacyStructuredSessionTabIds: chatJournal.open.legacySessionTabIds,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
     getAdditionalAiVaultCodexHomePaths: () => [
@@ -228,7 +229,7 @@ async function activateOrcadRuntime(
     }
   })
   paneGridsForShutdown = runtime
-  runtime.beginStructuredAgentSessionStartupOpen(agentSessionStartupOpen)
+  runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =
@@ -351,6 +352,8 @@ async function activateOrcadRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
+  // Background chat-journal maintenance starts once this host is serving.
+  chatJournal.serving()
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 

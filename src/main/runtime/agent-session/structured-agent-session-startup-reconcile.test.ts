@@ -3,9 +3,10 @@
 import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { journalDomainDatabasePath } from '../../native-chat/agent-session-journal/database/journal-domain-database'
+import { JournalSqlDatabase } from '../../native-chat/agent-session-journal/database/journal-sql-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
@@ -29,6 +30,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   recordStructuredAgentSessionHostInstallRefusal(null)
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
   await closeTestJournalHostDatabases()
@@ -87,8 +89,9 @@ it('finishes startup over records a newer Orca wrote, reads them, and writes not
   expect(await readFile(path)).toEqual(bytes)
 })
 
-it('does not boot the journal writer again before RPC after this startup refused it', async () => {
+it('does not open the journal again before RPC after this startup refused it', async () => {
   await writeFile(journalDomainDatabasePath(root), 'not a database')
+  const open = vi.spyOn(JournalSqlDatabase, 'open')
   const opened = openTestAgentSessionRecordStoreSlot({
     stateDirectory: root,
     legacySessionTabIds: [],
@@ -97,16 +100,14 @@ it('does not boot the journal writer again before RPC after this startup refused
   })
   opened.catch(() => {})
   const runtime = startupRuntime()
-  let installs = 0
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's own protected install, counted to prove the refusal is not reopened.
-  const internal = runtime as unknown as { ensureStructuredAgentSessionHost(): Promise<unknown> }
-  internal.ensureStructuredAgentSessionHost = async () => {
-    installs += 1
-  }
-  runtime.beginStructuredAgentSessionStartupOpen({ persisted: true, opened })
+  runtime.beginStructuredAgentSessionStartupOpen(Promise.resolve(), {
+    legacySessionTabIds: [],
+    persisted: true,
+    opened
+  })
 
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 
   expect(structuredAgentSessionHostRefusal()).not.toBeNull()
-  expect(installs).toBe(0)
+  expect(open).toHaveBeenCalledTimes(1)
 })

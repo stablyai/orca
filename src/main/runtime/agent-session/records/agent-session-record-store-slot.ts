@@ -72,7 +72,7 @@ export function openAgentSessionRecordStoreOnce(
         slot.database = opened.journalDatabase
         if (!slot.retire) {
           slot.store = opened.store
-          // A startup opener holds maintenance until its restoration settles; pre-RPC startup does not share the disk.
+          // A startup opener holds background maintenance until its host's listening milestone.
           void Promise.resolve(location.maintenanceAfter).then(() => {
             if (!slot.retire) {
               void opened.journalDatabase.startMaintenance()

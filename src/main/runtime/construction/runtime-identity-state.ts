@@ -159,7 +159,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   /** Starts the saved-chat open early; the next startup restoration consumes this attempt. */
   beginStructuredAgentSessionStartupOpen(
-    open = startLocalAgentSessionRecordStoreOpen(this.legacyStructuredSessionTabIds)
+    maintenanceAfter: Promise<void>,
+    open = startLocalAgentSessionRecordStoreOpen(
+      this.legacyStructuredSessionTabIds,
+      maintenanceAfter
+    )
   ): void {
     this.structuredAgentSessionStartupOpen = open
   }

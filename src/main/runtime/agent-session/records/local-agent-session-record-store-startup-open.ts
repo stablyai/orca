@@ -12,10 +12,9 @@ import {
 
 /** One startup's saved-chat probe and open attempt; startup restoration consumes it once. */
 export type AgentSessionRecordStoreStartupOpen = {
+  legacySessionTabIds: readonly string[]
   persisted: boolean
   opened: Promise<unknown> | null
-  /** Startup restoration settled; background journal maintenance may begin. */
-  restored?: () => void
 }
 
 export function localAgentSessionRecordStoreLocation(
@@ -29,20 +28,18 @@ export function localAgentSessionRecordStoreLocation(
   }
 }
 
-/** Boots the chat writer alongside other startup work; profiles without chats spawn nothing. */
+/** Boots the chat writer alongside other startup work; profiles without chats spawn nothing.
+ *  `maintenanceAfter` is the host's own listening milestone, so background sweeps start after it. */
 export function startLocalAgentSessionRecordStoreOpen(
-  legacySessionTabIds: readonly string[]
+  legacySessionTabIds: readonly string[],
+  maintenanceAfter: Promise<void>
 ): AgentSessionRecordStoreStartupOpen {
   const location = localAgentSessionRecordStoreLocation(legacySessionTabIds)
   if (!hasPersistedStructuredAgentSessionStore(location.stateDirectory)) {
-    return { persisted: false, opened: null }
+    return { legacySessionTabIds, persisted: false, opened: null }
   }
-  const restored = Promise.withResolvers<void>()
-  const opened = openAgentSessionRecordStoreOnce({
-    ...location,
-    maintenanceAfter: restored.promise
-  })
+  const opened = openAgentSessionRecordStoreOnce({ ...location, maintenanceAfter })
   // Restoration reads the outcome; the open already logs and records its own refusal.
   opened.catch(() => {})
-  return { persisted: true, opened, restored: () => restored.resolve() }
+  return { legacySessionTabIds, persisted: true, opened }
 }

@@ -111,15 +111,24 @@ export function installOrcadShutdownSignals(
   return shutdown
 }
 
-/** Starts the saved-chat writer from the profile's own tab snapshot; restoration consumes it. */
+/** Starts the saved-chat writer from the profile's tab snapshot; `serving` releases maintenance. */
 export async function startOrcadAgentSessionRecordStoreOpen(
   profileStore: Parameters<typeof collectLocalSavedStructuredAgentSessionIds>[0]
-): Promise<AgentSessionRecordStoreStartupOpen> {
+): Promise<{
+  open: AgentSessionRecordStoreStartupOpen
+  maintenanceAfter: Promise<void>
+  serving: () => void
+}> {
   const { startLocalAgentSessionRecordStoreOpen } =
     await import('../../runtime/agent-session/records/local-agent-session-record-store-startup-open')
   const { collectLocalSavedStructuredAgentSessionIds: collectIds } =
     await import('../../runtime/agent-session/lifecycle/saved-structured-agent-session-restoration')
-  return startLocalAgentSessionRecordStoreOpen(collectIds(profileStore))
+  const serving = Promise.withResolvers<void>()
+  return {
+    open: startLocalAgentSessionRecordStoreOpen(collectIds(profileStore), serving.promise),
+    maintenanceAfter: serving.promise,
+    serving: () => serving.resolve()
+  }
 }
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {
