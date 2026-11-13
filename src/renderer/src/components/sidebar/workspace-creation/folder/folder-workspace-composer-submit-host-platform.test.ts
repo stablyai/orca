@@ -22,6 +22,10 @@ vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { FolderWorkspaceCreate } from '../../../../../../shared/rpc-contract/folder-workspace-params'
 import { FolderWorkspaceCreateArgs } from '../../../../../../main/ipc/repos/repo-ipc-arg-schemas'
+import {
+  buildWorktreeStartupForAgent,
+  buildWorktreeStartupForDraft
+} from '../../../../../../main/runtime/workspaces/startup/runtime-worktree-agent-startup'
 import { prepareGroupFolderCreation } from '../../../../../../main/runtime/workspaces/creation/runtime-group-folder-setup'
 import { useAppStore } from '@/store/index'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
@@ -221,36 +225,61 @@ it.each([
       ])
     })
     const pasteDraft = vi.fn()
+    const createTerminal = vi.fn(async (_selector: string, _options: unknown) => ({
+      handle: 'agent',
+      tabId: 'returned-agent-tab',
+      ptyId: 'agent-pty',
+      worktreeId: 'folder:folder-workspace-1',
+      title: 'Agent'
+    }))
     const sendFollowup = vi.fn()
-    const buildStartup = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      agentCmdOverrides: { [agent]: `custom-${agent} --color never` }
+    }
+    const environment = {
+      repo: { path: '/tmp', connectionId: null },
+      settings,
+      getLaunchRuntime: () => ({
+        platform: 'linux' as const,
+        shell: 'posix' as const,
+        launchRuntime: { platform: 'linux' as const, pty: {} }
+      })
+    }
     const createFolderWorkspace = vi.fn(
       async (input: Parameters<typeof FolderWorkspaceCreate.parse>[0]) => {
         const parsed = FolderWorkspaceCreateArgs.parse(FolderWorkspaceCreate.parse(input))
-        expect(parsed.startupCommand).toContain(`custom-${agent} --color never`)
-        expect(parsed.startupPromptDelivery).toBe(delivery ?? undefined)
-        if (delivery === 'draft') {
-          expect(parsed.startupPrompt).toContain('https://linear.app/team/issue/STA-1')
-        } else if (delivery === 'auto-submit') {
+        expect(parsed.startupCommand).toBeUndefined()
+        expect(parsed.startupAgent).toBe(agent)
+        if (delivery === 'auto-submit') {
           expect(parsed.startupPrompt).toBe('Inspect regular task')
+          expect(parsed.startupDraft).toBeUndefined()
         } else {
+          expect(parsed.startupDraft).toContain('https://linear.app/team/issue/STA-1')
           expect(parsed.startupPrompt).toBeUndefined()
         }
         return prepareGroupFolderCreation({
           input: parsed,
           group: { ...projectGroup, executionHostId: undefined },
           workspace: makeFolderWorkspace(),
-          settings: getDefaultSettings('/tmp'),
-          buildStartup,
+          settings,
+          startupBuilders: {
+            agent: (agent, prompt, launchPreferences, inputs) =>
+              buildWorktreeStartupForAgent({
+                ...environment,
+                agent,
+                prompt,
+                launchPreferences,
+                ...inputs,
+                toSessionOptions: () => undefined
+              }),
+            draft: (draft, requestedAgent) =>
+              buildWorktreeStartupForDraft({ ...environment, draft, requestedAgent })
+          },
           wait: async () => ({ exitCode: 0 }),
           ports: {
             canSpawn: true,
-            createTerminal: async () => ({
-              handle: 'agent',
-              tabId: 'returned-agent-tab',
-              ptyId: 'agent-pty',
-              worktreeId: 'folder:folder-workspace-1',
-              title: 'Codex'
-            }),
+            createTerminal,
             pasteDraft,
             sendFollowup,
             provision: async () => ({ setupSpawned: false, setupTerminalHandle: null }),
@@ -283,21 +312,21 @@ it.each([
       createFolderWorkspace,
       onOpenChange: vi.fn()
     })
-    expect(buildStartup).not.toHaveBeenCalled()
     if (delivery === 'draft') {
-      expect(pasteDraft).toHaveBeenCalledOnce()
-      expect(pasteDraft.mock.calls[0]?.[1]).toMatchObject({
-        agent: 'codex',
-        content: expect.stringContaining('https://linear.app/team/issue/STA-1')
-      })
+      expect(pasteDraft).not.toHaveBeenCalled()
+      expect(createTerminal.mock.calls[0]).toEqual([
+        'id:folder:folder-workspace-1',
+        expect.objectContaining({
+          command: expect.stringContaining('https://linear.app/team/issue/STA-1')
+        })
+      ])
       expect(sendFollowup).not.toHaveBeenCalled()
     } else if (delivery === 'auto-submit') {
       expect(pasteDraft).not.toHaveBeenCalled()
       expect(sendFollowup).toHaveBeenCalledExactlyOnceWith(
         'agent',
         { agent: 'autohand', prompt: 'Inspect regular task' },
-        expect.objectContaining({ tabId: 'returned-agent-tab' }),
-        true
+        expect.objectContaining({ tabId: 'returned-agent-tab' })
       )
     } else {
       expect(pasteDraft).not.toHaveBeenCalled()
@@ -315,30 +344,73 @@ it.each([
   }
 )
 
-it('rejects incomplete explicit delivery on IPC and RPC but preserves old captured-command forms', () => {
+it('applies the worktree semantic prompt and draft contract to IPC and RPC', () => {
   for (const schema of [FolderWorkspaceCreate, FolderWorkspaceCreateArgs]) {
+    expect(schema.safeParse({ projectGroupId: 'group', startupPrompt: 'task' }).success).toBe(false)
     expect(
-      schema.safeParse({
-        projectGroupId: 'group',
-        startupCommand: 'codex',
-        startupAgent: 'codex',
-        startupPromptDelivery: 'draft'
-      }).success
-    ).toBe(false)
+      schema.safeParse({ projectGroupId: 'group', startupAgent: 'codex', startupPrompt: 'task' })
+        .success
+    ).toBe(true)
     expect(
       schema.safeParse({
         projectGroupId: 'group',
         startupAgent: 'codex',
-        startupPrompt: 'task',
-        startupPromptDelivery: 'draft'
-      }).success
-    ).toBe(false)
-    expect(
-      schema.safeParse({
-        projectGroupId: 'group',
-        startupCommand: 'codex',
-        startupPrompt: 'legacy'
+        startupDraft: 'linked task'
       }).success
     ).toBe(true)
+    expect(
+      schema.safeParse({ projectGroupId: 'group', startupCommand: 'custom --literal' }).success
+    ).toBe(true)
   }
+})
+
+it('defers paired startup planning to the owning host when its OS has not been projected', async () => {
+  useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
+  const createFolderWorkspace = vi.fn(async (input: unknown) => {
+    const parsed = FolderWorkspaceCreateArgs.parse(FolderWorkspaceCreate.parse(input))
+    expect(parsed.startupAgent).toBe('claude')
+    expect(parsed.startupPrompt).toBe('Inspect on the host')
+    return { folderWorkspace: makeFolderWorkspace() }
+  })
+  await submitFolderWorkspaceCreate({
+    projectGroup: { ...makeProjectGroup(), executionHostId: 'runtime:unprojected' },
+    setupSupported: true,
+    setupApproval: { setupDecision: 'skip' },
+    runtimeEnvironmentId: 'unprojected',
+    name: 'Host task',
+    lastAutoName: '',
+    linkedWorkItem: null,
+    note: 'Inspect on the host',
+    quickAgent: 'claude',
+    autoRenameBranchFromWork: false,
+    agentCmdOverrides: {},
+    createFolderWorkspace,
+    onOpenChange: vi.fn()
+  })
+  expect(createFolderWorkspace).toHaveBeenCalledOnce()
+})
+
+it('creates a paired shell workspace without an agent prompt', async () => {
+  const createFolderWorkspace = vi.fn(async (input: unknown) => {
+    const parsed = FolderWorkspaceCreateArgs.parse(FolderWorkspaceCreate.parse(input))
+    expect(parsed.startupAgent).toBeUndefined()
+    expect(parsed.startupPrompt).toBeUndefined()
+    return { folderWorkspace: makeFolderWorkspace() }
+  })
+  await submitFolderWorkspaceCreate({
+    projectGroup: { ...makeProjectGroup(), executionHostId: 'runtime:paired-shell' },
+    setupSupported: true,
+    setupApproval: { setupDecision: 'skip' },
+    runtimeEnvironmentId: 'paired-shell',
+    name: 'Shell task',
+    lastAutoName: '',
+    linkedWorkItem: null,
+    note: '',
+    quickAgent: null,
+    autoRenameBranchFromWork: false,
+    agentCmdOverrides: {},
+    createFolderWorkspace,
+    onOpenChange: vi.fn()
+  })
+  expect(createFolderWorkspace).toHaveBeenCalledOnce()
 })

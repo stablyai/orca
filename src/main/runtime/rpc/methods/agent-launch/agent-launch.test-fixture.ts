@@ -133,7 +133,6 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
             createdAt: 0,
             updatedAt: 0
           },
-          agentLaunchOutcome: { status: 'not-required' },
           ...(input.startupAgent ? { startupTerminal: { spawned: true, ...terminal } } : {})
         }
       }

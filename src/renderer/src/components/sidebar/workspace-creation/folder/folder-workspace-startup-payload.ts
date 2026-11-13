@@ -57,29 +57,22 @@ export function buildFolderWorkspaceStartupPayload({
 }
 
 export function buildFolderWorkspaceHostStartupPayload({
-  startupPlan,
   quickAgent,
   agentArgs,
   sessionOptions,
-  launchSource
-}: Pick<SubmitFolderWorkspaceCreateParams, 'quickAgent' | 'agentArgs' | 'sessionOptions'> & {
-  startupPlan: NonNullable<ReturnType<typeof buildAgentStartupPlan>>
+  launchSource,
+  note,
+  launchDraftPrompt
+}: Pick<
+  SubmitFolderWorkspaceCreateParams,
+  'quickAgent' | 'agentArgs' | 'sessionOptions' | 'note'
+> & {
   launchSource: NonNullable<SubmitFolderWorkspaceCreateParams['launchSource']>
+  launchDraftPrompt: string | null
 }): Partial<FolderWorkspaceCreateInput> {
   return {
-    startupCommand: startupPlan.launchCommand,
-    startupEnv: startupPlan.env,
-    startupLaunchConfig: startupPlan.launchConfig,
-    startupCommandDelivery: startupPlan.startupCommandDelivery,
+    ...(launchDraftPrompt ? { startupDraft: launchDraftPrompt } : { startupPrompt: note }),
     startupAgent: quickAgent ?? undefined,
-    ...(startupPlan.draftPrompt
-      ? { startupPrompt: startupPlan.draftPrompt, startupPromptDelivery: 'draft' as const }
-      : startupPlan.followupPrompt
-        ? {
-            startupPrompt: startupPlan.followupPrompt,
-            startupPromptDelivery: 'auto-submit' as const
-          }
-        : {}),
     startupAgentArgs: agentArgs,
     startupSessionOptions: sessionOptions,
     startupLaunchPreferences: quickAgent

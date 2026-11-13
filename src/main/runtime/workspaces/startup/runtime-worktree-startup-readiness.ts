@@ -38,22 +38,17 @@ export type WorktreeStartupReadinessHost = {
 export function pasteWorktreeStartupDraftWhenReady(
   host: WorktreeStartupReadinessHost,
   handle: string,
-  draft: WorktreeStartupDraftPaste,
-  guarded?: { beforeWrite: (ptyId: string) => Promise<void>; dispose: () => void }
+  draft: WorktreeStartupDraftPaste
 ): void {
   void waitForWorktreeStartupDraft(host, handle, draft.agent)
-    .then(async (ptyId) => {
+    .then((ptyId) => {
       if (!ptyId) {
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      if (guarded) {
-        await guarded.beforeWrite(ptyId)
-      }
       host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
-    .finally(() => guarded?.dispose())
 }
 
 export type StartupFollowupPromptOptions = {

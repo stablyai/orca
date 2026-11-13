@@ -57,10 +57,7 @@ export function agentLaunchFolderWorkspaceCreator(
         promptRodeLaunchCommand = carried
       }
     })
-    if (
-      result.agentLaunchOutcome?.status === 'failed' ||
-      (startupAgent && !result.startupTerminal?.spawned)
-    ) {
+    if (startupAgent && !result.startupTerminal?.spawned) {
       throw new Error(
         `Could not start ${agent}. Setup or agent startup did not complete. Open the workspace, check Setup and try again.`
       )

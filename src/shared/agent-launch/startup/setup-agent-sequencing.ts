@@ -11,7 +11,7 @@ import {
 import { createNonSecureContextUuid } from '../../non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../powershell-native-argument'
 
-export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
@@ -54,7 +54,7 @@ export function createSequencedSetupAgentCommands(args: {
     : resolution.runnerScriptPathForShell
   // Use distinct markers for overlapping launches of one setup runner.
   const markerPath = `${markerBasePath}.${nonce}.done`
-  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? SETUP_AGENT_WAIT_TIMEOUT_SECONDS
+  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {

@@ -1,12 +1,10 @@
-import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
-import { shouldWaitForSetupBeforeAgentStartup } from '../../../../shared/agent-launch/startup/setup-agent-startup-policy'
 import type {
   CreateWorktreeResult,
   SetupDecision,
   SetupTrustMismatch
 } from '../../../../shared/worktree/create-types'
 import type { WorkspaceHookOwner } from '../../../../shared/workspace-hook-owner'
-import { hasHooksFile, loadHooks, runHook } from '../../../workspace-hooks/hooks'
+import { loadHooks, runHook } from '../../../workspace-hooks/hooks'
 import {
   createSetupRunnerScript,
   resolveSetupRunnerShell
@@ -44,7 +42,6 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   settings: ReturnType<RuntimeStore['getSettings']>
   runtimeTarget: { wslDistro?: string } | undefined
   shouldUseSetupRunner: boolean
-  requireReadableConfig?: boolean
   warning?: string
   /** Required for folder workspaces, whose shared directory can't name the workspace. */
   identity?: HookWorkspaceIdentity
@@ -56,20 +53,12 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   setupTrustMismatch?: SetupTrustMismatch
   hookFound: boolean
   shouldRunSetup: boolean
-  waitForAgentStartup: boolean
   didStartInProcessSetupHook: boolean
 }> {
   const { request, repo, worktreePath, settings } = args
   let warning = args.warning
   let setup: CreateWorktreeResult['setup']
   const yamlHooks = scopeHooksToRepoKind(repo, loadHooks(worktreePath))
-  const localPolicyKnown =
-    resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
-      hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
-    }) === 'local-only' && repo.hookSettings?.setupAgentStartupPolicy !== undefined
-  if (args.requireReadableConfig && !localPolicyKnown && hasHooksFile(worktreePath) && !yamlHooks) {
-    throw new Error('Check orca.yaml and try Setup again.')
-  }
   // One parse feeds both the trust check and the runner, so approved bytes are the bytes that run.
   const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
   const effectiveDecision = resolveRuntimeSetupDecision(request)
@@ -152,10 +141,6 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(warning ? { warning } : {}),
     effectiveDecision,
-    waitForAgentStartup: shouldWaitForSetupBeforeAgentStartup(
-      repo.hookSettings?.setupAgentStartupPolicy,
-      yamlHooks?.setupAgentStartupPolicy
-    ),
     ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,

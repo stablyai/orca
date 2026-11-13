@@ -22,30 +22,19 @@ export const FolderWorkspaceHookCreateShape = {
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   startupAgent: z.string().refine(isTuiAgent).optional(),
   startupPrompt: OptionalString,
-  startupPromptDelivery: z.enum(['draft', 'auto-submit']).optional(),
+  startupDraft: OptionalString,
   startupAgentArgs: AgentArgs.optional(),
   startupSessionOptions: z.record(z.string(), z.string()).optional(),
   startupLaunchPreferences: LaunchPreferences.optional(),
   launchSource: LaunchSourceParam.optional()
 }
 
-export function assertFolderWorkspaceStartupDelivery(
-  value: {
-    startupPromptDelivery?: string
-    startupCommand?: string
-    startupAgent?: string
-    startupPrompt?: string
-  },
+export function assertFolderWorkspaceStartup(
+  value: { startupAgent?: string; startupPrompt?: string },
   ctx: z.RefinementCtx
 ): void {
-  if (
-    value.startupPromptDelivery &&
-    (!value.startupCommand?.trim() || !value.startupAgent || !value.startupPrompt?.trim())
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Startup prompt delivery requires a command, agent and text'
-    })
+  if (value.startupPrompt !== undefined && value.startupAgent === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'startupPrompt requires startupAgent' })
   }
 }
 
@@ -85,7 +74,7 @@ export const FolderWorkspaceCreate = z
     pendingFirstAgentMessageRename: z.boolean().optional()
   })
   .superRefine(assertLinkedTaskSourceContextMatch)
-  .superRefine(assertFolderWorkspaceStartupDelivery)
+  .superRefine(assertFolderWorkspaceStartup)
 
 // Hosts advertising the unique-id mutation capability refuse a shared folder id when this is set.
 const RequireUniqueId = z.boolean().optional()

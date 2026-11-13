@@ -210,7 +210,6 @@ export class RuntimeProjectGroupController {
       console.warn('[hooks] group workspace startup failed:', error)
       return {
         folderWorkspace: workspace,
-        agentLaunchOutcome: { status: 'failed', reason: 'spawn' },
         warning: 'Setup or the agent could not start. Open the workspace and try again.'
       }
     }

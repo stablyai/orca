@@ -11,6 +11,8 @@ import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-t
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 import type {
   WorktreeStartupDraftPaste,
@@ -21,11 +23,44 @@ import type {
   WorktreeTerminalProvisioningArgs
 } from './runtime-worktree-terminal-provisioning'
 
-import type {
-  RuntimeLocalWorktreeTerminalPorts,
-  RuntimeLocalWorktreeTerminalStartupResult
-} from './runtime-worktree-terminal-startup-types'
-export type { RuntimeLocalWorktreeTerminalPorts } from './runtime-worktree-terminal-startup-types'
+export type RuntimeLocalWorktreeTerminalPorts = {
+  canSpawn: boolean
+  provisionInBackground?: () => boolean
+  createTerminal: (
+    selector: string,
+    options: TerminalCreateOptions
+  ) => Promise<RuntimeTerminalCreate>
+  pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
+  sendFollowup: (
+    handle: string,
+    followup: WorktreeStartupFollowup,
+    terminal: RuntimeTerminalCreate
+  ) => void
+  provision: (
+    options: WorktreeTerminalProvisioningArgs
+  ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
+  activate: (
+    repoId: string,
+    worktreeId: string,
+    startup?: WorktreeStartupLaunch,
+    // Only work main tried to start and failed; the host window retries it where the user sees it.
+    failedSetup?: CreateWorktreeResult['setup'],
+    failedDefaultTabs?: CreateWorktreeResult['defaultTabs'],
+    providesInitialSurface?: boolean
+  ) => void
+}
+
+export type RuntimeLocalWorktreeTerminalStartupResult = {
+  warning?: string
+  returnedSetup?: CreateWorktreeResult['setup']
+  didSpawnSetup: boolean
+  didSpawnStartup: boolean
+  setupTerminalHandle: string | null
+  startupTerminalHandle: string | null
+  startupTerminalTabId: string | null
+  startupTerminalPaneKey: string | null
+  startupTerminalPtyId: string | null
+}
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
   request: Omit<RuntimeManagedWorktreeCreateArgs, 'repoSelector' | 'name'>
@@ -38,8 +73,6 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   /** What a host-built startup was quoted for, or the repair error it fails with. */
   startupLaunchRuntime?: AgentLaunchRuntime | Error
   createdWithAgent?: TuiAgent
-  observeSequencedSetupCompletion?: boolean
-  guardStartupInput?: true
   promisedAgentChat?: boolean
   draftPaste?: WorktreeStartupDraftPaste
   warning?: string
@@ -105,14 +138,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       })
       request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
-        ports.pasteDraft(
-          terminal.handle,
-          args.draftPaste,
-          args.guardStartupInput ? terminal : undefined
-        )
+        ports.pasteDraft(terminal.handle, args.draftPaste)
       }
       if (args.startupFollowup) {
-        ports.sendFollowup(terminal.handle, args.startupFollowup, terminal, args.guardStartupInput)
+        ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
@@ -243,7 +272,6 @@ function provisionArgs(
     startupNeedsTerminal: args.startup !== undefined,
     setupCommandPlatform: setupPlatform(args.setup, 'posix'),
     observeSetupCompletion: args.request.observeSetupCompletion,
-    observeSequencedSetupCompletion: args.observeSequencedSetupCompletion,
     ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
   }
 }

@@ -9,7 +9,7 @@ import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import {
   FolderWorkspaceHookCreateShape,
-  assertFolderWorkspaceStartupDelivery
+  assertFolderWorkspaceStartup
 } from '../../../shared/rpc-contract/folder-workspace-params'
 
 export const ProjectGroupCreateArgs = z.object({
@@ -164,7 +164,7 @@ export const FolderWorkspaceCreateArgs = z
     pendingFirstAgentMessageRename: z.boolean().optional()
   })
   .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
-  .superRefine(assertFolderWorkspaceStartupDelivery)
+  .superRefine(assertFolderWorkspaceStartup)
 
 export const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),

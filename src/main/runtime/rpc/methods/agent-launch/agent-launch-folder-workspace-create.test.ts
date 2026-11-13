@@ -88,12 +88,11 @@ describe('a replayed folder launch', () => {
     expect(result).toMatchObject({ worktreeId: 'folder:fw-new', outcome: { kind: 'terminal' } })
   })
 
-  it('does not launch or fall back to an agent after group setup fails', async () => {
+  it('does not duplicate a terminal when the requested startup fails', async () => {
     const runtime = folderRuntime()
     const original = runtime.createFolderWorkspace.getMockImplementation()!
     runtime.createFolderWorkspace.mockImplementationOnce(async (input) => ({
       ...(await original(input)),
-      agentLaunchOutcome: { status: 'failed', reason: 'exit' },
       startupTerminal: undefined
     }))
     await expect(replay(runtime)).rejects.toThrow()

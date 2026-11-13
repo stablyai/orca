@@ -21,23 +21,15 @@ export type FolderWorkspaceCreateInput = {
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   startupAgent?: TuiAgent
   startupPrompt?: string
-  startupPromptDelivery?: 'draft' | 'auto-submit'
+  startupDraft?: string
   startupAgentArgs?: string | null
   startupSessionOptions?: Record<string, string>
   startupLaunchPreferences?: AgentLaunchPreferences
   launchSource?: string
 } & Pick<CreateWorktreeArgs, 'setupDecision' | 'approvedSetupHash' | 'approvedSetupHashes'>
 
-export type FolderWorkspaceAgentLaunchOutcome =
-  | { status: 'not-required' | 'successful' }
-  | {
-      status: 'failed'
-      reason: 'preparation' | 'spawn' | 'observation' | 'exit' | 'timeout' | 'cancelled'
-    }
-
 export type FolderWorkspaceCreateResult = {
   folderWorkspace: FolderWorkspace
-  agentLaunchOutcome?: FolderWorkspaceAgentLaunchOutcome
 } & Pick<
   CreateWorktreeResult,
   'setup' | 'setupReceipt' | 'startupTerminal' | 'warning' | 'setupTrustMismatch'

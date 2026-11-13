@@ -1,5 +1,3 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import { SETUP_AGENT_WAIT_TIMEOUT_SECONDS } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import type {
   FolderWorkspaceCreateInput,
@@ -22,8 +20,8 @@ import {
   startRuntimeLocalWorktreeTerminals,
   type RuntimeLocalWorktreeTerminalPorts
 } from '../startup/runtime-local-worktree-terminal-startup'
-import { resolveWorktreeCreateAgentStartup } from '../startup/runtime-worktree-agent-startup'
-import { groupSetupAgentOutcome } from './group-setup-agent-outcome'
+import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
+import { waitForStructuredSetup } from '../../rpc/methods/agent-launch/agent-launch-worktree-creation'
 
 export type RuntimeGroupFolderCreateInput = FolderWorkspaceCreateInput &
   Pick<
@@ -56,16 +54,13 @@ export async function prepareGroupFolderCreation(args: {
   workspace: FolderWorkspace
   settings: ReturnType<RuntimeStore['getSettings']>
   ports: RuntimeLocalWorktreeTerminalPorts
-  buildStartup: Parameters<typeof resolveWorktreeCreateAgentStartup>[1]
+  startupBuilders: Parameters<typeof resolveManagedWorktreeCreateStartup>[2]
   wait: (handle: string, signal: AbortSignal) => Promise<{ exitCode: number | null }>
 }): Promise<FolderWorkspaceCreateResult> {
   const { input, workspace, group } = args
   const result: FolderWorkspaceCreateResult = { folderWorkspace: workspace }
   const owner = projectGroupHookOwner(group)
   const skip = resolveRuntimeSetupDecision(input) === 'skip'
-  if (!owner || !isRepoOnCatalogHost(owner) || skip) {
-    result.agentLaunchOutcome = { status: 'not-required' }
-  }
   let prepared: Awaited<ReturnType<typeof prepareRuntimeLocalWorktreeSetup>> | undefined
   if (owner && isRepoOnCatalogHost(owner) && !skip) {
     try {
@@ -87,8 +82,7 @@ export async function prepareGroupFolderCreation(args: {
         },
         settings: args.settings,
         runtimeTarget: undefined,
-        shouldUseSetupRunner: true,
-        requireReadableConfig: true
+        shouldUseSetupRunner: true
       })
       if (prepared.setup) {
         prepared.setup = { ...prepared.setup, cwd: owner.path }
@@ -98,36 +92,12 @@ export async function prepareGroupFolderCreation(args: {
     } catch (error) {
       console.warn('[hooks] group setup preparation failed:', error)
       result.warning = 'Setup did not run. Check the group’s workspace hooks and try Setup again.'
-      result.agentLaunchOutcome = { status: 'failed', reason: 'preparation' }
     }
-  }
-  const required = Boolean(prepared?.shouldRunSetup && prepared.waitForAgentStartup)
-  if (required && !prepared?.setup) {
-    result.agentLaunchOutcome = { status: 'failed', reason: 'preparation' }
   }
   if (input.rendererOwnsSetup && input.agentLaunchMode !== 'structured') {
     result.setup = prepared?.setup
     return result
   }
-  if (result.agentLaunchOutcome?.status === 'failed') {
-    return result
-  }
-  const pendingDraft =
-    input.startupCommand &&
-    input.startupAgent &&
-    input.startupPrompt &&
-    input.startupPromptDelivery === 'draft'
-      ? { agent: input.startupAgent, content: input.startupPrompt }
-      : undefined
-  const pendingFollowup =
-    input.startupCommand &&
-    input.startupAgent &&
-    input.startupPrompt &&
-    input.startupPromptDelivery === 'auto-submit'
-      ? { agent: input.startupAgent, prompt: input.startupPrompt }
-      : undefined
-  const deferInput = required && Boolean(pendingDraft || pendingFollowup)
-  const captured: { terminal?: RuntimeTerminalCreate } = {}
   const request = {
     ...input,
     ...(input.startupCommand
@@ -142,51 +112,27 @@ export async function prepareGroupFolderCreation(args: {
       : {}),
     startupLaunchSource: input.launchSource,
     awaitTerminalProvisioning: true,
-    observeSetupCompletion: input.agentLaunchMode === 'structured' || deferInput,
-    onStartupTerminalCreated: (terminal: RuntimeTerminalCreate) => {
-      captured.terminal = terminal
-      input.onStartupTerminalCreated?.(terminal)
-    },
+    observeSetupCompletion: input.agentLaunchMode === 'structured',
     setupOnly: input.agentLaunchMode === 'structured'
   }
-  const built = await resolveWorktreeCreateAgentStartup(request, args.buildStartup)
+  const built = await resolveManagedWorktreeCreateStartup(
+    request,
+    args.settings.disabledTuiAgents,
+    args.startupBuilders
+  )
   const started = await startRuntimeLocalWorktreeTerminals({
     request,
     repo: { id: group.id },
     worktree: folderWorkspaceToWorktree(workspace),
     setup: prepared?.setup,
-    startup: request.startup ?? built?.startup,
-    startupFollowup: deferInput ? undefined : (pendingFollowup ?? built?.followup),
-    draftPaste: deferInput ? undefined : pendingDraft,
-    observeSequencedSetupCompletion: deferInput,
-    ...(pendingDraft || pendingFollowup ? { guardStartupInput: true as const } : {}),
-    startupLaunchRuntime: built?.launchRuntime,
-    createdWithAgent: input.createdWithAgent,
+    startup: built.effectiveStartup,
+    startupFollowup: built.effectiveStartupFollowup,
+    draftPaste: built.effectiveDraftPaste,
+    startupLaunchRuntime: built.startupLaunchRuntime,
+    createdWithAgent: built.effectiveCreatedWithAgent,
     promisedAgentChat: input.agentLaunchMode === 'structured',
     ports: args.ports
   })
-  if (deferInput && started.didSpawnStartup && captured.terminal) {
-    const terminal = captured.terminal
-    // The host owns pending input after create returns; RPC disconnect is not cancellation.
-    void groupSetupAgentOutcome({
-      required: true,
-      prepared: Boolean(prepared?.setup),
-      terminalHandle: started.setupTerminalHandle,
-      wait: args.wait,
-      timeoutMs: SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
-    })
-      .then((outcome) => {
-        if (outcome.status !== 'successful') {
-          return
-        }
-        if (pendingDraft) {
-          args.ports.pasteDraft(terminal.handle, pendingDraft, terminal)
-        } else if (pendingFollowup) {
-          args.ports.sendFollowup(terminal.handle, pendingFollowup, terminal, true)
-        }
-      })
-      .catch((error) => console.warn('[hooks] group startup input was not delivered:', error))
-  }
   // Host-owned provisioning is never retried by renderer activation.
   result.setup = undefined
   result.warning = started.warning ?? result.warning
@@ -208,13 +154,7 @@ export async function prepareGroupFolderCreation(args: {
     }
   }
   if (input.agentLaunchMode === 'structured') {
-    result.agentLaunchOutcome = await groupSetupAgentOutcome({
-      required,
-      prepared: Boolean(prepared?.setup),
-      terminalHandle: started.setupTerminalHandle,
-      wait: args.wait,
-      signal: input.signal
-    })
+    await waitForStructuredSetup({ waitForSetupTerminalCompletion: args.wait }, result.setupReceipt)
   }
   return result
 }
