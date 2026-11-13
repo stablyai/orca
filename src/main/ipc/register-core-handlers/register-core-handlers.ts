@@ -47,6 +47,7 @@ import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/br
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings'
+import { applyDesktopSettingsUpdate } from '../desktop-settings-update'
 import { registerDiagnosticsHandlers } from '../diagnostics'
 import { registerSkillsHandlers } from '../skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
@@ -213,6 +214,9 @@ export function registerCoreHandlers(
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
+  runtime.setDesktopSettingsWriter((updates) =>
+    applyDesktopSettingsUpdate(store, updates, { agentAwakeService })
+  )
   registerSkillsHandlers(store, runtime)
   registerSkillDeleteIpcHandlers(store, runtime)
   if (automations) {
