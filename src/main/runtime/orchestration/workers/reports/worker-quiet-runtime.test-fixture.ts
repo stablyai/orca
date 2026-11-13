@@ -14,6 +14,7 @@ import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime
 
 const chat = vi.hoisted(() => ({
   handles: new Set<string>(),
+  lineageRevision: {},
   status: 'working',
   statuses: new Map<string, string>(),
   progress: vi.fn<(id: string) => Omit<WorkerQuietObservation, 'dispatchId' | 'working'> | null>()
@@ -23,6 +24,14 @@ vi.mock(
   '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
   () => ({
     getStructuredAgentSessionHost: () => ({
+      deps: {
+        store: {
+          getConversation: () => null,
+          listConversations: () => [],
+          getVisibleSessionTabIndex: () => ({ present: false, sessionIds: [] }),
+          lineageRevision: () => chat.lineageRevision
+        }
+      },
       loadedSessionIds: () => [...chat.handles],
       readStatusSummary: (id: string) => ({ status: chat.statuses.get(id) ?? chat.status }),
       attentionReads: { workerProgress: chat.progress },
@@ -79,6 +88,10 @@ export function runtimeFixture() {
   return {
     chat,
     changes,
+    stop: () => {
+      stop?.()
+      stop = undefined
+    },
     panes,
     get store() {
       return store

@@ -14,6 +14,7 @@ import {
 export function startWorkerQuietSweep(
   deps: QuietWorkerSource & {
     changes: Pick<CrewChanges, 'subscribe'>
+    subscribeTitleStatus?: (wake: () => void) => () => void
     getDb: () => OrchestrationDb | null
     notify: (handle: string, type: string) => void
   }
@@ -67,6 +68,7 @@ export function startWorkerQuietSweep(
   return startWorkerQuietWatch({
     sweep: run,
     subscribe: (wake) => {
+      const detachTitleStatus = deps.subscribeTitleStatus?.(wake)
       const detachChanges = deps.changes.subscribe((facets) => {
         if (facets.has('topology') || facets.has('status')) {
           wake()
@@ -77,6 +79,7 @@ export function startWorkerQuietSweep(
         wake()
       })
       return () => {
+        detachTitleStatus?.()
         detachChanges()
         detachResume?.()
       }

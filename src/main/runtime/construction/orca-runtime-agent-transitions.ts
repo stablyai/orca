@@ -113,9 +113,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     ? null
     : new WorktreeRowsChanges((event) => this.emitClientEvent(event))
 
+  private readonly quietWorkerTitleWakes = new Set<() => void>()
+
   protected onTitleAgentStatusChanged(): void {
     this.worktreeRowsChanges?.changed()
-    this.crewChanges.notify(new Set(['status']))
+    for (const wake of this.quietWorkerTitleWakes) {
+      wake()
+    }
   }
 
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
@@ -178,6 +182,10 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     const stopQuietSweep = startWorkerQuietSweep({
       store,
       changes: this.crewChanges,
+      subscribeTitleStatus: (wake) => {
+        this.quietWorkerTitleWakes.add(wake)
+        return () => this.quietWorkerTitleWakes.delete(wake)
+      },
       getDb: () => this._orchestrationDb,
       resolveTerminal: (paneKey) =>
         resolveTerminalWorkerDispatch(this.terminalWorkerResolution, paneKey),

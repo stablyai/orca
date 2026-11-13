@@ -34,6 +34,7 @@ it.each(['hook', 'title'])(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: invoke the real subscription and title edges with only their runtime dependencies; never construct or operate a PTY.
     const runtime = Object.assign(Object.create(OrcaRuntimeWithAgentTransitions.prototype), {
       crewChanges: changes,
+      quietWorkerTitleWakes: new Set<() => void>(),
       _orchestrationDb: db,
       externalConversations: { current: () => null },
       agentTransitions: { attach: () => () => {} },
@@ -60,6 +61,7 @@ it.each(['hook', 'title'])(
     detach = runtime.attachAgentStatusStore(store)
     vi.advanceTimersByTime(120_000)
     expect(db.getUnreadRunMailbox(run.id, 100, ['status'])).toEqual([])
+    const crewNotify = vi.spyOn(changes, 'notify')
     if (source === 'hook') {
       store.ingestRemote(
         {
@@ -78,6 +80,9 @@ it.each(['hook', 'title'])(
         'Custom working'
       )
     }
+    if (source === 'title') {
+      expect(crewNotify).not.toHaveBeenCalled()
+    }
     vi.advanceTimersByTime(source === 'hook' ? 900_000 : 3_600_000)
     expect(db.getUnreadRunMailbox(run.id, 100, ['status'])).toHaveLength(1)
     ptys.clear()
@@ -89,5 +94,23 @@ it.each(['hook', 'title'])(
     vi.advanceTimersByTime(600_000)
     expect(reads).not.toHaveBeenCalled()
     expect(db.getUnreadRunMailbox(run.id, 100, ['status'])).toHaveLength(1)
+    runtime['onTitleAgentStatusChanged']()
+    detach()
+    detach = undefined
+    const paneReads = vi.spyOn(runtime, 'getPtyRecordForPaneKey')
+    store.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        payload: { state: 'working', prompt: 'new work', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    runtime['onTitleAgentStatusChanged']()
+    changes.notify(new Set(['status']))
+    changes.notify()
+    vi.advanceTimersByTime(120_000)
+    expect(paneReads).not.toHaveBeenCalled()
+    expect(reads).not.toHaveBeenCalled()
   }
 )

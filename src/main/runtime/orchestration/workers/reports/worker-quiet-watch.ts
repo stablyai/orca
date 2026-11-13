@@ -4,6 +4,7 @@ export function startWorkerQuietWatch(deps: {
   subscribe: (wake: () => void) => () => void
 }): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
+  let lastSweepAt: number | undefined
   let failures = 0
   let running = false
   let stopped = false
@@ -16,6 +17,7 @@ export function startWorkerQuietWatch(deps: {
     if (stopped) {
       return
     }
+    lastSweepAt = performance.now()
     running = true
     try {
       const active = deps.sweep()
@@ -36,7 +38,7 @@ export function startWorkerQuietWatch(deps: {
   const detach = deps.subscribe(() => {
     // Repeated status events must not postpone a deadline or bypass a failure backoff.
     if (!stopped && !running && timer === undefined) {
-      schedule(0)
+      schedule(Math.max(0, (lastSweepAt ?? -60_000) + 60_000 - performance.now()))
     }
   })
   schedule(0)
