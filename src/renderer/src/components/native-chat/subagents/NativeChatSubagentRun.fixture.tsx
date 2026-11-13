@@ -38,7 +38,7 @@ const block: NativeChatSubagentGroupBlock = {
       settledAt: now - 62_000,
       model: 'claude-haiku-4-5-20251001',
       lastMessage:
-        'Refresh happens in two places: the middleware retries once on 401, and the client refreshes on a timer 60 s before expiry.'
+        'Refresh happens in **two** places:\n- `middleware.ts` retries once on 401\n- the client refreshes on a timer 60 s before expiry'
     }
   ]
 }

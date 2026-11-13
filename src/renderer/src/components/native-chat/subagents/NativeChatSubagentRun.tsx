@@ -12,6 +12,7 @@ import { normalizeSubagentState } from '../../../../../shared/native-chat/transc
 import {
   subagentEntryDetail,
   subagentEntryRunsOn,
+  subagentMessageText,
   subagentRoleLabel
 } from '../../../../../shared/native-chat/transcript/native-chat-subagent-entry-detail'
 import type {
@@ -175,7 +176,10 @@ function SubagentEntryPreview({
   children: React.ReactElement
 }): React.JSX.Element {
   const role = [subagentRoleLabel(agent.agentType), runsOn].filter(Boolean).join(' · ')
-  const text = state === 'working' && agent.operation ? detail : (agent.lastMessage?.trim() ?? null)
+  const text =
+    state === 'working' && agent.operation
+      ? detail
+      : subagentMessageText(agent.lastMessage ?? '') || null
   return (
     <HoverCard openDelay={300} closeDelay={100}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>

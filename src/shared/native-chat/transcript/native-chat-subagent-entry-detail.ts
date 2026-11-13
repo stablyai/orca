@@ -19,8 +19,24 @@ export function subagentEntryDetail(entry: NativeChatSubagentEntry): string | nu
           false
         )
       : ''
-  const text = operation || entry.lastMessage?.replace(/\s+/g, ' ').trim()
+  // Lines become separate clauses, so list items don't run together on one row.
+  const text =
+    operation ||
+    subagentMessageText(entry.lastMessage ?? '')
+      .replace(/:\s*\n\s*/g, ': ')
+      .replace(/\s*\n\s*/g, ' · ')
+      .replace(/\s+/g, ' ')
   return text || null
+}
+
+/** What the subagent said, without the markdown marks a plain row or preview can't render. */
+export function subagentMessageText(markdown: string): string {
+  return markdown
+    .replace(/^\s*```.*$/gm, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+)/gm, '')
+    .replace(/[`*~]|__/g, '')
+    .trim()
 }
 
 /** `claude-opus-5-5` reads as `Opus 5.5`, `gpt-5.5` as `GPT-5.5`: the chat already names the provider. */
