@@ -1,5 +1,5 @@
 // #503 follow-up (design-squad): a commit that goes out under the workspace identity (Orca Cloud's
-// name) says once per session how to use your own: connect GitHub in Settings › Account & billing.
+// name) says once per session how to use your own: connect GitHub in Settings › Account.
 // Pushes and read-only git never say it; orca-git-as's own fallback line is replaced by it.
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const SHIM = fileURLToPath(new URL('../image/vm/git', import.meta.url).href)
-const NUDGE = "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings › Account & billing to use yours."
+const NUDGE = "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings › Account to use yours."
 
 let home = ''
 let cwd = ''
