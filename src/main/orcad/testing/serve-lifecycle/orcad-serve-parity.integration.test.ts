@@ -107,7 +107,7 @@ function profile(): string {
 describe.skipIf(skip)('orca serve on orcad', () => {
   // Real server startup, CLI commands and graceful shutdown each cross process boundaries.
   it('deletes a linked worktree through the real CLI with a durable host journal', async () => {
-    const userData = realpathSync(profile())
+    const userData = realpathSync.native(profile())
     const home = join(userData, 'isolated-home')
     const repo = join(userData, 'repo')
     const worktree = join(userData, 'feature')
