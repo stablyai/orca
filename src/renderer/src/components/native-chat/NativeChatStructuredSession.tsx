@@ -393,6 +393,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               agent={props.agent}
               {...stopControls.composer}
               unavailableHint={install.unavailableHint}
+              heldHint={hostHeld ? undefined : install.heldHint}
               steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
               structuredTransport={transport}
               notices={notices}
