@@ -8925,7 +8925,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/protocol-backpressure.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 2.24,
-          "summary": "Sixteen deterministic SSH relay/session/source/decoder files passed 192 tests, including exit-sealed private recovery, retained stale-transfer cancellation authority, exact private-frame proof watermarks, one retirement record across 10,000 same-PTY token rotations, stale-owner fallback, and scheduler rejection isolation; no live topology was exercised."
+          "summary": "Sixteen deterministic SSH relay/session/source/decoder files passed 192 tests, including exit-sealed private recovery, retained stale-transfer cancellation authority, exact private-frame proof watermarks, one retirement record across 10,000 same-PTY token rotations, stale-owner fallback, and scheduler rejection isolation; no live topology was exercised.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/transport/wire/protocol-backpressure.test.ts --reporter=dot"
         }
       ],
       "runtimeBudget": {
