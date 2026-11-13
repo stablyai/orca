@@ -8,12 +8,18 @@
 //   npx tsx test/g1-front-door.ts
 // Optional: G1_JWT_KEYS (default spike/.keys.json: the test JWKS the staging edge trusts),
 // G1_JWT_ISSUER, G1_INGRESS_NAME (default cn), G1_HOLD_MS, G1_PREAUTH_PROBES (default 0: skip),
-// G1_OUT (write the results as JSON). Prints no secrets or tokens.
+// G1_OUT (write the results as JSON), G1_PHASES (default g1,g4). Prints no secrets or tokens.
+// G4 (folded in): a burst of G4_HANDSHAKES (300) handshakes, G4_CONCURRENCY (25) at a time, then
+// G4_SOCKETS (50) parallel control sockets held G4_HOLD_MS (60 s). Every request reaches Cloudflare
+// from the load balancer's few egress IPs; any challenge or block from the zone's own features
+// (bot fight mode, security level, rate or custom rules) is reported apart from our pre-auth limiter.
 //
 // The staging edge must have INGRESS_TOKENS / INGRESS_ORIGINS (incl. the front door origin) /
 // INGRESS_SOURCE_CIDRS set; otherwise G1.5 fails exactly like the negative control G1.4.
 import { randomBytes } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { request as httpsRequest } from 'node:https'
+import { classify, type Answer } from './front-door-answer'
 import { importJWK, type JWK, type KeyLike } from 'jose'
 import {
   adminAssign,
@@ -56,8 +62,23 @@ function record(name: string, ok: boolean, detail = ''): void {
 }
 const errorText = (value: unknown) => (value instanceof Error ? value.message.slice(0, 120) : '')
 
+// The `server` header on the edge's own responses (local dry runs have none).
+const EDGE_SERVER = process.env.G1_EDGE_SERVER_HEADER ?? 'cloudflare'
+const PHASES = new Set((process.env.G1_PHASES ?? 'g1,g4').split(',').map((p) => p.trim()))
+const G4 = {
+  handshakes: Number(process.env.G4_HANDSHAKES ?? 300),
+  concurrency: Number(process.env.G4_CONCURRENCY ?? 25),
+  sockets: Number(process.env.G4_SOCKETS ?? 50),
+  holdMs: Number(process.env.G4_HOLD_MS ?? 60_000)
+}
+
 async function main(): Promise<void> {
   const key = (await importJWK((JSON.parse(readFileSync(KEYS, 'utf8')) as { privateJwk: JWK }).privateJwk, 'ES256')) as KeyLike
+  if (PHASES.has('g1')) await g1(key)
+  if (PHASES.has('g4')) await g4(key)
+}
+
+async function g1(key: KeyLike): Promise<void> {
   const host = newHost()
   const id = host.relayHostId
   const jwt = await mint(ACCOUNT, key, id)
@@ -170,6 +191,108 @@ async function main(): Promise<void> {
     for (let i = 0; i < PREAUTH_PROBES; i++) statuses.push(await preauthStatus(FRONT, probeHost))
     record('G1.10 pre-auth probes through the front door (informational)', statuses.includes(426), `first=${statuses[0]} limitedFrom=${statuses.indexOf(429)} last=${statuses.at(-1)}`)
   }
+}
+
+// ---- G4: the zone's view of traffic concentrated on the front door's few egress IPs ----
+
+// One fresh TLS connection per handshake (no agent), so the load balancer sees many clients'
+// worth of connections; it still reaches Cloudflare from its few egress IPs.
+function handshake(url: string, upgrade: boolean, headers: Record<string, string> = {}): Promise<Answer> {
+  const started = Date.now()
+  return new Promise((resolve) => {
+    const req = httpsRequest(url, {
+      agent: false,
+      headers: upgrade
+        ? { connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': randomBytes(16).toString('base64'), ...headers }
+        : headers
+    })
+    req.setTimeout(15_000, () => req.destroy(new Error('timeout')))
+    req.on('upgrade', (res, socket) => {
+      socket.destroy()
+      resolve({ status: 101, headers: res.headers, body: '', ms: Date.now() - started })
+    })
+    req.on('response', (res) => {
+      let body = ''
+      res.setEncoding('utf8')
+      res.on('data', (d: string) => (body = (body + d).slice(0, 4096)))
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body, ms: Date.now() - started }))
+      res.on('error', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body, ms: Date.now() - started }))
+    })
+    req.on('error', () => resolve({ status: -1, headers: {}, body: '', ms: Date.now() - started }))
+    req.end()
+  })
+}
+
+async function pool<T>(count: number, concurrency: number, task: (i: number) => Promise<T>): Promise<T[]> {
+  const out: T[] = new Array(count)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(concurrency, count) }, async () => {
+    while (next < count) {
+      const i = next++
+      out[i] = await task(i)
+    }
+  }))
+  return out
+}
+
+function tally(answers: Answer[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const a of answers) {
+    const k = `${classify(a, EDGE_SERVER)}:${a.status}`
+    counts[k] = (counts[k] ?? 0) + 1
+  }
+  return counts
+}
+
+async function g4(key: KeyLike): Promise<void> {
+  // G4.1 Burst of handshakes, three kinds in rotation: a plain request, a control upgrade with no
+  // JWT (401 before upgrade), and a phone upgrade for a host nobody pushed (101, or 429 from OUR
+  // pre-auth limiter once this client passes it; that is expected and kept apart).
+  const stray = newHost().relayHostId
+  const kinds = [
+    () => handshake(`${FRONT}/health`, false),
+    () => handshake(`${FRONT}/v1/host/control`, true),
+    () => handshake(`${FRONT}/v1/connect/${stray}`, true)
+  ]
+  const burstStart = Date.now()
+  const answers = await pool(G4.handshakes, G4.concurrency, (i) => kinds[i % kinds.length]!())
+  const counts = tally(answers)
+  const zone = answers.filter((a) => classify(a, EDGE_SERVER) === 'cf-zone')
+  const bad = answers.filter((a) => ['cf-zone', 'load-balancer', 'network', 'other'].includes(classify(a, EDGE_SERVER)))
+  const ms = answers.map((a) => a.ms).sort((x, y) => x - y)
+  const rayShare = answers.filter((a) => a.headers['cf-ray'] !== undefined).length / Math.max(1, answers.length)
+  record(
+    `G4.1 ${G4.handshakes} handshakes (${G4.concurrency} at a time) through the front door: no zone challenge/block, no LB error`,
+    bad.length === 0,
+    `in ${Date.now() - burstStart} ms; ${JSON.stringify(counts)}; p50=${ms[Math.floor(ms.length / 2)]} ms p95=${ms[Math.floor(ms.length * 0.95)]} ms; cf-ray on ${Math.round(rayShare * 100)}%` +
+      (zone.length ? `; zone sample: status=${zone[0]!.status} cf-mitigated=${zone[0]!.headers['cf-mitigated'] ?? '-'} body=${JSON.stringify(zone[0]!.body.slice(0, 120))}` : '')
+  )
+
+  // G4.2 Parallel long-lived sockets: G4_SOCKETS desktops (distinct hosts) hold their control
+  // sockets through the front door at once.
+  const hosts = Array.from({ length: G4.sockets }, () => newHost())
+  const pushes = await pool(hosts.length, 10, (i) => adminAssign(EDGE, ADMIN, ACCOUNT, hosts[i]!.relayHostId))
+  const desktops = await Promise.all(hosts.map(async (h) => desktop(ACCOUNT, FRONT, h, await mint(ACCOUNT, key, h.relayHostId), { appVersion: 'g4-front-door' })))
+  const openStart = Date.now()
+  const acks = await Promise.all(desktops.map((d) => d.connect().then(() => null, (e: Error) => e)))
+  const opened = acks.filter((a) => a === null).length
+  const openMs = Date.now() - openStart
+  let failure = ''
+  const firstFail = acks.findIndex((a) => a !== null)
+  if (firstFail >= 0) {
+    // Classify one failure with a raw handshake carrying the same JWT.
+    const answer = await handshake(`${FRONT}/v1/host/control`, true, { authorization: `Bearer ${await mint(ACCOUNT, key, hosts[firstFail]!.relayHostId)}` })
+    failure = `; first failure: ${errorText(acks[firstFail])} (raw retry: ${classify(answer, EDGE_SERVER)}:${answer.status})`
+  }
+  const holdStart = Date.now()
+  while (Date.now() - holdStart < G4.holdMs && desktops.every((d) => d.events.closes.length === 0)) await sleep(1000)
+  const closed = desktops.filter((d) => d.events.closes.length > 0)
+  record(
+    `G4.2 ${G4.sockets} parallel control sockets through the front door, held ${Math.round(G4.holdMs / 1000)} s`,
+    pushes.every((p) => p.outcome === 'applied') && opened === G4.sockets && closed.length === 0,
+    `pushed=${pushes.filter((p) => p.outcome === 'applied').length} opened=${opened} in ${openMs} ms; closed during hold=${closed.length}${closed.length ? ` codes=${closed.map((d) => d.events.closes[0]).join(',')}` : ''}${failure}`
+  )
+  for (const d of desktops) d.client.closeNow()
 }
 
 main()

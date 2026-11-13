@@ -112,7 +112,7 @@ async function run(): Promise<void> {
     }
     const g1 = spawn(process.execPath, ['--import', 'tsx', new URL('./g1-front-door.ts', import.meta.url).pathname], {
       stdio: 'inherit',
-      env: { ...process.env, G1_FRONT_DOOR: FRONT, G1_EDGE: EDGE, G1_ADMIN_KEY_FILE: join(dir, 'admin-key'), G1_ADMIN_ISSUER: ADMIN_ISSUER, G1_HOLD_MS: process.env.G1_HOLD_MS ?? '20000' }
+      env: { ...process.env, G1_FRONT_DOOR: FRONT, G1_EDGE: EDGE, G1_ADMIN_KEY_FILE: join(dir, 'admin-key'), G1_ADMIN_ISSUER: ADMIN_ISSUER, G1_HOLD_MS: process.env.G1_HOLD_MS ?? '20000', G1_EDGE_SERVER_HEADER: '', G4_HANDSHAKES: process.env.G4_HANDSHAKES ?? '90', G4_SOCKETS: process.env.G4_SOCKETS ?? '50', G4_HOLD_MS: process.env.G4_HOLD_MS ?? '10000' }
     })
     code = await new Promise<number>((r) => g1.on('exit', (c) => r(c ?? 1)))
   } finally {
