@@ -1,5 +1,6 @@
-import { extractString, timestampMs } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { timestampMs } from '../../parsing/session-record-time'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 export type OmpTranscriptTitle = {
   title: string

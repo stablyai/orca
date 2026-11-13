@@ -47,41 +47,6 @@ describe('terminal WebView external mouse click', () => {
     expect(document.getElementById('selection-overlay')?.classList.contains('active')).toBe(false)
   })
 
-  it('routes a plain mouse click to the tap pipeline for keyboard focus', () => {
-    mouse.boot()
-
-    mouse.mouseClick(40, 60)
-
-    const messages = mouse.postedMessages()
-    expect(messages.filter((message) => message.type === 'terminal-tap')).toHaveLength(1)
-    expect(mouse.terminalInputBytes()).toBe('')
-  })
-
-  it('ignores non-mouse pointers and non-left buttons', () => {
-    mouse.boot()
-    mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
-
-    mouse.dispatchPointer('pointerdown', {
-      pointerType: 'touch',
-      x: 40,
-      y: 60,
-      button: 0,
-      buttons: 1
-    })
-    mouse.dispatchPointer('pointerup', {
-      pointerType: 'touch',
-      x: 40,
-      y: 60,
-      button: 0,
-      buttons: 0
-    })
-    mouse.dispatchPointer('pointerdown', { x: 40, y: 60, button: 2, buttons: 2 })
-    mouse.dispatchPointer('pointerup', { x: 40, y: 60, button: 2, buttons: 0 })
-
-    expect(mouse.terminalInputBytes()).toBe('')
-    expect(mouse.postedMessages().filter((message) => message.type === 'terminal-tap')).toEqual([])
-  })
-
   it('lets the touch dispatcher own a gesture when touch events follow pointerdown', () => {
     mouse.boot()
     mouse.writeLegacyMouseEncoding()

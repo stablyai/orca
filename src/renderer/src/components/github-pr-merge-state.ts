@@ -4,7 +4,7 @@ import {
   type GitHubPRAutoMergeActionIntent,
   type GitHubPRMergeStateInput,
   type GitHubPRMergeStateKind
-} from '../../../shared/github/pull-request-merge-state'
+} from '../../../shared/github/pull-requests/merge/pull-request-merge-state'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

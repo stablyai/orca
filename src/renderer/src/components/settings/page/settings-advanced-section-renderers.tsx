@@ -21,7 +21,6 @@ export function renderAdvancedSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="advanced"
-      grouped
       title={t('auto.components.settings.Settings.1c87f8d024', 'Advanced')}
       description={t(
         'auto.components.settings.Settings.499c1cd7f9',
@@ -44,7 +43,6 @@ export function renderDevSettingsSection(
   return model.showDesktopOnlySettings && import.meta.env.DEV ? (
     <SettingsSection
       id="dev"
-      grouped
       title={t('auto.components.settings.Settings.3eac6fb97f', 'Dev tools')}
       description={t(
         'auto.components.settings.Settings.devDescription',
@@ -69,7 +67,6 @@ export function renderExperimentalSettingsSection(
   return (
     <SettingsSection
       id="experimental"
-      grouped
       title={t('auto.components.settings.Settings.8b017f2506', 'Experimental')}
       description={t(
         'auto.components.settings.Settings.075341c763',

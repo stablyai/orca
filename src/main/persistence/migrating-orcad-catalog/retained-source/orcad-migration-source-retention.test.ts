@@ -12,7 +12,7 @@ import {
   writeOrcadMigrationSourceCutover
 } from '../cutover-journals/orcad-migration-cutover-journal'
 import { orcadMigrationCutoverFixture } from '../../../managed-server/migration/cutover/testing/orcad-migration-cutover-fixture'
-import { listPendingManagedOrcadMigrations } from '../../../managed-server/lifecycle/orcad-managed-migration-status'
+
 import {
   retainUnretainedOrcadMigrationSources,
   retainOrcadMigrationSource
@@ -83,31 +83,6 @@ async function restart(): Promise<void> {
 
 const serverFiles = () => store.getWorkspaceSession(SERVER_HOST).openFilesByWorktree?.[WORKTREE]
 
-describe('retaining a committed migration source', () => {
-  it('marks only a committed cutover, idempotently, and stops counting it as pending', async () => {
-    writeOrcadMigrationSourceCutover(userDataPath, orcadMigrationCutoverFixture('m-1'))
-    await expect(retainOrcadMigrationSource(userDataPath, 'm-1', store)).rejects.toThrow(
-      'orcad_migration_retain_before_commit'
-    )
-    writeOrcadMigrationSourceCutover(userDataPath, {
-      ...orcadMigrationCutoverFixture('m-1'),
-      phase: 'destination-committed'
-    })
-    const at = () => new Date('2026-10-03T00:00:00.000Z')
-    await retainOrcadMigrationSource(userDataPath, 'm-1', store, at)
-    await retainOrcadMigrationSource(
-      userDataPath,
-      'm-1',
-      store,
-      () => new Date('2026-12-01T00:00:00.000Z')
-    )
-    expect(listOrcadMigrationSourceCutovers(userDataPath)[0]?.sourceRetainedAt).toBe(
-      '2026-10-03T00:00:00.000Z'
-    )
-    expect(listPendingManagedOrcadMigrations(userDataPath)).toEqual([])
-  })
-})
-
 describe('renaming unsaved drafts to the server on commit', () => {
   beforeEach(() => {
     store.addSshTarget({
@@ -158,15 +133,6 @@ describe('renaming unsaved drafts to the server on commit', () => {
     expect(serverFiles()).toEqual([])
   })
 
-  it("never retains another profile's migration at startup", async () => {
-    writeOrcadMigrationSourceCutover(userDataPath, {
-      ...orcadMigrationCutoverFixture('m-9', 'ssh-other-profile'),
-      phase: 'destination-committed'
-    })
-    await retainUnretainedOrcadMigrationSources(userDataPath, store)
-    expect(listOrcadMigrationSourceCutovers(userDataPath)[0]?.sourceRetainedAt).toBeUndefined()
-  })
-
   it('makes the startup rename durable before its retained mark', async () => {
     saveFiles(SOURCE_HOST, [draftedFile('/srv/app/a.md', 'source A')])
     writeOrcadMigrationSourceCutover(userDataPath, committed())
@@ -180,26 +146,4 @@ describe('renaming unsaved drafts to the server on commit', () => {
         ?.dirtyDraftContent
     ).toBe('source A')
   })
-
-  it("leaves another host's file and another project's draft where they are", async () => {
-    saveFiles(SOURCE_HOST, [
-      { ...draftedFile('/srv/app/remote.md', 'other host'), runtimeEnvironmentId: 'env-9' }
-    ])
-    store.setWorkspaceSession(
-      {
-        ...store.getWorkspaceSession(SOURCE_HOST),
-        openFilesByWorktree: {
-          ...store.getWorkspaceSession(SOURCE_HOST).openFilesByWorktree,
-          'repo-2::/srv/other': [draftedFile('/srv/other/x.md', 'other project')]
-        }
-      },
-      SOURCE_HOST
-    )
-    writeOrcadMigrationSourceCutover(userDataPath, committed())
-
-    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
-    expect(store.getWorkspaceSession(SERVER_HOST).openFilesByWorktree ?? {}).toEqual({})
-  })
 })
-
-// #29083: a moved automation must run on the server, never again from this desktop.

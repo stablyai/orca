@@ -24,9 +24,7 @@ export function makeFacetCandidate(
     displayName: 'alpha',
     branch: 'refs/heads/alpha',
     path: '/repo/alpha',
-    tier: 'ready',
-    selectedByDefault: true,
-    reasons: ['idle-clean'],
+    reasons: ['inactive'],
     blockers: [],
     lastActivityAt: FACET_NOW - 40 * DAY,
     localContext: {

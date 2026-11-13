@@ -205,7 +205,8 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady
+    composerReady,
+    surfaceReady: shownPromptCard !== null
   })
 
   const pendingMessages = useMemo(
@@ -372,7 +373,7 @@ export function NativeChatResolvedView({
             onAnswerInTerminal={onSwitchToTerminal}
             onDismiss={promptCardPresentation.dismiss}
             onCollapse={
-              mountedPromptCard?.kind === 'approval' && mountedPromptCard.approval.holdsComposer
+              mountedPromptCard?.kind === 'approval' && mountedPromptCard.approval.startupDialog
                 ? undefined
                 : promptCardPresentation.collapse
             }

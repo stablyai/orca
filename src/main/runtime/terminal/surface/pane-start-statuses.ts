@@ -5,7 +5,7 @@ import type {
   PaneResumeOutcome,
   PaneStartStatus,
   PublishedWorkspaceLayout
-} from '../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import { bindingOf, PaneLiveFacts } from './pane-live-facts'
 
 export type PaneStartFact = { status: PaneStartStatus; reason?: string }

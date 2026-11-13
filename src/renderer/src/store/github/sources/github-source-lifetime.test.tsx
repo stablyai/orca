@@ -8,7 +8,7 @@ import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-pa
 import type { AppState } from '../../types'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 const holder = vi.hoisted((): { store: ReturnType<typeof createTestStore> | null } => ({
   store: null

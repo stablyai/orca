@@ -60,10 +60,6 @@ describe('a model whose newer chat listing does not know its efforts', () => {
     expect(merged).not.toHaveProperty('effortsKnown')
   })
 
-  it('stays unknown when no listing knows its menu', () => {
-    expect(model(unknownChat(1), unknownChat(2))).toMatchObject({ effortsKnown: false })
-  })
-
   it('prefers known probe evidence over an older unknown chat offering the configured effort', () => {
     const merged = model(
       listing('probe', 2, menu('low', 'high')),

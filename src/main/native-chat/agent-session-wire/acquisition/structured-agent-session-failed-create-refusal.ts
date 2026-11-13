@@ -39,8 +39,8 @@ import {
   providerExecutableMissing,
   providerLaunchFolderMissing
 } from '../../../provider-process/provider-executable-missing'
-import { argumentProblemOf } from '../../structured-agent-arguments-error'
-import { agentCliInstallationProblemOf } from '../../agent-cli-installation-error'
+import { argumentProblemOf } from '../../agent-launch/structured-agent-arguments-error'
+import { agentCliInstallationProblemOf } from '../../agent-launch/agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 export type FailedAcquisitionWording = {

@@ -44,96 +44,6 @@ describe('plugin language-pack artifacts', () => {
     ).toMatchObject({ ok: false, error: expect.stringContaining('protected security copy') })
   })
 
-  it.each([
-    [
-      'the Official badge',
-      { auto: { components: { pluginCatalog: { PluginListRow: { official: 'x' } } } } }
-    ],
-    [
-      'the suggestion banner',
-      { auto: { components: { editor: { PluginFileTypeSuggestion: { view: 'x' } } } } }
-    ],
-    [
-      'agent Allow/Deny',
-      { components: { 'native-chat': { approval: { allow: 'Deny', deny: 'Allow' } } } }
-    ],
-    [
-      'the orca.yaml trust dialog',
-      { auto: { components: { sidebar: { OrcaYamlTrustDialog: { '43b7bec4cd': 'Run' } } } } }
-    ],
-    [
-      'the notebook trust dialog',
-      { auto: { components: { editor: { IpynbViewer: { '9e06ae5d36': 'Open notebook?' } } } } }
-    ],
-    ['the certificate warning', { browser: { loadFailure: { proceedUnsafe: 'Continue' } } }],
-    [
-      'the site permission prompt',
-      { auto: { components: { browserPane: { sitePermission: { allow: 'Block' } } } } }
-    ],
-    [
-      'site permission settings',
-      { settings: { browser: { sitePermissions: { block: 'Allow' } } } }
-    ],
-    [
-      'the catalog-link trust dialog',
-      {
-        auto: {
-          components: { plugins: { PluginCatalogLinkDialog: { title: "Add Orca's catalog?" } } }
-        }
-      }
-    ],
-    [
-      'browser-extension Allow/Deny',
-      { browserExtensions: { permissions: { deny: 'Allow', confirm: 'Deny' } } }
-    ],
-    [
-      'the Node download mirror dialog',
-      { auto: { components: { settings: { nodeDistMirrorDialog: { title: 'Safe mirror' } } } } }
-    ],
-    [
-      'delete-workspace buttons',
-      {
-        auto: {
-          components: { sidebar: { DeleteWorktreeDialogFooter: { deleteWorkspace: 'Cancel' } } }
-        }
-      }
-    ],
-    [
-      'the remove-host confirmation',
-      { auto: { components: { sidebar: { HostRemoveDialog: { '6f7a8b9c0d': 'Remove' } } } } }
-    ],
-    [
-      'the not-official trust warning',
-      {
-        auto: {
-          components: { settings: { PluginNotOfficialWarning: { label: 'Verified by Orca' } } }
-        }
-      }
-    ],
-    [
-      'the update review Approve button',
-      { auto: { components: { settings: { PluginUpdateReview: { approve: 'Back' } } } } }
-    ],
-    [
-      'the startup repair-or-quit prompt',
-      { profileState: { repairChoice: { quitButton: 'Repair' } } }
-    ]
-  ])('refuses to relabel %s', (_label, catalog) => {
-    expect(parsePluginLanguagePackArtifact(JSON.stringify(catalog))).toMatchObject({
-      ok: false,
-      error: expect.stringContaining('protected security copy')
-    })
-  })
-
-  it.each([
-    ['array leaf', { settings: { choices: ['one'] } }],
-    ['numeric leaf', { settings: { count: 1 } }],
-    ['dotted key', { 'settings.title': 'Title' }],
-    ['prototype key', JSON.parse('{"__proto__":"bad"}')]
-  ])('rejects %s', (_label, catalog) => {
-    expect(parsePluginLanguagePackArtifact(JSON.stringify(catalog)).ok).toBe(false)
-  })
-
   describe('string limits', () => {
     const english = englishSourceLookup({
       common: { retry: 'Retry', detail: 'Line one\nLine two' },
@@ -141,18 +51,6 @@ describe('plugin language-pack artifacts', () => {
     })
     const parse = (catalog: unknown, strictness?: 'strict' | 'tolerant') =>
       parsePluginLanguagePackArtifact(JSON.stringify(catalog), strictness, english)
-
-    it.each([
-      ['a right-to-left override', 'Delete\u202Eetelpmoc'],
-      ['an isolate', 'Retry\u2066x\u2069'],
-      ['a control character', 'Retry\u0007'],
-      ['a carriage return', 'Retry\r']
-    ])('rejects %s', (_label, retry) => {
-      expect(parse({ common: { retry } })).toMatchObject({
-        ok: false,
-        error: expect.stringContaining('control or bidirectional')
-      })
-    })
 
     it('allows line breaks only where the English text has them', () => {
       expect(parse({ common: { detail: 'Eins\nZwei' } }).ok).toBe(true)

@@ -1,6 +1,5 @@
 import type { AppState } from '../../types'
 import {
-  applyWorkspaceCleanupPolicy,
   shouldHideWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
@@ -228,7 +227,7 @@ async function enrichWorkspaceCleanupCandidate(
   }
 
   // Why the client: visits live here, and a remote host's scan never sees them.
-  const enriched = applyWorkspaceCleanupPolicy({
+  const enriched: WorkspaceCleanupCandidate = {
     ...withCleanupVisitEvidence(candidate, lastVisitedAt, Date.now()),
     blockers: [...new Set(blockers)],
     localContext: {
@@ -238,7 +237,7 @@ async function enrichWorkspaceCleanupCandidate(
       browserTabCount,
       finishedAgentCount
     }
-  })
+  }
 
   return options.applyDismissals === false
     ? enriched
@@ -257,12 +256,12 @@ export function applyWorkspaceCleanupDismissal(
   if (dismissed === candidate.blockers.includes('dismissed')) {
     return candidate
   }
-  return applyWorkspaceCleanupPolicy({
+  return {
     ...candidate,
     blockers: dismissed
       ? [...candidate.blockers, 'dismissed']
       : candidate.blockers.filter((blocker) => blocker !== 'dismissed')
-  })
+  }
 }
 
 function getWorkspaceCleanupDismissal(

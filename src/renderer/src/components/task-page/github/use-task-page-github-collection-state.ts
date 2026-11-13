@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useSyncExternalStore, type SetStateAction } from 'react'
 import type { TaskPageProviderStateModel } from '../use-task-page-provider-state'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { sortWorkItemsByNumber } from '../../../../../shared/work-items/work-item-order'
 import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query'
 import type { GitHubSourceCollections } from '@/store/github/sources/source-collections'
