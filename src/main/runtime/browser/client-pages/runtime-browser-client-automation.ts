@@ -1,4 +1,5 @@
 import { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BrowserError } from '../../../browser/browser-error'
 import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
@@ -36,14 +37,15 @@ export async function routeRuntimeBrowserClientAutomation(options: {
       method: method.data,
       params: options.params,
       // A person's link or relayed input must not light the desktop page as agent-driven.
-      agent: isAgentRpcCaller(options.caller)
+      agent: isAgentRpcCaller(options.caller),
+      stagedResults: true
     }
   )
   const result = await issued.result
   if (result.status === 'failed') {
     throw result.expectedUrlMismatch
       ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
-      : new Error(result.errorCode)
+      : new BrowserError(result.errorCode, result.errorMessage ?? result.errorCode)
   }
   return { handled: true, result: result.value }
 }

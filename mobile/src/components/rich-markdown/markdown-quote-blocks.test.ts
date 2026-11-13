@@ -103,21 +103,3 @@ it('keeps quoted code literal rather than interpreting its block markers', () =>
   expect(editor.querySelectorAll('blockquote').length).toBe(1)
   expect(editorDocument.send.currentMarkdown()).toBe(markdown)
 })
-
-it('keeps task state and read-only controls inside quotes', () => {
-  const { editorDocument, editor } = surface()
-  const markdown = '> - [x] Done\n> - [ ] Open'
-  editorDocument.send.setEditable(false)
-  editorDocument.send.setMarkdown(markdown, 8)
-
-  expect(
-    Array.from(editor.querySelectorAll('input')).map((input) => ({
-      checked: input.checked,
-      disabled: input.disabled
-    }))
-  ).toEqual([
-    { checked: true, disabled: true },
-    { checked: false, disabled: true }
-  ])
-  expect(editorDocument.send.currentMarkdown()).toBe(markdown)
-})

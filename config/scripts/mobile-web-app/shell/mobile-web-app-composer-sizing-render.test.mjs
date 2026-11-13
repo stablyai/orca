@@ -29,7 +29,7 @@ import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { View } from 'react-native'
 import { MobileNativeChatComposerField } from './src/session/native-chat/composer/MobileNativeChatComposerField.web'
-import { publishShellKeyboardSource } from './src/platform/keyboard-occlusion'
+import { publishShellKeyboardSource } from './src/platform/keyboard/keyboard-occlusion'
 
 let keyboardHeight = 0
 const listeners = new Set()

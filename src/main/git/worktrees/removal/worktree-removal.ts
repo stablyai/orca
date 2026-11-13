@@ -177,7 +177,7 @@ function removalWorkerOptions(options: RemoveWorktreeOptions): RemoveWorktreeOpt
   return process.platform === 'darwin' ? { ...options, spawnOnWorkerThread: true } : options
 }
 
-async function localBranchExists(
+export async function localBranchExists(
   repoPath: string,
   branchName: string,
   options: RemoveWorktreeOptions

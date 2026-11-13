@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useDictationCapture } from '../platform/dictation-capture'
-import { useOnDeviceSpeech } from '../platform/on-device-speech'
+import { useDictationCapture } from '../platform/audio-capture/dictation-capture'
+import { useOnDeviceSpeech } from '../platform/speech/on-device-speech'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDictationMeter } from './mobile-dictation-meter'

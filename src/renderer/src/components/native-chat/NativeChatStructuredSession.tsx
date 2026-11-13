@@ -20,6 +20,7 @@ import { NativeChatEmptyState } from '@/components/native-chat/host-access/Nativ
 import { NativeChatEmptyPane } from '@/components/native-chat/host-access/NativeChatEmptyPane'
 import { NativeChatLoadingCue } from '@/components/native-chat/host-access/NativeChatLoadingCue'
 import { NativeChatMessageList } from '@/components/native-chat/NativeChatMessageList'
+import { NativeChatToolRunWindowProvider } from '@/components/native-chat/tools/runs/native-chat-tool-run-window-context'
 import { NativeChatContextClearFade } from '@/components/native-chat/conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from '@/components/native-chat/pane/actions/use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from '@/components/native-chat/prompts/use-structured-prompt-response-hold'
@@ -301,34 +302,36 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 view={continuation.view}
               >
                 <NativeChatHostSetupContext.Provider value={setup}>
-                  <NativeChatWorkerApprovalTimeline party={workerApprovalParty}>
-                    {(timedRows) => (
-                      <NativeChatMessageList
-                        // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
-                        key={`${controller.epoch}:${controller.contextClear.clears}`}
-                        ref={submits.messageListRef}
-                        session={session}
-                        journalItems={controller.journalItems}
-                        journalSubmissions={controller.submissions}
-                        journalLatestTurn={controller.latestTurn}
-                        journalHostWork={controller.hostWork}
-                        subagentRoster={controller.subagentRoster}
-                        railOutline={controller.railOutline}
-                        isVisible={props.isVisible}
-                        isWorking={controller.isWorking}
-                        expandSignal={false}
-                        workingStartedAt={controller.workingStartedAt}
-                        settledTurns={controller.settledTurns}
-                        awaitingInput={prompt === null ? null : 'shown'}
-                        turnActivity={controller.turnActivity}
-                        stopping={stopControls.stopping}
-                        structuredAttachments
-                        runtimeContext={imageRuntimeContext}
-                        deliveryNotices={deliveryNotices}
-                        timedRows={timedRows}
-                      />
-                    )}
-                  </NativeChatWorkerApprovalTimeline>
+                  <NativeChatToolRunWindowProvider isVisible={props.isVisible} find={find}>
+                    <NativeChatWorkerApprovalTimeline party={workerApprovalParty}>
+                      {(timedRows) => (
+                        <NativeChatMessageList
+                          // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
+                          key={`${controller.epoch}:${controller.contextClear.clears}`}
+                          ref={submits.messageListRef}
+                          session={session}
+                          journalItems={controller.journalItems}
+                          journalSubmissions={controller.submissions}
+                          journalLatestTurn={controller.latestTurn}
+                          journalHostWork={controller.hostWork}
+                          subagentRoster={controller.subagentRoster}
+                          railOutline={controller.railOutline}
+                          isVisible={props.isVisible}
+                          isWorking={controller.isWorking}
+                          expandSignal={false}
+                          workingStartedAt={controller.workingStartedAt}
+                          settledTurns={controller.settledTurns}
+                          awaitingInput={prompt === null ? null : 'shown'}
+                          turnActivity={controller.turnActivity}
+                          stopping={stopControls.stopping}
+                          structuredAttachments
+                          runtimeContext={imageRuntimeContext}
+                          deliveryNotices={deliveryNotices}
+                          timedRows={timedRows}
+                        />
+                      )}
+                    </NativeChatWorkerApprovalTimeline>
+                  </NativeChatToolRunWindowProvider>
                 </NativeChatHostSetupContext.Provider>
               </NativeChatUsageLimitActionsProvider>
             </NativeChatRowActionsProvider>

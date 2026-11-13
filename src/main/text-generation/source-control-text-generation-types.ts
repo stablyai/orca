@@ -2,7 +2,7 @@ import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-s
 import type { ProviderChild } from '../provider-process/provider-child'
 import type { ChildProcess } from 'node:child_process'
 import type { EventEmitter } from 'node:events'
-import type { AgentGenerationFailureOutput } from './agent-failure-output'
+import type { AgentGenerationFailureOutput } from './failures/agent-failure-output'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
@@ -55,7 +55,7 @@ export type TextGenerationOperation =
   | 'dictation-cleanup'
 
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
+  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string; laneId?: string }
   | {
       kind: 'remote'
       cwd: string
@@ -131,6 +131,7 @@ export type LocalSourceControlPlanInput = {
   cwd: string
   env: NodeJS.ProcessEnv | undefined
   operation: TextGenerationOperation
+  laneId?: string
   wslDistro?: string
   spawnAgent: SpawnSourceControlAgent
   timeoutMs?: number

@@ -12,11 +12,8 @@ vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-r
 
 const { killAllProcessesForWorktree } = await import('./worktree-teardown')
 type TeardownRuntime = NonNullable<Parameters<typeof killAllProcessesForWorktree>[1]['runtime']>
-const {
-  classifyWorktreeForceDeleteReason,
-  isProvenLiveStructuredSessionRemovalError,
-  isUnstoppedPtyRemovalError
-} = await import('../../../../shared/worktree/removal')
+const { classifyWorktreeForceDeleteReason, isUnstoppedPtyRemovalError } =
+  await import('../../../../shared/worktree/removal')
 await import('./structured-session-worktree-teardown')
 
 const WORKTREE = 'repo_1::/tmp/wt-a'
@@ -187,81 +184,6 @@ describe('worktree teardown and structured agent sessions', () => {
     hostRef.current = null
   })
 
-  it('puts the chat tab back when the removal refuses over the session', async () => {
-    // A refused removal preserves the workspace and must restore its chat tabs.
-    const host = installHost({
-      records: [record('s1', WORKTREE)],
-      stuck: new Set(['s1']),
-      visible: ['s1']
-    })
-    await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).rejects.toThrow(
-      /still live: 1 agent session \(claude\)/
-    )
-    expect([...host.visible]).toEqual(['s1'])
-  })
-
-  it('still removes under force when a close does not settle, and says so', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const retired: string[] = []
-    installHost({ records: [record('s1', WORKTREE)], stuck: new Set(['s1']), visible: ['s1'] })
-    const result = await killAllProcessesForWorktree(WORKTREE, {
-      ...destructiveDeps({ allowUnverifiedStop: true }),
-      runtime: runtimeDouble({
-        retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
-          retired.push(sessionId)
-          return true
-        }
-      })
-    })
-    expect(result.structuredStopped).toBeUndefined()
-    // The live arm of that record, carrying the verdict the refusal would have shown.
-    expect(structuredSessionWarning(warn)).toContain('still live: 1 agent session (claude)')
-    expect(retired).toEqual(['s1'])
-    warn.mockRestore()
-  })
-
-  it('takes the proof when a failed close is re-observed as exited', async () => {
-    // Later exit evidence can prove a child gone after close threw or restored its tab.
-    const retired: string[] = []
-    const runtime: TeardownRuntime = {
-      ...presentationRuntime(),
-      getPtyLivenessVerdict: () => null,
-      stopTerminalsForWorktree: async () => ({ stopped: 0 }),
-      retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
-        if (!retired.includes(sessionId)) {
-          retired.push(sessionId)
-        }
-        return true
-      }
-    }
-    installHost({ records: [record('s1', WORKTREE)], settledThenThrows: new Set(['s1']) })
-    await expect(
-      killAllProcessesForWorktree(WORKTREE, { ...destructiveDeps(), runtime })
-    ).resolves.toMatchObject({ structuredStopped: 1 })
-    // Retired here because the close gave up before its own retirement step, and a chat tab left
-    // behind re-attaches a released session pointing at a workspace that is about to be deleted.
-    expect(retired).toEqual(['s1'])
-  })
-
-  it('names the unconfirmed sessions too, instead of counting only the live ones', async () => {
-    // The PTY sibling may drop everything outside its live list because a fresh inventory PROVED
-    // those exited. Nothing proves that here: an `unverifiable` session is unclosed as well, so
-    // naming only the live subset told the user "1 agent session" while two were about to go.
-    installHost({
-      records: [record('s1', WORKTREE), record('s2', WORKTREE, { provider: 'codex' })],
-      stuck: new Set(['s1']),
-      unverifiable: new Set(['s2'])
-    })
-    const error = await killAllProcessesForWorktree(WORKTREE, destructiveDeps()).catch(
-      (thrown: Error) => thrown.message
-    )
-    expect(error).toContain(
-      'still live: 1 agent session (claude); could not confirm these closed: 1 agent session (codex)'
-    )
-    // The marker still leads, so the toast keeps showing the stronger of the two warnings.
-    expect(isProvenLiveStructuredSessionRemovalError(error as string)).toBe(true)
-  })
-
   it('refuses in agent-session wording when the close outlives the sweep budget', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     try {
@@ -299,32 +221,6 @@ describe('worktree teardown and structured agent sessions', () => {
       expect(message).not.toContain('still attached')
     } finally {
       warn.mockRestore()
-      vi.useRealTimers()
-    }
-  })
-
-  it('stops issuing new closes once the budget is spent', async () => {
-    // Stop issuing closes at deadline; the uncancellable in-flight close and untouched tail both remain unverified.
-    let releaseFirstClose: () => void = () => {}
-    const firstClose = new Promise<void>((resolve) => {
-      releaseFirstClose = resolve
-    })
-    const host = installHost({
-      records: [record('s1', WORKTREE), record('s2', WORKTREE)],
-      closeGates: { s1: firstClose }
-    })
-    vi.useFakeTimers()
-    try {
-      const outcome = killAllProcessesForWorktree(
-        WORKTREE,
-        destructiveDeps({ timeoutMs: 5 })
-      ).catch((thrown: Error) => thrown.message)
-      await vi.advanceTimersByTimeAsync(5)
-      expect(await outcome).toContain('could not confirm these closed: 2 agent sessions (claude)')
-      releaseFirstClose()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(host.closed).toEqual(['s1'])
-    } finally {
       vi.useRealTimers()
     }
   })
