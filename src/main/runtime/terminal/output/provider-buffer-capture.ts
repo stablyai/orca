@@ -67,14 +67,15 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   }): Promise<RuntimeTerminalProjection>
 
   /**
-   * A visible read passes `publishMode: false` and publishes the snapshot's screen mode only when
-   * its frame is applicable; a superseded visible frame must not change later source selection.
+   * A visible read passes `false` and publishes the snapshot's screen mode only when its frame is
+   * applicable. A lower acquisition passes its owner's check, asked with the reconciled sequence
+   * at completion: a superseded capture still answers its caller but leaves the shared mode alone.
    */
   protected async captureProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number },
     generation: number,
-    publishMode = true
+    publishMode: boolean | ((reconciledSeq: number) => boolean) = true
   ): Promise<PtyProviderBufferSnapshot | null> {
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
@@ -110,7 +111,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         if (liveModeTracker.hasObservedAlternateScreenSwitch) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
-        if (publishMode) {
+        // Same synchronous section as the owner's check: nothing can supersede it in between.
+        const reconciledSeq = (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0) + snapshot.seq
+        if (typeof publishMode === 'function' ? publishMode(reconciledSeq) : publishMode) {
           this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
         }
         effectiveAlternateScreen = modeTracker.isAlternateScreen

@@ -167,6 +167,7 @@ describe('terminal frame across a grid change or lifecycle reset', () => {
         alternateScreen
       }),
       output: (data: string) => runtime.onPtyData('pty-1', data, Date.now()),
+      screenMode: () => runtime.isTerminalAlternateScreen('pty-1'),
       read: (first: { screen?: boolean }, options: RuntimeProviderSnapshotReadOptions = {}) =>
         track(runtime.readTerminal(terminal.handle, first, options)),
       screen: (): Promise<string> =>
@@ -533,6 +534,69 @@ describe('terminal frame across a grid change or lifecycle reset', () => {
       expect(t.frames).toHaveLength(2)
     } finally {
       vi.useRealTimers()
+      await t.cleanup()
+    }
+  })
+
+  // HS-C1 (adopted capture): a deep answer a superseded visible read had adopted used to set the
+  // screen mode after a newer accepted frame. The provider's switch bytes are not yet delivered.
+  it('never lets an older adopted deep answer change the mode of an accepted newer frame', async () => {
+    const t = await terminalAt(80, 25, 'provider')
+    const parses = vi.spyOn(HeadlessEmulator.prototype, 'write')
+    try {
+      const deepRead = t.deepRead()
+      await vi.waitFor(() => expect(t.deep).toHaveLength(1))
+      // D's complete normal-screen cut: its history marker sits more than a screen above the end.
+      const history = Array.from({ length: 30 }, (_, index) => `HISTORY_${index}`)
+      const deepAnswer = t.frame(['DEEP_HISTORY_ROW', ...history].join('\r\n'), 80, 25, false)
+      // A adopts D's pending capture instead of asking for its own.
+      const late = t.screen()
+      t.resize(40, 10)
+      t.resize(80, 25)
+      t.output('PROMPT$ ')
+      const successor = t.screen()
+      await vi.waitFor(() => expect(t.frames).toHaveLength(1))
+      t.frames[0]!.resolve(t.frame('SUCCESSOR_ROW', 80, 25, true))
+      expect(await successor).toContain('SUCCESSOR_ROW')
+
+      t.deep[0]!.resolve(deepAnswer)
+      const recovered = await deepRead
+      expect(recovered?.data).toContain('DEEP_HISTORY_ROW')
+      expect(recovered?.data).toContain('HISTORY_29')
+      expect(await late).not.toContain('DEEP_HISTORY_ROW')
+      const after = await t.screen()
+      expect(after).toContain('SUCCESSOR_ROW')
+      expect(after).not.toContain('MAIN_ONLY_ROW')
+      // A never took a capture of its own, and B's frame was neither retaken nor reparsed.
+      expect(t.frames).toHaveLength(1)
+      expect(parses.mock.calls.filter(([data]) => data.includes('SUCCESSOR_ROW'))).toHaveLength(1)
+    } finally {
+      parses.mockRestore()
+      await t.cleanup()
+    }
+  })
+
+  it('lets a deep answer set the screen mode first, and a later deep cut update it', async () => {
+    const t = await terminalAt(80, 25, 'provider')
+    try {
+      const first = t.deepRead()
+      await vi.waitFor(() => expect(t.deep).toHaveLength(1))
+      t.deep[0]!.resolve(t.frame('DEEP_ALT_ROW', 80, 25, true))
+      expect((await first)?.data).toContain('DEEP_ALT_ROW')
+      expect(t.screenMode()).toBe(true)
+
+      const visible = t.screen()
+      await vi.waitFor(() => expect(t.frames).toHaveLength(1))
+      t.frames[0]!.resolve(t.frame('VISIBLE_ROW', 80, 25, true))
+      expect(await visible).toContain('VISIBLE_ROW')
+      // A deep cut taken after more output is later than the accepted frame, so its mode applies.
+      t.output('LATER_OUTPUT\r\n')
+      const second = t.deepRead()
+      await vi.waitFor(() => expect(t.deep).toHaveLength(2))
+      t.deep[1]!.resolve(t.frame('LATER_DEEP_ROW', 80, 25, false))
+      expect((await second)?.data).toContain('LATER_DEEP_ROW')
+      expect(t.screenMode()).toBe(false)
+    } finally {
       await t.cleanup()
     }
   })

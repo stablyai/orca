@@ -7,6 +7,7 @@ import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-
 import type { RuntimeProviderSnapshotReadOptions } from './provider-snapshot-read-options'
 import {
   sameProviderFrameGrid,
+  type ProviderVisibleAcquisition,
   type ProviderVisibleRead
 } from '../lifecycle/terminal-view-resources'
 
@@ -15,7 +16,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     ptyId: string,
     opts: { scrollbackRows?: number },
     generation: number,
-    publishMode?: boolean
+    publishMode?: boolean | ((reconciledSeq: number) => boolean)
   ): Promise<PtyProviderBufferSnapshot | null>
 
   protected async serializeTerminalBufferFromAvailableState(
@@ -242,6 +243,27 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     return promise
   }
 
+  /**
+   * A lower capture may set the shared screen mode only while its exact record still holds its
+   * slot in the current lifecycle, unretired, and its cut is later than any frame already
+   * accepted for this lifecycle (either kind); an equal cut defers to the accepted frame.
+   */
+  private lowerAcquisitionMayPublishMode(
+    ptyId: string,
+    acquisitions: Map<string, ProviderVisibleAcquisition>,
+    record: ProviderVisibleAcquisition,
+    reconciledSeq: number
+  ): boolean {
+    const accepted = this.providerVisibleStateByPtyId.get(ptyId)?.state
+    return (
+      acquisitions.get(ptyId) === record &&
+      this.getPtyLifecycleGeneration(ptyId) === record.generation &&
+      !record.visibleRetired &&
+      !record.timedOut &&
+      (accepted?.generation !== record.generation || reconciledSeq > accepted.sequence)
+    )
+  }
+
   /** One supplied deadline for a whole read: each call gives the options with the time left. */
   protected spendProviderSnapshotDeadline(
     options: RuntimeProviderSnapshotReadOptions
@@ -280,17 +302,26 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       return { snapshot: null, late: acquisition.promise }
     }
     if (!acquisition || !current || acquisition.scrollbackRows < scrollbackRows) {
-      const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
-      acquisition = {
+      // The record exists before its capture can complete; only while it is still this map's own
+      // current, unretired acquisition may the capture set the shared screen mode.
+      const record: ProviderVisibleAcquisition = {
         generation,
         scrollbackRows,
-        promise,
+        promise: Promise.resolve(null),
         timedOut: false,
         ...(grid !== undefined ? { grid } : {})
       }
-      acquisitions.set(ptyId, acquisition)
-      void promise.finally(() => {
-        if (acquisitions.get(ptyId) === acquisition) {
+      record.promise = this.captureProviderTerminalBuffer(
+        ptyId,
+        opts,
+        generation,
+        (reconciledSeq) =>
+          this.lowerAcquisitionMayPublishMode(ptyId, acquisitions, record, reconciledSeq)
+      )
+      acquisition = record
+      acquisitions.set(ptyId, record)
+      void record.promise.finally(() => {
+        if (acquisitions.get(ptyId) === record) {
           acquisitions.delete(ptyId)
         }
       })
