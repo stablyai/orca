@@ -10,10 +10,7 @@ import { getLogicalRepoOrderRankById } from '../project-section-order'
 import type { ProjectSectionModel } from '../project-section-grouping'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
-import {
-  filterFolderWorkspacesFromOtherDevices,
-  isWorkspaceOwnedBySomeoneElse
-} from '../workspace-creator-visibility'
+import { isWorkspaceOwnedBySomeoneElse } from '../workspace-creator-visibility'
 import type { WorkspaceRowFilters } from '../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { hiddenProjectRowFacts, indexHiddenProjects } from '../hidden-projects'
@@ -30,8 +27,8 @@ import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
+import { filterFolderWorkspacesForSidebar } from './folder-workspace-project-visibility'
 import {
-  filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
@@ -187,18 +184,15 @@ export function planSidebarFeedRows(
     view.workspaceHostScope
   )
   const visibleRepos = filterReposForVisibleHosts(repos, visibleHostIdSet, defaultHostId)
-  const hostVisibleFolderWorkspaces = filterFolderWorkspacesForVisibleHosts(
+  const visibleFolderWorkspaces = filterFolderWorkspacesForSidebar(
     folderWorkspaces,
     projectGroups,
     visibleHostIdSet,
-    defaultHostId
+    defaultHostId,
+    pairedDeviceIdsByEnvironment,
+    repos,
+    view.filters
   )
-  const visibleFolderWorkspaces = view.filters.hideWorkspacesFromOtherDevices
-    ? filterFolderWorkspacesFromOtherDevices(
-        hostVisibleFolderWorkspaces,
-        pairedDeviceIdsByEnvironment
-      )
-    : hostVisibleFolderWorkspaces
   const visibleProjectGroups = filterProjectGroupsForVisibleHosts(
     projectGroups,
     visibleHostIdSet,

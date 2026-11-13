@@ -34,6 +34,7 @@ import {
 } from '../../../../../../shared/workspace-creator-visibility'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -46,8 +47,35 @@ type RevealContext = {
 
 /** Require every shared filter key to provide a reveal action so new filters cannot omit recovery. */
 const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContext) => void> = {
-  filterRepoIds: ({ state, worktree }) => {
-    if (!worktree.id.startsWith('folder:') && !state.filterRepoIds.includes(worktree.repoId)) {
+  filterRepoIds: ({ state, worktree, targetHostId }) => {
+    const folderScope = parseWorkspaceKey(worktree.id)
+    if (folderScope?.type === 'folder') {
+      // Two hosts can hold folders with the same id; resolve it against the row's own host.
+      const folderResult = resolveQualifiedIndexedFolderWorkspace(
+        state,
+        folderScope.folderWorkspaceId,
+        targetHostId
+      )
+      if (folderResult.kind !== 'selected') {
+        return
+      }
+      const folder = folderResult.value.workspace
+      const groupRepos = state.repos.filter((repo) => repo.projectGroupId === folder.projectGroupId)
+      // A selected repo of the group already passes this filter; another filter hides the folder.
+      if (groupRepos.some((repo) => state.filterRepoIds.includes(repo.id))) {
+        return
+      }
+      // The filter stores repository ids; reveal the folder through a repo of its project group.
+      const [groupRepo] = groupRepos
+      if (groupRepo) {
+        state.setFilterRepoIds([...state.filterRepoIds, groupRepo.id])
+      } else if (state.filterRepoIds.length > 0) {
+        // A group with no repo cannot be selected; clearing removes the only filter hiding it.
+        state.setFilterRepoIds([])
+      }
+      return
+    }
+    if (!state.filterRepoIds.includes(worktree.repoId)) {
       state.setFilterRepoIds([...state.filterRepoIds, worktree.repoId])
     }
   },
@@ -98,7 +126,16 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
   alwaysShowDefaultBranchWorkspace: () => {}
 }
 
-function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo | undefined) {
+function getRevealTargetHostId(
+  state: AppState,
+  worktree: Worktree,
+  repo: Repo | undefined,
+  executionHostId?: ExecutionHostId
+) {
+  // The sidebar row's own host wins; same-id folders on other hosts must not steer the reveal.
+  if (executionHostId) {
+    return executionHostId
+  }
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const workspaceScope = parseWorkspaceKey(worktree.id)
   if (workspaceScope?.type === 'folder') {
@@ -121,19 +158,22 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
 export function useSidebarWorktreeFilters() {
   const filterState = useAppStore(useShallow(selectSidebarFilterState))
 
-  const revealWorkspaceFilters = useCallback((worktree: Worktree) => {
-    const state = useAppStore.getState()
-    const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
-    const context = {
-      state,
-      worktree,
-      repo,
-      targetHostId: getRevealTargetHostId(state, worktree, repo)
-    }
-    for (const key of activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state))) {
-      REVEAL_WORKSPACE[key](context)
-    }
-  }, [])
+  const revealWorkspaceFilters = useCallback(
+    (worktree: Worktree, executionHostId?: ExecutionHostId) => {
+      const state = useAppStore.getState()
+      const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
+      const context = {
+        state,
+        worktree,
+        repo,
+        targetHostId: getRevealTargetHostId(state, worktree, repo, executionHostId)
+      }
+      for (const key of activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state))) {
+        REVEAL_WORKSPACE[key](context)
+      }
+    },
+    []
+  )
 
   const clearFilters = useCallback(
     () => clearSidebarFilters(filterState, useAppStore.getState()),
