@@ -15,6 +15,7 @@ import { ChatPanel } from './CloudOfflineChatPanel'
 import { formatAsleepSince } from './CloudAsleepTerminalNotice'
 import { tidyTerminalTail } from './tidy-terminal-tail'
 
+import { CloudSleepCopyFailed, CloudSleepCopySaving } from './CloudSleepCopyState'
 export type CloudOfflineViewProps = {
   snapshot: CloudOfflineSnapshot
   queued: CloudQueuedPrompt[]
@@ -31,6 +32,8 @@ export type CloudOfflineViewProps = {
   onKeepAwake?: () => void
   /** Kept on screen right after Sleep: nothing here wakes it but "Wake to continue". */
   viewOnly?: boolean
+  /** SLEEP-IN-PROGRESS: its copy is still being saved, or never arrived (never the empty lines). */
+  copySave?: 'saving' | 'failed' | null
 }
 
 /** A terminal tail opens at its newest lines, the way the live pane did. */
@@ -52,12 +55,17 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
   const defaultTab =
     snapshot.chats.length > 0 ? 'chat' : snapshot.terminals.length > 0 ? 'terminals' : 'changes'
   const empty = snapshot.capturedAt === null
+  const saving = props.goingToSleep === true || props.copySave === 'saving'
+  const failed = !saving && props.copySave === 'failed'
   const asOf = snapshot.capturedAt === null ? null : asOfParts(snapshot.capturedAt, now)
-  const stateLine = props.goingToSleep
-    ? t('orcaCloudWorkspace.state.goingToSleep', 'Going to sleep…')
+  const stateLine = saving
+    ? t(
+        'components.orcaCloud.offline.copySaving.state',
+        'Going to sleep · Saving a read-only copy…'
+      )
     : asOf
       ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', { when: asOf.relative })
-      : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · nothing cached yet')
+      : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · no read-only copy')
   return (
     <section
       className="flex h-full min-h-0 w-full max-w-3xl flex-col gap-5 px-6 py-8"
@@ -71,15 +79,9 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
         stateLine={stateLine}
         stateTitle={asOf?.absolute}
         note={
-          empty
+          empty || saving || failed
             ? undefined
-            : // Still saving: the copy shown is the one from before, not the one going to sleep.
-              props.goingToSleep
-              ? t(
-                  'components.orcaCloud.offline.savingCopy',
-                  'Saving a read-only copy of chats, terminals and changes…'
-                )
-              : t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
+            : t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
         }
         headingRef={props.headingRef}
         action={
@@ -88,7 +90,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
               <Play />
               {t('components.orcaCloud.offline.keepAwake', 'Keep awake')}
             </Button>
-          ) : (
+          ) : saving && !props.goingToSleep ? undefined : ( // Still saving its copy: not "asleep" yet, so no Wake to continue beside the spinner.
             <Button size="sm" onClick={props.onWake}>
               <Play />
               {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
@@ -96,17 +98,16 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
           )
         }
       />
-      {empty ? (
+      {saving ? (
+        <CloudSleepCopySaving />
+      ) : failed ? (
+        <CloudSleepCopyFailed />
+      ) : empty ? (
         <p className="max-w-[60ch] text-sm text-muted-foreground">
-          {props.goingToSleep
-            ? t(
-                'components.orcaCloud.offline.savingCopy',
-                'Saving a read-only copy of chats, terminals and changes…'
-              )
-            : t(
-                'components.orcaCloud.offline.emptyBody',
-                'Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.'
-              )}
+          {t(
+            'components.orcaCloud.offline.emptyBody',
+            'Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.'
+          )}
         </p>
       ) : (
         <>

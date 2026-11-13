@@ -9,11 +9,14 @@ import { workspaceSleepTarget } from './workspace-sleep-target'
 import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
 import {
+  clearSleepCopySave,
   clearWorktreeGoingToSleep,
   clearWorktreeKeptAwake,
+  markSleepCopySaving,
   markWorktreeGoingToSleep,
   releaseWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
+import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { holdActiveCloudSleepView } from './workspace-sleep-view-hold'
 
 /** One per host asked to stop the workspace's chats. */
@@ -80,7 +83,13 @@ export async function runSleepWorktrees(
   worktreeIds: readonly string[]
 ): Promise<WorkspaceSleepResult[]> {
   // Intent (hover, focus) must not wake what was just put to sleep.
+  const pressedAt = Date.now()
+  const ownedCloud = getCloudWorkspaceSnapshot().ids
   for (const id of worktreeIds) {
+    if (ownedCloud.has(id)) {
+      // Saving its read-only copy until the asleep view reads one back (SLEEP-IN-PROGRESS).
+      markSleepCopySaving(id, pressedAt)
+    }
     notePredictiveWakeSlept(id)
     // "Going to sleep…" from the click on: main first saves the copy the asleep view shows.
     markWorktreeGoingToSleep(id)
@@ -95,6 +104,10 @@ export async function runSleepWorktrees(
   // Refused before main started it (nothing stopped) or failed: the workspace is awake.
   for (const id of unsleptWorktreeIds) {
     releaseWorktreeSleepView(id)
+  }
+  // Awake after all (refused, or its machine kept running): no copy is coming.
+  for (const id of [...unsleptWorktreeIds, ...vmStillRunningIds]) {
+    clearSleepCopySave(id)
   }
   // A paired cloud workspace's sandbox sleeps through the control plane (PAIRED-SLEEP).
   const unslept = new Set(unsleptWorktreeIds)

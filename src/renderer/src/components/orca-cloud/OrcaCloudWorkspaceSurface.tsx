@@ -33,7 +33,7 @@ import { CloudSetupNoticesDock } from './CloudSetupNotices'
 import { useConfirmedRestart } from './use-cloud-panel-actions'
 import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
-import { useCloudOfflineData } from './offline/use-cloud-offline-data'
+import { useAsleepCopyData } from './offline/CloudSleepCopyState'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import {
   useIsWorktreeGoingToSleep,
@@ -211,7 +211,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   // Past main's last reopen check Keep awake can't work: Wake to continue (an honest wake) instead.
   const suspendCommitted = useIsWorktreeSuspendCommitted(workspaceId)
   const [archiveLoad, retryArchive] = useArchiveLoad(workspaceId, archived)
-  const offline = useCloudOfflineData(workspaceId, (maybeAsleep || viewOnly) && !archived)
+  const offline = useAsleepCopyData(workspaceId, (maybeAsleep || viewOnly) && !archived)
   const asleep = (Boolean(offline.snapshot?.asleep) && maybeAsleep) || viewOnly
   const wakeInFlight =
     wakeInput.waking ||
@@ -400,6 +400,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
                 workspaceName={name}
                 now={Math.max(now, slowNow)}
                 goingToSleep={goingToSleep}
+                copySave={offline.copySave}
                 onKeepAwake={
                   suspendCommitted ? undefined : () => keepWorkspaceAwakeDuringSleep(workspaceId)
                 }

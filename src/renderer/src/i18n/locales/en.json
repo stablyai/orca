@@ -24214,7 +24214,14 @@
         "noGit": "No source control state was saved.",
         "terminalN": "Terminal {{n}}",
         "keepAwake": "Keep awake",
-        "savingCopy": "Saving a read-only copy of chats, terminals and changes…"
+        "copySaving": {
+          "title": "Saving a read-only copy…",
+          "body": "Terminals, chats and changes will be readable here in a moment.",
+          "state": "Going to sleep · Saving a read-only copy…",
+          "row": "Going to sleep · Saving copy…"
+        },
+        "copyFailed": "Couldn’t save a read-only copy. Your files are safe in the workspace.",
+        "copyFailedWake": "Wake"
       },
       "read": {
         "wakeToContinue": "Wake to continue",
@@ -27776,7 +27783,7 @@
     "undo": "Undo",
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
-      "noCopy": "Asleep · nothing cached yet"
+      "noCopy": "Asleep · no read-only copy"
     },
     "bytes": {
       "gb": "{{value}} GB",
@@ -27846,8 +27853,7 @@
       "changedTitle": "Changed files",
       "moreChanged": "+{{count}} more",
       "recentCommitsOn": "Recent commits on {{branch}}",
-      "recentCommits": "Recent commits",
-      "goingToSleep": "Going to sleep… The read-only copy shows here when it’s done."
+      "recentCommits": "Recent commits"
     },
     "terminal": {
       "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept.",

@@ -6,6 +6,7 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import WorktreeCard from '../surface/WorktreeCard'
+import { markSleepCopySaving, resetWorktreeSleepViewForTests } from '@/lib/worktree-sleep-view'
 
 const local: Repo = { ...makeRepo(), displayName: 'orca' }
 const ssh: Repo = { ...makeRepo(), id: 'repo-ssh', displayName: 'api', connectionId: 'devbox' }
@@ -130,4 +131,29 @@ export const localOnly = defineFixture({
   },
   setup: () => seedCloudWorkspaceSnapshot({ ids: new Set(), idsLoaded: true }),
   render: () => <Rows rows={localRows.map((worktree) => ({ worktree, repo: local }))} />
+})
+
+/** SLEEP-IN-PROGRESS: asleep, its read-only copy still saving (beside one already asleep). */
+export const savingReadOnlyCopy = defineFixture({
+  width: 320,
+  store: {
+    settings: getDefaultSettings('/home/fixture'),
+    repos: [local],
+    worktreesByRepo: { [local.id]: [cloudRows[1]!, row('cloud-saving', 'Polish onboarding')] },
+    worktreeCardProperties: ['status', 'branch']
+  },
+  setup: () => {
+    cloud['cloud-saving'] = status('sleeping')
+    setup()
+    resetWorktreeSleepViewForTests()
+    markSleepCopySaving('cloud-saving')
+  },
+  render: () => (
+    <Rows
+      rows={[cloudRows[1]!, row('cloud-saving', 'Polish onboarding')].map((worktree) => ({
+        worktree,
+        repo: local
+      }))}
+    />
+  )
 })
