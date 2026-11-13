@@ -169,7 +169,7 @@ export class JournalLegacyRetirement {
   }
 
   private async attempt(): Promise<void> {
-    if (this.stopped.signal.aborted) {
+    if (this.stopped.signal.aborted || performance.now() < this.retryAt) {
       return
     }
     const saved = await this.savedState()
@@ -194,7 +194,7 @@ export class JournalLegacyRetirement {
       this.retryAt = 0
       this.retryDelay = 60_000
     }
-    if (this.retained || performance.now() < this.retryAt) {
+    if (this.retained) {
       return
     }
     let state = decodeRetirement(saved.retirement)
