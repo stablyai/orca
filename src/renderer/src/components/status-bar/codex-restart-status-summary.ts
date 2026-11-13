@@ -1,4 +1,9 @@
 import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import {
   eligibleCodexRestartPtyIds,
   codexRestartTabIndex,
   currentCodexRestartPanes,
@@ -56,9 +61,9 @@ export function selectCodexRestartStatus(
     previous.tabsByWorktree !== state.tabsByWorktree ||
     previous.terminalLayoutsByTabId !== state.terminalLayoutsByTabId ||
     previous.repos !== state.repos ||
-    previous.worktreesByRepo !== state.worktreesByRepo ||
-    previous.detectedWorktreesByRepo !== state.detectedWorktreesByRepo ||
-    previous.folderWorkspaces !== state.folderWorkspaces ||
+    selectWorktreesByRepo(previous) !== selectWorktreesByRepo(state) ||
+    selectDetectedWorktreesByRepo(previous) !== selectDetectedWorktreesByRepo(state) ||
+    selectFolderWorkspaces(previous) !== selectFolderWorkspaces(state) ||
     previous.projectGroups !== state.projectGroups ||
     previous.restoredRuntimeHostIdByWorkspaceSessionKey !==
       state.restoredRuntimeHostIdByWorkspaceSessionKey ||
@@ -70,9 +75,9 @@ export function selectCodexRestartStatus(
   ) {
     previous = {
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
+      worktreesByRepo: selectWorktreesByRepo(state),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
       restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
       activeWorktreeId: state.activeWorktreeId,
