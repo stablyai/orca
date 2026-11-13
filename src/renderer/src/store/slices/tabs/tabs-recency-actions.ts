@@ -11,7 +11,7 @@ export function createTabsRecencyActions(
     groupId: string
     order: string[]
     displayedOrder: string[]
-    activeTabId: string | null
+    selectedTabId: string | null
   } | null = null
 
   return {
@@ -42,7 +42,7 @@ export function createTabsRecencyActions(
         !cycle ||
         cycle.worktreeId !== worktreeId ||
         cycle.groupId !== groupId ||
-        cycle.activeTabId !== group.activeTabId ||
+        cycle.selectedTabId !== group.activeTabId ||
         cycle.displayedOrder.length !== group.tabOrder.length ||
         !cycle.displayedOrder.every((id, index) => id === group.tabOrder[index])
       ) {
@@ -51,7 +51,7 @@ export function createTabsRecencyActions(
           groupId,
           order: group.tabOrder,
           displayedOrder: group.tabOrder,
-          activeTabId: group.activeTabId
+          selectedTabId: group.activeTabId
         }
       }
       return cycle.order
@@ -87,7 +87,7 @@ export function createTabsRecencyActions(
         : partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
       if (opts?.cycle && cycle?.worktreeId === worktreeId && cycle.groupId === group.id) {
         cycle.displayedOrder = order
-        cycle.activeTabId = group.activeTabId
+        cycle.selectedTabId = group.activeTabId
       }
       // Repeated typing in the leading tab must not publish another layout change.
       if (order.every((id, index) => id === group.tabOrder[index])) {
