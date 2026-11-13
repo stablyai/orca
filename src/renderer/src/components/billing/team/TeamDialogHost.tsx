@@ -234,7 +234,6 @@ export function TeamPageBody({
           openTeammateProfile(userId)
         }}
         onDismissArrival={clearTeamPageArrival}
-        onContactSales={(url) => void window.api.shell.openUrl(url)}
         inline={inline}
         dangerZone={
           org && teamDelete.check ? (

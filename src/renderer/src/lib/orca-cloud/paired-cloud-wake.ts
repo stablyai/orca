@@ -28,6 +28,33 @@ export function notePairedCloudSlept(workspaceId: string): void {
   void refreshCloudWorkspaceStatus(workspaceId)
 }
 
+/** How often, and for how long, an explicit wake re-reads status until the VM runs. */
+export const PAIRED_WAKE_POLL_MS = 1_500
+export const PAIRED_WAKE_MAX_WAIT_MS = 120_000
+
+function wakeStalledMessage(): string {
+  return translate(
+    'orcaCloudWorkspace.overlay.stalled',
+    'Orca Cloud stopped responding while waking.'
+  )
+}
+
+/** Re-reads status until it says running (true) or the wait runs out (false). Bounded: it stops. */
+async function waitUntilRunning(workspaceId: string): Promise<boolean> {
+  const deadline = Date.now() + PAIRED_WAKE_MAX_WAIT_MS
+  for (;;) {
+    await refreshCloudWorkspaceStatus(workspaceId)
+    const entry = getCloudWorkspaceSnapshot().status[workspaceId]
+    if (!entry?.error && entry?.status?.state === 'ready') {
+      return true
+    }
+    if (Date.now() + PAIRED_WAKE_POLL_MS > deadline) {
+      return false
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, PAIRED_WAKE_POLL_MS))
+  }
+}
+
 export type PairedWakeResult = { ok: true } | { ok: false; message: string; reason?: string }
 
 /** Is this sidebar id a paired cloud workspace (registered by the paired registry)? */
@@ -57,7 +84,7 @@ export async function wakePairedCloudWorkspace(
   const startedAt = Date.now()
   const source = options.source ?? 'open'
   const report = (
-    phase: 'waking' | 'ready' | 'failed',
+    phase: 'waking' | 'connecting' | 'ready' | 'failed',
     failure?: { message: string; reason?: string }
   ): void => {
     if (!options.quiet) {
@@ -83,11 +110,20 @@ export async function wakePairedCloudWorkspace(
   }))
   if (result.ok) {
     sleptHere.delete(workspaceId)
-    report('ready')
+    // The control plane accepts the wake before the VM runs (it takes seconds more): "ready" only
+    // once its status says so, or the overlay never outlasts its show delay (PAIRED-WAKING-OVERLAY).
+    report('connecting')
+    if (options.quiet) {
+      await refreshCloudWorkspaceStatus(workspaceId)
+    } else if (await waitUntilRunning(workspaceId)) {
+      report('ready')
+    } else {
+      report('failed', { message: wakeStalledMessage() })
+    }
   } else {
     report('failed', { message: result.error, ...(result.reason ? { reason: result.reason } : {}) })
+    await refreshCloudWorkspaceStatus(workspaceId)
   }
-  await refreshCloudWorkspaceStatus(workspaceId)
   return result.ok
     ? { ok: true }
     : { ok: false, message: result.error, ...(result.reason ? { reason: result.reason } : {}) }
