@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
 import { translate } from '../../i18n/mobile-i18n'
-import { triggerError } from '../../platform/haptics'
-import { currentSoftKeyboardHeight } from '../../platform/keyboard-occlusion'
+import { triggerError } from '../../platform/haptics/haptics'
+import { currentSoftKeyboardHeight } from '../../platform/keyboard/keyboard-occlusion'
 import type { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../terminal-live-accessory-raw-send'
 import {

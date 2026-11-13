@@ -8,7 +8,7 @@ import {
   Folder,
   Image as ImageIcon
 } from 'lucide-react-native'
-import { triggerMediumImpact, triggerSelection } from '../../platform/haptics'
+import { triggerMediumImpact, triggerSelection } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

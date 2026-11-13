@@ -1,5 +1,8 @@
 import { useEffect, useCallback } from 'react'
-import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../../platform/keyboard-occlusion'
+import {
+  currentSoftKeyboardHeight,
+  subscribeSoftKeyboard
+} from '../../platform/keyboard/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'

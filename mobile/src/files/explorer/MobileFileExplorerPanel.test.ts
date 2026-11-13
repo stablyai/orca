@@ -25,7 +25,9 @@ const mockTransport = vi.hoisted(
   })
 )
 
-vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('../../platform/accessibility/use-reduced-motion', () => ({
+  useReducedMotionEnabled: () => true
+}))
 vi.mock('react-native-reanimated', () => ({
   Easing: { bezier: () => (t: number) => t },
   default: { View: 'AnimatedView' },
@@ -110,7 +112,7 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('../../platform/haptics', () => ({
+vi.mock('../../platform/haptics/haptics', () => ({
   triggerSelection: vi.fn()
 }))
 

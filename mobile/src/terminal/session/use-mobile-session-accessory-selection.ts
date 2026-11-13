@@ -6,7 +6,7 @@ import {
   createTerminalAccessoryRepeatController,
   createTerminalAccessoryRepeatSender
 } from '../terminal-accessory-repeat'
-import { useClipboardReader, useClipboardWriter } from '../../platform/clipboard'
+import { useClipboardReader, useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   newTabRepoListRead,
@@ -17,7 +17,7 @@ import {
   triggerSuccess,
   triggerError,
   triggerEdgeBump
-} from '../../platform/haptics'
+} from '../../platform/haptics/haptics'
 import {
   sameTerminalKeyboardAvoidanceMetrics,
   type TerminalKeyboardAvoidanceMetrics,
