@@ -1,6 +1,7 @@
 // macOS's own record of a terminal-host folder denial: tccd decisions and kernel sandbox denies.
 
 import { runProcess } from '@orca/process-host'
+import { z } from 'zod'
 import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
 import type {
   TccAsked,
@@ -48,6 +49,12 @@ type MsgGroup = {
   result: { authValue: string; authReason: string } | null
 }
 
+const LOG_ENTRY_SCHEMA = z.object({
+  eventMessage: z.string(),
+  processImagePath: z.string().optional(),
+  processID: z.number().optional(),
+  timestamp: z.string().optional()
+})
 const MSG_ID_PATTERN = /\bmsgID=(\d+\.\d+)/
 const SERVICE_PATTERN = /\bservice=kTCCService(\w+)/
 const RESULT_PATTERN = /AUTHREQ_RESULT: .*\bauthValue=(\d+), authReason=(\d+)/
@@ -76,17 +83,13 @@ function toRecord(rawLine: string): LogRecord | null {
   } catch {
     return null
   }
-  if (!parsed || typeof parsed !== 'object') {
+  const entry = LOG_ENTRY_SCHEMA.safeParse(parsed)
+  if (!entry.success) {
     return null
   }
-  const entry = parsed as Record<string, unknown>
-  if (typeof entry.eventMessage !== 'string') {
-    return null
-  }
-  const message = entry.eventMessage
-  const image = typeof entry.processImagePath === 'string' ? entry.processImagePath : ''
+  const { eventMessage: message, processImagePath: image = '' } = entry.data
   const processName = image.slice(image.lastIndexOf('/') + 1)
-  const line = `${String(entry.timestamp ?? '')} ${processName}[${String(entry.processID ?? '')}] ${message}`
+  const line = `${entry.data.timestamp ?? ''} ${processName}[${entry.data.processID ?? ''}] ${message}`
   return {
     line: line.length > MAX_KEPT_LINE_CHARS ? `${line.slice(0, MAX_KEPT_LINE_CHARS)}…` : line,
     message,
@@ -112,7 +115,7 @@ function authReasonOf(raw: string | undefined): TccAuthReason {
   if (raw === undefined) {
     return 'none'
   }
-  return (TCC_AUTH_REASONS as readonly string[]).includes(raw) ? (raw as TccAuthReason) : 'other'
+  return TCC_AUTH_REASONS.find((reason) => reason === raw) ?? 'other'
 }
 
 /** Keep only lines about the helper, then derive the enums; `stdout` is `log show --style ndjson`. */

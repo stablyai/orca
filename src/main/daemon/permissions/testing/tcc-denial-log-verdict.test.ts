@@ -7,6 +7,7 @@ const HELPER =
   '/Users/user/Library/Application Support/orca/daemon-host/macos/terminal-host-57202dec6187e819396a5a0ab07c2932bf5a00fe/app.noindex/Orca Terminal Host.app/Contents/MacOS/orca-terminal-host'
 const TCCD = '/System/Library/PrivateFrameworks/TCC.framework/Support/tccd'
 const SANDBOXD = '/usr/libexec/sandboxd'
+const DENIED_AT_MS = Date.UTC(2026, 10, 13, 20, 24, 30)
 
 function line(timestamp: string, image: string, pid: number, eventMessage: string): string {
   return JSON.stringify({
@@ -176,7 +177,7 @@ describe('parseTccLogVerdict', () => {
 
 describe('readTccLogVerdict', () => {
   it('keeps what a timed-out log printed and reports the timeout', async () => {
-    const verdict = await readTccLogVerdict(Date.now(), SUBJECT, async () => ({
+    const verdict = await readTccLogVerdict(DENIED_AT_MS, SUBJECT, async () => ({
       code: null,
       signal: 'SIGTERM',
       stdout: ndjson(HELPER_DOWNLOADS_REFUSED),
@@ -190,7 +191,7 @@ describe('readTccLogVerdict', () => {
     'kills a hung log reader at its deadline',
     async () => {
       // Same spec, but a child that never exits on its own.
-      const verdict = await readTccLogVerdict(Date.now(), SUBJECT, (spec) =>
+      const verdict = await readTccLogVerdict(DENIED_AT_MS, SUBJECT, (spec) =>
         runProcess({ ...spec, program: '/bin/sleep', args: ['60'] })
       )
       expect(verdict.logAccess).toBe('timeout')
@@ -199,7 +200,7 @@ describe('readTccLogVerdict', () => {
   )
 
   it('swallows a spawn failure', async () => {
-    const verdict = await readTccLogVerdict(Date.now(), SUBJECT, async () => {
+    const verdict = await readTccLogVerdict(DENIED_AT_MS, SUBJECT, async () => {
       throw new Error('spawn ENOENT')
     })
     expect(verdict).toMatchObject({ logAccess: 'error', tccdAsked: 'unknown' })
