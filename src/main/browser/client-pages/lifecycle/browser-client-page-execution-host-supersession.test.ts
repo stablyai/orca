@@ -28,7 +28,8 @@ const storageIdentityByKey: Record<string, string> = {
   [OTHER_HOST]: OTHER_HOST_STORAGE
 }
 
-function createHarness() {
+function createHarness(options: { failedRouteRelease?: string } = {}) {
+  const retireRenderer = vi.fn(async () => {})
   const releasedRoutes: string[] = []
   const proxyRulesByPartition = new Map<string, string>()
   const sessionsByPartition = new Map<string, BrowserRouteElectronSession>()
@@ -79,6 +80,9 @@ function createHarness() {
       proxyEndpoint: { host: '127.0.0.1' as const, port: proxyPortByKey[executionHostKey] },
       release: vi.fn(() => {
         releasedRoutes.push(executionHostKey)
+        if (options.failedRouteRelease === executionHostKey) {
+          throw new Error('route-release-failed')
+        }
       })
     })),
     selectRenderer: vi.fn(() => ({
@@ -88,7 +92,7 @@ function createHarness() {
         nextWebContentsId += 1
         return { webContentsId: nextWebContentsId }
       }),
-      retirePage: vi.fn(async () => {})
+      retirePage: retireRenderer
     })),
     routeSessions,
     executeAutomation: vi.fn(async () => ({})),
@@ -108,6 +112,8 @@ function createHarness() {
 
   return {
     executor: new BrowserClientPageCommandExecutor(dependencies),
+    dependencies,
+    retireRenderer,
     proxyRulesFor: (storageIdentity: string) =>
       proxyRulesByPartition.get(`persist:${storageIdentity}`),
     releasedRoutes
@@ -180,4 +186,59 @@ describe('client-hosted pages across an execution host generation change', () =>
     expect(harness.proxyRulesFor(OTHER_HOST_STORAGE)).toBe('socks5://127.0.0.1:43125')
     expect(harness.proxyRulesFor(SSH_HOST_STORAGE)).toBe('socks5://127.0.0.1:43124')
   })
+})
+
+it('allows a different legacy page to retarget only after exact native and network retirement despite a missing renderer acknowledgement', async () => {
+  const h = createHarness()
+  const destroyed = Promise.withResolvers<void>()
+  let pending: ReturnType<typeof createPage> | undefined
+  h.dependencies.routeWebContents.claimGuestLifecycle.mockImplementationOnce((registration) =>
+    createLifecycleClaim(registration, destroyed.promise)
+  )
+  h.retireRenderer.mockRejectedValue(new Error('renderer-ack-unavailable'))
+  try {
+    await createPage(h.executor, 'old', GENERATION_1)
+    pending = createPage(h.executor, 'new', GENERATION_2)
+    await vi.waitFor(() => expect(h.retireRenderer).toHaveBeenCalledTimes(1))
+    expect(h.proxyRulesFor(SSH_HOST_STORAGE)).toBe('socks5://127.0.0.1:43123')
+    expect(
+      h.executor.snapshotPageInventory().filter((p) => p.browserPageId === 'old')
+    ).toMatchObject([{ browserPageId: 'old', state: 'outcomeUnknown' }])
+    destroyed.resolve()
+    expect(await pending).toEqual({ status: 'completed' })
+    expect(h.proxyRulesFor(SSH_HOST_STORAGE)).toBe('socks5://127.0.0.1:43124')
+    expect(h.executor.snapshotPageInventory()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ browserPageId: 'old', state: 'outcomeUnknown' }),
+        expect.objectContaining({ browserPageId: 'new', state: 'active' })
+      ])
+    )
+    expect(h.releasedRoutes).toEqual([GENERATION_1])
+    await expect(h.executor.retirePage('old', 7)).rejects.toThrow(
+      'Browser client page cleanup failed'
+    )
+    expect(h.releasedRoutes).toEqual([GENERATION_1])
+    expect(await createPage(h.executor, 'old', GENERATION_2)).toMatchObject({ status: 'failed' })
+    expect(await createPage(h.executor, 'sibling', GENERATION_2)).toEqual({ status: 'completed' })
+    expect(h.retireRenderer).toHaveBeenCalledTimes(2)
+  } finally {
+    destroyed.resolve()
+    h.retireRenderer.mockResolvedValue(undefined)
+    await pending
+    await h.executor.close()
+  }
+})
+
+it('does not retarget a legacy session after the original route release failed', async () => {
+  const h = createHarness({ failedRouteRelease: GENERATION_1 })
+  await createPage(h.executor, 'old', GENERATION_1)
+  expect(await createPage(h.executor, 'new', GENERATION_2)).toMatchObject({ status: 'failed' })
+  expect(await createPage(h.executor, 'retry', GENERATION_2)).toMatchObject({ status: 'failed' })
+  expect(h.proxyRulesFor(SSH_HOST_STORAGE)).not.toBe('socks5://127.0.0.1:43124')
+  expect(h.releasedRoutes.filter((key) => key === GENERATION_1)).toEqual([GENERATION_1])
+  expect(h.executor.snapshotPageInventory()).toMatchObject([
+    { browserPageId: 'old', state: 'outcomeUnknown' }
+  ])
+  await expect(h.executor.close()).rejects.toThrow('Browser client page executor cleanup failed')
+  expect(h.releasedRoutes.filter((key) => key === GENERATION_1)).toEqual([GENERATION_1])
 })

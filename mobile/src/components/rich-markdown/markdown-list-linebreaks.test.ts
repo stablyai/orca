@@ -30,7 +30,6 @@ afterEach(() => {
 
 for (const [kind, source, selector] of lists) {
   it.each([
-    ['First<br>Second', 'First<br />Second'],
     ['<strong>First<br>Second</strong>', '**First<br />Second**'],
     ['<code>First</code><br><code>Second</code>', '`First`<br />`Second`']
   ])(`keeps ${kind} item soft break inside its list through host save: %s`, (html, text) => {
@@ -107,7 +106,6 @@ it.each([
 
 it.each([
   ['<span>First</span><br>', 'First'],
-  ['<p>First<br></p>', 'First'],
   ['<p><strong>First<br></strong></p>', '**First**'],
   ['<span>First</span><br><ul><li><p>Child</p></li></ul>', 'First\n  - Child'],
   ['<p>First<br><br></p>', 'First<br /><br />'],

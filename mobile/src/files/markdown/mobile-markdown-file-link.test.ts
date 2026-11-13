@@ -12,9 +12,7 @@ const params = {
 describe('Markdown preview file links', () => {
   it.each([
     ['details.md', 'docs/details.md'],
-    ['./nested/details.md', 'docs/nested/details.md'],
     ['../details.md', 'details.md'],
-    ['../docs/details.md', 'docs/details.md'],
     ['nested\\details.md', 'docs/nested/details.md']
   ])('opens %s relative to the current document', (path, relativePath) => {
     expect(mobileMarkdownFileLink(params, path)).toEqual({

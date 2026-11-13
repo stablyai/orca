@@ -1,5 +1,5 @@
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import { cleanupBrowserClientPage } from './browser-client-page-cleanup'
+import { createBrowserClientPageCleanup } from './browser-client-page-cleanup'
 import type { BrowserClientPageNetworkRoute as RetainedNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
 import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import {
@@ -31,6 +31,7 @@ type BrowserClientPageCreationDependencies = BrowserClientPageAuthorityIdentity 
   routeSessions: Pick<BrowserRouteSessionRegistry, 'preparePage'>
   routeWebContents: BrowserClientPageLifecycleRegistry
   guestBinding: BrowserClientPageGuestBinding
+  retainFailedCleanup?: (cleanup: () => Promise<void>) => void
 }
 
 export async function createReservedBrowserClientPage(
@@ -56,7 +57,9 @@ export async function createReservedBrowserClientPage(
     if (route.key !== event.command.executionHostKey) {
       throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
     }
-    await dependencies.retireSupersededExecutionHostPages(route)
+    if (event.command.initialUrl === undefined) {
+      await dependencies.retireSupersededExecutionHostPages(route)
+    }
     assertBrowserClientPageCommandNotAborted(signal)
     assertAvailable()
     renderer = dependencies.selectRenderer()
@@ -120,7 +123,10 @@ export async function createReservedBrowserClientPage(
     assertAvailable()
     const retainedPage = {
       generation: event.pageHostGeneration,
-      inventory: createBrowserClientPageInventory(event, 'active'),
+      inventory: createBrowserClientPageInventory(
+        event,
+        event.command.initialUrl === undefined ? 'active' : 'outcomeUnknown'
+      ),
       registration,
       lifecycleClaim,
       renderer,
@@ -135,18 +141,19 @@ export async function createReservedBrowserClientPage(
     if (guestBound && registration) {
       dependencies.guestBinding.release(registration)
     }
+    const target = {
+      guestMayExist: mountAttempted,
+      lifecycleClaim,
+      renderer,
+      rendererPages: routeSession ? [browserClientPageIdentity(event, routeSession.partition)] : [],
+      route,
+      routeSession
+    }
+    const cleanup = createBrowserClientPageCleanup(dependencies.routeWebContents, target)
     try {
-      await cleanupBrowserClientPage(dependencies.routeWebContents, {
-        guestMayExist: mountAttempted,
-        lifecycleClaim,
-        renderer,
-        rendererPages: routeSession
-          ? [browserClientPageIdentity(event, routeSession.partition)]
-          : [],
-        route,
-        routeSession
-      })
+      await cleanup()
     } catch (cleanupError) {
+      dependencies.retainFailedCleanup?.(cleanup)
       throw new BrowserClientPageCommandError('browser_client_page_cleanup_failed', {
         cause: new AggregateError([error, cleanupError], 'Browser client page creation failed')
       })

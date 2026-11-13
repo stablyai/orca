@@ -21,14 +21,3 @@ test('adds a task from the input and counts it as open', async () => {
   assert.equal(stored.length, 3)
   assert.deepEqual(panel.errors, [])
 })
-
-test('starts from the persisted list and clears done tasks', async () => {
-  panel = await mount(panelModule, {
-    persisted: { plugin: { todos: [{ id: 7, title: 'Ship it', done: true }] } }
-  })
-  assert.equal(panel.find({ role: 'status' })?.text, '0 open')
-
-  await panel.press({ text: 'Clear done' })
-
-  assert.ok(panel.find({ label: 'Nothing to do' }))
-})

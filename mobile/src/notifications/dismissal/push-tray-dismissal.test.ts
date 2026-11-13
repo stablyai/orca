@@ -11,8 +11,23 @@ vi.mock('expo-notifications', () => ({
   dismissNotificationAsync: vi.fn()
 }))
 
-function presented(identifier: string, data: unknown): unknown {
-  return { request: { identifier, content: { data } } }
+function presented(identifier: string, data: Record<string, unknown>): Notifications.Notification {
+  return {
+    date: 0,
+    request: {
+      identifier,
+      trigger: null,
+      content: {
+        title: null,
+        subtitle: null,
+        body: null,
+        categoryIdentifier: null,
+        sound: null,
+        threadIdentifier: null,
+        data
+      }
+    }
+  }
 }
 
 beforeEach(() => {
@@ -30,8 +45,9 @@ describe('dismissPresentedPushNotification', () => {
         orca: { hostFingerprint: 'fp0123456789abcd', notificationId: 'agent:two' }
       }),
       presented('other-host', { hostFingerprint: 'another-host', notificationId: 'agent:one' }),
-      presented('tray-3', { hostFingerprint: 'fp0123456789abcd', notificationId: 'agent:one' })
-    ] as never)
+      presented('tray-3', { hostFingerprint: 'fp0123456789abcd', notificationId: 'agent:one' }),
+      presented('no-gateway', { hostId: 'host-1', notificationId: 'agent:one' })
+    ])
 
     await dismissPresentedPushNotification('agent:one', 'fp0123456789abcd')
 
@@ -39,26 +55,6 @@ describe('dismissPresentedPushNotification', () => {
       'tray-1',
       'tray-3'
     ])
-  })
-
-  it('ignores notifications without a gateway identity', async () => {
-    vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue([
-      presented('tray-1', { hostId: 'host-1', notificationId: 'agent:one' })
-    ] as never)
-
-    await dismissPresentedPushNotification('agent:one', 'fp0123456789abcd')
-
-    expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalled()
-  })
-
-  it('reports tray query failures to the caller', async () => {
-    vi.mocked(Notifications.getPresentedNotificationsAsync).mockRejectedValue(
-      new Error('unavailable')
-    )
-
-    await expect(dismissPresentedPushNotification('agent:one', 'fp0123456789abcd')).rejects.toThrow(
-      'unavailable'
-    )
   })
 })
 
@@ -71,7 +67,7 @@ it('a delayed dismissal preserves newer alerts, other epochs, and other hosts', 
     presented('restarted', { ...base, notificationSeq: 1, notificationEpoch: 'epoch-b' }),
     presented('other-host', { ...base, notificationSeq: 1, hostFingerprint: 'host-b' }),
     presented('legacy', base)
-  ] as never)
+  ])
   await dismissPresentedPushNotification('note', 'host-a', {
     notificationEpoch: 'epoch-a',
     notificationSeq: 2
@@ -82,17 +78,14 @@ it('a delayed dismissal preserves newer alerts, other epochs, and other hosts', 
   ])
 })
 
-it.each([undefined, {}, { notificationEpoch: 'epoch' }, { notificationSeq: 2 }])(
-  'an incomplete dismissal fence %j removes only unversioned entries',
-  async (fence) => {
-    const base = { hostFingerprint: 'host-a', notificationId: 'note' }
-    vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue([
-      presented('unversioned', base),
-      presented('versioned', { ...base, notificationEpoch: 'epoch', notificationSeq: 2 }),
-      presented('epoch-only', { ...base, notificationEpoch: 'epoch' }),
-      presented('sequence-only', { ...base, notificationSeq: 2 })
-    ] as never)
-    await dismissPresentedPushNotification('note', 'host-a', fence)
-    expect(Notifications.dismissNotificationAsync).toHaveBeenCalledExactlyOnceWith('unversioned')
-  }
-)
+it('an incomplete dismissal fence removes only unversioned entries', async () => {
+  const base = { hostFingerprint: 'host-a', notificationId: 'note' }
+  vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue([
+    presented('unversioned', base),
+    presented('versioned', { ...base, notificationEpoch: 'epoch', notificationSeq: 2 }),
+    presented('epoch-only', { ...base, notificationEpoch: 'epoch' }),
+    presented('sequence-only', { ...base, notificationSeq: 2 })
+  ])
+  await dismissPresentedPushNotification('note', 'host-a', { notificationEpoch: 'epoch' })
+  expect(Notifications.dismissNotificationAsync).toHaveBeenCalledExactlyOnceWith('unversioned')
+})

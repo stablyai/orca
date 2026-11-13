@@ -8,15 +8,8 @@ import {
   shouldSuppressNotificationWhileViewing
 } from './notification-viewing-policy'
 
-const storage = new Map<string, string>()
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: vi.fn(async (key: string) => storage.get(key) ?? null)
-  }
-}))
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
 beforeEach(() => {
-  storage.clear()
   setNotificationViewingWorkspace(null)
   AppState.currentState = 'background'
 })

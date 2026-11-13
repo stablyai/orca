@@ -70,4 +70,4 @@
 6 src/renderer/src/store/slices/worktrees/teardown/host-qualified-worktree-row-removal.ts # store writer
 8 src/renderer/src/store/slices/worktrees/teardown/purge-stale-runtime-host-state.ts # store writer
 1 src/renderer/src/store/slices/worktrees/teardown/remove-worktree-store-cleanup.ts # store writer
-8 src/renderer/src/store/terminals/workspace-terminal-hydration.ts # store writer
+8 src/renderer/src/store/terminals/hydration/workspace-terminal-hydration.ts # store writer

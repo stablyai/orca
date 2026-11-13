@@ -1,11 +1,21 @@
+import {
+  browserInitializationPresentation,
+  browserInitializationReceiptCurrent,
+  type BrowserInitializationPresentation
+} from './browser-initialization-presentation'
+import { hasBrowserPageInitializationAction } from '../../components/browser-pane/navigate/browser-page-deferred-navigation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { WebSessionTabsSyncState, MirroredBrowserTab } from './state'
+import type {
+  WebSessionTabsSyncState,
+  MirroredBrowserTab,
+  WebSessionTabsSnapshotApplyOptions
+} from './state'
 import { readBrowserClientHostId } from '../browser/client-hosting/browser-client-host-identity'
 import { peekWebSessionBrowserPlacementGroup } from '../browser/placement/web-session-browser-placement'
-import { browserPageEqual } from './state-equality-tabs'
+import { browserPageEqual, optionalRuntimeBrowserPlacementsEqual } from './state-equality-tabs'
 import { sameStringArray } from './state-equality-core'
 import { collectLayoutGroupIds } from './tab-group-layout-tree'
 import { buildBrowserUnifiedTab } from './tab-builders'
@@ -113,13 +123,28 @@ export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserT
 /** Our guest row owns content; host metadata is delayed echo/create defaults. Rewinding URL also defeats staged-title matching next frame. Other clients have no guest evidence and must follow host content rather than freeze their first snapshot. */
 export function resolveMirroredBrowserPageContent(
   tab: RuntimeMobileSessionBrowserTab,
-  existingPage: BrowserPage | undefined
+  existingPage: BrowserPage | undefined,
+  presentation?: BrowserInitializationPresentation,
+  previousPresentation?: BrowserInitializationPresentation,
+  stale = false,
+  reconcile = false
 ): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl'> {
-  if (clientHostsMirroredBrowserPage(tab) && existingPage) {
+  const localAction = existingPage && hasBrowserPageInitializationAction(existingPage.id)
+  if (
+    existingPage &&
+    (localAction ||
+      stale ||
+      (!reconcile && clientHostsMirroredBrowserPage(tab) && !presentation && !previousPresentation))
+  ) {
     return {
       url: existingPage.url,
       title: existingPage.title,
-      loading: existingPage.loading,
+      loading:
+        presentation?.disposition === 'pending'
+          ? true
+          : presentation
+            ? false
+            : existingPage.loading,
       canGoBack: existingPage.canGoBack,
       canGoForward: existingPage.canGoForward,
       faviconUrl: existingPage.faviconUrl
@@ -143,7 +168,8 @@ export function buildMirroredBrowserTabs(
   hostGroupIdByTabId: ReadonlyMap<string, string>,
   fallbackGroupId: string,
   sortOffset: number,
-  now: number
+  now: number,
+  reconciliation?: WebSessionTabsSnapshotApplyOptions['reconcileBrowserPage']
 ): MirroredBrowserTab[] {
   const renderedGroupIds = collectLayoutGroupIds(state.layoutByWorktree[snapshot.worktree])
   const clientGroupIds = new Set(
@@ -182,7 +208,23 @@ export function buildMirroredBrowserTabs(
         ? preferredClientGroupId
         : undefined
     const groupId = clientGroupId ?? hostGroupId
-    const content = resolveMirroredBrowserPageContent(tab, existing?.page)
+    const previousHandle = existing ? state.remoteBrowserPageHandlesByPageId[pageId] : undefined
+    const presentation = browserInitializationPresentation(snapshot, tab, previousHandle)
+    const content = resolveMirroredBrowserPageContent(
+      tab,
+      existing?.page,
+      presentation,
+      previousHandle?.initializationPresentation,
+      !browserInitializationReceiptCurrent(snapshot) &&
+        Boolean(previousHandle?.initializationPresentation),
+      reconciliation?.page === existing?.page &&
+        previousHandle?.environmentId === reconciliation?.handle.environmentId &&
+        previousHandle?.remotePageId === reconciliation?.handle.remotePageId &&
+        optionalRuntimeBrowserPlacementsEqual(
+          previousHandle?.placement,
+          reconciliation?.handle.placement
+        )
+    )
     const nextPage: BrowserPage = {
       id: pageId,
       workspaceId,
@@ -190,7 +232,14 @@ export function buildMirroredBrowserTabs(
       ...content,
       // Guest owns client-hosted loadError; host omission must not clear it.
       loadError:
-        (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,
+        (tab.placement?.kind === 'client'
+          ? presentation &&
+            (previousHandle?.initializationPresentation ||
+              !optionalRuntimeBrowserPlacementsEqual(previousHandle?.placement, tab.placement) ||
+              tab.placement.pageHostGeneration === 0)
+            ? null
+            : existing?.page.loadError
+          : tab.loadError) ?? null,
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
@@ -223,6 +272,7 @@ export function buildMirroredBrowserTabs(
       page,
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
+      initializationPresentation: presentation,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),
       ...(tab.placement ? { placement: tab.placement } : {}),
       unifiedTab: buildBrowserUnifiedTab(

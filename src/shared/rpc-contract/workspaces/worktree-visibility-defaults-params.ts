@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../worktree/visibility-sources'
+} from '../../worktree/visibility/visibility-sources'
 
 export const WorktreeVisibilityDefaultsUpdate = z
   .object({

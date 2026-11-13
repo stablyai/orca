@@ -6,7 +6,7 @@ import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
-import type { RetiredNameRegistry } from '../../../shared/worktree/retired-name-registry'
+import type { RetiredNameRegistry } from '../../../shared/worktree/naming/retired-name-registry'
 import {
   extractRetiredNameRegistriesByNamespace,
   mergeRetiredNameRegistryMaps
@@ -24,7 +24,7 @@ import {
   rekeyWorktreeId,
   rekeyWorkspaceKey
 } from './profile-project-worktree-identity'
-import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../../shared/worktree/cross-store-lineage-move-refusal'
+import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../../shared/worktree/lineage/cross-store-lineage-move-refusal'
 
 export type TransferPayload = {
   repo: Repo

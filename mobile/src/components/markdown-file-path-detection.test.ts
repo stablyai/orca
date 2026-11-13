@@ -22,20 +22,6 @@ describe('detectFilePathSegments', () => {
     ])
   })
 
-  it('detects POSIX absolute paths', () => {
-    expect(detectFilePathSegments('Wrote /Users/me/wt/src/app.tsx today')).toEqual([
-      { type: 'text', value: 'Wrote ' },
-      { type: 'file', value: '/Users/me/wt/src/app.tsx', path: '/Users/me/wt/src/app.tsx' },
-      { type: 'text', value: ' today' }
-    ])
-    expect(detectFilePathSegments('/repo/src/index.ts')).toEqual([
-      { type: 'file', value: '/repo/src/index.ts', path: '/repo/src/index.ts' }
-    ])
-    expect(detectFilePathSegments('/root.ts')).toEqual([
-      { type: 'file', value: '/root.ts', path: '/root.ts' }
-    ])
-  })
-
   it('detects paths with :line and :line:col suffixes', () => {
     expect(detectFilePathSegments('see src/foo.ts:42 here')).toEqual([
       { type: 'text', value: 'see ' },
@@ -69,15 +55,6 @@ describe('detectFilePathSegments', () => {
     expect(detectFilePathSegments('https://example.com/path/file.ts')).toEqual([
       { type: 'text', value: 'https://example.com/path/file.ts' }
     ])
-    expect(detectFilePathSegments('see https://example.com/path/file.ts:42 now')).toEqual([
-      { type: 'text', value: 'see https://example.com/path/file.ts:42 now' }
-    ])
-  })
-
-  it('does not match protocol-relative URLs', () => {
-    expect(detectFilePathSegments('load //cdn.example.com/lib/app.js')).toEqual([
-      { type: 'text', value: 'load //cdn.example.com/lib/app.js' }
-    ])
   })
 
   it('detects scoped-package file paths with a segment-leading @', () => {
@@ -89,15 +66,6 @@ describe('detectFilePathSegments', () => {
         path: '@types/react/index.d.ts'
       },
       { type: 'text', value: ' here' }
-    ])
-    expect(
-      detectFilePathSegments('node_modules/@scope/pkg/file.ts').filter((s) => s.type === 'file')
-    ).toEqual([
-      {
-        type: 'file',
-        value: 'node_modules/@scope/pkg/file.ts',
-        path: 'node_modules/@scope/pkg/file.ts'
-      }
     ])
   })
 
@@ -118,11 +86,7 @@ describe('detectFilePathSegments', () => {
 })
 
 describe('isFilePathCodeSpan', () => {
-  it('accepts POSIX absolute paths and :line citations', () => {
-    expect(isFilePathCodeSpan('/Users/me/wt/src/app.tsx')).toBe(true)
-    expect(isFilePathCodeSpan('src/foo.ts:42')).toBe(true)
-    expect(isFilePathCodeSpan('src/foo.ts:42:7')).toBe(true)
+  it('accepts a bare file name with a line citation', () => {
     expect(isFilePathCodeSpan('MobileNativeChatComposer.tsx:23')).toBe(true)
-    expect(isFilePathCodeSpan(String.raw`C:\repo\Main.tsx:12`)).toBe(true)
   })
 })

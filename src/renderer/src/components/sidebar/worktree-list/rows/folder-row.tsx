@@ -8,7 +8,7 @@ import type {
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/selection/active-workspace'
 
 import {
   type FolderWorkspacePathStatus,

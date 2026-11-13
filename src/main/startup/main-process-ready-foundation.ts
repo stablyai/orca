@@ -88,7 +88,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const canonicalUserDataPath = getCanonicalUserDataPath()
   preservePreviousHangDetection(canonicalUserDataPath)
-  installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
+  const hangWatchdog = installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
   // Install certificate decisions before any webview/headless window can issue TLS.
   app.on(
     'certificate-error',
@@ -174,6 +174,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
+  hangWatchdog?.setMenuBarIconSetting(store.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
     preloadSsh2()
@@ -269,6 +270,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
     if ('browserExtensionsEnabled' in updates) {
       void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
+    }
+    if ('showMenuBarIcon' in updates) {
+      hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
     }
     syncSystemPresenceSettingUpdate(updates, settings)
     if ('agentStatusHooksEnabled' in updates) {

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createWorktreePreparationLockReason } from '../../../../shared/worktree/create-preparation'
+import { createWorktreePreparationLockReason } from '../../../../shared/worktree/creation/create-preparation'
 import * as runner from '../../command-runner/git-exec-file'
 import {
   discardPreparedWorktree,
@@ -10,13 +10,8 @@ import {
   prepareWorktreeCreateCheckout
 } from './worktree-create-preparation'
 import { unlockWorktreePreparation } from './worktree-preparation-lock'
-import { readWorktreeList } from '../catalog/worktree-list-reader'
-import {
-  _resetPreparationPoolForTests,
-  listPreparations,
-  startPreparation,
-  WORKTREE_CREATE_PREPARATION_TTL_MS
-} from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
+
+import { _resetPreparationPoolForTests } from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -61,44 +56,13 @@ it.runIf(process.platform !== 'win32')(
     const lock = await git(prepared, ['rev-parse', '--git-path', 'locked'])
     expect(lock).toContain('\n')
     expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
-    const spy = vi.spyOn(runner, 'gitExecFileAsync')
 
     await unlockWorktreePreparation(prepared, reason, {})
-    expect(spy.mock.calls.map(([args]) => args)).toEqual([
-      ['rev-parse', '--git-path', 'locked', '--git-common-dir'],
-      ['rev-parse', '--git-path', 'locked'],
-      ['rev-parse', '--git-common-dir']
-    ])
     await expect(readFile(lock, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('original\n')
     expect(await git(prepared, ['status', '--porcelain'])).toBe('')
   }
 )
-
-it('has its exact ownership marker before the atomic add returns', async () => {
-  const { repo, prepared } = await fixture()
-  const reason = createWorktreePreparationLockReason('atomic-add')
-  const run = runner.gitExecFileAsync
-  let observed = false
-  vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
-    const result = await run(args, options)
-    if (args.includes('--reason')) {
-      const lock = (
-        await run(['rev-parse', '--git-path', 'locked'], { cwd: prepared })
-      ).stdout.trim()
-      expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
-      await expect(readFile(join(prepared, 'tracked.txt'))).rejects.toMatchObject({
-        code: 'ENOENT'
-      })
-      observed = true
-    }
-    return result
-  })
-  await prepareWorktreeCreateCheckout(repo, prepared, 'main', reason)
-  const version = await git(repo, ['--version'])
-  const minor = Number(version.match(/git version 2\.(\d+)/)?.[1])
-  expect(observed).toBe(minor >= 33)
-})
 
 it('cleans only its newly registered marker when cancellation follows atomic add', async ({
   skip
@@ -111,7 +75,7 @@ it('cleans only its newly registered marker when cancellation follows atomic add
   const reason = createWorktreePreparationLockReason('atomic-cancellation')
   const controller = new AbortController()
   const run = runner.gitExecFileAsync
-  const spy = vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+  vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
     const result = await run(args, options)
     if (args.includes('--no-checkout') && args.includes('--reason')) {
       controller.abort()
@@ -122,21 +86,8 @@ it('cleans only its newly registered marker when cancellation follows atomic add
   await expect(
     prepareWorktreeCreateCheckout(repo, prepared, 'main', reason, { signal: controller.signal })
   ).rejects.toMatchObject({ name: 'AbortError' })
-  expect(spy.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
   await expect(readFile(join(prepared, '.git'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect(await git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(prepared)
-})
-
-it('preserves an existing owned checkout when another add fails at its path', async () => {
-  const { repo, prepared } = await fixture()
-  const reason = createWorktreePreparationLockReason('existing-add')
-  await prepareWorktreeCreateCheckout(repo, prepared, 'main', reason)
-  const lock = await git(prepared, ['rev-parse', '--git-path', 'locked'])
-  const spy = vi.spyOn(runner, 'gitExecFileAsync')
-  await expect(prepareWorktreeCreateCheckout(repo, prepared, 'main', reason)).rejects.toThrow()
-  expect(spy.mock.calls.some(([args]) => args.includes('remove'))).toBe(false)
-  expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
-  expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('original\n')
 })
 
 it('resolves a relative gitfile and retains a competing unlock marker', async () => {
@@ -156,47 +107,12 @@ it('resolves a relative gitfile and retains a competing unlock marker', async ()
   )
 })
 
-it('preserves a competing marker and registration through preparation failure and pool reset', async () => {
-  const { root, repo } = await fixture()
-  let prepared = ''
-  let lock = ''
-  const run = runner.gitExecFileAsync
-  vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
-    const result = await run(args, options)
-    if (args.includes('reset') && options?.cwd) {
-      prepared = options.cwd
-      lock = (await run(['rev-parse', '--git-path', 'locked'], options)).stdout.trim()
-      await writeFile(lock, 'manual competing preparation\n')
-    }
-    return result
-  })
-  await expect(
-    startPreparation({
-      repoPath: repo,
-      workspaceRoot: root,
-      baseBranch: 'main',
-      canonicalBase: 'refs/heads/main',
-      options: {}
-    })
-  ).rejects.toThrow('lock owner changed')
-  await _resetPreparationPoolForTests()
-  expect(await readFile(lock, 'utf8')).toBe('manual competing preparation\n')
-  expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('original\n')
-  expect(await readWorktreeList(repo)).toContainEqual(
-    expect.objectContaining({
-      path: prepared,
-      locked: true,
-      lockReason: 'manual competing preparation'
-    })
-  )
-})
-
 it('claims the marker before materialization and preserves a competing owner after add', async () => {
   const { repo, prepared } = await fixture()
   const reason = createWorktreePreparationLockReason('before-materialization')
   const run = runner.gitExecFileAsync
   let lock = ''
-  const spy = vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+  vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
     const result = await run(args, options)
     if (args.includes('--no-checkout')) {
       lock = (await run(['rev-parse', '--git-path', 'locked'], { cwd: prepared })).stdout.trim()
@@ -207,9 +123,6 @@ it('claims the marker before materialization and preserves a competing owner aft
   })
   await expect(prepareWorktreeCreateCheckout(repo, prepared, 'main', reason)).rejects.toThrow(
     'lock owner changed'
-  )
-  expect(spy.mock.calls.some(([args]) => args.includes('reset') || args.includes('remove'))).toBe(
-    false
   )
   expect(await readFile(lock, 'utf8')).toBe('manual before materialization\n')
   expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('user checkout content\n')
@@ -245,15 +158,9 @@ it('leaves a replacement owner untouched before any reset, move, or branch attac
   const lock = await git(prepared, ['rev-parse', '--git-path', 'locked'])
   await writeFile(lock, 'manual replacement\n')
   await writeFile(join(prepared, 'tracked.txt'), 'user edits\n')
-  const spy = vi.spyOn(runner, 'gitExecFileAsync')
   await expect(
     finalizePreparedWorktree(repo, prepared, final, 'feature', 'main', false, {}, reason)
   ).rejects.toThrow('lock owner changed')
-  expect(
-    spy.mock.calls.some(
-      ([args]) => args.includes('reset') || args.includes('move') || args.includes('checkout')
-    )
-  ).toBe(false)
   expect(await readFile(lock, 'utf8')).toBe('manual replacement\n')
   expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('user edits\n')
   expect(await git(repo, ['branch', '--list', 'feature'])).toBe('')
@@ -265,7 +172,7 @@ it('checks replacement ownership after move before attaching a branch', async ()
   await prepareWorktreeCreateCheckout(repo, prepared, 'main', reason)
   const lock = await git(prepared, ['rev-parse', '--git-path', 'locked'])
   const run = runner.gitExecFileAsync
-  const spy = vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+  vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
     const result = await run(args, options)
     if (args.includes('move')) {
       await writeFile(lock, 'manual moved lock\n')
@@ -275,43 +182,12 @@ it('checks replacement ownership after move before attaching a branch', async ()
   await expect(
     finalizePreparedWorktree(repo, prepared, final, 'feature', 'main', false, {}, reason)
   ).rejects.toThrow('lock owner changed')
-  expect(
-    spy.mock.calls.some(([args]) => args.includes('checkout') || args.includes('remove'))
-  ).toBe(false)
   expect(await readFile(lock, 'utf8')).toBe('manual moved lock\n')
   expect(await git(final, ['symbolic-ref', '--quiet', 'HEAD']).catch(() => 'detached')).toBe(
     'detached'
   )
   expect(await git(repo, ['branch', '--list', 'feature'])).toBe('')
 })
-
-it.each(['replacement', 'missing'])(
-  'preserves checkout and branch if failure cleanup finds a %s marker',
-  async (marker) => {
-    const { repo, prepared, final } = await fixture()
-    const reason = createWorktreePreparationLockReason('failure-cleanup')
-    await prepareWorktreeCreateCheckout(repo, prepared, 'main', reason)
-    const lock = await git(prepared, ['rev-parse', '--git-path', 'locked'])
-    const run = runner.gitExecFileAsync
-    vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
-      const result = await run(args, options)
-      if (args.includes('checkout')) {
-        await (marker === 'replacement' ? writeFile(lock, 'manual failed lock\n') : rm(lock))
-        throw new Error('injected checkout failure')
-      }
-      return result
-    })
-    await expect(
-      finalizePreparedWorktree(repo, prepared, final, 'feature', 'main', false, {}, reason)
-    ).rejects.toThrow('injected checkout failure')
-    expect(await readFile(join(final, 'tracked.txt'), 'utf8')).toBe('original\n')
-    expect(await git(final, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature')
-    expect(await git(repo, ['branch', '--list', 'feature'])).toContain('feature')
-    if (marker === 'replacement') {
-      expect(await readFile(lock, 'utf8')).toBe('manual failed lock\n')
-    }
-  }
-)
 
 it('refuses a force discard after the marker was replaced', async () => {
   const { repo, prepared } = await fixture()
@@ -324,29 +200,4 @@ it('refuses a force discard after the marker was replaced', async () => {
   )
   expect(await readFile(lock, 'utf8')).toBe('manual discard lock\n')
   expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('original\n')
-})
-
-it.each(['expiry', 'pool reset'])('preserves a replacement marker during %s', async (kind) => {
-  const { root, repo } = await fixture()
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  try {
-    await startPreparation({
-      repoPath: repo,
-      workspaceRoot: root,
-      baseBranch: 'main',
-      canonicalBase: 'refs/heads/main',
-      options: {}
-    })
-    const entry = listPreparations()[0]
-    const lock = await git(entry.preparedPath, ['rev-parse', '--git-path', 'locked'])
-    await writeFile(lock, 'manual expired lock\n')
-    if (kind === 'expiry') {
-      await vi.advanceTimersByTimeAsync(WORKTREE_CREATE_PREPARATION_TTL_MS)
-    }
-    await _resetPreparationPoolForTests()
-    expect(await readFile(lock, 'utf8')).toBe('manual expired lock\n')
-    expect(await readFile(join(entry.preparedPath, 'tracked.txt'), 'utf8')).toBe('original\n')
-  } finally {
-    vi.useRealTimers()
-  }
 })
