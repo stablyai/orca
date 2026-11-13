@@ -4,7 +4,7 @@ import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-t
 import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../../shared/repo-types'
-import type { GitWorktreeInfo, Worktree } from '../../../shared/worktree/types'
+import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { mergeWorktree } from '../worktree-metadata-merge'
 import type {
   WorkspaceCleanupAutomationRunLookup,
@@ -21,7 +21,7 @@ import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 import { shouldScanBroadWorkspaceCleanupWorktree } from './workspace-cleanup-scan-eligibility'
 import {
   resolvePersistedWorkspaceCleanupActivityWorktree,
-  resolveWorkspaceCleanupActivityWorktree,
+  resolveWorkspaceCleanupActivityWithTimeout,
   type WorkspaceCleanupFsActivityCache
 } from './workspace-cleanup-activity'
 import {
@@ -32,12 +32,10 @@ import {
 } from './workspace-cleanup-candidate'
 import { synthesizeDisconnectedSshCleanupCandidates } from './workspace-cleanup-disconnected-ssh'
 import {
-  WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
   WorkspaceCleanupScanCancelledError,
   appendWorkspaceCleanupItems,
   mapWorkspaceCleanupWithConcurrency,
-  throwIfWorkspaceCleanupScanAborted,
-  withWorkspaceCleanupTimeout
+  throwIfWorkspaceCleanupScanAborted
 } from './workspace-cleanup-scan-primitives'
 import { listWorkspaceCleanupFolderWorkspaces } from './workspace-cleanup-folder-workspaces'
 import {
@@ -50,6 +48,10 @@ import {
 } from './workspace-cleanup-scan-targets'
 import { isWorktreeMetaOwnedByRepo } from '../../workspaces/catalog/worktree-metadata-ownership'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
+import {
+  createWorkspaceCleanupReleasedWorkerLookup,
+  type WorkspaceCleanupReleasedWorkerLookup
+} from './workspace-cleanup-orchestration-workers'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 // Overlap repo scans to avoid summing SSH listing round-trip latency.
@@ -86,6 +88,10 @@ export async function scanWorkspaceCleanup(
   // One snapshot per scan: merged-review evidence reads it without the network.
   const prCache = store.getGitHubCache().pr
   const findAutomationRun = createWorkspaceCleanupAutomationRunLookup(store)
+  const findReleasedWorker = createWorkspaceCleanupReleasedWorkerLookup(
+    store,
+    options.getOrchestrationDb
+  )
   const progress = createWorkspaceCleanupProgressEmitter(args.scanId, scannedAt, options)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -103,6 +109,7 @@ export async function scanWorkspaceCleanup(
           scannedAt,
           prCache,
           findAutomationRun,
+          findReleasedWorker,
           targetWorktreeIds: targetWorktreeIdsByRepo.get(repo.id),
           refreshTargetActivity: args.worktreeId !== undefined || args.refreshActivity === true,
           includeAllWorkspaces: args.includeAllWorkspaces === true,
@@ -132,6 +139,7 @@ async function scanRepoWorkspaces(
     scannedAt: number
     prCache: PRCacheView<PRInfo>
     findAutomationRun: WorkspaceCleanupAutomationRunLookup
+    findReleasedWorker: WorkspaceCleanupReleasedWorkerLookup
     targetWorktreeIds?: ReadonlySet<string>
     refreshTargetActivity: boolean
     includeAllWorkspaces: boolean
@@ -146,6 +154,7 @@ async function scanRepoWorkspaces(
     scannedAt,
     prCache,
     findAutomationRun,
+    findReleasedWorker,
     targetWorktreeIds,
     refreshTargetActivity,
     includeAllWorkspaces,
@@ -243,7 +252,7 @@ async function scanRepoWorkspaces(
         activityStatsUnavailable ||
         (targetWorktreeIds ? !refreshTargetActivity : persistedActivityIsRecent)
           ? persistedActivityWorktree
-          : await resolveCleanupActivityWithTimeout(
+          : await resolveWorkspaceCleanupActivityWithTimeout(
               route,
               worktree,
               () => {
@@ -269,6 +278,7 @@ async function scanRepoWorkspaces(
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
         findAutomationRun,
+        releasedWorker: findReleasedWorker(worktreeWithActivity, mergedWorktrees),
         signal
       }).catch((error) => {
         if (error instanceof WorkspaceCleanupScanCancelledError) {
@@ -286,35 +296,4 @@ async function scanRepoWorkspaces(
   )
 
   return { scannedAt, candidates, errors }
-}
-
-async function resolveCleanupActivityWithTimeout(
-  route: WorkspaceCleanupGitRoute,
-  worktree: Worktree,
-  onActivityStatsUnavailable: () => void,
-  signal?: AbortSignal,
-  fsActivityCache?: WorkspaceCleanupFsActivityCache
-): Promise<Worktree> {
-  try {
-    return await withWorkspaceCleanupTimeout(
-      () =>
-        resolveWorkspaceCleanupActivityWorktree(
-          route,
-          worktree,
-          undefined,
-          undefined,
-          fsActivityCache
-        ),
-      WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
-      'Timed out reading worktree activity.',
-      signal
-    )
-  } catch (error) {
-    if (error instanceof WorkspaceCleanupScanCancelledError) {
-      throw error
-    }
-    onActivityStatsUnavailable()
-    console.warn('Workspace cleanup activity scan failed', error)
-    return resolvePersistedWorkspaceCleanupActivityWorktree(worktree)
-  }
 }
