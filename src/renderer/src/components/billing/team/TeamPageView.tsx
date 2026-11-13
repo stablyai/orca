@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
@@ -305,15 +304,15 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
               <h3 id={ssoTitleId} className="min-w-[14rem] flex-1 text-sm font-medium">
                 {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
               </h3>
-              <OpenExternalSplitButton
+              <Button
+                type="button"
                 variant="outline"
                 size="sm"
-                link={enterprise.contactUrl}
                 onClick={() => props.onContactSales(enterprise.contactUrl)}
               >
                 {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
                 <ExternalLink />
-              </OpenExternalSplitButton>
+              </Button>
             </section>
           ) : null}
           {props.dangerZone}

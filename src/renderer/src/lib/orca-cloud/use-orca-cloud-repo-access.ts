@@ -3,14 +3,12 @@
 // network call; everything else comes from the control plane's GET /v1/github/repo-access (N2),
 // cached 5 minutes. While a repository is waiting (an install in the browser, or an org owner's
 // approval, D2), `poll` re-checks on the spec's cadence: every 2 s for 3 minutes, then every 10 s.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
 import type { HostedGithubRepoAccessResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
-import { gitHubInstallLinkSource } from './github-link-sources'
 import { useOrcaCloudIdentityKey } from './orca-cloud-identity'
 
 export type OrcaCloudRepoAccessState =
@@ -139,12 +137,7 @@ export function useOrcaCloudRepoAccess(
     /** Fired once when a repository that was waiting becomes reachable (D2's "access granted"). */
     onGranted?: () => void
   } = {}
-): OrcaCloudRepoAccess & {
-  refresh: () => void
-  openInstall: () => Promise<boolean>
-  /** "Copy link" for openInstall: the same single-use install page, minted without opening. */
-  installLink: ExternalLinkSource | null
-} {
+): OrcaCloudRepoAccess & { refresh: () => void; openInstall: () => Promise<boolean> } {
   const repo = useAppStore((s) =>
     repoId ? s.repos.find((entry) => entry.id === repoId) : undefined
   )
@@ -218,14 +211,6 @@ export function useOrcaCloudRepoAccess(
     return Boolean(result?.ok)
   }, [repoUrl, setupSessionId])
 
-  const installLink = useMemo(
-    () =>
-      repoUrl
-        ? gitHubInstallLinkSource({ repoUrl, ...(setupSessionId ? { setupSessionId } : {}) })
-        : null,
-    [repoUrl, setupSessionId]
-  )
-
   return {
     state: enabled || !repoUrl ? state : 'unknown',
     ...(current?.installUrl ? { installUrl: current.installUrl } : {}),
@@ -235,7 +220,6 @@ export function useOrcaCloudRepoAccess(
     repoUrl,
     loading: enabled && current === undefined,
     refresh,
-    openInstall,
-    installLink
+    openInstall
   }
 }

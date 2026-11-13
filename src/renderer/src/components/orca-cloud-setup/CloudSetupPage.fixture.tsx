@@ -35,8 +35,7 @@ function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
     checkAgain: noop,
     contactUrl: null,
     reopenBrowser: noop,
-    reopenLink: null,
-    installGitHubLink: null
+    reopenLink: null
   }
 }
 

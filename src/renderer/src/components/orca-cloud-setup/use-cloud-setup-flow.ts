@@ -102,10 +102,11 @@ export type CloudSetupFlow = CloudSetupPageModel & {
   /** Where "Contact us" goes when Orca Cloud isn't turned on for the team; null hides it. */
   contactUrl: string | null
   reopenBrowser: () => void
-  /** "Copy link" beside Reopen browser: a fresh one-time setup link; null without a session. */
+  /**
+   * "Copy link" beside Reopen browser on the sign-in step: a fresh one-time setup link. Null on
+   * other steps (plan, billing, GitHub App install) and without a session.
+   */
   reopenLink: ExternalLinkSource | null
-  /** "Copy link" beside the GitHub step's button: the same install page, minted without opening. */
-  installGitHubLink: ExternalLinkSource | null
 }
 
 export function useCloudSetupFlow(
@@ -132,8 +133,7 @@ export function useCloudSetupFlow(
   const {
     steps: rowSteps,
     session,
-    openInstall,
-    installLink
+    openInstall
   } = useCloudStartSteps({
     availability,
     access,
@@ -298,7 +298,7 @@ export function useCloudSetupFlow(
     checkAgain,
     contactUrl,
     reopenBrowser: () => void reopenCloudSetup(sessionId, continueInBrowser),
-    reopenLink: cloudSetupLinkSource(sessionId),
-    installGitHubLink: installLink
+    // Copy link is for sign-in pages only (pasted into an incognito window or another profile).
+    reopenLink: signingIn || model.action === 'sign-in' ? cloudSetupLinkSource(sessionId) : null
   }
 }

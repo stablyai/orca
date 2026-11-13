@@ -212,7 +212,7 @@ function StepActions({
         </Button>
       )
     case 'github-install':
-      return browser(continueLabel, flow.installGitHub, flow.installGitHubLink)
+      return browser(continueLabel, flow.installGitHub)
     case 'start-trial':
       return (
         <Button type="button" onClick={flow.startTrial} disabled={flow.busy}>

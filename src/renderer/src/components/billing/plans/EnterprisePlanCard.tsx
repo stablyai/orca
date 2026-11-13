@@ -1,5 +1,5 @@
 import { Building2, ExternalLink } from 'lucide-react'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { PlanCardShell } from './PlanCardShell'
 import { planFeatureLines } from './plan-feature-copy'
@@ -46,16 +46,15 @@ export function EnterprisePlanCard({
       footer={
         contactUrl ? (
           <>
-            <OpenExternalSplitButton
+            <Button
+              type="button"
               variant="outline"
-              groupClassName="w-full"
-              className="flex-1"
-              link={contactUrl}
+              className="w-full"
               onClick={() => onContactSales(contactUrl)}
             >
               {t('auto.components.billing.plans.contactSales', 'Contact sales')}
               <ExternalLink />
-            </OpenExternalSplitButton>
+            </Button>
             <p className="text-center text-xs text-muted-foreground">
               {t(
                 'auto.components.billing.plans.entHint',
