@@ -35,7 +35,8 @@ describe('getComputerUsePermissionStatus with a running automation helper', () =
       accessibility: 'not-granted',
       screenshots: 'granted'
     })
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permission-status')
+    const { getComputerUsePermissionStatus } =
+      await import('./macos-computer-use-permission-status')
 
     await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
       permissions: [
@@ -48,7 +49,8 @@ describe('getComputerUsePermissionStatus with a running automation helper', () =
 
   it('surfaces a running helper probe failure rather than a separate helper grant', async () => {
     runningHelperStatusMock.mockRejectedValue(new Error('automation worker unavailable'))
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permission-status')
+    const { getComputerUsePermissionStatus } =
+      await import('./macos-computer-use-permission-status')
 
     await expect(getComputerUsePermissionStatus()).rejects.toThrow('automation worker unavailable')
     expect(spawnMock).not.toHaveBeenCalled()

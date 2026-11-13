@@ -9,6 +9,30 @@ export type NativePermissionStatus = Partial<
   Record<ComputerUsePermissionId, ComputerUsePermissionStatus>
 >
 
+function readNativePermissionValue(value: unknown): ComputerUsePermissionStatus | undefined {
+  return value === 'granted' || value === 'not-granted' || value === 'unsupported'
+    ? value
+    : undefined
+}
+
+/**
+ * Reads the helper's permissionStatus reply. Unrecognized values are dropped,
+ * which callers report as not-granted, so a malformed reply never reads as a grant.
+ */
+export function parseNativePermissionStatus(value: unknown): NativePermissionStatus {
+  if (typeof value !== 'object' || value === null) {
+    return {}
+  }
+  const accessibility =
+    'accessibility' in value ? readNativePermissionValue(value.accessibility) : undefined
+  const screenshots =
+    'screenshots' in value ? readNativePermissionValue(value.screenshots) : undefined
+  return {
+    ...(accessibility ? { accessibility } : {}),
+    ...(screenshots ? { screenshots } : {})
+  }
+}
+
 export type NativeMethod =
   | 'handshake'
   | 'permissionStatus'

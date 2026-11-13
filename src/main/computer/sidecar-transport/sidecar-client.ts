@@ -14,7 +14,10 @@ import {
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from '../action-contracts/computer-sidecar-paste-validation'
 import { RuntimeClientError } from '../runtime-client-error'
-import type { NativePermissionStatus } from '../macos-native/macos-native-provider-contract'
+import {
+  parseNativePermissionStatus,
+  type NativePermissionStatus
+} from '../macos-native/macos-native-provider-contract'
 import { getForkedChildEntryPath } from '../../worker-threads/forked-child-entry-path'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
@@ -67,10 +70,9 @@ export async function callComputerSidecarCapabilities(): Promise<ComputerProvide
 }
 
 export async function callComputerSidecarPermissionStatus(): Promise<NativePermissionStatus | null> {
-  // SAFETY: our sidecar returns the bundled native helper's permission status or null over IPC.
-  return sidecar
-    ? ((await sidecar.callIfRunning('permissionStatus', {})) as NativePermissionStatus | null)
-    : null
+  // Null means no automation helper is running, so the caller probes a separate helper instead.
+  const result = sidecar?.isRunning() ? await sidecar.call('permissionStatus', {}) : null
+  return result === null || result === undefined ? null : parseNativePermissionStatus(result)
 }
 
 export async function callComputerSidecarListWindows(
@@ -129,11 +131,8 @@ class ComputerSidecarProcess {
 
   constructor(private readonly entryPath: string) {}
 
-  callIfRunning(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
-    if (!this.child || this.child.killed || !this.child.connected) {
-      return Promise.resolve(null)
-    }
-    return this.call(method, params)
+  isRunning(): boolean {
+    return this.child?.connected === true && !this.child.killed
   }
 
   call(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {

@@ -166,7 +166,7 @@ describe('MacOSNativeProviderClient', () => {
     connectMacOSProviderSocketMock.mockImplementation(async () => {
       const socket = new FakeSocket()
       socket.write = (line, callback) => {
-        const request = JSON.parse(line) as { id: number; method: string }
+        const request: { id: number; method: string } = JSON.parse(line)
         const result =
           request.method === 'handshake'
             ? { protocolVersion: 1, supports: {} }
@@ -193,5 +193,14 @@ describe('MacOSNativeProviderClient', () => {
     })
     expect(spawnMock).toHaveBeenCalledTimes(1)
     client.shutdown()
+  })
+
+  it('never reads a malformed helper permission reply as a grant', async () => {
+    const { parseNativePermissionStatus } = await import('./macos-native-provider-contract')
+
+    expect(parseNativePermissionStatus(null)).toEqual({})
+    expect(parseNativePermissionStatus({ accessibility: true, screenshots: 'granted' })).toEqual({
+      screenshots: 'granted'
+    })
   })
 })
