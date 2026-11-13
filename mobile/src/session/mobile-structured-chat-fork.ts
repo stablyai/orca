@@ -13,7 +13,7 @@ import {
   withLaunchReply,
   withoutUnansweredLaunch
 } from './tabs/pending-session-selection'
-import { releaseTerminalCreateLock } from '../terminal/session/terminal-create-lock'
+import { releaseTerminalCreateLock } from '../terminal/session/creation/terminal-create-lock'
 import type { MobileSessionAttachmentsModel } from '../files/attachments/use-mobile-session-attachments'
 
 type ForkScope = Pick<

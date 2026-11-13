@@ -4,7 +4,7 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import type { TerminalWebViewHandle } from '../webview/terminal-webview-contract'
 import type { TerminalFrame } from '../webview/terminal-webview-messages'
 import type { TerminalViewportDims } from './terminal-viewport-refit'
-import type { TerminalPaneViewport } from '../session/mobile-terminal-pane-layout'
+import type { TerminalPaneViewport } from '../session/pane-layout/mobile-terminal-pane-layout'
 
 export type TerminalViewportRefitOptions = {
   activeHandleRef: RefObject<string | null>
