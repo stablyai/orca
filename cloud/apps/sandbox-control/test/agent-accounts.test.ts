@@ -236,8 +236,8 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
 
 describe('D13 fails closed', () => {
   it('treats any visibility other than private as shared', () => {
-    expect(isSharedWorkspace({ visibility: 'private' })).toBe(false)
-    expect(isSharedWorkspace({ visibility: 'team' })).toBe(true)
+    expect(isSharedWorkspace({ visibility: 'private', ownership_transferred_at: null })).toBe(false)
+    expect(isSharedWorkspace({ visibility: 'team', ownership_transferred_at: null })).toBe(true)
     for (const visibility of ['', 'org', null, undefined] as unknown as string[]) {
       expect(isSharedWorkspace({ visibility } as never)).toBe(true)
     }

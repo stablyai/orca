@@ -207,7 +207,7 @@ export async function deleteAgentSourcesForSandbox(db: D1Database, sandboxId: st
 export type AgentMode = 'account' | 'omit' | 'keep'
 export async function agentModesFor(
   db: D1Database,
-  row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility'>,
+  row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility' | 'ownership_transferred_at'>,
   env: Readonly<Record<string, string>>,
   options: {
     providerEnabled: Record<CredentialAgent, boolean>

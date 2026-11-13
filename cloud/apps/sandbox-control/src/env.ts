@@ -208,6 +208,12 @@ export type Env = {
    * GitHub install started by a setup session, the browser goes to <origin>/cloud/setup/next.
    */
   CLOUD_SETUP_ORIGIN?: string
+  /**
+   * Origin of Orca Cloud auth's internal API (https), asked whether someone is in a team before a
+   * workspace is handed to them (team-membership.ts). Its own setting, so changing the setup pages'
+   * origin can never redirect an authorization call. Unset: every hand-off is refused (503).
+   */
+  AUTH_INTERNAL_ORIGIN?: string
   /** Archived workspaces are destroyed this many days after archive (default 30). */
   ARCHIVE_TTL_DAYS?: string
   /** Idle minutes before a sandbox sleeps (default 15; keep equal to billing's plan idleSleepMinutes). */

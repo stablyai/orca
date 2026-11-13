@@ -41,13 +41,16 @@ export type MemberGitDeps = {
 
 /** Members whose GitHub identity this workspace may use: owner + active grantees, connected only. */
 export async function connectedMembers(db: D1Database, row: SandboxRow): Promise<string[]> {
+  // OWNER-TRANSFER: on a transferred workspace the owner has no entry of their own. They count
+  // only while they hold an active grant, exactly like any member of a shared workspace.
+  const ownerToo = row.ownership_transferred_at == null
   const { results } = await db
     .prepare(
-      `SELECT t.user_id FROM github_user_tokens t WHERE t.account_id = ? AND (t.user_id = ? OR t.user_id IN
+      `SELECT t.user_id FROM github_user_tokens t WHERE t.account_id = ? AND ((? = 1 AND t.user_id = ?) OR t.user_id IN
          (SELECT g.user_id FROM workspace_grants g WHERE g.sandbox_id = ? AND g.status = 'active'))
        ORDER BY t.user_id`
     )
-    .bind(row.account_id, row.user_id, row.id)
+    .bind(row.account_id, ownerToo ? 1 : 0, row.user_id, row.id)
     .all<{ user_id: string }>()
   return results.map((r) => r.user_id)
 }
