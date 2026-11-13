@@ -86,7 +86,9 @@ export function nativeChatTurnMembership(
         nativeChatOpeningTurnKey(messages, turnKeys, journal) ??
         newestNativeChatUserTurnKey(messages, turnKeys),
       drawOrder: nativeChatTurnDrawOrder(messages, turnKeys, anchoringUserItems(recordKeys)),
-      providerTurnBoundsKnown: anchors.size > 0
+      // A record whose opener is unnamed falls back to the preceding user row, so one key can span
+      // several provider turns; bounds are only known when every record names its opener.
+      providerTurnBoundsKnown: anchors.size > 0 && !hasUnnamedRecord(recordKeys)
     }
   }
   const runningKey = running.kind === 'turn' ? anchors.get(running.turnItemId) : undefined
@@ -155,4 +157,14 @@ function namedRecordKeys(
 
 function anchoringUserItems(recordKeys: ReadonlyMap<string, string | null>): ReadonlySet<string> {
   return new Set([...recordKeys.values()].filter((key) => key !== null))
+}
+
+/** An unnamed record's replies group under the preceding user key, so that key spans provider turns. */
+function hasUnnamedRecord(recordKeys: ReadonlyMap<string, string | null>): boolean {
+  for (const key of recordKeys.values()) {
+    if (key === null) {
+      return true
+    }
+  }
+  return false
 }
