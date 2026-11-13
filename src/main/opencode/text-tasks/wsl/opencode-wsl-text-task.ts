@@ -11,9 +11,9 @@ import { runWslProcess, type WslSpec } from '../../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
 import {
   ensureWslAutomountRoot,
-  isWindowsDrivePath,
   peekWslAutomountRoot
 } from '../../../wsl/filesystem/wsl-automount-root'
+import { isWindowsDrivePath } from '../../../wsl/filesystem/wsl-drive-paths'
 import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { translateArgsForWsl } from '../../../git/command-runner/host-routing/wsl-path-translation'
 import { spawnSourceControlAgent } from '../../../text-generation/source-control-agent-launch'

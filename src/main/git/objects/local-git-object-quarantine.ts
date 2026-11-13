@@ -11,11 +11,13 @@ import { toWindowsWslUncPath } from '../../../shared/wsl-paths'
 import {
   type WslAutomountSnapshot,
   isWslAutomountSnapshotCurrent,
+  peekWslAutomountRoot
+} from '../../wsl/filesystem/wsl-automount-root'
+import {
   isWindowsDrivePath,
-  peekWslAutomountRoot,
   windowsDrivePathForDistro,
   wslDrivePathForDistro
-} from '../../wsl/filesystem/wsl-automount-root'
+} from '../../wsl/filesystem/wsl-drive-paths'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import { readRepoCommonDirWithContext } from '../worktrees/catalog/worktree-list-reader'

@@ -4,10 +4,12 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import {
   type WslAutomountSnapshot,
   settleWslAutomountSnapshot,
-  peekWslAutomountRoot,
+  peekWslAutomountRoot
+} from '../../../wsl/filesystem/wsl-automount-root'
+import {
   windowsDrivePathForDistro,
   wslDrivePathForDistro
-} from '../../../wsl/filesystem/wsl-automount-root'
+} from '../../../wsl/filesystem/wsl-drive-paths'
 
 /** Windows operands use the selected distro's filesystem namespace. */
 export function translateArgsForWsl(

@@ -14,9 +14,9 @@ import {
   assertWslAutomountSnapshotCurrent,
   type WslAutomountSnapshot,
   ensureWslAutomountRoot,
-  isWindowsDrivePath,
   peekWslAutomountRoot
 } from '../../../wsl/filesystem/wsl-automount-root'
+import { isWindowsDrivePath } from '../../../wsl/filesystem/wsl-drive-paths'
 import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'
 
 export type GitExecutionContext = Readonly<

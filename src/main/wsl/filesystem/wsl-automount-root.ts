@@ -314,11 +314,3 @@ export function resetWslAutomountRootsForTests(): void {
   stopCounts.clear()
   changeListeners.clear()
 }
-
-export {
-  isWindowsDrivePath,
-  wslDrivePathForDistro,
-  windowsDrivePathForDistro,
-  wslAutomountRootShellSetup,
-  quoteWslDrivePathForShell
-} from './wsl-drive-paths'

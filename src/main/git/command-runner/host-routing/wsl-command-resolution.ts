@@ -21,11 +21,13 @@ import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-sp
 import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'
 import {
   type WslAutomountSnapshot,
+  peekWslAutomountRoot
+} from '../../../wsl/filesystem/wsl-automount-root'
+import {
   isWindowsDrivePath,
-  peekWslAutomountRoot,
   quoteWslDrivePathForShell,
   wslAutomountRootShellSetup
-} from '../../../wsl/filesystem/wsl-automount-root'
+} from '../../../wsl/filesystem/wsl-drive-paths'
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
