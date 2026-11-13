@@ -85,4 +85,58 @@ describe('openMobileFileTap', () => {
     )
     expect(opened).toEqual([{ worktree: 'id:wt-1', relativePath: 'src/file19.ts' }])
   })
+
+  function openLinkedWorkspaceRoot(sourceAuthorityCurrent: boolean) {
+    const calls = { openWorkspace: vi.fn(), pushPreviewRoute: vi.fn(), onOpenFailed: vi.fn() }
+    openMobileFileTap({
+      client: {
+        sendRequest: vi
+          .fn<SendRequest>(async (method) => {
+            throw new Error(`no scripted response for ${method}`)
+          })
+          .mockResolvedValueOnce(
+            ok({
+              worktree: 'wt-2',
+              relativePath: '',
+              absolutePath: '/workspaces/wt-2',
+              exists: true,
+              isDirectory: true
+            })
+          )
+      },
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      candidates: [{ pathText: '/workspaces/wt-2', line: null, column: null }],
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: (activated) => ({
+        ...activeTerminalState(activated),
+        sourceAuthorityCurrent
+      }),
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      ...calls
+    })
+    return calls
+  }
+
+  it("opens the workspace when the link is another workspace's root", async () => {
+    const calls = openLinkedWorkspaceRoot(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(calls.openWorkspace.mock.calls).toEqual([['wt-2']])
+    expect(calls.onOpenFailed).not.toHaveBeenCalled()
+  })
+
+  it('drops a workspace-root reply that outlived its host authority', async () => {
+    const calls = openLinkedWorkspaceRoot(false)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(calls.openWorkspace).not.toHaveBeenCalled()
+    expect(calls.pushPreviewRoute).not.toHaveBeenCalled()
+    expect(calls.onOpenFailed).not.toHaveBeenCalled()
+  })
 })
