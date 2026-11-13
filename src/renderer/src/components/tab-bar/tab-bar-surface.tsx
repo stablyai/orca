@@ -159,6 +159,7 @@ export function renderTabBarSurface(
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
     items: orderedItems,
+    groupItems: allItems,
     props,
     runtime,
     actions: itemActions,
@@ -275,6 +276,8 @@ export function renderTabBarSurface(
             attentionIds={attentionIds}
             generatedTabTitlesEnabled={runtime.generatedTabTitlesEnabled}
             isGroupFocused={isGroupFocused}
+            worktreeId={worktreeId}
+            groupId={resolvedGroupId}
             surface={condense.surface}
             onSelect={activateEntry}
           />

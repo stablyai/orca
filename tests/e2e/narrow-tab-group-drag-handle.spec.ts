@@ -115,25 +115,25 @@ async function tabThroughStrip(
   groupId: string
 ): Promise<{ label: string; fullyVisible: boolean }[]> {
   const tab = page.locator(`[data-tab-group-strip-id="${groupId}"] [data-tab-id]`).first()
-  // An icon-only tab in a strip whose controls all hid leaves nothing in the strip to Tab to.
-  const hasStripControl = await page.evaluate(
-    (id) =>
-      [...document.querySelectorAll<HTMLElement>(`[data-tab-group-strip-id="${id}"] button`)].some(
-        (button) => button.offsetParent !== null
-      ),
-    groupId
-  )
-  if (!hasStripControl) {
+  // Why: focusing a group can hand focus to its terminal a beat later, so retry Tab from the tab.
+  // A strip whose controls all hid beside an icon-only tab has nothing to land on: report none.
+  const landed = await expect
+    .poll(
+      async () => {
+        await tab.focus()
+        await page.keyboard.press('Tab')
+        return focusedStripControl(page, groupId)
+      },
+      { timeout: 3000 }
+    )
+    .not.toBeNull()
+    .then(
+      () => true,
+      () => false
+    )
+  if (!landed) {
     return []
   }
-  // Why: focusing a group can hand focus to its terminal a beat later, so retry until Tab from the tab lands in the strip.
-  await expect
-    .poll(async () => {
-      await tab.focus()
-      await page.keyboard.press('Tab')
-      return focusedStripControl(page, groupId)
-    })
-    .not.toBeNull()
   let focused = await focusedStripControl(page, groupId)
   const visited: { label: string; fullyVisible: boolean }[] = []
   for (let i = 0; i < 8 && focused; i++) {

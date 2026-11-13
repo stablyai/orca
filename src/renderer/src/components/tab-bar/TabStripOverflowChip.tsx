@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Laptop, Smartphone } from 'lucide-react'
+import { Check, Laptop, Smartphone } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -24,6 +24,7 @@ import {
   parseKeybinding
 } from '../../../../shared/keybindings'
 import { captureFocusBeforeRestore, restoreTabStripFocus } from './tab-strip-focus-restore'
+import { useAppStore } from '../../store'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -118,6 +119,8 @@ function EntryRow({
       {needsAttention ? (
         <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-warning" />
       ) : null}
+      {/* Current is marked apart from the focus/hover background. */}
+      {isCurrent ? <Check className="size-3.5 shrink-0" aria-hidden /> : null}
       {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
     </DropdownMenuItem>
   )
@@ -148,6 +151,14 @@ function shortcutForIndex(bindings: readonly string[], index: number): string | 
   )
 }
 
+/** Read at execution from the store, so a deferred restore never trusts a stale render. */
+function isGroupFocusedInStore(worktreeId: string, groupId: string): boolean {
+  const state = useAppStore.getState()
+  return (
+    state.activeWorktreeId === worktreeId && state.activeGroupIdByWorktree[worktreeId] === groupId
+  )
+}
+
 /** "+N" (or, when nothing else fits, the active icon and tab count): opens every tab in strip order. */
 export function TabStripOverflowChip({
   entries,
@@ -157,6 +168,8 @@ export function TabStripOverflowChip({
   attentionIds,
   generatedTabTitlesEnabled,
   isGroupFocused,
+  worktreeId,
+  groupId,
   surface,
   onSelect
 }: {
@@ -167,6 +180,8 @@ export function TabStripOverflowChip({
   attentionIds: ReadonlySet<string>
   generatedTabTitlesEnabled: boolean
   isGroupFocused: boolean
+  worktreeId: string
+  groupId: string
   surface: HTMLElement | null
   onSelect: (entry: TabStripEntry) => void
 }): React.JSX.Element {
@@ -197,24 +212,25 @@ export function TabStripOverflowChip({
   const openRef = useRef(open)
   const surfaceRef = useRef(surface)
   const activeIdRef = useRef(activeId)
-  const groupFocusedRef = useRef(isGroupFocused)
+  const ownerRef = useRef({ worktreeId, groupId })
   useLayoutEffect(() => {
     openRef.current = open
     surfaceRef.current = surface
     activeIdRef.current = activeId
-    groupFocusedRef.current = isGroupFocused
+    ownerRef.current = { worktreeId, groupId }
   })
   useEffect(
     () => () => {
       // A resize removed the chip while its list was open: keep focus in the strip.
-      if (openRef.current && groupFocusedRef.current) {
+      if (openRef.current) {
         const strip = surfaceRef.current
+        const owner = ownerRef.current
         const focusBefore = captureFocusBeforeRestore()
         requestAnimationFrame(() =>
           restoreTabStripFocus({
             strip,
             slotId: activeIdRef.current,
-            stillOwned: () => groupFocusedRef.current,
+            stillOwned: () => isGroupFocusedInStore(owner.worktreeId, owner.groupId),
             focusBefore
           })
         )
@@ -309,7 +325,7 @@ export function TabStripOverflowChip({
                 restoreTabStripFocus({
                   strip: surfaceRef.current,
                   slotId: pickedId,
-                  stillOwned: () => groupFocusedRef.current,
+                  stillOwned: () => isGroupFocusedInStore(worktreeId, groupId),
                   focusBefore
                 })
               )

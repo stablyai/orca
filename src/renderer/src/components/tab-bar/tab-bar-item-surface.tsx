@@ -38,6 +38,7 @@ export type TabBarItemSurfaceRuntime = Pick<
 
 export function renderTabBarItems({
   items,
+  groupItems = items,
   props,
   runtime,
   actions,
@@ -46,6 +47,8 @@ export function renderTabBarItems({
   activeClientHostedBrowserRowId
 }: {
   items: TabBarItem[]
+  /** The whole group in strip order; close-others/left/right act on hidden tabs too. */
+  groupItems?: readonly TabBarItem[]
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -97,7 +100,9 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
-  return items.map((item, index) => {
+  const groupIndexById = new Map(groupItems.map((item, index) => [item.id, index]))
+  return items.map((item) => {
+    const groupIndex = groupIndexById.get(item.id) ?? 0
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -130,9 +135,9 @@ export function renderTabBarItems({
         worktreeId={worktreeId}
         groupId={resolvedGroupId}
         generatedTabTitlesEnabled={generatedTabTitlesEnabled}
-        tabCount={items.length}
-        hasTabsToLeft={index > 0}
-        hasTabsToRight={index < items.length - 1}
+        tabCount={groupItems.length}
+        hasTabsToLeft={groupIndex > 0}
+        hasTabsToRight={groupIndex < groupItems.length - 1}
         isActive={isActiveItem(item)}
         isExpanded={item.type === 'terminal' && expandedPaneByTabId[item.id] === true}
         dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}

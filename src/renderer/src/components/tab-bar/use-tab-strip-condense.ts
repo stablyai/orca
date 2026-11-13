@@ -59,6 +59,26 @@ function measureSlotWidths(surface: HTMLElement): Map<string, number> {
   return widths
 }
 
+const renameWatchers = new WeakMap<HTMLElement, MutationObserver>()
+
+/** Watches only while a rename is open: a re-plan skipped for the rename runs when its input leaves. */
+function watchRenameEnd(surface: HTMLElement, replanRef: { current: () => void }): void {
+  if (renameWatchers.has(surface)) {
+    return
+  }
+  const observer = new MutationObserver(() => {
+    if (!surface.isConnected || !surface.querySelector('[data-tab-rename-input]')) {
+      observer.disconnect()
+      renameWatchers.delete(surface)
+      if (surface.isConnected) {
+        replanRef.current()
+      }
+    }
+  })
+  observer.observe(surface, { childList: true, subtree: true })
+  renameWatchers.set(surface, observer)
+}
+
 /** Drop ids that no longer exist; ids the plan has never seen stay hidden until the next plan. */
 function reconcilePlan(plan: TabStripPlan, ids: readonly string[]): TabStripPlan {
   if (plan.mode === 'titled') {
@@ -98,6 +118,7 @@ export function useTabStripCondense({
     inputsRef.current = { ids, activeId, frozen, heldWidths }
   })
 
+  const replanRef = useRef<() => void>(() => {})
   const replan = useCallback(() => {
     if (!surface) {
       return
@@ -119,8 +140,13 @@ export function useTabStripCondense({
       }
       return
     }
+    if (isFrozen) {
+      return
+    }
     // A rename keeps its 300px slot and scrolls; re-planning would unmount the row being edited.
-    if (isFrozen || surface.querySelector('[data-tab-rename-input]')) {
+    // Replan once the input leaves, since a resize during the rename was skipped.
+    if (surface.querySelector('[data-tab-rename-input]')) {
+      watchRenameEnd(surface, replanRef)
       return
     }
     const next = planTabStrip({
@@ -139,6 +165,10 @@ export function useTabStripCondense({
       setPlan(next)
     }
   }, [surface])
+
+  useLayoutEffect(() => {
+    replanRef.current = replan
+  }, [replan])
 
   useLayoutEffect(() => {
     if (!surface) {

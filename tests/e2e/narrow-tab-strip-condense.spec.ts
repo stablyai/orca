@@ -82,14 +82,31 @@ test('a narrow left-most pane folds the header, condenses tabs and reaches hidde
   const picked = strip.locator(`[data-tab-strip-slot="${lastId}"]`)
   await expect(picked).toBeVisible()
   await expect(picked.locator('[data-active="true"]')).toHaveCount(1)
+  // Focus lands on the picked tab: its slot, or its own content when activation focuses it (a terminal).
   await expect
     .poll(() =>
       orcaPage.evaluate(
-        () =>
-          document.activeElement
-            ?.closest('[data-tab-strip-slot]')
-            ?.getAttribute('data-tab-strip-slot') ?? null
+        ({ slotId, gid }) => {
+          const active = document.activeElement
+          if (
+            active?.closest('[data-tab-strip-slot]')?.getAttribute('data-tab-strip-slot') === slotId
+          ) {
+            return 'slot'
+          }
+          const body = document
+            .querySelector(`[data-tab-group-body-id="${gid}"]`)
+            ?.getBoundingClientRect()
+          const rect = active?.getBoundingClientRect()
+          const inPane =
+            body &&
+            rect &&
+            rect.left >= body.left - 1 &&
+            rect.right <= body.right + 1 &&
+            rect.top >= body.top - 1
+          return inPane && window.__store?.getState().activeTabId === slotId ? 'content' : null
+        },
+        { slotId: lastId, gid: groupId }
       )
     )
-    .toBe(lastId)
+    .not.toBeNull()
 })

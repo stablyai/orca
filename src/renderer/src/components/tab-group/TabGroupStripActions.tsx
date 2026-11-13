@@ -33,7 +33,11 @@ export function TabGroupStripActions({
     >
       {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
           163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2. */}
-      <div ref={quickCommandsSlotRef} className="contents @max-[163px]/tab-strip:hidden">
+      {/* Folded titlebar: the active tab's title outranks quick commands, so they move into ⋯ (which offers a hidden slot's commands). */}
+      <div
+        ref={quickCommandsSlotRef}
+        className={foldLevel > 0 ? 'hidden' : 'contents @max-[163px]/tab-strip:hidden'}
+      >
         <TabBarQuickCommandsButton
           worktreeId={worktreeId}
           groupId={groupId}

@@ -238,7 +238,7 @@ test('floating tabs keep their preferred width and share constrained space befor
 })
 
 // Real pointer capture requires the isolated visible-window project.
-test('@headful floating header keeps a drag and maximize target with expanded and overflowing tabs', async ({
+test('@headful floating header keeps a drag and maximize target with one tab and with many condensed tabs', async ({
   orcaPage
 }) => {
   for (const count of [1, 16]) {
@@ -248,9 +248,9 @@ test('@headful floating header keeps a drag and maximize target with expanded an
     const panel = orcaPage.locator(OPEN_PANEL_SELECTOR).first()
     const handle = panel.locator('[data-floating-terminal-drag-handle]')
     const strip = panel.locator('.terminal-tab-strip').first()
-    await expect
-      .poll(() => strip.evaluate((element) => element.scrollWidth > element.clientWidth))
-      .toBe(count > 1)
+    // Many tabs condense to icons and "+N" rather than scrolling, so the strip never overflows.
+    await expect(panel.locator('[data-tab-strip-slot]').first()).toBeVisible()
+    expect(await strip.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
 
     const before = await panel.boundingBox()
     const grab = await handle.boundingBox()

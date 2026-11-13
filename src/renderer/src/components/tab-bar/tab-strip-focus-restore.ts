@@ -40,11 +40,16 @@ export function restoreTabStripFocus({
     slotId === null
       ? null
       : strip.querySelector<HTMLElement>(`[data-tab-strip-slot="${CSS.escape(slotId)}"]`)
-  const slotTarget = slot?.querySelector<HTMLElement>('[tabindex]') ?? slot
-  const target = isShown(slotTarget)
-    ? slotTarget
-    : strip.querySelector<HTMLElement>('[data-tab-strip-overflow-chip]')
-  if (isShown(target)) {
-    target.focus()
+  // Only a real focus target counts (a paired-page slot has none), else this strip's chip.
+  const slotTarget = slot?.querySelector<HTMLElement>('[tabindex]')
+  if (isShown(slotTarget)) {
+    slotTarget.focus()
+    if (document.activeElement === slotTarget) {
+      return
+    }
+  }
+  const chip = strip.querySelector<HTMLElement>('[data-tab-strip-overflow-chip]')
+  if (isShown(chip)) {
+    chip.focus()
   }
 }
