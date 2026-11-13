@@ -3,10 +3,9 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
-import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/publication/subscribers/agent-session-empty-batch'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
@@ -159,11 +158,12 @@ describe('cross-version structured agent sessions', () => {
       refusal?: { code: string; currentFence?: number }
     }
 
-    async function call(
+    async function call<Result = unknown>(
       method: string,
       params: unknown,
-      clientCapabilities: readonly string[] = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-    ): Promise<RpcReply[]> {
+      clientCapabilities: readonly string[] = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      onReply?: (reply: RpcReply<Result>) => void
+    ): Promise<RpcReply<Result>[]> {
       return callBuild(
         current,
         method,
@@ -174,17 +174,21 @@ describe('cross-version structured agent sessions', () => {
           clientId: 'paired-device-1',
           connectionId: 'connection-1'
         },
-        runtime
+        runtime,
+        onReply
       )
     }
 
     /** The host's own answer, which carries its refusals inside a successful RPC. */
     async function answer(method: string, params: unknown): Promise<HostAnswer> {
-      const reply = (await call(method, params))[0]
+      const reply = (await call<HostAnswer>(method, params))[0]
       if (!reply?.ok) {
         throw new Error(`${method} failed at the wire: ${JSON.stringify(reply?.error ?? reply)}`)
       }
-      return reply.result as HostAnswer
+      if (!reply.result) {
+        throw new Error(`${method} returned no host answer`)
+      }
+      return reply.result
     }
 
     beforeEach(async () => {
@@ -220,14 +224,46 @@ describe('cross-version structured agent sessions', () => {
       const second = await answer('agentSession.send', sendParams('after restart', resumedFence))
       expect(second.ok).toBe(true)
 
-      const replies = await call('agentSession.subscribe', {
-        sessionId: SESSION,
-        cursor: held
+      const restated = Promise.withResolvers<void>()
+      const replies = await call<AgentSessionSubscribeEvent>(
+        'agentSession.subscribe',
+        { sessionId: SESSION, cursor: held },
+        undefined,
+        (reply) => {
+          const event = reply.result
+          if (!reply.ok || event?.type !== 'batch') {
+            restated.reject(new Error(`cursor resume failed: ${JSON.stringify(reply)}`))
+          } else if (
+            event.batch.cursor.sequence > held.sequence &&
+            event.batch.items.length === 0 &&
+            event.batch.removedItemIds.length === 0 &&
+            event.batch.submissions.length === 0 &&
+            event.working !== undefined
+          ) {
+            restated.resolve()
+          }
+        }
+      )
+      await restated.promise
+      const events = replies.map((reply) => {
+        if (!reply.ok || !reply.result) {
+          throw new Error(`cursor resume failed: ${JSON.stringify(reply)}`)
+        }
+        return reply.result
       })
-      const read = () => replies.map((reply) => reply.result as AgentSessionSubscribeEvent)
-      // Catch-up frames follow committed reads after the subscription opens.
-      await vi.waitFor(() => expect(read().map((event) => event.type)).toEqual(['batch', 'batch']))
-      const events = read()
+      // A roster-only publication may precede catch-up while its initial capture is superseded.
+      if (events[0]?.type === 'batch' && events[0].batch.cursor.sequence === held.sequence) {
+        expect(events.shift()).toEqual({
+          type: 'batch',
+          sessionId: SESSION,
+          batch: { cursor: held, items: [], removedItemIds: [], submissions: [] },
+          fence: store.getConversation(SESSION)?.currentFence,
+          backgroundTasks: null,
+          commands: null,
+          hostNow: expect.any(Number)
+        })
+      }
+      expect(events.map((event) => event.type)).toEqual(['batch', 'batch'])
       const batches = events.filter((event) => event.type === 'batch')
       const batch = batches[0]?.batch
       const rendered = JSON.stringify(batches.flatMap((event) => event.batch.items))
@@ -236,7 +272,12 @@ describe('cross-version structured agent sessions', () => {
       expect(rendered).not.toContain('before restart')
       expect(batch?.cursor.epoch).toBe(held.epoch)
       expect(batch?.cursor.sequence).toBeGreaterThan(held.sequence)
-      expect(batches[1]?.batch).toEqual(emptyAgentSessionBatch(batch?.cursor ?? held))
+      expect(batches[1]?.batch).toEqual({
+        cursor: batch?.cursor,
+        items: [],
+        removedItemIds: [],
+        submissions: []
+      })
     })
 
     // Every released client still sends the fence it last saw; this host names a write by its

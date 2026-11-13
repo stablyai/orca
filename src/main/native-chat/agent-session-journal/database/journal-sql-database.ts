@@ -61,6 +61,9 @@ export class JournalSqlDatabase {
       this.activity,
       options.onMaintenanceError
     )
+    if (!this.readOnly) {
+      this.maintenance.ownLegacySource(stateDirectory, this.readers)
+    }
   }
 
   static async open(
