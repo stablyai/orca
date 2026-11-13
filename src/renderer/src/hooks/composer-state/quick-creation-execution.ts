@@ -17,6 +17,7 @@ import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routi
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { parentWorktreeForRunOn } from '@/components/new-workspace/run-on/cloud-advanced-options'
 import { reportCloudStartAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-agent-coverage'
+import { ORCA_CLOUD_PENDING_HOST_CAPABILITIES } from '@/lib/orca-cloud/orca-cloud-pending-host-capabilities'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -141,18 +142,26 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const agentLaunchRoute = !agent
         ? 'terminal-tui'
         : (options?.launchChoice?.route ??
-          resolveAgentSessionLaunchRoute(useAppStore.getState(), {
-            agent,
-            workspace: {
-              kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
-              repoId,
-              executionHostId: ephemeralVmRecipe
-                ? 'runtime:pending-ephemeral-vm'
-                : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
+          resolveAgentSessionLaunchRoute(
+            useAppStore.getState(),
+            {
+              agent,
+              workspace: {
+                kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+                repoId,
+                executionHostId: ephemeralVmRecipe
+                  ? 'runtime:pending-ephemeral-vm'
+                  : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
+              },
+              prompt: quickDraftPrompt ?? quickPrompt,
+              promptDelivery,
+              // CLOUD-HELD-SURFACE: the VM doesn't exist yet; its image's capabilities stand in.
+              ...(ephemeralVmRecipe?.recipeId === ORCA_CLOUD_RECIPE_ID
+                ? { pendingHostCapabilities: ORCA_CLOUD_PENDING_HOST_CAPABILITIES }
+                : {})
             },
-            prompt: quickDraftPrompt ?? quickPrompt,
-            promptDelivery
-          }))
+            { reportDowngrade: true }
+          ))
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
       const quickStartup = await prepareQuickComposerStartup({
