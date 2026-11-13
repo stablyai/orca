@@ -149,6 +149,13 @@ function createClaudeAdapter(
     ...(deps.prepareAdvisoryReporter
       ? { prepareAdvisoryReporter: deps.prepareAdvisoryReporter }
       : {}),
+    onAdvisoryReceipt: async (input) => {
+      const runtime = deps.executionRuntimeIdentity?.()
+      await store.recordAdvisoryReceipt({
+        ...input,
+        receipt: { ...input.receipt, ...(runtime ? { runtime } : {}) }
+      })
+    },
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
 }

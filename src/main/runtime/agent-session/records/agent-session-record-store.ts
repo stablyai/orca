@@ -1,5 +1,6 @@
 import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
 import { createExecutionReceiptRecorder } from './agent-session-execution-receipt'
+import { createAdvisoryReceiptRecorder } from './agent-session-advisory-receipt'
 import { clearSuccessor } from './agent-session-sender-identity-revision'
 import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
@@ -334,9 +335,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   onAcceptedSend = (listener: (sessionId: string) => void): (() => void) => {
     this.transactions.acceptedSendListeners.add(listener)
-    return () => {
-      this.transactions.acceptedSendListeners.delete(listener)
-    }
+    return () => this.transactions.acceptedSendListeners.delete(listener)
   }
 
   admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
@@ -351,6 +350,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
   recordExecutionReceipt = createExecutionReceiptRecorder(this.mutate.bind(this))
+  recordAdvisoryReceipt = createAdvisoryReceiptRecorder(this.mutate.bind(this))
 
   /** Evaluate options against the record held by this ordered write. */
   reviseSessionOptions = <A extends { sessionId: string }>(

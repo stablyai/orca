@@ -1,9 +1,14 @@
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import type { ClaudeStreamJsonConnectionHandlers } from '../claude-stream-json-connection-types'
+import type {
+  ClaudeStreamJsonConnectionHandlers,
+  ClaudeStreamJsonConnection
+} from '../claude-stream-json-connection-types'
 import { claudeConfigDirEnvPatch } from './launch/claude-config-dir-pin'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import { launchPreparationFailure } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { readdir } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import type { AgentSessionAdvisoryObservation } from '../../../shared/agent-session/agent-session-advisory-receipt'
 import type {
   ClaudeAcquisitionLaunch,
   ClaudeSessionAcquisitionInput
@@ -21,10 +26,43 @@ export async function openClaudeAcquisitionConnection({
   currentGeneration: () => string | null
 }) {
   let onAdvisoryReport
+  let opened: ClaudeStreamJsonConnection | null = null
+  let recordingFailed = false
+  const onAdvisoryObservation = (observation: AgentSessionAdvisoryObservation) => {
+    const generation = currentGeneration()
+    if (recordingFailed || !generation || !deps.onAdvisoryReceipt) {
+      return
+    }
+    void deps
+      .onAdvisoryReceipt({
+        sessionId: input.identity.sessionId,
+        fence: input.fence,
+        generation,
+        spawnToken: input.spawnToken,
+        receipt: {
+          ...observation,
+          spawnTokenHash: createHash('sha256').update(input.spawnToken).digest('hex'),
+          execution: {
+            ...observation.execution,
+            sessionId: input.identity.sessionId,
+            runtimeFence: input.fence,
+            acquisitionGeneration: generation
+          }
+        }
+      })
+      .catch(() => {
+        recordingFailed = true
+        handlers.onFault?.(new Error('Advisor receipt unavailable.'))
+        void opened?.close({ grace: 'brief' })
+      })
+  }
   if (launch.advisoryPolicy) {
     try {
       if (!deps.prepareAdvisoryReporter) {
         throw new Error('Advisory report authority unavailable.')
+      }
+      if (launch.advisoryPolicy.schema === 2 && !deps.onAdvisoryReceipt) {
+        throw new Error('Advisor receipt authority unavailable.')
       }
       onAdvisoryReport = deps.prepareAdvisoryReporter({
         sessionId: input.identity.sessionId,
@@ -39,7 +77,7 @@ export async function openClaudeAcquisitionConnection({
       throw launchPreparationFailure(error)
     }
   }
-  return withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
+  opened = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
     (deps.openConnection ?? openClaudeStreamJsonConnection)(
       {
         pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
@@ -54,7 +92,12 @@ export async function openClaudeAcquisitionConnection({
         },
         ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})
       },
-      { ...handlers, ...(onAdvisoryReport ? { onAdvisoryReport } : {}) }
+      {
+        ...handlers,
+        ...(onAdvisoryReport ? { onAdvisoryReport } : {}),
+        ...(launch.advisoryPolicy?.schema === 2 ? { onAdvisoryObservation } : {})
+      }
     )
   )
+  return opened
 }

@@ -7,7 +7,10 @@ import { spawnProcess } from '@orca/process-host'
 import { buildClaudeChildProcessEnv } from './child-process/claude-child-process-environment'
 import { withoutInheritedClaudeConfigDir } from './structured/launch/claude-config-dir-pin'
 import { withoutRejectedClaudeApiKey } from './configuration/claude-rejected-api-key'
-import { createClaudeControlSurface } from './sdk-transport/claude-agent-sdk-control-requests'
+import {
+  createClaudeControlSurface,
+  runClaudeControl
+} from './sdk-transport/claude-agent-sdk-control-requests'
 import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
@@ -72,7 +75,8 @@ export async function openClaudeStreamJsonConnection(
         launch.advisoryPolicy,
         sdk,
         launch.options,
-        handlers.onAdvisoryReport
+        handlers.onAdvisoryReport,
+        handlers.onAdvisoryObservation
       )
     : undefined
   const session = (queryImpl ?? sdk.query)({
@@ -139,6 +143,7 @@ export async function openClaudeStreamJsonConnection(
   }
 
   const handleUnexpectedEnd = (cause?: Error): void => {
+    advisory?.observeClosure(managed.rootVerdict, tree.treeVerdict)
     advisory?.end()
     resumeReading()
     if (!terminalError) {
@@ -177,6 +182,7 @@ export async function openClaudeStreamJsonConnection(
           if (!isRecord(next.value)) {
             throw new Error('claude stream-json yielded a non-object message')
           }
+          advisory?.observeMessage(next.value)
           handlers.onMessage?.(next.value)
         }
       } finally {
@@ -233,7 +239,15 @@ export async function openClaudeStreamJsonConnection(
     return inbox.push(
       message as unknown as SDKUserMessage,
       advisory
-        ? () => advisory.beforeWrite(() => session.initializationResult(), beforeDispatch)
+        ? () =>
+            advisory.beforeWrite(
+              () => session.initializationResult(),
+              beforeDispatch,
+              async () => ({
+                account: await runClaudeControl('account_info', () => session.accountInfo()),
+                settings: await controls.getSettings()
+              })
+            )
         : beforeDispatch
     )
   }
@@ -247,6 +261,7 @@ export async function openClaudeStreamJsonConnection(
       await (tree.refresh?.() ?? tree.capture())
       inbox.end()
       const result = await managed.closeWriter(tree, options)
+      advisory?.observeClosure(managed.rootVerdict, tree.treeVerdict)
       const proven = claudeChildCloseProven(result) || result.killDelivered === true
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {

@@ -1,4 +1,5 @@
 import { readWorkerExecutionReceipt } from '../worker-execution-receipt'
+import { readWorkerAdvisoryReceipt } from '../worker-advisory-receipt'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
@@ -121,6 +122,15 @@ export async function readStructuredWorkerSettings(
     )
     if (historical) {
       return historical
+    }
+    const advisoryReceipt = readWorkerAdvisoryReceipt(
+      host,
+      db,
+      dispatchId,
+      runtime.getRuntimeId?.()
+    )
+    if (advisoryReceipt) {
+      return advisoryReceipt
     }
     const held = holdStructuredWorker(identity, db)
     if (held.kind !== 'held') {

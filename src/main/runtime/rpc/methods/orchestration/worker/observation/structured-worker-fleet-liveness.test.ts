@@ -7,6 +7,7 @@ import {
   agentSessionRecordFixture
 } from '../../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../../../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../../../shared/agent-session/agent-session-advisory-policy'
 import type { FleetAgentStatusEvidence } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import {
   structuredAgentSessionPaneKey,
@@ -21,6 +22,10 @@ import '../../../../../orchestration/db/dispatch-row-writer'
 import '../../../../../orchestration/db/attempt-outcome-projection'
 
 const hostRef: { current: unknown } = { current: null }
+
+vi.mock('../../../../../agent-session/records/agent-session-execution-runtime', () => ({
+  executionBuildHash: '0123456789abcdef'
+}))
 
 vi.mock(
   '../../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
@@ -107,11 +112,11 @@ describe('worker-list liveness for chat-mode workers', () => {
     vi.restoreAllMocks()
   })
 
-  function seed() {
+  function seed(advisoryPolicyFingerprint?: string) {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'structured work' })
     const { dispatch } = db.createStartingWorkerDispatch({
       taskId: task.id,
-      startOptions: {},
+      startOptions: advisoryPolicyFingerprint ? { advisoryPolicyFingerprint } : {},
       creator: { kind: 'system' },
       maxDepth: 9
     })
@@ -235,6 +240,78 @@ describe('worker-list liveness for chat-mode workers', () => {
     }
     const runtime = { ensureStructuredAgentSessionHost: async () => {} }
 
+    expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
+      kind: 'unknown',
+      reason: 'identity_changed'
+    })
+  })
+
+  it('reads a released advisor receipt without private artifacts or owner tokens, and refuses replaced bindings', async () => {
+    const current = record('claude', {
+      claimStatus: 'released',
+      runtimeFence: 8,
+      ownerProcess: null,
+      reservedSpawnToken: null
+    })
+    current.schemaVersion = 3
+    current.location.workspaceKind = 'folder'
+    current.advisoryPolicy = {
+      schema: 2,
+      dataScope: 'published',
+      sourcePin: 'a'.repeat(40),
+      deadlineAt: 1800000120000,
+      maxModelCalls: 4,
+      binding: { accountFingerprint: `claude:${'b'.repeat(64)}`, model: 'fixture', effort: 'high' },
+      artifacts: [{ path: 'note', text: 'private artifact body', sha256: 'c'.repeat(64) }]
+    }
+    const fingerprint = agentSessionAdvisoryPolicyFingerprint(current.advisoryPolicy)
+    const dispatchId = seed(fingerprint)
+    current.advisoryReceipt = {
+      version: 1,
+      spawnTokenHash: 'd'.repeat(64),
+      runtime: { runtimeId: 'retired-runtime', pid: 4242, buildHash: '0123456789abcdef' },
+      invalidated: false,
+      turnCompleted: true,
+      execution: {
+        agent: 'claude',
+        sessionId: SESSION,
+        runtimeFence: 7,
+        acquisitionGeneration: 'generation',
+        observedAt: 1800000000000,
+        binding: { ...current.advisoryPolicy.binding, plan: 'max' },
+        bounded: {
+          policyFingerprint: fingerprint,
+          deadlineAt: 1800000120000,
+          maxModelCalls: 4,
+          modelCalls: 1,
+          inputAdmitted: true,
+          hooksApplied: true,
+          callCounter: 'main-assistant-message-ids'
+        }
+      },
+      closure: { root: 'exited', tree: 'exited', observedAt: 1800000001000 }
+    }
+    installHost(current, false)
+    const runtime = {
+      ensureStructuredAgentSessionHost: async () => {},
+      getRuntimeId: () => 'current-runtime'
+    }
+    const result = await readStructuredWorkerSettings(runtime, db, dispatchId)
+    expect(result).toMatchObject({
+      kind: 'advisory-receipt',
+      sessionId: SESSION,
+      runtimeFence: 7,
+      qualification: { metadata: null, receipt: { closure: { root: 'exited', tree: 'exited' } } }
+    })
+    expect(JSON.stringify(result)).not.toContain('spawnTokenHash')
+    expect(JSON.stringify(result)).not.toContain('private artifact body')
+    current.lease.runtimeFence = 9
+    expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
+      kind: 'unknown',
+      reason: 'identity_changed'
+    })
+    current.lease.runtimeFence = 8
+    current.advisoryPolicy.binding.model = 'different'
     expect(await readStructuredWorkerSettings(runtime, db, dispatchId)).toEqual({
       kind: 'unknown',
       reason: 'identity_changed'

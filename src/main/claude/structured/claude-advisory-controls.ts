@@ -1,4 +1,7 @@
 import type * as ClaudeSdk from '@anthropic-ai/claude-agent-sdk'
+import { readClaudeAdvisoryBinding } from './claude-advisory-binding'
+import { createClaudeAdvisoryObservation } from './claude-advisory-observation'
+import type { AgentSessionAdvisoryObservation } from '../../../shared/agent-session/agent-session-advisory-receipt'
 import { agentSessionAdvisoryPolicySchema } from '../../../shared/agent-session/agent-session-advisory-policy'
 import { createClaudeAdvisoryArtifactServer } from './claude-advisory-artifacts'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -32,11 +35,18 @@ export function createClaudeAdvisoryControls(
     ClaudeSdk.Options,
     'model' | 'effort' | 'sessionId' | 'resume' | 'forkSession' | 'resumeSessionAt'
   >,
-  publish?: AgentSessionAdvisoryReporter
+  publish?: AgentSessionAdvisoryReporter,
+  observe?: (value: AgentSessionAdvisoryObservation) => void
 ) {
   const parsed = agentSessionAdvisoryPolicySchema.safeParse(input)
   if (!parsed.success || selected.resume || selected.forkSession || selected.resumeSessionAt) {
     throw new Error('Invalid advisory launch.')
+  }
+  if (
+    parsed.data.schema === 2 &&
+    (selected.model !== parsed.data.binding.model || selected.effort !== parsed.data.binding.effort)
+  ) {
+    throw new Error('Invalid advisory launch binding.')
   }
   const remaining = parsed.data.deadlineAt - Date.now()
   if (remaining <= 0 || remaining > 300_000) {
@@ -48,6 +58,9 @@ export function createClaudeAdvisoryControls(
   let onFault: ((error: Error) => void) | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   const stop = (reason?: Error) => {
+    if (reason) {
+      observation.invalidate()
+    }
     controller.abort()
     const stopped = close?.({ grace: 'brief' })
     if (reason) {
@@ -63,6 +76,11 @@ export function createClaudeAdvisoryControls(
         onFault?.(error instanceof Error ? error : new Error('Advisor stop failed.'))
       )
   }
+  const observation = createClaudeAdvisoryObservation(
+    parsed.data,
+    (value) => observe?.(value),
+    stop
+  )
   const server = createClaudeAdvisoryArtifactServer(
     parsed.data,
     sdk,
@@ -74,8 +92,14 @@ export function createClaudeAdvisoryControls(
         }
         try {
           await publish(report)
-        } finally {
+          observation.reported()
+          if (parsed.data.schema === 1) {
+            stop()
+          }
+        } catch (error) {
+          observation.invalidate()
           stop()
+          throw error
         }
       })
   )
@@ -142,7 +166,8 @@ export function createClaudeAdvisoryControls(
     },
     beforeWrite: async (
       initialized: () => Promise<unknown>,
-      beforeDispatch?: () => Promise<void>
+      beforeDispatch?: () => Promise<void>,
+      readBinding?: () => Promise<unknown>
     ) => {
       const result = await initialized()
       if (
@@ -155,10 +180,28 @@ export function createClaudeAdvisoryControls(
       ) {
         throw new Error('Advisor hooks unproven.')
       }
+      if (parsed.data.schema === 2) {
+        let observed
+        try {
+          observed = readBinding && readClaudeAdvisoryBinding(await readBinding())
+        } catch {
+          observed = null
+        }
+        observation.binding(observed || null, true)
+        if (
+          !observed ||
+          observed.accountFingerprint !== parsed.data.binding.accountFingerprint ||
+          observed.model !== parsed.data.binding.model ||
+          observed.effort !== parsed.data.binding.effort
+        ) {
+          throw new Error('Advisor native binding unproven.')
+        }
+      }
       await beforeDispatch?.()
       if (ended()) {
         throw new Error('Advisor access ended.')
       }
+      observation.admitted()
     },
     admitInput: () => {
       if (ended()) {
@@ -173,6 +216,16 @@ export function createClaudeAdvisoryControls(
     end: () => {
       controller.abort()
       clearTimeout(timer)
-    }
+    },
+    observeMessage: observation.message,
+    observeClosure: (
+      root: ClaudeStreamJsonConnection['exitVerdict']['root'],
+      tree: ClaudeStreamJsonConnection['exitVerdict']['tree']
+    ) =>
+      observation.closure({
+        root: root === 'exited' ? 'exited' : 'unverifiable',
+        tree: tree === 'exited' ? 'exited' : 'unverifiable',
+        observedAt: Date.now()
+      })
   }
 }

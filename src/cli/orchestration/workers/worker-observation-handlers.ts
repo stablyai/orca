@@ -72,7 +72,9 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
               ? `Settings: unknown (${value.settings.reason})`
               : value.settings.kind === 'execution-receipt'
                 ? `Execution receipt (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.qualification.receipt)}`
-                : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`,
+                : value.settings.kind === 'advisory-receipt'
+                  ? `Advisory receipt (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.qualification.receipt)}`
+                  : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`,
             true
           )
         )

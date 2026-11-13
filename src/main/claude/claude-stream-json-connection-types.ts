@@ -5,6 +5,7 @@ import type { ProviderProcessCloseOptions } from '../provider-process/provider-p
 import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-structured-launch-resolution'
 import type { AgentSessionAdvisoryPolicy } from '../../shared/agent-session/agent-session-advisory-policy'
 import type { AgentSessionAdvisoryReporter } from '../../shared/agent-session/agent-session-advisory-report'
+import type { AgentSessionAdvisoryObservation } from '../../shared/agent-session/agent-session-advisory-receipt'
 
 export type ClaudeStreamJsonLaunch = {
   /** Orca's resolved user CLI; the SDK falls back to a bundled binary that is not installed. */
@@ -20,6 +21,7 @@ export type ClaudeStreamJsonLaunch = {
 
 export type ClaudeStreamJsonConnectionHandlers = {
   onAdvisoryReport?: AgentSessionAdvisoryReporter
+  onAdvisoryObservation?: (value: AgentSessionAdvisoryObservation) => void
   onMessage?: (message: Record<string, unknown>) => void
   /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
   onStdout?: (chunk: Buffer | string) => void
