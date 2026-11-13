@@ -20,8 +20,8 @@ import {
   generatePerforceDescription,
   type PerforceDescriptionChangelist
 } from '../perforce/perforce-description-generation'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
-import type { GenerateCommitMessageResult } from '../text-generation/commit-message-text-generation'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
+import type { GenerateCommitMessageResult } from '../text-generation/source-control-text-generation-types'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'

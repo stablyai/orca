@@ -4,7 +4,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { dispatchPerforceOperation } from '../../shared/perforce/perforce-operations'
 import { runWithDesktopPerforceSettings } from '../perforce/perforce-desktop-settings'
 import { resolvePerforceBackend } from '../perforce/perforce-ssh-backend'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 import { registerPerforceDescriptionGeneration } from './perforce-description-generation'
 import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 

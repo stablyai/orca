@@ -8,11 +8,9 @@ import type { PerforceSettings } from '../../shared/perforce/perforce-settings'
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
-} from '../text-generation/commit-message-agent-environment'
-import {
-  generateCommitMessageFromContext,
-  type GenerateCommitMessageResult
-} from '../text-generation/commit-message-text-generation'
+} from '../text-generation/execution/commit-message-agent-environment'
+import { generateCommitMessageFromContext } from '../text-generation/commit-message-text-generation'
+import type { GenerateCommitMessageResult } from '../text-generation/source-control-text-generation-types'
 
 export type PerforceDescriptionChangelist = 'default' | 'new' | number
 

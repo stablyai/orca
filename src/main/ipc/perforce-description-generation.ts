@@ -9,8 +9,8 @@ import {
   desktopPerforceSettings,
   runWithDesktopPerforceSettings
 } from '../perforce/perforce-desktop-settings'
-import type { GenerateCommitMessageResult } from '../text-generation/commit-message-text-generation'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import type { GenerateCommitMessageResult } from '../text-generation/source-control-text-generation-types'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
 import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 
