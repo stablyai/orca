@@ -77,20 +77,26 @@ for (const [name, run] of scenarios) {
       'real foreground and keystrokes need the Windows CI desktop'
     )
     test.setTimeout(120_000)
+    const ownedWindow = await electronApp.browserWindow(orcaPage)
     const holder = await startWindowsForegroundHolder()
     try {
+      // Why: background launch keeps Orca hidden, and a hidden window cannot be activated at all.
+      await ownedWindow.evaluate((window) => window.showInactive())
+      await expect.poll(() => ownedWindow.evaluate((window) => window.isVisible())).toBe(true)
       await holder.take()
       await run(orcaPage, async (pageId) => {
         // Why: a guest press that activates Orca's window pulls it over the app the user is in.
-        expect(await holder.foreground(), `Orca is pid ${electronApp.process().pid}`).toEqual({
-          holder: true,
-          pid: expect.any(Number)
-        })
-        await (await electronApp.browserWindow(orcaPage)).evaluate((window) => window.focus())
+        expect(await holder.foreground()).toEqual({ holder: true, pid: expect.any(Number) })
+        // The same check must see Orca once it really is activated, or the one above proves nothing.
+        await ownedWindow.evaluate((window) => window.focus())
+        await expect
+          .poll(() => holder.foreground())
+          .toEqual({ holder: false, pid: electronApp.process().pid })
         await realKeystrokeReachesTerminal(orcaPage, electronApp, holder.press)(pageId)
       })
     } finally {
       await holder.close()
+      await ownedWindow.dispose()
     }
   })
 }
