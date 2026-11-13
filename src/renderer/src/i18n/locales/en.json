@@ -21711,6 +21711,8 @@
         "grace30": "In 30 days",
         "bannerTitle": "{{value0}} requires two-factor authentication. {{value1}}.",
         "bannerBody": "Set it up by {{value0}}. After that you can’t use this team’s workspaces until you do.",
+      "bannerBlockedTitle": "{{value0}} requires two-factor authentication",
+      "bannerBlockedBody": "You can’t use this team’s workspaces until you set it up. Your personal account is not affected.",
         "setUp": "Set up MFA",
         "blockedTitle": "Set up two-factor authentication to use {{value0}}",
         "blockedBody": "{{value0}} has required it for all members since {{value1}}. Your workspaces and files are safe, and open again as soon as you add an authenticator app.",

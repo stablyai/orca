@@ -4,7 +4,6 @@ import { useHomeWorkspaces } from './cloud-workspace-local-titles'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useTeamMfaGate } from '@/components/team-mfa/TeamMfaGate'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
@@ -121,10 +120,6 @@ export function CloudWorkspacesHome({
     shown: state.status === 'ready' && !stale ? all : null,
     archivedOn: filters.archived,
     enabled: Boolean(cloud)
-  })
-  // The team's MFA requirement: a countdown banner before the deadline, the setup screen after.
-  const mfa = useTeamMfaGate({
-    forceBlocked: state.status === 'error' && state.reason === 'mfa_required'
   })
   const showFilters = shouldShowCloudHomeFilters(all.length, filters, Boolean(orgId))
   const { directory, canAdmin } = useMemberDirectory(orgId, all)
@@ -307,17 +302,8 @@ export function CloudWorkspacesHome({
         archivedCount={archivedCount}
       />
 
-      {mfa.banner ? <div className="mb-3">{mfa.banner}</div> : null}
-
-      {mfa.blocked ? (
-        <div className="rounded-xl border border-border bg-card">{mfa.blocked}</div>
-      ) : null}
-
       <div
         aria-busy={stale || state.status === 'loading'}
-        // Hidden, not unmounted, while the team's MFA policy blocks it: the list keeps its state
-        // and reappears as soon as the person has set MFA up.
-        hidden={mfa.blocked !== null}
         className={cn(
           'rounded-xl border border-border bg-card p-1 transition-opacity motion-reduce:transition-none',
           stale && 'opacity-60'

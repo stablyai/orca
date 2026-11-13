@@ -37,6 +37,17 @@ const banner = (daysLeft: number, frameWidth = width) =>
 export const bannerTwoWeeks = banner(14)
 export const bannerOneDay = banner(1)
 export const bannerNarrow = banner(6, 420)
+/** The app-level line once the deadline has passed. */
+export const bannerBlocked = frame(
+  <TeamMfaBanner
+    teamName="Acme Engineering"
+    enforceAt={NOW - 2 * DAY}
+    now={NOW}
+    setupUrl={setupUrl}
+    onSetUp={noop}
+    blocked
+  />
+)
 
 // ---- Blocked screen: after the deadline ----
 

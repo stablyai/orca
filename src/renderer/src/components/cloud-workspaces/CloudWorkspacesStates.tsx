@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
 import { SignInAgainNotice } from '@/components/orca-cloud/SignInAgainButton'
+import { TeamMfaRefused } from '@/components/team-mfa/TeamMfaAppBanner'
 import { describeInlineError } from './cloud-workspace-errors'
 import { openCloudWorkspacesHome } from './cloud-workspaces-home-nav'
 
@@ -34,7 +35,17 @@ export function ErrorState({
   onSignIn: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  if (error === 'unauthorized' && reason !== 'mfa_required') {
+  if (reason === 'mfa_required') {
+    // The team's MFA policy refused this, so neither signing in again nor retrying helps: show
+    // the setup screen, and under it the plain sentence in case the policy could not be read.
+    return (
+      <>
+        <TeamMfaRefused />
+        <InlineError className="m-1" tone="neutral" title={describeInlineError(error, reason, t)} />
+      </>
+    )
+  }
+  if (error === 'unauthorized') {
     return <SignInAgainNotice className="m-1" onSignIn={onSignIn} />
   }
   // At the running-sandbox limit a retry can't help: show your workspaces so one can go to sleep.

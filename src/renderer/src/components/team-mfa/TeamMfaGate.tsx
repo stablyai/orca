@@ -19,6 +19,8 @@ import { useTeamMfaPolicy } from './use-team-mfa-policy'
 export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   banner: React.JSX.Element | null
   blocked: React.JSX.Element | null
+  /** One line for the app-level notice: the countdown, or "no access" once blocked. */
+  appBanner: React.JSX.Element | null
 } {
   const cloud = useAppStore((state) => state.orcaProfileAuthStatus?.cloud)
   const selectOrg = useAppStore((state) => state.selectOrcaProfileOrg)
@@ -29,7 +31,7 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   const [stillMissing, setStillMissing] = useState(false)
 
   if (!orgId || !policy?.policy) {
-    return { banner: null, blocked: null }
+    return { banner: null, blocked: null, appBanner: null }
   }
   const surface = teamMfaSurface(policy)
   const openSetup = (): void => {
@@ -39,9 +41,20 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   // The server's refusal wins over a policy read that has not caught up, unless that read now
   // says the member has MFA (they just set it up; the next request will go through).
   const isBlocked = surface === 'blocked' || (options.forceBlocked === true && policy.self !== 'on')
+  const line = (blocked: boolean): React.JSX.Element => (
+    <TeamMfaBanner
+      teamName={teamName}
+      enforceAt={policy.policy?.enforceAt ?? now}
+      now={now}
+      setupUrl={policy.setupUrl}
+      onSetUp={openSetup}
+      blocked={blocked}
+    />
+  )
   if (isBlocked) {
     return {
       banner: null,
+      appBanner: line(true),
       blocked: (
         <TeamMfaBlockedScreen
           teamName={teamName}
@@ -61,17 +74,6 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
       )
     }
   }
-  return {
-    banner:
-      surface === 'banner' ? (
-        <TeamMfaBanner
-          teamName={teamName}
-          enforceAt={policy.policy.enforceAt}
-          now={now}
-          setupUrl={policy.setupUrl}
-          onSetUp={openSetup}
-        />
-      ) : null,
-    blocked: null
-  }
+  const banner = surface === 'banner' ? line(false) : null
+  return { banner, appBanner: banner, blocked: null }
 }

@@ -214,3 +214,23 @@ describe('the server refusal in cloud workspace errors', () => {
     expect(describeInlineError('unauthorized', undefined, translate)).not.toContain('two-factor')
   })
 })
+
+describe('banner after the deadline', () => {
+  it('says there is no access until MFA is set up, and that the personal account is fine', () => {
+    const { container, getByRole } = render(
+      <TeamMfaBanner
+        teamName="Acme"
+        enforceAt={NOW - DAY}
+        now={NOW}
+        setupUrl={setupUrl}
+        onSetUp={() => {}}
+        blocked
+      />
+    )
+    expect(container.textContent).toContain('Acme requires two-factor authentication')
+    expect(container.textContent).toContain('until you set it up')
+    expect(container.textContent).toContain('Your personal account is not affected')
+    expect(container.textContent).not.toContain('days left')
+    expect(getByRole('button', { name: 'Set up MFA' })).toBeTruthy()
+  })
+})

@@ -11,6 +11,7 @@ import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/R
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
 import { WorkspaceLowDiskBanner } from '../components/low-disk/WorkspaceLowDiskBanner'
+import { TeamMfaAppBanner } from '../components/team-mfa/TeamMfaAppBanner'
 import { CloudSetupPageLayer } from '../components/orca-cloud-setup/CloudSetupPageLayer'
 import { CloudOpenCoverLayer } from '../components/worktree-creation/CloudOpenCoverLayer'
 import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
@@ -213,6 +214,9 @@ export function AppWorkspaceShell(props: {
                   </div>
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                  {/* The active team requires MFA and this person has none: a countdown, then
+                      "no access". Renders nothing for almost everyone. */}
+                  <TeamMfaAppBanner className="shrink-0 px-3 pt-2" />
                   {layout.shouldMountTerminalWorkbench ? (
                     <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
                       <Suspense fallback={null}>
