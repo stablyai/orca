@@ -80,14 +80,16 @@ it('delivers what waited behind the command once its child dies mid-command, wit
     'agentSession.create',
     harness.createIntentParams()
   )
+  const compacting = harness.codex.nextRequest('thread/compact/start')
   const command = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(1))
+  await compacting
   await send('after the exit')
 
+  const restarted = harness.codex.nextRequest('turn/start')
   const dead = exitChild()
 
-  await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
-  expect(calls('turn/start')[0]).not.toBe(dead)
+  expect(await restarted).not.toBe(dead)
+  expect(calls('turn/start')).toHaveLength(1)
   const settled = await snapshot()
   const turn = settled.items.find(
     (item) => item.itemId === structuredAgentSessionCommandTurn(command).itemId
@@ -103,8 +105,9 @@ it('ends a command Codex has not opened a turn for by stopping its child, and th
     'agentSession.create',
     harness.createIntentParams()
   )
+  const compacting = harness.codex.nextRequest('thread/compact/start')
   const command = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(1))
+  await compacting
   const first = threadChild()
   const { itemId, turnId } = structuredAgentSessionCommandTurn(command)
 
@@ -123,7 +126,8 @@ it('ends a command Codex has not opened a turn for by stopping its child, and th
     const turn = (await snapshot()).items.find((item) => item.itemId === itemId)
     expect(readAgentJournalTurn(turn?.body)?.state).toBe('interrupted')
   })
+  const restarted = harness.codex.nextRequest('turn/start')
   await send('after the stop')
-  await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
-  expect(calls('turn/start')[0]).not.toBe(first)
+  expect(await restarted).not.toBe(first)
+  expect(calls('turn/start')).toHaveLength(1)
 })

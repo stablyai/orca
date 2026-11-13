@@ -51,12 +51,15 @@ export type FakeCodex = {
   connections: FakeCodexConnection[]
   openConnection: typeof openCodexAppServerConnection
   live: () => FakeCodexConnection
+  /** Resolves with the child that next receives `method`. */
+  nextRequest: (method: string) => Promise<FakeCodexConnection>
   notify: (method: string, params: unknown) => void
   ask: (id: number, method: string, params: unknown) => void
 }
 
 function fakeCodex(): FakeCodex {
   const connections: FakeCodexConnection[] = []
+  const requestWaiters = new Map<string, ((connection: FakeCodexConnection) => void)[]>()
   const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeCodexConnection = {
       launch,
@@ -68,6 +71,10 @@ function fakeCodex(): FakeCodex {
       closed: false,
       request: async (method, params) => {
         connection.calls.push({ method, params })
+        requestWaiters
+          .get(method)
+          ?.splice(0)
+          .forEach((resolve) => resolve(connection))
         if (method === 'thread/start') {
           return { thread: { id: THREAD, path: '/rollouts/integration.jsonl' } }
         }
@@ -123,6 +130,10 @@ function fakeCodex(): FakeCodex {
     connections,
     openConnection,
     live,
+    nextRequest: (method) =>
+      new Promise((resolve) => {
+        requestWaiters.set(method, [...(requestWaiters.get(method) ?? []), resolve])
+      }),
     notify: (method, params) => live().handlers.onNotification?.(method, params),
     ask: (id, method, params) => live().handlers.onServerRequest?.({ id, method, params })
   }
