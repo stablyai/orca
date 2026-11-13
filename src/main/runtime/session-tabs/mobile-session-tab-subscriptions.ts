@@ -45,6 +45,7 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     // A new graph epoch cannot send a status-less phone frame before its seed snapshot.
     if (
       subscription.clientKind === 'mobile' &&
+      this.graphStatus !== 'unavailable' &&
       rendererStatusReplica(this).awaitingSnapshot(frame.worktree, this.rendererGeneration)
     ) {
       return

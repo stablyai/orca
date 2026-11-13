@@ -4,8 +4,16 @@ import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-ti
 import type { RuntimeRendererReloadFence } from './renderer-reload-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { rendererStatusReplica } from './renderer-status-replica'
 
 export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithSessionTitleAuthority {
+  /** Phone frames held for an unseeded renderer's snapshot are owed once it loses authority. */
+  protected releaseUnseededPhoneFrames(): void {
+    for (const worktreeId of rendererStatusReplica(this).unseededWorktrees()) {
+      this.scheduleMobileSessionTabsChanged(worktreeId)
+    }
+  }
+
   protected abstract assertStableReadyGraph(
     ...args: Parameters<TransitionGraphReloadToTerminalStateMethods['assertStableReadyGraph']>
   ): ReturnType<TransitionGraphReloadToTerminalStateMethods['assertStableReadyGraph']>
@@ -217,6 +225,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.clearPtyIncarnationHandles()
     // Keep pre-allocated CLI handles for reconnect adoption.
     this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.releaseUnseededPhoneFrames()
     this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
   }
 
