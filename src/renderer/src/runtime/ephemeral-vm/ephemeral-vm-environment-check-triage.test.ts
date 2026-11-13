@@ -1,7 +1,7 @@
-import { environmentHeldNotice } from './ephemeral-vm-environment-check-triage'
 import { describe, expect, it } from 'vitest'
 import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
 import {
+  environmentHeldNotice,
   missingToolCommand,
   triageCloudEnvironmentChecks
 } from './ephemeral-vm-environment-check-triage'

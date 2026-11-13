@@ -52,7 +52,8 @@ export function environmentHeldNotice(
       id: 'environment.held',
       category: 'setup',
       status: 'warn',
-      message: 'environment held'
+      // The line's words come from CloudSetupNotices; this check only carries the id.
+      message: ''
     }
   }
 }

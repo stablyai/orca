@@ -1,6 +1,7 @@
 // Wire contract between the desktop and the Orca sandbox control plane (cloud/apps/sandbox-control).
 // The Worker's tests parse its responses with these schemas, so either side drifting fails a test.
 import { z } from 'zod'
+import { HostedEnvironmentHeldSchema } from './hosted-environment-held-wire'
 
 /**
  * Minutes of no agent work and no input before a cloud sandbox sleeps. The one source for every
@@ -169,14 +170,7 @@ export const HostedSandboxReadyResponseSchema = z
       })
       .strict()
       .optional(),
-    /**
-     * ENV-BUILD-CHURN (feature `environment-held`): the repo's environment wasn't used because its build
-     * is below the security floor; the workspace started from the current image without its setup.
-     */
-    environmentHeld: z
-      .object({ environmentId: z.string().min(1).max(64), reason: z.literal('security_update') })
-      .strict()
-      .optional()
+    environmentHeld: HostedEnvironmentHeldSchema.optional()
   })
   .strict()
 export type HostedSandboxReadyResponse = z.infer<typeof HostedSandboxReadyResponseSchema>
