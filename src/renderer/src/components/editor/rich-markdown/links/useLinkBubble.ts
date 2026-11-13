@@ -31,6 +31,9 @@ export function applyRichMarkdownLinkSave(
   href: string,
   targetRange?: { from: number; to: number }
 ): void {
+  if (!editor.isEditable) {
+    return
+  }
   if (isValidTargetRange(editor, targetRange)) {
     if (href) {
       editor.chain().focus().setTextSelection(targetRange).setLink({ href }).run()
@@ -71,6 +74,9 @@ export function applyRichMarkdownLinkRemove(
   editor: Editor,
   targetRange?: { from: number; to: number }
 ): void {
+  if (!editor.isEditable) {
+    return
+  }
   if (isValidTargetRange(editor, targetRange)) {
     editor.chain().focus().setTextSelection(targetRange).unsetLink().run()
     return

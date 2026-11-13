@@ -141,6 +141,7 @@ type RichMarkdownLinkBubbleProps = {
   anchorElement: HTMLElement | null
   linkBubble: LinkBubbleState
   isEditing: boolean
+  readOnly?: boolean
   onDismiss: () => void
   onSave: (href: string) => void
   onRemove: () => void
@@ -169,6 +170,7 @@ export function RichMarkdownLinkBubble({
   anchorElement,
   linkBubble,
   isEditing,
+  readOnly = false,
   onDismiss,
   onSave,
   onRemove,
@@ -304,7 +306,7 @@ export function RichMarkdownLinkBubble({
         buttons[(currentIndex + direction + buttons.length) % buttons.length]?.focus()
       }}
     >
-      {isEditing ? (
+      {isEditing && !readOnly ? (
         <LinkEditInput initialHref={linkBubble.href} onSave={onSave} onCancel={onEditCancel} />
       ) : (
         <>
@@ -324,7 +326,7 @@ export function RichMarkdownLinkBubble({
           >
             <Copy size={14} />
           </LinkBubbleAction>
-          {linkBubble.kind === 'markdown' ? (
+          {linkBubble.kind === 'markdown' && !readOnly ? (
             <>
               <LinkBubbleAction
                 label={t('auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f', 'Edit link')}

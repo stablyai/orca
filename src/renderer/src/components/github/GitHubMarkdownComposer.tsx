@@ -350,6 +350,7 @@ export function GitHubMarkdownComposer({
           anchorElement={rootRef.current}
           linkBubble={linkBubble}
           isEditing={isEditingLink}
+          readOnly={disabled}
           onDismiss={() => {
             cancelHoverBubble()
             setLinkBubble(null)

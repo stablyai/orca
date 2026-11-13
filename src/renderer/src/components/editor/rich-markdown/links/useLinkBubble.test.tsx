@@ -9,7 +9,11 @@ import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-
 import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { RichMarkdownLinkBubble, type LinkBubbleState } from './RichMarkdownLinkBubble'
-import { useLinkBubble } from './useLinkBubble'
+import {
+  applyRichMarkdownLinkRemove,
+  applyRichMarkdownLinkSave,
+  useLinkBubble
+} from './useLinkBubble'
 
 vi.mock('@/i18n/use-translate', () => ({
   useTranslate: () => (_key: string, fallback: string) => fallback
@@ -199,6 +203,15 @@ describe('useLinkBubble hover and targetRange actions', () => {
     act(() => removeButton.click())
 
     expect(activeEditor.getMarkdown()).toBe('Intro paragraph\n\nVisit docs today')
+  })
+
+  it('preserves links when mutation actions run against a non-editable editor', () => {
+    const { editor: activeEditor } = mountEditorWithBubble('[docs](https://example.com)')
+    activeEditor.setEditable(false)
+    applyRichMarkdownLinkSave(activeEditor, 'https://orca.dev', { from: 1, to: 5 })
+    applyRichMarkdownLinkRemove(activeEditor, { from: 1, to: 5 })
+
+    expect(activeEditor.getMarkdown()).toBe('[docs](https://example.com)')
   })
 
   it('selects the full URL text on double-click in the hover bubble and keeps it open while selected', () => {

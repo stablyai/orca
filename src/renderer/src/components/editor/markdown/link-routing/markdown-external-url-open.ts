@@ -1,4 +1,4 @@
-import { canSourceOwnerOpenInOrca } from '@/lib/browser/navigation/http-link-destinations'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import {
   openOwnedHttpLink,
   type HttpLinkSourceOwner
@@ -37,9 +37,11 @@ export function openMarkdownExternalUrl(
   const canOpenOwnedBrowser =
     sourceOwner.kind === 'runtime'
       ? canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, sourceOwner.runtimeEnvironmentId)
-      : sourceOwner.kind === 'ssh' &&
-        canOpenWorkspaceBrowserTabOnSsh(state, worktreeId, sourceOwner.connectionId)
-  if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
+      : sourceOwner.kind === 'ssh'
+        ? canOpenWorkspaceBrowserTabOnSsh(state, worktreeId, sourceOwner.connectionId)
+        : getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
+          'enabled'
+  if (!canOpenOwnedBrowser) {
     openOwnedHttpLink(url, {
       worktreeId,
       sourceOwner,

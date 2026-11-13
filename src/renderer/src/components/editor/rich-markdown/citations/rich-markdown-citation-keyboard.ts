@@ -31,12 +31,6 @@ export function handleRichMarkdownCitationKey({
     return false
   }
   const selector = `[data-rich-markdown-link-bubble-owner="${linkBubbleOwnerId}"] button:not([disabled])`
-  const firstAction = document.querySelector<HTMLButtonElement>(selector)
-  if (firstAction) {
-    event.preventDefault()
-    firstAction.focus()
-    return true
-  }
   if (!onOpenBubble?.()) {
     return false
   }

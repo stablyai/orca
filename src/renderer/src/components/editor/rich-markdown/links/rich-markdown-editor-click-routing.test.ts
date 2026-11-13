@@ -12,6 +12,8 @@ import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-h
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { handleRichMarkdownEditorClick } from './rich-markdown-editor-click-routing'
 import { handleRichMarkdownEditorAuxClick } from './rich-markdown-link-dom-events'
+import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
+import { useAppStore } from '@/store/index'
 
 const editors: Editor[] = []
 const openWorkspaceBrowserMock = vi.fn(async () => 'page-1')
@@ -36,6 +38,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   registerWorkspaceHttpLinkBrowserOpener(null)
   for (const editor of editors.splice(0)) {
     editor.destroy()
@@ -157,6 +160,19 @@ describe('rich markdown URL click and middle-click routing', () => {
       })
     )
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the system browser when a paired web workspace cannot host a browser', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    openMarkdownExternalUrl('https://orca.dev/docs', {
+      state: useAppStore.getState(),
+      worktreeId: 'worktree-1',
+      sourceOwner: { kind: 'local' },
+      destination: 'orca'
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://orca.dev/docs')
+    expect(openWorkspaceBrowserMock).not.toHaveBeenCalled()
   })
 
   it('opens external URLs in the system browser on middle-click', () => {
