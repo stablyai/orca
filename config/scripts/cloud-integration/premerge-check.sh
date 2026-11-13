@@ -4,7 +4,8 @@
 # Merges the current private/cloud/integration into a throwaway worktree with your branch, then requires
 #   pnpm typecheck, the full pnpm lint suite (pre-commit hooks only lint staged files), and vitest for the tests your
 #   branch touched: changed *.test.ts(x), every test in the folder of each changed source, every test that imports a
-#   changed module, every test Vitest's module graph relates to the change (vitest --changed), and each touched cloud/apps/* package's own suite. PREMERGE_FULL=1 runs the whole vitest suite.
+#   changed module, every test Vitest's module graph relates to the change (vitest --changed), and each touched cloud/apps/* package's own suite, plus the own `pnpm typecheck` of each touched cloud/ package listed
+#   in premerge-typecheck-packages.txt. PREMERGE_FULL=1 runs the whole vitest suite.
 # The merged copy of this script is what runs, so the gate is always integration's current one.
 # Prints "premerge OK" only when everything passes. Nothing here reads /tmp state. On macOS (no flock) wrap heavy runs
 # as /tmp/vdrv/heavy.sh 'config/scripts/cloud-integration/premerge-check.sh'.
@@ -172,5 +173,20 @@ fi
 for app in $(git diff --name-only "$base"...HEAD -- cloud/apps | cut -d/ -f1-3 | sort -u); do
   if [[ -d "$app" ]]; then (cd "$app" && npx vitest run); fi
 done
+# The root `pnpm typecheck` above covers no cloud/ package, and vitest strips types, so cloud packages' own type errors
+# went unseen (261 in sandbox-control by 2026-11-13). Typecheck each touched cloud package that is listed as clean.
+# cloud/ is its own pnpm workspace (own lockfile): install it and build its packages first, as its own scripts expect.
+tc_list=config/scripts/cloud-integration/premerge-typecheck-packages.txt
+tc_pkgs=()
+for pkg in $(git diff --name-only "$base"...HEAD -- cloud/apps cloud/packages | cut -d/ -f1-3 | sort -u); do
+  if [[ -d "$pkg" ]] && grep -qx "$pkg" "$tc_list" 2>/dev/null; then tc_pkgs+=("$pkg"); fi
+done
+if ((${#tc_pkgs[@]})); then
+  (cd cloud && pnpm install --frozen-lockfile >/dev/null && pnpm -r --filter "./packages/**" build >/dev/null)
+  for pkg in "${tc_pkgs[@]}"; do
+    echo "premerge: typecheck $pkg"
+    (cd "$pkg" && pnpm typecheck)
+  done
+fi
 if [[ "${PREMERGE_FULL:-}" == 1 ]]; then scope="the full vitest suite"; else scope="${#tests[@]} targeted test file(s)"; fi
 echo "premerge OK: $branch merges cleanly into cloud/integration with typecheck, lint and $scope green."
