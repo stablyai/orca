@@ -5464,7 +5464,6 @@
       "src/renderer/src/hooks/ipc-events/worktree-event-runtime-activation.test.ts": 1934,
       "src/renderer/src/hooks/ipc-events/wsl-host-ipc-bridge-capability.test.ts": 1917,
       "src/renderer/src/hooks/ipc-tab-switch-group-order-hydration.test.ts": 797,
-      "src/renderer/src/hooks/ipc-tab-switch.test.ts": 839,
       "src/renderer/src/hooks/macos-tcc-prompt-notice-subscription.test.ts": 52,
       "src/renderer/src/hooks/metadata-request-cache.test.ts": 144,
       "src/renderer/src/hooks/programmatic-scroll-marks.test.ts": 47,
