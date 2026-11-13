@@ -98,7 +98,10 @@ function failedSidecarMatches(
   row: SessionSearchFileRow,
   sidecar: SessionFileCandidate['file']['sidecar']
 ): boolean {
-  if (sidecar === undefined || sidecar === 'none' || sidecar === 'unknown') {
+  if (sidecar === 'unknown') {
+    return false
+  }
+  if (sidecar === undefined || sidecar === 'none') {
     return row.failedSidecarMtimeMs === null && row.failedSidecarSizeBytes === null
   }
   return (

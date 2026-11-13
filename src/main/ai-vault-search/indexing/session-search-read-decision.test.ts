@@ -109,6 +109,17 @@ it('retries a held-out file after its transcript grew past an unchanged meta.jso
   expect(decide({ sidecar: { ...SIDECAR, sizeBytes: 9000 } }, failed)).toBe('any')
 })
 
+it('retries a held-out file when its sidecar stat is unknown', () => {
+  const failed = row({
+    state: 'failed',
+    failCount: SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT,
+    failedMtimeMs: MTIME,
+    failedSidecarMtimeMs: null,
+    failedSidecarSizeBytes: null
+  })
+  expect(decide({ sidecar: 'unknown' }, failed)).toBe('any')
+})
+
 it('retries a held-out file whose sidecar stat was never stamped', () => {
   // Rows failed before the failure stamp existed cannot prove the sidecar is unchanged.
   const failed = row({
