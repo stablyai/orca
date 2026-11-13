@@ -255,6 +255,8 @@ export type BootSource = {
   region: string
   /** An automatic environment (auto-environments.ts): the caller's machine size stands. */
   auto?: boolean
+  /** The golden the build started from (environment-security.ts compares it with the floor). */
+  baseSnapshotId: string | null
   /** When the build finished (ms): a just-made snapshot gets one retry on a provider 404 (lifecycle.ts). */
   builtAt?: number | null
 }
@@ -269,6 +271,7 @@ type BootBuildRow = {
   finished_at: number | null
   result: string | null
   config: string
+  base_snapshot_id?: string | null
 }
 
 function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): BootSource | null {
@@ -296,6 +299,7 @@ function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): Boot
     repoDir: dir,
     machineSize,
     region: build.region,
+    baseSnapshotId: build.base_snapshot_id ?? null,
     builtAt: build.finished_at
   }
 }

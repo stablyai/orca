@@ -83,7 +83,9 @@ export function readyView(
   connection: OrcadReady,
   cloning?: 'clone' | 'update',
   /** The client knows `mode` (feature `repo-update`); older ones show an update as a clone. */
-  updateAware = false
+  updateAware = false,
+  /** ENV-BUILD-CHURN (d): the environment wasn't used (its build is below the security floor). */
+  environmentHeld?: { environmentId: string; reason: 'security_update' }
 ) {
   return {
     sandbox: sandboxView(row),
@@ -95,7 +97,8 @@ export function readyView(
     // Only for a create that asked (feature `clone-progress`): the repo is still cloning.
     ...(cloning
       ? { clone: { state: 'running' as const, ...(cloning === 'update' && updateAware ? { mode: 'update' as const } : {}) } }
-      : {})
+      : {}),
+    ...(environmentHeld ? { environmentHeld } : {})
   }
 }
 

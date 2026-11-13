@@ -1,6 +1,7 @@
 // Wire contract between the desktop and the Orca sandbox control plane (cloud/apps/sandbox-control).
 // The Worker's tests parse its responses with these schemas, so either side drifting fails a test.
 import { z } from 'zod'
+import { HostedEnvironmentHeldSchema } from './hosted-environment-held-wire'
 
 /**
  * Minutes of no agent work and no input before a cloud sandbox sleeps. The one source for every
@@ -168,7 +169,8 @@ export const HostedSandboxReadyResponseSchema = z
         mode: z.literal('update').optional()
       })
       .strict()
-      .optional()
+      .optional(),
+    environmentHeld: HostedEnvironmentHeldSchema.optional()
   })
   .strict()
 export type HostedSandboxReadyResponse = z.infer<typeof HostedSandboxReadyResponseSchema>

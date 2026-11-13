@@ -40,7 +40,7 @@
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { purgeTeamSecrets, teamDeleteRoute, teamWorkspaceCount } from './team-delete'
 import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneReadSnapshotToOwner, revokeDeviceSessionReaderKeys } from './read-snapshots'
-import { refreshStaleEnvironments } from './environment-golden-refresh'
+import { refreshEnvironment, refreshStaleEnvironments, type GoldenRefreshOptions } from './environment-golden-refresh'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
 import { WorkerEntrypoint } from 'cloudflare:workers'
@@ -968,6 +968,11 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
   }
+  // ENV-BUILD-CHURN: every environment boot records the use; a stale one refreshes lazily.
+  life.environmentUsed = async (environmentId) => {
+    await touchEnvironment(env.SANDBOX_DB, environmentId, life.now())
+    return refreshEnvironment(buildDeps(life, deps, env), environmentId, { minIntervalMs: refreshOptions(env).minIntervalMs })
+  }
   // AUTO_ENVIRONMENTS=off: creates of repos without an environment keep cloning from scratch.
   if (env.AUTO_ENVIRONMENTS !== 'off') {
     life.autoEnvironment = {
@@ -1864,7 +1869,14 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
             await recordOwnerDeviceForCreate(life, ready)
             await auditSession(life.db, caller, { action: 'workspace.create', targetType: 'workspace', targetId: ready.row.id, detail: { origin: 'desktop', visibility: ready.row.visibility } }, life.now())
             timings = ready.timings
-            return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
+            return { status: 200, body: readyView(
+                ready.row,
+                ready.connection,
+                ready.cloning,
+                features.includes('repo-update'),
+                // Older desktops parse the answer strictly: only one that knows the field gets it.
+                features.includes('environment-held') ? ready.environmentHeld : undefined
+              ) }
           }
           )
         )
@@ -2669,9 +2681,30 @@ export async function codexTick(env: Env, fifthMinute: boolean, deps: Deps = {})
   }
 }
 
+/** ENV-BUILD-CHURN: the refresh's limits, from the Worker's vars (unset or invalid: the defaults). */
+export function refreshOptions(env: Pick<Env, 'ENV_REFRESH_MIN_INTERVAL_HOURS' | 'ENV_REFRESH_MAX_IN_FLIGHT' | 'ENV_REFRESH_MAX_STARTS' | 'ENV_REFRESH_RECENT_DAYS'>): GoldenRefreshOptions {
+  const positive = (value: string | undefined): number | undefined => {
+    const n = Number(value)
+    return value && Number.isFinite(n) && n > 0 ? n : undefined
+  }
+  // 0 is allowed here (refresh on every golden, the old behaviour).
+  const rawHours = Number(env.ENV_REFRESH_MIN_INTERVAL_HOURS)
+  const hours =
+    env.ENV_REFRESH_MIN_INTERVAL_HOURS && Number.isFinite(rawHours) && rawHours >= 0 ? rawHours : undefined
+  const days = positive(env.ENV_REFRESH_RECENT_DAYS)
+  const inFlight = positive(env.ENV_REFRESH_MAX_IN_FLIGHT)
+  const starts = positive(env.ENV_REFRESH_MAX_STARTS)
+  return {
+    ...(hours !== undefined ? { minIntervalMs: hours * 60 * 60_000 } : {}),
+    ...(days ? { recentMs: days * 24 * 60 * 60_000 } : {}),
+    ...(inFlight ? { maxInFlight: Math.floor(inFlight) } : {}),
+    ...(starts ? { maxStartsPerTick: Math.floor(starts) } : {})
+  }
+}
+
 /** Org environments built on an older golden rebuild on the current one (environment-golden-refresh.ts). */
 export async function refreshEnvironmentsOnGolden(env: Env, life: LifecycleDeps, deps: Deps = {}) {
-  return refreshStaleEnvironments(buildDeps(life, deps, env)).catch((error: unknown) => {
+  return refreshStaleEnvironments(buildDeps(life, deps, env), refreshOptions(env)).catch((error: unknown) => {
     console.log(JSON.stringify({ event: 'environment_golden_refresh_failed', error: String(error).slice(0, 200) }))
     return { stale: 0, started: 0, skipped: 0 }
   })

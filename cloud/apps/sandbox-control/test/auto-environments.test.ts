@@ -140,7 +140,7 @@ describe('automatic environments', () => {
       now: h.now,
       config: { environment: 'test', goldenSnapshotId: GOLDEN, region: 'iad1' }
     }
-    expect((await refreshStaleEnvironments(deps as never)).started).toBe(1)
+    expect((await refreshStaleEnvironments(deps as never, { minIntervalMs: 0 })).started).toBe(1)
     expect(lastCommand().env).toMatchObject({ ORCA_AUTO_INSTALL: '1', ORCA_CLONE_FILTER: 'blob:none' })
     // Let the refresh build finish, so a manual Rebuild may start.
     const refresh = h.raw.prepare('SELECT id FROM environment_builds WHERE environment_id = ? ORDER BY number DESC').get(env.id) as { id: string }

@@ -20,6 +20,7 @@ import {
   type VmEnvironmentCheckDecision
 } from './ephemeral-vm-environment-check-decision'
 import {
+  environmentHeldNotice,
   triageCloudEnvironmentChecks,
   type CloudSetupNotice
 } from './ephemeral-vm-environment-check-triage'
@@ -238,6 +239,9 @@ export async function gateVmCreateOnEnvironmentCheck(
         }
       })
       if (cloud && triage) {
+        const held = environmentHeldNotice(
+          useAppStore.getState().pendingWorktreeCreations[creationId]?.provisioningLog
+        )
         publishCloudNotices(
           {
             environmentId,
@@ -245,7 +249,7 @@ export async function gateVmCreateOnEnvironmentCheck(
             repoId: cloud.repoId,
             hostId: cloud.hostId,
             repoUrl: cloud.repoUrl,
-            notices: triage.notices
+            notices: held ? [held, ...triage.notices] : triage.notices
           },
           confirmFetch
         )

@@ -1,3 +1,4 @@
+import { runEnvironmentSetup } from '@/lib/orca-cloud/cloud-environment-held'
 import React, { useEffect, useRef, useState } from 'react'
 import { Loader2, Play, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -74,6 +75,23 @@ export function cloudSetupNoticeLine(
               ...(handlers.checkingFetch ? { pending: true } : {})
             }
           : null
+      }
+    case 'environmentHeld':
+      // ENV-BUILD-CHURN (d): started without the environment's setup while it updates for a security fix.
+      return {
+        text: t(
+          'orcaCloud.setupNotices.environmentHeld',
+          'Your environment’s setup hasn’t run in this workspace, so dependencies may be missing.'
+        ),
+        description: t(
+          'orcaCloud.setupNotices.environmentHeldMeaning',
+          'The environment is rebuilding for a security update. New workspaces get its setup again in a few minutes.'
+        ),
+        action: {
+          label: t('orcaCloud.setupNotices.runSetupNow', 'Run setup now'),
+          icon: <Play />,
+          run: handlers.runSetup
+        }
       }
     case 'setup':
       return {
@@ -232,7 +250,10 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
       toastId,
       cloudSetupNoticesView(record, notices, t, {
         push,
-        runSetup: (noticeId) => void runCloudSetupScript(workspaceId, record, noticeId),
+        runSetup: (noticeId) =>
+          void (noticeId === 'environment.held'
+            ? runEnvironmentSetup(workspaceId, record, noticeId)
+            : runCloudSetupScript(workspaceId, record, noticeId)),
         dismiss: (noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId),
         recheckFetch: fetch.recheck,
         checkingFetch: fetch.checking

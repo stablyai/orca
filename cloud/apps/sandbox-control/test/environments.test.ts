@@ -295,13 +295,15 @@ describe('org environments', () => {
     const old = await build(0)
     const activeBuild = () => h.raw.prepare('SELECT b.id, b.base_snapshot_id AS base, b.created_by AS by FROM environments e JOIN environment_builds b ON b.id = e.active_build_id WHERE e.id = ?').get(envId) as { id: string; base: string; by: string }
     expect(activeBuild()).toMatchObject({ id: old.id, base: GOLDEN })
+    // These tests are about the swap itself: no minimum interval (ENV-BUILD-CHURN tests cover it).
+    h.env.ENV_REFRESH_MIN_INTERVAL_HOURS = '0'
     const refresh = async () => refreshEnvironmentsOnGolden(h.env, (await lifecycleDeps(h.env, h.deps))!, h.deps)
     // Same golden: nothing to do.
-    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0 })
+    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0, deferred: 0 })
 
     // The golden rotates (the cron activates a new image).
     h.raw.prepare(`INSERT INTO golden_images (id, source, status, snapshot_id, created_at, updated_at, activated_at) VALUES ('g2', 'test', 'active', 'snap_golden_2', ?, ?, ?)`).run(h.now(), h.now(), h.now())
-    expect(await refresh()).toEqual({ stale: 1, started: 1, skipped: 0 })
+    expect(await refresh()).toEqual({ stale: 1, started: 1, skipped: 0, deferred: 0 })
     // The old build keeps serving new workspaces while the rebuild runs.
     expect(activeBuild().id).toBe(old.id)
     const during = await adminCall('POST', '/v1/sandboxes', { workspaceId: 'during', machineSize: 'standard', repo: { url: REPO } })
@@ -323,7 +325,7 @@ describe('org environments', () => {
     const after = await adminCall('POST', '/v1/sandboxes', { workspaceId: 'after', machineSize: 'standard', repo: { url: REPO } })
     expect(after.body.sandbox.environmentBuildId).toBe(activeBuild().id)
     // Up to date now.
-    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0 })
+    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0, deferred: 0 })
 
     // Next rotation, and this time the rebuild fails: the previous build keeps serving, no retry loop.
     const servingBefore = activeBuild().id
@@ -337,7 +339,7 @@ describe('org environments', () => {
     const failedBuild = (await adminCall('GET', `/v1/environments/${envId}/builds`)).body.builds[0]
     expect((await adminCall('GET', `/v1/environments/${envId}/builds/${failedBuild.id}`)).body.build.status).toBe('failed')
     expect(activeBuild().id).toBe(servingBefore)
-    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0 })
+    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0, deferred: 0 })
   })
 
   it('rate-limits golden refresh starts across environments', async () => {
@@ -355,6 +357,8 @@ describe('org environments', () => {
       await adminCall('GET', `/v1/environments/${id}/builds/${b.id}`)
     }
     h.raw.prepare(`INSERT INTO golden_images (id, source, status, snapshot_id, created_at, updated_at, activated_at) VALUES ('g2', 'test', 'active', 'snap_golden_2', ?, ?, ?)`).run(h.now(), h.now(), h.now())
+    // These tests are about the swap itself: no minimum interval (ENV-BUILD-CHURN tests cover it).
+    h.env.ENV_REFRESH_MIN_INTERVAL_HOURS = '0'
     const refresh = async () => refreshEnvironmentsOnGolden(h.env, (await lifecycleDeps(h.env, h.deps))!, h.deps)
     expect(await refresh()).toMatchObject({ stale: 4, started: 2 })
     // Two in flight + cap 3: one more this tick at most.

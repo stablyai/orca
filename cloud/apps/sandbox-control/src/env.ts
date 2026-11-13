@@ -25,6 +25,14 @@ export type Env = {
   GOLDEN_SNAPSHOT_OVERRIDE?: string
   /** 'off': no automatic environments (auto-environments.ts); creates without one keep cloning. */
   AUTO_ENVIRONMENTS?: string
+  /** ENV-BUILD-CHURN: hours between non-security refreshes of one environment (default 24). */
+  ENV_REFRESH_MIN_INTERVAL_HOURS?: string
+  /** ENV-BUILD-CHURN: refresh builds in flight across all accounts (default 3). */
+  ENV_REFRESH_MAX_IN_FLIGHT?: string
+  /** ENV-BUILD-CHURN: refresh builds started per cron tick (default 2). */
+  ENV_REFRESH_MAX_STARTS?: string
+  /** ENV-BUILD-CHURN: eager refresh only for environments used within these days (default 7). */
+  ENV_REFRESH_RECENT_DAYS?: string
   /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
   MEMBER_GIT_IDENTITY?: string
   /** How long after a member's own send their GitHub identity stays usable (default 30). */

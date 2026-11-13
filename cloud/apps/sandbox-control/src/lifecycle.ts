@@ -40,6 +40,7 @@ import {
 } from './sandbox-vm-commands'
 import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
 import { resolveEnvironmentBoot, type BootSource } from './environments'
+import { belowSecurityFloor } from './environment-security'
 import { shareProxyKey } from './share-crypto'
 import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
 import {
@@ -122,6 +123,11 @@ export type LifecycleDeps = {
     ensure(accountId: string, repoUrl: string): Promise<unknown>
     touch(environmentId: string): Promise<unknown>
   }
+  /**
+   * ENV-BUILD-CHURN: a create booted from (or was kept off) this environment. Records the use and
+   * rebuilds it on the current golden when stale and due, or below the security floor; at most one build.
+   */
+  environmentUsed?: (environmentId: string) => Promise<unknown>
   /** Work that may finish after the response (Worker ctx.waitUntil); absent means fire-and-forget. */
   background?: (work: Promise<unknown>) => void
   /**
@@ -202,6 +208,11 @@ export type Ready = {
   cloning?: 'clone' | 'update'
   /** The VM was told member git setup is pending (CREATE-GIT-ASYNC): the caller must finish it. */
   gitSetupPending?: boolean
+  /**
+   * ENV-BUILD-CHURN (d): the repo's environment was not used because its build is below the security
+   * floor; the workspace started from the current golden without the environment's setup.
+   */
+  environmentHeld?: { environmentId: string; reason: 'security_update' }
 }
 
 /** Phase durations for one lifecycle call (logged + Server-Timing); counts only, no ids or secrets. */
@@ -747,7 +758,7 @@ export async function createSandbox(
   }
   const timer = phaseTimer(deps.now)
   // An environment build carries the repo prebuilt and its own machine size.
-  const source: BootSource | null =
+  let source: BootSource | null =
     request.environmentBuildId || request.useEnvironment !== false
       ? await timer.time('environment', () =>
           resolveEnvironmentBoot(deps.db, caller.accountId, {
@@ -757,6 +768,14 @@ export async function createSandbox(
           })
         )
       : null
+  // ENV-BUILD-CHURN (d): never boot a build below the security floor, even while its rebuild runs.
+  // The workspace starts from the current golden and clones instead; the desktop says the
+  // environment's setup hasn't run (environmentHeld). One rebuild starts behind the response.
+  let environmentHeld: Ready['environmentHeld']
+  if (source && (await belowSecurityFloor(deps.db, source))) {
+    environmentHeld = { environmentId: source.environmentId, reason: 'security_update' }
+    source = null
+  }
   // An automatic environment is only the repo checked out: the caller's machine size stands.
   const machineSize = source && !source.auto ? source.machineSize : request.machineSize
   await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
@@ -834,8 +853,20 @@ export async function createSandbox(
       throw error
     }
   })
+  // ENV-BUILD-CHURN (b): every environment boot records the use (org environments too) and may start
+  // the lazy refresh; an environment held off by the floor starts its one rebuild here.
+  const usedEnvironmentId = source?.environmentId ?? environmentHeld?.environmentId
+  if (usedEnvironmentId && deps.environmentUsed) {
+    deps.background?.(deps.environmentUsed(usedEnvironmentId).catch(() => undefined))
+  }
   // The repo is reachable: the next create of it should find it prebuilt (auto-environments.ts).
-  if (request.repo && deps.autoEnvironment && !request.environmentBuildId && request.useEnvironment !== false) {
+  if (
+    request.repo &&
+    deps.autoEnvironment &&
+    !environmentHeld &&
+    !request.environmentBuildId &&
+    request.useEnvironment !== false
+  ) {
     const work = source?.auto
       ? deps.autoEnvironment.touch(source.environmentId)
       : !source
@@ -860,7 +891,7 @@ export async function createSandbox(
         deferMemberGit: request.deferMemberGit
       })
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
-      return cloning ? { ...ready, cloning } : ready
+      return { ...ready, ...(cloning ? { cloning } : {}), ...(environmentHeld ? { environmentHeld } : {}) }
     } catch (error) {
       // EP-5: deleted by its owner mid-create (a cancel): free it, never make another.
       const cancelled = await deletedMeanwhile(deps, row)
@@ -937,7 +968,7 @@ export async function createSandbox(
   try {
     const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, prelude, deferMemberGit: request.deferMemberGit })
     console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', fromBuild: source?.buildId ?? null, ms: timer.timings }))
-    return cloning ? { ...ready, cloning } : ready
+    return { ...ready, ...(cloning ? { cloning } : {}), ...(environmentHeld ? { environmentHeld } : {}) }
   } catch (error) {
     await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error, timer))
     throw error

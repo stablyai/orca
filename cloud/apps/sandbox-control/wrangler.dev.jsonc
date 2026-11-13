@@ -42,6 +42,8 @@
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "SANDBOX_ENV": "dev",
+    // ENV-BUILD-CHURN: goldens rotate per merge on dev; refresh one environment at most every 6 h.
+    "ENV_REFRESH_MIN_INTERVAL_HOURS": "6",
     // Flag S1 (contract D10/D11): Claude via the person's Orca account. Dev only until Neil's S1 sign-off.
     "AGENT_ACCOUNTS_CLAUDE": "on",
     // Flag S2: Codex via the account broker (broker sandbox, lease refresher, placeholder auth.json). Dev only

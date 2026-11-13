@@ -20,6 +20,8 @@ export type EnvironmentProviderPhase =
   | 'cloning'
   /** The repo came prebuilt (an environment build): only what changed is fetched. */
   | 'updating'
+  /** ENV-BUILD-CHURN: the repo's environment was held back (security rebuild); `message` is its id. */
+  | 'environment-held'
   /** Before the create answers: whether its repository step will clone or update (names the step once). */
   | 'plan-clone'
   | 'plan-update'

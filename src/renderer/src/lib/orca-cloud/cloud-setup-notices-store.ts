@@ -73,7 +73,7 @@ export function visibleCloudSetupNotices(
   if (!record) {
     return []
   }
-  const order = { push: 0, fetch: 1, setup: 2, tool: 3, disk: 4 } as const
+  const order = { environmentHeld: 0, push: 1, fetch: 2, setup: 3, tool: 4, disk: 5 } as const
   return record.notices
     .filter((notice) => !state.dismissed.has(dismissalKey(record.environmentId, notice.id)))
     .slice()
