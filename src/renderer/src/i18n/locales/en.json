@@ -27600,7 +27600,8 @@
       "vmLost": "Orca lost contact with the build sandbox.",
       "canceled": "The build was canceled.",
       "unknownPlain": "Something went wrong during the build.",
-      "saveEnvironmentFailed": "Saving the environment failed."
+      "saveEnvironmentFailed": "Saving the environment failed.",
+      "secretLeftOnDisk": "The install script left a secret on disk, so the environment wasn’t saved. Remove it before the script ends, then save again."
     },
     "failedAtStep": "Build #{{number}} failed at {{step}}.",
     "failedPlain": "Build #{{number}} failed.",

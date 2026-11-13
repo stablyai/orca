@@ -7,6 +7,7 @@ import { checkoutPrice } from './catalog-sync'
 import { defaultSelfServePlan, loadCatalog, planVersion, policyFor, type Catalog, type CatalogPlan } from './catalog'
 import { catalogOverageCentsPerHour, computeEntitlement, entitlementsMode, type Entitlement } from './entitlements'
 import type { Env } from './env'
+import { featuresFor } from './features'
 import { grantsForSubject, liveAt } from './grants'
 import { MACHINE_SIZE_WEIGHT, planCatalog, publicOffers, type BillingInterval } from './plans'
 
@@ -152,7 +153,9 @@ export async function entitlementsView(env: Env, accountId: string, canManageBil
       machineSizes: entitlement.limits.machineSizes,
       overage: entitlement.overage,
       overageSeconds: entitlement.overageSeconds,
-      usageWarningPercent: entitlement.usageWarningPercent
+      usageWarningPercent: entitlement.usageWarningPercent,
+      // Additive: plan features (Enterprise). Who may use each one is the owning service's call.
+      features: await featuresFor(env, accountId, now)
     },
     access: { canStartSandbox: entitlement.canStartSandbox, reason: entitlement.reason, suspendRunning: entitlement.suspendRunning },
     payment: { pastDueSince: entitlement.payment.pastDueSince, graceEndsAt: entitlement.payment.graceEndsAt },
@@ -164,7 +167,8 @@ export async function entitlementsView(env: Env, accountId: string, canManageBil
       source: row.source_type,
       state: row.state,
       ...(row.hold_reason ? { holdReason: row.hold_reason } : {}),
-      plan: row.plan_id && row.source_type !== 'manual' && row.source_type !== 'promo' ? { id: row.plan_id, version: row.plan_version } : null,
+      // Ad hoc manual and promo grants carry the placeholder plan 'manual'; a contact-sales plan granted by ops names itself.
+      plan: row.plan_id && row.plan_id !== 'manual' ? { id: row.plan_id, version: row.plan_version } : null,
       startsAt: row.starts_at,
       endsAt: row.ends_at
     })),

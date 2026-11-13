@@ -21,7 +21,7 @@ import { countAllActive, getControlState, killSwitchOn, setKillSwitch } from './
 import { guardrails, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
-import { removeMember } from './member-removal'
+import { memberEventActor, memberEventTarget, removeMember } from './member-removal'
 import type { Keyring } from './secrets-crypto'
 import { kekStatus, rewrapBatch, RewrapError, REWRAP_MAX_LIMIT } from './secrets-rewrap'
 import { fairUseReport, FAIR_USE_WINDOW_DAYS, sweepSessionCpu } from './session-cpu'
@@ -40,8 +40,10 @@ const BindingBody = z
   .refine((body) => (body.installationId === undefined) !== (body.repoUrl === undefined))
 // `changedAt`: auth's time of the change (ms), so tokens auth issued up to then count as stale.
 const ChangedAt = z.number().int().positive().optional()
-const MemberRemovedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), changedAt: ChangedAt }).strict()
-const RoleChangedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), role: z.enum(['owner', 'admin', 'member']), changedAt: ChangedAt }).strict()
+// `actorUserId`: who made the change in auth (absent for a directory sync or an older auth), for the audit log.
+const ActorUserId = z.string().min(1).max(128).optional()
+const MemberRemovedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), changedAt: ChangedAt, actorUserId: ActorUserId }).strict()
+const RoleChangedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), role: z.enum(['owner', 'admin', 'member']), changedAt: ChangedAt, actorUserId: ActorUserId }).strict()
 const RewrapBody = z
   .object({ limit: z.number().int().min(1).max(REWRAP_MAX_LIMIT).optional(), cursor: z.string().max(2048).nullable().optional(), dryRun: z.boolean().optional() })
   .strict()
@@ -145,7 +147,7 @@ export async function handleOperator(
       // First, so a desktop token minted before the change can't sync the old role back.
       await recordMemberChange(life.db, body.data.accountId, body.data.userId, 'role', memberChangeTime(now, body.data.changedAt))
       const updated = await syncMemberRole(life.db, body.data.accountId, body.data.userId, body.data.role)
-      await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.role_changed', detail: { role: body.data.role, keysUpdated: updated } }, now)
+      await audit(life.db, memberEventActor(body.data.accountId, body.data.userId, body.data.actorUserId), { action: 'member.role_changed', ...memberEventTarget(body.data.userId, body.data.actorUserId), detail: { role: body.data.role, keysUpdated: updated } }, now)
       return Response.json({ updated })
     }
     case 'POST /v1/internal/members/removed': {
@@ -154,7 +156,7 @@ export async function handleOperator(
         return Response.json({ error: 'invalid_request' }, { status: 400 })
       }
       // Same cleanup as /v1/internal/org-members/removed: whichever auth calls, nothing of theirs survives.
-      const removal = await removeMember(life, body.data.accountId, body.data.userId, now, body.data.changedAt)
+      const removal = await removeMember(life, body.data.accountId, body.data.userId, now, body.data.changedAt, body.data.actorUserId)
       return Response.json({ revoked: removal.keysRevoked, ...removal })
     }
     case 'GET /v1/internal/fair-use': {

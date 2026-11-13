@@ -22,6 +22,7 @@ import type { GitHubAppMinter } from './github-app'
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { assertStartsOpen, type GuardrailConfig, DEFAULT_GUARDRAILS } from './guardrails'
 import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import { SWAPPED_CREDENTIALS } from './provider-env'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, startOrcad } from './sandbox-vm-commands'
 import type { Keyring } from './secrets-crypto'
@@ -180,8 +181,27 @@ function placeholder(buildId: string, index: number): string {
   return `orca-ph-${buildId}-r${index}`
 }
 
-/** Org secrets with the environment's names (personal secrets never reach a shared image). */
-async function buildSecrets(deps: BuildDeps, accountId: string, names: string[]): Promise<Record<string, string>> {
+/**
+ * What a build's install script receives (SEC-2). The build's snapshot is the team's saved environment,
+ * booted by every member's workspace, so the rules are tighter than a session's:
+ * - nothing by default: only the team secrets an admin named on the environment (`envVarNames`), never
+ *   personal or repository ones, and none at all for automatic environments;
+ * - never a model key: in a session those stay outside the VM behind an egress placeholder, and a
+ *   build VM has no such route (and no use for a model), so a named one is withheld, not injected;
+ * - the named rest reach the install script only, and the build fails if one of their values is
+ *   still on disk afterwards (image/env/environment-build.sh, exit 40).
+ */
+export function buildSecretNames(names: readonly string[]): { injected: string[]; withheld: string[] } {
+  const unique = [...new Set(names)]
+  return {
+    injected: unique.filter((name) => !SWAPPED_CREDENTIALS.includes(name)),
+    withheld: unique.filter((name) => SWAPPED_CREDENTIALS.includes(name))
+  }
+}
+
+/** Team secrets a build may hold, by name (see buildSecretNames); withheld ones are never decrypted. */
+async function buildSecrets(deps: BuildDeps, accountId: string, named: readonly string[]): Promise<Record<string, string>> {
+  const names = buildSecretNames(named).injected
   if (!deps.keyring || names.length === 0) {
     return {}
   }
@@ -327,15 +347,22 @@ async function bootBuild(deps: BuildDeps, row: BuildRow, config: BuildConfig): P
     region: row.region,
     timeoutMs: BUILD_DEADLINE_MS,
     ports: [],
-    // Installs reach any registry; repo tokens are claimed per repo, anonymous clones still work.
+    // Installs reach any registry (private ones included, which no allowlist could name); repo tokens are
+    // claimed per repo, anonymous clones still work. Open egress is why a build never holds a model key
+    // and gets only the secrets an admin named (buildSecretNames).
     networkPolicy: compileNetworkPolicy({ mode: 'open', allowlist: [], credentials, denyUnclaimed: false }),
     tags: { orcaEnvBuild: row.id, orcaEnv: deps.config.environment },
     snapshotExpirationMs: 0,
     persistent: false
   })
   const secrets = await buildSecrets(deps, row.account_id, config.envVarNames)
+  const withheld = buildSecretNames(config.envVarNames).withheld
   const env: Record<string, string> = {
     ...secrets,
+    // The script takes these out of its own environment, gives them to the install step alone and
+    // searches the disk for their values before it lets the build succeed.
+    ...(Object.keys(secrets).length > 0 ? { ORCA_BUILD_SECRET_NAMES: Object.keys(secrets).join(' ') } : {}),
+    ...(withheld.length > 0 ? { ORCA_BUILD_WITHHELD_SECRETS: withheld.join(' ') } : {}),
     ORCA_BUILD_ID: row.id,
     ORCA_BUILD_REPOS: lines.join('\n'),
     ORCA_INSTALL_SCRIPT_B64: base64(config.installScript),
@@ -343,7 +370,13 @@ async function bootBuild(deps: BuildDeps, row: BuildRow, config: BuildConfig): P
     ORCA_DEPS_HOOK_B64: base64(ENVIRONMENT_DEPS_HOOK),
     ...(config.cloneFilter ? { ORCA_CLONE_FILTER: config.cloneFilter } : {})
   }
-  log('environment_build_secrets', { buildId: row.id, injected: Object.keys(secrets).length, named: config.envVarNames.length })
+  // Counts only.
+  log('environment_build_secrets', {
+    buildId: row.id,
+    injected: Object.keys(secrets).length,
+    withheld: withheld.length,
+    named: config.envVarNames.length
+  })
   const commandId = await deps.provider.startCommand(box.session.id, {
     command: 'bash',
     args: ['-c', ENVIRONMENT_BUILD_SCRIPT],
@@ -420,7 +453,9 @@ export async function advanceBuild(deps: BuildDeps, row: BuildRow, options: { wa
 const EXIT_STEPS: Record<number, { step: string; error: string }> = {
   10: { step: 'clone', error: 'clone_failed' },
   20: { step: 'install', error: 'install_failed' },
-  30: { step: 'record', error: 'record_failed' }
+  30: { step: 'record', error: 'record_failed' },
+  // A team secret's value was still on disk after the install script: no snapshot is taken (SEC-2).
+  40: { step: 'record', error: 'secret_in_image' }
 }
 
 async function finalize(deps: BuildDeps, row: BuildRow, exitCode: number): Promise<BuildRow> {
@@ -713,7 +748,7 @@ async function readUntil(stream: ReadableStream<Uint8Array>, ms: number): Promis
 
 /**
  * Org secret values the install script received, replaced by `[secret NAME]` in every log Orca
- * shows or stores. (Files the script writes from them still land in the image: documented.)
+ * shows or stores. (A file the script writes one into fails the build instead: exit 40.)
  */
 async function secretRedactor(deps: BuildDeps, row: BuildRow): Promise<(text: string) => string> {
   let names: string[] = []
