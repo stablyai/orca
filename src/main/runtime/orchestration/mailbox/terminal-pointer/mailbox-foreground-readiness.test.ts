@@ -42,6 +42,127 @@ describe('mail-local foreground recovery readiness', () => {
     }
   })
 
+  it.each([
+    { status: 'working', hydration: false },
+    { status: 'working', hydration: true },
+    { status: 'permission', hydration: false },
+    { status: 'permission', hydration: true },
+    { status: 'permission', hydration: false, inconclusive: true }
+  ])(
+    'submits silent recovery with retained $status (hydration=$hydration, inconclusive=$inconclusive)',
+    async ({ status, hydration, inconclusive = false }) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-mail-silent-enter-')
+      const { runtime, write } = createRuntime(db, { launchAgent: 'claude' })
+      let shell = true
+      let hydrate = false
+      let unknown = false
+      let finishSnapshot!: (snapshot: { data: string; cols: number; rows: number }) => void
+      const snapshot = new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
+        finishSnapshot = resolve
+      })
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getSize: () => ({ cols: 100, rows: 30 }),
+        getForegroundProcess: async () => null,
+        supportsForegroundObservation: () => true,
+        inspectProcess: async () =>
+          unknown
+            ? { foregroundProcess: null, hasChildProcesses: false }
+            : {
+                foregroundProcess: shell ? 'zsh' : 'claude',
+                hasChildProcesses: !shell,
+                foregroundObservation: {
+                  ptyId: PTY_ID,
+                  ptyIncarnationId: 'mailbox-incarnation',
+                  authorityGeneration: 'test',
+                  observationEpoch: 1,
+                  capturedAgeMs: 0,
+                  verdict: 'observed',
+                  source: 'pty-master',
+                  foregroundKind: shell ? 'shell' : 'non-shell',
+                  processName: shell ? 'zsh' : 'claude'
+                }
+              },
+        hasRendererSerializer: () => hydrate,
+        serializeBuffer: () => (hydrate ? snapshot : Promise.resolve(null))
+      })
+      try {
+        await runtime.listTerminals()
+        runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${COMPOSER}`, Date.now())
+        runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', Date.now())
+        const run = createBoundRun(db, 'Silent staged recovery')
+        const message = insertDirectRunMessage(db, run.id, 'Submit without a tab switch')
+        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(write).not.toHaveBeenCalled()
+        shell = false
+        let stagedAt = 0
+        let pointerScreen = ''
+        let hydrationDone: Promise<boolean> | null = null
+        write.mockImplementation((_ptyId, data) => {
+          if (data !== '\r') {
+            stagedAt = Date.now()
+            unknown = inconclusive
+            pointerScreen = `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`
+            runtime.onPtyData(PTY_ID, `\x1b]0;Claude ${status}\x07${pointerScreen}`, Date.now())
+            if (hydration) {
+              // A stream gap drops the mirror without changing the live process or flight.
+              runtime.notePtyDataGap(PTY_ID)
+              hydrate = true
+              hydrationDone = runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)
+            }
+          }
+          return true
+        })
+        await vi.advanceTimersByTimeAsync(6000)
+        expect(stagedAt).toBeGreaterThan(0)
+        expect(runtime.mailTerminal?.lastAgentStatus).toBe(status)
+        if (hydration) {
+          expect(hydrationDone).not.toBeNull()
+          expect(runtime.idleEvidenceSource.readScreenLines(PTY_ID)).toBeNull()
+          expect(write).toHaveBeenCalledTimes(1)
+          expect(db.getMessageById(message.id)).toMatchObject({
+            read: 0,
+            delivered_at: null,
+            pointer_enter_pending: 2
+          })
+          // Completing a seed emits no new live output, title, status, hook or send.
+          finishSnapshot({ data: pointerScreen, cols: 100, rows: 30 })
+          await hydrationDone
+        }
+        if (inconclusive) {
+          await vi.advanceTimersByTimeAsync(4000)
+          expect(write).toHaveBeenCalledTimes(1)
+          expect(db.getMessageById(message.id)).toMatchObject({
+            read: 0,
+            delivered_at: null,
+            pointer_enter_pending: 2
+          })
+          unknown = false
+        }
+        await vi.advanceTimersByTimeAsync(4000)
+        expect(write.mock.calls.map(([, data]) => data)).toEqual([
+          expect.stringContaining('You have 1 orchestration message'),
+          '\r'
+        ])
+        expect(db.getMessageById(message.id)).toMatchObject({
+          read: 0,
+          delivered_at: expect.any(String),
+          pointer_enter_pending: 0
+        })
+        const attempts = vi.spyOn(runtime, 'deliverPendingMessagesForPty')
+        await vi.advanceTimersByTimeAsync(65000)
+        expect(write).toHaveBeenCalledTimes(2)
+        expect(attempts).not.toHaveBeenCalled()
+      } finally {
+        finishSnapshot({ data: '', cols: 100, rows: 30 })
+        db.close()
+      }
+    }
+  )
   it.each(['before staging', 'before Enter'])(
     'recovers after shell cleanup retains only the provider identity (%s)',
     async (cleanup) => {

@@ -30,9 +30,14 @@ afterEach(() => {
   }
 })
 
-it.each([2, 20])(
-  'bounds blocked-flight readiness independently of %i owed mailboxes',
-  async (m) => {
+it.each([
+  { m: 2, status: null },
+  { m: 20, status: null },
+  { m: 2, status: 'permission' },
+  { m: 20, status: 'permission' }
+])(
+  'bounds blocked-flight readiness with $status independently of $m owed mailboxes',
+  async ({ m, status }) => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mail-screen-cost-')
     const row: AgentStatusIpcPayload = {
@@ -120,13 +125,18 @@ it.each([2, 20])(
         delivered_at: null,
         pointer_enter_pending: 2
       })
+      if (status) {
+        runtime.onPtyData(PTY_ID, '\x1b]0;Claude permission\x07', Date.now())
+        await vi.advanceTimersByTimeAsync(0)
+      }
       const attempts = vi.spyOn(runtime, 'deliverPendingMessagesForPty')
       const screens = vi.spyOn(runtime.idleEvidenceSource, 'readScreenLines')
       const work = countForegroundSqlWork(db)
       const priorInspections = inspections
       await vi.advanceTimersByTimeAsync(60000)
       const count = attempts.mock.calls.length
-      expect(count).toBeGreaterThan(0)
+      // The blocked recovery keeps its wake throughout the minute, including retained permission.
+      expect(count).toBeGreaterThanOrEqual(60000 / 2000 - 1)
       // One terminal decision every two seconds, plus the scheduling edge.
       expect(count).toBeLessThanOrEqual(60000 / 2000 + 1)
       expect(screens.mock.calls.length).toBeLessThanOrEqual(count)
@@ -140,6 +150,7 @@ it.each([2, 20])(
         'blocked-flight contract',
         JSON.stringify({
           m,
+          status,
           attempts: count,
           screens: screens.mock.calls.length,
           inspections: inspections - priorInspections,

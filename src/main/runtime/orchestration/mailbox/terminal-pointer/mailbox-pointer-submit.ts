@@ -144,11 +144,13 @@ export function submitOrchestrationMailboxPointer(
         redriveClearedPointer = false
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
-        (queueSafe && !settled) ||
+        (queueSafe
+          ? !settled
+          : deps.state.foreground.screenRecovery(input.ptyId) ===
+            input.expectedTarget.processIncarnation) ||
         deps.isPtyAwaitingUserInput(input.ptyId)
       ) {
-        // A neutral title can outlive the foreground check, and an open dialog would take the
-        // Enter as its answer; no Enter has been attempted yet.
+        // Keep staged text pending until admission is safe; Enter could answer a dialog.
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deps.onDeliveryDecision?.(input.ptyId, { foreground: false })

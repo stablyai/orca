@@ -79,13 +79,12 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
           this.getOrchestrationMailboxTerminal(ptyId)
         ),
       readinessDelay: (terminal) => {
+        const delivery = this.orchestrationMailboxPointerDelivery
         if (
           !isMailboxTerminalTakingInput(terminal) &&
-          !(
-            terminal.lastAgentStatusObservedLive &&
-            terminal.lastAgentStatus === null &&
-            this.orchestrationMailboxPointerDelivery.stagedPointerText(terminal.ptyId) !== undefined
-          )
+          (delivery.stagedPointerText(terminal.ptyId) === undefined ||
+            (!delivery.requiresCurrentScreen(terminal.ptyId) &&
+              (!terminal.lastAgentStatusObservedLive || terminal.lastAgentStatus !== null)))
         ) {
           return null
         }
@@ -147,9 +146,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     foreground?: MailboxForeground,
     stagedText?: string
   ): OrchestrationMailboxTerminal {
-    return terminal.lastAgentStatus === null &&
-      foreground === 'agent' &&
+    return foreground === 'agent' &&
       terminal.lastAgentStatusObservedLive &&
+      (terminal.lastAgentStatus === null ||
+        this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(terminal.ptyId)) &&
       this.deliveryRefusal(terminal.ptyId, foreground, stagedText) === null
       ? { ...terminal, lastAgentStatus: 'idle' }
       : terminal
