@@ -295,6 +295,7 @@ export type RuntimeMobileSessionCreateTerminalResult = {
   publicationEpoch: string
   snapshotVersion: number
   warning?: 'desktop-tab-not-shown'
+  launchWarning?: string
   /** The saved folder was gone, so the terminal started at the workspace root. */
   startupCwdFallback?: 'workspace-root'
 }

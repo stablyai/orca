@@ -1,5 +1,5 @@
+import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnings'
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
-import { assertRemoteAntigravityEffort } from '../../terminal/catalog/antigravity-remote-terminal-effort'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import * as Caps from '../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -35,10 +35,7 @@ import {
   workerLaunchAgent
 } from '../workers/launch/worker-launch-observation'
 
-export async function startFederatedWorker(
-  args: FederatedWorkerStartRequest,
-  validateNewEffort = false
-): Promise<unknown> {
+export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
@@ -109,9 +106,6 @@ export async function startFederatedWorker(
           serverName: server.name
         })
       : undefined
-  if (validateNewEffort && !params.terminal) {
-    await assertRemoteAntigravityEffort(runtime, params, server, budgets.preflightTimeoutMs)
-  }
 
   const supportsControlMail = capabilities?.includes(
     Caps.ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
@@ -247,7 +241,10 @@ export async function startFederatedWorker(
           timeoutMs: budgets.readinessTimeoutMs,
           effects: remote.effects ?? [],
           residualResources: remote.residualResources ?? [],
-          ...(childParent && 'warning' in childParent ? { warning: childParent.warning } : {})
+          warning: combineLaunchWarnings(
+            typeof remote.warning === 'string' ? remote.warning : undefined,
+            childParent && 'warning' in childParent ? childParent.warning : undefined
+          )
         },
         reportsTurnStops
           ? undefined

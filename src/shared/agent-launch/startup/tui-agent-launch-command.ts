@@ -1,19 +1,12 @@
-import { clearTerminalEffortArgs } from './terminal-effort-option-edit'
-import type { TerminalOptionEdits } from '../choices/agent-launch-choices'
+import {
+  normalizeAntigravityTerminalArgs,
+  type AntigravityLaunchModels
+} from './antigravity-terminal-model'
 import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
 import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
 } from '../../agent-session/options/agent-session-option-launch'
-import { resolveAgentChoiceLayers, yieldAgentChoicesToArgs } from '../choices/agent-choice-layers'
-import { resolveTuiAgentLaunchRawArgs } from '../choices/tui-agent-launch-defaults'
-import {
-  hasExtraAgentArgs,
-  parseExtraAgentArgs,
-  mergeParsedExtraAgentArgs
-} from './automation-extra-agent-args'
-import type { AgentLaunchProfileSettings } from '../choices/tui-agent-launch-defaults'
-import { readLaunchPermissionChoice } from '../permissions/tui-agent-permission-choice'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { agentArgTerminatorIndex } from '../../agent-session/options/agent-session-option-agent-args'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
@@ -86,6 +79,7 @@ export type ResolvedAgentLaunchCommand =
   | {
       ok: true
       command: string
+      warning?: string
       resumeLaunch: { agentCommand: string; agentArgs?: string }
       appliedSessionOptions: Record<string, SessionOptionValue>
       startupEnv?: Readonly<Record<string, string>>
@@ -105,6 +99,8 @@ export function resolveAgentLaunchCommand(args: {
   suppressStartupUpdatePrompt?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
+  antigravityModels?: AntigravityLaunchModels
+  explicitEffort?: boolean
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
   const command =
@@ -160,7 +156,9 @@ export function resolveAgentLaunchCommand(args: {
     )
     if (
       Object.entries(resolvedOptions.appliedValues).some(
-        ([key, value]) => commandOverrideOptions.appliedValues[key] !== value
+        ([key, value]) =>
+          !(args.agent === 'antigravity' && (key === 'model' || key === 'effort')) &&
+          commandOverrideOptions.appliedValues[key] !== value
       )
     ) {
       return {
@@ -177,9 +175,25 @@ export function resolveAgentLaunchCommand(args: {
   const render = (tokens: readonly string[]): string =>
     tokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')
   const withArgs = (suffix: string, head = command): string => (suffix ? `${head} ${suffix}` : head)
-  const initialTokens = args.sessionOptionsOverrideAgentArgs
-    ? insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.args)
-    : [...resolvedOptions.args, ...keptTokens]
+  const normalized =
+    args.agent === 'antigravity'
+      ? normalizeAntigravityTerminalArgs({
+          generated: resolvedOptions.args,
+          appliedValues: resolvedOptions.appliedValues,
+          raw: keptTokens,
+          rawText: args.agentArgs ?? '',
+          override,
+          shell: args.shell,
+          models: args.antigravityModels,
+          explicitEffort:
+            args.explicitEffort ?? (args.sessionOptions?.effort !== undefined ? true : undefined)
+        })
+      : undefined
+  const initialTokens =
+    normalized?.tokens ??
+    (args.sessionOptionsOverrideAgentArgs
+      ? insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.args)
+      : [...resolvedOptions.args, ...keptTokens])
   // Aider's last boolean flag wins, even over configured --check-update.
   const launchTokens =
     args.agent === 'aider'
@@ -192,6 +206,7 @@ export function resolveAgentLaunchCommand(args: {
   return {
     ok: true,
     command: withArgs(render(launchTokens), launchHead),
+    ...(normalized?.warning ? { warning: normalized.warning } : {}),
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
       ...(keptTokens.length !== rawTokens.length ||
@@ -200,7 +215,16 @@ export function resolveAgentLaunchCommand(args: {
         ? { agentArgs: resumeArgs }
         : {})
     },
-    appliedSessionOptions: resolvedOptions.appliedValues,
+    appliedSessionOptions: normalized
+      ? {
+          ...Object.fromEntries(
+            Object.entries(resolvedOptions.appliedValues).filter(
+              ([key]) => key !== 'model' && key !== 'effort'
+            )
+          ),
+          ...(normalized.model ? { model: normalized.model } : {})
+        }
+      : resolvedOptions.appliedValues,
     ...(args.suppressStartupUpdatePrompt && STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent]
       ? { startupEnv: STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent] }
       : {})
@@ -216,104 +240,4 @@ function insertBeforeTerminator(
   return [...tokens.slice(0, terminator), ...inserted, ...tokens.slice(terminator)]
 }
 
-/** Resolve authored defaults against the original raw text before compiling either into argv. */
-export function terminalSessionOptionInputs(args: {
-  agent: TuiAgent
-  settings?: AgentLaunchProfileSettings | null
-  terminalOptionEdits?: TerminalOptionEdits
-  sessionOptions: Readonly<Record<string, SessionOptionValue>> | undefined
-  yieldToAgentArgs?: boolean
-  agentArgs: string | null | undefined
-  shell: AgentStartupShell
-  command?: string
-  extraAgentArgs?: string
-}): {
-  agentArgs?: string | null
-  sessionOptions?: Record<string, SessionOptionValue>
-  sessionOptionsOverrideAgentArgs?: true
-} {
-  const permission = readLaunchPermissionChoice(args.sessionOptions)
-  let raw =
-    args.agentArgs === undefined
-      ? resolveTuiAgentLaunchRawArgs(
-          args.agent,
-          args.settings,
-          permission ? 'own' : undefined,
-          args.shell
-        )
-      : args.agentArgs
-  const extras = hasExtraAgentArgs(args.extraAgentArgs)
-    ? parseExtraAgentArgs({ agent: args.agent, extraAgentArgs: args.extraAgentArgs })
-    : undefined
-  if (extras && !extras.ok) {
-    throw new Error(extras.error)
-  }
-  if (extras?.ok) {
-    const merged = mergeParsedExtraAgentArgs({
-      agent: args.agent,
-      defaultArgs: raw,
-      extras,
-      shell: args.shell
-    })
-    if (!merged.ok) {
-      throw new Error(merged.error)
-    }
-    raw = merged.agentArgs
-  }
-  const clearsEffort = args.terminalOptionEdits?.effort === null
-  if (clearsEffort && raw) {
-    raw = clearTerminalEffortArgs(args.agent, raw)
-  }
-  const authored = args.settings?.agentLaunchChoices?.[args.agent]
-  let defaultValues: Record<string, string> = {
-    ...authored?.options,
-    ...(authored?.model ? { model: authored.model } : {})
-  }
-  if (clearsEffort) {
-    delete defaultValues.effort
-  }
-  if (Object.keys(defaultValues).length) {
-    const command = tokenizeStartupCommand(args.command ?? '', args.shell)
-    defaultValues = yieldAgentChoicesToArgs(args.agent, defaultValues, [
-      ...(command.ok ? command.tokens : []),
-      ...(extras?.ok ? extras.tokens : [])
-    ])
-  }
-  const { model: defaultModel, ...defaultOptions } = defaultValues
-  const choices = resolveAgentChoiceLayers({
-    agent: args.agent,
-    defaults: { ...(defaultModel ? { model: defaultModel } : {}), options: defaultOptions },
-    action: args.sessionOptions
-      ? {
-          ...(typeof args.sessionOptions.model === 'string'
-            ? { model: args.sessionOptions.model }
-            : {}),
-          options: Object.fromEntries(
-            Object.entries(args.sessionOptions)
-              .filter(
-                ([id]) =>
-                  !['model', 'mode', 'permissionMode'].includes(id) &&
-                  !(clearsEffort && id === 'effort')
-              )
-              .map(([id, value]) => [id, String(value)])
-          ),
-          ...(permission ? { permissionMode: permission } : {})
-        }
-      : undefined,
-    argumentOwner: args.agentArgs === undefined ? 'defaults' : 'launch',
-    userArgs: raw,
-    launchPreferencesYieldToAgentArgs: args.yieldToAgentArgs,
-    shell: args.shell
-  })
-  const sessionOptions = {
-    ...choices.options,
-    ...(choices.model ? { model: choices.model } : {}),
-    ...(choices.permissionMode ? { permissionMode: choices.permissionMode } : {})
-  }
-  return {
-    agentArgs: raw,
-    ...(Object.keys(sessionOptions).length > 0
-      ? { sessionOptions, sessionOptionsOverrideAgentArgs: true as const }
-      : {})
-  }
-}
+export { terminalSessionOptionInputs } from './terminal-session-option-inputs'

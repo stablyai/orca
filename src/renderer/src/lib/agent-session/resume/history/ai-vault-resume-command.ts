@@ -40,7 +40,7 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
 
 export function buildAiVaultResumeStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
-): AiVaultResumeStartup {
+): AiVaultResumeStartup & { warning?: string } {
   return buildAiVaultResumeForWorktree(args, false)
 }
 
@@ -77,7 +77,7 @@ function buildAiVaultResumeForWorktree(
   embedCwd: boolean,
   /** Copied lines strip env from the agent command; spawned startups use envToDelete. */
   clearEnvNames?: readonly string[]
-): AiVaultResumeStartup {
+): AiVaultResumeStartup & { warning?: string } {
   assertAntigravityReferenceTarget(args)
   const remote = buildAiVaultRemoteResumeStartup(args.session, args.commandOverride)
   if (remote) {

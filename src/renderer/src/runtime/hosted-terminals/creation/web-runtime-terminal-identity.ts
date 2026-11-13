@@ -6,7 +6,7 @@ export function createdTerminalLeafId(terminal: CreatedAgentTerminalIdentity): s
   return pane && pane.tabId === terminal.tabId ? pane.leafId : undefined
 }
 
-/** Decode only the host terminal coordinates consumed by the paired renderer. */
+/** Decode the host coordinates and transient launch notice consumed by the paired renderer. */
 export function readCreatedAgentTerminalIdentity(value: unknown): {
   terminal: CreatedAgentTerminalIdentity
 } {
@@ -25,5 +25,13 @@ export function readCreatedAgentTerminalIdentity(value: unknown): {
   ) {
     throw new Error('Host returned invalid agent terminal coordinates')
   }
-  return { terminal: { tabId, paneKey } }
+  return {
+    terminal: {
+      tabId,
+      paneKey,
+      ...('warning' in terminal && typeof terminal.warning === 'string'
+        ? { warning: terminal.warning }
+        : {})
+    }
+  }
 }

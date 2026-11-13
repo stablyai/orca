@@ -24,7 +24,7 @@ export function buildAntigravityReferenceStartup(args: {
   settings?:
     | (Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> & AgentLaunchProfileSettings)
     | null
-}): AiVaultResumeStartup | null {
+}): (AiVaultResumeStartup & { warning?: string }) | null {
   const plan = buildAgentStartupPlan({
     ...resolveAgentStartupPlanInputs({
       agent: 'antigravity',
@@ -46,6 +46,7 @@ export function buildAntigravityReferenceStartup(args: {
     return null
   }
   return {
+    ...(plan.warning ? { warning: plan.warning } : {}),
     command: buildAiVaultResumeCommand({
       agent: 'antigravity',
       sessionId: args.session.sessionId,

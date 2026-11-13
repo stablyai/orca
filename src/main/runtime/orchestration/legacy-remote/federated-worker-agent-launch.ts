@@ -39,6 +39,7 @@ export async function launchFederatedWorkerAgent(args: {
   worktree: { id: string }
   terminalHandle: string
   terminalCreation?: RuntimeTerminalCreate
+  warning?: string
 }> {
   const { runtime, db, params, effects } = args
   if (!args.agent) {
@@ -144,7 +145,11 @@ export async function launchFederatedWorkerAgent(args: {
           result.setupReceipt?.terminalHandle
         )
         appendFederationSetupEffect(effects, setup)
-        return { worktreeId: result.worktree.id, startupTerminalHandle: terminalHandle }
+        return {
+          worktreeId: result.worktree.id,
+          startupTerminalHandle: terminalHandle,
+          ...(result.warning ? { warning: result.warning } : {})
+        }
       }
     },
     surfaces: {
@@ -163,7 +168,11 @@ export async function launchFederatedWorkerAgent(args: {
         })
         effects.push({ kind: 'terminal', role: 'agent', action: 'created', id: terminal.handle })
         terminalCreation = terminal
-        return { handle: terminal.handle, terminalCreation: terminal }
+        return {
+          handle: terminal.handle,
+          terminalCreation: terminal,
+          ...(terminal.warning ? { warning: terminal.warning } : {})
+        }
       }
     }
   })
@@ -171,5 +180,10 @@ export async function launchFederatedWorkerAgent(args: {
   if (!worktree) {
     throw new Error('Federated worker topology did not resolve.')
   }
-  return { worktree, terminalHandle: launched.outcome.handle, terminalCreation }
+  return {
+    worktree,
+    terminalHandle: launched.outcome.handle,
+    terminalCreation,
+    ...(launched.warning ? { warning: launched.warning } : {})
+  }
 }

@@ -1,3 +1,5 @@
+import { cachedAntigravityLaunchModels } from '../catalog/antigravity-launch-models'
+import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
@@ -22,16 +24,19 @@ import {
   type AgentLaunchRuntime
 } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 
-export type MobileTerminalCommandOptions = {
-  command?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-  agent?: TuiAgent
-  agentPrompt?: string
-  launchConfig?: SleepingAgentLaunchConfig
-  launchAgent?: TuiAgent
-}
+export type MobileTerminalCommandOptions = Pick<
+  MobileTerminalCreateOptions,
+  | 'command'
+  | 'cwd'
+  | 'shellOverride'
+  | 'env'
+  | 'envToDelete'
+  | 'startupCommandDelivery'
+  | 'agent'
+  | 'agentPrompt'
+  | 'launchConfig'
+  | 'launchAgent'
+>
 
 /** What a resume reads from a recorded session; a SleepingAgentSessionRecord is one. */
 export type ResumableAgentSessionSource = {
@@ -43,6 +48,7 @@ export type ResumableAgentSessionSource = {
 }
 
 export type MobileTerminalCommand = {
+  normalizationWarning?: string
   command?: string
   env?: Record<string, string>
   envToDelete?: string[]
@@ -134,7 +140,12 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, opts.agent)
+    const antigravityModels =
+      opts.agent === 'antigravity'
+        ? await cachedAntigravityLaunchModels(this.store, workspace, opts)
+        : undefined
     const startupPlan = buildAgentStartupPlan({
+      antigravityModels,
       ...resolveWslHostAgentLaunchInputs(
         resolveAgentStartupPlanInputs({
           agent: opts.agent,
@@ -157,6 +168,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     }
     return {
       command: startupPlan.launchCommand,
+      normalizationWarning: startupPlan.warning,
       env: startupPlan.env,
       // Codex real-home resumes need envToDelete to strip inherited CODEX_HOME.
       envToDelete: opts.envToDelete,

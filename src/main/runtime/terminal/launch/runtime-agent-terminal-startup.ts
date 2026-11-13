@@ -1,3 +1,4 @@
+import { cachedAntigravityLaunchModels } from '../catalog/antigravity-launch-models'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
@@ -177,22 +178,29 @@ async function buildRuntimeAgentTerminalStartupOptions(
   if (opts.startupPrompt && !forceLine && !agentPromptRidesLaunchCommand(agent)) {
     throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
   }
+  const antigravityModels =
+    agent === 'antigravity' && host.store
+      ? await cachedAntigravityLaunchModels(host.store, workspace, opts)
+      : undefined
   const scope = {
-    inputs: resolveWslHostAgentLaunchInputs(
-      resolveAgentStartupPlanInputs({
-        agent,
-        settings,
-        platform: runtime.platform,
-        isRemote,
-        ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
-        ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
-        shell: agentLaunchQuotingShell(runtime),
-        terminalOptionEdits: opts.terminalOptionEdits,
-        sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
-        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
-      }),
-      opts.env?.PATH
-    ),
+    inputs: {
+      ...resolveWslHostAgentLaunchInputs(
+        resolveAgentStartupPlanInputs({
+          agent,
+          settings,
+          platform: runtime.platform,
+          isRemote,
+          ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+          ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+          shell: agentLaunchQuotingShell(runtime),
+          terminalOptionEdits: opts.terminalOptionEdits,
+          sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
+          ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
+        }),
+        opts.env?.PATH
+      ),
+      antigravityModels
+    },
     prompt: opts.startupPrompt ?? '',
     cwd: effectiveTerminalStartupCwd(workspace.path, opts.cwd),
     hostIdentity: host.hostIdentity,
@@ -239,6 +247,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
   return {
     ...opts,
     command: startupPlan.launchCommand,
+    normalizationWarning: startupPlan.warning,
     ...(env ? { env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,

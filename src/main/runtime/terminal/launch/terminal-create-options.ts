@@ -17,6 +17,9 @@ import type { AgentLaunchTabViewerRule } from '../../../../shared/agent-launch/c
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export type TerminalCreateOptions = {
+  /** Transient successful launch information, never part of a resume recipe. */
+  normalizationWarning?: string
+
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string

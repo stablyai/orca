@@ -147,6 +147,7 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     },
     intent.sessionOptions
   )
+  ctx.normalizationWarning = planned.normalizationWarning
   ctx.paneAgentLaunch.launchRuntime = planned.launchRuntime
   ctx.args = withPlannedLaunch(args, planned)
 }

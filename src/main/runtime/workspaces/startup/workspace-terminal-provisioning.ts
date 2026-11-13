@@ -37,6 +37,13 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     ...args: Parameters<RuntimeRemoteFetchController['fetchRemoteWithCache']>
   ): ReturnType<RuntimeRemoteFetchController['fetchRemoteWithCache']>
 
+  // A window, an agent or a PTY host can show setup in a terminal; otherwise it runs in-process.
+  protected canUseSetupRunner(startup: unknown): boolean {
+    return (
+      this.authoritativeWindowId !== null || Boolean(startup) || Boolean(this.ptyController?.spawn)
+    )
+  }
+
   protected shouldProvisionWorktreeInBackground(navigation?: RuntimeNavigationTarget): boolean {
     return (
       navigationTargetsHost(navigation ?? 'host') &&

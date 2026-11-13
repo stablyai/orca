@@ -9,10 +9,8 @@ import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
 } from '../../../text-generation/execution/commit-message-agent-environment'
-import {
-  discoverCommitMessageModelsLocal,
-  type DiscoverCommitMessageModelsResult
-} from '../../../text-generation/commit-message-text-generation'
+import { discoverCommitMessageModelsLocal } from '../../../text-generation/commit-message-text-generation'
+import type { DiscoverCommitMessageModelsResult } from '../../../text-generation/source-control-text-generation-types'
 
 export async function discoverTerminalModels(
   context: {

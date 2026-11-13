@@ -13,6 +13,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 
 export type OnboardingFolderAgentStartup = {
   command: string
+  warning?: string
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
@@ -53,6 +54,7 @@ export function buildOnboardingFolderAgentStartup(
 
   return {
     command: startupPlan.launchCommand,
+    ...(startupPlan.warning ? { warning: startupPlan.warning } : {}),
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,

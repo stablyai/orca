@@ -1,3 +1,4 @@
+import { resolveWorkerStartModeOnHost } from './structured-workers/orchestration-worker-start-mode'
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   formatOrcaSessionAddress,
@@ -83,4 +84,19 @@ export function chatWorkerMode(
         detail: `--terminal names the chat ${formatOrcaSessionAddress(chat)}; its task goes to that chat and no agent is launched.`
       }
     : mode
+}
+
+export async function chatWorkerModeOnHost(
+  args: {
+    runtime: Parameters<typeof resolveWorkerStartModeOnHost>[0]
+    mode: WorkerStartModeReceipt
+  },
+  agent: Parameters<typeof resolveWorkerStartModeOnHost>[3],
+  worktreeId: string | undefined,
+  chat: OrcaSessionId | null
+) {
+  return chatWorkerMode(
+    await resolveWorkerStartModeOnHost(args.runtime, args.mode, worktreeId, agent),
+    chat
+  )
 }

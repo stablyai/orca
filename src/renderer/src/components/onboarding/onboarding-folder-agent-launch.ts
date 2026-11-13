@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -116,6 +117,9 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   const structured = plan?.route === 'structured-native-chat'
   if (!structured) {
     reveal(args.launch.startup)
+    if (args.launch.startup?.warning) {
+      toast.info(args.launch.startup.warning)
+    }
     return
   }
   beginStructuredAgentSessionProvisionalLaunch({

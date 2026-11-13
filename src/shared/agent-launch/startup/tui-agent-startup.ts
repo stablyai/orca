@@ -1,3 +1,4 @@
+import type { AntigravityLaunchModels } from './antigravity-terminal-model'
 import { withFreshOmpLaunch, isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { withOmpDraftCleanup } from './omp-draft-launch'
 import '../../agent-status/process/shell-process-detection'
@@ -29,6 +30,7 @@ export type AgentStartupPlan = {
   draftPrompt?: string | null
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
+  warning?: string
   /** Carry only emitted base model IDs so native chat shows launch-backed session options. */
   sessionOptions?: Record<string, SessionOptionValue>
 }
@@ -44,6 +46,8 @@ export function buildAgentStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
+  antigravityModels?: AntigravityLaunchModels
+  explicitEffort?: boolean
   /** Remote Linux deploys orca, so skip the local-only orca-ide rename. */
   isRemote?: boolean
   /** Orca types into this launch after start, so a startup update prompt would take that input. */
@@ -60,6 +64,8 @@ export function buildAgentStartupPlan(args: {
     platform,
     shell,
     agentArgs: usesQuery ? null : args.agentArgs,
+    antigravityModels: args.antigravityModels,
+    explicitEffort: args.explicitEffort,
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote,
@@ -100,6 +106,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
@@ -118,6 +125,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
@@ -132,6 +140,7 @@ export function buildAgentStartupPlan(args: {
       prompt: trimmedPrompt,
       shell,
       launchConfig,
+      warning: baseCommand.warning,
       sessionOptions: baseCommand.appliedSessionOptions,
       agentEnv
     })
@@ -157,6 +166,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(queryPlan.env ? { env: queryPlan.env } : {})
     }
@@ -169,6 +179,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
@@ -181,6 +192,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
@@ -192,6 +204,7 @@ export function buildAgentStartupPlan(args: {
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt,
     launchConfig,
+    ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
     ...(agentEnv ? { env: { ...agentEnv } } : {})
   }
@@ -210,6 +223,7 @@ export type AgentDraftLaunchPlan = {
   launchConfig: SleepingAgentLaunchConfig
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
+  warning?: string
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
@@ -223,6 +237,8 @@ export function buildAgentDraftLaunchPlan(args: {
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
+  antigravityModels?: AntigravityLaunchModels
+  explicitEffort?: boolean
   isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
@@ -238,6 +254,8 @@ export function buildAgentDraftLaunchPlan(args: {
     platform,
     shell,
     agentArgs: args.agentArgs,
+    antigravityModels: args.antigravityModels,
+    explicitEffort: args.explicitEffort,
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote
@@ -263,6 +281,7 @@ export function buildAgentDraftLaunchPlan(args: {
       launchCommand: `${launchCommand} ${config.draftPromptFlag} ${quoted}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
+      ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       // Why: native draft flags carry user text on argv and must survive rc-file startup.
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
@@ -278,6 +297,7 @@ export function buildAgentDraftLaunchPlan(args: {
           : `${launchCommand}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
+      ...(baseCommand.warning ? { warning: baseCommand.warning } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }

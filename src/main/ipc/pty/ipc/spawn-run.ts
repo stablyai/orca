@@ -116,12 +116,16 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         }
       : {})
   })
-  return args.agentLaunch === undefined
-    ? outcome.result
-    : typeof args.agentLaunch === 'object' &&
-        args.agentLaunch !== null &&
-        'returnLaunchFailure' in args.agentLaunch &&
-        args.agentLaunch.returnLaunchFailure === true
-      ? requireAcceptedSpawn(outcome)
-      : requireAcceptedSpawn(outcome, AGENT_LAUNCH_PANE_REFUSED_CODE)
+  const result =
+    args.agentLaunch === undefined
+      ? outcome.result
+      : typeof args.agentLaunch === 'object' &&
+          args.agentLaunch !== null &&
+          'returnLaunchFailure' in args.agentLaunch &&
+          args.agentLaunch.returnLaunchFailure === true
+        ? requireAcceptedSpawn(outcome)
+        : requireAcceptedSpawn(outcome, AGENT_LAUNCH_PANE_REFUSED_CODE)
+  return ctx.normalizationWarning && !result.isReattach && !result.exitedBeforeSpawnReply
+    ? { ...result, warning: ctx.normalizationWarning }
+    : result
 }

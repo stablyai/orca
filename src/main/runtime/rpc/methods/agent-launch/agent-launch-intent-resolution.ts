@@ -1,5 +1,3 @@
-import { assertAntigravityTerminalEffort } from '../../../terminal/catalog/antigravity-terminal-effort'
-import { worktreeCreateRepoSelector } from '../workspaces/worktree-create-args'
 import { decideAgentLaunchIntentMode } from '../../../../agent-launch/agent-launch-intent-mode'
 /** Resolve selectors and validate terminal reuse without creating a surface. */
 
@@ -112,18 +110,5 @@ export async function resolveUnlaunchedIntent(
         )
       : preflight
   assertTerminalLaunchAdmissible(intent, decidedMode.mode)
-  if (params.launchSource === 'cli' && decidedMode.mode === 'terminal' && !intent.reuseTerminal) {
-    await assertAntigravityTerminalEffort(runtime, {
-      agent: params.agent,
-      model: params.sessionOptions?.model,
-      effort: params.sessionOptions?.effort,
-      cwd: intent.cwd,
-      ...(params.target.kind === 'existing'
-        ? { worktree: params.target.worktree }
-        : params.target.kind === 'create-worktree'
-          ? { repo: worktreeCreateRepoSelector(params.target.create) }
-          : { folder: params.target.create })
-    })
-  }
   return { intent, decidedMode }
 }

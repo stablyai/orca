@@ -12,6 +12,7 @@ export type RemoteFederatedWorkerStartReceipt = {
   residualResources?: unknown[]
   failedStage?: string
   lastError?: string
+  warning?: string
 }
 
 export type ReadyRemoteFederatedWorkerStartReceipt = RemoteFederatedWorkerStartReceipt & {

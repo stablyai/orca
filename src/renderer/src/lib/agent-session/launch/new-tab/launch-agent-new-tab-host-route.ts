@@ -1,4 +1,16 @@
 import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { planLaunchAgentStartupPrompt } from '../prompt/launch-agent-startup-prompt-plan'
+import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { yieldAgentChoicesToArgs } from '../../../../../../shared/agent-launch/choices/agent-choice-layers'
+import {
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
+import {
   launchAgentThroughHost,
   type HostAgentLaunchArgs
 } from '@/lib/agent-session/launch/pane/agent-launch-through-host'
@@ -71,4 +83,39 @@ export function launchNewTabThroughHost(
         }
       : {})
   }
+}
+
+export function newTabHostSessionOptions(args: LaunchAgentInNewTabArgs, shell: AgentStartupShell) {
+  const raw = tokenizeStartupCommand(args.agentArgs ?? '', shell)
+  return args.sessionOptionsYieldToAgentArgs && raw.ok && args.sessionOptions
+    ? yieldAgentChoicesToArgs(args.agent, args.sessionOptions, raw.tokens)
+    : args.sessionOptions
+}
+
+export function buildNewTabStartup(
+  args: LaunchAgentInNewTabArgs,
+  settings: AgentStartupSettings | null,
+  context: {
+    resolvedLaunchPlatform: NodeJS.Platform
+    queuedShell?: AgentStartupShell
+    isRemote: boolean
+  },
+  agentLaunchChoices: AgentStartupSettings['agentLaunchChoices']
+) {
+  return planLaunchAgentStartupPrompt({
+    base: resolveAgentStartupPlanInputs({
+      agent: args.agent,
+      settings: { ...settings, agentLaunchChoices },
+      agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions,
+      terminalOptionEdits: args.terminalOptionEdits,
+      sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+      platform: context.resolvedLaunchPlatform,
+      shell: context.queuedShell,
+      isRemote: context.isRemote
+    }),
+    prompt: args.prompt?.trim() ?? '',
+    promptDelivery: args.promptDelivery ?? 'auto-submit',
+    isFollowupPath: TUI_AGENT_CONFIG[args.agent].promptInjectionMode === 'stdin-after-start'
+  })
 }

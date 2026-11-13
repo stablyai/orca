@@ -1,4 +1,3 @@
-import { workerTerminalMode } from '../worker-antigravity-effort-preflight'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
@@ -29,7 +28,7 @@ import {
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { assertExplicitWorkerUsable } from './placement/explicit-worker-terminal-validation'
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
-import { chatAssigneeOf } from '../../chat-assignee-admission'
+import { chatAssigneeOf, chatWorkerModeOnHost } from '../../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-terminal-custody'
 import { releaseRetriedWorkerTerminal } from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
@@ -136,7 +135,7 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  let mode = await workerTerminalMode(args, agent, resolvedWorktree, creationTarget, chat)
+  let mode = await chatWorkerModeOnHost(args, agent, resolvedWorktree?.id, chat)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)

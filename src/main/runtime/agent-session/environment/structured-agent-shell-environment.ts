@@ -179,10 +179,11 @@ export async function resolveHostAgentBaseEnvironment(
   settings: Pick<
     GlobalSettings,
     'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
-  >
+  >,
+  cachedOnly = false
 ): Promise<Record<string, string>> {
   return structuredAgentBaseEnvironment({
-    shellEnv: await hostShellEnvironment(),
+    shellEnv: await hostShellEnvironment(cachedOnly),
     policy: nativeChatShellEnvironmentPolicy(settings)
   })
 }

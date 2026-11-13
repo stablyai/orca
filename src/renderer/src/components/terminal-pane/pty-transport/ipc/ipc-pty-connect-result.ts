@@ -14,6 +14,7 @@ export function projectIpcPtyConnectResult(
       ...facts,
       ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
       id: spawnResult.id,
+      ...(spawnResult.warning ? { warning: spawnResult.warning } : {}),
       ...(spawnResult.isReattach ? { isReattach: true } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
@@ -57,12 +58,14 @@ export function projectIpcPtyConnectResult(
     spawnResult.agentResumeUnavailable ||
     spawnResult.savedResumeDecision ||
     spawnResult.refusedResume ||
-    spawnResult.launchToken
+    spawnResult.launchToken ||
+    spawnResult.warning
   ) {
     return {
       ...facts,
       ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
       id: spawnResult.id,
+      ...(spawnResult.warning ? { warning: spawnResult.warning } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
       ...(spawnResult.startupCwdFallback

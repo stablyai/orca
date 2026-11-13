@@ -92,9 +92,17 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       afterTabId !== undefined
     )
     const startupCommand = applyRemoteViewerLaunchEnv(
-      await this.resolveMobileSessionTerminalCommand(workspace, opts),
+      await this.resolveMobileSessionTerminalCommand(workspace, { ...opts, cwd }),
       opts.terminalImageViewerSupported
     )
+    const withWarning = (
+      result: RuntimeMobileSessionCreateTerminalResult
+    ): RuntimeMobileSessionCreateTerminalResult => ({
+      ...result,
+      ...(startupCommand.normalizationWarning
+        ? { launchWarning: startupCommand.normalizationWarning }
+        : {})
+    })
     this.assertStableReadyGraph(graphEpoch)
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
@@ -123,7 +131,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           signal: opts.signal
         }
-      )
+      ).then(withWarning)
     }
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {
@@ -152,7 +160,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           launchRuntime: startupCommand.launchRuntime,
           signal: opts.signal
         }
-      )
+      ).then(withWarning)
     }
     const rendererWebContents = win.webContents
     if (rendererWebContents.isDestroyed?.()) {
@@ -236,7 +244,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
-          return surface
+          return withWarning(surface)
         }
         const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
           timeoutMs: MOBILE_TERMINAL_READY_FALLBACK_MS,
@@ -245,7 +253,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }).catch(() => null)
         if (readySurface) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
-          return readySurface
+          return withWarning(readySurface)
         }
         if (opts.signal?.aborted) {
           // Disconnected callers no longer await creation; let renderer publication settle the tab.
@@ -278,14 +286,14 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             launchRuntime: startupCommand.launchRuntime,
             signal: opts.signal
           }
-        )
+        ).then(withWarning)
       } catch (error) {
         // Hidden-renderer publication can time out; rescue only a live-backed tab or rollback would leave a ghost (#7587).
         if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
           const rescued = this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
           if (rescued) {
             this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
-            return rescued
+            return withWarning(rescued)
           }
         }
         // Disconnect or a live backing shell must never trigger tab rollback (#7718).

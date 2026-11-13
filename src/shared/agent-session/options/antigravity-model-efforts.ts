@@ -6,7 +6,7 @@ import type {
   AgentModelOptionChoices
 } from '../../agent-launch/choices/agent-launch-choices'
 
-const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+const LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max']
 const LABELS: Record<string, string> = {
   low: 'Low',
   medium: 'Medium',
@@ -93,52 +93,62 @@ export function groupAntigravityModelEfforts(
   })
 }
 
-export function antigravityEffortRefusal(
-  models: readonly ListedModel[],
-  model: string,
-  effort: string
-): string | undefined {
-  // Display-name inventories predate the CLI's slug contract and cannot validate a pair.
-  if (!models.length || models.some(({ id }) => /\s/.test(id))) {
-    return undefined
+export function normalizeAntigravityModel(
+  model: string | undefined,
+  effort: string | undefined,
+  models: readonly ListedModel[] = []
+): { model?: string; warning?: string } {
+  if (!model) {
+    return effort
+      ? {
+          warning:
+            'Antigravity: no model selected; starting its default without the requested effort.'
+        }
+      : {}
   }
-  const families = groupAntigravityModelEfforts(models)
-  const family =
-    families.find((row) => row.id === model) ??
-    families.find((row) => Object.values(row.variants).includes(model))
-  const variant = family?.id === model && family.efforts.length ? undefined : effortVariant(model)
-  if (
-    family?.efforts.some(({ value }) => value === effort) &&
-    (!variant || variant.level === effort)
-  ) {
-    return undefined
+  if (!effort) {
+    return { model }
   }
-  if (models.some(({ id }) => id === model) && variant?.level === effort) {
-    return undefined
+  const requested = LEVELS.indexOf(effort)
+  if (requested === -1) {
+    return {
+      model,
+      warning: "Antigravity: couldn't match the effort; starting the selected model."
+    }
   }
-  if (
-    LEVELS.some((level) => level === effort) &&
-    models.some(({ id }) => id === `${model}-${effort}`)
-  ) {
-    return undefined
+  const own = models.filter((row) => effortVariant(row.id)?.base === model)
+  const base = own.length ? model : (effortVariant(model)?.base ?? model)
+  const siblings = new Map<string, string>()
+  for (const row of models) {
+    const variant = effortVariant(row.id)
+    if (variant?.base === base) {
+      siblings.set(variant.level, row.id)
+    } else if (row.id === base) {
+      const level = labelledEffort(row.label)?.level
+      if (level && !siblings.has(level)) {
+        siblings.set(level, row.id)
+      }
+    }
   }
-  const alternatives =
-    family?.efforts.map(({ value }) => `--model ${family.id} --effort ${value}`) ?? []
-  const exact = models.find(({ id }) => id === model)
-  if (exact) {
-    alternatives.push(`--model ${exact.id} (without --effort)`)
-  } else if (!alternatives.length) {
-    alternatives.push(
-      ...models
-        .filter(({ id }) => effortVariant(id)?.base === model)
-        .map(({ id }) => `--model ${id} (without --effort)`)
-    )
+  const nearest = [...siblings].sort(([a], [b]) => {
+    const ai = LEVELS.indexOf(a)
+    const bi = LEVELS.indexOf(b)
+    return Math.abs(ai - requested) - Math.abs(bi - requested) || ai - bi
+  })[0]
+  if (nearest) {
+    return { model: nearest[1] }
   }
-  const reason =
-    variant && exact
-      ? `Antigravity model ${model} already names ${LABELS[variant.level]}.`
-      : `Antigravity model ${model} does not list effort ${effort}.`
-  return `${reason} ${alternatives.length ? `Use ${alternatives.join(' or ')}.` : 'Choose a model and effort from agy models, or omit --effort.'}`
+  const variant = effortVariant(model)
+  if (variant?.level === effort) {
+    return { model }
+  }
+  if (variant) {
+    return {
+      model: `${variant.base}-${effort}`,
+      warning: 'Antigravity: model list unavailable; trying the requested effort.'
+    }
+  }
+  return { model, warning: "Antigravity: couldn't match the effort; starting the selected model." }
 }
 
 export function antigravityModelSelection(
@@ -167,14 +177,18 @@ export function antigravityTerminalChoicePatch(
     const row = antigravityModelSelection(models, patch.model ?? undefined)?.row
     const saved = patch.options?.effort ?? current.options?.effort
     return row?.efforts.some(({ value }) => value === saved)
-      ? patch
+      ? { ...patch, model: row.variants?.[String(saved)] ?? patch.model }
       : { ...patch, options: { ...patch.options, effort: null } }
   }
   if (patch.options?.effort !== undefined) {
     const selected = antigravityModelSelection(models, current.model)
     return {
       ...patch,
-      ...(selected?.effort ? { model: selected.row.id } : {}),
+      ...(selected && patch.options.effort === null
+        ? { model: selected.row.id }
+        : selected?.row.variants?.[String(patch.options.effort)]
+          ? { model: selected.row.variants[String(patch.options.effort)] }
+          : {}),
       options: { ...patch.options, effort: patch.options.effort || null }
     }
   }

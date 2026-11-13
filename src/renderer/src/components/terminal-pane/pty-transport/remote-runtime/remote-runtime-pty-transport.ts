@@ -4037,6 +4037,7 @@ export function createRemoteRuntimePtyTransport(
 
       return {
         ...terminalLaunchFacts(createdTerminal),
+        ...(createdTerminal.warning ? { warning: createdTerminal.warning } : {}),
         ...(createdTerminal.isReattach !== true && createdTerminal.coldRestore
           ? { coldRestore: createdTerminal.coldRestore }
           : {}),

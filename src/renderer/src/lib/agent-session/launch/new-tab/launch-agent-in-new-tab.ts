@@ -1,6 +1,8 @@
 import { refuseAgentTabLaunch, refuseUnavailableAgentTabLaunch } from './launch-agent-tab-refusal'
 import {
   launchNewTabPromptThroughHost,
+  buildNewTabStartup,
+  newTabHostSessionOptions,
   launchNewTabThroughHost,
   newTabPromptLaunchesThroughHost
 } from '@/lib/agent-session/launch/new-tab/launch-agent-new-tab-host-route'
@@ -12,7 +14,6 @@ import {
   agentLaunchCheckSettingsMessage,
   notifyAgentLaunchFailure
 } from '@/lib/agent-session/launch/failure/agent-launch-failure'
-import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
@@ -22,7 +23,6 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { snapshotAgentTabLaunchArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
-import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -160,24 +160,8 @@ function openAgentInNewTab(
     return refuseAgentTabLaunch(args, argsProblem, () => toast.error(argsProblem), notifyFailure)
   }
   const buildStartup = (
-    agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
-  ) =>
-    planLaunchAgentStartupPrompt({
-      base: resolveAgentStartupPlanInputs({
-        agent,
-        settings: { ...store.settings, agentLaunchChoices },
-        agentArgs,
-        sessionOptions,
-        terminalOptionEdits: args.terminalOptionEdits,
-        sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
-        platform: resolvedLaunchPlatform,
-        shell: queuedShell,
-        isRemote
-      }),
-      prompt: trimmedPrompt,
-      promptDelivery,
-      isFollowupPath
-    })
+    choices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
+  ) => buildNewTabStartup(args, store.settings, executionContext, choices)
   args.focusIntent?.cancel()
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -223,6 +207,7 @@ function openAgentInNewTab(
     return null
   }
   if (
+    (agent === 'antigravity' && !isRemote) ||
     args.terminalOptionEdits?.effort === null ||
     (pasteDraftAfterLaunch !== null &&
       newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote }))
@@ -234,7 +219,7 @@ function openAgentInNewTab(
       prompt: trimmedPrompt,
       terminalOptionEdits: args.terminalOptionEdits,
       agentArgs,
-      sessionOptions,
+      sessionOptions: newTabHostSessionOptions(args, terminalShell),
       cwd: initialCwd ?? undefined,
       trustWorktreeId,
       launchSource: launchSource ?? 'tab_bar_quick_launch',
@@ -258,6 +243,9 @@ function openAgentInNewTab(
       pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
       promptDeliveryResult: launched.promptDeliveryResult
     }
+  }
+  if (startupPlan.warning) {
+    toast.info(startupPlan.warning)
   }
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,

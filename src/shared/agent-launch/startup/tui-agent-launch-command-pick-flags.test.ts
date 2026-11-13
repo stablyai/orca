@@ -56,7 +56,7 @@ it('applies effort deletion to current destination defaults, actions and Argumen
   }
   expect(editedLaunch(request).argv).toMatchObject({
     ok: true,
-    tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'new', '--effort', 'medium']
+    tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'new']
   })
   expect(editedLaunch({ ...request, terminalOptionEdits: { effort: null } }).argv).toMatchObject({
     ok: true,

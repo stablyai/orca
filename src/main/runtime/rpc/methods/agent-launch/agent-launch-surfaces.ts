@@ -195,7 +195,7 @@ export function agentLaunchSurfaceFactory(
         // A caller that shows the tab itself reports a failed reveal; the fallback it can't know.
         ...launchWarning(
           terminal.startupCwdFallback ? STARTUP_CWD_FALLBACK_SENTENCE : undefined,
-          callerPresentsSurface ? undefined : terminal.warning
+          callerPresentsSurface ? terminal.normalizationWarning : terminal.warning
         ),
         ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }

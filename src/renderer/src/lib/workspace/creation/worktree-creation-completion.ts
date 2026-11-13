@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -48,6 +49,13 @@ export async function completeWorktreeCreation(args: {
     (!paired || request.ephemeralVmRecipe)
       ? (request.startupPlan ?? request.creationStartup?.legacy().startupPlan)
       : null
+  const legacyWarning =
+    !args.structuredLaunchAccepted && !args.hostPlannedStartup
+      ? (request.startupPlan ?? request.creationStartup?.legacy().startupPlan)?.warning
+      : undefined
+  if (legacyWarning) {
+    toast.info(legacyWarning)
+  }
   if (deferred) {
     void ensureAgentStartupInTerminal({
       worktreeId: args.worktreeId,

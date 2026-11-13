@@ -92,6 +92,7 @@ export type LocalPtySessionMetadata = {
 }
 
 export type PtyConnectResult = TerminalLaunchResult & {
+  warning?: string
   id: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string

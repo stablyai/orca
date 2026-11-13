@@ -84,6 +84,7 @@ export async function createWebRuntimeSessionTerminalResult(
   let hostCreated = false
   let createdTabId: string | undefined
   let createdLeafId: string | undefined
+  let warning: string | undefined
   try {
     const agent = args.launchAgent ?? args.agent
     const agentArgsOverride =
@@ -197,12 +198,14 @@ export async function createWebRuntimeSessionTerminalResult(
           return {
             terminal: {
               tabId: legacyCreated.tab.id,
-              leafId: legacyCreated.tab.leafId
+              leafId: legacyCreated.tab.leafId,
+              warning: legacyCreated.launchWarning ?? legacyAgentLaunch?.warning
             }
           }
         }
       })
       hostCreated = true
+      warning = created.terminal.warning
       createdTabId = created.terminal.tabId
       createdLeafId = legacyAlreadyPlacedInGroup
         ? created.terminal.leafId
@@ -229,6 +232,7 @@ export async function createWebRuntimeSessionTerminalResult(
         response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
       )
       hostCreated = true
+      warning = created.launchWarning
       createdTabId = created.tab.id
       createdLeafId = created.tab.leafId
     }
@@ -269,6 +273,7 @@ export async function createWebRuntimeSessionTerminalResult(
     }
     return {
       outcome: { status: 'created' },
+      ...(warning ? { warning } : {}),
       ...(createdTabId ? { hostTabId: createdTabId } : {})
     }
   } catch (error) {
@@ -293,6 +298,7 @@ export async function createWebRuntimeSessionTerminalResult(
     // Accepted creation must not report failure and invite duplicate agent retries with new operation IDs.
     return {
       outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
+      ...(hostCreated && warning ? { warning } : {}),
       ...(createdTabId ? { hostTabId: createdTabId } : {}),
       ...(hostCreated ? {} : { hostFailed: true as const })
     }

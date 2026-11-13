@@ -55,21 +55,15 @@ export function discoverModelsWithHostCache(
   probe: () => Promise<DiscoverCommitMessageModelsResult>
 ): Promise<DiscoverCommitMessageModelsResult> {
   const accountDirVar = ACCOUNT_DIR_VAR[input.agentId]
-  if (!accountDirVar || input.options.uncached) {
+  if (
+    (!accountDirVar && input.agentId !== 'antigravity') ||
+    (input.options.uncached && input.agentId !== 'antigravity')
+  ) {
     return probe()
   }
-  const { cwd, wslDistro } = input.options
-  // Not the whole env: the login-shell capture differs on every read (e.g. STARSHIP_SESSION_KEY).
-  // Native probes ignore cwd, so only a WSL probe keys on it.
-  const key = stableInFlightKey([
-    input.agentId,
-    input.agentCommandOverride ?? null,
-    wslDistro ? { cwd: cwd ?? '', wslDistro } : null,
-    // Why: a native probe without an env spawns with process.env; a WSL guest's env isn't ours to read.
-    accountDir(input.env ?? (wslDistro ? undefined : process.env), accountDirVar)
-  ])
+  const key = modelDiscoveryHostCacheKey(input)
   const cached = cache.get(key)
-  if (cached && cached.expiresAt > Date.now()) {
+  if (input.agentId !== 'antigravity' && cached && cached.expiresAt > Date.now()) {
     return Promise.resolve(cached.result)
   }
   return inFlight.run(key, async () => {
@@ -81,4 +75,28 @@ export function discoverModelsWithHostCache(
     }
     return result
   })
+}
+
+function modelDiscoveryHostCacheKey(input: ModelDiscoveryCacheInput): string {
+  const { cwd, wslDistro, agentEnv, useCwdForNative } = input.options
+  const env = input.env ?? (wslDistro ? undefined : process.env)
+  return stableInFlightKey([
+    input.agentId,
+    input.agentCommandOverride ?? null,
+    wslDistro ? { cwd: cwd ?? '', wslDistro } : useCwdForNative ? { cwd: cwd ?? '' } : null,
+    input.agentId === 'antigravity'
+      ? {
+          home: accountDir(env, 'HOME'),
+          userProfile: accountDir(env, 'USERPROFILE'),
+          configHome: accountDir(env, 'XDG_CONFIG_HOME'),
+          agentEnv: Object.entries(agentEnv ?? {}).sort(([a], [b]) => a.localeCompare(b))
+        }
+      : accountDir(env, ACCOUNT_DIR_VAR[input.agentId] ?? '')
+  ])
+}
+
+/** A launch may use stale inventory, but must never start or await discovery. */
+export function peekAntigravityModels(input: ModelDiscoveryCacheInput) {
+  const result = cache.get(modelDiscoveryHostCacheKey(input))?.result
+  return result?.success && result.catalogOrigin === 'probe' ? result.models : undefined
 }

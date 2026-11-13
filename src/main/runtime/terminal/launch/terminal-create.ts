@@ -2,7 +2,8 @@ import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-sco
 import {
   recordTerminalLaunchMetadata,
   resolveTerminalLaunchResult,
-  terminalLaunchPublicFacts
+  terminalLaunchPublicFacts,
+  terminalCreateWarningFacts
 } from './terminal-launch-result'
 import { revealCreatedTerminal } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
@@ -298,15 +299,13 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ...this.getPtyExecutionHostMetadata(result.id),
           surface,
           ...(result.startupCwdFallback ? { startupCwdFallback: result.startupCwdFallback } : {}),
-          ...(warning ? { warning } : {})
+          ...terminalCreateWarningFacts(launch, launchOpts, warning)
         }
       } finally {
         teamAllocation.release()
         releaseStablePaneCreate()
       }
     }
-    // The renderer owns this spawn, so this process cannot see when it is requested.
-    opts.onPtySpawnDispatched?.()
     return createDesktopTerminal(this, opts, presentation)
   }
 }

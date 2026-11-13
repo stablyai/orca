@@ -97,6 +97,7 @@ export async function buildWorktreeStartupForDraft(
 ): Promise<{
   agent: TuiAgent
   startup: AttributedWorktreeStartupLaunch
+  warning?: string
   draftPaste?: WorktreeStartupDraftPaste
   launchRuntime: AgentLaunchRuntime | Error
 } | null> {
@@ -138,6 +139,7 @@ export async function buildWorktreeStartupForDraft(
   if (draftPlan) {
     return {
       agent,
+      ...(draftPlan.warning ? { warning: draftPlan.warning } : {}),
       startup: {
         command: draftPlan.launchCommand,
         launchConfig: draftPlan.launchConfig,
@@ -160,6 +162,7 @@ export async function buildWorktreeStartupForDraft(
   }
   return {
     agent,
+    ...(startupPlan.warning ? { warning: startupPlan.warning } : {}),
     startup: {
       command: startupPlan.launchCommand,
       launchConfig: prepared.launchConfig ?? startupPlan.launchConfig,
@@ -188,6 +191,7 @@ export async function buildWorktreeStartupForAgent(
 ): Promise<{
   agent: TuiAgent
   startup: AttributedWorktreeStartupLaunch
+  warning?: string
   followup?: WorktreeStartupFollowup
   launchRuntime: AgentLaunchRuntime | Error
 }> {
@@ -242,6 +246,7 @@ export async function buildWorktreeStartupForAgent(
   }
   return {
     agent,
+    ...(startupPlan.warning ? { warning: startupPlan.warning } : {}),
     startup: {
       command: startupPlan.launchCommand,
       launchConfig: prepared.launchConfig ?? startupPlan.launchConfig,
@@ -279,12 +284,14 @@ export async function resolveWorktreeCreateAgentStartup(
     | Promise<{
         agent: TuiAgent
         startup: WorktreeStartupLaunch
+        warning?: string
         followup?: WorktreeStartupFollowup
         launchRuntime: AgentLaunchRuntime | Error
       }>
     | {
         agent: TuiAgent
         startup: WorktreeStartupLaunch
+        warning?: string
         followup?: WorktreeStartupFollowup
         launchRuntime: AgentLaunchRuntime | Error
       }

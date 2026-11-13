@@ -1,3 +1,4 @@
+import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnings'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { admitStablePaneAdoption } from '../identity/runtime-terminal-pane-identity'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
@@ -99,5 +100,18 @@ export function terminalLaunchPublicFacts(
       ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
       : {}),
     ...(adoptedStablePane ? { isReattach: true as const } : {})
+  }
+}
+
+export function terminalCreateWarningFacts(
+  launch: { adoptedStablePane: boolean },
+  opts: Pick<TerminalCreateOptions, 'normalizationWarning'>,
+  revealWarning: string | undefined
+) {
+  const normalizationWarning = launch.adoptedStablePane ? undefined : opts.normalizationWarning
+  const warning = combineLaunchWarnings(normalizationWarning, revealWarning)
+  return {
+    ...(normalizationWarning ? { normalizationWarning } : {}),
+    ...(warning ? { warning } : {})
   }
 }

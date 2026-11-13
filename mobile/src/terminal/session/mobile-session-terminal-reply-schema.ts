@@ -27,3 +27,8 @@ export function createdTerminalDesktopWarning(raw: unknown): boolean {
 export function activatedAtWorkspaceRoot(raw: unknown): boolean {
   return z.looseObject({ startupCwdFallback: z.literal('workspace-root') }).safeParse(raw).success
 }
+
+export function createdTerminalLaunchWarning(raw: unknown): string | undefined {
+  const result = z.looseObject({ launchWarning: z.string() }).safeParse(raw)
+  return result.success ? result.data.launchWarning : undefined
+}

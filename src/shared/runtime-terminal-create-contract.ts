@@ -16,6 +16,8 @@ export type RuntimeTerminalCreate = TerminalLaunchResult & {
   hostPlatform?: NodeJS.Platform
   surface?: 'background' | 'visible'
   warning?: string
+  /** Host-internal, retained when a caller owns reveal-warning presentation. */
+  normalizationWarning?: string
   agentSessionDisposition?: 'created' | 'adopted'
   isReattach?: true
   /** Spawn process identity for host-internal ownership proof. */

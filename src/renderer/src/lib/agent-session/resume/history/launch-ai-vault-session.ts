@@ -21,6 +21,7 @@ export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
   worktreeId: string
   command: string
+  warning?: string
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]

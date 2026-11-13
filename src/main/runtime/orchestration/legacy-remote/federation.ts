@@ -100,6 +100,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       let worktree
       let terminalHandle = params.terminal
       let terminalCreation: RuntimeTerminalCreate | undefined
+      let warning: string | undefined
       const setupSource = createsWorktree
         ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
         : 'existing_worktree'
@@ -132,7 +133,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             }
           })
         if (createsWorktree) {
-          ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
+          ;({ worktree, terminalHandle, terminalCreation, warning } = await launchAgent())
         } else {
           worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
             throw new OrchestrationError(
@@ -166,7 +167,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             })
           } else {
             failedStage = 'terminal_create'
-            ;({ terminalHandle, terminalCreation } = await launchAgent(worktree))
+            ;({ terminalHandle, terminalCreation, warning } = await launchAgent(worktree))
           }
         }
         if (!worktree || !terminalHandle) {
@@ -256,6 +257,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           setup,
           launch: launch.receipt,
           effects,
+          ...(warning ? { warning } : {}),
           ...(prompt.prompt ? { prompt: prompt.prompt } : {}),
           residualResources: []
         }

@@ -185,6 +185,9 @@ export function finishDirectWorkItemPrompt(args: {
     return false
   }
 
+  if (startupPlan?.warning) {
+    toast.info(startupPlan.warning)
+  }
   if (primaryTabId && effectiveAgent && promptDelivery === 'draft') {
     // Why: the draft rides in on argv or the startup payload, so no paste runs
     // below; mirror it into chat the way the new-tab launcher does.
@@ -219,8 +222,11 @@ export function directWorkItemStartupAccepted(
   plan: ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan'],
   planFailed: boolean
 ): boolean {
-  return (
+  const accepted =
     Boolean(activation.primaryTabId && plan?.launchToken && !planFailed) ||
     activation.startupAccepted === true
-  )
+  if (accepted && plan?.warning) {
+    toast.info(plan.warning)
+  }
+  return accepted
 }

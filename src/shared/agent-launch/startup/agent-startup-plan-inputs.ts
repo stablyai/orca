@@ -1,3 +1,4 @@
+import type { AntigravityLaunchModels } from './antigravity-terminal-model'
 import type { TerminalOptionEdits } from '../choices/agent-launch-choices'
 import type { GlobalSettings } from '../../global-settings-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
@@ -8,6 +9,7 @@ import {
 } from '../choices/tui-agent-launch-defaults'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { terminalSessionOptionInputs } from './tui-agent-launch-command'
+import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
 import { resolveLocalWindowsAgentStartupShell } from '../../windows-terminal-shell'
 
 /** The settings slice a launch reads; hosts pass their whole `GlobalSettings` row. */
@@ -36,6 +38,8 @@ export type AgentStartupPlanInputs = {
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs: boolean
   suppressStartupUpdatePrompt?: boolean
+  antigravityModels?: AntigravityLaunchModels
+  explicitEffort?: boolean
 }
 
 /** Share settings-to-launch mapping so hosts cannot omit precedence flags and let configured args override explicit model picks. Keep host, actual PTY shell and launch overrides as parameters. */
@@ -84,6 +88,14 @@ export function resolveAgentStartupPlanInputs(args: {
     platform,
     shell,
     isRemote,
+    explicitEffort:
+      sessionOptions?.effort !== undefined ||
+      (agent === 'antigravity' &&
+        [args.agentArgs, args.extraAgentArgs].some(
+          (raw) =>
+            raw &&
+            analyzeAgentChoiceArgs(agent, raw).occurrences.some((entry) => entry.key === 'effort')
+        )),
     sessionOptionsOverrideAgentArgs: false,
     ...options,
     ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})

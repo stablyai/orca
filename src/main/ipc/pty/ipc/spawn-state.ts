@@ -50,6 +50,7 @@ export type PtyIpcSpawnState = {
   provider: IPtyProvider
   preAdoptedStablePane: AdoptStablePaneResult | null
   paneAgentLaunch: PaneAgentLaunch | null
+  normalizationWarning?: string
   isClaudeLaunch: boolean
   claudeAuth: ClaudeRuntimeAuthPreparation | null
   terminalRuntimeOptions: {

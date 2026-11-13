@@ -9,6 +9,7 @@ import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/termi
 import type { OpenCodeCliCapabilities } from '../../../shared/opencode-cli-version'
 
 export type PtySpawnResult = TerminalLaunchResult & {
+  warning?: string
   /** Execution-host probe; absent on older hosts and reattachments. */
   openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult

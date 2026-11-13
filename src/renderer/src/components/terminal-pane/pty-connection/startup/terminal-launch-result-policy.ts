@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import {
   agentProviderSessionsEqual,
   type TerminalLaunchResult
@@ -27,10 +28,17 @@ export type TerminalLaunchContext = ReturnType<typeof captureTerminalLaunchConte
 
 export function applyTerminalLaunchResult(
   session: ConnectPanePtySession | ReattachPayloadSession,
-  result: TerminalLaunchResult & { isReattach?: boolean },
+  result: TerminalLaunchResult & { isReattach?: boolean; warning?: string },
   context: TerminalLaunchContext,
   kind: 'creator' | 'observer' | 'candidate'
 ): boolean {
+  if (kind === 'creator' && !result.isReattach && result.warning) {
+    try {
+      toast.info(result.warning)
+    } catch (error) {
+      console.warn('Terminal launch notice failed', error)
+    }
+  }
   const startup = context.startup
   const decision = result.savedResumeDecision
   const agent = startup && ('agent' in startup ? startup.agent : startup.launchAgent)

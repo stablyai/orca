@@ -33,6 +33,17 @@ export function checkAgentLaunchModelPreferences(args: {
   model?: string
   effort?: string
 }): AgentLaunchModelPreferenceCheck {
+  if (args.agent === 'antigravity') {
+    return {
+      preferences:
+        args.model || args.effort
+          ? {
+              ...(args.model ? { model: args.model } : {}),
+              ...(args.effort ? { effort: args.effort } : {})
+            }
+          : undefined
+    }
+  }
   if (args.effort && !args.model) {
     return refuse('invalid_argument', '--effort requires --model.')
   }
@@ -60,7 +71,7 @@ export function checkAgentLaunchModelPreferences(args: {
     )
   }
 
-  if (args.effort && args.agent !== 'antigravity') {
+  if (args.effort) {
     const model = findCatalogModel(catalog, args.model)
     const option =
       findCatalogOption(model, 'effort') ??

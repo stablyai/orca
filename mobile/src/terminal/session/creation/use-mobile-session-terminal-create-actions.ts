@@ -1,3 +1,4 @@
+import { createdTerminalLaunchWarning } from '../mobile-session-terminal-reply-schema'
 import type { RpcSuccess } from '../../../transport/rpc/rpc-wire-types'
 import { sessionTabCreateTerminal } from '../../../session/tabs/mobile-session-tab-write-operations'
 import { triggerSuccess, triggerError } from '../../../platform/haptics/haptics'
@@ -175,6 +176,10 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       >
       if (forkMessage) {
         reportFork(forkMessage)
+      }
+      const launchWarning = response.ok ? createdTerminalLaunchWarning(response.result) : undefined
+      if (launchWarning) {
+        showToast(launchWarning, 3000)
       }
       // Unsubscribe the old terminal to arm restoration of its desktop dimensions.
       const prev = activeHandleRef.current

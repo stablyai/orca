@@ -89,9 +89,9 @@ import {
   AgentActivityClearParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
-import { AgentDiscoverTerminalModels } from './agent-model-discovery-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch/agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch/agent-launch-settings-params'
+import { AgentDiscoverTerminalModels } from './agent-model-discovery-params'
 import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,

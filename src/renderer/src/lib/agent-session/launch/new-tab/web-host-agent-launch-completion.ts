@@ -19,6 +19,7 @@ export function completeWebHostAgentLaunch(args: {
   promptDelivered: boolean
   submitFollowup?: boolean
   hostTabId?: string
+  warning?: string
 }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion {
   const { outcome, promptDelivered, hostTabId } = args
   if (outcome.status === 'failed') {
@@ -27,6 +28,13 @@ export function completeWebHostAgentLaunch(args: {
     }
     toast.error(args.failureMessage)
     return { delivered: false, failureNotified: true, outcome }
+  }
+  if (args.warning) {
+    try {
+      toast.info(args.warning)
+    } catch (error) {
+      console.warn('Terminal launch notice failed', error)
+    }
   }
   if (args.activate !== false) {
     useAppStore.getState().setActiveTabType('terminal', args.worktreeId)

@@ -1,3 +1,4 @@
+import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnings'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import {
   formatAmbiguousCwdParentMessage,
@@ -105,6 +106,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     const createSettings = store.getSettings()
     const {
       effectiveStartup,
+      normalizationWarning,
       effectiveStartupFollowup,
       startupLaunchRuntime,
       effectiveCreatedWithAgent,
@@ -121,7 +123,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     const createRoute = resolveWorktreeCreateRoute(repo)
     if (isFolderRepo(repo)) {
       // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
-      return createRuntimeFolderWorktree({
+      const result = await createRuntimeFolderWorktree({
         request: args,
         repo,
         startup: effectiveStartup,
@@ -144,6 +146,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           }
         }
       })
+      const warning = combineLaunchWarnings(result.warning, normalizationWarning)
+      return { ...result, ...(warning ? { warning } : {}) }
     }
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
@@ -236,7 +240,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning,
       ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
     })
-    warning = terminalWarning
+    warning = combineLaunchWarnings(terminalWarning, normalizationWarning)
     this.emitWorktreeLifecycle({
       kind: 'created',
       worktreeId: worktree.id,
@@ -287,13 +291,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           }
         : {})
     }
-  }
-
-  // A window, an agent or a PTY host can show setup in a terminal; otherwise it runs in-process.
-  private canUseSetupRunner(startup: unknown): boolean {
-    return (
-      this.authoritativeWindowId !== null || Boolean(startup) || Boolean(this.ptyController?.spawn)
-    )
   }
 
   private localWorktreeTerminalPorts(

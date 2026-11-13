@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest'
 import {
-  antigravityEffortRefusal,
   antigravityTerminalCatalogModels,
   groupAntigravityModelEfforts
 } from './antigravity-model-efforts'
@@ -39,7 +38,6 @@ it('keeps the bare High id in the family from the captured agy 1.5.6 listing', (
       }
     }
   ])
-  expect(antigravityEffortRefusal(models, 'gemini-3.5-flash', 'high')).toBeUndefined()
   expect(antigravityTerminalCatalogModels(grouped).map(({ id }) => id)).toEqual([
     'gemini-3.5-flash',
     'gemini-3.5-flash-medium',
@@ -103,28 +101,6 @@ it('offers only distinct listed siblings, leaving lone suffixed and legacy model
   ])
 })
 
-it('refuses conflicting explicit efforts using actual listed alternatives', () => {
-  expect(antigravityEffortRefusal(AGY_1411_MODELS, 'gemini-3.8-flash', 'low')).toBeUndefined()
-  expect(antigravityEffortRefusal(AGY_1411_MODELS, 'gemini-3.8-flash-high', 'high')).toBeUndefined()
-  expect(antigravityEffortRefusal(AGY_1411_MODELS, 'gpt-oss-120b', 'medium')).toBeUndefined()
-  expect(antigravityEffortRefusal(AGY_1411_MODELS, 'gpt-oss-120b', 'low')).toContain(
-    '--model gpt-oss-120b-medium (without --effort)'
-  )
-  expect(antigravityEffortRefusal(AGY_1411_MODELS, 'gemini-3.8-flash-high', 'low')).toContain(
-    '--model gemini-3.8-flash --effort low'
-  )
-  expect(antigravityEffortRefusal(AGY_1411_MODELS, 'claude-sonnet-4-6', 'low')).toContain(
-    '--model claude-sonnet-4-6 (without --effort)'
-  )
-  expect(
-    antigravityEffortRefusal(
-      [{ id: 'Gemini 3.1 Pro', label: 'Gemini 3.1 Pro' }],
-      'Gemini 3.1 Pro',
-      'high'
-    )
-  ).toBeUndefined()
-})
-
 it('uses exact family identity before interpreting its suffix (synthetic naming regression)', () => {
   const rows = [
     { id: 'family-high-low', label: 'Low label' },
@@ -134,10 +110,6 @@ it('uses exact family identity before interpreting its suffix (synthetic naming 
     'low',
     'medium'
   ])
-  expect(antigravityEffortRefusal(rows, 'family-high', 'low')).toBeUndefined()
-  expect(antigravityEffortRefusal(rows, 'family-high-medium', 'low')).toContain(
-    'already names Medium'
-  )
   const bare = { id: 'family-high', label: 'Family High' }
   for (const listing of [
     [bare, ...rows],
@@ -149,6 +121,5 @@ it('uses exact family identity before interpreting its suffix (synthetic naming 
         efforts.map(({ value }) => value)
       ])
     ).toEqual([['family-high', ['low', 'medium']]])
-    expect(antigravityEffortRefusal(listing, 'family-high', 'low')).toBeUndefined()
   }
 })

@@ -51,7 +51,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
     Pick<
       CreateWebRuntimeSessionTerminalArgs,
       'command' | 'env' | 'launchConfig' | 'startupCommandDelivery'
-    > & { agentPrompt?: string }
+    > & { agentPrompt?: string; warning?: string }
   >
   providerSession?: AgentProviderSessionMetadata
   viewMode?: 'terminal' | 'chat'
@@ -68,8 +68,12 @@ export type CreatedWebRuntimeSessionTerminal = {
   hostTabId?: string
   /** A live session existed and the create was not confirmed, as opposed to no session to ask. */
   hostFailed?: true
+  warning?: string
 }
 
-export type CreatedAgentTerminalIdentity = Pick<RuntimeTerminalCreate, 'tabId' | 'paneKey'> & {
+export type CreatedAgentTerminalIdentity = Pick<
+  RuntimeTerminalCreate,
+  'tabId' | 'paneKey' | 'warning'
+> & {
   leafId?: string
 }

@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
 import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
 import { useAppStore } from '../../../store/index'
@@ -54,6 +55,13 @@ async function createWebRuntimeTerminal(
     return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
   }
   const created = await create()
+  if (created.outcome.status === 'created' && created.warning) {
+    try {
+      toast.info(created.warning)
+    } catch (error) {
+      console.warn('Terminal launch notice failed', error)
+    }
+  }
   if (
     created.hostFailed &&
     created.outcome.status === 'failed' &&

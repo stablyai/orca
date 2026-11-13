@@ -30,6 +30,9 @@ export async function launchAiVaultSessionAndReveal(
   if (useAppStore.getState().activeWorktreeId !== args.worktreeId) {
     activateAiVaultResumeWorkspace(args.worktreeId)
   }
+  if (args.warning) {
+    toast.info(args.warning)
+  }
   notifyAiVaultSessionQueued(args.agent)
   return launch.tabId
 }

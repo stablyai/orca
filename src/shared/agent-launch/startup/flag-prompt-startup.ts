@@ -18,6 +18,7 @@ export function buildFlagPromptStartupPlan(args: {
   prompt: string
   shell: AgentStartupShell
   launchConfig: SleepingAgentLaunchConfig
+  warning?: string
   sessionOptions: Record<string, SessionOptionValue>
   agentEnv: Record<string, string> | null | undefined
 }): AgentStartupPlan {
@@ -38,6 +39,7 @@ export function buildFlagPromptStartupPlan(args: {
     expectedProcess: TUI_AGENT_CONFIG[args.agent].expectedProcess,
     followupPrompt: null,
     launchConfig: args.launchConfig,
+    ...(args.warning ? { warning: args.warning } : {}),
     ...appliedSessionOptionProps(args.sessionOptions),
     ...openCodeStartupPromptEnv(
       args.agent,

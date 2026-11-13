@@ -236,6 +236,7 @@ export async function launchAgentInWebHostTab(args: {
         }
         return {
           command: plan.launchCommand,
+          warning: plan.warning,
           env: plan.env,
           launchConfig: plan.launchConfig,
           startupCommandDelivery: plan.startupCommandDelivery

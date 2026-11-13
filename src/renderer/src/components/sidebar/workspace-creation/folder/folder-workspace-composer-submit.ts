@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
@@ -258,6 +259,9 @@ export async function submitFolderWorkspaceCreate({
       revealWorkspace()
     }
     const activation = activationHolder.value
+    if (!structuredLaunch && activation !== false && startupPlan?.warning) {
+      toast.info(startupPlan.warning)
+    }
     if (
       !structuredLaunch &&
       quickAgent &&

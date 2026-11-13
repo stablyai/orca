@@ -79,6 +79,7 @@ export async function resolveManagedWorktreeCreateStartup(
   const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
   return {
     effectiveStartup,
+    normalizationWarning: agentStartup?.warning ?? draftStartup?.warning,
     effectiveStartupFollowup,
     startupLaunchRuntime,
     effectiveCreatedWithAgent,
