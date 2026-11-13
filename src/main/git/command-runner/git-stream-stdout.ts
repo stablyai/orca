@@ -7,7 +7,7 @@ import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-k
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import {
   pendingWslDirectGitReadEnvironment,

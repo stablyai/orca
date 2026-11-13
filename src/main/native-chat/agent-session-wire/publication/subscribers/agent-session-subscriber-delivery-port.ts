@@ -16,21 +16,45 @@ export function subscriberDeliveryPort(
 ): SubscriberDeliveryPort {
   let work: Promise<StructuredAgentSessionObservedWork | null> | undefined
   let queue: Promise<QueuePublication | undefined> | undefined
+  let framed: { key: string; value: Promise<QueuePublication | null | undefined> } | undefined
   const readWork = () =>
     (work ??= Promise.resolve(
       sessionId && journal ? base.hooks.readCurrentWork?.(sessionId, journal) : null
     ).then((value) => value ?? null))
-  const hooks =
+  const readQueue = base.hooks.readQueuePublication
+  // Frames at one complete work identity and queue revision share one in-lane queue answer.
+  const captureQueue = readQueue
+    ? (id: string, current: StructuredAgentSessionObservedWork | undefined) => {
+        const key = journal && frameQueueKey(journal, current)
+        if (key === undefined || framed?.key !== key) {
+          const value = Promise.resolve(readQueue(id, current, true))
+          const entry = key === undefined ? undefined : { key, value }
+          framed = entry
+          // A superseded answer is that attempt's alone; the next capture reads again.
+          void value.then((answer) => {
+            if (answer === null && framed === entry) {
+              framed = undefined
+            }
+          })
+          return value
+        }
+        return framed.value
+      }
+    : undefined
+  const hooks: SubscriberDeliveryPort['hooks'] =
     sessionId && journal
       ? {
           ...base.hooks,
           readCurrentWork: readWork,
           readQueuePublication: queueChanged
             ? () =>
-                (queue ??= readWork().then((value) =>
-                  base.hooks.readQueuePublication?.(sessionId, value ?? undefined)
+                (queue ??= readWork().then(
+                  async (value) =>
+                    (await base.hooks.readQueuePublication?.(sessionId, value ?? undefined)) ??
+                    undefined
                 ))
-            : undefined
+            : undefined,
+          captureQueuePublication: queueChanged ? captureQueue : undefined
         }
       : base.hooks
   return {
@@ -47,4 +71,21 @@ export function subscriberDeliveryPort(
         hooks
       )
   }
+}
+
+function frameQueueKey(
+  journal: SqlAgentSessionJournal,
+  work: StructuredAgentSessionObservedWork | undefined
+): string | undefined {
+  const source = work?.readSource
+  if (work && !source) {
+    return undefined
+  }
+  return JSON.stringify([
+    source && [source.cursor, source.physicalCursor, source.authority],
+    journal.cursor(),
+    journal.physicalCursor(),
+    journal.queuedMessages.revision(),
+    journal.reopenFloor()
+  ])
 }

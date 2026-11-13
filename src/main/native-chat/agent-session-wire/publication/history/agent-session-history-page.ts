@@ -8,6 +8,8 @@ import type {
 import type { HistoryReader } from './agent-session-history-page-bounds'
 import { heldQueuedImageHistoryPolicy } from './agent-session-queued-image-reader'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
+import type { JournalDomainHistoryWork } from '../../../agent-session-journal/journal-domain-history-page'
+import type { JournalSqlWorkResult } from '../../../agent-session-journal/journal-work-read'
 
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 
@@ -15,47 +17,70 @@ export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 export async function readAgentSessionHistory(
   journal: SqlAgentSessionJournal,
   request: AgentSessionHistoryRequest,
-  {
-    scope = 'every-agent',
-    reader = CLIENT_HISTORY_READER,
-    rowReplay = false
-  }: {
-    scope?: AgentSessionHistoryScope
-    reader?: HistoryReader
-    rowReplay?: boolean
-  } = {}
+  options: HistoryReadOptions = {}
 ): Promise<AgentSessionHistoryResult> {
-  const read = async (): Promise<AgentSessionHistoryResult> => {
-    const result = await journal.history({
-      ...request,
-      scope,
-      rowReplay,
-      reader: {
-        form: reader.wireForm ?? 'client',
-        budgetBytes: reader.budgetBytes,
-        ...(reader.queueSourceIds
-          ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
-          : {})
-      }
-    })
-    return {
-      ...result,
-      page: await projectPage(
-        journal,
-        result.page,
-        reader,
-        request.direction === 'after' && result.ok
-      )
-    }
-  }
-  return reader.queueSourceIds ? journal.readInOrder(read) : read()
+  return (await readAgentSessionHistoryFrame(journal, request, options)).result
 }
 
+type HistoryReadOptions = {
+  scope?: AgentSessionHistoryScope
+  reader?: HistoryReader
+  rowReplay?: boolean
+}
+
+export type AgentSessionHistoryFrame<T> = { result: T; work?: JournalSqlWorkResult }
+
+/** The page and any requested work share one reader snapshot. `inLane`: the caller already holds
+ *  the chat's command lane, which is not reentrant. */
+export async function readAgentSessionHistoryFrame(
+  journal: SqlAgentSessionJournal,
+  request: AgentSessionHistoryRequest,
+  { scope = 'every-agent', reader = CLIENT_HISTORY_READER, rowReplay = false }: HistoryReadOptions,
+  work?: JournalDomainHistoryWork,
+  inLane = false
+): Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> {
+  const read = async (): Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> => {
+    const frame = await journal.history(
+      {
+        ...request,
+        scope,
+        rowReplay,
+        reader: {
+          form: reader.wireForm ?? 'client',
+          budgetBytes: reader.budgetBytes,
+          ...(reader.queueSourceIds
+            ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
+            : {})
+        }
+      },
+      work
+    )
+    return {
+      ...frame,
+      result: {
+        ...frame.result,
+        page: await projectPage(
+          journal,
+          frame.result.page,
+          reader,
+          request.direction === 'after' && frame.result.ok
+        )
+      }
+    }
+  }
+  return reader.queueSourceIds && !inLane ? journal.readInOrder(read) : read()
+}
+
+/** Subscriber catch-up reads inside its held frame capture. */
 export function createAgentSessionCatchUpReader(
   journal: SqlAgentSessionJournal,
   reader: HistoryReader = CLIENT_HISTORY_READER
-): (request: AgentSessionHistoryRequest) => Promise<AgentSessionHistoryResult> {
-  return (request) => readAgentSessionHistory(journal, request, { reader, rowReplay: true })
+): (
+  request: AgentSessionHistoryRequest,
+  work?: JournalDomainHistoryWork
+) => Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> {
+  return (request, work) =>
+    readAgentSessionHistoryFrame(journal, request, { reader, rowReplay: true }, work, true)
 }
 
 export async function readAgentSessionHydrationPage(
@@ -63,21 +88,34 @@ export async function readAgentSessionHydrationPage(
   fence?: number,
   reader: HistoryReader = CLIENT_HISTORY_READER
 ): Promise<AgentSessionHistoryPage> {
-  const read = async () => {
-    const result = await journal.history({
-      direction: 'hydrate',
-      fence,
-      reader: {
-        form: reader.wireForm ?? 'client',
-        budgetBytes: reader.budgetBytes,
-        ...(reader.queueSourceIds
-          ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
-          : {})
-      }
-    })
-    return projectPage(journal, result.page, reader, false)
+  return (await readAgentSessionHydrationFrame(journal, fence, reader)).result
+}
+
+export async function readAgentSessionHydrationFrame(
+  journal: SqlAgentSessionJournal,
+  fence?: number,
+  reader: HistoryReader = CLIENT_HISTORY_READER,
+  work?: JournalDomainHistoryWork,
+  inLane = false
+): Promise<AgentSessionHistoryFrame<AgentSessionHistoryPage>> {
+  const read = async (): Promise<AgentSessionHistoryFrame<AgentSessionHistoryPage>> => {
+    const frame = await journal.history(
+      {
+        direction: 'hydrate',
+        fence,
+        reader: {
+          form: reader.wireForm ?? 'client',
+          budgetBytes: reader.budgetBytes,
+          ...(reader.queueSourceIds
+            ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
+            : {})
+        }
+      },
+      work
+    )
+    return { ...frame, result: await projectPage(journal, frame.result.page, reader, false) }
   }
-  return reader.queueSourceIds ? journal.readInOrder(read) : read()
+  return reader.queueSourceIds && !inLane ? journal.readInOrder(read) : read()
 }
 
 async function projectPage(

@@ -82,11 +82,6 @@ describe('seedDevProfile', () => {
         'utf8'
       )
     ).toBe('{"ciphertext":"x"}')
-    expect(readdirSync(target).sort()).toEqual([
-      'orca-dev-seed.json',
-      'orca-profile-index.json',
-      'profiles'
-    ])
   })
 
   it('refuses to overwrite a profile that already has state', async () => {

@@ -19,6 +19,7 @@ import type { StructuredAgentSessionCurrentWorkHost } from '../observations/stru
 import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { journalSubmissionIsPersonal } from '../../agent-session-journal/submissions/journal-submission-fold'
+import { readJournalSqlWorkAnswerOnce } from '../../agent-session-journal/journal-sql-work-answer'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
@@ -27,14 +28,16 @@ export type QueuePublication = {
   nextQueuedMessageId: string | null
 }
 
+/** Null: live authority no longer matches the work the gate was asked to read at. */
 type QueueSendGate = (
   journal: AgentSessionJournal,
   cards: readonly QueuedMessageRow[]
 ) => Promise<
-  StructuredQueueGateInput & {
-    state: ReturnType<StructuredAgentSessionObservedWork['queueState']>
-    selected: QueuedMessageRow | null
-  }
+  | (StructuredQueueGateInput & {
+      state: ReturnType<StructuredAgentSessionObservedWork['queueState']>
+      selected: QueuedMessageRow | null
+    })
+  | null
 >
 
 export function structuredQueueSendGate(
@@ -46,7 +49,9 @@ export function structuredQueueSendGate(
   resolved?: StructuredAgentSessionObservedWork
 ): QueueSendGate {
   return async (journal, cards) => {
-    const answer = await journal.readWork(
+    // One attempt, at the resolved frame's own authority when there is one.
+    const answer = await readJournalSqlWorkAnswerOnce(
+      journal,
       () => captureHostStructuredAgentSessionWork(host, sessionId, journal),
       {
         kind: 'input',
@@ -54,8 +59,12 @@ export function structuredQueueSendGate(
         allowSteer: false,
         now: now(),
         facts: journal.queuedMessages.facts(journal.queuedMessages.answerMail(cards))
-      }
+      },
+      resolved?.readSource?.authority
     )
+    if (!answer) {
+      return null
+    }
     const work = new StructuredAgentSessionObservedWork(journal, answer.state, journal.cursor())
     if ('failure' in answer.queue) {
       throw restoreJournalSqlFailure(answer.queue.failure)
@@ -147,11 +156,14 @@ function sameQueuePause(
   return (previous === null) === (next === null) && previous?.reason === next?.reason
 }
 
+/** `inLane`: the caller already holds the chat's command lane, which is not reentrant. Null when
+ *  live authority moved during the read. */
 export async function readQueuePublication(
   journal: AgentSessionJournal,
-  gate: QueueSendGate
-): Promise<QueuePublication> {
-  return journal.readInOrder(async () => {
+  gate: QueueSendGate,
+  inLane = false
+): Promise<QueuePublication | null> {
+  const read = async () => {
     const { rows: cardRows, list: queuedMessages, pauses } = await publishedQueueRows(journal)
     // Show pauses only when Resume can send a card; hide old pauses after clear/reopen.
     const visible = Math.max(
@@ -170,6 +182,9 @@ export async function readQueuePublication(
     const resumable = silent ? null : resumableQueuePause(pauses, cardRows)
     // The input order indexes pending sends, so a held queue never rescans history.
     const input = await gate(journal, cardRows)
+    if (!input) {
+      return null
+    }
     const { state } = input
     const sending = state.owedSendingSubmissions
     const pause =
@@ -200,16 +215,18 @@ export async function readQueuePublication(
     const publication = { queuedMessages, queuePause, nextQueuedMessageId }
     publications.set(journal, publication)
     return publication
-  })
+  }
+  return inLane ? read() : journal.readInOrder(read)
 }
 
 /** Closing handles return no claim instead of failing streams/history reads. */
 export async function tryReadQueuePublication(
   journal: AgentSessionJournal | undefined,
-  gate: QueueSendGate
-): Promise<QueuePublication | undefined> {
+  gate: QueueSendGate,
+  inLane = false
+): Promise<QueuePublication | null | undefined> {
   try {
-    return journal ? await readQueuePublication(journal, gate) : undefined
+    return journal ? await readQueuePublication(journal, gate, inLane) : undefined
   } catch {
     return undefined
   }

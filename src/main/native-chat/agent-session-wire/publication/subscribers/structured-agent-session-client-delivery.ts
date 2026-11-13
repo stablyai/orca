@@ -111,14 +111,17 @@ export class StructuredAgentSessionClientDelivery {
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
-      readQueuePublication: (sessionId, work) =>
+      readQueuePublication: (sessionId, work, inLane) =>
         tryReadQueuePublication(
           sessions.get(sessionId)?.journal,
-          structuredQueueSendGate({ store: this.deps().store, sessions }, sessionId, now, work)
+          structuredQueueSendGate({ store: this.deps().store, sessions }, sessionId, now, work),
+          inLane
         ),
       readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
-      readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal)
+      readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
+      readWorkFrame: (sessionId, journal, rows) =>
+        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows)
     })
   }
 

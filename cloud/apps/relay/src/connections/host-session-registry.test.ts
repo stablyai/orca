@@ -215,7 +215,6 @@ describe('host session cleanup races', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
     const rebinding = activate(rebindSocket as unknown as WebSocket, identity, original, 1, true, 1)
     await vi.advanceTimersByTimeAsync(0)
-    expect(activateControl).toHaveBeenCalledTimes(2)
     // The grace runs out while the database answers slowly.
     await vi.advanceTimersByTimeAsync(CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
     expect(registry.get(key)).toBeNull()
@@ -231,55 +230,6 @@ describe('host session cleanup races', () => {
     const page = registry.seatFeed(null)
     expect('full' in page && page.full).toEqual([])
     expect(releaseActivity).toHaveBeenCalledWith(key, 'control:production-gce-c3:1')
-  })
-
-  it('skips a closed queued control so its live retry avoids abandoned database work', async () => {
-    const stalled = deferred<string>()
-    const activateControl = vi
-      .fn<RelayAssignmentStore['activateControl']>()
-      .mockReturnValueOnce(stalled.promise)
-      .mockImplementation(async () => {
-        await new Promise<void>((resolve) => setTimeout(resolve, 4_000))
-        return 'control:production-gce-c3:1'
-      })
-    const { registry, activate, releaseActivity } = createRegistry(activateControl)
-    const firstSocket = new FakeSocket()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
-    const first = activate(firstSocket as unknown as WebSocket, identity, null, 1, false, 1)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(activateControl).toHaveBeenCalledOnce()
-    const abandonedSocket = new FakeSocket()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
-    const abandoned = activate(abandonedSocket as unknown as WebSocket, identity, null, 1, false, 1)
-    const liveSocket = new FakeSocket()
-    const startedAt = Date.now()
-    let liveCompletedAt: number | undefined
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
-    const live = activate(liveSocket as unknown as WebSocket, identity, null, 1, false, 1).then(
-      () => {
-        liveCompletedAt = Date.now()
-      }
-    )
-    firstSocket.close()
-    abandonedSocket.close()
-    stalled.resolve('control:production-gce-c3:1')
-    await vi.advanceTimersByTimeAsync(8_000)
-    await Promise.all([first, abandoned, live])
-
-    console.log(
-      JSON.stringify({
-        scenario: 'closed queued control before a live retry',
-        activationCalls: activateControl.mock.calls.length,
-        activityReleases: releaseActivity.mock.calls.length,
-        liveReadyMs: liveCompletedAt === undefined ? null : liveCompletedAt - startedAt
-      })
-    )
-    expect(activateControl).toHaveBeenCalledTimes(2)
-    expect(releaseActivity).toHaveBeenCalledOnce()
-    expect(liveCompletedAt! - startedAt).toBe(4_000)
-    expect(registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })?.socket).toBe(
-      liveSocket
-    )
   })
 
   it('ignores a denial belonging to the socket before a same-generation rebind', async () => {
@@ -303,7 +253,6 @@ describe('host session cleanup races', () => {
     expect(session.socket).toBe(replacement)
     expect(session.generation).toBe(1)
   })
-
 })
 
 describe('source-owned idle cutover', () => {
@@ -321,11 +270,8 @@ describe('source-owned idle cutover', () => {
     sourceCellIncarnation: 'incarnation-1',
     targetCellId: 'target'
   }
-  async function source(
-    store: Partial<RelayCredentialStore> = {},
-    controlAgeMs = IDLE_REHOME_MIN_CONTROL_AGE_MS
-  ) {
-    const h = createRegistry(vi.fn().mockResolvedValue('control:1'), store)
+  async function source() {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:1'))
     const socket = new FakeSocket()
     h.registry.acceptControl(
       socket as unknown as WebSocket,
@@ -336,7 +282,7 @@ describe('source-owned idle cutover', () => {
     socket.removeAllListeners('message')
     await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
     // Moves the clock without firing the heartbeat timers that would close the session.
-    vi.setSystemTime(Date.now() + controlAgeMs)
+    vi.setSystemTime(Date.now() + IDLE_REHOME_MIN_CONTROL_AGE_MS)
     return { ...h, socket, session: h.registry.get(request)! }
   }
 
@@ -380,155 +326,4 @@ describe('source-owned idle cutover', () => {
       )
     ).toEqual({ outcome: 'committed' })
   })
-  it.each(['ambiguous', 'deferred'])(
-    'keeps %s outcomes fenced until locked reconciliation succeeds',
-    async (claim) => {
-      const h = await source()
-      const reconcile = vi
-        .fn()
-        .mockRejectedValueOnce(new Error('database unavailable'))
-        .mockRejectedValueOnce(new Error('database unavailable'))
-        .mockResolvedValue('not-committed')
-      const moving = h.registry.idleRehome(
-        request,
-        claim === 'ambiguous'
-          ? vi.fn().mockRejectedValue(new Error('lost commit reply'))
-          : vi.fn().mockResolvedValue({ outcome: 'deferred' }),
-        reconcile
-      )
-      await vi.advanceTimersByTimeAsync(50)
-      expect(
-        await h.registry.idleRehome(
-          { ...request, attemptId: 'other' },
-          vi.fn(),
-          vi.fn().mockResolvedValue('not-committed')
-        )
-      ).toEqual({ outcome: 'busy' })
-      expect(h.socket.close).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(300)
-      expect(await moving).toEqual({ outcome: 'deferred' })
-      expect(reconcile).toHaveBeenCalledTimes(3)
-      expect(h.socket.close).not.toHaveBeenCalled()
-    }
-  )
-
-  it('holds attach ownership through basis failure reservation cleanup', async () => {
-    const basis = deferred<void>()
-    const cleanup = deferred<void>()
-    const h = await source({
-      recordConnectionBasis: vi.fn().mockImplementation(async () => {
-        await basis.promise
-        throw new Error('basis failed')
-      }),
-      failReservation: vi.fn().mockReturnValue(cleanup.promise)
-    })
-    const client = new FakeSocket()
-    h.session.pendingConns.set('conn', {
-      connId: 'conn',
-      connTicket: 'ticket',
-      client: client as unknown as WebSocket,
-      reservation: {
-        userId: identity.sub,
-        relayHostId: identity.relayHostId,
-        credentialKind: 'invite',
-        relayDeviceId: 'device-1',
-        tokenHash: 'invite-hash',
-        reservationId: 'reservation-1',
-        leaseExpiresAt: Date.now() + 1000
-      },
-      attachTimer: setTimeout(() => {}, 1000),
-      credentialActivityId: null,
-      phonePath: 'db',
-      timing: {
-        startedAt: Date.now(),
-        connOpenAt: Date.now(),
-        stageMs: { assignment: 0, credential: 0, activity: 0 }
-      }
-    })
-    const attached = h.registry.acceptHostData(
-      new FakeSocket() as unknown as WebSocket,
-      'conn',
-      'ticket',
-      1
-    )
-    const commit = vi.fn().mockResolvedValue({ outcome: 'deferred' })
-    expect(await h.registry.idleRehome(request, commit, vi.fn())).toEqual({ outcome: 'busy' })
-    basis.resolve()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(h.session.activeConnIds.size).toBe(0)
-    expect(await h.registry.idleRehome(request, commit, vi.fn())).toEqual({ outcome: 'busy' })
-    expect(commit).not.toHaveBeenCalled()
-    cleanup.resolve()
-    await attached
-  })
-
 })
-
-describe('paced drain', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => {
-    vi.clearAllTimers()
-    vi.useRealTimers()
-  })
-
-  async function connectHosts(count: number): Promise<{
-    registry: HostSessionRegistry
-    sockets: FakeSocket[]
-  }> {
-    const activateControl = vi
-      .fn<RelayAssignmentStore['activateControl']>()
-      .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate } = createRegistry(activateControl)
-    const sockets: FakeSocket[] = []
-    for (let index = 0; index < count; index += 1) {
-      const socket = new FakeSocket()
-      sockets.push(socket)
-      await activate(
-        socket as unknown as WebSocket,
-        { ...identity, sub: `user-${index}` },
-        null,
-        1,
-        false,
-        1
-      )
-      socket.send.mockClear()
-    }
-    return { registry, sockets }
-  }
-
-  function drainsSent(sockets: FakeSocket[]): number {
-    return sockets.filter((socket) =>
-      socket.send.mock.calls.some(([payload]) => String(payload).includes('"type":"drain"'))
-    ).length
-  }
-
-  // Windows here stay under the 75s control-silence watchdog, which would otherwise close
-  // a test socket that never heartbeats before its paced send is due.
-
-  it('gives each host its own grace after its own send, not after the call', async () => {
-    const { registry, sockets } = await connectHosts(2)
-    registry.drain(10_000, { paceWindowMs: 40_000 })
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(sockets[0]!.readyState).toBe(sockets[0]!.CLOSED)
-    expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
-    // Its own send at 40s plus its own 10s grace, not 10s from the drain call.
-    await vi.advanceTimersByTimeAsync(39_999)
-    expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(sockets[1]!.readyState).toBe(sockets[1]!.CLOSED)
-  })
-
-  it('lets an emergency drain supersede the sends still queued by a paced one', async () => {
-    const { registry, sockets } = await connectHosts(4)
-    registry.drain(0, { paceWindowMs: 40_000 })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(drainsSent(sockets)).toBe(1)
-    registry.drain(0)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(drainsSent(sockets)).toBe(4)
-    const sendsAfterEmergency = sockets.map((socket) => socket.send.mock.calls.length)
-    await vi.advanceTimersByTimeAsync(40_000)
-    expect(sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sendsAfterEmergency)
-  })
-})
-

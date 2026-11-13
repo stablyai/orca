@@ -2,7 +2,7 @@ import type { MessageType } from '../../../../orchestration/db/orchestration-rec
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
-import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 
 type CheckParamsInput = z.infer<typeof CheckParams>

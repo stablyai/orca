@@ -3,11 +3,11 @@ import { requireSwitchedOn } from '../../../construction/require-sidebar-inputs-
 import { readRuntimeDesktopSidebarFacts } from '../../../sidebar-inputs/sidebar-inputs-feed-domains'
 import { isHostOwnPhone } from '../../callers/host-own-phone'
 import { SidebarInputsReadParams } from '../../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
-import { SidebarSessionBeginParams } from '../../../../../shared/rpc-contract/sidebar-session-params'
+import { SidebarSessionBeginParams } from '../../../../../shared/rpc-contract/client-ui/sidebar-session-params'
 import { RepoIconDataUrlsParams } from '../../../../../shared/sidebar-list/repo-icon-data-urls-contract'
-import { SetCollapsedParams } from '../../../../../shared/rpc-contract/workspace-view-collapse-params'
+import { SetCollapsedParams } from '../../../../../shared/rpc-contract/workspaces/workspace-view-collapse-params'
 import { setCollapsedSection } from '../../../client/settings/workspace-view-collapse-writes'
-import { ClientWorkspaceViewParams } from '../../../../../shared/rpc-contract/client-workspace-view-params'
+import { ClientWorkspaceViewParams } from '../../../../../shared/rpc-contract/client-ui/client-workspace-view-params'
 
 // Registered only with ORCA_SIDEBAR_INPUTS=main, so the producers below always exist.
 

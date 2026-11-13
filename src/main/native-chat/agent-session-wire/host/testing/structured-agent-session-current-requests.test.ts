@@ -97,16 +97,32 @@ it('keeps full child requests answerable outside the bounded transcript and clea
     attribution
   )
   let state = EMPTY_STRUCTURED_AGENT_SESSION
+  const stateWaiters = new Set<() => void>()
+  const setState = (next: typeof state) => {
+    state = next
+    for (const wake of stateWaiters) {
+      wake()
+    }
+  }
+  // Request reads and publications settle asynchronously in SQL workers; wait on real state changes.
+  const untilState = async (ready: () => boolean) => {
+    while (!ready()) {
+      const changed = Promise.withResolvers<void>()
+      stateWaiters.add(changed.resolve)
+      await changed.promise.finally(() => stateWaiters.delete(changed.resolve))
+    }
+  }
+  const requestIds = () => state.currentRequests?.map((item) => item.itemId)
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
-    state = reduceStructuredAgentSession(state, { type: 'event', event })
+    setState(reduceStructuredAgentSession(state, { type: 'event', event }))
   })
   const reader = createAgentSessionCurrentRequestsReader({
     read: (request) => current.host.readCurrentRequests(request),
     complete: (marker, items) => {
-      state = reduceStructuredAgentSession(state, { type: 'requests-complete', marker, items })
+      setState(reduceStructuredAgentSession(state, { type: 'requests-complete', marker, items }))
     },
     replaceMarker: (marker) => {
-      state = reduceStructuredAgentSession(state, { type: 'requests-marker', marker })
+      setState(reduceStructuredAgentSession(state, { type: 'requests-marker', marker }))
     },
     error: (error) => {
       throw error
@@ -126,12 +142,8 @@ it('keeps full child requests answerable outside the bounded transcript and clea
     readsCurrentRequests: true,
     emit
   })
-  await vi.waitFor(() =>
-    expect(state.currentRequests?.map((item) => item.itemId)).toEqual([
-      approval.itemId,
-      question.itemId
-    ])
-  )
+  await untilState(() => requestIds()?.length === 2)
+  expect(requestIds()).toEqual([approval.itemId, question.itemId])
   const requestVersion = state.requestMarker?.version
   const cursor = state.cursor
   if (!cursor) {
@@ -177,9 +189,7 @@ it('keeps full child requests answerable outside the bounded transcript and clea
   })
   await caughtUp.promise
   expect(state.cursor).toEqual(target)
-  await vi.waitFor(() =>
-    expect(state.requestAuthority?.version).toEqual(state.requestMarker?.version)
-  )
+  await untilState(() => state.requestAuthority?.version === state.requestMarker?.version)
   expect(state.items.length).toBeLessThanOrEqual(200)
   expect(
     state.items.some((item) => item.itemId === approval.itemId || item.itemId === question.itemId)
@@ -207,12 +217,11 @@ it('keeps full child requests answerable outside the bounded transcript and clea
       envelope: current.envelope(answer, 'agentSession.respondTo:approval', hostTestOperationId())
     })
   ).toMatchObject({ ok: true })
-  await vi.waitFor(() =>
-    expect(state.currentRequests?.map((item) => item.itemId)).toEqual([question.itemId])
-  )
+  await untilState(() => requestIds()?.length === 1)
+  expect(requestIds()).toEqual([question.itemId])
   const beforeExit = journal.cursor()
   await exitWhileSettlementFails(current)
-  await vi.waitFor(() => expect(state.currentRequests).toEqual([]))
+  await untilState(() => requestIds()?.length === 0)
   expect(journal.cursor()).toEqual(beforeExit)
   expect(selectAgentSessionCurrentRequests(state)).toEqual([])
   closeReopened()

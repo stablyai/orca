@@ -4,8 +4,8 @@ import {
   refuse
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
-import '../../../../shared/rpc-contract/structured-agent-session-params'
-import { MAX_PROMPT_BYTES } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
+import '../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import { MAX_PROMPT_BYTES } from '../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from '../../agent-session-wire/publication/history/agent-session-history-page-bounds'
 
 /** Reserve history-page room within the outbound frame cap; oversized frames close remote sessions. */

@@ -33,7 +33,10 @@ import { SqlJournalStopMarks } from './journal-sql-stop-marks'
 import { SqlJournalAppends } from './journal-sql-appends'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type { JournalWorkRead, JournalWorkAnswer } from './journal-work-read'
-import type { JournalDomainHistoryRequest } from './journal-domain-history-page'
+import type {
+  JournalDomainHistoryRequest,
+  JournalDomainHistoryWork
+} from './journal-domain-history-page'
 import type { JournalDomainEditLeaseOutcome } from './journal-domain-edit-leases'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
@@ -282,8 +285,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     return this.admit(() => read(this.reads))
   }
 
-  history(request: Omit<JournalDomainHistoryRequest, 'sessionId'>) {
-    return this.database.readers.domainHistory({ ...request, sessionId: this.identity.sessionId })
+  /** One reader snapshot answers the page and, when asked, current work beside it. */
+  history(
+    request: Omit<JournalDomainHistoryRequest, 'sessionId'>,
+    work?: JournalDomainHistoryWork
+  ) {
+    const sessionId = this.identity.sessionId
+    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work)
   }
 
   readWork<K extends JournalWorkRead['kind']>(

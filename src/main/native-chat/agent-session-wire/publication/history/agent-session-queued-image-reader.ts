@@ -15,6 +15,8 @@ import {
 import { boundedFrameItem } from './agent-session-bounded-frame-item'
 import { agentJournalItemForWire } from './agent-session-item-wire-form'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
+import { sameJournalCursor } from '../../../agent-session-journal/replay/journal-cursor'
+import { SubscriberFrameSuperseded } from '../subscribers/agent-session-subscriber-frame-capture'
 
 export const queuedCardHoldsImage = (card: Pick<AgentSessionQueuedMessage, 'body'>): boolean =>
   card.body.blocks.some((block) => block.type === 'image-ref')
@@ -187,6 +189,10 @@ export async function queuedImageReaderEvent(
     return event
   }
   return journal.readInOrder(async () => {
+    // Current rows and cards are read here, so they must still be the frame's own.
+    if (event.type === 'batch' && !sameJournalCursor(journal.cursor(), event.batch.cursor)) {
+      throw new SubscriberFrameSuperseded()
+    }
     const { ids: now, imageIds, fingerprints } = await sourceIds(journal, current.queuedMessages)
     if (event.type !== 'batch') {
       return event

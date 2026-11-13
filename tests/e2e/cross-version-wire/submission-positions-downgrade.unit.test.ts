@@ -104,7 +104,7 @@ async function journalWithRejections(directory: string, journals: TrackedJournal
     fence: 1
   })
   // The batch a subscriber's catch-up sends from the page after what it had seen.
-  const since = await createAgentSessionCatchUpReader(journal)({
+  const { result: since } = await createAgentSessionCatchUpReader(journal)({
     sessionId: IDENTITY.sessionId,
     direction: 'after',
     cursor: seen

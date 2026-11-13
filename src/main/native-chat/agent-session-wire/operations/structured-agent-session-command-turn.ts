@@ -36,7 +36,10 @@ import type {
   StructuredAgentSessionAdapter
 } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
-import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import {
+  compactionChildWork,
+  conversationCommandBlocked
+} from './structured-conversation-command-admission'
 import { structuredAgentSessionCommandTurn } from '../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { refuseQueuedCommand } from '../delivery/structured-agent-session-queued-command-refusal'
 import {
@@ -261,10 +264,11 @@ async function commandBlocked(
   if (!capabilities?.compact || (body.command.instructions && !capabilities.compactInstructions)) {
     return agentSessionFailureFact('commandRefused')
   }
+  const childWork = () => ({ views: ctx.childWork(), open: ctx.childWorkOpen() })
   const refusal = await conversationCommandBlocked(
     ctx,
     record,
-    { views: ctx.childWork(), open: ctx.childWorkOpen() },
+    compactionChildWork(capabilities, childWork),
     'handover'
   )
   return refusal

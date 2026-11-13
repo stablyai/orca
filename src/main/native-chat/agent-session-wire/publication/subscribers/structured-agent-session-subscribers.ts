@@ -28,7 +28,8 @@ import {
 } from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
-import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
+import { resumeSubscriber } from './agent-session-stop-note-refresh'
+import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
@@ -74,16 +75,12 @@ export class AgentSessionSubscribers {
     this.enqueue(subscriber, async () => {
       const hostNow = this.now()
       const port = this.deliveryPort(input.sessionId, journal)
-      const work = (await port.hooks.readCurrentWork?.(input.sessionId, journal)) ?? undefined
-      if (!this.isActive(subscriber)) {
-        return
-      }
       if (input.cursor) {
-        await deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: true })
-        await this.forkMarkers.refresh(subscriber, journal, true)
-        await refreshDerivedStopNotes(port, subscriber, journal, hostNow, work)
+        await resumeSubscriber(port, subscriber, journal, hostNow, () =>
+          this.forkMarkers.refresh(subscriber, journal, true)
+        )
       } else {
-        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, work, hostNow)
+        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
       await publishSubscriberLiveText(this.deliveryPort(), {
@@ -153,8 +150,12 @@ export class AgentSessionSubscribers {
     }
   }
 
+  /** What a request's frame captures with, outside any subscriber. */
+  frameHooks = (sessionId: string, journal: AgentSessionJournal) =>
+    this.deliveryPort(sessionId, journal).hooks
+
   async readQueuePublication(sessionId: string): Promise<QueuePublication | undefined> {
-    return this.hooks.readQueuePublication?.(sessionId)
+    return (await this.hooks.readQueuePublication?.(sessionId)) ?? undefined
   }
 
   deliverFrames(
@@ -177,8 +178,7 @@ export class AgentSessionSubscribers {
     const port = this.deliveryPort(sessionId, journal)
     for (const subscriber of this.subscribers(sessionId)) {
       this.enqueue(subscriber, async () => {
-        const work = (await port.hooks.readCurrentWork?.(sessionId, journal)) ?? undefined
-        await publishSubscriberSnapshot(port, subscriber, journal, fence, work, hostNow)
+        await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
         await publishSubscriberLiveText(this.deliveryPort(), {
           sessionId,
           journal,
@@ -280,13 +280,17 @@ export class AgentSessionSubscribers {
         subscriber.historyView = options.historyView
       }
     } catch (error) {
+      // Nothing was sent; the newer commit's own delivery replaces the frame.
+      if (error instanceof SubscriberFrameSuperseded) {
+        throw error
+      }
       // A dropped subscriber gets no more frames, so end its stream or the client never resubscribes.
       this.drop(subscriber)
       subscriber.end?.(error)
     }
   }
 
-  private enqueue(subscriber: Subscriber, deliver: () => Promise<void>): void {
+  private enqueue(subscriber: Subscriber, deliver: () => Promise<unknown>): void {
     const previous = this.deliveries.get(subscriber) ?? Promise.resolve()
     const next = previous
       .then(async () => {
@@ -294,7 +298,11 @@ export class AgentSessionSubscribers {
           await deliver()
         }
       })
-      .catch(() => this.drop(subscriber))
+      .catch((error: unknown) => {
+        if (!(error instanceof SubscriberFrameSuperseded)) {
+          this.drop(subscriber)
+        }
+      })
     this.deliveries.set(subscriber, next)
     void next.finally(() => {
       if (this.deliveries.get(subscriber) === next) {

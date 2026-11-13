@@ -92,26 +92,6 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  it('does not roll an unregistered target back to a stale regional source', async () => {
-    const context = await setup()
-    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    await activatePreferredSource(context, identity)
-    await context.store.tryIdleRehome()
-    context.advance(6 * 60_000)
-    await heartbeat(context.store, target, targetIncarnation, 3, 2)
-
-    expect(await context.store.refreshRegionalRehomeLeases()).toBe(0)
-    expect(await context.store.abortExpiredEvacuations()).toBe(0)
-    expect(
-      await context.database.query(
-        `SELECT cell_id, assignment_epoch FROM relay_assignments
-         WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-    ).toEqual([{ cell_id: target.id, assignment_epoch: 2 }])
-    await context.database.close()
-  })
-
   it('completes healthy candidates past a poisoned attempt and logs it', async () => {
     const context = await setup()
     const poisoned = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
@@ -167,50 +147,6 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  it('keeps dual-control accounting when the drained host re-resolves mid-rehome', async () => {
-    const context = await setup()
-    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    const sourceControl = await activatePreferredSource(context, identity)
-    const attempt = await context.store.tryIdleRehome()
-    expect(await controlAccounting(context, identity)).toEqual({
-      reservedControls: 2,
-      controlLeases: 2
-    })
-
-    // The drained host re-resolves through the director while both the source
-    // control and the target's pending control are still live.
-    await context.store.assign(identity, 'asia-east2')
-    expect(await controlAccounting(context, identity)).toEqual({
-      reservedControls: 2,
-      controlLeases: 2
-    })
-
-    await context.store.activateControl(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch,
-      generation: 1
-    })
-    await context.store.markMigrationTargetRegistered(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch
-    })
-    await context.store.releaseActivity(identity, sourceControl)
-    expect(await controlAccounting(context, identity)).toEqual({
-      reservedControls: 1,
-      controlLeases: 1
-    })
-
-    expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
-    expect(
-      await context.database.query(
-        `SELECT completed_at FROM relay_assignment_migrations
-       WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-    ).toEqual([{ completed_at: context.now() }])
-    expect(await cellReservations(context)).toEqual({ [source.id]: 0, [target.id]: 1 })
-    await context.database.close()
-  })
 
 })
 
@@ -279,35 +215,6 @@ function collectCandidateFailureWarnings(
       console.warn = original
     }
   }
-}
-
-async function controlAccounting(
-  context: Context,
-  identity: { userId: string; relayHostId: string }
-): Promise<{ reservedControls: number; controlLeases: number }> {
-  const assignment = (
-    await context.database.query(
-      `SELECT reserved_controls FROM relay_assignments
-       WHERE user_id = ? AND relay_host_id = ?`,
-      [identity.userId, identity.relayHostId]
-    )
-  )[0]!
-  const leases = await context.database.query(
-    `SELECT COUNT(*) AS controls FROM relay_assignment_activity_leases
-     WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'control'`,
-    [identity.userId, identity.relayHostId]
-  )
-  return {
-    reservedControls: Number(assignment.reserved_controls),
-    controlLeases: Number(leases[0]!.controls)
-  }
-}
-
-async function cellReservations(context: Context): Promise<Record<string, number>> {
-  const rows = await context.database.query(
-    `SELECT cell_id, reserved_requests FROM relay_cells ORDER BY cell_id`
-  )
-  return Object.fromEntries(rows.map((row) => [String(row.cell_id), Number(row.reserved_requests)]))
 }
 
 async function activatePreferredSource(

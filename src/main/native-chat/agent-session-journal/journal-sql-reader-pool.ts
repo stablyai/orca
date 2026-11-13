@@ -7,13 +7,17 @@ import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../worker-threads/worker-thread-entry-path'
-import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
 import type {
   JournalSqlDatabaseRead,
   JournalSqlDatabaseReadResult
 } from './journal-sql-database-read'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
-import type { JournalDomainHistoryRequest } from './journal-domain-history-page'
+import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
+import type {
+  JournalDomainHistoryFrame,
+  JournalDomainHistoryRequest,
+  JournalDomainHistoryWork
+} from './journal-domain-history-page'
 
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
@@ -91,11 +95,22 @@ export class JournalSqlReaderPool {
   }
 
   async domainHistory(request: JournalDomainHistoryRequest): Promise<AgentSessionHistoryResult> {
-    const response = await this.slot().request({ kind: 'domain-history', request })
+    return (await this.domainHistoryFrame(request)).result
+  }
+
+  async domainHistoryFrame(
+    request: JournalDomainHistoryRequest,
+    work?: JournalDomainHistoryWork
+  ): Promise<JournalDomainHistoryFrame> {
+    const response = await this.slot().request({
+      kind: 'domain-history',
+      request,
+      ...(work ? { work } : {})
+    })
     if (response.type !== 'page') {
       throw new Error('journal reader returned no domain history page')
     }
-    return response.result
+    return { result: response.result, ...(response.work ? { work: response.work } : {}) }
   }
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {

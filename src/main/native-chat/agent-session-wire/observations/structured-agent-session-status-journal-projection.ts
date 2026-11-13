@@ -2,8 +2,12 @@ import {
   copyJournalWorkAuthority,
   copyJournalCurrentWorkAuthority
 } from '../../agent-session-journal/journal-observer-read'
-import { journalSqlWorkAnswerIsCurrent } from '../../agent-session-journal/journal-sql-work-answer'
+import {
+  journalSqlWorkAnswerIsCurrent,
+  readJournalSqlWorkFrame
+} from '../../agent-session-journal/journal-sql-work-answer'
 import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
+import type { JournalDomainHistoryWork } from '../../agent-session-journal/journal-domain-history-page'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   JournalWorkAuthority,
@@ -150,17 +154,51 @@ export class StructuredAgentSessionJournalProjections {
       ) {
         continue
       }
-      if (
-        this.currentEntry(journal)?.kind !== 'full' ||
-        !this.currentWorkSql(journal, recaptured)
-      ) {
-        this.byJournal.set(journal, {
-          kind: 'work-only',
-          answer: result,
-          contextId: captured.contextId
-        })
-      }
+      this.remember(journal, recaptured, result, captured.contextId)
       return result
+    }
+  }
+
+  /** One attempt: the caller's rows and work from one reader snapshot, validated against live
+   *  authority; a cached answer is reused only at that same snapshot. Null when authority changed
+   *  during the read; the change's own publication schedules the replacement. */
+  async captureWorkFrame<T>(
+    journal: SqlAgentSessionJournal,
+    capture: () => CapturedWork | null,
+    read: (work: JournalDomainHistoryWork | undefined) => Promise<{
+      value: T
+      work?: JournalSqlWorkResult
+    }>
+  ): Promise<{ answer: JournalSqlWorkResult | null; value: T; current: () => boolean } | null> {
+    const captured = capture()
+    if (!captured) {
+      this.byJournal.delete(journal)
+      return { answer: null, value: (await read(undefined)).value, current: () => !capture() }
+    }
+    const cached = this.currentWorkSql(journal, captured)
+    const frame = await readJournalSqlWorkFrame(
+      journal,
+      () => {
+        const live = capture()
+        return live && live.contextId === captured.contextId ? live.authority : null
+      },
+      read,
+      cached
+    )
+    if (frame && frame.answer !== cached) {
+      this.remember(journal, captured, frame.answer, captured.contextId)
+    }
+    return frame
+  }
+
+  private remember(
+    journal: SqlAgentSessionJournal,
+    captured: CapturedWork,
+    answer: JournalSqlWorkResult,
+    contextId: string | null
+  ) {
+    if (this.currentEntry(journal)?.kind !== 'full' || !this.currentWorkSql(journal, captured)) {
+      this.byJournal.set(journal, { kind: 'work-only', answer, contextId })
     }
   }
 

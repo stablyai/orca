@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { SlugRepo } from '../../rpc-contract/github-repo-target-params'
+import { SlugRepo } from '../../rpc-contract/github/github-repo-target-params'
 import { ExpectedRuntimeSourceSchema } from '../../runtime-rpc-envelope'
 
 const methods = new Set([
