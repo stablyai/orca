@@ -1,3 +1,4 @@
+import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
@@ -267,6 +268,7 @@ export function writeRuntimeEnvironmentSidecarEntry(
     MAX_SIDECAR_FILE_BYTES,
     { durable: true }
   )
+  noteEnvironmentStoreWrite()
 }
 
 /** The current sidecar entry for an environment, or none when absent or stale. Throws when unreadable. */

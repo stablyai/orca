@@ -3,7 +3,10 @@ import { closeEnvironmentStore } from './runtime-environment-store-worker-client
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { Worker } from 'node:worker_threads'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { environmentStoreWriteCount } from './runtime-environment-store-worker-client'
+import { observeEnvironmentStoreReads } from './runtime-environment-store-read-observation'
 import { encodePairingOffer } from '../pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
@@ -37,6 +40,59 @@ afterEach(() => {
 })
 
 describe('asynchronous environment store owner', () => {
+  it.each([
+    [100, 2],
+    [1000, 16]
+  ])(
+    'observes every admitted group of at most 64 readers once for %i readers',
+    async (count, expectedObservations) => {
+      const root = profile()
+      const saved = await addEnvironmentFromPairingCode(root, {
+        name: 'Alpha',
+        pairingCode: pairing(7),
+        now: 100
+      })
+      const messages = vi.spyOn(Worker.prototype, 'postMessage')
+      try {
+        const environments = await Promise.all(
+          Array.from({ length: count }, () => resolveEnvironment(root, saved.id))
+        )
+        expect(environments.every((environment) => environment.id === saved.id)).toBe(true)
+        expect(
+          messages.mock.calls.filter(([message]) =>
+            message.commands?.every(
+              (command: { operation: string }) => command.operation === 'resolveEnvironment'
+            )
+          )
+        ).toHaveLength(expectedObservations)
+      } finally {
+        messages.mockRestore()
+      }
+    }
+  )
+
+  it.each([1, 10])(
+    'includes %i preceding durable writes in its first observation',
+    async (count) => {
+      const root = profile()
+      const saved = await addEnvironmentFromPairingCode(root, {
+        name: 'Alpha',
+        pairingCode: pairing(8),
+        now: 100
+      })
+      const updates = Array.from({ length: count }, (_, i) =>
+        markEnvironmentUsed(root, saved.id, { runtimeId: `runtime-${i}`, now: 100_000 + i })
+      )
+      const observed = await observeEnvironmentStoreReads(
+        () => resolveEnvironment(root, saved.id),
+        environmentStoreWriteCount
+      )
+      await Promise.all(updates)
+      expect(observed.current).toBe(true)
+      expect(observed.value.runtimeId).toBe(`runtime-${count - 1}`)
+    }
+  )
+
   it('serializes concurrent saves through the production store without replacing another addition', async () => {
     const root = profile()
     await Promise.all([

@@ -344,3 +344,45 @@ it('publishes one principal per paired peer and attachments only while their wor
   h.db.db.prepare("UPDATE remote_dispatch_attachments SET state = 'stopped'").run()
   expect((await h.read(() => h.projection.build('workspace'))).attachments).toEqual([])
 })
+
+it('consumes current sender handles with the principal whose preparation was delayed', async () => {
+  const h = harness()
+  h.db.db
+    .prepare(
+      'INSERT INTO federated_dispatches (dispatch_id, environment_id, environment_name, peer_fingerprint, protocol_version) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run('federated', 'remote', 'Remote', 'execution-peer', 1)
+  let release!: (value: Awaited<ReturnType<typeof h.resolveServer>>) => void
+  let entered!: () => void
+  const reached = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  h.resolveServer.mockImplementationOnce(() => {
+    entered()
+    return new Promise((resolve) => {
+      release = resolve
+    })
+  })
+  const pending = h.projection.withPreparedPublication(() => ({
+    graph: h.projection.buildForGraph(undefined),
+    frame: h.projection.buildForFramePass()('workspace')
+  }))
+  await reached
+  h.handles.set('tab-0', 'term_successor')
+  release({
+    environmentId: 'remote',
+    name: 'Remote',
+    peerFingerprint: 'execution-peer',
+    homePeerFingerprint: 'paired-home'
+  })
+  const result = await pending
+  expect(result.graph.agentSenderAssociations?.principals).toEqual([
+    { peerFingerprint: 'execution-peer', homePeerFingerprint: 'paired-home' }
+  ])
+  expect(result.frame.associations).toEqual([
+    { identity: 'term_successor', paneKey: pane('tab-0'), worktreeId: 'workspace' }
+  ])
+  expect(result.frame.principals).toEqual([
+    { peerFingerprint: 'execution-peer', homePeerFingerprint: 'paired-home' }
+  ])
+})

@@ -1,6 +1,6 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import * as environmentStore from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import * as setup from './runtime-environment-subscription-setup'
-import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { resetRuntimeEnvironmentStatusOwners } from '../connections/runtime-environment-request-connections'
 import { advanceRuntimeEnvironmentTransportGeneration } from '../connections/runtime-environment-transport-generation'
 import { mkdtempSync, rmSync } from 'node:fs'

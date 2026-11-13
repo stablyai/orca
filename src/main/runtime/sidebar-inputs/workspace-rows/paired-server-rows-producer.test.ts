@@ -144,6 +144,49 @@ describe('PairedServerRowsProducer', () => {
   })
 
   it.each([10, 100])(
+    'coalesces %i status invalidations without publishing unchanged facts',
+    async (count) => {
+      const h = fakeHosts([{ id: 'box', live: false }])
+      const producer = new PairedServerRowsProducer({
+        hasDemand: () => false,
+        hostLabelOverrides: () => new Map()
+      })
+      const original = h.hosts.list
+      const list = vi.spyOn(h.hosts, 'list')
+      const detach = producer.attach(h.hosts)
+      await producer.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      const before = producer.revision.value
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      list.mockImplementationOnce(async () => {
+        await gate
+        return original()
+      })
+      list.mockClear()
+      h.publishStatus()
+      for (let i = 0; i < count; i++) {
+        h.publishStatus()
+      }
+      release()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(list.mock.calls.length).toBeLessThanOrEqual(2)
+      expect(producer.revision.value).toBe(before)
+      h.state.servers = [{ id: 'renamed', live: false }]
+      h.publishStatus()
+      await vi.advanceTimersByTimeAsync(0)
+      expect((await producer.snapshot()).servers.map((server) => server.host.label)).toEqual([
+        'renamed'
+      ])
+      expect(producer.revision.value).toBeGreaterThan(before)
+      detach()
+      list.mockRestore()
+    }
+  )
+
+  it.each([10, 100])(
     'keeps other hosts confirmed on a same-health publication across %i hosts',
     async (count) => {
       const h = fakeHosts(Array.from({ length: count }, (_, i) => ({ id: `box-${i}`, live: true })))

@@ -1,5 +1,6 @@
 import { captureEnvironmentStoreRead } from './runtime-environment-store-read-observation'
 import type { Worker } from 'node:worker_threads'
+import type { runEnvironmentStoreBatch } from './runtime-environment-store-batch'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -28,7 +29,7 @@ type Pending = {
   resolve: (value: EnvironmentStoreSuccess) => void
   reject: (error: Error) => void
 }
-type Owner = { worker: Worker; writes: number; active?: { id: number; pending: Pending[] } }
+type Owner = { worker?: Worker; writes: number; active?: { id: number; pending: Pending[] } }
 const readers = new Set<EnvironmentStoreCommand['operation']>([
   'listEnvironments',
   'parseRemotePairingCode',
@@ -46,6 +47,17 @@ let retiring: Promise<void> | undefined
 let scheduled = false
 let closing: Promise<void> | undefined
 let finishClose: (() => void) | undefined
+let inline = false
+let admitted = false
+let runInline: typeof runEnvironmentStoreBatch | undefined
+
+/** Only the disposable CLI executable bootstrap may select this before admission. */
+export function useInlineEnvironmentStoreForCli(): void {
+  if (inline || admitted || closing) {
+    throw new Error('Environment store placement is already sealed')
+  }
+  inline = true
+}
 
 /** Parent generation survives worker restarts and invalidates derived pairing caches on uncertainty. */
 export function environmentStoreWriteCount(): number {
@@ -84,7 +96,7 @@ function fail(current: Owner, error: Error): void {
   }
   current.active = undefined
   // No accepted mutation is replayed: its rename may already have completed.
-  retiring = current.worker.terminate().then(
+  retiring = (current.worker?.terminate() ?? Promise.resolve()).then(
     () => {},
     () => {}
   )
@@ -136,11 +148,11 @@ function dispatch(): void {
     return
   }
   if (queue.length === 0) {
-    owner?.worker.unref()
+    owner?.worker?.unref()
     if (finishClose) {
       const current = owner
       owner = undefined
-      if (current) {
+      if (current?.worker) {
         void current.worker.terminate().then(
           () => finishClose?.(),
           () => finishClose?.()
@@ -153,18 +165,20 @@ function dispatch(): void {
   }
   try {
     if (!owner) {
-      const worker = spawnWorkerThread(
-        resolveWorkerThreadEntryPath(
-          currentWorkerEntryLayout(__dirname),
-          'runtime-environment-store-worker-entry.js'
-        ),
-        { execArgv: [] }
-      )
+      const worker = inline
+        ? undefined
+        : spawnWorkerThread(
+            resolveWorkerThreadEntryPath(
+              currentWorkerEntryLayout(__dirname),
+              'runtime-environment-store-worker-entry.js'
+            ),
+            { execArgv: [] }
+          )
       const current: Owner = { worker, writes: 0 }
       owner = current
-      worker.on('message', (message: EnvironmentStoreMessage) => receive(current, message))
-      worker.once('error', (error) => fail(current, error))
-      worker.once('exit', (code) =>
+      worker?.on('message', (message: EnvironmentStoreMessage) => receive(current, message))
+      worker?.once('error', (error) => fail(current, error))
+      worker?.once('exit', (code) =>
         fail(current, new Error(`Environment store worker exited (${code})`))
       )
     }
@@ -183,12 +197,24 @@ function dispatch(): void {
       }
     }
     current.active = { id: ++sequence, pending }
-    current.worker.ref()
-    current.worker.postMessage({
+    current.worker?.ref()
+    const request = {
       id: sequence,
       servingWsl: first.servingWsl,
       commands: pending.map((item) => item.command)
-    })
+    }
+    if (current.worker) {
+      current.worker.postMessage(request)
+    } else {
+      const ready = runInline
+        ? Promise.resolve(runInline)
+        : import('./runtime-environment-store-batch.js').then(
+            (module) => (runInline = module.runEnvironmentStoreBatch)
+          )
+      void ready
+        .then((run) => receive(current, structuredClone(run(request))))
+        .catch((error) => fail(current, error instanceof Error ? error : new Error(String(error))))
+    }
   } catch (error) {
     if (owner) {
       fail(owner, error instanceof Error ? error : new Error(String(error)))
@@ -207,9 +233,10 @@ export function submitEnvironmentStoreCommand(
   if (closing) {
     return Promise.reject(new Error('Environment store is closing'))
   }
+  admitted = true
   const result = new Promise<EnvironmentStoreSuccess>((resolve, reject) =>
     queue.push({
-      command,
+      command: inline ? structuredClone(command) : command,
       servingWsl: isWslHostsServing(process.env),
       observe: captureEnvironmentStoreRead(),
       resolve,

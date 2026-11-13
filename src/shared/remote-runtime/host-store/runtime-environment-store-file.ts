@@ -1,3 +1,4 @@
+import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
@@ -38,9 +39,11 @@ import {
   type WslHostDeployments,
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
-import { isWslHostsServing } from '../../wsl-host-internal-gate'
 import { createSecureFileContentCache } from './runtime-environment-store-read-cache'
-import { invalidateEnvironmentStoreObservation } from './runtime-environment-store-observation'
+import {
+  invalidateEnvironmentStoreObservation,
+  environmentStoreServesWsl
+} from './runtime-environment-store-observation'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
@@ -73,7 +76,7 @@ function persistedStoreFromRecords(
 function readWslHostDeploymentsForRegistry(
   readDeployments: () => WslHostDeployments
 ): WslHostDeployments {
-  const gateOpen = isWslHostsServing(process.env)
+  const gateOpen = environmentStoreServesWsl()
   try {
     const read = readDeployments()
     return gateOpen ? read : { deployments: read.deployments, unreadableEnvironmentIds: new Set() }
@@ -104,7 +107,7 @@ export function readEnvironmentStore(
   const sidecarPath = getRuntimeEnvironmentSidecarPath(userDataPath)
   const wslPath = getWslHostDeploymentStorePath(userDataPath)
   return mergedStoreCache.read(
-    `${userDataPath}\0${isWslHostsServing(process.env)}`,
+    `${userDataPath}\0${environmentStoreServesWsl()}`,
     userDataPath,
     [
       { path: storePath, maxBytes: MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES },
@@ -226,11 +229,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
   invalidateEnvironmentStoreObservation(path)
   writeSecureFile(path, serialized, { durable: true })
-  environmentStoreWrites++
+  noteEnvironmentStoreWrite()
 }
 
-let environmentStoreWrites = 0
-/** Registry writes this process made; what is derived from pairings is stale only after one. */
-export function environmentStoreWriteCount(): number {
-  return environmentStoreWrites
-}
+export { environmentStoreWriteCount } from './runtime-environment-store-write-generation'

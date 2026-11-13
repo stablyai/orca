@@ -4,17 +4,26 @@ import {
   type BoundedNodeFileRead
 } from '../../file-content/node-bounded-file-reader'
 import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
+import { isWslHostsServing } from '../../wsl-host-internal-gate'
 
 let observation: Map<string, BoundedNodeFileRead | null> | undefined
+let servingWsl: boolean | undefined
+
+export function environmentStoreServesWsl(): boolean {
+  return servingWsl ?? isWslHostsServing(process.env)
+}
 
 /** Only commands admitted before this observation may share its bytes. */
-export function withEnvironmentStoreObservation<T>(read: () => T): T {
+export function withEnvironmentStoreObservation<T>(read: () => T, servesWsl?: boolean): T {
   const previous = observation
+  const previousPolicy = servingWsl
   observation = new Map()
+  servingWsl = servesWsl
   try {
     return read()
   } finally {
     observation = previous
+    servingWsl = previousPolicy
   }
 }
 

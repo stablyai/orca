@@ -1,3 +1,4 @@
+import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
@@ -184,6 +185,7 @@ export function writeWslHostDeployment(
     MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES,
     { durable: true }
   )
+  noteEnvironmentStoreWrite()
 }
 
 export function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
