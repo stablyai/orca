@@ -1241,12 +1241,12 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
-      // Auth's token (MEMBER_REMOVED_TOKEN) is good for its own routes only: the member-removed
-      // push and deleting a team. Never the operator routes.
+      // Auth's token (MEMBER_REMOVED_TOKEN) is good for its own routes only: the member-removed and
+      // role-changed pushes and deleting a team. Never the other operator routes.
       const teamDelete = teamDeleteRoute(url.pathname, request.method)
-      const authOnly =
-        ((url.pathname === '/v1/internal/org-members/removed' && request.method === 'POST') || teamDelete !== null) &&
-        (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
+      const memberPush =
+        request.method === 'POST' && (url.pathname === '/v1/internal/org-members/removed' || url.pathname === '/v1/internal/members/role-changed')
+      const authOnly = (memberPush || teamDelete !== null) && (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
       if (!authOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
       }
