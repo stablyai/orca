@@ -2,7 +2,7 @@ import type { TabBarItem } from './tab-bar-item-model'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { getBrowserTabLabel } from './BrowserTab'
-import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
+import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
 import type { Translate } from '@/i18n/use-translate'
 
 export function tabItemLabel(

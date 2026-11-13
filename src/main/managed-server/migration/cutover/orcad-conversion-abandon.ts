@@ -9,7 +9,7 @@ import {
   type OrcadMigrationCutoverContext,
   type OrcadMigrationDestinationCatalog
 } from './orcad-migration-cutover-coordinator'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   releaseOrcadMigrationFence,
   releaseUndeployedMigrationFence

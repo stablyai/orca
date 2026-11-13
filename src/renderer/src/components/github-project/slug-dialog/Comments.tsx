@@ -8,8 +8,8 @@ import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { projectViewErrorMessage } from '../project-view-error-copy'
 

@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
 import { ProjectItemsEmptyState } from './ProjectViewStates'
-import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
+import { groupRows, sortRows } from '../../../../shared/github/projects/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
   ACTION_COLUMN_WIDTH,
@@ -22,7 +22,7 @@ import type {
   GitHubProjectRow,
   GitHubProjectSortDirection,
   GitHubProjectTable
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 

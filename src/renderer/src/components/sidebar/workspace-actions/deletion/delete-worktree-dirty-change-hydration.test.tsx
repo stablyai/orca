@@ -33,7 +33,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitStatus: vi.fn()
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionId: () => null }))
 
 const repoMap = new Map<string, Repo>()
 

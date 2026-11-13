@@ -45,7 +45,7 @@ export class JournalInputOrder extends JournalInputEvidence {
     readonly newestTurn = new JournalNewestTurn(state)
   ) {
     super(state)
-    this.cards = new JournalInputCardIndex()
+    this.cards = new JournalInputCardIndex(journalInputOrder)
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -54,7 +54,11 @@ export class JournalInputOrder extends JournalInputEvidence {
     this.legacy?.beforeRow(state, row)
   }
   beginReconstruction(): void {
-    this.legacy ??= new LegacyQueueOrderReader(this.state, this.originalAcceptance)
+    this.legacy ??= new LegacyQueueOrderReader(
+      this.state,
+      journalInputOrder,
+      this.originalAcceptance
+    )
     this.legacy.beginReconstruction()
   }
   finishReconstruction(state: JournalReducerState): void {

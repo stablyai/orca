@@ -16,7 +16,7 @@ import { supportsClaudeStructuredLocation } from '../../../claude/structured/lau
 import { supportsAcpStructuredLocation } from '../../../acp/session/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../../../pi/rpc-runtime-metadata'
 import { ZCODE_RUNTIME_METADATA } from '../../../zcode/structured/zcode-runtime-metadata'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath
@@ -26,7 +26,7 @@ import {
   claudeModelCatalogDiscovery,
   codexModelCatalogDiscovery
 } from '../model-catalog/structured-agent-model-catalog-discovery'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import type {
   StructuredAgentAccountHomeRequest,

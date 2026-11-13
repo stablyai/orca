@@ -1,6 +1,6 @@
 import React from 'react'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 type ExpandableMarkdownImageProps = {

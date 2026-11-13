@@ -22,7 +22,7 @@ import type {
   AgentLaunchChoices
 } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { SourceControlActionModelPicker } from './SourceControlActionModelPicker'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'

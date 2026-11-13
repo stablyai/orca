@@ -10,8 +10,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { trackAgentDefaultSurfaceChanged } from '../../../feature-tips/feature-tip-telemetry'
 import {
@@ -19,7 +19,6 @@ import {
   TerminalSurfacePreview
 } from '../../../agent/launch-settings/AgentDefaultSurfacePreviews'
 import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from '../agents-search'
-import { Card, CardContent } from '../../../ui/card'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { Button } from '../../../ui/button'
@@ -203,41 +202,39 @@ export function AgentDefaultSurfaceSection({
   }
   if (presentation === 'switch') {
     return (
-      <Card>
-        <CardContent>
-          <SettingsRow
-            label={
-              <span className="text-lg font-semibold">
-                {surface === 'chat'
-                  ? t('settings.chat.launch.on', 'Chat UI is on')
-                  : t('settings.chat.launch.off', 'Chat UI is off')}
-              </span>
-            }
-            description={
-              surface === 'chat'
-                ? t(
-                    'settings.chat.launch.chatDescription',
-                    'New agents will launch in chat mode by default.'
-                  )
-                : t(
-                    'settings.chat.launch.cliDescription',
-                    'New agents will launch as CLI by default.'
-                  )
-            }
-            control={
-              <Button
-                variant={surface === 'chat' ? 'outline' : 'default'}
-                disabled={pending}
-                onClick={() => choose(surface === 'chat' ? 'terminal' : 'chat')}
-              >
-                {surface === 'chat'
-                  ? t('settings.chat.launch.turnOff', 'Turn off')
-                  : t('settings.chat.launch.turnOn', 'Turn on')}
-              </Button>
-            }
-          />
-        </CardContent>
-      </Card>
+      <SettingsGroup>
+        <SettingsRow
+          label={
+            <span className="text-lg font-semibold">
+              {surface === 'chat'
+                ? t('settings.chat.launch.on', 'Chat UI is on')
+                : t('settings.chat.launch.off', 'Chat UI is off')}
+            </span>
+          }
+          description={
+            surface === 'chat'
+              ? t(
+                  'settings.chat.launch.chatDescription',
+                  'New agents will launch in chat mode by default.'
+                )
+              : t(
+                  'settings.chat.launch.cliDescription',
+                  'New agents will launch as CLI by default.'
+                )
+          }
+          control={
+            <Button
+              variant={surface === 'chat' ? 'outline' : 'default'}
+              disabled={pending}
+              onClick={() => choose(surface === 'chat' ? 'terminal' : 'chat')}
+            >
+              {surface === 'chat'
+                ? t('settings.chat.launch.turnOff', 'Turn off')
+                : t('settings.chat.launch.turnOn', 'Turn on')}
+            </Button>
+          }
+        />
+      </SettingsGroup>
     )
   }
   return (
@@ -254,7 +251,7 @@ export function AgentDefaultSurfaceSection({
           role="radiogroup"
           aria-label={title}
           aria-busy={pending}
-          className="grid gap-3.5 @3xl:grid-cols-2"
+          className="grid gap-3.5 @2xl:grid-cols-2"
         >
           <SurfaceTile
             name={name}

@@ -8,7 +8,7 @@ import {
   PROXY_URL_FAILURE_COPY,
   type ProxyUrlFailureCode
 } from '../../../../../../shared/network-proxy'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
@@ -245,7 +245,7 @@ export function AdvancedNetworkSettingsSection({
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 space-y-0.5">
           <Label>
-            {t('auto.components.settings.AdvancedNetworkSettingsSection.f00daf6324', 'HTTP Proxy')}
+            {t('auto.components.settings.AdvancedNetworkSettingsSection.f8ec545b7c', 'HTTP proxy')}
           </Label>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -278,8 +278,8 @@ export function AdvancedNetworkSettingsSection({
             <div className="space-y-2">
               <Label htmlFor="settings-http-proxy-url">
                 {t(
-                  'auto.components.settings.AdvancedNetworkSettingsSection.f00daf6324',
-                  'HTTP Proxy'
+                  'auto.components.settings.AdvancedNetworkSettingsSection.f8ec545b7c',
+                  'HTTP proxy'
                 )}
               </Label>
               <Input
@@ -322,8 +322,8 @@ export function AdvancedNetworkSettingsSection({
             <div className="space-y-2">
               <Label htmlFor="settings-http-proxy-bypass-rules">
                 {t(
-                  'auto.components.settings.AdvancedNetworkSettingsSection.f6d76cc8f4',
-                  'Proxy Bypass Rules'
+                  'auto.components.settings.AdvancedNetworkSettingsSection.abbc3efa4a',
+                  'Proxy bypass rules'
                 )}
               </Label>
               <Textarea

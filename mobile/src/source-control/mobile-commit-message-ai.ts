@@ -5,13 +5,13 @@ import {
   gitGenerateCommitMessageRun,
   type MobileGenerateCommitMessageResult
 } from './mobile-git-mutation-operations'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export type { MobileGenerateCommitMessageResult }
 
 // Collapse refusals and malformed payloads to the same failed-generation verdict.
 export async function requestMobileCommitMessage(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<MobileGenerateCommitMessageResult> {
   const reply = await gitGenerateCommitMessageRun.request(client, {
@@ -34,7 +34,7 @@ export async function requestMobileCommitMessage(
 }
 
 export async function cancelMobileCommitMessage(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<void> {
   const reply = await gitCancelGenerateCommitMessageRun.request(client, {

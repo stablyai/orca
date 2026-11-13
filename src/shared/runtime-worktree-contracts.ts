@@ -1,3 +1,4 @@
+import type { DictationTerm } from './dictation-dictionary'
 import type { SmartTier } from './sidebar-list/sort-stamps'
 import type {
   AgentStatusState,
@@ -7,7 +8,7 @@ import type {
 import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentListVerdict } from './agent-status/presentation/agent-list-status'
-import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-requests/pull-request-types'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
@@ -33,6 +34,8 @@ export type RuntimeWorktreeSetResult = {
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
+  /** The host's Orca id for this terminal agent's conversation; old hosts omit it. */
+  orcaSessionId?: string
   parentPaneKey: string | null
   state: AgentStatusState
   workingMode?: AgentWorkingMode
@@ -136,6 +139,8 @@ export type RuntimeWorktreePsSummary = {
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
+  /** The owning host committed removal intent before publishing this row. */
+  removalRecorded?: true
   /** See `GitWorktreeInfo.removalError`. */
   removalError?: string
   /** Host-derived workspace kinds. Missing defaultBranch retains reader guesses; other missing flags show the row.
@@ -177,6 +182,10 @@ export type RuntimeSpeechSetupState = {
   dictationHoldToRecord: boolean
   /** Phones that recognize speech themselves clean their own text by this switch. */
   removeFillerWords: boolean
+  /** Seconds of silence that end a tap-started dictation; null never. Absent from older hosts (60). */
+  stopAfterSilenceSeconds?: number | null
+  /** ...and spell these terms, repo terms first; absent from older hosts. */
+  dictationTerms?: DictationTerm[]
   models: RuntimeSpeechModelSummary[]
 }
 

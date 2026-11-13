@@ -1,8 +1,8 @@
 import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
+import type { GitHubProjectRow } from '../../../../shared/github/projects/project-types'
 
 type Props = {
   row: GitHubProjectRow

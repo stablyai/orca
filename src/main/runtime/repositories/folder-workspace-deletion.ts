@@ -2,7 +2,7 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   assertWslMoveProjectWritable,
   isLocalWslMoveRow
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import {
   assertUniqueIdWhenRequired,
   type FolderWorkspaceMutationOptions
@@ -65,7 +65,8 @@ export async function deleteFolderWorkspaceRow(
         deps.emitWorktreeLifecycle({
           kind: 'removed',
           worktreeId: folderWorkspaceKey(folderWorkspaceId),
-          path: workspace.folderPath
+          path: workspace.folderPath,
+          ...(workspace.executionHostId ? { hostId: workspace.executionHostId } : {})
         })
       }
     }

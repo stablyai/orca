@@ -6,10 +6,10 @@ import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/githu
 import {
   applyWorkspaceEmojiSuggestion,
   type WorkspaceEmojiReplacement,
-  type getActiveWorkspaceEmojiShortcode,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+  type getActiveWorkspaceEmojiShortcode
+} from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import type {
   RepoOption,
@@ -19,7 +19,7 @@ import type {
 import { getRepoSlugCached, sameSlug } from './smart-workspace-repo-slug'
 import type { useWorkItemSourceSearch } from './use-work-item-source-search'
 import type { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -139,7 +139,7 @@ export function useSmartWorkspaceNameFieldActions(
     ]
   )
   const handleEmojiSelect = useCallback(
-    (suggestion: WorkspaceEmojiSuggestion): void => {
+    (suggestion: StandardEmojiShortcodeEntry): void => {
       if (!activeEmojiShortcode) {
         return
       }

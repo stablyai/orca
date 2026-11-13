@@ -35,6 +35,7 @@ export type CodexBackgroundCommandChange =
 
 export class CodexBackgroundCommandTracker {
   private readonly commands = new Map<string, Command>()
+  private readonly byThread = new Map<string, Set<string>>()
   private readonly settled = new Set<string>()
 
   constructor(private readonly primaryThreadId: string) {}
@@ -52,13 +53,20 @@ export class CodexBackgroundCommandTracker {
       return null
     }
     this.commands.set(key, command)
+    const thread = this.byThread.get(command.threadId) ?? new Set<string>()
+    thread.add(key)
+    this.byThread.set(command.threadId, thread)
     return this.liveChange(command)
   }
 
   /** A surviving process becomes background work when the turn that launched it ends. */
   endTurn(threadId: string, turnId: string): CodexBackgroundCommandChange[] {
     const backgrounded: CodexBackgroundCommandChange[] = []
-    for (const command of this.commands.values()) {
+    for (const key of this.byThread.get(threadId) ?? []) {
+      const command = this.commands.get(key)
+      if (!command) {
+        continue
+      }
       if (
         command.threadId === threadId &&
         (command.turnId === turnId || command.turnId === null) &&
@@ -86,9 +94,7 @@ export class CodexBackgroundCommandTracker {
 
   /** The thread closed: Codex stops its processes first, so none of them can report an exit. */
   endThread(threadId: string): CodexBackgroundCommandChange[] {
-    return [...this.commands]
-      .filter(([, command]) => command.threadId === threadId)
-      .flatMap(([key]) => this.end(key) ?? [])
+    return [...(this.byThread.get(threadId) ?? [])].flatMap((key) => this.end(key) ?? [])
   }
 
   /** Its approval went unanswered until its turn ended, so its process never started. */
@@ -129,9 +135,10 @@ export class CodexBackgroundCommandTracker {
 
   /** Live processes, including foreground tools that are absent from the strip. */
   threadCommands(threadId: string): CodexBackgroundCommandChange[] {
-    return [...this.commands.values()]
-      .filter((command) => command.threadId === threadId)
-      .map((command) => this.liveChange(command))
+    return [...(this.byThread.get(threadId) ?? [])].flatMap((key) => {
+      const command = this.commands.get(key)
+      return command ? [this.liveChange(command)] : []
+    })
   }
 
   clear(): CodexBackgroundCommandChange[] {
@@ -143,6 +150,7 @@ export class CodexBackgroundCommandTracker {
       })
     )
     this.commands.clear()
+    this.byThread.clear()
     this.settled.clear()
     return ended
   }
@@ -152,6 +160,11 @@ export class CodexBackgroundCommandTracker {
     const existing = this.commands.get(key)
     if (existing) {
       this.commands.delete(key)
+      const thread = this.byThread.get(existing.threadId)
+      thread?.delete(key)
+      if (thread?.size === 0) {
+        this.byThread.delete(existing.threadId)
+      }
     }
     this.rememberSettled(key)
     return existing

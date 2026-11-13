@@ -6,7 +6,6 @@ import type {
   DiagnosticsStatusPayload
 } from '../../../../../preload/api/telemetry-api'
 import { Label } from '../../ui/label'
-import { Separator } from '../../ui/separator'
 import {
   getDiagnosticBundleDescription,
   PrivacyDiagnosticBundleControls
@@ -270,7 +269,6 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       {status?.disabledReason ? (
         <DiagnosticsDisabledStateNote reason={status.disabledReason} />
       ) : null}
-      <Separator />
       <PrivacyDiagnosticsRow
         icon={<FileText className="size-4" />}
         title={t(
@@ -354,7 +352,7 @@ function PrivacyDiagnosticsRow({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
       <div className="flex min-w-0 flex-1 items-start gap-2.5">
         <div className="mt-0.5 text-muted-foreground">{icon}</div>
         <div className="min-w-0 space-y-0.5">

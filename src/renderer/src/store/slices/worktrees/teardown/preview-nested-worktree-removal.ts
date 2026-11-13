@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost
-} from '@/lib/worktree-operation-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'

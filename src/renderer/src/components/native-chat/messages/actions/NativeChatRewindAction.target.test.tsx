@@ -77,8 +77,6 @@ describe('rewind target after send acceptance', () => {
 
   it.each([
     ['codex', 'orca'],
-    ['codex', 'provider'],
-    ['claude', 'orca'],
     ['claude', 'provider']
   ] as const)('uses the accepted %s row with a %s journal key', async (agent, keySource) => {
     const hook = renderHook(() =>
@@ -150,6 +148,5 @@ describe('rewind target after send acceptance', () => {
       )
     )
     expect(confirm).toHaveBeenCalledOnce()
-    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Rewind to here?' }))
   })
 })

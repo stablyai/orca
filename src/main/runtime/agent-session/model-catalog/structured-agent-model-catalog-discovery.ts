@@ -6,7 +6,7 @@ import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import {
   createClaudeModelCatalogProbe,
   type ClaudeModelCatalogProbeDeps
-} from '../../../claude/claude-model-catalog-probe'
+} from '../../../claude/model-catalog/claude-model-catalog-probe'
 import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
 import { createZcodeModelCatalogProbe } from '../../../zcode/structured/catalog/zcode-model-catalog-probe'
 import { resolveZcodeChatCredentials } from '../../../zcode/structured/credentials/zcode-chat-credentials'

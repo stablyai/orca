@@ -5,7 +5,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.2b313598c6', 'App Icon'),
+    title: translate('auto.components.settings.appearance.search.19aa904233', 'App icon'),
     description: translate(
       'auto.components.settings.appearance.search.e80c2af428',
       'Choose the app icon shown in the Dock and window switcher.'

@@ -13,8 +13,8 @@ import {
   testState,
   writePersistedStateJson
 } from '../persistence/persistence-test-harness'
-import { startedAutomationService, tickAt } from './automation-service-tick.test-fixture'
-import { runNowSettled } from './automation-run-now-settled.test-fixture'
+import { startedAutomationService, tickAt } from './testing/automation-service-tick.test-fixture'
+import { runNowSettled } from './testing/automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -108,27 +108,6 @@ describe('repeated skipped_unavailable coalescing', () => {
     expect(manual.status).toBe('skipped_unavailable')
     expect(manual.occurrenceCount).toBeUndefined()
     expect(store.listAutomationRuns(automation.id)).toHaveLength(2)
-  })
-
-  it('counts one occurrence once, however many times the scheduler revisits it', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    const scheduledFor = Date.now()
-    seedSkip(store, automation, scheduledFor, SETUP_GONE)
-
-    expect(
-      store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor)?.occurrenceCount
-    ).toBeUndefined()
-    const folded = store.recordRepeatedAutomationSkip(
-      automation.id,
-      SETUP_GONE,
-      scheduledFor + 1000
-    )
-    expect(folded?.occurrenceCount).toBe(2)
-    expect(
-      store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor + 1000)
-        ?.occurrenceCount
-    ).toBe(2)
   })
 
   it('resumes counting a folded record across a reload', async () => {

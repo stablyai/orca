@@ -2,7 +2,8 @@ import type { BrowserScreencastResult } from '../../../../shared/browser/runtime
 import { BrowserError } from '../../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { startBrowserScreencast } from '../../../browser/cdp/screencast/browser-screencast-stream'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { mintBrowserScreencastSubscriptionId } from './browser-screencast-subscription-id'
 import {
   cancelScreencastSubscriberFrameRetry,
@@ -18,7 +19,7 @@ import {
   screencastSubscriberIsGhost
 } from './browser-screencast-ghost-subscriber-eviction'
 import type { BrowserScreencastSession } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
@@ -102,6 +103,7 @@ export class RuntimeBrowserScreencasts {
         format: params.format,
         ...budget,
         ...viewport,
+        holdPaint: () => browserManager.holdPaintForCapture(guest.id),
         onFrame: (bytes) => {
           const ghosts: string[] = []
           for (const [subscriptionId, subscriber] of pendingRecord.subscribers) {

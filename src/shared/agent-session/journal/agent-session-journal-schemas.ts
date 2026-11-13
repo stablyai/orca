@@ -16,6 +16,7 @@ import type {
   AgentJournalResolution,
   AgentJournalRenderItem
 } from './agent-session-journal-types'
+import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
 
 const BoundedPayload = z.object({
   head: z.string(),
@@ -116,7 +117,9 @@ const Block = openDiscriminatedUnion(
 const PromptOption = z.object({
   id: z.string(),
   label: z.string(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  preview: z.string().optional(),
+  intent: z.enum(AGENT_JOURNAL_PROMPT_INTENTS).optional()
 })
 
 const FreeTextInput = z.object({
@@ -234,6 +237,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     blockedPath: z.string().optional(),
     matchedAskRule: ApprovalMatchedAskRule.optional(),
     subject: ApprovalSubject.optional(),
+    personOnly: z.literal(true).optional(),
     detail: z.string().nullable(),
     options: z.array(PromptOption),
     resolution: Resolution

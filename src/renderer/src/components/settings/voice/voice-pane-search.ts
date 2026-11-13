@@ -6,8 +6,8 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
-      'auto.components.settings.voice.pane.search.ebfd0b32e5',
-      'OpenAI Transcription'
+      'auto.components.settings.voice.pane.search.ffaa3efe7c',
+      'OpenAI transcription'
     ),
     description: translate(
       'auto.components.settings.voice.pane.search.dcc7846641',
@@ -30,10 +30,7 @@ export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
 
 export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate(
-      'auto.components.settings.voice.pane.search.20574cbc72',
-      'Enable Voice Dictation'
-    ),
+    title: translate('auto.components.settings.voice.pane.search.dictationTitle', 'Dictation'),
     description: translate(
       'auto.components.settings.voice.pane.search.698376a38d',
       'Master toggle for voice dictation features.'
@@ -53,7 +50,25 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.voice.pane.search.6a3abb4338', 'Dictation Mode'),
+    title: translate('auto.components.settings.voice.pane.search.shortcutTitle', 'Shortcut'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.shortcutDescription',
+      'The key that starts dictation.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.shortcutKeyword',
+        'keyboard'
+      )
+    ]
+  },
+  {
+    title: translate('auto.components.settings.voice.pane.search.d0c230c061', 'Dictation mode'),
     description: translate(
       'auto.components.settings.voice.pane.search.748b33e531',
       'Toggle or hold-to-talk dictation behavior.'
@@ -99,10 +114,7 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate(
-      'auto.components.settings.voice.pane.search.dictationLanguageTitle',
-      'Dictation Language'
-    ),
+    title: translate('auto.components.settings.voice.pane.search.9d83747eae', 'Dictation language'),
     description: translate(
       'auto.components.settings.voice.pane.search.dictationLanguageDescription',
       'Tell the speech model which language you speak.'
@@ -121,9 +133,27 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.voice.pane.search.vocabularyTitle', 'Vocabulary'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.vocabularyDescription',
+      'Names and code terms dictation spells your way, for you or for one repo.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.vocabularyKeyword',
+        'dictionary'
+      )
+    ]
+  },
+  {
     title: translate(
-      'auto.components.settings.voice.pane.search.fillerWordsTitle',
-      'Remove Filler Words'
+      'auto.components.settings.voice.pane.search.c7a7eaa0da',
+      'Remove filler words'
     ),
     description: translate(
       'auto.components.settings.voice.pane.search.fillerWordsDescription',
@@ -142,9 +172,52 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('components.settings.voice.cleanup.label', 'AI cleanup'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.cleanupDescription',
+      'Fix punctuation, numbers and spoken corrections with your agent before text lands.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.cleanupKeyword',
+        'correction word'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.cleanupScratchKeyword',
+        'scratch that'
+      )
+    ]
+  },
+  {
     title: translate(
-      'auto.components.settings.voice.pane.search.modelUnloadTitle',
-      'Unload Speech Model'
+      'auto.components.settings.voice.pane.search.silenceStopTitle',
+      'Stop after silence'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.silenceStopDescription',
+      'Choose how long dictation keeps listening when you stop talking.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.silenceStopKeyword',
+        'silence'
+      )
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.keepLoadedTitle',
+      'Keep model loaded'
     ),
     description: translate(
       'auto.components.settings.voice.pane.search.modelUnloadDescription',
@@ -163,9 +236,27 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate('auto.components.settings.VoicePane.speechGpuLabel', 'Use GPU'),
+    description: translate(
+      'components.settings.voice.gpu.description',
+      'Turn off if dictation freezes your computer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.gpuKeyword',
+        'graphics card'
+      )
+    ]
+  },
   getOpenaiTranscriptionSearchEntry(),
   {
-    title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),
+    title: translate('auto.components.settings.voice.pane.search.7f5a2416a6', 'Speech model'),
     description: translate(
       'auto.components.settings.voice.pane.search.56defcd6c3',
       'Select a local or cloud speech-to-text model to use for dictation.'

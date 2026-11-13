@@ -15,6 +15,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient
   dictationId: string
+  worktreeId?: string
   generation: number
   getCurrentGeneration: () => number
   getEnabled: () => boolean
@@ -102,7 +103,7 @@ export function startMobileDictationDesktopSession(
 }
 
 async function startOnHost(options: StartMobileDictationDesktopSessionOptions): Promise<boolean> {
-  const { client, dictationId } = options
+  const { client, dictationId, worktreeId } = options
   let hostDedupesResends = false
 
   try {
@@ -111,7 +112,7 @@ async function startOnHost(options: StartMobileDictationDesktopSessionOptions): 
       client,
       dictationSessionStart.request(
         client,
-        { dictationId },
+        { dictationId, ...(worktreeId ? { worktreeId } : {}) },
         { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS }
       )
     ).catch(() => {

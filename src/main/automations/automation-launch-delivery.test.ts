@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { AutomationService } from './service'
+import { AutomationService } from './automation-service'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 

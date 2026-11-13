@@ -13,7 +13,7 @@ import {
 import '../../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
-import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
+import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'

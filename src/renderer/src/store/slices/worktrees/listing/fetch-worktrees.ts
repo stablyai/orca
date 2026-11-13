@@ -20,6 +20,7 @@ import {
 } from './worktree-host-ownership'
 import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
+import { listingMetadataCoverage } from './workspace-metadata-coverage'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
@@ -87,7 +88,8 @@ export function createFetchWorktrees(
         connectionId: repoOwner?.connectionId,
         knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
         isStaleCatalogPublication: (result) =>
-          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
+          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion),
+        ...(options?.forceFresh ? { forceFresh: true } : {})
       })
       if (refresh.status !== 'admitted') {
         return directCallerAuthority ? refresh.providerResult : false
@@ -95,6 +97,7 @@ export function createFetchWorktrees(
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
         return directCallerAuthority ? (refresh.providerResult ?? false) : false
       }
+      const metadata = listingMetadataCoverage(get(), repoId, hostId, refresh)
       const outcome = mergeFetchedWorktrees(set, get, {
         repoId,
         hostId,
@@ -105,8 +108,11 @@ export function createFetchWorktrees(
             : undefined,
         requestStartedWorktrees,
         setup,
-        refresh
+        refresh: metadata.refresh
       })
+      if (outcome === 'applied') {
+        metadata.settle((id, fetchOptions) => get().fetchWorktrees(id, fetchOptions))
+      }
       switch (outcome) {
         case 'applied':
           break

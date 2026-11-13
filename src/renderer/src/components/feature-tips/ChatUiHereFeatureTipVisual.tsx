@@ -5,8 +5,8 @@ import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { cn } from '@/lib/class-names'
 import {
   CHAT_DEMO_FILE,
   CHAT_DEMO_FINISHED_AT,

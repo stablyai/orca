@@ -7,7 +7,7 @@ import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
 import { Terminal } from 'lucide-react'
-import { agentPickerBlankTerminalMatches } from '@/lib/agent-picker-search'
+import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -18,7 +18,10 @@ import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './use-agent-launch-picker-inventory'
-import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
+import {
+  filterAgentPickerEntries,
+  searchAgentPickerSetups
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -106,10 +109,7 @@ export function AgentLaunchPickerMenu({
   const openSetup = activeSetup?.id ?? null
   const root = useRef<HTMLDivElement>(null)
   const setups = setupDisabled ? [] : searchAgentPickerSetups(entries, query)
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const visible = entries.filter((entry) =>
-    words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
-  )
+  const visible = filterAgentPickerEntries(entries, query)
   // Filtering changes presentation; an active owner survives its result row disappearing.
   if (activeSetup) {
     const entry = entries.find((entry) => entry.agent === activeSetup.agent)

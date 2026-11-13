@@ -6,6 +6,8 @@ const KEY_HEIGHT = 32
 const KEY_ROW_HEIGHT = 46
 const KEY_GAP = spacing.sm
 const KEY_RADIUS = radii.control
+// The smart group wraps its keys with this much room on each side, inside the same row.
+const SMART_GROUP_INSET = spacing.xs
 
 /** Grows each 32 pt key to the row's height and halfway into its neighbours' gaps. */
 export const TERMINAL_KEY_HIT_SLOP = {
@@ -78,6 +80,58 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   },
   keyPressed: {
     opacity: feedback.pressedOpacity
+  },
+  // A Shift, Ctrl or Alt latch armed for the next key, and one locked on (the Duo rail's look).
+  // A border on every latch, so arming one doesn't widen it.
+  keyLatch: {
+    borderWidth: 1,
+    borderColor: 'transparent'
+  },
+  keyLatched: {
+    borderColor: colors.textPrimary
+  },
+  keyLocked: {
+    backgroundColor: colors.textPrimary
+  },
+  keyTextLocked: {
+    color: colors.bgBase
+  },
+  smartGroup: {
+    height: KEY_HEIGHT + SMART_GROUP_INSET * 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SMART_GROUP_INSET,
+    paddingLeft: spacing.sm,
+    paddingRight: SMART_GROUP_INSET,
+    borderRadius: KEY_RADIUS + SMART_GROUP_INSET,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.composerBorder,
+    backgroundColor: colors.composerSurface
+  },
+  smartDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: KEY_HEIGHT - spacing.sm,
+    backgroundColor: colors.translucentFill
+  },
+  smartKeyStack: {
+    alignItems: 'center'
+  },
+  smartKeyWord: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  smartKeyCombo: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontFamily: typography.monoFamily
+  },
+  // The prompt's accept key, in the app's filled primary.
+  smartKeyPrimary: {
+    backgroundColor: colors.surfaceBright
+  },
+  smartKeyPrimaryText: {
+    color: colors.bgBase
   },
   ghostKey: {
     ...key,

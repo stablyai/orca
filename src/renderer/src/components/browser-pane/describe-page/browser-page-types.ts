@@ -131,6 +131,22 @@ export type BrowserPageAnnotationTrayProps = {
   ) => void
 }
 
+export type BrowserPagePaneProps = {
+  browserTab: BrowserPageState
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId: string | null
+  sessionPartition: string | null
+  isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
+  isAutomationVisible: boolean
+  isMobileDriven: boolean
+  isRemotelyViewed: boolean
+  inputLocked: boolean
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: BrowserPageUrlSetter
+}
+
 export type ClientHostedBrowserPagePaneProps = {
   browserTab: BrowserPageState
   workspaceId: string

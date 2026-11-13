@@ -9,7 +9,7 @@ import type {
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
-import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/snapshots/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
@@ -152,6 +152,8 @@ export function buildMirroredAgentTabs(
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
+        // Focus visits are client-owned; host snapshots carry none, so rebuilding must not drop them.
+        ...(existing?.lastFocusedAt !== undefined ? { lastFocusedAt: existing.lastFocusedAt } : {}),
         isPinned: tab.isPinned !== undefined ? tab.isPinned : existing?.isPinned === true
       }
     }

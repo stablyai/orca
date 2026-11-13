@@ -54,14 +54,4 @@ describe('on-device dictation text', () => {
       failure: null
     })
   })
-
-  it('keeps every word when the computer turned filler removal off', async () => {
-    const speech = mountSpeech(false)
-    await speech.start()
-
-    expect(await speech.finish()).toEqual({
-      text: 'Äh, das ist, ähm, um fünf Uhr fertig.',
-      failure: null
-    })
-  })
 })

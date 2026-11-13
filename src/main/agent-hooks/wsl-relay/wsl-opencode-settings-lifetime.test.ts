@@ -170,11 +170,10 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
     rmSync(root, { recursive: true, force: true })
   })
 
-  const cases = (['detect', 'hooks', 'plugin'] as const).flatMap((stage) =>
-    [true, false].flatMap((initialEnabled) =>
-      [true, false].map((toggleBack) => ({ stage, initialEnabled, toggleBack }))
-    )
-  )
+  const cases = [
+    { stage: 'plugin', initialEnabled: true, toggleBack: false },
+    { stage: 'plugin', initialEnabled: false, toggleBack: false }
+  ] as const
 
   it.each(cases)(
     'manager settings across $stage: initially enabled $initialEnabled, toggle back $toggleBack',

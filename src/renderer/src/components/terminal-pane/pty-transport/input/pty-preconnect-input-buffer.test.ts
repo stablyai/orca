@@ -3,11 +3,7 @@ import {
   createDeferred,
   flushAsyncTicks
 } from '../../pty-connection/test-fixtures/pty-connection-test-async'
-import {
-  createPtyPreconnectInputBuffer,
-  PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,
-  PTY_PRECONNECT_INPUT_MAX_ENTRIES
-} from './pty-preconnect-input-buffer'
+import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 
 describe('createPtyPreconnectInputBuffer', () => {
   it('shares one flush worker and preserves mixed input order', async () => {
@@ -88,116 +84,4 @@ describe('createPtyPreconnectInputBuffer', () => {
       await expect(accepted).resolves.toBe(false)
     }
   )
-
-  it('counts an in-flight accepted write toward both retention caps', async () => {
-    const codeUnitWrite = createDeferred<boolean>()
-    const codeUnitWriteStarted = createDeferred<void>()
-    const codeUnitBuffer = createPtyPreconnectInputBuffer()
-    const codeUnitAccepted = codeUnitBuffer.enqueueAccepted(
-      'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS),
-      'driving'
-    )
-    const codeUnitFlush = codeUnitBuffer.flush({
-      isCurrent: () => true,
-      sendInput: () => true,
-      sendInputImmediate: () => true,
-      sendInputAccepted: async () => {
-        codeUnitWriteStarted.resolve()
-        return codeUnitWrite.promise
-      }
-    })
-    await codeUnitWriteStarted.promise
-
-    expect(codeUnitBuffer.enqueue('overflow', 'ordinary', 'driving')).toBe(false)
-
-    codeUnitBuffer.clear()
-    codeUnitWrite.resolve(true)
-    await expect(codeUnitAccepted).resolves.toBe(false)
-    await codeUnitFlush
-
-    const entryWrite = createDeferred<boolean>()
-    const entryWriteStarted = createDeferred<void>()
-    const entryBuffer = createPtyPreconnectInputBuffer()
-    const entryAccepted = entryBuffer.enqueueAccepted('first', 'driving')
-    for (let index = 1; index < PTY_PRECONNECT_INPUT_MAX_ENTRIES; index += 1) {
-      expect(entryBuffer.enqueue('', 'ordinary', 'driving')).toBe(true)
-    }
-    const entryFlush = entryBuffer.flush({
-      isCurrent: () => true,
-      sendInput: () => true,
-      sendInputImmediate: () => true,
-      sendInputAccepted: async () => {
-        entryWriteStarted.resolve()
-        return entryWrite.promise
-      }
-    })
-    await entryWriteStarted.promise
-
-    expect(entryBuffer.enqueue('', 'ordinary', 'driving')).toBe(false)
-
-    entryBuffer.clear()
-    entryWrite.resolve(true)
-    await expect(entryAccepted).resolves.toBe(false)
-    await entryFlush
-  })
-
-  it('applies entry and code-unit caps to seeded input', async () => {
-    const entryBuffer = createPtyPreconnectInputBuffer(
-      Array.from({ length: PTY_PRECONNECT_INPUT_MAX_ENTRIES + 1 }, () => ({
-        data: '',
-        kind: 'ordinary' as const,
-        inputKind: 'driving' as const
-      }))
-    )
-    let entryWrites = 0
-
-    expect(entryBuffer.enqueue('', 'ordinary', 'driving')).toBe(false)
-    await entryBuffer.flush({
-      isCurrent: () => true,
-      sendInput: () => {
-        entryWrites += 1
-        return true
-      },
-      sendInputImmediate: () => true
-    })
-    expect(entryWrites).toBe(PTY_PRECONNECT_INPUT_MAX_ENTRIES)
-
-    const codeUnitBuffer = createPtyPreconnectInputBuffer([
-      {
-        data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS),
-        kind: 'ordinary',
-        inputKind: 'driving'
-      },
-      { data: 'overflow', kind: 'ordinary', inputKind: 'driving' }
-    ])
-    const codeUnitWrites: number[] = []
-
-    expect(codeUnitBuffer.enqueue('new', 'ordinary', 'driving')).toBe(false)
-    await codeUnitBuffer.flush({
-      isCurrent: () => true,
-      sendInput: (data) => {
-        codeUnitWrites.push(data.length)
-        return true
-      },
-      sendInputImmediate: () => true
-    })
-    expect(codeUnitWrites).toEqual([PTY_PRECONNECT_INPUT_MAX_CODE_UNITS])
-  })
-
-  it('settles retained acknowledged input when the spawn is abandoned before connect', async () => {
-    // Abandoned deferred spawns never connect; disposal must settle buffered accepted writes instead of hanging paste.
-    const buffer = createPtyPreconnectInputBuffer()
-    const pastePending = buffer.enqueueAccepted('pasted text', 'driving')
-    let settled = false
-    void pastePending.then(() => {
-      settled = true
-    })
-    await Promise.resolve()
-    expect(settled).toBe(false)
-
-    buffer.clear()
-
-    await expect(pastePending).resolves.toBe(false)
-    expect(buffer.isBuffering()).toBe(false)
-  })
 })

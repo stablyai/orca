@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AgentCombobox from '../../../src/renderer/src/components/agent/AgentCombobox'
-import { getAgentCatalog } from '../../../src/renderer/src/lib/agent-catalog'
+import { getAgentCatalog } from '../../../src/renderer/src/lib/agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import './fixture.css'
 const baseline = new URLSearchParams(window.location.search).get('baseline') === '1'

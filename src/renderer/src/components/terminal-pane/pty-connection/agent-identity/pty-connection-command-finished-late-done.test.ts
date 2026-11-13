@@ -64,7 +64,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -156,7 +156,9 @@ describe('command-finished drop and a Done that lands after it', () => {
   }> {
     vi.useFakeTimers()
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
@@ -179,7 +181,11 @@ describe('command-finished drop and a Done that lands after it', () => {
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
     const realStore = createTestStore(
-      (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
+      (
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
+      ).isClaudeAgent
     )
     mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
       delete mockStoreState.agentStatusByPaneKey[key]

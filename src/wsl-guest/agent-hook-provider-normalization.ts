@@ -3,6 +3,7 @@ import {
   isOwnerProviderGuestHook,
   readHookProcessVerdict
 } from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import { retainHookRootContext } from '../shared/agent-hook-listener/pane-provider-session'
 import { sameAgentStatusTerminalOwner } from '../shared/agent-status/identity/agent-status-terminal-owner'
 import { normalizeHookPayload } from '../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
@@ -42,10 +43,21 @@ export class RelayProviderHookNormalization {
       lastToolByPaneKey: state.lastToolByPaneKey,
       lastStatusByPaneKey: state.lastStatusByPaneKey
     }
-    const event = normalizeHookPayload(view, source, body, env, {
+    const normalized = normalizeHookPayload(view, source, body, env, {
       ...options,
       bindingStatusByPaneKey: canonical.lastStatusByPaneKey
     })
+    const previous = normalized ? state.lastStatusByPaneKey.get(normalized.paneKey) : undefined
+    const event =
+      normalized && source === 'codex'
+        ? retainHookRootContext(
+            normalized,
+            previous && sameAgentStatusTerminalOwner(previous, normalized) ? previous : undefined,
+            true,
+            true,
+            undefined
+          )
+        : normalized
     if (event) {
       const providerState = state
       cacheRelayLegacyAgentStatus(state, event, MAX_CACHED_PANES, (paneKey) =>

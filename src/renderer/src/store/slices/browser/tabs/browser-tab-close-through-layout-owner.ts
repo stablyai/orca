@@ -4,7 +4,7 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
-import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-order'
+import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { AppState } from '../../../types'
 import { pickNextActiveTab } from '../../tabs/tab-selection-history'
 import {

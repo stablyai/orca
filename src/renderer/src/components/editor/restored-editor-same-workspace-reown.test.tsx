@@ -7,11 +7,8 @@ import type * as RuntimeFileReadClient from '@/runtime/files/reads/runtime-file-
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
-import type { FileContent } from './editor-panel-content-types'
-import {
-  useEditorPanelFileContentLoader,
-  type EditorPanelFileContentLoader
-} from './useEditorPanelFileContentLoader'
+import type { FileContent, EditorPanelFileContentLoader } from './editor-panel-content-types'
+import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,

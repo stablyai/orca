@@ -1,6 +1,6 @@
 import { LayoutDashboard } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { DASHBOARD_BUCKET_ORDER, type DashboardBucket } from '../../../../shared/dashboard-snapshot'
 import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'

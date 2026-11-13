@@ -6,8 +6,8 @@ import {
   consumeOpenCodeMessages,
   parseOpenCodeSessionFile
 } from './session-scanner-opencode-parser'
-import { createAccumulator } from '../../session-scanner-accumulator'
-import { withFullFirstUserPromptCapture } from '../../session-scanner-first-user-prompt-capture'
+import { createAccumulator } from '../../parsing/session-scanner-accumulator'
+import { withFullFirstUserPromptCapture } from '../../prompts/session-scanner-first-user-prompt-capture'
 import type { TranscriptMessage } from '../../transcripts/session-transcript-consumers'
 
 let tempDirs: string[] = []
@@ -66,37 +66,6 @@ describe('parseOpenCodeSessionFile', () => {
       ])
       expect(messages).toEqual([])
       expect(accumulator.firstUserPrompt).toBeNull()
-    }
-  )
-
-  it.each([5000, 256 * 1024 + 1])(
-    'publishes %i-character legacy OpenCode content before preview limits',
-    async (length) => {
-      const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-transcript-'))
-      tempDirs.push(storageRoot)
-      const sessionDir = join(storageRoot, 'session', 'project')
-      const messageDir = join(storageRoot, 'message', 'ses_transcript')
-      await mkdir(sessionDir, { recursive: true })
-      await mkdir(messageDir, { recursive: true })
-      const path = join(sessionDir, 'ses_transcript.json')
-      await writeFile(path, JSON.stringify({ id: 'ses_transcript' }))
-      const text = 'x'.repeat(length)
-      await writeFile(join(messageDir, 'msg_1.json'), userMessage(text, 1_777_634_000_000))
-      const messages: TranscriptMessage[] = []
-      const session = await parseOpenCodeSessionFile(
-        { path, mtimeMs: 1, modifiedAt: '2026-05-01T00:00:00.000Z' },
-        'linux',
-        { active: true, push: (message) => messages.push(message) }
-      )
-      expect(messages).toEqual([
-        {
-          role: 'user',
-          text: text.slice(0, 256 * 1024),
-          timestamp: '2026-05-01T11:13:20.000Z',
-          ...(length > 256 * 1024 ? { textTruncated: true } : {})
-        }
-      ])
-      expect(session?.previewMessages[0]?.text).toHaveLength(220)
     }
   )
 

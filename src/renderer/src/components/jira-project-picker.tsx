@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { JiraProject } from '../../../shared/jira/jira-types'
 import {
   normalizeJiraProjectReference,
@@ -13,7 +14,9 @@ export function JiraProjectPicker({
   onChange,
   label,
   emptyLabel,
-  disabled
+  disabled,
+  size,
+  returnFocusRef
 }: {
   projects: readonly JiraProject[]
   value: JiraProjectReference | null
@@ -21,6 +24,8 @@ export function JiraProjectPicker({
   label: string
   emptyLabel: string
   disabled?: boolean
+  size?: 'default' | 'xs'
+  returnFocusRef?: React.RefObject<HTMLElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   const options: WorkItemScopeOption<JiraProjectReference>[] = projects.flatMap((project) => {
@@ -48,6 +53,8 @@ export function JiraProjectPicker({
       searchPlaceholder={t('components.jiraProjectPicker.search', 'Search Jira projects')}
       emptyLabel={t('components.jiraProjectPicker.empty', 'No projects found.')}
       disabled={disabled}
+      size={size}
+      returnFocusRef={returnFocusRef}
     />
   )
 }
