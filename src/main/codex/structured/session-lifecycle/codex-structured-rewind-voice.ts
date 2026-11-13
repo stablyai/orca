@@ -5,29 +5,69 @@ import { requireLiveCodexSession, type CodexSession } from './codex-structured-s
 import { recoverCodexRewindAtStart } from './codex-structured-start-verdict'
 
 type Adapter = Required<
-  Pick<StructuredAgentSessionAdapter, 'prepareRewind' | 'rewind' | 'recoverRewind'>
+  Pick<
+    StructuredAgentSessionAdapter,
+    'prepareRewind' | 'rewind' | 'recoverRewind' | 'startVoiceConversation'
+  >
 >
 
-/** Rewind undoes turns but keeps the thread, so Voice mode forgets what it heard there, and ends a
- *  call that heard it, before Codex reverts anything. */
+/** Rewind undoes turns but keeps the thread, so Voice mode forgets what it heard there, ends a
+ *  call that heard it, and refuses new calls until Codex has settled the revert. */
 export function codexRewindsForgettingVoice(
   sessions: Map<string, CodexSession>,
-  voice: Pick<CodexRealtimeVoice, 'forget'>,
+  voice: Pick<CodexRealtimeVoice, 'forget' | 'start'>,
   timeoutMs: () => number | undefined
 ): {
   prepare: Adapter['prepareRewind']
   rewind: Adapter['rewind']
   recover: Adapter['recoverRewind']
+  startVoice: Adapter['startVoiceConversation']
 } {
-  const forget = ({ sessionId, threadId }: { sessionId: string; threadId?: string }) => {
+  const rewinding = new Map<string, number>()
+  const forget = ({ sessionId, threadId }: { sessionId: string; threadId?: string }) =>
     voice.forget(sessionId, threadId ?? sessions.get(sessionId)?.threadId)
-    return sessions
+  const holding = async <T>(
+    input: { sessionId: string; threadId?: string },
+    run: () => Promise<T>
+  ): Promise<T> => {
+    rewinding.set(input.sessionId, (rewinding.get(input.sessionId) ?? 0) + 1)
+    try {
+      forget(input)
+      return await run()
+    } finally {
+      const left = (rewinding.get(input.sessionId) ?? 1) - 1
+      if (left > 0) {
+        rewinding.set(input.sessionId, left)
+      } else {
+        rewinding.delete(input.sessionId)
+      }
+    }
   }
-  const live = (input: { sessionId: string }) =>
-    requireLiveCodexSession(forget(input), input.sessionId)
   return {
-    prepare: (input) => prepareCodexRewind(live(input), input, timeoutMs()),
-    rewind: (input) => rewindCodexSession(live(input), input, timeoutMs()),
-    recover: (input) => recoverCodexRewindAtStart(forget(input), input, timeoutMs())
+    // A refused preflight changes nothing, so the call and what it heard stay.
+    prepare: async (input) => {
+      const admission = await prepareCodexRewind(
+        requireLiveCodexSession(sessions, input.sessionId),
+        input,
+        timeoutMs()
+      )
+      if (admission.ok) {
+        forget(input)
+      }
+      return admission
+    },
+    rewind: (input) =>
+      holding(input, () =>
+        rewindCodexSession(requireLiveCodexSession(sessions, input.sessionId), input, timeoutMs())
+      ),
+    recover: (input) =>
+      holding(input, () => recoverCodexRewindAtStart(sessions, input, timeoutMs())),
+    startVoice: (input) => {
+      if (rewinding.has(input.sessionId)) {
+        input.emit({ type: 'refused', reason: 'busy' })
+        return { stop: () => {} }
+      }
+      return voice.start(sessions.get(input.sessionId), input)
+    }
   }
 }
