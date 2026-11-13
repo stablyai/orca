@@ -27696,7 +27696,6 @@
       "untracked": "Untracked",
       "unknown": "Changed"
     },
-    "thisWorkspaceTitle": "This workspace",
     "overlay": {
       "restarting": "Restarting…",
       "waking": "Waking…",
@@ -27713,14 +27712,20 @@
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
       "clearPendingKeys": "Discard waiting keys",
       "unarchivingNow": "Unarchiving…",
-      "billingPayment": "Your team’s last payment failed."
+      "billingPayment": "Your team’s last payment failed.",
+      "failedTitleUnnamed": "Couldn’t wake this workspace"
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
       "waking": "Waking {{name}}.",
       "archived": "{{name}} is archived.",
       "asleep": "{{name}} is asleep.",
-      "unarchivingNamed": "Unarchiving {{name}}."
+      "unarchivingNamed": "Unarchiving {{name}}.",
+      "wakingUnnamed": "Waking this workspace.",
+      "restartingUnnamed": "Restarting this workspace.",
+      "unarchivingUnnamed": "Unarchiving this workspace.",
+      "archivedUnnamed": "This workspace is archived.",
+      "asleepUnnamed": "This workspace is asleep."
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
@@ -27821,7 +27826,6 @@
     "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
     "tryAgain": "Try again",
     "sleep": "Sleep",
-    "thisWorkspace": "This workspace",
     "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
     "sleepFailedCount": "Couldn’t put {{count}} workspaces to sleep",
     "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe.",
@@ -27879,7 +27883,9 @@
     "primaryDelete": {
       "noSandbox": "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
     },
-    "opensAndWakes": "Opens and wakes when you select it."
+    "opensAndWakes": "Opens and wakes when you select it.",
+    "sleepFailedUnnamed": "Couldn’t put this workspace to sleep",
+    "cloudWorkspaceTitle": "Cloud workspace"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

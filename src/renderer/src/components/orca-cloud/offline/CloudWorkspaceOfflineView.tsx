@@ -1,4 +1,5 @@
 import React from 'react'
+import { cloudWorkspaceTitle } from '@/lib/orca-cloud/cloud-workspace-name-copy'
 import { Cloud, Play, SquareTerminal } from 'lucide-react'
 import type {
   CloudOfflineSnapshot,
@@ -74,7 +75,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
     >
       <CloudWorkspaceHeader
         icon={Cloud}
-        title={props.workspaceName ?? t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')}
+        title={cloudWorkspaceTitle(props.workspaceName, t)}
         state="sleeping"
         stateLine={stateLine}
         stateTitle={asOf?.absolute}

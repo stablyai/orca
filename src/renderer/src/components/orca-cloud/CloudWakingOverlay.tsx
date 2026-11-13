@@ -10,6 +10,10 @@ import { wakeElapsedSeconds } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { TERMINAL_CONTENT_INSET_PX, useTerminalContentInset } from './use-terminal-content-inset'
 import { useBillingSummary } from '@/components/billing/billing-summary-store'
 import { cloudWakeBillingCopy } from './cloud-wake-billing'
+import {
+  cloudWakeFailedTitle,
+  cloudWorkspaceAnnouncement
+} from '@/lib/orca-cloud/cloud-workspace-name-copy'
 import { CloudWakeBillingFixButton } from './CloudWakeBillingFixButton'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
@@ -124,7 +128,6 @@ export function CloudWakingOverlay({
       rootRef.current?.focus()
     }
   }, [failed, autoFocus])
-  const name = workspaceName || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
   // Once the sandbox is up the pill says so; the clock still counts from the wake's start.
   const title =
     wake.phase === 'connecting'
@@ -167,13 +170,15 @@ export function CloudWakingOverlay({
       aria-label={
         failed
           ? undefined
-          : wake.source === 'restart'
-            ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name })
-            : wake.source === 'unarchive'
-              ? t('orcaCloudWorkspace.announce.unarchivingNamed', 'Unarchiving {{name}}.', {
-                  name
-                })
-              : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name })
+          : cloudWorkspaceAnnouncement(
+              wake.source === 'restart'
+                ? 'restarting'
+                : wake.source === 'unarchive'
+                  ? 'unarchiving'
+                  : 'waking',
+              workspaceName,
+              t
+            )
       }
     >
       {passThrough ? null : <TerminalSkeleton still={failed} />}
@@ -218,9 +223,7 @@ export function CloudWakingOverlay({
                           'components.cloudRemoteDesktop.wakeFailedTitle',
                           'Couldn’t wake the sandbox.'
                         )
-                      : t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', {
-                          name
-                        })}
+                      : cloudWakeFailedTitle(workspaceName, t)}
                 </div>
                 {billing ? (
                   <p className="break-words text-xs text-foreground">{billing.body}</p>
