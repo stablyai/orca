@@ -1,7 +1,7 @@
 // SEC-4: every create, update and delete of a cloud secret leaves an activity record (who, when, scope,
 // NAME; never the value or hint), team owners/admins read the team's, each user reads their own.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ACTIVITY_WINDOW_MS } from '../src/secret-events'
+import { ACTIVITY_WINDOW_MS, activityAccounts, listSecretEvents } from '../src/secret-events'
 import { createHarness } from './harness'
 
 const KEK = Buffer.alloc(32, 7).toString('base64')
@@ -34,7 +34,21 @@ async function setup() {
     h.call('PUT', `/v1/secrets/${scope}/${name}${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`, { body: { value }, bearer })
   const del = (scope: string, name: string, bearer: string, repo?: string) =>
     h.call('DELETE', `/v1/secrets/${scope}/${name}${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`, { bearer })
-  const activity = (bearer: string, query = 'view=team') => h.call('GET', `/v1/secrets/activity?${query}`, { bearer })
+  // Team reads go through the unified audit log (plan-gated) via listSecretEvents; the route is personal only.
+  const team = async (query = '') => {
+    const params = new URLSearchParams(query)
+    return listSecretEvents(h.env.SANDBOX_DB, ['org:acme'], {
+      now: h.now(),
+      cursor: params.get('cursor'),
+      limit: Number(params.get('limit') ?? 50)
+    })
+  }
+  const activity = async (bearer: string, query = 'view=team') => {
+    if (query.startsWith('view=team')) {
+      return { status: 200, body: await team(query.replace(/^view=team&?/, '')) }
+    }
+    return h.call('GET', `/v1/secrets/activity?${query}`, { bearer })
+  }
   return { h, admin, owner, member, solo, put, del, activity }
 }
 
@@ -94,14 +108,21 @@ describe('secret activity records', () => {
 })
 
 describe('who can read secret activity', () => {
-  it('team activity: owners and admins only; members and personal accounts are refused', async () => {
-    const { admin, owner, member, solo, put, activity } = await setup()
+  it('the route serves no team view (the plan-gated unified audit log does)', async () => {
+    const { h, admin, owner, put } = await setup()
     await put('org', 'TEAM_VAR', VALUES[1]!, admin)
-    expect((await activity(owner)).body.events).toHaveLength(1)
-    const refused = await activity(member)
-    expect(refused.status).toBe(403)
-    expect(refused.body).toMatchObject({ reason: 'org_admin_required' })
-    expect((await activity(solo)).body).toMatchObject({ reason: 'no_org' })
+    for (const bearer of [admin, owner]) {
+      const res = await h.call('GET', '/v1/secrets/activity?view=team', { bearer })
+      expect(res.status).toBe(400)
+      expect(res.body).toMatchObject({ reason: 'invalid_view' })
+    }
+  })
+
+  it('activityAccounts: team needs owner/admin of an org (for the unified log’s reuse)', () => {
+    const base = { userId: 'u', accountId: 'org:acme', orgId: 'acme' }
+    expect(activityAccounts({ ...base, orgRole: 'admin' }, 'team', 'user:u')).toEqual({ accounts: ['org:acme'] })
+    expect(activityAccounts({ ...base, orgRole: 'member' }, 'team', 'user:u')).toEqual({ error: 'org_admin_required' })
+    expect(activityAccounts({ userId: 'u', accountId: 'user:u' }, 'team', 'user:u')).toEqual({ error: 'no_org' })
   })
 
   it('personal changes stay with the user: not in the team log, not in another user’s', async () => {
@@ -122,11 +143,10 @@ describe('who can read secret activity', () => {
     expect((await activity(solo, 'view=personal')).body.events).toMatchObject([{ scope: 'repo', name: 'DATABASE_URL' }])
   })
 
-  it('another team never sees this team’s activity', async () => {
+  it('another team’s account never lists this team’s activity', async () => {
     const { h, admin, put } = await setup()
     await put('org', 'TEAM_VAR', VALUES[1]!, admin)
-    const otherAdmin = await h.token('dave', 'globex', 'sandbox', { org_role: 'owner' })
-    expect((await h.call('GET', '/v1/secrets/activity?view=team', { bearer: otherAdmin })).body.events).toEqual([])
+    expect((await listSecretEvents(h.env.SANDBOX_DB, ['org:globex'], { now: h.now(), cursor: null, limit: 50 })).events).toEqual([])
   })
 
   it('rejects an unknown view', async () => {
@@ -171,9 +191,9 @@ describe('activity window and pagination', () => {
   })
 
   it('ignores a malformed cursor or limit rather than failing', async () => {
-    const { admin, put, activity } = await setup()
-    await put('org', 'TEAM_VAR', VALUES[1]!, admin)
-    const res = await activity(admin, 'view=team&cursor=%27%20OR%201%3D1&limit=-5')
+    const { member, put, activity } = await setup()
+    await put('personal', 'MY_VAR', VALUES[1]!, member)
+    const res = await activity(member, 'view=personal&cursor=%27%20OR%201%3D1&limit=-5')
     expect(res.status).toBe(200)
     expect(res.body.events).toHaveLength(1)
   })

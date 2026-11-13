@@ -3,6 +3,7 @@ import { ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { registerSignInNotice } from '@/lib/orca-cloud/sign-in-notice-visibility'
 import { Button } from './ui/button'
+import { OpenExternalSplitButton } from './open-external/OpenExternalSplitButton'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -39,16 +40,25 @@ export function OrcaSignInButton({
     }
     void window.api.shell.openUrl(link).catch(() => void connect())
   }
+  if (link) {
+    // The pending sign-in's link, for an incognito window or another browser profile.
+    return (
+      <OpenExternalSplitButton
+        {...props}
+        // The caller places the whole pair; the main half fills what the chevron leaves.
+        groupClassName={props.className}
+        className="flex-1"
+        link={link}
+        onClick={onClick}
+      >
+        {t('auto.components.OrcaSignInProgress.reopenBrowser', 'Reopen browser')}
+        <ExternalLink aria-hidden />
+      </OpenExternalSplitButton>
+    )
+  }
   return (
     <Button {...props} type="button" onClick={onClick}>
-      {link ? (
-        <>
-          {t('auto.components.OrcaSignInProgress.reopenBrowser', 'Reopen browser')}
-          <ExternalLink aria-hidden />
-        </>
-      ) : (
-        children
-      )}
+      {children}
     </Button>
   )
 }

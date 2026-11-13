@@ -11,6 +11,7 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import type { CloudStripActions } from './CloudAgentSignInStrip'
+import { requireLink } from '@/components/open-external/copy-external-link'
 
 export function cloudSetupStripActions(args: {
   agent: HostAgentSignInAgent
@@ -51,6 +52,11 @@ export function cloudSetupStripActions(args: {
       // The CLI's answer comes back as a setup update (checking, then saved or rejected).
       void api?.submitClaudeCode({ code }).catch(() => undefined)
     },
+    // "Copy link" beside "Open again": the provider page main would reopen, minted the same way.
+    linkFor: (action) =>
+      action.kind === 'reopenSetup' && api
+        ? () => api.signInLink({ agent }).then(requireLink)
+        : null,
     useCode: () => undefined,
     pasteCode: () => void api?.usePaste(),
     useApiKey: args.useApiKey,

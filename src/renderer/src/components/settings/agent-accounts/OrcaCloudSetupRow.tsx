@@ -15,6 +15,14 @@ import { setupFailureCopy } from './orca-cloud-accounts-copy'
 import { CloudStripPasteForm } from '@/components/agent-sign-in-strip/CloudStripPasteForm'
 import { setupCodePaste } from '@/components/agent-sign-in-strip/cloud-agent-setup-strip-model'
 import type { OrcaCloudAccountsActions } from './orca-cloud-accounts-types'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import { requireLink } from '@/components/open-external/copy-external-link'
+
+/** The provider page "Open again" reopens, minted by main the same way but not opened. */
+async function setupSignInLink(agent: OrcaCloudAccountAgent): Promise<string> {
+  const api = window.api.orcaCloudAgents
+  return requireLink(api ? await api.signInLink({ agent }) : null)
+}
 
 function PasteTokenForm({
   reason,
@@ -173,14 +181,14 @@ export function SetupRow({
           actions={
             <>
               {setup.canReopen ? (
-                <Button
-                  type="button"
+                <OpenExternalSplitButton
+                  link={() => setupSignInLink(agent)}
                   variant="ghost"
                   size="sm"
                   onClick={() => actions.reopen(agent)}
                 >
                   {t('orcaCloudAccounts.openAgain', 'Open again')}
-                </Button>
+                </OpenExternalSplitButton>
               ) : null}
               {cancel}
             </>
@@ -238,8 +246,8 @@ export function SetupRow({
           )}
           actions={
             <>
-              <Button
-                type="button"
+              <OpenExternalSplitButton
+                link={setup.verificationUrl}
                 variant="outline"
                 size="sm"
                 onClick={() => {
@@ -248,7 +256,7 @@ export function SetupRow({
                 }}
               >
                 {t('orcaCloudAccounts.copyAndOpen', 'Copy code and open')}
-              </Button>
+              </OpenExternalSplitButton>
               {cancel}
             </>
           }

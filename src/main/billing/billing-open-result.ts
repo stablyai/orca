@@ -1,10 +1,10 @@
 // What a failed Checkout/Portal open means, as a typed result the plans dialog can act on.
-import type { OrcaBillingOpenResult } from '../../shared/orca-billing'
+import type { OrcaBillingOpenRefusal } from '../../shared/orca-billing'
 import { BillingServiceError } from './billing-client'
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-export function openResultForError(error: unknown): OrcaBillingOpenResult {
+export function openResultForError(error: unknown): OrcaBillingOpenRefusal {
   if (error instanceof BillingServiceError) {
     if (error.statusCode === 403) {
       return { status: 'forbidden' }

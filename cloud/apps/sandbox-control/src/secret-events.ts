@@ -1,10 +1,11 @@
 // SEC-4: customer-visible activity for cloud secrets (migration 0054_secret_events.sql).
-//   GET /v1/secrets/activity?view=team|personal[&cursor=…][&limit=…]  -> {events, nextCursor}
+//   GET /v1/secrets/activity?view=personal[&cursor=…][&limit=…]  -> {events, nextCursor}
 // Each create, update and delete is recorded in the same D1 transaction as the write, so a change
 // never lands without its record. A record holds who, when, the scope and the variable NAME. It never
 // holds the value, the last-4 hint, ciphertext or any key material.
-// Team activity (Shared and the team's Repository secrets) is for team owners and admins. Personal
-// activity (and a personal account's Repository secrets) is for that user alone.
+// Personal activity (and a personal account's Repository secrets) is for that user alone, over that
+// route. Team activity (Shared and the team's Repository secrets) is served by the unified Enterprise
+// audit log (GET /v1/audit-log, plan-gated, owners/admins), which reads this table.
 import { randomId } from './api/keys'
 import type { SandboxCaller } from './auth'
 import type { SecretScope } from './secrets'

@@ -4,6 +4,7 @@
 import React, { useState } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { Input } from '@/components/ui/input'
 import { InlineError } from '@/components/ui/inline-error'
 import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../../shared/host-agent-sign-in-status'
@@ -135,14 +136,20 @@ export function SshCodeSignIn({
           </p>
           <p className="text-xs text-muted-foreground">{GUARD(t)}</p>
           <div className="flex items-center gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={() => flow.url && actions.openLink(flow.url)}
-            >
-              {t('agentHostPanel.ssh.openClaude', 'Open claude.ai')}
-            </Button>
+            {flow.url ? (
+              <OpenExternalSplitButton
+                link={flow.url}
+                variant="outline"
+                size="xs"
+                onClick={() => flow.url && actions.openLink(flow.url)}
+              >
+                {t('agentHostPanel.ssh.openClaude', 'Open claude.ai')}
+              </OpenExternalSplitButton>
+            ) : (
+              <Button type="button" variant="outline" size="xs" disabled>
+                {t('agentHostPanel.ssh.openClaude', 'Open claude.ai')}
+              </Button>
+            )}
             <Input
               variant="code"
               autoComplete="off"
@@ -177,15 +184,21 @@ export function SshCodeSignIn({
             <code className="shrink-0 select-all rounded bg-muted px-1.5 font-mono text-xs tracking-wider">
               {flow.userCode}
             </code>
-            <Button
-              type="button"
-              size="xs"
-              onClick={() =>
-                flow.userCode && flow.url && actions.copyAndOpen(flow.userCode, flow.url)
-              }
-            >
-              {t('agentSignInStrip.copyAndOpen', 'Copy code and open')}
-            </Button>
+            {flow.url ? (
+              <OpenExternalSplitButton
+                link={flow.url}
+                size="xs"
+                onClick={() =>
+                  flow.userCode && flow.url && actions.copyAndOpen(flow.userCode, flow.url)
+                }
+              >
+                {t('agentSignInStrip.copyAndOpen', 'Copy code and open')}
+              </OpenExternalSplitButton>
+            ) : (
+              <Button type="button" size="xs" disabled>
+                {t('agentSignInStrip.copyAndOpen', 'Copy code and open')}
+              </Button>
+            )}
             {cancel}
           </div>
         </div>

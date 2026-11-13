@@ -1,5 +1,5 @@
 // The 56 px strip at the top of an Orca Cloud pane (redesign §6). Fixed slots: status 16, two text
-// lines, the queued prompt chip (140, hidden below 720 px), actions (280, or 200 below 560 px).
+// lines, the queued prompt chip (140, hidden below 720 px), actions (304, or 200 below 560 px).
 // Laid out from its own live width (RA-1): a pane narrowed after mount gets the narrow layout too.
 // A region, never a dialog; one polite status sentence per state.
 import React, { useLayoutEffect, useRef, useState } from 'react'
@@ -15,7 +15,9 @@ import {
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { CloudStripPasteForm } from './CloudStripPasteForm'
+import { StripPrimaryButton, stripPrimaryLink } from './CloudStripPrimaryButton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +98,11 @@ export type CloudStripActions = {
   pasteCode: () => void
   useApiKey: () => void
   cancel: () => void
+  /**
+   * "Copy link" for a primary that opens a page whose URL the action doesn't carry (e.g. the
+   * setup's sign-in page, known only to main). Actions carrying a `url` copy it without this.
+   */
+  linkFor?: (action: CloudStripPrimary) => ExternalLinkSource | null
 }
 
 /** GA-P3t: the strip's severity look; anything that isn't a warning or an error reads as info. */
@@ -151,8 +158,9 @@ function withInlineCode(text: string): React.ReactNode {
 }
 
 const GRID: Record<CloudStripWidth, string> = {
-  wide: 'grid-cols-[16px_minmax(0,1fr)_140px_280px]',
-  narrow: 'grid-cols-[16px_minmax(0,1fr)_280px]',
+  // 304: room for a primary with its "Copy link" chevron beside the device code.
+  wide: 'grid-cols-[16px_minmax(0,1fr)_140px_304px]',
+  narrow: 'grid-cols-[16px_minmax(0,1fr)_304px]',
   tiny: 'grid-cols-[16px_minmax(0,1fr)_200px]',
   compact: 'grid-cols-[16px_minmax(0,1fr)_auto]'
 }
@@ -280,22 +288,20 @@ export function CloudAgentSignInStrip({
           />
         ) : null}
         {primary ? (
-          <Button
-            type="button"
+          <StripPrimaryButton
+            primary={primary}
+            link={stripPrimaryLink(primary.action, actions)}
             // The short label still names what it does for a screen reader.
-            aria-label={
+            ariaLabel={
               (width === 'tiny' || compact) && primary.narrowLabel ? primary.label : undefined
             }
-            size="xs"
             variant={model.status === 'error' ? 'outline' : 'default'}
-            aria-busy={primary.busy || undefined}
-            aria-disabled={primary.busy || undefined}
-            onClick={() => (primary.busy ? undefined : actions.primary(primary.action))}
+            onActivate={() => actions.primary(primary.action)}
           >
             {(width === 'tiny' || compact) && primary.narrowLabel
               ? primary.narrowLabel
               : primary.label}
-          </Button>
+          </StripPrimaryButton>
         ) : null}
         {model.otherWays ? (
           <DropdownMenu>
@@ -362,19 +368,15 @@ export function CloudAgentSignInStrip({
             />
           </div>
           {model.primary ? (
-            <Button
-              type="button"
+            <StripPrimaryButton
+              primary={model.primary}
+              link={stripPrimaryLink(model.primary.action, actions)}
               variant="ghost"
-              size="xs"
-              aria-disabled={model.primary.busy || undefined}
-              onClick={() =>
-                model.primary && !model.primary.busy
-                  ? actions.primary(model.primary.action)
-                  : undefined
-              }
+              quiet
+              onActivate={() => model.primary && actions.primary(model.primary.action)}
             >
               {model.primary.label}
-            </Button>
+            </StripPrimaryButton>
           ) : null}
         </div>
       ) : null}

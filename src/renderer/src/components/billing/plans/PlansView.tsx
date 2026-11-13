@@ -36,6 +36,12 @@ export type PlansViewProps = {
   /** Seats Checkout will bill: org members, or 1 for a personal account. */
   seats: number
   onCheckout: (args: { planId: string; interval: OrcaBillingInterval; seats: number }) => void
+  /** "Copy link" on the checkout button: the Checkout URL it would open (absent: no chevron). */
+  checkoutLink?: (args: {
+    planId: string
+    interval: OrcaBillingInterval
+    seats: number
+  }) => Promise<string | null>
   onManage: () => void
   onContactSales: (url: string) => void
   onRetry: () => void
@@ -208,6 +214,11 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
           notice={props.notice}
           hideManage={paymentIssue}
           onCheckout={() => props.onCheckout({ planId: team.planId, interval, seats })}
+          checkoutLink={
+            props.checkoutLink
+              ? () => props.checkoutLink!({ planId: team.planId, interval, seats })
+              : undefined
+          }
           onManage={props.onManage}
         />
         {enterprise ? (

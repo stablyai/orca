@@ -17,6 +17,8 @@ import {
   repoSlug,
   runCloudSetupScript
 } from '@/lib/orca-cloud/cloud-setup-notice-actions'
+import { gitHubInstallLinkSource } from '@/lib/orca-cloud/github-link-sources'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { recheckCloudFetch } from '@/lib/orca-cloud/cloud-fetch-notice'
 import { runVmEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check'
 import { hideCloudToast, showCloudToast, type CloudToastView } from './cloud-toast-stack'
@@ -31,7 +33,14 @@ export type CloudSetupNoticeLine = {
   text: string
   /** A muted second line: what it means for the person. */
   description?: string
-  action: { label: string; icon: React.ReactNode; run: () => void; pending?: boolean } | null
+  action: {
+    label: string
+    icon: React.ReactNode
+    run: () => void
+    pending?: boolean
+    /** Opens this page in the browser: "Copy link" beside it. */
+    link?: ExternalLinkSource
+  } | null
 }
 
 export function cloudSetupNoticeLine(
@@ -66,7 +75,8 @@ export function cloudSetupNoticeLine(
               <GitPullRequestArrow />
             ),
             run: handlers.install,
-            pending: handlers.installing
+            pending: handlers.installing,
+            link: gitHubInstallLinkSource({ repoUrl: record.repoUrl })
           }
         }
       }
@@ -247,7 +257,8 @@ export function cloudSetupNoticesView(
                 label: line.action.label,
                 icon: line.action.icon,
                 onClick: line.action.run,
-                ...(line.action.pending ? { pending: true } : {})
+                ...(line.action.pending ? { pending: true } : {}),
+                ...(line.action.link ? { link: line.action.link } : {})
               }
             }
           : {}),
