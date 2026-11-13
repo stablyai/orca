@@ -131,7 +131,7 @@ export const secretsPage = defineFixture({
     <Page
       id="cloud-secrets"
       title="Cloud secrets"
-      description="API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables."
+      description="Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach cloud workspaces as environment variables that anything in the sandbox can read."
     >
       <CloudSecretsPane
         api={fixtureCloudSecretsApi({})}
@@ -189,7 +189,7 @@ export const sessionExpired = defineFixture({
     <Page
       id="cloud-secrets"
       title="Cloud secrets"
-      description="API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables."
+      description="Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach cloud workspaces as environment variables that anything in the sandbox can read."
     >
       <OrcaCloudSignedOutNotice />
     </Page>
