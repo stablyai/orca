@@ -66,19 +66,11 @@ export function useWorkspaceReferenceDetails(
         review?.url && review.state && matching.length === 1 && matching[0] === request
           ? { title: review.title, url: review.url, review, stale: true }
           : undefined
-      // Why: merged is terminal, so an older per-reference read must not show the card's merged review as open.
-      const data =
-        entry?.data?.review &&
-        entry.data.review.state !== 'merged' &&
-        review?.state === 'merged' &&
-        matchWorkspaceReferenceReview(request.item, review)
-          ? { ...entry.data, review }
-          : entry?.data
       return [
         getWorkspaceAttachmentKey(request.item),
         entry
-          ? data
-            ? { ...data, stale: entry.stale || hostOff }
+          ? entry.data
+            ? { ...entry.data, stale: entry.stale || hostOff }
             : undefined
           : primary
       ]
