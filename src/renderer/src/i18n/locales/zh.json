@@ -4272,11 +4272,8 @@
             "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
-            "59c6e7b4e0": "可见会话将立即重启，其他会话会在其工作树变为活动状态时重启",
             "c676918adc": "系统默认",
             "3325d996cb": "刷新速率限制",
-            "cd9d7b40ff": "重新启动 {{value0}} 会话",
-            "6cd6650b4c": "重新启动会话",
             "25d8bbde69": "正在使用重置…",
             "e159fc1fd7": "立即重置",
             "972a1ff497": "重置 Codex 限额？",
@@ -4294,11 +4291,13 @@
             "cursorUsageMenu": "Cursor 用量",
             "hiddenUsageProviders": "另有：{{value0}}",
             "zcodeUsageMenu": "Z代码使用",
-            "rateLimitResetsAvailable_other": "可重置速率限制 {{count}} 次",
-            "staleCodexSessions_other": "{{count}} 个 Codex 会话仍在使用旧账户",
             "4025a6f62f": "无限制",
             "a95969101f": "{{value0}} 积分",
-            "windowWeeks": "{{value0}} 周"
+            "windowWeeks": "{{value0}} 周",
+            "codexResetsAvailable_other": "{{count}} 次重置可用",
+            "codexRestartBadgeLabel_other": "{{count}} 个 Codex 会话需要重启",
+            "codexRestartBannerTitle_other": "{{count}} 个 Codex 会话仍在使用之前的账户。",
+            "codexRestartBannerAction_other": "重启会话"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -4501,7 +4500,11 @@
             "473d45cd0f": "余额 {{value0}}",
             "f21b2ba897": "积分",
             "56c0d70577": "无限制",
-            "87b5bda4d3": "可用积分 {{value0}}"
+            "87b5bda4d3": "可用积分 {{value0}}",
+            "inlineNextExpiresNow": "下一个现在过期",
+            "inlineExpiresNow": "现在过期",
+            "inlineNextExpiresIn": "下一个将在 {{value0}} 后过期",
+            "inlineExpiresIn": "将在 {{value0}} 后过期"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"

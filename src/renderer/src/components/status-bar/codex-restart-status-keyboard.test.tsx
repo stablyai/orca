@@ -7,11 +7,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { CodexRestartStatusPrompt } from './StatusBarAccountControls'
+import { CodexRestartBanner } from './CodexRestartBanner'
 
 const { state } = vi.hoisted(() => ({
   state: {
-    tabsByWorktree: { workspace: [{ id: 'tab-1' }] },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     codexRestartNoticeByPtyId: {
       'pty-1': { previousAccountLabel: 'old', nextAccountLabel: 'new' }
@@ -33,17 +32,17 @@ describe('Codex restart banner keyboard action', () => {
         <DropdownMenuTrigger>Accounts</DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem>Previous action</DropdownMenuItem>
-          <CodexRestartStatusPrompt />
+          <CodexRestartBanner />
         </DropdownMenuContent>
       </DropdownMenu>
     )
     const previous = await screen.findByRole('menuitem', { name: 'Previous action' })
     previous.focus()
     fireEvent.keyDown(previous, { key: 'ArrowDown' })
-    const restart = screen.getByRole('menuitem', { name: 'Restart Session' })
+    const restart = screen.getByRole('menuitem', { name: 'Restart session' })
     await waitFor(() => expect(document.activeElement).toBe(restart))
     fireEvent.keyDown(restart, { key: 'Enter' })
     expect(state.queuePaneAccountRestarts).toHaveBeenCalledExactlyOnceWith(['pty-1'], 'codex')
-    expect(screen.getByRole('menuitem', { name: 'Restart Session' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Restart session' })).toBeTruthy()
   })
 })

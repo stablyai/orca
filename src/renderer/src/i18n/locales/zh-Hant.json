@@ -4559,11 +4559,8 @@
             "d450654fa2": "Claude 帳戶",
             "11e2354daf": "Claude 用量執行環境",
             "3dd7ddfae1": "開啟 Claude 詳情和帳戶切換器",
-            "59c6e7b4e0": "可見工作階段將立即重新啟動。其他工作階段會在其工作樹變為作用中狀態時重新啟動。",
             "c676918adc": "系統預設",
             "3325d996cb": "重新整理速率限制",
-            "cd9d7b40ff": "重新啟動 {{value0}} 工作階段",
-            "6cd6650b4c": "重新啟動工作階段",
             "25d8bbde69": "正在使用重設…",
             "e159fc1fd7": "立即重設",
             "972a1ff497": "重設 Codex 限額？",
@@ -4581,8 +4578,10 @@
             "cursorUsageMenu": "Cursor 用量",
             "hiddenUsageProviders": "另有：{{value0}}",
             "zcodeUsageMenu": "ZCode 用量",
-            "rateLimitResetsAvailable_other": "可重設速率限制 {{count}} 次",
-            "staleCodexSessions_other": "{{count}} 個 Codex 工作階段仍在使用舊帳戶。"
+            "codexResetsAvailable_other": "{{count}} 次重設可用",
+            "codexRestartBadgeLabel_other": "{{count}} 個 Codex 工作階段需要重新啟動",
+            "codexRestartBannerTitle_other": "{{count}} 個 Codex 工作階段仍在使用先前的帳戶。",
+            "codexRestartBannerAction_other": "重新啟動工作階段"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "連結帳戶",
@@ -4797,7 +4796,11 @@
             "hoursAgo": "{{hours}} 小時前",
             "updatedAgo": "更新於 {{time}}",
             "notYetUpdated": "尚未更新",
-            "rateLimitResetsAvailable_other": "可重設速率限制 {{count}} 次"
+            "rateLimitResetsAvailable_other": "可重設速率限制 {{count}} 次",
+            "inlineNextExpiresNow": "下一個現在過期",
+            "inlineExpiresNow": "現在過期",
+            "inlineNextExpiresIn": "下一個將在 {{value0}} 後過期",
+            "inlineExpiresIn": "將在 {{value0}} 後過期"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主機"

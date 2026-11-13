@@ -4074,11 +4074,8 @@
             "d450654fa2": "Claude 계정",
             "11e2354daf": "Claude 사용 런타임",
             "3dd7ddfae1": "Claude 세부정보 및 계정 전환 도구 열기",
-            "59c6e7b4e0": "보이는 세션은 지금 다시 시작됩니다. 나머지는 해당 작업 트리가 활성화될 때 다시 시작됩니다.",
             "c676918adc": "시스템 기본값",
             "3325d996cb": "rate-limit 새로고침",
-            "cd9d7b40ff": "{{value0}} 세션 다시 시작",
-            "6cd6650b4c": "세션 다시 시작",
             "25d8bbde69": "재설정 사용 중…",
             "e159fc1fd7": "지금 재설정",
             "972a1ff497": "Codex 한도를 재설정할까요?",
@@ -4096,8 +4093,10 @@
             "cursorUsageMenu": "Cursor 사용량",
             "hiddenUsageProviders": "그 외: {{value0}}",
             "zcodeUsageMenu": "ZCode 사용",
-            "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능",
-            "staleCodexSessions_other": "Codex 세션 {{count}}개가 아직 이전 계정을 사용하고 있습니다."
+            "codexResetsAvailable_other": "재설정 {{count}}회 사용 가능",
+            "codexRestartBadgeLabel_other": "Codex 세션 {{count}}개를 다시 시작해야 합니다",
+            "codexRestartBannerTitle_other": "Codex 세션 {{count}}개가 아직 이전 계정을 사용하고 있습니다.",
+            "codexRestartBannerAction_other": "세션 다시 시작"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -4292,7 +4291,11 @@
             "hoursAgo": "{{hours}}시간 전",
             "updatedAgo": "{{time}} 업데이트됨",
             "notYetUpdated": "아직 업데이트되지 않음",
-            "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능"
+            "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능",
+            "inlineNextExpiresNow": "다음 항목이 지금 만료됨",
+            "inlineExpiresNow": "지금 만료됨",
+            "inlineNextExpiresIn": "다음 항목이 {{value0}} 후 만료됨",
+            "inlineExpiresIn": "{{value0}} 후 만료됨"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"

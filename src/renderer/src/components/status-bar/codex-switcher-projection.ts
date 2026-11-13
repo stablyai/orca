@@ -16,7 +16,9 @@ export function getCodexResetProjection(
   const resetCreditCount = codex.rateLimitResetCredits?.availableCount ?? null
   const resetCreditExpiry =
     resetCreditCount !== null
-      ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount, t)
+      ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount, t, {
+          inline: true
+        })
       : null
   return {
     resetCreditCount,

@@ -15,6 +15,7 @@ import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
+import { CodexRestartBadge, useCodexStaleSessionCount } from './CodexRestartBadge'
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
@@ -124,6 +125,10 @@ function UsageMetric({
   )
 }
 
+function CodexRosterRestartBadge(): React.JSX.Element | null {
+  return <CodexRestartBadge count={useCodexStaleSessionCount()} />
+}
+
 export function UsageRow({
   p,
   display,
@@ -157,6 +162,7 @@ export function UsageRow({
           {name}
           {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
         </span>
+        {p.provider === 'codex' ? <CodexRosterRestartBadge /> : null}
         {!hasUsage ? (
           <>
             <span className="min-w-0 truncate text-[11px] text-muted-foreground">

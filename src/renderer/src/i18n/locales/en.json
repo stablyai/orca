@@ -5268,11 +5268,8 @@
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
-            "59c6e7b4e0": "Visible sessions restart now. Others restart when their worktree becomes active.",
             "c676918adc": "System default",
             "3325d996cb": "Refresh rate limits",
-            "cd9d7b40ff": "Restart {{value0}} Sessions",
-            "6cd6650b4c": "Restart Session",
             "25d8bbde69": "Using reset…",
             "e159fc1fd7": "Reset now",
             "972a1ff497": "Reset Codex limits?",
@@ -5292,14 +5289,18 @@
             "cursorUsageMenu": "Cursor Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
             "zcodeUsageMenu": "ZCode Usage",
-            "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
-            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
             "signedOutAccounts": "Signed out",
             "addAnotherAccount": "Add another account…",
-            "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
-            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
             "windowWeeks": "{{value0}}wk",
-            "museUsageMenu": "Muse Usage"
+            "museUsageMenu": "Muse Usage",
+            "codexResetsAvailable_one": "{{count}} reset available",
+            "codexResetsAvailable_other": "{{count}} resets available",
+            "codexRestartBadgeLabel_one": "{{count}} Codex session needs a restart",
+            "codexRestartBadgeLabel_other": "{{count}} Codex sessions need a restart",
+            "codexRestartBannerTitle_one": "{{count}} Codex session still uses the previous account.",
+            "codexRestartBannerTitle_other": "{{count}} Codex sessions still use the previous account.",
+            "codexRestartBannerAction_one": "Restart session",
+            "codexRestartBannerAction_other": "Restart sessions"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -5528,7 +5529,11 @@
             "updatedAgo": "Updated {{time}}",
             "notYetUpdated": "Not yet updated",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
-            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available"
+            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "inlineNextExpiresNow": "next expires now",
+            "inlineExpiresNow": "expires now",
+            "inlineNextExpiresIn": "next expires in {{value0}}",
+            "inlineExpiresIn": "expires in {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"

@@ -26,31 +26,46 @@ export function CodexResetCredits({
   canRedeemReset: boolean
   isRedeemingReset: boolean
   onReset: () => void
-  renderAction?: (action: React.ReactNode) => React.ReactNode
+  /** Wraps the label in an interactive child (e.g. a menu item); the ghost Button styles that child. */
+  renderAction?: (content: React.ReactNode) => React.ReactElement
 }): React.JSX.Element {
   const t = useTranslate()
-  const action = (
-    <Button variant="outline" size="xs" disabled={isRedeemingReset} onClick={onReset}>
+  const content = (
+    <>
       {isRedeemingReset ? <Loader2 className="size-3.5 animate-spin" /> : null}
       {isRedeemingReset
         ? t('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
         : t('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
+    </>
+  )
+  // Why: Button outside the wrapper so its classes win the merge over a menu item's own styles.
+  const action = (
+    <Button
+      asChild={renderAction !== undefined}
+      variant="ghost"
+      size="xs"
+      disabled={isRedeemingReset}
+      onClick={onReset}
+    >
+      {renderAction ? renderAction(content) : content}
     </Button>
   )
   return (
     <div className="flex items-center justify-between gap-2">
-      <div className="min-w-0 text-2xs text-muted-foreground">
-        {t(
-          'auto.components.status.bar.StatusBar.rateLimitResetsAvailable',
-          '{{count}} rate-limit resets available',
-          {
-            count: resetCreditCount,
-            defaultValue_one: '{{count}} rate-limit reset available'
-          }
-        )}
-        {resetCreditExpiry ? <div>{resetCreditExpiry}</div> : null}
+      <div className="min-w-0 truncate text-2xs text-muted-foreground">
+        <span className="font-medium text-foreground">
+          {t(
+            'auto.components.status.bar.StatusBar.codexResetsAvailable',
+            '{{count}} resets available',
+            {
+              count: resetCreditCount,
+              defaultValue_one: '{{count}} reset available'
+            }
+          )}
+        </span>
+        {resetCreditExpiry ? ` · ${resetCreditExpiry}` : null}
       </div>
-      {canRedeemReset ? (renderAction ? renderAction(action) : action) : null}
+      {canRedeemReset ? action : null}
     </div>
   )
 }

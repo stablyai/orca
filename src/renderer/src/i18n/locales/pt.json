@@ -3387,11 +3387,8 @@
             "d450654fa2": "Conta do Claude",
             "11e2354daf": "Runtime de uso do Claude",
             "3dd7ddfae1": "Abrir detalhes do Claude e alternador de conta",
-            "59c6e7b4e0": "As sessões visíveis reiniciam agora. As outras reiniciam quando sua worktree se tornar ativa.",
             "c676918adc": "Padrão do sistema",
             "3325d996cb": "Atualizar limites de taxa",
-            "cd9d7b40ff": "Reiniciar {{value0}} Sessões",
-            "6cd6650b4c": "Reiniciar Sessão",
             "25d8bbde69": "Usando redefinição…",
             "e159fc1fd7": "Redefinir agora",
             "972a1ff497": "Redefinir limites do Codex?",
@@ -3411,14 +3408,20 @@
             "cursorUsageMenu": "Uso do Cursor",
             "hiddenUsageProviders": "Também: {{value0}}",
             "zcodeUsageMenu": "Uso do ZCode",
-            "rateLimitResetsAvailable_one": "{{count}} redefinição de limite de taxa disponível",
-            "rateLimitResetsAvailable_other": "{{count}} redefinições de limite de taxa disponíveis",
-            "rateLimitResetsAvailable_many": "{{count}} redefinições de limite de taxa disponíveis",
-            "staleCodexSessions_one": "{{count}} sessão do Codex ainda está na conta antiga.",
-            "staleCodexSessions_other": "{{count}} sessões do Codex ainda estão na conta antiga.",
-            "staleCodexSessions_many": "{{count}} sessões do Codex ainda estão na conta antiga.",
             "signedOutAccounts": "Desconectado",
-            "addAnotherAccount": "Adicionar outra conta…"
+            "addAnotherAccount": "Adicionar outra conta…",
+            "codexResetsAvailable_one": "{{count}} redefinição disponível",
+            "codexResetsAvailable_many": "{{count}} redefinições disponíveis",
+            "codexResetsAvailable_other": "{{count}} redefinições disponíveis",
+            "codexRestartBadgeLabel_one": "{{count}} sessão do Codex precisa ser reiniciada",
+            "codexRestartBadgeLabel_many": "{{count}} sessões do Codex precisam ser reiniciadas",
+            "codexRestartBadgeLabel_other": "{{count}} sessões do Codex precisam ser reiniciadas",
+            "codexRestartBannerTitle_one": "{{count}} sessão do Codex ainda usa a conta anterior.",
+            "codexRestartBannerTitle_many": "{{count}} sessões do Codex ainda usam a conta anterior.",
+            "codexRestartBannerTitle_other": "{{count}} sessões do Codex ainda usam a conta anterior.",
+            "codexRestartBannerAction_one": "Reiniciar sessão",
+            "codexRestartBannerAction_many": "Reiniciar sessões",
+            "codexRestartBannerAction_other": "Reiniciar sessões"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar uma conta",
@@ -3642,7 +3645,11 @@
             "notYetUpdated": "Ainda não atualizado",
             "rateLimitResetsAvailable_one": "{{count}} redefinição de limite de taxa disponível",
             "rateLimitResetsAvailable_other": "{{count}} redefinições de limite de taxa disponíveis",
-            "rateLimitResetsAvailable_many": "{{count}} redefinições de limite de taxa disponíveis"
+            "rateLimitResetsAvailable_many": "{{count}} redefinições de limite de taxa disponíveis",
+            "inlineNextExpiresNow": "o próximo expira agora",
+            "inlineExpiresNow": "expira agora",
+            "inlineNextExpiresIn": "o próximo expira em {{value0}}",
+            "inlineExpiresIn": "expira em {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"

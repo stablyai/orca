@@ -4647,11 +4647,8 @@
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
-            "59c6e7b4e0": "Sichtbare Sitzungen werden jetzt neu gestartet. Andere werden neu gestartet, sobald ihr Worktree aktiv wird.",
             "c676918adc": "Systemstandard",
             "3325d996cb": "Ratenlimits aktualisieren",
-            "cd9d7b40ff": "{{value0}} Sitzungen neu starten",
-            "6cd6650b4c": "Sitzung neu starten",
             "25d8bbde69": "Zurücksetzung wird verwendet…",
             "e159fc1fd7": "Jetzt zurücksetzen",
             "972a1ff497": "Codex-Limits zurücksetzen?",
@@ -4669,10 +4666,14 @@
             "cursorUsageMenu": "Cursor-Nutzung",
             "hiddenUsageProviders": "Außerdem: {{value0}}",
             "zcodeUsageMenu": "ZCode-Nutzung",
-            "rateLimitResetsAvailable_one": "{{count}} Ratenlimit-Zurücksetzung verfügbar",
-            "rateLimitResetsAvailable_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar",
-            "staleCodexSessions_one": "{{count}} Codex-Sitzung verwendet noch das alte Konto.",
-            "staleCodexSessions_other": "{{count}} Codex-Sitzungen verwenden noch das alte Konto."
+            "codexResetsAvailable_one": "{{count}} Zurücksetzung verfügbar",
+            "codexResetsAvailable_other": "{{count}} Zurücksetzungen verfügbar",
+            "codexRestartBadgeLabel_one": "{{count}} Codex-Sitzung muss neu gestartet werden",
+            "codexRestartBadgeLabel_other": "{{count}} Codex-Sitzungen müssen neu gestartet werden",
+            "codexRestartBannerTitle_one": "{{count}} Codex-Sitzung verwendet noch das vorherige Konto.",
+            "codexRestartBannerTitle_other": "{{count}} Codex-Sitzungen verwenden noch das vorherige Konto.",
+            "codexRestartBannerAction_one": "Sitzung neu starten",
+            "codexRestartBannerAction_other": "Sitzungen neu starten"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Konto verbinden",
@@ -4892,7 +4893,11 @@
             "updatedAgo": "Aktualisiert {{time}}",
             "notYetUpdated": "Noch nicht aktualisiert",
             "rateLimitResetsAvailable_one": "{{count}} Ratenlimit-Zurücksetzung verfügbar",
-            "rateLimitResetsAvailable_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar"
+            "rateLimitResetsAvailable_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar",
+            "inlineNextExpiresNow": "nächste läuft jetzt ab",
+            "inlineExpiresNow": "läuft jetzt ab",
+            "inlineNextExpiresIn": "nächste läuft in {{value0}} ab",
+            "inlineExpiresIn": "läuft in {{value0}} ab"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH-Host"

@@ -4418,11 +4418,8 @@
             "d450654fa2": "Compte Claude",
             "11e2354daf": "Runtime d'utilisation Claude",
             "3dd7ddfae1": "Ouvrir les détails Claude et le sélecteur de compte",
-            "59c6e7b4e0": "Les sessions visibles redémarrent maintenant. Les autres redémarrent quand leur worktree devient actif.",
             "c676918adc": "Valeur par défaut du système",
             "3325d996cb": "Actualiser les limites de débit",
-            "cd9d7b40ff": "Redémarrer {{value0}} sessions",
-            "6cd6650b4c": "Redémarrer la session",
             "25d8bbde69": "Utilisation de la réinitialisation…",
             "e159fc1fd7": "Réinitialiser maintenant",
             "972a1ff497": "Réinitialiser les limites Codex ?",
@@ -4440,12 +4437,18 @@
             "cursorUsageMenu": "Utilisation Cursor",
             "hiddenUsageProviders": "Aussi : {{value0}}",
             "zcodeUsageMenu": "Utilisation du code Z",
-            "rateLimitResetsAvailable_one": "{{count}} réinitialisation de limite de débit disponible",
-            "rateLimitResetsAvailable_other": "{{count}} réinitialisations de limite de débit disponibles",
-            "rateLimitResetsAvailable_many": "{{count}} réinitialisations de limite de débit disponibles",
-            "staleCodexSessions_one": "{{count}} session Codex utilise encore l’ancien compte.",
-            "staleCodexSessions_other": "{{count}} sessions Codex utilisent encore l’ancien compte.",
-            "staleCodexSessions_many": "{{count}} sessions Codex utilisent encore l’ancien compte."
+            "codexResetsAvailable_one": "{{count}} réinitialisation disponible",
+            "codexResetsAvailable_many": "{{count}} réinitialisations disponibles",
+            "codexResetsAvailable_other": "{{count}} réinitialisations disponibles",
+            "codexRestartBadgeLabel_one": "{{count}} session Codex doit redémarrer",
+            "codexRestartBadgeLabel_many": "{{count}} sessions Codex doivent redémarrer",
+            "codexRestartBadgeLabel_other": "{{count}} sessions Codex doivent redémarrer",
+            "codexRestartBannerTitle_one": "{{count}} session Codex utilise encore le compte précédent.",
+            "codexRestartBannerTitle_many": "{{count}} sessions Codex utilisent encore le compte précédent.",
+            "codexRestartBannerTitle_other": "{{count}} sessions Codex utilisent encore le compte précédent.",
+            "codexRestartBannerAction_one": "Redémarrer la session",
+            "codexRestartBannerAction_many": "Redémarrer les sessions",
+            "codexRestartBannerAction_other": "Redémarrer les sessions"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connecter un compte",
@@ -4661,7 +4664,11 @@
             "notYetUpdated": "Pas encore mis à jour",
             "rateLimitResetsAvailable_one": "{{count}} réinitialisation de limite de débit disponible",
             "rateLimitResetsAvailable_other": "{{count}} réinitialisations de limite de débit disponibles",
-            "rateLimitResetsAvailable_many": "{{count}} réinitialisations de limite de débit disponibles"
+            "rateLimitResetsAvailable_many": "{{count}} réinitialisations de limite de débit disponibles",
+            "inlineNextExpiresNow": "la prochaine expire maintenant",
+            "inlineExpiresNow": "expire maintenant",
+            "inlineNextExpiresIn": "la prochaine expire dans {{value0}}",
+            "inlineExpiresIn": "expire dans {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "Hôte SSH"

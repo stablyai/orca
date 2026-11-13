@@ -1,30 +1,23 @@
 import { awaitsCodexRestartAnswer } from '@/components/codex-restart-notice-state'
 import type { CodexRestartNotice } from '@/store/terminals/terminal-contracts'
 
-type TabLookup = Record<string, { id: string }[]>
-
 export type CodexRestartStatusSummaryInput = {
-  tabsByWorktree: TabLookup
   ptyIdsByTabId: Record<string, string[]>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice | undefined>
 }
 
 export type CodexRestartStatusSummary = {
   stalePtyIds: string[]
+  /** Zero unless a stale session is still bound to a tab, so orphaned notices never prompt. */
   staleSessionCount: number
-  staleTabCount: number
-  staleWorktreeCount: number
 }
 
 const EMPTY_CODEX_RESTART_STATUS_SUMMARY: CodexRestartStatusSummary = {
   stalePtyIds: [],
-  staleSessionCount: 0,
-  staleTabCount: 0,
-  staleWorktreeCount: 0
+  staleSessionCount: 0
 }
 
 export function summarizeCodexRestartStatus({
-  tabsByWorktree,
   ptyIdsByTabId,
   codexRestartNoticeByPtyId
 }: CodexRestartStatusSummaryInput): CodexRestartStatusSummary {
@@ -37,24 +30,24 @@ export function summarizeCodexRestartStatus({
   }
 
   const stalePtyIdSet = new Set(stalePtyIds)
-  const staleTabIds = new Set<string>()
-  for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
-    if (ptyIds.some((ptyId) => stalePtyIdSet.has(ptyId))) {
-      staleTabIds.add(tabId)
-    }
-  }
+  const boundToTab = Object.values(ptyIdsByTabId).some((ptyIds) =>
+    ptyIds.some((ptyId) => stalePtyIdSet.has(ptyId))
+  )
+  return boundToTab
+    ? { stalePtyIds, staleSessionCount: stalePtyIds.length }
+    : EMPTY_CODEX_RESTART_STATUS_SUMMARY
+}
 
-  const staleWorktreeIds = new Set<string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    if (tabs.some((tab) => staleTabIds.has(tab.id))) {
-      staleWorktreeIds.add(worktreeId)
-    }
-  }
+let memoNotices: CodexRestartStatusSummaryInput['codexRestartNoticeByPtyId'] | null = null
+let memoBindings: CodexRestartStatusSummaryInput['ptyIdsByTabId'] | null = null
+let memoCount = 0
 
-  return {
-    stalePtyIds,
-    staleSessionCount: stalePtyIds.length,
-    staleTabCount: staleTabIds.size,
-    staleWorktreeCount: staleWorktreeIds.size
+/** Store selector for always-mounted surfaces: unrelated writes cost two reference checks and allocate nothing. */
+export function selectCodexStaleSessionCount(state: CodexRestartStatusSummaryInput): number {
+  if (state.codexRestartNoticeByPtyId !== memoNotices || state.ptyIdsByTabId !== memoBindings) {
+    memoNotices = state.codexRestartNoticeByPtyId
+    memoBindings = state.ptyIdsByTabId
+    memoCount = summarizeCodexRestartStatus(state).staleSessionCount
   }
+  return memoCount
 }

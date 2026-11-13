@@ -4613,11 +4613,8 @@
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
-            "59c6e7b4e0": "Görünür oturumlar şimdi yeniden başlar. Diğerleri, worktree'leri etkin hale geldiğinde yeniden başlar.",
             "c676918adc": "Sistem varsayılanı",
             "3325d996cb": "Hız sınırlarını yenile",
-            "cd9d7b40ff": "{{value0}} Oturumu Yeniden Başlat",
-            "6cd6650b4c": "Oturumu Yeniden Başlat",
             "25d8bbde69": "Sıfırlama kullanılıyor…",
             "e159fc1fd7": "Şimdi sıfırla",
             "972a1ff497": "Codex sınırları sıfırlansın mı?",
@@ -4637,10 +4634,14 @@
             "cursorUsageMenu": "Cursor Kullanımı",
             "hiddenUsageProviders": "Ayrıca: {{value0}}",
             "zcodeUsageMenu": "ZCode Kullanımı",
-            "rateLimitResetsAvailable_other": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
-            "rateLimitResetsAvailable_one": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
-            "staleCodexSessions_other": "{{count}} Codex oturumu hâlâ eski hesapta.",
-            "staleCodexSessions_one": "{{count}} Codex oturumu hâlâ eski hesapta."
+            "codexResetsAvailable_one": "{{count}} sıfırlama kullanılabilir",
+            "codexResetsAvailable_other": "{{count}} sıfırlama kullanılabilir",
+            "codexRestartBadgeLabel_one": "{{count}} Codex oturumunun yeniden başlatılması gerekiyor",
+            "codexRestartBadgeLabel_other": "{{count}} Codex oturumunun yeniden başlatılması gerekiyor",
+            "codexRestartBannerTitle_one": "{{count}} Codex oturumu hâlâ önceki hesabı kullanıyor.",
+            "codexRestartBannerTitle_other": "{{count}} Codex oturumu hâlâ önceki hesabı kullanıyor.",
+            "codexRestartBannerAction_one": "Oturumu yeniden başlat",
+            "codexRestartBannerAction_other": "Oturumları yeniden başlat"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Bir hesap bağlayın",
@@ -4869,7 +4870,11 @@
             "updatedAgo": "{{time}} güncellendi",
             "notYetUpdated": "Henüz güncellenmedi",
             "rateLimitResetsAvailable_other": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
-            "rateLimitResetsAvailable_one": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir"
+            "rateLimitResetsAvailable_one": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
+            "inlineNextExpiresNow": "sıradaki şimdi sona eriyor",
+            "inlineExpiresNow": "şimdi sona eriyor",
+            "inlineNextExpiresIn": "sıradaki {{value0}} içinde sona eriyor",
+            "inlineExpiresIn": "{{value0}} içinde sona eriyor"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH sunucusu"

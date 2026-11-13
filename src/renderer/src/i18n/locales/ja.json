@@ -4077,11 +4077,8 @@
             "d450654fa2": "Claude アカウント",
             "11e2354daf": "Claude 使用ランタイム",
             "3dd7ddfae1": "Claude の詳細とアカウント切り替えを開く",
-            "59c6e7b4e0": "表示されているセッションが再開されます。他のものは、ワークツリーがアクティブになると再起動します。",
             "c676918adc": "システムのデフォルト",
             "3325d996cb": "レート制限をリセット",
-            "cd9d7b40ff": "{{value0}} セッションを再起動します",
-            "6cd6650b4c": "セッションを再開する",
             "25d8bbde69": "リセットを使用中…",
             "e159fc1fd7": "今すぐリセット",
             "972a1ff497": "Codex の制限をリセットしますか？",
@@ -4099,8 +4096,10 @@
             "cursorUsageMenu": "Cursor の使用状況",
             "hiddenUsageProviders": "ほかに: {{value0}}",
             "zcodeUsageMenu": "ZCode の使用量",
-            "rateLimitResetsAvailable_other": "レート制限リセットが {{count}} 回利用可能",
-            "staleCodexSessions_other": "{{count}} 件の Codex セッションがまだ以前のアカウントを使用しています。"
+            "codexResetsAvailable_other": "{{count}} 回のリセットが利用可能",
+            "codexRestartBadgeLabel_other": "{{count}} 件の Codex セッションの再起動が必要です",
+            "codexRestartBannerTitle_other": "{{count}} 件の Codex セッションがまだ以前のアカウントを使用しています。",
+            "codexRestartBannerAction_other": "セッションを再起動"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -4295,7 +4294,11 @@
             "hoursAgo": "{{hours}} 時間前",
             "updatedAgo": "{{time}}に更新",
             "notYetUpdated": "未更新",
-            "rateLimitResetsAvailable_other": "レート制限リセットが {{count}} 回利用可能"
+            "rateLimitResetsAvailable_other": "レート制限リセットが {{count}} 回利用可能",
+            "inlineNextExpiresNow": "次は今期限切れ",
+            "inlineExpiresNow": "今期限切れ",
+            "inlineNextExpiresIn": "次は {{value0}} 後に期限切れ",
+            "inlineExpiresIn": "{{value0}} 後に期限切れ"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"

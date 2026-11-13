@@ -215,7 +215,8 @@ function ChatUsageReset({
         resetCreditExpiry={formatResetCreditExpiry(
           result.reset?.expiresAt ?? credits?.nextExpiresAt,
           count,
-          t
+          t,
+          { inline: true }
         )}
         canRedeemReset={result.reset !== undefined}
         isRedeemingReset={busy}
