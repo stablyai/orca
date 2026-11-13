@@ -161,7 +161,16 @@ export function useNativeChatPtyComposerSend(args: {
         agent: args.agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
-      useAppStore.getState().recordTabInteraction?.(args.terminalTabId)
+      const state = useAppStore.getState()
+      for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
+        const tab = tabs.find(
+          (tab) => tab.contentType === 'terminal' && tab.entityId === args.terminalTabId
+        )
+        if (tab) {
+          state.recordTabInteraction(tab.id, { worktreeId })
+          break
+        }
+      }
       args.onSubmitted?.()
       if (!retry) {
         args.setDraft('')

@@ -101,7 +101,9 @@ export type TabsSlice = {
     /** recordFocus false skips the focus-time stamp (not a user visit); the group history still updates. */
     opts?: { preservePreview?: boolean; worktreeId?: string; recordFocus?: boolean }
   ) => void
-  recordTabInteraction: (tabId: string, opts?: { worktreeId?: string }) => void
+  captureTabInteraction: (tabId: string, worktreeId: string) => () => void
+  getTabCycleOrder: (worktreeId: string, groupId: string) => string[]
+  recordTabInteraction: (tabId: string, opts?: { worktreeId?: string; cycle?: boolean }) => void
   closeUnifiedTabs: (tabIds: readonly string[]) => void
   closeUnifiedTab: (
     tabId: string,
