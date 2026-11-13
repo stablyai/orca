@@ -42,18 +42,60 @@ const UNKNOWN_CODES = new Set(['ZZ', 'XX', '--'])
 // rather than serving with every country unknown.
 export function loadIpCountryTable(path: string): IpCountryLookup {
   const raw = readFileSync(path)
-  return parseIpCountryTable((path.endsWith('.gz') ? gunzipSync(raw) : raw).toString('utf8'))
+  return parseIpCountryBytes(path.endsWith('.gz') ? gunzipSync(raw) : raw)
 }
 
 export function parseIpCountryTable(text: string): IpCountryLookup {
+  return parseIpCountryBytes(Buffer.from(text, 'utf8'))
+}
+
+const NEWLINE = 0x0a
+const COMMA = 0x2c
+
+// Parses the bytes straight into typed arrays, a line at a time. Only a line's first three fields
+// become strings, and none outlives its line: a 30 MB table never exists as one string, a string
+// per line or an array per range, so the boot peak stays near the file size.
+function parseIpCountryBytes(bytes: Buffer): IpCountryLookup {
+  let lines = 1
+  for (let at = bytes.indexOf(NEWLINE); at !== -1; at = bytes.indexOf(NEWLINE, at + 1)) {
+    lines += 1
+  }
   const codes: string[] = []
   const codeIndex = new Map<string, number>()
-  const v4: [number, number, number][] = []
-  const v6: [bigint, bigint, number][] = []
-  for (const line of text.split('\n')) {
-    const [first, last, rawCode] = line.split(',').map((field) => field.trim().replace(/^"|"$/g, ''))
-    const code = rawCode?.toUpperCase()
-    if (!first || !last || !code || !/^[A-Z]{2}$/.test(code) || UNKNOWN_CODES.has(code)) {
+  // Sized for every line in one family, then trimmed to what was read.
+  const v4First = new Uint32Array(lines)
+  const v4Last = new Uint32Array(lines)
+  const v4Code = new Uint16Array(lines)
+  const v6First = new BigUint64Array(lines)
+  const v6Last = new BigUint64Array(lines)
+  const v6Code = new Uint16Array(lines)
+  let v4Count = 0
+  let v6Count = 0
+  const field = (from: number, to: number) =>
+    bytes.toString('utf8', from, to).trim().replace(/^"|"$/g, '')
+  for (let start = 0; start < bytes.length; ) {
+    const newline = bytes.indexOf(NEWLINE, start)
+    const end = newline === -1 ? bytes.length : newline
+    const lineStart = start
+    start = end + 1
+    // The line's first three comma-separated fields; the third ends at a comma or the line end.
+    const firstComma = bytes.indexOf(COMMA, lineStart)
+    if (firstComma === -1 || firstComma >= end) {
+      continue
+    }
+    const secondComma = bytes.indexOf(COMMA, firstComma + 1)
+    if (secondComma === -1 || secondComma >= end) {
+      continue
+    }
+    const thirdComma = bytes.indexOf(COMMA, secondComma + 1)
+    const codeEnd = thirdComma === -1 || thirdComma > end ? end : thirdComma
+    const code = field(secondComma + 1, codeEnd).toUpperCase()
+    if (!/^[A-Z]{2}$/.test(code) || UNKNOWN_CODES.has(code)) {
+      continue
+    }
+    const first = field(lineStart, firstComma)
+    const last = field(firstComma + 1, secondComma)
+    if (!first || !last) {
       continue
     }
     let index = codeIndex.get(code)
@@ -62,22 +104,71 @@ export function parseIpCountryTable(text: string): IpCountryLookup {
       codeIndex.set(code, index)
     }
     if (isIPv4(first) && isIPv4(last)) {
-      v4.push([ipv4Number(first), ipv4Number(last), index])
+      v4First[v4Count] = ipv4Number(first)
+      v4Last[v4Count] = ipv4Number(last)
+      v4Code[v4Count] = index
+      v4Count += 1
     } else if (isIPv6(first) && isIPv6(last)) {
-      v6.push([ipv6Prefix64(ipv6Groups(first)), ipv6Prefix64(ipv6Groups(last)), index])
+      v6First[v6Count] = ipv6Prefix64(ipv6Groups(first))
+      v6Last[v6Count] = ipv6Prefix64(ipv6Groups(last))
+      v6Code[v6Count] = index
+      v6Count += 1
     }
   }
-  if (v4.length + v6.length === 0) {
+  if (v4Count + v6Count === 0) {
     throw new Error('ip_country_table_empty')
   }
-  v4.sort((a, b) => a[0] - b[0])
-  v6.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-  const v4First = Uint32Array.from(v4, (range) => range[0])
-  const v4Last = Uint32Array.from(v4, (range) => range[1])
-  const v4Code = Uint16Array.from(v4, (range) => range[2])
-  const v6First = BigUint64Array.from(v6, (range) => range[0])
-  const v6Last = BigUint64Array.from(v6, (range) => range[1])
-  const v6Code = Uint16Array.from(v6, (range) => range[2])
+  const v4 = byFirst(v4First, v4Last, v4Code, v4Count)
+  const v6 = byFirst(v6First, v6Last, v6Code, v6Count)
+  return lookup(codes, v4, v6)
+}
+
+type Ranges<T extends Uint32Array | BigUint64Array> = { first: T; last: T; code: Uint16Array }
+
+// The first `count` ranges, ordered by first address; ties keep file order (a stable sort), so
+// the later of two ranges with the same start wins, as it always has. Release files are already
+// in order, which costs one pass and no sort.
+function byFirst<T extends Uint32Array | BigUint64Array>(
+  first: T,
+  last: T,
+  code: Uint16Array,
+  count: number
+): Ranges<T> {
+  let sorted = true
+  for (let at = 1; at < count && sorted; at += 1) {
+    sorted = first[at - 1]! <= first[at]!
+  }
+  if (sorted) {
+    return {
+      first: first.slice(0, count) as T,
+      last: last.slice(0, count) as T,
+      code: code.slice(0, count)
+    }
+  }
+  const order = new Uint32Array(count)
+  for (let at = 0; at < count; at += 1) {
+    order[at] = at
+  }
+  order.sort((a, b) => (first[a]! < first[b]! ? -1 : first[a]! > first[b]! ? 1 : a - b))
+  const result = {
+    first: first.slice(0, count) as T,
+    last: last.slice(0, count) as T,
+    code: new Uint16Array(count)
+  }
+  for (let at = 0; at < count; at += 1) {
+    const from = order[at]!
+    result.first[at] = first[from]!
+    result.last[at] = last[from]!
+    result.code[at] = code[from]!
+  }
+  return result
+}
+
+function lookup(
+  codes: string[],
+  { first: v4First, last: v4Last, code: v4Code }: Ranges<Uint32Array>,
+  { first: v6First, last: v6Last, code: v6Code }: Ranges<BigUint64Array>
+): IpCountryLookup {
   return {
     country(ip) {
       let v4 = isIPv4(ip) ? ipv4Number(ip) : undefined
