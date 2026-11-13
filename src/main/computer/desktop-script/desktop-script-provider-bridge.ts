@@ -183,7 +183,7 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('unsupported_capability', text)
   }
   if (
-    /unsupported mouse button|unsupported scroll direction|unsupported (?:key|modifier)|windowId is not supported|must be a positive|must be a finite number|\b(?:x|y|from_x|from_y|to_x|to_y|pages|click_count|text|key|direction) is required\b/i.test(
+    /unsupported mouse button|unsupported scroll direction|outside the target window|unsupported (?:key|modifier)|windowId is not supported|must be a positive|must be a finite number|\b(?:x|y|from_x|from_y|to_x|to_y|pages|click_count|text|key|direction) is required\b/i.test(
       text
     )
   ) {

@@ -326,7 +326,7 @@ def restore_pointer_window(app, window):
 
 
 def x11_pointer_state():
-    """The X11 pointer's root position and modifier mask, or None when no X11 display answers."""
+    """The X11 pointer's root position (None off the default screen) and modifier mask, or None with no X11 display."""
     try:
         x = ctypes.CDLL("libX11.so.6")
     except OSError:
@@ -344,10 +344,11 @@ def x11_pointer_state():
     try:
         root, child = window(), window()
         root_x, root_y, window_x, window_y, mask = integer(), integer(), integer(), integer(), ctypes.c_uint()
+        # Why keep the mask on False: that only means the pointer is on another screen; the modifiers are still valid.
         if not x.XQueryPointer(display, x.XDefaultRootWindow(display), ctypes.byref(root), ctypes.byref(child),
                                ctypes.byref(root_x), ctypes.byref(root_y), ctypes.byref(window_x),
                                ctypes.byref(window_y), ctypes.byref(mask)):
-            return None
+            return None, None, mask.value
         return root_x.value, root_y.value, mask.value
     finally:
         x.XCloseDisplay(display)
@@ -359,7 +360,7 @@ def pointer_put_back():
     try:
         yield
     finally:
-        if before is not None:
+        if before is not None and before[0] is not None:
             attempt(lambda: Atspi.generate_mouse_event(before[0], before[1], "abs"))
 
 
@@ -1962,6 +1963,9 @@ def type_text(value, window=None):
             typed += len(chunk)
         if receipt is not None and stopped is None:
             wait_for_typed_text(receipt)
+        elif receipt is not None:
+            # Why: the remapped keycodes must outlive the typed prefix until an input method has read it.
+            time.sleep(CLIPBOARD_PASTE_SETTLE_SECONDS)
     if stopped is not None:
         raise stopped
 
