@@ -32,6 +32,9 @@ RUN pnpm install --prod --frozen-lockfile --filter @orca-cloud/relay... \
   && rm -rf /opt/pnpm /usr/local/lib/node_modules /opt/yarn-* /root/.cache /root/.local \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
     /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg
+# Data a deployment stages into apps/relay/ip-country before the build (README there), e.g. the
+# director's IP → country table for ORCA_RELAY_IP_COUNTRY_DB. Holds only the README otherwise.
+COPY apps/relay/ip-country apps/relay/ip-country
 USER node
 EXPOSE 8080
 CMD ["node", "apps/relay/dist/index.js"]
