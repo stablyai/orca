@@ -291,6 +291,8 @@ if ($uiaTypes) {
     $scroll.Calls.Clear()
     Assert-TestEqual (Invoke-OrcaScrollPercent $scroll $true $false 9.5 46.6667) $true "fractional scroll clamps at the top"
     Assert-TestEqual ($scroll.Calls -join " ") "-1,0" "fractional scroll clamped percent"
+    $scroll | Add-Member -Force -MemberType ScriptMethod -Name SetScrollPercent -Value { param($horizontal, $vertical) }
+    Assert-TestEqual (Invoke-OrcaScrollPercent $scroll $true $true 0.5 0.0) $false "fractional scroll the provider ignores"
 } else {
     Write-Output "skipping UI Automation pattern checks: UIAutomationClient is unavailable"
 }

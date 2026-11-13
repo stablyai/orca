@@ -585,10 +585,11 @@ function Assert-OrcaWindowTarget($Process, $WindowId, $WindowIndex) {
 
 function Invoke-OrcaWindowPatternActivation($RootElement) {
     # Why: reapplying the current visual state lets the window's provider activate it when Windows refuses our raise (agent-desktop #651).
+    # Only for maximized windows: re-applying Normal restores a snapped window's pre-snap size.
     try {
         $pattern = $RootElement.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern)
-        $state = $pattern.Current.WindowVisualState
-        if ($state -ne [Windows.Automation.WindowVisualState]::Minimized) { $pattern.SetWindowVisualState($state) }
+        $maximized = [Windows.Automation.WindowVisualState]::Maximized
+        if ($pattern.Current.WindowVisualState -eq $maximized) { $pattern.SetWindowVisualState($maximized) }
     } catch {}
 }
 
@@ -665,7 +666,10 @@ function Get-OrcaCursorPosition {
 }
 
 function Restore-OrcaCursorPosition($Point) {
-    if ($null -ne $Point) { [OrcaDesktopWin32]::MoveCursorAfterInput($Point.X, $Point.Y) }
+    if ($null -eq $Point) { return }
+    # Why: apps read the live cursor while handling a click (context menus, hover), and Windows doesn't say when they're done.
+    Start-Sleep -Milliseconds 200
+    [OrcaDesktopWin32]::MoveCursorAfterInput($Point.X, $Point.Y)
 }
 
 function Get-OrcaElementFrame($Element, $WindowFrame) {
@@ -1423,7 +1427,8 @@ function Find-OrcaScrollContainerAt($RootElement, [double]$ScreenX, [double]$Scr
             $pattern = $candidate.GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern)
             $scrollable = if ($Vertical) { $pattern.Current.VerticallyScrollable } else { $pattern.Current.HorizontallyScrollable }
             $area = $rect.Width * $rect.Height
-            if ($scrollable -and $area -lt $bestArea) { $best = $candidate; $bestArea = $area }
+            # Why: FindAll lists ancestors first, so a tie goes to the nested viewport.
+            if ($scrollable -and $area -le $bestArea) { $best = $candidate; $bestArea = $area }
         } catch {}
     }
     $best
@@ -1471,8 +1476,9 @@ function Invoke-OrcaScrollPercent($Pattern, [bool]$Vertical, [bool]$Forward, [do
     } catch {
         return $false
     }
-    [void](Wait-OrcaScrollPercentChange $Pattern $Vertical $Before)
-    $true
+    # Why: the target differs from the start, so an unmoved position means the provider ignored the write.
+    $after = Wait-OrcaScrollPercentChange $Pattern $Vertical $Before
+    $null -ne $after -and $after -ne $Before
 }
 
 function Invoke-OrcaScrollPattern($Element, $RootElement, [string]$Direction, [double]$Pages) {
@@ -1799,16 +1805,17 @@ function Invoke-OrcaOperation($Operation) {
                 elseif ($clickCount -gt 1) { "a double or multi-click needs the real mouse" }
                 elseif ($null -eq $Operation.element) { "a click by coordinates needs the real mouse" }
                 else { $null }
+            $alternative = if ($null -eq $Operation.element) { "Click an element by --element-index instead when it lists Invoke, Select or Toggle." } else { "" }
             if ($null -eq $pointerNeed) {
                 if (Invoke-OrcaPrimaryAction $element $Operation.element.index) {
                     $action = [pscustomobject]@{ path = "accessibility"; actionName = "primaryAction"; fallbackReason = $null }
                     break
                 }
                 $pointerNeed = "element $($Operation.element.index) has no Invoke, Select or Toggle action, so clicking it needs the real mouse"
+                $alternative = "For a text field, use set-value instead."
             }
             if ($validatePointsBeforeRaise) { [void](Get-OrcaPointerPoint $element $Operation.element $Operation.x $Operation.y "x" "y" $windowFrame) }
             if (-not $restoreWindow) {
-                $alternative = if ($null -eq $Operation.element) { "Click an element by --element-index instead when it lists Invoke, Select or Toggle." } else { "For a text field, use set-value instead." }
                 throw (New-OrcaForegroundRefusal $process $pointerNeed $alternative)
             }
             $windowFrame = Restore-OrcaPointerWindow $process $root
@@ -1921,6 +1928,8 @@ function Invoke-OrcaOperation($Operation) {
             throw "unsupported tool: $($Operation.tool)"
         }
     }
+    # Why: an app can activate itself and hand the foreground back during the observe, so sample before it too.
+    $patternTookForeground = $action.path -eq "accessibility" -and (Test-OrcaTargetTookForeground $foregroundBefore $process)
 
     try {
         try {
@@ -1941,8 +1950,8 @@ function Invoke-OrcaOperation($Operation) {
         throw
     }
     # Why: real mouse and key input needs the target in front. WPF and others activate their own window for UIA patterns,
-    # sometimes after the call returns, so those are measured once the observe above has given them time.
-    $delivery = if ($action.path -eq "accessibility" -and -not (Test-OrcaTargetTookForeground $foregroundBefore $process)) { "background" } else { "foreground" }
+    # sometimes after the call returns, so those are measured again once the observe above has given them time.
+    $delivery = if ($action.path -eq "accessibility" -and -not $patternTookForeground -and -not (Test-OrcaTargetTookForeground $foregroundBefore $process)) { "background" } else { "foreground" }
     $action | Add-Member -NotePropertyName delivery -NotePropertyValue $delivery
     [pscustomobject]@{ ok = $true; action = $action; snapshot = $snapshot }
 }
