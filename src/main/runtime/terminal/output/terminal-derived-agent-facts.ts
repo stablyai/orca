@@ -113,21 +113,6 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
   }
 
-  protected emitLiveTerminalAgentStatusEvents(
-    ptyId: string,
-    chunk: ProcessedAgentStatusChunk,
-    at: number
-  ): void {
-    if (chunk.payloads.length > 0) {
-      this.orchestrationMailboxPointerDelivery.observeTerminal(
-        ptyId,
-        chunk.payloads.at(-1)?.state,
-        at
-      )
-    }
-    this.emitTerminalAgentStatusEvents(ptyId, chunk)
-  }
-
   protected emitTerminalAgentStatusEvents(
     ptyId: string,
     chunk: Pick<ProcessedAgentStatusChunk, 'payloads'> & Partial<ProcessedAgentStatusChunk>,
@@ -137,6 +122,9 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
     /** False for rows projected from the screen: they are not the agent's own prompt state. */
     recordsPromptLifecycle = true
   ): void {
+    if (chunk.payloads.length > 0 && !provenance && recordsPromptLifecycle) {
+      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId, chunk.payloads.at(-1)?.state)
+    }
     const facet = chunk.programStatusFacet
     if (chunk.payloads.length === 0 && facet === undefined) {
       return

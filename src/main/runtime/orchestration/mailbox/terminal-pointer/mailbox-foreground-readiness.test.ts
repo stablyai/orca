@@ -1,5 +1,6 @@
 import { readRuntimeFixture } from '../../../terminal/wait/agent-transcript-replay-test-harness'
-import { rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -9,10 +10,19 @@ import {
   insertDirectRunMessage,
   PTY_ID,
   PANE_KEY,
+  TAB_ID,
+  WORKTREE_ID,
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
+
+import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
+import {
+  buildBody,
+  postHookEvent,
+  RUNNING_SHELL
+} from '../../../../agent-hooks/server/testing/server.test-fixtures'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -196,12 +206,25 @@ describe('mail-local foreground recovery readiness', () => {
     { kind: 'receipt-first', recovering: true, receiptFirst: true },
     { kind: 'child-expiry', recovering: true, receiptFirst: false },
     { kind: 'owed-read-error', recovering: true, receiptFirst: false },
-    { kind: 'stale-in-band', recovering: true, receiptFirst: false },
+    { kind: 'waiter-masked', recovering: true, receiptFirst: false },
+    { kind: 'reset', recovering: true, receiptFirst: false },
+    { kind: 'fresh-in-band', recovering: true, receiptFirst: false },
+    { kind: 'fresh-hook', recovering: true, receiptFirst: false },
+    { kind: 'claude-lease', recovering: true, receiptFirst: false },
     { kind: 'permission-edge', recovering: false, receiptFirst: false }
   ])(
     'keeps a late dialog off the foreground retry schedule ($kind)',
     async ({ kind, recovering, receiptFirst }) => {
-      vi.useFakeTimers()
+      const server = ['fresh-hook', 'claude-lease'].includes(kind) ? new AgentHookServer() : null
+      vi.useFakeTimers(
+        server
+          ? {
+              shouldAdvanceTime: true,
+              toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance']
+            }
+          : undefined
+      )
+      let detach: (() => void) | undefined
       const db = createDatabase('orca-mail-late-dialog-')
       const row: AgentStatusIpcPayload = {
         paneKey: PANE_KEY,
@@ -298,14 +321,61 @@ describe('mail-local foreground recovery readiness', () => {
           delivered_at: null,
           pointer_enter_pending: 2
         })
-        if (kind === 'stale-in-band') {
+        if (kind === 'reset' || kind === 'fresh-in-band') {
           runtime.onPtyData(
             PTY_ID,
-            '\x1b]7501;state=idle:app=claude-code\x07',
-            originalRow.receivedAt
+            kind === 'reset'
+              ? '\x1b]7501;state=working:app=claude-code\x07\x1bc\x1b]0;✳ Claude Code\x07\x1b[2J\x1b[HDo you want to create hello.txt?\r\n❯ 1. Yes\r\n  2. No\r\nEsc to cancel · Tab to amend'
+              : '\x1b]7501;state=idle:app=claude-code\x07',
+            Date.now()
           )
           await vi.advanceTimersByTimeAsync(1000)
           expect(write).toHaveBeenCalledTimes(1)
+        }
+        if (server) {
+          const directory = mkdtempSync(join(tmpdir(), 'orca-mail-hook-recovery-'))
+          temporaryDirectories.push(directory)
+          await server.start({ env: 'production', userDataPath: directory })
+          detach = runtime.attachAgentStatusStore(server)
+          const post = async (payload: Record<string, unknown>) => {
+            const response = await postHookEvent(
+              server,
+              buildBody(
+                { session_id: 'mail-recovery-session', ...payload },
+                { paneKey: PANE_KEY, tabId: TAB_ID, worktreeId: WORKTREE_ID }
+              )
+            )
+            expect(response.status).toBe(204)
+          }
+          await post({ hook_event_name: 'UserPromptSubmit', prompt: 'start the dev server' })
+          if (kind === 'claude-lease') {
+            await post({
+              hook_event_name: 'PostToolUse',
+              tool_name: 'Bash',
+              tool_response: { backgroundTaskId: RUNNING_SHELL.id }
+            })
+            await post({ hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] })
+            await post({ hook_event_name: 'UserPromptSubmit', prompt: 'thanks' })
+          }
+          await post({ hook_event_name: 'Stop', background_tasks: [] })
+          expect(server.getStatusSnapshotForPane(PANE_KEY)[0]?.state).toBe(
+            kind === 'claude-lease' ? 'working' : 'done'
+          )
+          if (kind === 'claude-lease') {
+            expect(write).toHaveBeenCalledTimes(1)
+          }
+          await vi.advanceTimersByTimeAsync(65000)
+          expect(server.getStatusSnapshotForPane(PANE_KEY)[0]?.state).toBe('done')
+          expect(write).toHaveBeenCalledTimes(1)
+        }
+        if (kind === 'waiter-masked') {
+          const waiter = new AbortController()
+          const waiting = runtime.waitForMessage(`run:${run.id}`, { signal: waiter.signal })
+          await runtime.readTerminalMailHold(`run:${run.id}`)
+          await vi.advanceTimersByTimeAsync(0)
+          waiter.abort()
+          expect(await waiting).toBe('cancelled')
+          runtime.requestMailDecision(PTY_ID)
         }
         if (kind === 'owed-read-error') {
           const read = vi.spyOn(db, 'getMessageById').mockImplementationOnce(() => {
@@ -346,9 +416,15 @@ describe('mail-local foreground recovery readiness', () => {
           delivered_at: expect.any(String),
           pointer_enter_pending: 0
         })
+        attempts.mockClear()
+        const settledInspections = inspections
         await vi.advanceTimersByTimeAsync(65000)
         expect(write).toHaveBeenCalledTimes(2)
+        expect(attempts).not.toHaveBeenCalled()
+        expect(inspections).toBe(settledInspections)
       } finally {
+        detach?.()
+        server?.stop()
         db.close()
       }
     }

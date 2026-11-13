@@ -5,13 +5,13 @@ type ForegroundObservation = {
   processIncarnation: string
   generation: number
   held: boolean
-  screenRequiredSince?: number
+  screenRequired: boolean
   contradiction: number
   status?: string
 }
 
 export type OrchestrationMailboxForegroundObservation = {
-  observation: Readonly<Omit<ForegroundObservation, 'held' | 'screenRequiredSince'>>
+  observation: Readonly<Omit<ForegroundObservation, 'held' | 'screenRequired'>>
   generation: number
   contradiction: number
 }
@@ -94,7 +94,7 @@ export class MailboxForegroundEvidence {
     const wasHeld = observation.held
     if (foreground === 'shell') {
       observation.held = true
-      observation.screenRequiredSince = Date.now()
+      observation.screenRequired = true
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
       observation.held = false
@@ -112,19 +112,17 @@ export class MailboxForegroundEvidence {
 
   screenRecovery(ptyId: string): string | undefined {
     const observation = this.foregroundObservations.get(ptyId)
-    return observation?.screenRequiredSince !== undefined
-      ? observation.processIncarnation
-      : undefined
+    return observation?.screenRequired ? observation.processIncarnation : undefined
   }
 
   completeDelivery(ptyId: string): void {
     const observation = this.foregroundObservations.get(ptyId)
     if (observation && !observation.held) {
-      observation.screenRequiredSince = undefined
+      observation.screenRequired = false
     }
   }
 
-  observeTerminal(ptyId: string, status?: string, readinessObservedAt?: number): boolean {
+  observeTerminal(ptyId: string, status?: string): boolean {
     const observation = this.foregroundObservations.get(ptyId)
     if (!observation) {
       return false
@@ -133,19 +131,11 @@ export class MailboxForegroundEvidence {
     if (status === 'done') {
       status = 'idle'
     }
-    const ready =
-      observation.screenRequiredSince !== undefined &&
-      readinessObservedAt !== undefined &&
-      readinessObservedAt > observation.screenRequiredSince &&
-      status === 'idle'
-    if (ready) {
-      observation.screenRequiredSince = undefined
-    }
     const changed = status !== undefined && observation.status !== status
     if (status !== undefined) {
       observation.status = status
     }
-    return ready || (observation.held && changed)
+    return observation.held && changed
   }
 
   private foregroundObservation(ptyId: string, processIncarnation: string): ForegroundObservation {
@@ -155,7 +145,7 @@ export class MailboxForegroundEvidence {
         processIncarnation,
         generation: 0,
         held: false,
-        screenRequiredSince: undefined,
+        screenRequired: false,
         contradiction: 0
       }
       this.foregroundObservations.set(ptyId, observation)
