@@ -15,7 +15,7 @@
 //   POST /v1/stripe/webhook                 signed events
 // Sandbox control plane (CONTROL_PLANE_TOKEN):
 //   POST /v1/internal/entitlements/check {accountId, machineSize, runningSandboxes}
-//   POST /v1/internal/entitlements/features {accountId} -> {features: {audit_log, sso, scim, mfa_enforcement}}   plan feature flags (control plane or auth)
+//   POST /v1/internal/entitlements/features {accountId} -> {features: {audit_log, sso, scim, mfa_enforcement}, subscribed}   plan feature flags and paid-subscription access (control plane or auth)
 //   POST /v1/internal/usage {usageId, accountId, sandboxId, machineSize, startedAt, endedAt}
 //   GET  /v1/internal/suspensions          accounts whose payment grace expired (suspend running)
 //   POST /v1/internal/trial/github {accountId, githubUserId?, githubOwnerId?} GitHub binding -> trial abuse keys
@@ -58,7 +58,7 @@ import { MACHINE_SIZES, PlanConfigError, planCatalog, publicOffers } from './pla
 import { OverageRequestSchema, updateOverage } from './overage'
 import { LiveModeRefusedError, StripeError, createStripeClient, type StripeClient } from './stripe'
 import { UsageReportSchema, flushMeterReports, recordUsage, validateSegment } from './usage'
-import { FeaturesRequestSchema, featuresFor } from './features'
+import { FeaturesRequestSchema, featuresFor, hasPaidSubscription } from './features'
 import { handleStripeWebhook } from './webhook'
 import { UsageHistoryQuerySchema, usageHistory } from './usage-history'
 import { renderReturnPage, returnOutcome } from './return-page'
@@ -526,7 +526,11 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!body.success) {
           return json({ error: 'invalid_request' }, 400)
         }
-        return json({ features: await featuresFor(env, body.data.accountId, now) })
+        const [features, subscribed] = await Promise.all([
+          featuresFor(env, body.data.accountId, now),
+          hasPaidSubscription(env.BILLING_DB, body.data.accountId)
+        ])
+        return json({ features, subscribed })
       }
 
       case 'POST /v1/internal/usage': {
