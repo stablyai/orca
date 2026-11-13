@@ -41,6 +41,7 @@ import { isDevParentShutdownRequested } from '../configure-process'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
+import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -268,7 +269,8 @@ function installWillQuitHandler(): void {
     ]).then(() => state.runtime?.closeNotificationDismissals())
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
+    // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
+    // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
     settleTeardownWithinDeadline([
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
@@ -299,6 +301,8 @@ function installWillQuitHandler(): void {
       .catch(() => {
         /* swallow — telemetry must never prevent app.quit() */
       })
+      // Last before quitting, so it saves every extension write accepted during teardown.
+      .then(() => closeBrowserExtensionProfileDocumentStores())
       .then(() => {
         daemonDisconnectDone = true
         app.quit()

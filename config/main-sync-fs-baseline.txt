@@ -59,7 +59,7 @@
 8 src/main/browser/extensions/installation/browser-extension-install-store.ts
 1 src/main/browser/extensions/installation/browser-extension-load-directory.ts
 2 src/main/browser/extensions/profile-storage/browser-extension-data-removal.ts
-8 src/main/browser/extensions/profile-storage/browser-extension-profile-document-store.ts
+1 src/main/browser/extensions/profile-storage/browser-extension-profile-document-store.ts
 4 src/main/browser/extensions/profile-storage/browser-extension-profile-state-store.ts
 3 src/main/browser/extensions/profile-storage/browser-extension-retired-profile-storage.ts
 1 src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-cdp-probe.ts

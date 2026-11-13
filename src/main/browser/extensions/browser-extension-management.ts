@@ -141,8 +141,11 @@ export function removeBrowserExtension(extensionId: string): Promise<BrowserExte
       )
       forgetPinnedBrowserExtension(extensionId)
       getBrowserExtensionProfileStateStore().forgetExtension(extensionId)
-      getBrowserExtensionSyncStorageStore().forgetExtension(extensionId)
-      getBrowserExtensionDnrStore().forgetExtension(extensionId)
+      // Why awaited: keep the install record until the extension's saved data is deleted.
+      await Promise.all([
+        getBrowserExtensionSyncStorageStore().forgetExtension(extensionId),
+        getBrowserExtensionDnrStore().forgetExtension(extensionId)
+      ])
       forgetBrowserExtensionLoadFailures({ extensionId })
       forgetHeldBrowserExtensionUpdate(extensionId)
       await getBrowserExtensionInstallStore().remove(extensionId)
