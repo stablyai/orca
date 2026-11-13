@@ -73,6 +73,17 @@ describe('Back to draft from a GitHub-only create (GH-CREATE-SHEET)', () => {
     })
   })
 
+  it('"Choose another repository" (CLONE-ACCESS-ERROR) opens the picker instead of the refused repository', () => {
+    const data = composerDataFromRefusedCreate(
+      { request: github },
+      { local: false, pickRepo: true }
+    )
+    expect(data.openCloudRepoPicker).toBe(true)
+    expect(data.initialCloudGitHubRepo).toBeUndefined()
+    expect(data.initialEphemeralVmRecipeId).toBe('cloud')
+    expect(data.prefilledName).toBe('Fix login')
+  })
+
   it('"Create locally" keeps the composer’s own project, with no cloud repository', () => {
     expect(composerDataFromRefusedCreate({ request: github }, { local: true })).toEqual({
       initialRepoId: 'repo-1',

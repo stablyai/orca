@@ -18,6 +18,22 @@ const base = {
 }
 
 describe('deriveVmBuildSteps', () => {
+  it('a clone GitHub refused marks the clone failed, not the sandbox start (CLONE-ACCESS-ERROR)', () => {
+    const steps = deriveVmBuildSteps(
+      {
+        ...base,
+        status: 'error',
+        errorCode: 'cloudCloneFailed',
+        errorAt: 3000,
+        provisioningLog: 'Orca Cloud: repo_unreachable'
+      },
+      4000,
+      { cloud: true }
+    )
+    expect(steps.find((step) => step.id === 'provision')?.state).toBe('done')
+    expect(steps.find((step) => step.id === 'clone')?.state).toBe('failed')
+  })
+
   it('keeps the sheet moving through fetch and checkout instead of stalling on checks', () => {
     const steps = deriveVmBuildSteps(
       {

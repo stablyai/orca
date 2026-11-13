@@ -123,7 +123,7 @@ export function VmBuildSheet({
   /** Leaves the build; when a VM is still up the caller confirms before it is deleted. */
   onDismiss: () => void
   /** Leaves a refused build for the composer with its prompt; `local` runs it on this computer. */
-  onReturnToComposer: (options: { local: boolean }) => void
+  onReturnToComposer: (options: { local: boolean; pickRepo?: boolean }) => void
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
@@ -378,7 +378,8 @@ export function VmBuildSheet({
                 onShowWorkspaces: () => openCloudWorkspacePicker({ kind: 'running' }),
                 onContactSupport: () => openAppHttpLink(ORCA_SUPPORT_URL),
                 onConnectGitHub: connectGitHub,
-                onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)
+                onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL),
+                onChooseAnotherRepo: () => onReturnToComposer({ local: false, pickRepo: true })
               }}
             />
           </div>
