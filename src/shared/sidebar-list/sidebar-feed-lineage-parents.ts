@@ -6,11 +6,11 @@ import {
 import {
   getSameStoreLineageParent,
   resolveLineageParentsByPolicy
-} from '../worktree/workspace-lineage-graph'
+} from '../worktree/lineage/workspace-lineage-graph'
 import {
   buildCrossStoreLineageViewOfRows,
   OWN_LINEAGE_STORE_KEY
-} from '../worktree/cross-store-lineage-resolution'
+} from '../worktree/lineage/cross-store-lineage-resolution'
 import type { WorkspaceLineageEdge, WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'

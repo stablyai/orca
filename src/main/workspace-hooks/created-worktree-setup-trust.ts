@@ -4,8 +4,8 @@ import { getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupDecision, SetupTrustMismatch } from '../../shared/worktree/create-types'
-import type { ApprovedSetupHashes } from '../../shared/worktree/approved-setup-hashes'
-import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
+import type { ApprovedSetupHashes } from '../../shared/worktree/creation/approved-setup-hashes'
+import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
 import { shouldRunSetupForCreate } from './effective-hook-config'
 
 /** Same digest as the renderer's hashOrcaHookScript, so host and prompt hashes compare. */

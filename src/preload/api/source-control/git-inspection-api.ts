@@ -11,7 +11,7 @@ import type {
   GitUpstreamStatus
 } from '../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import type {
   GitHistoryItemRef,
   GitHistoryOptions,

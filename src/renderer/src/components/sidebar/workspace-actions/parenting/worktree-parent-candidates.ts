@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -14,7 +14,7 @@ import {
 import {
   lineageStoreKeyOfRow,
   OWN_LINEAGE_STORE_KEY
-} from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+} from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus

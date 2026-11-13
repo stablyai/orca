@@ -1,4 +1,4 @@
-import { pickApprovedSetupHashes } from '../../../../../shared/worktree/approved-setup-hashes'
+import { pickApprovedSetupHashes } from '../../../../../shared/worktree/creation/approved-setup-hashes'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import type { z } from 'zod'

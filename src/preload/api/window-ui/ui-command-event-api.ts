@@ -40,7 +40,7 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from '../../../shared/worktree/launch-types'
+} from '../../../shared/worktree/creation/launch-types'
 import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import type { BrowserFindSource } from '../../../shared/browser-find-source'

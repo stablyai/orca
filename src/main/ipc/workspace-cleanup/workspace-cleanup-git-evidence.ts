@@ -17,7 +17,7 @@ import {
 import {
   hasWorktreeAtRiskLocalFiles,
   type WorktreeAtRiskLocalFiles
-} from '../../../shared/worktree/at-risk-local-files'
+} from '../../../shared/worktree/removal/at-risk-local-files'
 import { readWorktreeAtRiskLocalFiles } from '../../git/worktrees/removal/worktree-at-risk-local-files'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
