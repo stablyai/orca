@@ -14,9 +14,7 @@ import {
   readWorktreeCatalogSnapshot,
   type WorktreeCatalogSnapshot
 } from './worktree-catalog-snapshot-client'
-
-// Same pace as the workspace list's poll; agent status notices can arrive many times a second.
-const HOME_WORKTREE_REFRESH_FLOOR_MS = 3000
+import { HOST_READ_FLOOR_MS } from '../../../src/shared/remote-runtime/host-change-read-gate'
 
 /** What a desktop card and the Agents list draw from one worktree.ps read. */
 export type HomeWorktreeCounts = {
@@ -45,7 +43,7 @@ export const homeWorktreeCountsQuery = defineHostQuery<
       catalog
     }
   },
-  staleTime: HOME_WORKTREE_REFRESH_FLOOR_MS,
+  staleTime: HOST_READ_FLOOR_MS,
   // Home stays mounted for the whole launch; its cards must not empty while it sits under a screen.
   gcTime: Infinity,
   // Change notices that arrive in the background only mark it stale.
@@ -57,10 +55,10 @@ export const homeWorktreeCountsQuery = defineHostQuery<
       'reposChanged',
       // The desktop Agents list changed; worktree.ps carries its verdicts.
       'agentListChanged',
-      // Agent status changes on hosts without the sidebar feed (worktree.rows-changed-event.v1).
+      // Agent status changes (worktree.rows-changed-event.v1); the floor folds it and sidebarInputsChanged into one read.
       'worktreeRowsChanged'
     ],
-    floorMs: HOME_WORKTREE_REFRESH_FLOOR_MS
+    floorMs: HOST_READ_FLOOR_MS
   },
   persist: {
     version: 1,

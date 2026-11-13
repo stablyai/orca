@@ -24,7 +24,6 @@ import {
   terminalPhaseInTurn
 } from '../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { WorktreeRowsChanges } from '../client/events/worktree-rows-change-events'
 import {
   TerminalAgentPhonePush,
@@ -106,13 +105,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
 
   private readonly externalConversations = installExternalConversations(this.store, this)
 
-  // The sidebar feed's activity facts already announce row changes when it is on.
-  private readonly worktreeRowsChanges = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? null
-    : new WorktreeRowsChanges((event) => this.emitClientEvent(event))
+  // Published with the sidebar feed on too: paired desktops can't read this host's feed.
+  private readonly worktreeRowsChanges = new WorktreeRowsChanges((event) =>
+    this.emitClientEvent(event)
+  )
 
   protected onTitleAgentStatusChanged(): void {
-    this.worktreeRowsChanges?.changed()
+    this.worktreeRowsChanges.changed()
   }
 
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
@@ -177,7 +176,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       this.crewChanges.notify(new Set(['status', 'names']))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
-    const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())
+    const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges.changed())
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)

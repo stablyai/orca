@@ -34,13 +34,12 @@ import {
   readHostSshTargetLabels,
   settledMetadataReply
 } from './host-ssh-target-labels-read'
+import { HOST_READ_FLOOR_MS } from '../../../src/shared/remote-runtime/host-change-read-gate'
 
 // The host-wide lists: one per paired host, read on the desktop itself.
 export const HOST_LIST_TARGET: HostQueryTarget = { exec: 'local' }
 export const NO_HOST_LIST_INPUT = {}
 
-// A visible list polls rows the host sends no notice for: all of them on older hosts (host-worktree-catalog).
-export const HOST_LIST_POLL_MS = 3000
 // With worktreeRowsChanged, the poll only catches what agent row notices miss (terminal counts, unread, PR badge).
 export const HOST_LIST_BACKSTOP_POLL_MS = 10_000
 
@@ -90,14 +89,14 @@ export const hostWorktreeCatalogQuery = defineHostQuery<
 >({
   family: 'worktree.ps',
   fetch: (client, _target, _input, previous) => readWorktreeCatalogSnapshot(client, previous),
-  staleTime: HOST_LIST_POLL_MS,
+  staleTime: HOST_READ_FLOOR_MS,
   gcTime: 30 * 60_000,
   // A hidden page reads nothing on change events; coming back reads what it missed.
   refetchOnWindowFocus: true,
   // Folder workspace changes publish reposChanged, and worktree.ps carries their rows.
   signal: {
     events: ['worktreesChanged', 'reposChanged', 'worktreeRowsChanged'],
-    floorMs: HOST_LIST_POLL_MS
+    floorMs: HOST_READ_FLOOR_MS
   },
   persist: {
     version: 1,
@@ -157,10 +156,10 @@ export const hostServerWorkspacesQuery = defineHostQuery<{ deltas: boolean }, Se
     const held = previous ?? NO_SERVER_WORKSPACES
     return fetched ? applyServerWorkspaces(held, fetched) : held
   },
-  staleTime: HOST_LIST_POLL_MS,
+  staleTime: HOST_READ_FLOOR_MS,
   gcTime: 30 * 60_000,
   refetchOnWindowFocus: true,
-  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_LIST_POLL_MS },
+  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_READ_FLOOR_MS },
   persist: {
     version: 1,
     dataSchema: z.object({

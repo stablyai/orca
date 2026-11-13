@@ -31,7 +31,6 @@ import { refetchHostQueryAfterInFlight } from '../query/host-event-router'
 import {
   isHostListQuery,
   HOST_LIST_BACKSTOP_POLL_MS,
-  HOST_LIST_POLL_MS,
   HOST_LIST_TARGET,
   hostServerWorkspacesInput,
   hostServerWorkspacesQuery,
@@ -39,6 +38,7 @@ import {
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
 } from './host-list-queries'
+import { HOST_READ_FLOOR_MS } from '../../../src/shared/remote-runtime/host-change-read-gate'
 
 // Shown verbatim so broken remote hosts stay diagnosable instead of looking empty (STA-3123).
 function catalogErrorCode(error: unknown): string | null {
@@ -105,7 +105,7 @@ export function useHostWorktreeCatalog(args: {
 
   const host = { hostId: hostId ?? '', client }
   // The host's sidebar feed replaces the poll: its notices say when a row changed.
-  const pollMs = sidebarFeed ? false : HOST_LIST_POLL_MS
+  const pollMs = sidebarFeed ? false : HOST_READ_FLOOR_MS
   const catalog = useHostQuery(
     hostWorktreeCatalogQuery,
     host,
