@@ -1,6 +1,6 @@
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import { expect, it, vi } from 'vitest'
-import { meterQuietQueries, runtimeFixture } from './worker-quiet-runtime.test-fixture'
+import { runtimeFixture } from './worker-quiet-runtime.test-fixture'
 
 const fixture = runtimeFixture()
 
@@ -10,27 +10,93 @@ it.each([
   [100, 1],
   [1000, 1]
 ])(
-  'examines only live attachments with %i retained completed rows and %i live worker',
-  (history, live) => {
+  'bounds the real timer by %i stale open dispatches and %i working worker',
+  (history, working) => {
     const { db } = fixture
+    fixture.workers(history)
+    fixture.chat.handles.clear()
     const insert = db.db.prepare(`INSERT INTO remote_dispatch_attachments
-      (dispatch_id, task_id, home_peer_fingerprint, runtime_epoch, pane_key, terminal_handle, state)
-      VALUES (?, 'task', 'peer', 'epoch', ?, 'term_worker', ?)`)
+    (dispatch_id, task_id, home_peer_fingerprint, runtime_epoch, pane_key, terminal_handle, state,
+      process_incarnation)
+    VALUES (?, 'task', 'peer', 'epoch', ?, ?, 'ready', 'process-1')`)
     runLifecycleWriteTransaction(db.db, 'seed_quiet_notice', () => {
       for (let n = 0; n < history; n++) {
-        insert.run(`completed-${n}`, `pane-${n}`, 'succeeded')
+        insert.run(`stale-${n}`, `stale-pane-${n}`, `term_stale_${n}`)
       }
-      if (live) {
-        insert.run('live', 'live-pane', 'ready')
+      if (working) {
+        insert.run('live', 'live-pane', 'term_live')
+        fixture.terminal('live-pane', 'term_live')
       }
     })
-    const meter = meterQuietQueries(db)
-    fixture.start()
+    let visited = 0
+    db.db.function('quiet_visit', (_row: unknown) => {
+      visited++
+      return 1
+    })
+    const prepare = db.db.prepare.bind(db.db)
+    vi.spyOn(db.db, 'prepare').mockImplementation((sql) =>
+      prepare(
+        sql
+          .replace(
+            /FROM dispatch_contexts\s+WHERE/g,
+            'FROM dispatch_contexts WHERE quiet_visit(id) AND'
+          )
+          .replace(
+            /FROM remote_dispatch_attachments\s+WHERE/g,
+            'FROM remote_dispatch_attachments WHERE quiet_visit(dispatch_id) AND'
+          )
+      )
+    )
+    const local = vi.spyOn(db, 'getActiveDispatchForTerminal')
+    const remote = vi.spyOn(db, 'findActiveRemoteAttachmentForPane')
+    const observations = vi.fn(() => fixture.panes.keys())
+    fixture.start({ readPaneKeys: observations })
     vi.advanceTimersByTime(120_000)
-    // Each sweep may examine the one live worker; completed history owes no output.
-    expect(meter.visits.attachment).toBeLessThanOrEqual(live * 3)
-    expect(meter.visits.attachment).toBeGreaterThanOrEqual(live)
-    expect(meter.plans.join('\n')).toContain('idx_remote_dispatch_attachments_active_pane')
-    expect(meter.plans.join('\n')).not.toContain('SCAN remote_dispatch_attachments\n')
+    // Three sweeps owe at most one dispatch seek and two attachment reads per working pane.
+    expect(local).toHaveBeenCalledTimes(working * 3)
+    expect(remote).toHaveBeenCalledTimes(working * 3)
+    expect(visited).toBeLessThanOrEqual(working * 6)
+    fixture.panes.clear()
+    fixture.changes.notify()
+    vi.advanceTimersByTime(60_000)
+    local.mockClear()
+    remote.mockClear()
+    observations.mockClear()
+    vi.advanceTimersByTime(600_000)
+    expect(local).not.toHaveBeenCalled()
+    expect(remote).not.toHaveBeenCalled()
+    expect(observations).not.toHaveBeenCalled()
   }
 )
+
+it('recovers acknowledged remote notices only for the current live process after restart', () => {
+  const { db } = fixture
+  fixture.terminal('remote-pane', 'term_remote')
+  db.db
+    .prepare(`INSERT INTO remote_dispatch_attachments
+    (dispatch_id, task_id, home_peer_fingerprint, runtime_epoch, pane_key, terminal_handle, state,
+      process_incarnation)
+    VALUES ('remote', 'task', 'peer', 'epoch', 'remote-pane', 'term_remote', 'ready', 'stale-process')`)
+    .run()
+  db.db.prepare("UPDATE remote_dispatch_attachments SET created_at = '1970-01-01 00:00:00'").run()
+  fixture.start()
+  vi.advanceTimersByTime(3_600_000)
+  expect(db.db.prepare('SELECT count(*) AS n FROM federation_relay_items').get()?.n).toBe(0)
+  db.db.prepare("UPDATE remote_dispatch_attachments SET process_incarnation = 'process-1'").run()
+  fixture.changes.notify()
+  vi.advanceTimersByTime(3_600_000)
+  const first = db.db.prepare('SELECT message_id, payload FROM federation_relay_items').get()!
+  expect(JSON.parse(String(first.payload)).type).toBe('status')
+  expect(JSON.parse(JSON.parse(String(first.payload)).payload).quietNotice.ordinal).toBe(1)
+  db.db.prepare("UPDATE federation_relay_items SET acked_at = datetime('now')").run()
+  fixture.start()
+  vi.advanceTimersByTime(7_140_000)
+  expect(db.db.prepare('SELECT count(*) AS n FROM federation_relay_items').get()?.n).toBe(1)
+  vi.advanceTimersByTime(60_000)
+  const rows = db.db
+    .prepare('SELECT message_id, payload FROM federation_relay_items ORDER BY sequence')
+    .all()
+  expect(rows).toHaveLength(2)
+  expect(JSON.parse(JSON.parse(String(rows[1]!.payload)).payload).quietNotice.ordinal).toBe(2)
+  expect(rows[1]!.message_id).not.toBe(first.message_id)
+})

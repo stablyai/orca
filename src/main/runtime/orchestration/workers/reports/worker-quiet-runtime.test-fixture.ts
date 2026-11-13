@@ -8,10 +8,14 @@ import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { startWorkerQuietSweep } from './worker-quiet-runtime'
 import type { WorkerQuietObservation } from './worker-quiet-sweep'
+import { CrewChanges } from '../../crew/crew-changes'
+import { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-turn-stops'
+import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 
 const chat = vi.hoisted(() => ({
   handles: new Set<string>(),
   status: 'working',
+  statuses: new Map<string, string>(),
   progress: vi.fn<(id: string) => Omit<WorkerQuietObservation, 'dispatchId' | 'working'> | null>()
 }))
 
@@ -19,16 +23,28 @@ vi.mock(
   '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
   () => ({
     getStructuredAgentSessionHost: () => ({
-      readStatusSummary: () => ({ status: chat.status }),
+      loadedSessionIds: () => [...chat.handles],
+      readStatusSummary: (id: string) => ({ status: chat.statuses.get(id) ?? chat.status }),
       attentionReads: { workerProgress: chat.progress },
       sessionAgent: () => 'codex'
     })
   })
 )
 vi.mock('../../terminal-authority/structured-sessions/structured-worker-authority', () => ({
-  resolveStructuredWorkerIdentity: (handle: string) =>
-    chat.handles.has(handle) ? { handle, sessionId: 'session-1', agent: 'codex' } : null,
-  structuredWorkerSession: () => ({ kind: 'here', sessionId: 'session-1' })
+  resolveStructuredWorkerIdentityForSession: (id: string) =>
+    chat.handles.has(id)
+      ? {
+          handle: id,
+          sessionId: id,
+          paneKey: `pane-${id}`,
+          agent: 'codex',
+          processIncarnation: 'process-1'
+        }
+      : null,
+  structuredWorkerSession: (identity: { sessionId: string }) => ({
+    kind: 'here',
+    sessionId: identity.sessionId
+  })
 }))
 vi.mock('../../../construction/runtime-desktop-surface', () => ({
   getRuntimeDesktopSurface: () => ({})
@@ -37,10 +53,18 @@ vi.mock('../../../construction/runtime-desktop-surface', () => ({
 export function runtimeFixture() {
   let db: OrchestrationDb
   let stop: (() => void) | undefined
+  let store: AgentHookServer
+  const changes = new CrewChanges()
+  const panes = new Map<string, RuntimePtyWorktreeRecord>()
+  const handles = new Map<string, string>()
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
     chat.handles.clear()
+    chat.statuses.clear()
+    panes.clear()
+    handles.clear()
+    store = new AgentHookServer()
     chat.status = 'working'
     chat.progress.mockReset().mockReturnValue({ turnStartedAt: 0, lastProducerEventAt: 0 })
     db = new OrchestrationDb(':memory:')
@@ -54,21 +78,49 @@ export function runtimeFixture() {
   })
   return {
     chat,
+    changes,
+    panes,
+    get store() {
+      return store
+    },
     get db() {
       return db
     },
     start: (overrides: Partial<Parameters<typeof startWorkerQuietSweep>[0]> = {}) => {
       stop?.()
       stop = startWorkerQuietSweep({
-        store: new AgentHookServer(),
-        changes: { subscribe: () => () => {} },
+        store,
+        changes,
         getDb: () => db,
-        resolveTerminal: () => null,
-        readPty: () => null,
+        readPaneKeys: () => panes.keys(),
+        resolveTerminal: (paneKey) =>
+          resolveTerminalWorkerDispatch(
+            {
+              getDb: () => db,
+              getHandle: (key) => handles.get(key) ?? null,
+              getProcessIncarnation: () => 'process-1'
+            },
+            paneKey
+          ),
+        readPty: (key) => panes.get(key) ?? null,
         notify: () => {},
         ...overrides
       })
       vi.advanceTimersByTime(0)
+    },
+    terminal: (paneKey: string, handle: string, observedLive = true) => {
+      handles.set(paneKey, handle)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: quiet observations read only these PTY status fields; no PTY operation is called.
+      const pty = {
+        connected: true,
+        lastAgentStatus: 'working',
+        lastAgentStatusObservedLive: observedLive,
+        lastAgentStatusStartedAtEpochMs: 0,
+        launchAgent: 'custom',
+        foregroundAgent: null
+      } as unknown as RuntimePtyWorktreeRecord
+      panes.set(paneKey, pty)
+      return pty
     },
     workers: (count: number) => {
       const run = db.createRun({

@@ -1,4 +1,4 @@
-/** Watch only while dispatches remain open; push changes restart an idle watch. */
+/** Watch only while eligible workers are working; push changes restart an idle watch. */
 export function startWorkerQuietWatch(deps: {
   sweep: () => boolean
   subscribe: (wake: () => void) => () => void

@@ -73,7 +73,7 @@ it.each([
     state = journal['state'] = completion.adopt()
     expect(reads.attentionReads.workerProgress('session-1')?.tool).toBeUndefined()
     expect(journal.lastProviderActivityAt(2)).toBeUndefined()
-    chat.progress.mockImplementation(reads.attentionReads.workerProgress)
+    chat.progress.mockImplementation(() => reads.attentionReads.workerProgress('session-1'))
     const { db } = fixture
     const { run } = fixture.workers(count)
     let visited = 0

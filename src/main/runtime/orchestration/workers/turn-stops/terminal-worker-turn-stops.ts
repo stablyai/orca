@@ -1,3 +1,4 @@
+import type { RemoteDispatchAttachmentRow } from '../../db/orchestration-records'
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -131,7 +132,9 @@ export function resolveTerminalWorkerDispatch(
 ): {
   db: OrchestrationDb
   handle: string
-  target: WorkerTurnStopDispatch
+  target:
+    | Extract<WorkerTurnStopDispatch, { kind: 'local' }>
+    | { kind: 'remote'; attachment: RemoteDispatchAttachmentRow }
 } | null {
   const db = deps.getDb()
   const handle = db ? deps.getHandle(paneKey) : null

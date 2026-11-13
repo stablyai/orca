@@ -115,6 +115,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
 
   protected onTitleAgentStatusChanged(): void {
     this.worktreeRowsChanges?.changed()
+    this.crewChanges.notify(new Set(['status']))
   }
 
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
@@ -180,6 +181,16 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       getDb: () => this._orchestrationDb,
       resolveTerminal: (paneKey) =>
         resolveTerminalWorkerDispatch(this.terminalWorkerResolution, paneKey),
+      readPaneKeys: () => {
+        const keys = new Set<string>()
+        for (const pty of this.ptysById.values()) {
+          const paneKey = this.paneOfPty(pty).paneKey
+          if (paneKey) {
+            keys.add(paneKey)
+          }
+        }
+        return keys
+      },
       readPty: (paneKey) => this.getPtyRecordForPaneKey(paneKey),
       notify: this.workerTurnStopReportDeps.notify
     })

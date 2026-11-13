@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { PANE } from '../server.test-fixtures'
+import { PANE, GOOD_PANE } from '../server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -58,6 +58,68 @@ describe('AgentHookServer ingestTerminalStatus', () => {
       vi.useRealTimers()
     }
   })
+
+  it.each(['pane', 'tab'])(
+    'retires producer evidence on %s cleanup, including aliases and key reuse',
+    (kind) => {
+      vi.useFakeTimers()
+      try {
+        const server = new AgentHookServer()
+        const alias = 'tab-1:0'
+        vi.setSystemTime(1_000)
+        server.ingestTerminalStatus({
+          paneKey: alias,
+          tabId: 'tab-1',
+          ptyId: 'pty-1',
+          terminalHandle: 'term_old',
+          connectionId: 'conn-1',
+          fromProgramStatus: true,
+          payload: { state: 'working', agentType: 'codex', prompt: 'work' }
+        })
+        expect(server.producerProgress.get(alias)?.lastProducerEventAt).toBe(1_000)
+        for (const paneKey of [PANE, GOOD_PANE]) {
+          server.ingestRemote(
+            {
+              paneKey,
+              hookEventName: 'PreToolUse',
+              toolUseId: 'old-call',
+              payload: { state: 'working', agentType: 'codex', prompt: 'work' }
+            },
+            'conn-1'
+          )
+          expect(server.producerProgress.get(paneKey)?.lastProducerEventAt).toBe(1_000)
+        }
+        server.registerPaneKeyAlias(alias, PANE, 'pty-1')
+        if (kind === 'tab') {
+          server.dropStatusEntriesByTabPrefix('tab-1')
+        } else {
+          server.clearPaneState(alias)
+        }
+        expect(server.producerProgress.get(PANE)).toBeUndefined()
+        expect(server.producerProgress.get(alias)).toBeUndefined()
+        expect(server.producerProgress.get(GOOD_PANE)?.lastProducerEventAt).toBe(1_000)
+        server.restorePaneAuthority(PANE)
+        expect(server.producerProgress.get(PANE)).toBeUndefined()
+        vi.setSystemTime(2_000)
+        server.ingestRemote(
+          {
+            paneKey: PANE,
+            hookEventName: 'UserPromptSubmit',
+            payload: { state: 'working', agentType: 'codex', prompt: 'new work' }
+          },
+          'conn-1'
+        )
+        if (kind === 'pane') {
+          expect(server.producerProgress.get(PANE)?.lastProducerEventAt).toBe(2_000)
+          expect([...server.producerProgress.get(PANE)!.tools.values()]).toEqual([])
+        } else {
+          expect(server.producerProgress.get(PANE)).toBeUndefined()
+        }
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('preserves a hook turn stamp when an OSC repaint omits hook-only completion text', () => {
     const server = new AgentHookServer()

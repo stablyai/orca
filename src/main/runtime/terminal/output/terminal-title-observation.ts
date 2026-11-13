@@ -122,6 +122,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     let ptyInputEdge = false
     const pty = this.ptysById.get(ptyId)
     if (pty) {
+      const observedLive = pty.lastAgentStatusObservedLive
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
       // Mail goes to a terminal taking input, at rest or mid-turn, so offer it when the terminal starts
@@ -149,7 +150,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
       }
-      if (prevStatus !== agentStatus || retiresDisplayClear) {
+      if (prevStatus !== agentStatus || retiresDisplayClear || !observedLive) {
         this.onTitleAgentStatusChanged()
       }
       if (
