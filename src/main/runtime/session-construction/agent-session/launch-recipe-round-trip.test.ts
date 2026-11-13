@@ -28,7 +28,7 @@ const CASES: RoundTripCase[] = [
     agentArgs: '--verbose',
     sessionOptions: { model: 'opus', effort: 'max', fastMode: true, permissionMode: 'full-access' },
     launch: `claude '--verbose' '--model' 'opus' '--effort' 'max' '--settings' '{"fastMode":true}' '--dangerously-skip-permissions'`,
-    resume: `claude '--verbose' '--settings' '{"fastMode":true}' '--dangerously-skip-permissions' '--resume' 'S1'`
+    resume: `claude '--settings' '{"fastMode":true}' '--verbose' '--dangerously-skip-permissions' '--resume' 'S1'`
   },
   {
     agent: 'codex',
@@ -40,28 +40,36 @@ const CASES: RoundTripCase[] = [
       permissionMode: 'full-access'
     },
     launch: `codex '-c' 'disable_paste_burst=true' '--search' '-m' 'gpt-5.6-terra' '-c' 'model_reasoning_effort=xhigh' '-c' 'service_tier=fast' '--dangerously-bypass-approvals-and-sandbox'`,
-    resume: `codex '--search' '-m' 'gpt-5.6-terra' '-c' 'model_reasoning_effort=xhigh' '-c' 'service_tier=fast' '--dangerously-bypass-approvals-and-sandbox' '-c' 'disable_paste_burst=true' 'resume' 'S1'`
+    resume: `codex '-m' 'gpt-5.6-terra' '-c' 'model_reasoning_effort=xhigh' '-c' 'service_tier=fast' '--search' '--dangerously-bypass-approvals-and-sandbox' '-c' 'disable_paste_burst=true' 'resume' 'S1'`
+  },
+  {
+    // Codex restores its thread's own permissions, so a typed bypass flag is not replayed (#10886).
+    agent: 'codex',
+    agentArgs: '--dangerously-bypass-approvals-and-sandbox --search',
+    sessionOptions: { model: 'gpt-5.6-terra', effort: 'xhigh' },
+    launch: `codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox' '--search' '-m' 'gpt-5.6-terra' '-c' 'model_reasoning_effort=xhigh'`,
+    resume: `codex '-m' 'gpt-5.6-terra' '-c' 'model_reasoning_effort=xhigh' '--search' '-c' 'disable_paste_burst=true' 'resume' 'S1'`
   },
   {
     agent: 'gemini',
     agentArgs: '--debug',
     sessionOptions: { model: 'gemini-2.5-pro', permissionMode: 'full-access' },
     launch: `gemini '--debug' '-m' 'gemini-2.5-pro' '--yolo'`,
-    resume: `gemini '--debug' '-m' 'gemini-2.5-pro' '--yolo' '--resume' 'S1'`
+    resume: `gemini '-m' 'gemini-2.5-pro' '--debug' '--yolo' '--resume' 'S1'`
   },
   {
     agent: 'cursor',
     agentArgs: '--debug',
     sessionOptions: { model: 'gpt-5', permissionMode: 'full-access' },
     launch: `cursor-agent '--debug' '--model' 'gpt-5' '--yolo'`,
-    resume: `cursor-agent '--debug' '--model' 'gpt-5' '--yolo' '--resume' 'S1'`
+    resume: `cursor-agent '--model' 'gpt-5' '--debug' '--yolo' '--resume' 'S1'`
   },
   {
     agent: 'grok',
     agentArgs: '--debug',
     sessionOptions: { model: 'grok-4', effort: 'high', permissionMode: 'full-access' },
     launch: `grok '--debug' '-m' 'grok-4' '--reasoning-effort' 'high' '--permission-mode' 'bypassPermissions'`,
-    resume: `grok '--debug' '-m' 'grok-4' '--reasoning-effort' 'high' '--permission-mode' 'bypassPermissions' '--resume' 'S1'`
+    resume: `grok '-m' 'grok-4' '--reasoning-effort' 'high' '--debug' '--permission-mode' 'bypassPermissions' '--resume' 'S1'`
   }
 ]
 

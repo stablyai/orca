@@ -175,33 +175,34 @@ export function resolveAgentLaunchCommand(args: {
   const render = (tokens: readonly string[]): string =>
     tokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')
   const withArgs = (suffix: string, head = command): string => (suffix ? `${head} ${suffix}` : head)
-  const withOptionArgs = (optionArgs: readonly string[]): string[] =>
-    args.sessionOptionsOverrideAgentArgs
-      ? insertBeforeTerminator(args.agent, keptTokens, optionArgs)
-      : [...optionArgs, ...keptTokens]
-  const initialTokens = withOptionArgs(resolvedOptions.args)
+  const initialTokens = args.sessionOptionsOverrideAgentArgs
+    ? insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.args)
+    : [...resolvedOptions.args, ...keptTokens]
   // Aider's last boolean flag wins, even over configured --check-update.
   const launchTokens =
     args.agent === 'aider'
       ? insertBeforeTerminator(args.agent, initialTokens, suppressionArgs)
       : initialTokens
-  // The saved recipe is this launch minus choices the agent's own session restores on resume.
-  const recipeTokens = withOptionArgs(
+  const permissionArgs = resolvedOptions.permissionArgs ?? []
+  const resumeArgs = render(insertBeforeTerminator(args.agent, keptTokens, permissionArgs))
+  // The recipe replays every launch choice except those the agent's own session restores; choices
+  // lead so the Arguments stay a suffix Codex's resume can strip its permission flag from.
+  const choiceArgs = render(
     removeOverriddenAgentSessionArgs(
       args.agent,
       sessionOwnedLaunchChoices(args.agent, resolvedOptions.appliedValues),
-      resolvedOptions.args
+      resolvedOptions.args.slice(0, resolvedOptions.args.length - permissionArgs.length)
     )
   )
-  const recipeArgs = render(recipeTokens)
   return {
     ok: true,
     command: withArgs(render(launchTokens), launchHead),
     resumeLaunch: {
-      agentCommand: withArgs(recipeArgs),
-      ...(recipeTokens.length !== rawTokens.length ||
-      recipeTokens.some((token, index) => token !== rawTokens[index])
-        ? { agentArgs: recipeArgs }
+      agentCommand: withArgs(resumeArgs, withArgs(choiceArgs)),
+      ...(keptTokens.length !== rawTokens.length ||
+      keptTokens.some((token, index) => token !== rawTokens[index]) ||
+      resolvedOptions.permissionArgs
+        ? { agentArgs: resumeArgs }
         : {})
     },
     appliedSessionOptions: resolvedOptions.appliedValues,

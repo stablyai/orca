@@ -313,8 +313,7 @@ it('retains a genuinely admitted saved model node through real effort editing, S
     throw new Error(compiled.error)
   }
   expect(compiled.resumeLaunch).toEqual({
-    agentCommand: "codex '--search' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high'",
-    agentArgs: "'--search' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high'"
+    agentCommand: "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high' '--search'"
   })
 })
 
