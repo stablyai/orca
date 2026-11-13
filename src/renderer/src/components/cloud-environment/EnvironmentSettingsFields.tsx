@@ -44,8 +44,8 @@ export function EnvVarChipEditor({
         id={labelId}
         htmlFor={readOnly ? undefined : inputId}
         hint={t(
-          'cloudEnvironment.form.variablesHint',
-          'Names only. Values come from Cloud secrets (Shared scope) with the same names and reach the install script at build time. They’re never stored in the environment.'
+          'cloudEnvironment.form.variablesHintDisk',
+          'Names only. Values come from Cloud secrets (Shared scope) with the same names and reach the install script at build time. Orca doesn’t save them in the environment, but anything the install script writes to disk is kept.'
         )}
       >
         {t('cloudEnvironment.form.variables', 'Variables')}

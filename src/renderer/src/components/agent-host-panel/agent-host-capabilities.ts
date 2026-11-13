@@ -260,8 +260,8 @@ function sectionHelp(
     case 'cloud':
       return {
         agents: t(
-          'agentHostPanel.help.agentsCloud',
-          'Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.'
+          'agentHostPanel.help.agentsCloudSignIns',
+          'Agent sign-ins aren’t stored in the sandbox, so new, cloned and restarted sandboxes work the same.'
         ),
         // Sections 2–3 on Cloud carry their own help (Cloud secrets).
         keys: '',
