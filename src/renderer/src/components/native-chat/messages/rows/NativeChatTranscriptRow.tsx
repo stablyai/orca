@@ -58,14 +58,17 @@ function newRowsMarkerSpacing(
   deliveryNotice: NativeChatDeliveryNotice | undefined
 ): string {
   if (place === 'above-row') {
-    return '-mb-1.5'
+    // A turn with no prompt opens on its bar, which needs the deeper trim too.
+    return slot.statusAbove && slot.status ? '-mb-3' : '-mb-1.5'
   }
+  // Only where the hover row is drawn: it always shows a time, so a message without one may have none.
   const afterHoverMeta =
     slot.drawsMessage &&
     !slot.receipt &&
     slot.message.role === 'user' &&
     !slot.message.from &&
-    deliveryNotice === undefined
+    deliveryNotice === undefined &&
+    Number.isFinite(slot.message.timestamp)
   return cn('-mb-3', afterHoverMeta && '-mt-6')
 }
 
