@@ -26,7 +26,16 @@ describe('Markdown frontmatter tokenization', () => {
       'enabled: true',
       'count: 42 # items',
       '---',
-      '# Heading'
+      '# Heading',
+      '',
+      '---',
+      'count: 42',
+      '',
+      '```text',
+      '---',
+      'enabled: true',
+      '```',
+      '# After fence'
     ])
 
     expect(tokens[1]).toContainEqual({ startIndex: 0, scopes: 'md.entity.name.tag.yaml' })
@@ -35,6 +44,10 @@ describe('Markdown frontmatter tokenization', () => {
     expect(tokens[3]).toContainEqual({ startIndex: 7, scopes: 'md.constant.numeric.integer.yaml' })
     expect(tokens[3]).toContainEqual({ startIndex: 10, scopes: 'md.comment.line.number-sign.yaml' })
     expect(tokens[5]).toContainEqual({ startIndex: 2, scopes: 'md.entity.name.section.markdown' })
+    expect(tokens[7]).toContainEqual({ startIndex: 0, scopes: 'md.meta.separator.markdown' })
+    expect(tokens[8]).toEqual([{ startIndex: 0, scopes: 'md.text.html.markdown' }])
+    expect(tokens[12]).toEqual([{ startIndex: 0, scopes: 'md.text.html.markdown' }])
+    expect(tokens[14]).toContainEqual({ startIndex: 2, scopes: 'md.entity.name.section.markdown' })
   })
 
   it('keeps unfinished frontmatter in YAML while editing, including nested and block values', async () => {
@@ -50,25 +63,5 @@ describe('Markdown frontmatter tokenization', () => {
     expect(tokens[2]).toContainEqual({ startIndex: 4, scopes: 'md.constant.language.boolean.yaml' })
     expect(tokens[4]).toContainEqual({ startIndex: 2, scopes: 'md.string.unquoted.block.yaml' })
     expect(tokens[5]).toContainEqual({ startIndex: 7, scopes: 'md.constant.numeric.integer.yaml' })
-  })
-
-  it('leaves body separators and ordinary code fences as Markdown', async () => {
-    const tokens = await tokenize([
-      '# Heading',
-      '',
-      '---',
-      'count: 42',
-      '',
-      '```text',
-      '---',
-      'enabled: true',
-      '```',
-      '# After fence'
-    ])
-
-    expect(tokens[2]).toContainEqual({ startIndex: 0, scopes: 'md.meta.separator.markdown' })
-    expect(tokens[3]).toEqual([{ startIndex: 0, scopes: 'md.text.html.markdown' }])
-    expect(tokens[7]).toEqual([{ startIndex: 0, scopes: 'md.text.html.markdown' }])
-    expect(tokens[9]).toContainEqual({ startIndex: 2, scopes: 'md.entity.name.section.markdown' })
   })
 })
