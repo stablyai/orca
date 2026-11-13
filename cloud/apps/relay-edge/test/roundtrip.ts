@@ -18,7 +18,7 @@ import pg from 'pg'
 import WebSocket from 'ws'
 import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
 import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
-import { RelayPhoneHelloSchema } from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
+import { RelayPhoneHelloSchema } from '../../../../src/shared/mobile-relay-phone-protocol'
 import { loadOrCreateKeys } from '../spike/lib'
 
 const DIRECTOR_APP = process.env.DIRECTOR_APP ?? ''

@@ -4,12 +4,13 @@
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import type { Env } from './env'
+import type { IngressClaim } from '../../../packages/relay-contract/src/ingress-header'
 import { metric, requestPlace } from './metrics'
 
-// The caller's address as Cloudflare saw it (clients cannot set this header). IPv6 callers are
-// keyed by their /64, which one subscriber usually holds whole.
-export function sourceKey(request: Request): string {
-  const ip = request.headers.get('cf-connecting-ip')?.trim() ?? ''
+// The caller's address as Cloudflare saw it (clients cannot set this header), or as a verified
+// ingress saw it. IPv6 callers are keyed by their /64, which one subscriber usually holds whole.
+export function sourceKey(request: Request, ingress?: IngressClaim | null): string {
+  const ip = (ingress?.clientIp ?? request.headers.get('cf-connecting-ip'))?.trim() ?? ''
   if (!ip.includes(':')) return ip || 'unknown'
   const [head, tail = ''] = ip.split('::')
   const left = head ? head.split(':') : []
@@ -23,11 +24,11 @@ export function sourceKey(request: Request): string {
 
 // Counted per source per colo by the Rate Limiting binding. Fails open: a limiter outage must not
 // refuse live users. Without a binding (local spike runs) nothing is limited.
-export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data'): Promise<boolean> {
+export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data', ingress?: IngressClaim | null): Promise<boolean> {
   if (!env.PREAUTH_LIMITER) return true
   try {
-    const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request)}` })
-    if (!success) metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request))
+    const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request, ingress)}` })
+    if (!success) metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request, ingress))
     return success
   } catch {
     return true

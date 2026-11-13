@@ -403,6 +403,31 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
 
+  apps/relay-ingress:
+    dependencies:
+      '@orca-cloud/relay-contract':
+        specifier: workspace:*
+        version: link:../../packages/relay-contract
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
+      ws:
+        specifier: ^8.22.0
+        version: 8.22.0
+
   packages/cloud-database:
     dependencies:
       '@orca-cloud/postgres-schema':

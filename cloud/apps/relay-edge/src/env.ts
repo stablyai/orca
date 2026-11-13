@@ -1,5 +1,6 @@
 import type { HostRelay } from './host-relay'
 import type { SpliceRelay } from './splice-relay'
+import { INGRESS_SECRET_MIN_LENGTH } from '../../../packages/relay-contract/src/ingress-header'
 
 export interface Env {
   HOST_RELAY: DurableObjectNamespace<HostRelay>
@@ -45,6 +46,9 @@ export interface Env {
   // Optional second signer for `erase` only (the account erasure job): it can never push.
   ERASE_SIGNING_KEY?: string
   ERASE_ISSUER?: string
+  // Secret(s) shared with the ingress proxies (secret binding; comma-separated while rotating,
+  // current first). Unset: ingress headers are ignored and every request is treated as direct.
+  INGRESS_SECRETS?: string
 }
 
 export type EdgeClaims = {
@@ -63,6 +67,7 @@ export type EdgeConfig = {
   orphanGraceMs: number
   sweepIntervalMs: number
   leftRetentionMs: number
+  ingressSecrets: string[]
 }
 
 const configs = new WeakMap<object, EdgeConfig>()
@@ -91,6 +96,8 @@ export function edgeConfig(env: Env): EdgeConfig {
   if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) throw new Error('relay_edge_config_jwks')
   if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) throw new Error('relay_edge_config_issuer')
   if (!env.RELAY_JWT_AUDIENCE) throw new Error('relay_edge_config_audience')
+  const ingressSecrets = env.INGRESS_SECRETS ? env.INGRESS_SECRETS.split(',').map((s) => s.trim()) : []
+  if (ingressSecrets.some((s) => s.length < INGRESS_SECRET_MIN_LENGTH)) throw new Error('relay_edge_config_ingress')
   const config: EdgeConfig = {
     backend,
     cellId: env.EDGE_CELL_ID || 'edge',
@@ -98,7 +105,8 @@ export function edgeConfig(env: Env): EdgeConfig {
     silenceTimeoutMs: positiveInt('silence_timeout', env.SILENCE_TIMEOUT_MS),
     orphanGraceMs: positiveInt('orphan_grace', env.ORPHAN_GRACE_MS),
     sweepIntervalMs: positiveInt('sweep_interval', env.SWEEP_INTERVAL_MS ?? String(24 * 60 * 60 * 1000)),
-    leftRetentionMs: positiveInt('left_retention', env.LEFT_RETENTION_MS ?? String(30 * 24 * 60 * 60 * 1000))
+    leftRetentionMs: positiveInt('left_retention', env.LEFT_RETENTION_MS ?? String(30 * 24 * 60 * 60 * 1000)),
+    ingressSecrets
   }
   // Shipped desktops close a control that is silent for 75 s; a ping must arrive well inside it.
   if (config.pingIntervalMs >= config.silenceTimeoutMs) throw new Error('relay_edge_config_ping_interval')
