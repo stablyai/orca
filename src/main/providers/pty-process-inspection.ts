@@ -23,7 +23,7 @@ export type PtyProcessInspectionOptions = {
   /** Name-only cadence polls may use cheap captures and omit evidence; evidence consumers must never set this. */
   steadyState?: boolean
   /** Also reach a session the daemon still runs that no window has reattached since a relaunch.
-   *  WSL move gate only: other callers keep reading such a session as gone. */
+   *  The WSL move gate and the cleanup runner, which must see what teardown would stop; others read it as gone. */
   includeUnattached?: boolean
 }
 

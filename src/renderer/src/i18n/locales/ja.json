@@ -7033,8 +7033,6 @@
             "ba1d9a0607": "サイドバーの色合い"
           },
           "b707773a0d": "有効にすると、ウィンドウを閉じても Orca は終了せず、システムトレイで実行を続けます。",
-          "interfaceDefaultFont": "デフォルトフォント",
-          "terminalDefaultFont": "デフォルトフォント",
           "interfaceTitle": "インターフェース",
           "terminalTitle": "ターミナル",
           "windowSidebarSummary": "サイドバー、ステータスバー、ファイルエクスプローラー",
@@ -7948,16 +7946,12 @@
           "5426ecbdcb": "ローカルスクリプトは実行されません",
           "95a0411b3e": "テンプレート",
           "175daba180": "例",
-          "b20c5df6ca": "「orca.yaml」ファイルを追加して、このリポジトリの共有セットアップ、アーカイブ、または Issue 自動化のデフォルトを有効にします。テンプレートの例:",
-          "56f9a4a1d0": "`orca.yaml` を使用中",
           "623e0c9f31": "`orca.yaml` を解析できませんでした",
-          "5a67e4793d": "`orca.yaml` が見つかりません",
           "07ba35bc68": "`scripts:` の下のインデントを確認してください。フックキーは2スペース、コマンド行は4スペースにします。",
           "787ca433ef": "サポートされているキーのみを定義してください: `scripts`、`setup`、`archive`、`issueCommand`。",
           "ecc73d9125": "下の動作するテンプレートと比較し、必要に応じてその形式をコピーしてください。",
           "0cc712b823": "コア構成ファイルはリポジトリルートに存在しますが、Orca はサポートされているフック定義をまだ解析できませんでした。",
           "aba825233f": "このファイルには、このバージョンの Orca が認識しない構成キーが含まれています。 Orca を更新するか、ファイルにタイプミスがないか確認する必要がある場合があります。",
-          "ca424ff135": "共有フックと Issue 自動化のデフォルトはリポジトリで定義され、それを使用するすべてのユーザーが利用できます。",
           "8bfe65fc60": "ローカルコマンドを使用する",
           "8d6c56bff8": "両方を実行します",
           "0fa21e19ec": "ワークスペースの名前。通常はブランチ名に基づきます。",
@@ -16901,7 +16895,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "折りたたむ",
-          "showMore": "さらに表示"
+          "showMore": "さらに表示",
+          "copied": "コピーしました",
+          "copyFailed": "コピーに失敗しました",
+          "copyPrompt": "プロンプトをコピー"
         },
         "AutomationDetail": {
           "host": "ホスト",
@@ -16936,7 +16933,12 @@
           "precheckNone": "なし",
           "migrate": "移行",
           "migrateNotice": "{{host}} は新しいリモートホストにアップグレードされました。実行を続けるには、この自動化を移行してください。",
-          "needsMigration": "移行が必要"
+          "needsMigration": "移行が必要",
+          "repeats": "繰り返し",
+          "missedRunGrace": "実行漏れの猶予時間",
+          "execution": "実行",
+          "notRunYet": "未実行",
+          "usageDetail_other": "{{tokens}} トークン · {{known}}/{{count}} 回の実行を報告済み"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -19971,7 +19973,7 @@
         "scrollToLatestOnSendCopy": "上にスクロールした状態で送信すると、最新のメッセージに移動して返信を追従します。オフにすると現在の位置を維持します。",
         "scrollToLatestOnSendSearchPosition": "位置",
         "markNewMessagesTitle": "チャットに戻ったときに新着メッセージを示す",
-        "markNewMessagesCopy": "チャットに戻ると、離れている間に届いたメッセージの上に「新着」の線を表示します。最新のメッセージを読んでいた場合は、そこまでスクロールします。",
+        "markNewMessagesCopy": "チャットに戻ったとき、見逃した内容が長い場合や他の人が書き込んだ場合は、「新着」の線でその位置を示し、そこまでスクロールします。線は一度見るとフェードアウトします。",
         "markNewMessagesSearchUnread": "未読",
         "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られず、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になり、何も入力されていない場合は最初の待機カードを実行中のターンに送ります。画像付きメッセージもカードとして待機します。",
         "inlineVisualsTitle": "インライン表示",
@@ -20067,6 +20069,7 @@
           "about": {
             "parakeetV3": "高速。ヨーロッパの {{languages}} 言語。",
             "parakeetV2": "高速。英語専用で、英語では最も正確です。",
+            "parakeetUnifiedEn": "英語のみ。話すそばから文字が表示されます。",
             "whisperTiny": "最小のダウンロード。音声入力のお試しに。",
             "whisperTurbo": "最多の約 100 言語。GPU がないと低速です。",
             "senseVoice": "高速。中国語、日本語、韓国語向け。",

@@ -191,7 +191,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  computer perform-secondary-action Run an advertised accessibility action',
   '  computer scroll           Scroll an app element',
   '  computer drag             Drag between app elements or window coordinates',
-  '  computer type-text        Type literal text at the current app focus',
+  '  computer type-text        Type literal text at the current app focus or into an element',
   '  computer press-key        Press a single key such as Return or Escape',
   '  computer hotkey           Press a shortcut combination such as CmdOrCtrl+A',
   '  computer paste-text       Paste text through the native clipboard path',

@@ -1,4 +1,4 @@
-import type { AutomationService } from '../../automations/service'
+import type { AutomationService } from '../../automations/automation-service'
 import { createRuntimeAutomationService } from '../../automations/runtime-automation-service'
 import { mainProcessState as state } from '../main-process-state'
 

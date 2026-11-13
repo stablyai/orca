@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AutomationService } from './service'
-import { runNowSettled } from './automation-run-now-settled.test-fixture'
+import { AutomationService } from './automation-service'
+import { runNowSettled } from './testing/automation-run-now-settled.test-fixture'
 import type { Store } from '../persistence/loading-store/store'
 import {
   createWorkerMaintenanceFixture,

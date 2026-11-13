@@ -205,7 +205,8 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady
+    composerReady,
+    surfaceReady: shownPromptCard !== null
   })
 
   const pendingMessages = useMemo(
@@ -262,11 +263,10 @@ export function NativeChatResolvedView({
     ) {
       setWorkingInterrupted(false)
     }
-    if (liveWorking && workingEpoch != null) {
-      previousWorkingEpochRef.current = workingEpoch
-    }
     if (!liveWorking) {
       previousWorkingEpochRef.current = null
+    } else if (workingEpoch != null) {
+      previousWorkingEpochRef.current = workingEpoch
     }
   }, [liveWorking, workingInterrupted, workingEpoch])
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
@@ -307,6 +307,7 @@ export function NativeChatResolvedView({
     fileLinkContext,
     onFind: find.open
   })
+
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
   const root = (
