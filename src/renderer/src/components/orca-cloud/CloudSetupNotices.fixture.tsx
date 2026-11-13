@@ -24,6 +24,13 @@ const SETUP: CloudSetupNotice = {
   }
 }
 
+const HELD: CloudSetupNotice = {
+  id: 'environment.held',
+  kind: 'environmentHeld',
+  environmentId: 'env_0123abcd',
+  check: { id: 'environment.held', category: 'setup', status: 'warn', message: 'held' }
+}
+
 const FETCH: CloudSetupNotice = {
   id: 'git.fetch',
   kind: 'fetch',
@@ -137,3 +144,5 @@ export const agentAndPush = cards([AGENT, notices([PUSH, SETUP])])
 /** ENV-ORIGIN-TOAST: origin still unreachable after two confirming checks; Check again re-runs it. */
 export const fetchFailed = cards([notices([FETCH])])
 export const fetchChecking = cards([notices([FETCH], { checkingFetch: true })])
+/** ENV-BUILD-CHURN: started without the environment's setup while it updates for a security fix. */
+export const environmentHeld = cards([notices([HELD])])

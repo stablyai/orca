@@ -1,3 +1,4 @@
+import { environmentHeldNotice } from './ephemeral-vm-environment-check-triage'
 import { describe, expect, it } from 'vitest'
 import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
 import {
@@ -116,5 +117,19 @@ describe('triageCloudEnvironmentChecks', () => {
         c('cache.stale', 'warn', 'setup')
       ])
     ).toEqual([])
+  })
+})
+
+describe('environmentHeldNotice (ENV-BUILD-CHURN)', () => {
+  it('reads the held environment from the create log', () => {
+    expect(
+      environmentHeldNotice('[orca-cloud] booting\n[orca-cloud] environment-held env_0123abcd\n')
+    ).toMatchObject({
+      id: 'environment.held',
+      kind: 'environmentHeld',
+      environmentId: 'env_0123abcd'
+    })
+    expect(environmentHeldNotice('[orca-cloud] booting\n')).toBeNull()
+    expect(environmentHeldNotice(undefined)).toBeNull()
   })
 })

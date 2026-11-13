@@ -28691,7 +28691,11 @@
       "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
       "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
       "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
-      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet."
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
+      "environmentHeld": "Your environment’s setup hasn’t run in this workspace, so dependencies may be missing.",
+      "environmentHeldMeaning": "The environment is updating for a security fix. New workspaces will have it in a few minutes.",
+      "runSetupNow": "Run setup now",
+      "environmentSetupUnreadable": "Couldn’t read the environment’s setup. Try again in a moment."
     },
     "toast": {
       "dismiss": "Dismiss"

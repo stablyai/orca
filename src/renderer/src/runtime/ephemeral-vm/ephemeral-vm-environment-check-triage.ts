@@ -19,7 +19,7 @@ const FATAL_CHECK_IDS: ReadonlySet<string> = new Set([
  * repository needs isn't installed. A check with no kind of its own never shows as the doctor's
  * bare label (ENV-NOTICE-ACTIONS).
  */
-export type CloudSetupNoticeKind = 'push' | 'fetch' | 'setup' | 'disk' | 'tool'
+export type CloudSetupNoticeKind = 'environmentHeld' | 'push' | 'fetch' | 'setup' | 'disk' | 'tool'
 
 /** One problem the opened workspace shows as a single dismissible line. */
 export type CloudSetupNotice = {
@@ -27,6 +27,34 @@ export type CloudSetupNotice = {
   id: string
   kind: CloudSetupNoticeKind
   check: EnvironmentDoctorCheck
+  /** 'environmentHeld': the environment whose setup didn't run here (ENV-BUILD-CHURN). */
+  environmentId?: string
+}
+
+const ENVIRONMENT_HELD = /^\[orca-cloud\] environment-held ([A-Za-z0-9_-]{1,64})$/m
+
+/**
+ * ENV-BUILD-CHURN: the create's log says its environment was held back (its build is below the
+ * security floor): the workspace started without the environment's setup.
+ */
+export function environmentHeldNotice(
+  provisioningLog: string | undefined
+): CloudSetupNotice | null {
+  const environmentId = ENVIRONMENT_HELD.exec(provisioningLog ?? '')?.[1]
+  if (!environmentId) {
+    return null
+  }
+  return {
+    id: 'environment.held',
+    kind: 'environmentHeld',
+    environmentId,
+    check: {
+      id: 'environment.held',
+      category: 'setup',
+      status: 'warn',
+      message: 'environment held'
+    }
+  }
 }
 
 export type CloudEnvironmentCheckTriage = {
