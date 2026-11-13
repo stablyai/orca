@@ -24484,8 +24484,6 @@
     },
     "cloudWorkspaces": {
       "newCloudWorkspace": "New cloud workspace",
-      "emptyStartBody": "It runs in a sandbox, so your agents keep working even when this computer is off.",
-      "emptyFirstTitle": "Start your first cloud workspace",
       "picker": {
         "title": "Open cloud workspace",
         "description": "Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.",
@@ -24501,8 +24499,6 @@
         "inSidebarNote_other": "{{count}} more are already in your sidebar.",
         "emptySearchTitle": "Nothing matches your search",
         "emptySearchBody": "Try a title, repository, branch, owner or W-number.",
-        "emptyAllInSidebarTitle": "Your cloud workspaces are already in the sidebar",
-        "emptyAllInSidebarBody": "Workspaces teammates share, and ones you start on another computer, show up here.",
         "emptyRunningTitle": "None of yours are running",
         "emptyRunningBody": "Teammates’ running workspaces can count toward the limit too. Try again in a moment.",
         "emptyTeammateTitle": "{{name}} has no cloud workspaces you can see",
@@ -24514,7 +24510,11 @@
           "sharedWorkspace": "shared workspace",
           "teammate": "teammate",
           "orcaCloud": "orca cloud"
-        }
+        },
+        "emptyNothingElseTitle": "Nothing else to open",
+        "emptyNothingElseBody": "Every cloud workspace you can open is already in your sidebar.",
+        "emptyNoneTitle": "No cloud workspaces yet",
+        "emptyNoneBody": "Start one and it shows up in your sidebar."
       }
     },
     "worktreeCreation": {
