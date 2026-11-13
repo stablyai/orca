@@ -20,6 +20,7 @@ import type {
   MiniMaxRateLimitConfig,
   AntigravityUsageEnabledResolver,
   MuseUsageEnabledResolver,
+  ClaudeUsageEnabledResolver,
   ZcodePlanRateLimitConfig,
   GeminiCliOAuthEnabledResolver,
   InactiveCodexAccountInfo
@@ -47,6 +48,10 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
     this.claudeAuthPreparationResolver = resolver
+  }
+
+  setClaudeUsageEnabledResolver(resolver: ClaudeUsageEnabledResolver): void {
+    this.claudeUsageEnabledResolver = resolver
   }
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {

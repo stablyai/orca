@@ -59,7 +59,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
   ): boolean {
     const limits = this.state[provider]
     const now = Date.now()
-    if (this.isFetching || this.isRetryAfterActive(limits)) {
+    if (
+      this.isFetching ||
+      (provider === 'claude' && !this.isClaudeUsageEnabled()) ||
+      this.isRetryAfterActive(limits)
+    ) {
       return false
     }
     if (limits?.status === 'error' && !this.failureRetryDue(provider, now)) {

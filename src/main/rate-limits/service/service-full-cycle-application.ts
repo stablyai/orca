@@ -150,7 +150,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           } satisfies ProviderRateLimits)
 
     const latestCodexHome = await this.resolveCodexHome(codexTarget)
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    // A gated cycle never applies Claude, so its provenance check is moot.
+    const latestClaudeAuthPreparation = claudeFetchGated
+      ? undefined
+      : await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }

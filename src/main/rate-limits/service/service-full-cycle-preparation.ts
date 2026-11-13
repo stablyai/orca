@@ -13,46 +13,8 @@ import { fetchMiniMaxRateLimits } from '../providers/minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../providers/opencode-go/opencode-go-usage-source-selection'
 import { RateLimitServiceAntigravityAccounts } from './service-antigravity-accounts'
-import type { SettledProviderResult } from './service-sibling-provider-result'
-import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import type { InternalRateLimitState } from './service-types'
-import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
-import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { FetchAllCyclePrepared } from './service-full-cycle-prepared'
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
-
-export type FetchAllCyclePrepared = {
-  claudeTarget: NormalizedClaudeAccountSelectionTarget
-  claudeGeneration: number
-  claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
-  claudeProvenance: string
-  codexTarget: NormalizedCodexAccountSelectionTarget
-  previousState: InternalRateLimitState
-  codexFetchGated: boolean
-  codexStateBeforeFetch: ProviderRateLimits | null
-  codexProvenance: string | null
-  codexHomePath: string | null
-  codexGeneration: number
-  opencodeConfigChanged: boolean
-  opencodeGeneration: number
-  miniMaxConfigChanged: boolean
-  miniMaxGeneration: number
-  zcodeConfigChanged: boolean
-  zcodeGeneration: number
-  antigravityGeneration: number
-  claudeFetchGated: boolean
-  results: [
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>
-  ]
-  grokResultPromise: Promise<SettledProviderResult>
-  cursorResultPromise: Promise<SettledProviderResult>
-  zcodeResultPromise: Promise<SettledProviderResult>
-  antigravityResultPromise: Promise<SettledProviderResult>
-}
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceAntigravityAccounts {
   protected async prepareFetchAllCycle(
@@ -65,11 +27,18 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeTarget = this.claudeFetchTarget
     // Capture before await so a switch invalidates both attribution and result application.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeUsageEnabled = this.isClaudeUsageEnabled()
+    const claudeAuthPreparation = claudeUsageEnabled
+      ? await this.claudeAuthPreparationResolver?.(claudeTarget)
+      : undefined
     if (signal.aborted) {
       return null
     }
-    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
+    if (claudeUsageEnabled) {
+      this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
+    } else {
+      this.settleDisabledClaudeUsage()
+    }
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
     // Capture before await so a reset invalidates this cycle.
@@ -220,7 +189,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude)
+      !claudeUsageEnabled ||
+      (!options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude))
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([

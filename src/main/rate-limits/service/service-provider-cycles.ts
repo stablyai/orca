@@ -86,6 +86,10 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
+    if (!this.isClaudeUsageEnabled()) {
+      this.settleDisabledClaudeUsage()
+      return
+    }
     // Why: automated checks must honor the endpoint's Retry-After even when live display is available.
     if (!options?.force && this.shouldSkipAutomatedFetch('claude', this.state.claude)) {
       return

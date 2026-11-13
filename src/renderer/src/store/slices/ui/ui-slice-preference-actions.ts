@@ -245,7 +245,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     },
 
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
-    toggleStatusBarItem: (item) =>
+    toggleStatusBarItem: (item) => {
       set((s) => {
         const current = s.statusBarItems || DEFAULT_STATUS_BAR_ITEMS
         const updated = current.includes(item)
@@ -253,7 +253,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
           : [...current, item]
         window.api.ui.set({ statusBarItems: updated }).catch(console.error)
         return { statusBarItems: updated }
-      }),
+      })
+      // Main skips Claude fetches while the item is hidden, so showing it must read once instead of waiting for the next poll.
+      if (item === 'claude' && get().statusBarItems.includes('claude')) {
+        void get().refreshRateLimits()
+      }
+    },
 
     agentDashboardDrawerOpen: false,
     setAgentDashboardDrawerOpen: (open) => set({ agentDashboardDrawerOpen: open }),

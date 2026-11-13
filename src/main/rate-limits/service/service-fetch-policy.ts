@@ -1,4 +1,5 @@
 import { RateLimitServiceFetchTargets } from './service-fetch-targets'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { withoutResetWindows } from './service-result-policy'
 import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
@@ -56,6 +57,19 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       limits.usageMetadata?.source === 'live-session' &&
       Date.now() - limits.updatedAt < MIN_REFETCH_MS
     )
+  }
+
+  // Unlike Retry-After, a hidden Claude meter blocks user refreshes too.
+  protected isClaudeUsageEnabled(): boolean {
+    return this.claudeUsageEnabledResolver?.() ?? true
+  }
+
+  // A null or fetching slot reads as loading; a disabled meter must settle instead.
+  protected settleDisabledClaudeUsage(): void {
+    if (this.state.claude && this.state.claude.status !== 'fetching') {
+      return
+    }
+    this.updateState({ ...this.state, claude: disabledUsageSnapshot('claude') })
   }
 
   // Claude's Retry-After and agy's sign-in hold bind automated checks; user refreshes may pass.

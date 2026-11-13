@@ -18,6 +18,7 @@ import {
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
   type MuseUsageEnabledResolver,
+  type ClaudeUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   DEFAULT_POLL_MS
@@ -113,6 +114,7 @@ export abstract class RateLimitServiceState {
   // Runtime policy may change between cycles.
   protected kimiHomeResolver: KimiHomeResolver | null = null
   protected claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
+  protected claudeUsageEnabledResolver: ClaudeUsageEnabledResolver | null = null
   protected claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
