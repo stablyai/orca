@@ -13,6 +13,7 @@ const dependencyExports: [string, string[]][] = [
     '../../daemon/providers/lifecycle/daemon-provider-state',
     ['disconnectDaemon', 'shutdownDaemon']
   ],
+  ['./quit-terminal-session-teardown', ['disconnectDaemonOnQuit']],
   ['../../ipc/ssh/ssh-shutdown-drain', ['beginSshShutdown']],
   ['../../agent-hooks/server/agent-hook-server', ['agentHookServer']],
   ['../../agent-hooks/wsl-relay/wsl-hook-relay-manager', ['wslHookRelayManager']],

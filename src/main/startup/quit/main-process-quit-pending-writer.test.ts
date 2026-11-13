@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/quit-teardown-deadline'
+import type { DaemonKillAllResult } from '../../ipc/pty/pty-management'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
@@ -8,6 +9,12 @@ const stopAgentHookServer = idle()
 const stopStructuredAgentSessionRuntime = settled()
 const beginSshShutdown = settled()
 const killAllPty = idle()
+const disconnectDaemon = settled()
+const killAllDaemonSessions = vi.fn<() => Promise<DaemonKillAllResult>>(async () => ({
+  killedCount: 0,
+  remainingCount: 0,
+  killedSessionIds: []
+}))
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
@@ -17,10 +24,12 @@ const dependencies: Record<string, Record<string, unknown>> = {
   },
   '../../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../../ipc/pty/kill-all': { killAllPty },
+  '../../ipc/pty/pty-management': { killAllDaemonSessions },
   '../../daemon/providers/lifecycle/daemon-provider-state': {
-    disconnectDaemon: settled(),
+    disconnectDaemon,
     shutdownDaemon: settled()
   },
+  './app-relaunch': { isAppRelaunchRequested: () => false },
   '../../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   '../cloud-startup/main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../../agent-hooks/server/agent-hook-server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -94,17 +103,22 @@ afterEach(() => {
 
 async function startQuit(
   flushFinalOrThrowAsync: () => Promise<void>,
-  services: Record<string, unknown> = {}
+  services: Record<string, unknown> = {},
+  settings: { stopTerminalSessionsOnQuit?: boolean } = {},
+  freezeWrites: () => Promise<void> = async () => {}
 ) {
   beginSshShutdown.mockClear()
   killAllPty.mockClear()
+  disconnectDaemon.mockClear()
+  killAllDaemonSessions.mockClear()
   vi.resetModules()
   vi.useFakeTimers()
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
   const admission = { release: vi.fn() }
   const store = {
     flushFinalOrThrowAsync: vi.fn(flushFinalOrThrowAsync),
-    freezeWritesAsync: settled()
+    freezeWritesAsync: vi.fn(freezeWrites),
+    getSettings: () => settings
   }
   const profileStateAdmission: typeof admission | undefined = admission
   const state = {
@@ -142,4 +156,31 @@ it('quits at the teardown deadline without releasing admission while the writer 
   expect(store.freezeWritesAsync).not.toHaveBeenCalled()
   expect(admission.release).not.toHaveBeenCalled()
   expect(state.profileStateAdmission).toBe(admission)
+})
+
+// Exits from killed sessions must land after the frozen save, or next launch would drop their tabs.
+it('stops terminal sessions only after the final save freezes, and disconnects only after they stop', async () => {
+  const finalSave = Promise.withResolvers<void>()
+  const freeze = Promise.withResolvers<void>()
+  const stop = Promise.withResolvers<DaemonKillAllResult>()
+  killAllDaemonSessions.mockImplementationOnce(() => stop.promise)
+  const { app } = await startQuit(
+    () => finalSave.promise,
+    {},
+    { stopTerminalSessionsOnQuit: true },
+    () => freeze.promise
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  expect(killAllDaemonSessions).not.toHaveBeenCalled()
+  finalSave.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(killAllDaemonSessions).not.toHaveBeenCalled()
+  freeze.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(killAllDaemonSessions).toHaveBeenCalledOnce()
+  expect(disconnectDaemon).not.toHaveBeenCalled()
+  stop.resolve({ killedCount: 1, remainingCount: 0, killedSessionIds: ['a'] })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(disconnectDaemon).toHaveBeenCalledOnce()
+  expect(app.quit).toHaveBeenCalledOnce()
 })

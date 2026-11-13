@@ -231,9 +231,10 @@ export async function stopServeElectronAppForE2E(app: ElectronApplication): Prom
 
 export async function closeElectronAppForE2E(
   app: ElectronApplication,
-  options: { cleanupDaemonsForUserDataDir?: string } = {}
+  options: { cleanupDaemonsForUserDataDir?: string; gracefulCloseTimeoutMs?: number } = {}
 ): Promise<void> {
   const proc = app.process()
+  const closeTimeoutMs = options.gracefulCloseTimeoutMs ?? GRACEFUL_CLOSE_TIMEOUT_MS
   const started = performance.now()
   let rootExitMs: number | null = hasExited(proc) ? 0 : null
   let pipesClosedMs: number | null = null
@@ -260,7 +261,7 @@ export async function closeElectronAppForE2E(
   proc.once('close', pipesClosed)
   releasePipes()
   try {
-    await withTimeout(app.close(), GRACEFUL_CLOSE_TIMEOUT_MS, 'Timed out closing Electron app')
+    await withTimeout(app.close(), closeTimeoutMs, 'Timed out closing Electron app')
     if (proc) {
       const exited = await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
       if (!exited) {

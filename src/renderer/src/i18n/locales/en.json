@@ -11961,7 +11961,11 @@
             "3fdccf0277": "Vertical padding",
             "651c993c32": "Font family",
             "64f6b4fdf6": "Focus follows mouse",
-            "18a9f63aff": "Light divider color"
+            "18a9f63aff": "Light divider color",
+            "stop_sessions_on_quit": "Stop terminal sessions when Orca quits",
+            "stop_sessions_on_quit_description": "Quitting stops local terminals, including running agents, instead of keeping them in the background. Tabs reopen with new shells and without their scrollback; supported agents resume. Updates and restarts keep sessions.",
+            "quit": "quit",
+            "exit": "exit"
           },
           "windows": {
             "search": {
