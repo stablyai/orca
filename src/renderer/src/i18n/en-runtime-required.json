@@ -24,6 +24,9 @@
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice."
     }
   },
+  "agentPicker": {
+    "moreModelsWithCount": "More models ({{total}})"
+  },
   "aiVault": {
     "scanIssues": {
       "invalidResultsSkipped_one": "Skipped {{count}} invalid Agent Session History result entry.",
@@ -111,6 +114,9 @@
         "projectsFailedToLoad_other": "{{failed}} of {{count}} projects failed to load",
         "shownCount_one": "{{count}} shown",
         "shownCount_other": "{{count}} shown"
+      },
+      "Terminal": {
+        "93c2e9d845": "There is running work in chats or terminals. Close the window anyway?"
       },
       "WorktreeJumpPalette": {
         "itemsAvailable_one": "{{count}} item available.",
@@ -351,6 +357,16 @@
           "showMoreAgents": "Show {{value0}} more agents →",
           "showMoreAgents_one": "Show {{count}} more agent →",
           "showMoreAgents_other": "Show {{count}} more agents →"
+        }
+      },
+      "plugins": {
+        "PluginCatalogHighlights": {
+          "added": "Added {{value0}}",
+          "featured": "Featured",
+          "featuredDetail": "most installed, one per category",
+          "justNow": "just now",
+          "newlyAdded": "Newly added",
+          "newlyAddedDetail": "across your catalogs"
         }
       },
       "prCheckCounts": {
@@ -648,6 +664,10 @@
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
         },
         "OrchestrationPane": {
+          "coordinatorApprovalsDescription": "A coordinator agent can allow a worker's permission prompt, with a reason. You still see Allow and Deny, and the first answer wins. Applies to workers running on this computer.",
+          "coordinatorApprovalsKeywordApprove": "approve",
+          "coordinatorApprovalsKeywordPermission": "permission",
+          "coordinatorApprovalsTitle": "Let coordinators approve worker permission prompts",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release"
         },
@@ -699,6 +719,21 @@
           "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
           "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
           "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
+        },
+        "RepositoryRemoveProjectSection": {
+          "cancel": "Cancel",
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkouts",
+          "confirm": "Remove",
+          "dialogTitle": "Remove {{name}}?",
+          "filesNote": "Files stay on disk, so you can add it again later.",
+          "filesNoteVmRecipe": "VM recipes decide whether their environments and files are deleted.",
+          "hostCount_one": "{{count}} host",
+          "hostCount_other": "{{count}} hosts",
+          "removeButton": "Remove…",
+          "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "terminalWarning_other": "{{count}} open terminals in this project will be closed.",
+          "unknownHost": "Unknown host"
         },
         "Settings": {
           "084d8fac5b": "Privacy & Security",
@@ -848,6 +883,14 @@
         }
       },
       "sidebar": {
+        "AddProjectMenu": {
+          "addRemoteHost": "Add remote host…",
+          "browseFolder": "Browse folder…",
+          "changeProjectHost": "Project host: {{host}}",
+          "cloneFromUrl": "Clone from URL…",
+          "createNewProject": "Create new project…",
+          "projectHost": "Project host"
+        },
         "AddRemoteHostDialog": {
           "sshImportSynced": "Added {{value0}} host{{value1}} to Orca.",
           "sshImportSynced_one": "Added {{count}} host to Orca.",
@@ -1216,6 +1259,13 @@
           }
         }
       },
+      "tab": {
+        "bar": {
+          "QuickLaunchButton": {
+            "chatNotOnWindows": "No chat on Windows yet"
+          }
+        }
+      },
       "task": {
         "project": {
           "source": {
@@ -1261,13 +1311,23 @@
             }
           }
         }
+      },
+      "workspace": {
+        "cleanup": {
+          "WorkspaceCleanupDialog": {
+            "mergedStatus": "Merged",
+            "unchangedStatus": "No new commits"
+          }
+        }
       }
     },
     "hooks": {
       "useComposerState": {
         "dropPartiallyAttached": "{{failureCount}} of {{count}} items could not be attached.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
-        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
+        "githubItemUnresolved": "Could not resolve the GitHub item before creating the workspace.",
+        "githubLinkUnresolvedForProject": "Could not load {{repository}}#{{number}}. Check that it exists, that you can access it, and that it belongs to the origin or upstream repository of the selected project."
       },
       "useGlobalFileDrop": {
         "nativeDropTempCopyFailed": "Orca couldn't copy {{count}} dropped files.",
@@ -1404,6 +1464,15 @@
     "runtime": {
       "githubCheckDetailsTimeout": {
         "timedOut": "Timed out loading check details."
+      }
+    },
+    "store": {
+      "slices": {
+        "orca": {
+          "profiles": {
+            "a37b5e6d37": "Signed out of Orca"
+          }
+        }
       }
     }
   },
@@ -1592,14 +1661,45 @@
   },
   "components": {
     "native-chat": {
+      "agentMessage": {
+        "reopenedWorker": "Reopened worker",
+        "sentFollowUpToWorker": "Sent follow-up to worker"
+      },
       "approval": {
         "allow": "Allow",
+        "allowedByCoordinator": "Allowed by coordinator: {{reason}}",
+        "allowedByYou": "Allowed by you",
+        "allowedInTerminal": "Allowed in the worker's terminal",
+        "answerFailed": "{{name}}: {{detail}}",
+        "answerInTerminal": "Answer it in the worker's terminal",
+        "answerNotApplied": "{{name}}: the answer did not reach this prompt",
+        "answerWorkerEnded": "{{name}} has ended, so this prompt is closed",
+        "answeredInChat": "Answered in the worker's chat",
+        "autoDenied": "Auto-denied by Claude after 2:00",
+        "closedUnnamed": "Closed without a recorded answer",
+        "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
+        "deniedByCoordinator": "Denied by coordinator",
+        "deniedByYou": "Denied by you",
+        "deniedInTerminal": "Denied in the worker's terminal",
         "deny": "Deny",
+        "folderTrust": {
+          "exit": "Exit",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "title": "Trust this folder?",
+          "trust": "Trust folder"
+        },
+        "openWorker": "Open worker",
         "plan": {
           "refineHint": "Refine plan closes the review so you can send what to change.",
           "reviewTitle": "Review proposed plan"
         },
-        "title": "Allow {{value0}}?"
+        "reasonSentAsMessage": "Reason, sent as a message",
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
+        },
+        "title": "Allow {{value0}}?",
+        "worker": "Worker · {{name}}",
+        "workerEnded": "No longer open · worker ended"
       },
       "ask": {
         "asked": "Asked:",
@@ -1684,6 +1784,7 @@
         "modelApplyFailed": "Could not apply model {{value}}.",
         "modelPickerFailed": "Could not open the model picker."
       },
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
@@ -1819,6 +1920,9 @@
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
+      },
+      "hostOutage": {
+        "connecting": "Connecting to {{distro}}…"
       },
       "notices": {
         "compaction": "Context compacted",
@@ -2085,6 +2189,9 @@
           "reviewStatus": "See issue state, review status, and CI checks on every worktree",
           "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
         }
+      },
+      "theme": {
+        "changeAnyTime": "Change any time in Settings."
       }
     },
     "orchestrationCrew": {
@@ -2105,7 +2212,17 @@
         }
       }
     },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "searchAgentsAndFiles": "Search agents and files",
+        "searchShort": "Search"
+      }
+    },
     "workspace": {
+      "atRiskLocalFiles": {
+        "namesAndMore": "{{names}} and more",
+        "namesWithCount": "{{names}} +{{value0}}"
+      },
       "cleanup": {
         "browse": {
           "forceDeleteRisk_one": "{{count}} workspace currently shows risk and may need a force delete",
@@ -2118,6 +2235,11 @@
           "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
           "workspaceCount_one": "{{count}} workspace",
           "workspaceCount_other": "{{count}} workspaces"
+        },
+        "candidateRow": {
+          "ignoredFilesBlocker": "Ignored local files",
+          "ignoredFilesNamed": "Ignored files: {{value0}}",
+          "ignoredFilesUnchecked": "Ignored files not fully checked"
         },
         "confirm": {
           "deleteTitle_one": "Delete {{count}} workspace?",
@@ -2135,6 +2257,8 @@
         }
       },
       "delete": {
+        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked",
         "unsavedEdits": {
           "blocked_one": "Save or close {{count}} unsaved file in {{name}} first",
           "blocked_other": "Save or close {{count}} unsaved files in {{name}} first",
@@ -2338,10 +2462,13 @@
   },
   "settings": {
     "agents": {
+      "agentActions": "{{agent}} actions",
+      "defaultAutoBadge": "Default · Auto",
       "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
       "defaultSurfaceKeptTerminal_one": "{{agents}} stays in the terminal, as you set.",
       "defaultSurfaceKeptTerminal_other": "{{agents}} stay in the terminal, as you set.",
+      "newAgentsTitle": "New agents",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
@@ -2731,6 +2858,15 @@
       "unknownReleaseChannel": "Unknown release channel \"{{channel}}\".",
       "unsignedDevChannel": "{{channel}} builds are unsigned, and this signed build only installs updates signed by Orca's publisher. Download the installer from the release page and run it once — updates work normally from there, including back to Stable.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes."
+    }
+  },
+  "usage": {
+    "failure": {
+      "read": "Usage could not be loaded. Try Refresh again.",
+      "refresh": "The previous Refresh could not be completed. Try Refresh again.",
+      "retry": "Refresh",
+      "setting": "The tracking change could not be confirmed. Try changing it again.",
+      "unavailable": "Usage is unavailable. Try Refresh to reconnect."
     }
   },
   "workspace": {

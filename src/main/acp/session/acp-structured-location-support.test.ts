@@ -15,7 +15,9 @@ it('allows a local Windows ACP chat through a declared host backend when no mana
   const hostOnly = {
     managedRuntime: { pin: () => null },
     hostBackend: {}
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: location admission reads only these fields.
   } as AcpLaunchSpec
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: location admission reads only this field.
   const managedOnly = { managedRuntime: { pin: () => null } } as AcpLaunchSpec
 
   expect(supportsAcpStructuredLocation(hostOnly, local, () => true)).toBe(true)
