@@ -105,12 +105,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-      - uses: ./.github/actions/build-mobile-web-bundle
-      - uses: actions/upload-artifact@v7
+      - uses: $/.github/actions/install-node-dependencies
+      - uses: $/.github/actions/build-mobile-web-bundle
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ format('ssh-windows-mobile-web-{0}', github.sha) }}
           path: out/mobile-web/
@@ -139,7 +139,7 @@ jobs:
       ORCA_ISOLATED_SSH_CI: '1'
       INBOX_PREPARATION_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.preparation_mode == 'serial' && 'serial' || 'overlap' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
@@ -176,7 +176,7 @@ jobs:
             . config/ci/windows-ssh-provider/preview-ssh/windows-ssh-capability.ps1
             Initialize-WindowsInboxSshCapability -Arch '${{ matrix.arch }}' -Receipt (Join-Path $receipts 'inbox-capability-preparation.json') -PreparationMode $env:INBOX_PREPARATION_MODE
           }
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         id: dependencies
         with:
           native-runtime: node
@@ -194,21 +194,21 @@ jobs:
             reuse_args+=(--reuse-prepared-runtime)
           fi
           node config/scripts/native-build/windows/build-windows-process-tree-addon.mjs --arch=${{ matrix.arch }} "${reuse_args[@]}"
-      - uses: ./.github/actions/prepare-orcad-prebuilds
+      - uses: $/.github/actions/prepare-orcad-prebuilds
         with:
           resolve-windows-cache: ${{ github.event_name == 'pull_request' }}
           restore-windows-cache: ${{ github.event_name == 'pull_request' }}
-      - uses: ./.github/actions/prepare-windows-cli-launcher
+      - uses: $/.github/actions/prepare-windows-cli-launcher
         with:
           arches: ${{ matrix.arch }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         id: mobile-bundle
         continue-on-error: true
         with:
           name: ${{ format('ssh-windows-mobile-web-{0}', github.sha) }}
           path: out/mobile-web/
       # A failed-only retry may outlive the producer artifact's retention.
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
         if: steps.mobile-bundle.outcome != 'success'
       - name: Verify the mobile bundle before staging it
         shell: bash
@@ -258,7 +258,7 @@ jobs:
             & (Join-Path $tools 'invoke-windows-host-cells.ps1') -SourceRoot $sourceRoot -Context $context -Target 'win32-${{ matrix.arch }}' -ReceiptRoot $receipts -Cells $cells
           }.GetNewClosure()
           & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -InboxPreparationReceipt $preparation -Accounts $cells.Count -ForwardingAccounts $forwarding -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: ssh-windows-host-${{ matrix.arch }}-${{ matrix.server }}-receipts

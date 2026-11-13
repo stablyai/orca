@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           sparse-checkout: config/scripts
           persist-credentials: false
@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node config/scripts/ci/runner-capacity/ci-runner-demand.mjs
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: ci-runner-demand-${{ github.run_id }}
           path: ci-demand/

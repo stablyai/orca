@@ -34,20 +34,20 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
           package-manager-cache: false
-      - uses: ./.github/actions/prepare-xterm-dependencies
+      - uses: $/.github/actions/prepare-xterm-dependencies
         id: cache
       - name: Verify and populate dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: node config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs --check --work-dir="$RUNNER_TEMP/xterm-patch-build"
-      - uses: actions/cache/save@v5
+      - uses: actions/cache/save@v5.1.0
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
@@ -56,7 +56,7 @@ jobs:
           key: ${{ steps.cache.outputs.cache-key }}
       - name: Preserve fallback downloads
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v5.1.0
         with:
           path: |
             ~/.npm

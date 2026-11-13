@@ -28,10 +28,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
           node-version: '24'
@@ -56,10 +56,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
           node-version: '24'
@@ -84,10 +84,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
           # Windows PR consumers download packages directly; retain only the build caches.
@@ -103,7 +103,7 @@ jobs:
 
       - name: Cache Windows CLI launcher
         if: runner.arch == 'X64' && matrix.os != 'windows-2025'
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: |
             native/windows-cli-launcher/.build
@@ -126,24 +126,24 @@ jobs:
 
       - name: Warm the Windows ARM server launcher
         if: runner.arch == 'ARM64'
-        uses: ./.github/actions/prepare-windows-cli-launcher
+        uses: $/.github/actions/prepare-windows-cli-launcher
         with:
           arches: arm64
 
       # node-server, Windows E2E and the survival lanes restore these exact keys.
       - name: Warm the Windows x64 server launcher
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/prepare-windows-cli-launcher
+        uses: $/.github/actions/prepare-windows-cli-launcher
         with:
           arches: x64
       - name: Warm the Windows agent hook
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/prepare-windows-agent-hook
+        uses: $/.github/actions/prepare-windows-agent-hook
 
       - name: Warm the Windows server prebuild
         id: orcad-prebuild
         if: matrix.os != 'windows-2025'
-        uses: ./.github/actions/prepare-orcad-prebuilds
+        uses: $/.github/actions/prepare-orcad-prebuilds
         with:
           resolve-windows-cache: 'true'
           restore-windows-cache: 'true'
@@ -157,7 +157,7 @@ jobs:
       - name: Save the Windows server prebuild
         if: steps.orcad-prebuild-validate.outcome == 'success'
         continue-on-error: true
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v5.1.0
         with:
           path: ${{ steps.orcad-prebuild.outputs.cache-path }}
           key: ${{ steps.orcad-prebuild.outputs.cache-key }}
@@ -172,10 +172,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
           cache-pnpm-store: 'false'
@@ -190,10 +190,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
           cache-pnpm-store: 'false'
@@ -207,7 +207,7 @@ jobs:
       - name: Seed shared Linux packaging downloads
         id: eb-cache
         if: github.event_name != 'pull_request'
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/.cache/electron-builder
           key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
@@ -237,10 +237,10 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1.338.0
         with:
           ruby-version: '3.3'
           working-directory: mobile
@@ -253,7 +253,7 @@ jobs:
           printf 'key=mobile-bundle-v1-%s-%s-%s-%s\n' "$ID-$VERSION_ID" "$(ruby -e 'print RUBY_PLATFORM')" "$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" "$GEMFILE_HASH" >> "$GITHUB_OUTPUT"
       - name: Seed fastlane bundle
         id: ruby-bundle-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: mobile/vendor/bundle
           key: ${{ steps.ruby-bundle.outputs.key }}
@@ -279,18 +279,18 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/prepare-linux-package-fixture
+      - uses: $/.github/actions/prepare-linux-package-fixture
         with:
           fixture: daemon-shutdown-descendants
           save-cache: ${{ github.event_name != 'pull_request' }}
-      - uses: ./.github/actions/prepare-linux-package-fixture
+      - uses: $/.github/actions/prepare-linux-package-fixture
         with:
           fixture: headless-serve-shutdown
           save-cache: ${{ github.event_name != 'pull_request' }}
-      - uses: ./.github/actions/prepare-linux-package-fixture
+      - uses: $/.github/actions/prepare-linux-package-fixture
         with:
           fixture: cli-launch-contract
           save-cache: ${{ github.event_name != 'pull_request' }}

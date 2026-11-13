@@ -307,11 +307,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 2
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           cache-pnpm-store: 'false'
           cache-dependency-path: |
@@ -334,7 +334,7 @@ jobs:
         id: ruby-setup
         background: true
         if: steps.ruby-scope.outputs.should_run != 'false'
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           ruby-version: '3.3'
           working-directory: mobile
@@ -356,7 +356,7 @@ jobs:
 
       - name: Restore fastlane bundle
         if: steps.ruby-scope.outputs.should_run != 'false'
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v5.1.0
         with:
           path: mobile/vendor/bundle
           key: ${{ steps.ruby-bundle.outputs.key }}
@@ -417,7 +417,7 @@ jobs:
           fi
       - name: Setup Bun for tests
         if: steps.test-scope.outputs.should_run != 'false' && steps.installed-bun.outputs.found != 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: config/.bun-version
           no-cache: true
@@ -478,18 +478,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 2
           persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           package-manager-cache: false
 
       - name: Setup pnpm
-        uses: ./.github/actions/setup-pnpm
+        uses: $/.github/actions/setup-pnpm
 
       # The base commit may predate the fingerprint tools, so run the head's copy against both.
       - name: Compare native fingerprint with the base
@@ -522,12 +522,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
       # Restoring the 650 MB store took longer than downloading these packages.
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           cache-pnpm-store: 'false'
           cache-dependency-path: |
@@ -560,7 +560,7 @@ jobs:
           fi
       - name: Setup Bun for tests
         if: steps.installed-bun.outputs.found != 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: config/.bun-version
           no-cache: true

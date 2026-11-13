@@ -19,7 +19,7 @@ runs:
     # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
     - name: Cache the Windows CLI launcher builds
       if: runner.os == 'Windows'
-      uses: actions/cache@v5
+      uses: actions/cache@v5.1.0
       with:
         path: |
           .build/windows-cli-launcher

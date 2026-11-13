@@ -31,12 +31,12 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-      - uses: ./.github/actions/setup-wsl-test-runtime
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/setup-wsl-test-runtime
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
       - name: Build relay and Electron
@@ -97,7 +97,7 @@ jobs:
         if: always()
         run: node config/scripts/runtime-verification/participation/verify-wsl-no-background-boot-participation.mjs test-results/wsl-no-background-boot-results.json
       - name: Upload terminal image proof
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: windows-wsl-terminal-image-proof
@@ -107,13 +107,13 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Upload WSL participation report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: windows-wsl-participation-report
           path: test-results/wsl-results.json
           retention-days: 3
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
           name: windows-wsl-terminal-traces

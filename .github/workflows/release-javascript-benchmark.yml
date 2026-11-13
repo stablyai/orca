@@ -52,15 +52,15 @@ jobs:
             platform: darwin
             arch: arm64
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ needs.bundle.outputs.source_sha }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
           persist-native-cache: 'false'
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
       - name: Install Linux provider dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
@@ -76,7 +76,7 @@ jobs:
           echo "ORCA_BUILD_IDENTITY=$(node "$RELEASE_JAVASCRIPT_ARTIFACT" identity)" >> "$GITHUB_ENV"
       - name: Download shared JavaScript
         if: matrix.mode == 'shared'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: release-javascript
           path: .build/release-javascript
@@ -91,7 +91,7 @@ jobs:
             RELEASE_JAVASCRIPT_BENCHMARK='config/scripts/release-javascript-benchmark.mjs'
           fi
           node "$RELEASE_JAVASCRIPT_BENCHMARK" "$MEASUREMENT_MODE"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: release-javascript-measurement-${{ matrix.mode }}-${{ matrix.host.platform }}-${{ matrix.host.arch }}
           path: .build/release-javascript-measurements/
@@ -105,16 +105,16 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ needs.bundle.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
-      - uses: ./.github/actions/install-node-dependencies
-      - uses: actions/download-artifact@v8
+      - uses: $/.github/actions/install-node-dependencies
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: release-javascript-measurement-*
           path: .build/release-javascript-measurements
@@ -129,7 +129,7 @@ jobs:
           fi
           node "$RELEASE_JAVASCRIPT_BENCHMARK" summary
           cat .build/release-javascript-measurements/comparison.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: release-javascript-comparison

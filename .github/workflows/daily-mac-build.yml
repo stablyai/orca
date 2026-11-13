@@ -76,7 +76,7 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ needs.resolve-main.outputs.head_sha }}
           # Version helpers only read HEAD; published versions come from git tags.
@@ -86,7 +86,7 @@ jobs:
 
       - name: Mint daily repo token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -129,13 +129,13 @@ jobs:
 
       - name: Setup pnpm
         if: steps.freshness.outputs.should_build == 'true'
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       - name: Setup Node.js
         if: steps.freshness.outputs.should_build == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -152,14 +152,14 @@ jobs:
 
       - name: Cache the pinned Node runtime
         if: steps.freshness.outputs.should_build == 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/Library/Caches/orca-node-runtime
           key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
         if: steps.freshness.outputs.should_build == 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: |
             ~/Library/Caches/electron
@@ -171,7 +171,7 @@ jobs:
       # Install x64 and arm64 optional natives for both packaged macOS targets.
       - name: Install dependencies
         if: steps.freshness.outputs.should_build == 'true'
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -179,7 +179,7 @@ jobs:
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
       # Build required out/mobile-web using mobile’s React Native/Expo install.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
         if: steps.freshness.outputs.should_build == 'true'
 
       # Why: signing is what makes a daily installable over an existing Orca, so
@@ -240,7 +240,7 @@ jobs:
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
         if: steps.freshness.outputs.should_build == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-template
           path: out/orcad-template
@@ -249,7 +249,7 @@ jobs:
       - name: Re-mint daily repo token for publish
         id: app_token_publish
         if: steps.freshness.outputs.should_build == 'true'
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -298,7 +298,7 @@ jobs:
 
       - name: Publish daily macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           # Allow two 45min pack/notarize/upload attempts; a third costs more runner time than a missed daily.
           timeout_minutes: 45
@@ -323,7 +323,7 @@ jobs:
       - name: Re-mint daily repo token for verify and cleanup
         id: app_token_final
         if: always() && steps.freshness.outputs.should_build == 'true'
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}

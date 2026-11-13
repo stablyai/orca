@@ -19,13 +19,13 @@ jobs:
     runs-on: ${{ inputs.rebuild_plan && 'ubuntu-24.04' || 'ubuntu-slim' }}
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 2
           sparse-checkout: ${{ !inputs.rebuild_plan && '/config/scripts/ci/unit-selection/ci-unit-selection-review.mjs' || '' }}
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         if: inputs.rebuild_plan
       - name: Rebuild shadow selection
         if: inputs.rebuild_plan
@@ -34,13 +34,13 @@ jobs:
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
           ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
         run: node config/scripts/ci/unit-selection/ci-unit-plan.mjs
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: unit-shard-node-*-attempt-${{ github.run_attempt }}
           path: unit-evidence/
       - name: Compare selection with full results
         continue-on-error: true
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         env:
           REBUILD_SELECTION_PLAN: ${{ inputs.rebuild_plan }}
         with:
@@ -54,7 +54,7 @@ jobs:
             ]
             if (env.REBUILD_SELECTION_PLAN === 'true') args.push('ci-shards/unit-selection.json')
             await exec.exec(process.execPath, args, { env })
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         continue-on-error: true
         with:

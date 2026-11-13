@@ -45,22 +45,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
           # iOS 27.1 SDK: iPhone Duo resizing and reserved (fold/camera) regions.
           xcode-version: '27.1'
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version: 24
           check-latest: true
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
@@ -68,7 +68,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Setup Ruby and fastlane
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           ruby-version: '3.3'
           bundler-cache: true
@@ -139,7 +139,7 @@ jobs:
 
       - name: Upload .ipa artifact
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orca-mobile-ipa
           path: mobile/build/*.ipa
@@ -163,10 +163,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Setup Ruby and fastlane
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           ruby-version: '3.3'
           bundler-cache: true

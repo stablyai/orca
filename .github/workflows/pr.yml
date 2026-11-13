@@ -60,7 +60,7 @@ jobs:
       wsl_source_changed: ${{ steps.e2e_filter.outputs.wsl_source_changed }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           # Fetch 50 commits for merge HEAD^1 diffs instead of all 8127 refs (~20s); sparse ~7-file blob:none checkout avoids materialization/refetch (9.5s→1.6s).
           fetch-depth: 50
@@ -73,6 +73,8 @@ jobs:
             /.github/scripts/check-root-directory-entries.mjs
             /.github/scripts/check-required-pr-context.mjs
             /.github/scripts/check-pull-request-job-timeouts.mjs
+            /.github/actions/
+            /.github/dependabot.yml
             /.github/workflows/
             /config/.bun-version
             /config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs
@@ -105,7 +107,7 @@ jobs:
         run: node config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs
 
       - name: Set up Bun for required workflow validation
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: config/.bun-version
           no-cache: true
@@ -115,6 +117,21 @@ jobs:
 
       - name: Check PR job time limits
         run: bun .github/scripts/check-pull-request-job-timeouts.mjs
+
+      - name: Verify workflow dependency lockfile
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
+          if [ -n "$CHANGED" ] && ! printf '%s\n' "$CHANGED" | grep -Eq '^\.github/(workflows/|actions/|dependabot\.yml$)'; then
+            echo "No workflow or action changes; skipping lockfile network check."
+            exit 0
+          fi
+          gh extension install github/gh-actions-lock --pin v0.4.1
+          gh actions-lock --verify --no-interactive
 
       # Readiness changes eligibility for advisory tests, not the already-tested source.
       - name: Find identical successful required checks
@@ -188,7 +205,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           # Fetch 50 for merge HEAD^1, no merge-base graph needed. Full-tree checkout omits blob:none to avoid refetching ~30k blobs (23s versus ~11s).
           fetch-depth: 50
@@ -199,7 +216,7 @@ jobs:
         id: node18_runtime
         if: needs.code_paths.outputs.managed_hook_node18 == 'true'
         continue-on-error: true
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version: '18'
           package-manager-cache: false
@@ -211,13 +228,13 @@ jobs:
         run: node -p '"executable=" + process.execPath' >> "$GITHUB_OUTPUT"
 
       # Choose one root/mobile install: root-only store is 321MB/4.6s versus mixed 537MB/8.6s, saving unused mobile downloads on most PRs.
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         if: needs.code_paths.outputs.mobile_dependencies != 'true'
         with:
           native-runtime: node
           node-version: '24'
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         if: needs.code_paths.outputs.mobile_dependencies == 'true'
         with:
           native-runtime: node
@@ -228,7 +245,7 @@ jobs:
 
       # Bun 1.4.3 introduces the compiler used by this job.
       - name: Set up Bun for preflight checks
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: config/.bun-version
           no-cache: true
@@ -328,7 +345,7 @@ jobs:
       - wait: native-code-quality
 
       # Install mobile before type-aware changed-code lint or unresolved mobile types become phantom error-type findings.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
         if: needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'
 
       - name: Enforce changed-code quality
@@ -471,7 +488,7 @@ jobs:
           fi
 
       # orcad refuses to build without the page phones load.
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
         if: steps.orcad-smoke-scope.outputs.run == 'true'
 
       # Pair import-graph electron exclusion with built-Node boot/pair/worktree/PTY smoke; graph purity alone does not prove runtime operation.
@@ -605,13 +622,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
 
-      - uses: ./.github/actions/prepare-git-compatibility
+      - uses: $/.github/actions/prepare-git-compatibility
         if: '!matrix.image'
 
       - name: Verify Git ${{ matrix.git }} compatibility
@@ -650,11 +667,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
 
       - name: Install pinned Codex CLI
         run: |
@@ -742,19 +759,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
       # The generator uses Node built-ins and installs its own upstream toolchain.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
           package-manager-cache: false
 
       # Rebuild both pristine and patched bundles; reuse only the pinned toolchain.
-      - uses: ./.github/actions/prepare-xterm-dependencies
+      - uses: $/.github/actions/prepare-xterm-dependencies
 
       - name: Verify xterm patches match the pinned upstream build
         env:
@@ -781,7 +798,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
@@ -817,7 +834,7 @@ jobs:
           done
           printf 'fish selected: %s\n' "$(command -v fish)"
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
 
@@ -910,13 +927,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
       # Why no native-runtime: the builder is esbuild and the render check is a browser. Nothing
       # in this job loads node-pty.
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: none
           cache-dependency-path: |
@@ -943,7 +960,7 @@ jobs:
           timeout --kill-after=10s 180 pnpm exec playwright-core install webkit
 
       # The entry lives in mobile/ so one React resolves; without this every RN import is nothing.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
 
       - name: Prepare mobile route snapshot
         id: mobile-routes
@@ -991,14 +1008,14 @@ jobs:
     steps:
       # Fetch tags/full history for newest-release skew; shallow unit shards cannot supply it.
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           # Requested historical snapshots acquire their blobs before timed extraction.
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
 
@@ -1052,7 +1069,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
@@ -1064,7 +1081,7 @@ jobs:
 
       # The platform warmup seeds this on main.
       - name: Cache electron-builder downloads
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v5.1.0
         with:
           path: ~/.cache/electron-builder
           key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
@@ -1072,7 +1089,7 @@ jobs:
             electron-builder-linux-
 
       # Restore in the foreground: background steps may only be single run steps (ci-background-steps.test.mjs).
-      - uses: ./.github/actions/prepare-linux-package-fixture
+      - uses: $/.github/actions/prepare-linux-package-fixture
         id: daemon-fixture-cache-restore
         with:
           fixture: daemon-shutdown-descendants
@@ -1086,7 +1103,7 @@ jobs:
           CACHE_HIT: ${{ steps.daemon-fixture-cache-restore.outputs.cache-hit }}
         run: bash .github/actions/prepare-linux-package-fixture/load-fixture.sh
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
           cache-dependency-path: |
@@ -1095,7 +1112,7 @@ jobs:
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
 
       # The checkout must pass without depending on a historical baseline that leaks.
       - wait: daemon-fixture-cache
@@ -1127,7 +1144,7 @@ jobs:
 
       - name: Restore native components
         id: linux-native-restore
-        uses: ./.github/actions/prepare-wayland-clipboard
+        uses: $/.github/actions/prepare-wayland-clipboard
         with:
           build: 'false'
 
@@ -1140,7 +1157,7 @@ jobs:
         run: bash .github/actions/prepare-wayland-clipboard/build-or-validate.sh
 
       # Load independent fixtures during builds; keep native lifecycle probes serial.
-      - uses: ./.github/actions/prepare-linux-package-fixture
+      - uses: $/.github/actions/prepare-linux-package-fixture
         id: shutdown-fixture-cache-restore
         with:
           fixture: headless-serve-shutdown
@@ -1154,7 +1171,7 @@ jobs:
           CACHE_HIT: ${{ steps.shutdown-fixture-cache-restore.outputs.cache-hit }}
         run: bash .github/actions/prepare-linux-package-fixture/load-fixture.sh
 
-      - uses: ./.github/actions/prepare-linux-package-fixture
+      - uses: $/.github/actions/prepare-linux-package-fixture
         id: cli-fixture-cache-restore
         with:
           fixture: cli-launch-contract
@@ -1247,7 +1264,7 @@ jobs:
           ls -l dist/orca-linux.AppImage "$deb" "$rpm"
 
       # Kept briefly so a reviewer can run this exact AppImage on a real Linux desktop.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: orca-linux-appimage-${{ github.event.pull_request.head.sha }}
           path: dist/orca-linux.AppImage
@@ -1286,7 +1303,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
@@ -1297,7 +1314,7 @@ jobs:
         run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
 
       - name: Cache electron-builder downloads
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v5.1.0
         with:
           path: |
             ~\AppData\Local\electron\Cache
@@ -1308,7 +1325,7 @@ jobs:
             electron-builder-win-
 
       # Do not save Node cache post-job: later Electron rebuild mutates the same paths to another ABI.
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         id: deps
         with:
           native-runtime: node
@@ -1319,7 +1336,7 @@ jobs:
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
 
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
@@ -1341,7 +1358,7 @@ jobs:
 
       # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
       - name: Cache Windows CLI launcher
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           # Cache cargo registry with .build so misses do not rebuild resource crates cold.
           path: |
@@ -1400,7 +1417,7 @@ jobs:
         run: pnpm run build:release:parallel
 
       - name: Prepare Electron native runtime
-        uses: ./.github/actions/prepare-native-runtime
+        uses: $/.github/actions/prepare-native-runtime
         with:
           native-runtime: electron
           node-version: ${{ steps.deps.outputs.node-version }}
@@ -1509,18 +1526,18 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
           package-manager-cache: false
 
       - name: Setup pnpm
-        uses: ./.github/actions/setup-pnpm
+        uses: $/.github/actions/setup-pnpm
 
       - name: Install with every package isolated in its own store slot
         run: |

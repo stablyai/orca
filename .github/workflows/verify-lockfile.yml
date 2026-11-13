@@ -1,0 +1,41 @@
+name: Verify workflow lockfile
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/dependabot.yml'
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-lockfile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6.1.0
+        with:
+          sparse-checkout: |
+            /.github/actions/
+            /.github/dependabot.yml
+            /.github/workflows/
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Verify workflow dependency lockfile
+        run: |
+          gh extension install github/gh-actions-lock --pin v0.4.1
+          gh actions-lock --verify --no-interactive

@@ -13,14 +13,14 @@ runs:
     - name: Setup pnpm
       id: primary
       continue-on-error: true
-      uses: pnpm/setup@v2
+      uses: pnpm/setup@v2.1.0
       with:
         package-json-file: ${{ inputs.package-json-file }}
         install: false
 
     - name: Setup Node.js for the npm fallback
       if: steps.primary.outcome == 'failure'
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v6.5.0
       with:
         node-version: '24'
         package-manager-cache: false

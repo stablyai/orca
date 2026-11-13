@@ -75,11 +75,11 @@ jobs:
     outputs:
       families: ${{ steps.scope.outcome == 'success' && steps.scope.outputs.families || '' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 2
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
       - name: Select WSL distribution qualification
@@ -101,13 +101,13 @@ jobs:
           git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/wsl-modified"
           node config/scripts/orcad-distribution/qualification/wsl-orcad-qualification.mjs "$RUNNER_TEMP/wsl-changed" "$RUNNER_TEMP/wsl-modified"
 
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
       - name: Build the template
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
           node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets linux-x64-glibc
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: wsl-orcad-template
           path: out/orcad-template/
@@ -140,7 +140,7 @@ jobs:
           docker export "$id" > rootfs/rootfs.tar
           docker rm "$id" >/dev/null
           ls -l rootfs/rootfs.tar
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: wsl-orcad-rootfs-${{ matrix.family }}
           path: rootfs/rootfs.tar
@@ -166,7 +166,7 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
       # WSL before 3.0.1 drops the VM-wide WSLInterop entry when a systemd distro stops
@@ -187,7 +187,7 @@ jobs:
       - name: Restore the pinned WSL package
         id: wsl-msi-cache
         if: steps.wsl-version.outputs.needs-install == 'true'
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v5.1.0
         with:
           path: ${{ runner.temp }}/wsl-msi
           key: wsl-orcad-msi-${{ env.WSL_MSI_SHA256 }}
@@ -218,7 +218,7 @@ jobs:
           wsl.exe --shutdown
       - name: Save the pinned WSL package
         if: steps.wsl-version.outputs.needs-install == 'true' && steps.wsl-msi-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v5.1.0
         with:
           path: ${{ runner.temp }}/wsl-msi
           key: wsl-orcad-msi-${{ env.WSL_MSI_SHA256 }}
@@ -233,11 +233,11 @@ jobs:
       - name: Restore the pinned rootfs
         id: rootfs-cache
         if: ${{ matrix.family == 'ubuntu-24.04' }}
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v5.1.0
         with:
           path: ${{ runner.temp }}/wsl-rootfs
           key: wsl-orcad-rootfs-${{ env.ROOTFS_SHA256 }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         if: ${{ matrix.family != 'ubuntu-24.04' }}
         with:
           name: wsl-orcad-rootfs-${{ matrix.family }}
@@ -293,10 +293,10 @@ jobs:
             Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage terminate -Distro $d.Name -Arguments @('--terminate', $d.Name)
           }
           Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage list -Arguments @('--list', '--verbose')
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: wsl-orcad-template
           path: ${{ runner.temp }}/orcad-template
@@ -304,7 +304,7 @@ jobs:
       # Saved even when the lane fails; the import step verified its checksum.
       - name: Save the pinned rootfs
         if: ${{ matrix.family == 'ubuntu-24.04' && steps.rootfs-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v5.1.0
         with:
           path: ${{ runner.temp }}/wsl-rootfs
           key: wsl-orcad-rootfs-${{ env.ROOTFS_SHA256 }}
@@ -396,7 +396,7 @@ jobs:
             if (Test-Path $file) { $lines += "#### $phase", '```json', (Get-Content $file -Raw), '```' }
           }
           $lines | Add-Content $env:GITHUB_STEP_SUMMARY
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: wsl-orcad-lane-receipts-${{ matrix.family }}

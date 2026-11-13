@@ -40,12 +40,12 @@ jobs:
       number: ${{ steps.scope.outputs.number }}
       head: ${{ steps.scope.outputs.head }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           sparse-checkout: config/scripts/workflow/pr-admission/pullfrog-review-scope.cjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v8.0.0
         id: scope
         with:
           script: |
@@ -62,13 +62,13 @@ jobs:
       pull-requests: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 1
       - name: Recheck review head before starting agent
         id: freshness
         if: needs.review_scope.outputs.number != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         env:
           REVIEW_NUMBER: ${{ needs.review_scope.outputs.number }}
           REVIEW_HEAD: ${{ needs.review_scope.outputs.head }}
@@ -78,7 +78,7 @@ jobs:
             core.setOutput('current', pr.state === 'open' && pr.head.sha === process.env.REVIEW_HEAD)
       - name: Run agent
         if: needs.review_scope.outputs.number == '' || steps.freshness.outputs.current == 'true'
-        uses: pullfrog/pullfrog@v0
+        uses: pullfrog/pullfrog@v0.1.129
         with:
           prompt: ${{ inputs.prompt }}
         env:

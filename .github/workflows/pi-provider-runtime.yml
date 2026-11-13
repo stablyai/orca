@@ -24,10 +24,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       - name: Install pinned Pi runtime
         run: npm install --prefix .cache/pi-provider --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.84.2
       - name: Verify extension model generation and session entry ids

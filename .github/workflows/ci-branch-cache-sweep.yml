@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 10
     steps:
       # No checkout: only this script runs, with the cache-write token.
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v8.0.0
         env:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         with:

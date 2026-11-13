@@ -28,10 +28,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       - name: Verify case-twin refs and release trust boundary
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts

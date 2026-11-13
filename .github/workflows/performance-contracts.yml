@@ -44,10 +44,10 @@ jobs:
     runs-on: ${{ fromJSON('{"ubuntu-latest":"ubuntu-24.04","macos-latest":"macos-15","windows-latest":"windows-2022"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       - name: Run operation-count and retention contracts
         run: pnpm test:perf:contracts --reporter=default --reporter=json --outputFile=performance-contracts.json
       # Source-only scan: identical on every OS, so run it once.
@@ -55,13 +55,13 @@ jobs:
         if: always() && matrix.os == 'ubuntu-latest'
         shell: bash
         run: pnpm --silent audit:perf > performance-audit.json
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: performance-contracts-${{ matrix.os }}
           path: performance-contracts.json
           if-no-files-found: error
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always() && matrix.os == 'ubuntu-latest'
         with:
           name: performance-audit

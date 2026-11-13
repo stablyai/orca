@@ -26,19 +26,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
       # Why: pnpm must exist before setup-node resolves its dependency cache.
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload Playwright traces
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: windows-terminal-restart-playwright-traces
           path: test-results/

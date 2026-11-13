@@ -49,12 +49,12 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-      - uses: ./.github/actions/prepare-dependency-audit
+      - uses: $/.github/actions/install-node-dependencies
+      - uses: $/.github/actions/prepare-dependency-audit
         if: inputs.ref != ''
         with:
           ref: ${{ inputs.ref }}
@@ -70,7 +70,7 @@ jobs:
           else
             pnpm check:dependencies
           fi
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: dependency-security-javascript
@@ -82,18 +82,18 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - uses: actions/cache@v5
+      - uses: actions/cache@v5.1.0
         id: scanner
         with:
           path: ~/.cargo/bin/cargo-deny
           key: cargo-deny-0.20.2-${{ runner.os }}-${{ runner.arch }}
       - if: steps.scanner.outputs.cache-hit != 'true'
         run: cargo install cargo-deny --locked --version 0.20.2
-      - uses: ./.github/actions/prepare-dependency-audit
+      - uses: $/.github/actions/prepare-dependency-audit
         if: inputs.ref != ''
         with:
           ref: ${{ inputs.ref }}
@@ -112,7 +112,7 @@ jobs:
             cargo deny --manifest-path "$manifest" --locked --config "$GITHUB_WORKSPACE/config/cargo-deny.toml" check advisories 2>&1 | tee "$report_dir/$name.log" || status=1
           done
           exit "$status"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: dependency-security-rust

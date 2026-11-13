@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Apply OS label from issue form
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

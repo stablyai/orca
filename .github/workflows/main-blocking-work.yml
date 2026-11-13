@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: actions/checkout@v6.1.0
+      - uses: $/.github/actions/install-node-dependencies
       # Run the blocking-work ratchets over the full tree after every main merge.
       - name: Enforce ratchets
         run: |

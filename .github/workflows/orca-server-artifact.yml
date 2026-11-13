@@ -61,7 +61,7 @@ jobs:
     outputs:
       packed: ${{ steps.smoke.outcome == 'success' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
@@ -74,18 +74,18 @@ jobs:
           else
             echo '::notice::This ref predates the server-only tarball; skipping it.'
           fi
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         if: steps.supported.outputs.supported == 'true'
         with:
           cache-pnpm-store: ${{ !inputs.ref }}
       - name: Use the qualified release template
         if: steps.supported.outputs.supported == 'true' && inputs.template_artifact != ''
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: ${{ inputs.template_artifact }}
           path: out/orcad-template
       # Without a release template, build this runner's slot the way the desktop template does.
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
         if: steps.supported.outputs.supported == 'true' && inputs.template_artifact == ''
       - name: Build this runner's template slot
         if: steps.supported.outputs.supported == 'true' && inputs.template_artifact == ''
@@ -122,7 +122,7 @@ jobs:
               '
             echo '::endgroup::'
           done
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: steps.supported.outputs.supported == 'true'
         with:
           name: orca-server-linux-${{ matrix.arch }}

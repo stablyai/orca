@@ -151,7 +151,7 @@ jobs:
           echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
 
       - name: Checkout the built commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           # Read this repo without persisted credentials; writes use the dev-repo env App token (zizmor: artipacked).
@@ -181,12 +181,12 @@ jobs:
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store.
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -203,7 +203,7 @@ jobs:
 
       # Cache Electron/NSIS/winCodeSign tools with release-cut’s key shape.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: |
             ~\AppData\Local\electron\Cache
@@ -214,7 +214,7 @@ jobs:
 
       # Retry transient Electron CDN 504s during install; keep host-scoped natives for this runner’s only target.
       - name: Install dependencies
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -222,7 +222,7 @@ jobs:
           command: pnpm install --frozen-lockfile
 
       # Build required out/mobile-web from mobile’s React Native/Expo install.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
         if: inputs.javascript_source_sha == ''
 
       # Validate packaging config after install, before the expensive build.
@@ -232,7 +232,7 @@ jobs:
 
       - name: Download shared JavaScript
         if: inputs.javascript_source_sha != ''
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: release-javascript
           path: .build/release-javascript
@@ -259,7 +259,7 @@ jobs:
       # Inline so refs predating the wait can still use the trusted dispatch workflow.
       - name: Wait for the qualified orcad template
         if: inputs.fast_release && inputs.stage_only && inputs.orcad_template
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
           script: |
             const deadline = Date.now() + 30 * 60_000
@@ -284,7 +284,7 @@ jobs:
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
         if: inputs.orcad_template
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-template
           path: out/orcad-template
@@ -293,7 +293,7 @@ jobs:
       - name: Mint dev channel repo token
         if: ${{ !inputs.stage_only }}
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -315,7 +315,7 @@ jobs:
 
       - name: Publish Windows artifacts
         if: ${{ !inputs.stage_only }}
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           # 30 is the pack + upload budget; there is no notary queue on this leg.
           timeout_minutes: 30
@@ -351,7 +351,7 @@ jobs:
 
       - name: Package Windows artifacts without publishing
         if: inputs.stage_only
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 30
           max_attempts: 2
@@ -375,7 +375,7 @@ jobs:
 
       - name: Stage Windows artifacts for gated publishing
         if: inputs.stage_only
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: dev-channel-windows-${{ inputs.tag }}
           path: |

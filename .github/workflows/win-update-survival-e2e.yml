@@ -55,26 +55,26 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           # This job only builds and runs the harness locally; it never pushes.
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       # Cache installer by product inputs so harness-only changes skip ~20min build; hash before native install generates artifacts.
       - name: Cache branch installer
         id: cache-installer
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v4.3.0
         with:
           path: dist/orca-windows-setup.exe
           key: branch-installer-${{ inputs.trace_installer && format('trace-{0}-', hashFiles('tests/tools/win-update-e2e/trace-installer-branches.mjs')) || '' }}${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/**', 'mobile/**', 'patches/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
@@ -89,10 +89,10 @@ jobs:
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules. Gated with the
       # build it feeds, so a cache hit does not pay for an install nothing consumes.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
         if: steps.cache-installer.outputs.cache-hit != 'true'
 
-      - uses: ./.github/actions/prepare-windows-agent-hook
+      - uses: $/.github/actions/prepare-windows-agent-hook
         if: steps.cache-installer.outputs.cache-hit != 'true'
 
       - name: Build Windows installer (unsigned)
@@ -104,7 +104,7 @@ jobs:
 
       - name: Cache successfully built installer before survival verification
         if: steps.cache-installer.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v4.3.0
         with:
           path: dist/orca-windows-setup.exe
           key: ${{ steps.cache-installer.outputs.cache-primary-key }}
@@ -146,7 +146,7 @@ jobs:
 
       - name: Upload survival output
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: win-update-survival-output
           path: |

@@ -22,7 +22,7 @@ runs:
   steps:
     - name: Restore fixture image
       id: cache
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v5.1.0
       continue-on-error: true
       with:
         path: ${{ runner.temp }}/orca-package-fixtures/${{ inputs.fixture }}.tar
@@ -40,7 +40,7 @@ runs:
 
     - name: Save fixture image
       if: inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && steps.image.outputs.built == 'true'
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v5.1.0
       continue-on-error: true
       with:
         path: ${{ runner.temp }}/orca-package-fixtures/${{ inputs.fixture }}.tar

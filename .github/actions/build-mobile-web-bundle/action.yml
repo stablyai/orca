@@ -5,7 +5,7 @@ runs:
   using: composite
   steps:
     # Why: the bundle build resolves React Native and Expo from mobile/node_modules.
-    - uses: ./.github/actions/install-mobile-dependencies
+    - uses: $/.github/actions/install-mobile-dependencies
     - name: Build the mobile web bundle
       shell: bash
       run: pnpm run build:mobile-web
