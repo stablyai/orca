@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import { setPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import { _resetPacedPRChecksForTests } from '../../../github/client/check/pr-checks-last-outcome'
 import {
@@ -9,12 +8,63 @@ import {
   hostedReviewRepoScope
 } from '../../../source-control/hosted-review-scope-generations'
 
-const mocks = vi.hoisted(() => ({ getPRChecks: vi.fn() }))
-vi.mock('../../../github/client/check/get-pr-checks', () => ({ getPRChecks: mocks.getPRChecks }))
-vi.mock('../../../github/issues', () => ({ getIssue: vi.fn() }))
-vi.mock('../../../github/client/check/get-pr-check-details', () => ({ getPRCheckDetails: vi.fn() }))
-vi.mock('../../../github/client/fetch/get-pr-comments', () => ({ getPRComments: vi.fn() }))
-vi.mock('../../../github/work-item-details', () => ({ getPRFileContents: vi.fn() }))
+// Only the provider is faked: each gh call waits for the test to answer it with a check name.
+const provider = vi.hoisted(() => ({
+  calls: [] as { answer: (name: string) => void }[],
+  offline: false
+}))
+vi.mock('../../../git/command-runner/hosted-cli/gh-exec-file', () => ({
+  ghExecFileAsync: () =>
+    new Promise((resolve, reject) =>
+      provider.offline
+        ? reject(new Error('offline'))
+        : provider.calls.push({
+            answer: (name) =>
+              resolve({
+                stdout: JSON.stringify({
+                  data: {
+                    repository: {
+                      pullRequest: {
+                        headRefOid: 'head-a',
+                        commits: {
+                          nodes: [
+                            {
+                              commit: {
+                                statusCheckRollup: {
+                                  contexts: {
+                                    nodes: [
+                                      {
+                                        __typename: 'CheckRun',
+                                        name,
+                                        status: 'COMPLETED',
+                                        conclusion: 'SUCCESS'
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }),
+                stderr: ''
+              })
+          })
+    )
+}))
+vi.mock('../../../github/repositories/github-api-repository', () => ({
+  resolveGitHubRepoExecution: async () => ({
+    ownerRepo: { owner: 'acme', repo: 'repo' },
+    ghOptions: {}
+  })
+}))
+vi.mock('../../../github/client/lookup/pr-lookup-rate-limit', () => ({
+  assertRateLimitBudget: async () => {}
+}))
+vi.mock('../../../github/api/rate-limit', () => ({ noteRepositoryRateLimitSpend: () => {} }))
 
 import { RuntimeGitHubReviewQueryCommands } from './runtime-github-review-query-commands'
 
@@ -31,147 +81,92 @@ const commands = new RuntimeGitHubReviewQueryCommands({
   getLocalGitArgs: () => []
 })
 const prRepo = { owner: 'acme', repo: 'repo' }
-let reads = 0
-function check(name: string): PRCheckDetail {
-  return { name, status: 'completed', conclusion: 'success', url: null }
+
+const read = (options: Parameters<typeof commands.getRepoPRChecks>[4] = {}, head = 'head-a') =>
+  commands.getRepoPRChecks(repo.id, 7, head, prRepo, options)
+const timed = (head?: string) => read({ reason: 'swr' }, head)
+const manual = () => read({ noCache: true, userRefresh: true })
+const names = async (checks: ReturnType<typeof read>) => (await checks).map((check) => check.name)
+
+async function answerNext(name: string): Promise<void> {
+  await vi.waitFor(() => expect(provider.calls.length).toBeGreaterThan(0))
+  provider.calls.shift()!.answer(name)
 }
 
-describe('github.prChecks follows the host’s PR auto-refresh cadence', () => {
+describe('github.prChecks: one checks result per PR head, read on the host’s cadence', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    reads = 0
+    provider.calls = []
+    provider.offline = false
     _resetPacedPRChecksForTests()
     __resetHostedReviewScopeGenerationsForTests()
-    mocks.getPRChecks.mockReset().mockImplementation(async () => [check(`read-${++reads}`)])
   })
   afterEach(() => {
     setPRAutoRefreshCadence('default')
     vi.useRealTimers()
   })
 
-  const timed = (overrides: Record<string, unknown> = {}) =>
-    commands.getRepoPRChecks(repo.id, 7, 'head-a', prRepo, { reason: 'swr', ...overrides })
+  it('reads the provider for every timed read by default, and answers from the last read while off', async () => {
+    const first = timed()
+    await answerNext('first')
+    await first
+    const again = timed()
+    await answerNext('second')
+    expect(await names(again)).toEqual(['second'])
 
-  it('reads the provider for every timed read by default', async () => {
-    await timed()
-    vi.advanceTimersByTime(60_000)
-    await timed()
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
-  })
-
-  it('answers a client’s timed read from the last read while off, and after a minute', async () => {
     setPRAutoRefreshCadence('off')
-    const first = await timed()
-    vi.advanceTimersByTime(60_000)
-    const second = await timed()
-    expect(second).toBe(first)
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(1)
+    expect(await names(timed())).toEqual(['second'])
+    expect(provider.calls).toHaveLength(0)
+    // Another head is another resource.
+    const otherHead = timed('head-b')
+    await answerNext('other head')
+    expect(await names(otherHead)).toEqual(['other head'])
   })
 
-  it('reads again once the host’s own stretched interval has passed', async () => {
-    setPRAutoRefreshCadence('reduced')
-    await timed()
-    vi.advanceTimersByTime(4 * 60_000)
-    await timed()
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(60_000)
-    await timed()
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
-  })
-
-  it.each([
-    ['an opened panel or returned window', { foreground: true }],
-    ['a manual refresh', { userRefresh: true }],
-    ['a changed-state read', { noCache: true }],
-    ['a read without a reason', { reason: undefined }]
-  ])('still reads the provider for %s while off', async (_label, overrides) => {
+  it('while off, a manual read still reaches the provider and becomes every later timed answer; a failed one changes nothing', async () => {
     setPRAutoRefreshCadence('off')
-    await timed()
-    await timed(overrides)
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
+    const first = timed()
+    await answerNext('timed')
+    await first
+    const refreshed = manual()
+    await answerNext('manual')
+    expect(await names(refreshed)).toEqual(['manual'])
+    expect(await names(timed())).toEqual(['manual'])
+
+    // Every provider path (GraphQL, REST and gh pr checks) fails.
+    provider.offline = true
+    await expect(manual()).rejects.toThrow()
+    provider.offline = false
+    expect(await names(timed())).toEqual(['manual'])
   })
 
-  it('never answers one head’s checks for another', async () => {
+  it('a read that joins an older timed read never hands back or keeps that older answer over a newer manual one', async () => {
     setPRAutoRefreshCadence('off')
-    await timed()
-    await commands.getRepoPRChecks(repo.id, 7, 'head-b', prRepo, { reason: 'swr' })
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
+    const olderTimed = timed()
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
+    const refreshed = manual()
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
+    provider.calls.pop()!.answer('manual')
+    expect(await names(refreshed)).toEqual(['manual'])
+
+    const joined = read()
+    provider.calls.shift()!.answer('older timed')
+    expect(await names(joined)).toEqual(['manual'])
+    expect(await names(olderTimed)).toEqual(['manual'])
+    expect(await names(timed())).toEqual(['manual'])
+    expect(provider.calls).toHaveLength(0)
   })
 
-  it.each([
-    ['a manual refresh', { userRefresh: true }],
-    ['an opened panel or returned window', { foreground: true }],
-    ['a changed-state read', { noCache: true }],
-    ['a read without a reason', { reason: undefined }]
-  ])(
-    'hands the next timed client the fresher result of %s, not the older timed read',
-    async (_label, overrides) => {
-      setPRAutoRefreshCadence('reduced')
-      const stale = await timed()
-      vi.advanceTimersByTime(60_000)
-      const fresh = await timed(overrides)
-      expect(fresh).not.toEqual(stale)
-      vi.advanceTimersByTime(60_000)
-      expect(await timed()).toEqual(fresh)
-      expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
-    }
-  )
-
-  it('while off, a manual refresh replaces the answer every later timed read gets', async () => {
+  it('a read after a PR mutation starts its own provider read instead of joining one from before it', async () => {
     setPRAutoRefreshCadence('off')
-    await timed()
-    vi.advanceTimersByTime(60_000)
-    const fresh = await timed({ userRefresh: true })
-    vi.advanceTimersByTime(60 * 60_000)
-    expect(await timed()).toEqual(fresh)
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
-  })
-
-  it('an older timed read that settles after a newer foreground read does not replace it', async () => {
-    setPRAutoRefreshCadence('off')
-    let finishSlow!: (checks: PRCheckDetail[]) => void
-    mocks.getPRChecks
-      .mockImplementationOnce(
-        () => new Promise<PRCheckDetail[]>((resolve) => (finishSlow = resolve))
-      )
-      .mockImplementation(async () => [check(`read-${++reads}`)])
-    const slow = timed()
-    const fresh = await timed({ foreground: true })
-    finishSlow([check('older')])
-    await slow
-    expect(await timed()).toEqual(fresh)
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
-  })
-
-  it('a failed read leaves the last successful answer in place', async () => {
-    setPRAutoRefreshCadence('off')
-    const first = await timed()
-    mocks.getPRChecks.mockRejectedValueOnce(new Error('offline'))
-    await expect(timed({ userRefresh: true })).rejects.toThrow('offline')
-    expect(await timed()).toEqual(first)
-  })
-
-  it('does not answer one gh account’s checks to another', async () => {
-    setPRAutoRefreshCadence('off')
-    let user = 'alice'
-    const scoped = new RuntimeGitHubReviewQueryCommands({
-      resolveRepo: async () => repo,
-      getLocalGitArgs: () => [{ ghAccount: { host: 'github.com', user } }]
-    })
-    const read = () => scoped.getRepoPRChecks(repo.id, 7, 'head-a', prRepo, { reason: 'swr' })
-    const alice = await read()
-    expect(await read()).toEqual(alice)
-    user = 'bob'
-    expect(await read()).not.toEqual(alice)
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
-  })
-
-  it('reads again after the repository’s review scope generation is bumped', async () => {
-    setPRAutoRefreshCadence('off')
-    await timed()
+    const beforeMutation = timed()
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
     bumpScopeGeneration(hostedReviewRepoScope(repo.path, 'local'))
-    await timed()
-    expect(mocks.getPRChecks).toHaveBeenCalledTimes(2)
+    const afterMutation = read()
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
+    provider.calls.shift()!.answer('before mutation')
+    await beforeMutation
+    provider.calls.shift()!.answer('after mutation')
+    expect(await names(afterMutation)).toEqual(['after mutation'])
+    expect(await names(timed())).toEqual(['after mutation'])
   })
 })

@@ -1,22 +1,25 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GithubRepositoryIdentityModule from '../../../github/repositories/github-repository-identity'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   GitHubPRRefreshReason,
   PRRefreshOutcome
-} from '../../../../shared/github/pull-request-refresh-types'
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type {
   GitHubRepoContext,
   LocalGitExecOptions
-} from '../../../github/github-repository-identity'
+} from '../../../github/repositories/github-repository-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
-import { makePR } from '../../../github/pr-refresh-coordinator-test-harness'
-import { setPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
-import { createVisibleHostedReviewRefreshScheduler } from '../../../../renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
+import { makePR } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn() }))
-vi.mock('../../../github/gh-utils', () => ({
+vi.mock('../../../github/execution/github-operation-slots', () => ({
   acquire: vi.fn(async () => {}),
-  release: vi.fn(),
+  release: vi.fn()
+}))
+
+vi.mock('../../../github/repositories/github-repository-identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof GithubRepositoryIdentityModule>()),
   githubRepoContext: (
     repoPath: string,
     connectionId: string | null,
@@ -27,7 +30,7 @@ vi.mock('../../../github/gh-utils', () => ({
 vi.mock('../../../github/client/lookup/branch-lookup-resolution', () => ({
   resolvePRForBranchOutcome: mocks.resolve
 }))
-vi.mock('../../../github/pr-refresh-coordinator', () => ({
+vi.mock('../../../github/pull-requests/refresh/pr-refresh-coordinator', () => ({
   runHostedPRRead: (_candidate: unknown, read: () => Promise<PRRefreshOutcome>) => read()
 }))
 import { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
@@ -70,7 +73,6 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
     clientKind?: DeviceScope
     reason?: GitHubPRRefreshReason
     userRefresh?: boolean
-    foreground?: boolean
     seedFallback?: number
     fallback?: number
     expected: string
@@ -128,17 +130,9 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       headOid: 'head-a',
       clientKind: 'runtime',
       expected: 'from fresh lookup'
-    },
-    {
-      label: 'looks up again for a phone that just came back to the foreground',
-      branch: 'phone-foreground',
-      headOid: 'head-a',
-      clientKind: 'mobile',
-      foreground: true,
-      expected: 'from fresh lookup'
     }
   ])('$label', async (testCase) => {
-    const { branch, headOid, clientKind, reason, userRefresh, foreground, expected } = testCase
+    const { branch, headOid, clientKind, reason, userRefresh, expected } = testCase
     await commands.getRepoPRForBranch(
       repo.id,
       branch,
@@ -157,126 +151,8 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       headOid,
       reason,
       userRefresh,
-      clientKind,
-      foreground
+      clientKind
     )
-    expect(outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
+    expect('kind' in outcome && outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
   })
-})
-
-describe('a slower host cadence caps every client’s timed reads', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-  })
-  afterEach(() => {
-    setPRAutoRefreshCadence('default')
-    vi.useRealTimers()
-  })
-
-  it('answers a phone’s timer read (swr) from the last read while off, past the phone window', async () => {
-    setPRAutoRefreshCadence('off')
-    await commands.getRepoPRForBranch(
-      repo.id,
-      'phone-timer',
-      null,
-      null,
-      false,
-      'head-a',
-      'visible'
-    )
-    vi.advanceTimersByTime(60_000)
-    const timed = await commands.getRepoPRForBranch(
-      repo.id,
-      'phone-timer',
-      null,
-      null,
-      false,
-      'head-a',
-      'swr',
-      undefined,
-      'mobile'
-    )
-    expect(timed.kind === 'found' ? timed.pr.title : null).toBe('from desktop lookup')
-    expect(mocks.resolve).toHaveBeenCalledTimes(1)
-  })
-
-  it('reads fresh for a budgeted read marked foreground (window or screen came back) while off', async () => {
-    setPRAutoRefreshCadence('off')
-    await commands.getRepoPRForBranch(repo.id, 'fg', null, null, false, 'head-a', 'active')
-    vi.advanceTimersByTime(2 * 60_000)
-    const back = await commands.getRepoPRForBranch(
-      repo.id,
-      'fg',
-      null,
-      null,
-      false,
-      'head-a',
-      'visible',
-      undefined,
-      'runtime',
-      true
-    )
-    expect(back.kind === 'found' ? back.pr.title : null).toBe('from fresh lookup')
-    expect(mocks.resolve).toHaveBeenCalledTimes(2)
-  })
-
-  it('reads fresh when the request accepts a merged fallback the cached read did not', async () => {
-    setPRAutoRefreshCadence('off')
-    await commands.getRepoPRForBranch(repo.id, 'accept', null, 7, false, null, 'visible')
-    const accepting = await commands.getRepoPRForBranch(
-      repo.id,
-      'accept',
-      null,
-      7,
-      true,
-      null,
-      'visible'
-    )
-    expect(accepting.kind === 'found' ? accepting.pr.title : null).toBe('from fresh lookup')
-    expect(mocks.resolve).toHaveBeenCalledTimes(2)
-  })
-
-  it.each(['default', 'off'] as const)(
-    'a paired window returning after its data is due reads fresh with the host %s',
-    async (cadence) => {
-      setPRAutoRefreshCadence(cadence)
-      const branch = `window-return-${cadence}`
-      await commands.getRepoPRForBranch(repo.id, branch, null, null, false, 'head-a', 'active')
-      const scheduler = createVisibleHostedReviewRefreshScheduler()
-      let title: string | undefined
-      scheduler.update([
-        {
-          key: branch,
-          revision: 'head-a',
-          fetchedAt: 1_000,
-          intervalMs: cadence === 'off' ? null : 60_000,
-          selected: true,
-          cadence,
-          refresh: async (_force, _signal, foreground) => {
-            const outcome = await commands.getRepoPRForBranch(
-              repo.id,
-              branch,
-              null,
-              null,
-              false,
-              'head-a',
-              'visible',
-              undefined,
-              'runtime',
-              foreground
-            )
-            title = outcome.kind === 'found' ? outcome.pr.title : undefined
-            return true
-          }
-        }
-      ])
-      await vi.advanceTimersByTimeAsync(2 * 60_000)
-      scheduler.setVisible(true)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(title).toBe('from fresh lookup')
-      expect(mocks.resolve).toHaveBeenCalledTimes(2)
-      scheduler.dispose()
-    }
-  )
 })

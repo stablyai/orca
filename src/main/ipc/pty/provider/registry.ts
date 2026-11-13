@@ -1,6 +1,6 @@
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../../shared/ssh-pty-id'
 import { ptyOwnership } from './ownership-state'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import { colorQueryReplyColorsEqual } from '../../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'

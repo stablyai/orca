@@ -3,10 +3,8 @@ import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catal
 import { CLAUDE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  commitStructuredAgentSessionOption
+  createStructuredAgentSessionOptionState
 } from './structured-agent-session-options'
-import { structuredAgentSessionReportsAtFence } from './structured-agent-session-runtime-reports'
 import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
 import { structuredAgentSessionMessageSelection } from './structured-agent-session-option-view'
 import {
@@ -14,7 +12,7 @@ import {
   sayNativeChatSessionOptionEnglish
 } from '../../native-chat/input/native-chat-session-option-labels'
 
-it('shows the actual fallback in the shared composer pill while capturing the original model for Send', () => {
+it('uses the saved model for the shared picker and Send when an old host reports a different answering model', () => {
   const state = applyStructuredAgentSessionOptions(
     createStructuredAgentSessionOptionState('claude'),
     CLAUDE_SESSION_OPTION_CATALOG,
@@ -29,18 +27,9 @@ it('shows the actual fallback in the shared composer pill while capturing the or
     }
   )
   const model = structuredAgentSessionOptionSnapshot(state).find((option) => option.id === 'model')!
-  expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Opus 4.8')
+  expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Opus 5.5')
   expect(model.kind.currentValue).toBe('claude-opus-5-5')
   expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'claude-opus-5-5' })
-  expect(structuredAgentSessionReportsAtFence(state, 1, 2).reportedModel).toBeUndefined()
-  expect(
-    commitStructuredAgentSessionOption(state, 'model', 'claude-opus-5-5').reportedModel
-  ).toBeUndefined()
-  const oldHost = applyStructuredAgentSessionOptions(state, CLAUDE_SESSION_OPTION_CATALOG, {
-    models: [],
-    current: { model: 'claude-opus-5-5' }
-  })
-  expect(oldHost.reportedModel).toBeUndefined()
 })
 
 it('shows Auto when the session lists no models, without capturing it for Send', () => {

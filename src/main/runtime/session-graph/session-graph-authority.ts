@@ -252,6 +252,29 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
 
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */
   markClientHostedPagesReconciled(pairedDeviceId: string): void {
-    this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
+    const held = this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
+    if (!held?.size) {
+      return
+    }
+    const candidates = this.selectMobileSessionTabsListeners(undefined, pairedDeviceId)
+    if (candidates.length === 0) {
+      return
+    }
+    const deliver = this.createMobileSessionTabsDelivery()
+    for (const worktree of held) {
+      const selected = this.selectMobileSessionTabsListeners(worktree, pairedDeviceId, candidates)
+      if (selected.length === 0) {
+        continue
+      }
+      deliver(
+        this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
+          includeAgentSenders: false
+        }),
+        ++this.mobileSessionTabsChangeSequence,
+        pairedDeviceId,
+        selected,
+        'reconciliation'
+      )
+    }
   }
 }

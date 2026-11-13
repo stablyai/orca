@@ -1,21 +1,21 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
-import { isBackgroundHostRead, isForegroundHostRead } from '../../query/host-read-intent'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import { hostReadIntent } from '../../query/host-read-intent'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 import {
   acceptPRCheckObservation,
   completePRCheckOwnerScope
-} from '../../../../src/shared/github/complete-pr-check-owner'
+} from '../../../../src/shared/github/checks/complete-pr-check-owner'
 import type {
   GitHubAssignableUser,
-  GitHubOwnerRepo,
   PRInfo
-} from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
 import {
   matchesGitHubWorkItemTarget,
   resolveGitHubWorkItemTarget
-} from '../../../../src/shared/github/work-item-target'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+} from '../../../../src/shared/github/work-items/work-item-target'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host'
 import { worktreeIdsEqual } from '../../../../src/shared/worktree/id'
 import { defineHostQuery, type HostQuerySignal, type HostSignalEvent } from '../../query/host-query'
@@ -166,8 +166,7 @@ export const prBranchReviewQuery = defineHostQuery({
           headSha: input.head,
           // Only an action's read re-learns host status; revalidations reuse what this connection knows.
           refresh: read.live,
-          background: isBackgroundHostRead(read, previous),
-          foreground: isForegroundHostRead(read, previous),
+          intent: hostReadIntent(read, previous),
           previous
         }
       ),
@@ -188,7 +187,7 @@ export const prChecksQuery = defineHostQuery({
       // Fork checks must use the PR's own repo identity.
       prRepo: prRepoSlug(input),
       refresh: read.live,
-      background: isBackgroundHostRead(read, previous)
+      background: hostReadIntent(read, previous) === 'background'
     })
     if (!outcome.ok) {
       throw new Error(outcome.error)

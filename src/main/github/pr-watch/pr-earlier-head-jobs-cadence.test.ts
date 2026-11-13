@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(async () => []),
   pending: vi.fn(() => [{ headSha: 'old-head', movedAt: 1, expiresAt: null }])
 }))
-vi.mock('../pr-refresh-coordinator', () => ({ schedulePRWatchRead: vi.fn() }))
+vi.mock('../pull-requests/refresh/pr-refresh-coordinator', () => ({ schedulePRWatchRead: vi.fn() }))
 vi.mock('./pr-check-event-tables', () => ({
   readPRPendingHeads: mocks.pending,
   deletePRPendingHead: vi.fn()

@@ -4,7 +4,7 @@ import type { BrowserProfileScope } from './browser/profiles/browser-profile-sco
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
-import type { GitHubProjectSettings } from './github/project-types'
+import type { GitHubProjectSettings } from './github/projects/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'

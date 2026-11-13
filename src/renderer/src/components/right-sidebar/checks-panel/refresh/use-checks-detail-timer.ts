@@ -7,7 +7,7 @@ import {
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
 import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositories/repository-routing'
 import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
-import type { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks-detail-polling-policy'
+import type { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks/checks-detail-polling-policy'
 import type { ChecksPanelPollingInput, ChecksPanelPollingState } from './use-checks-panel-polling'
 
 export function useChecksDetailTimer({
@@ -80,14 +80,14 @@ export function useChecksDetailTimer({
         cadence
       )
     }
-    // Under a stretched cadence the window coming back still reads checks older than Default's
-    // delay: "reduced" and "minimal" slow the timer, not the user's return.
+    // Under a stretched or stopped cadence the window coming back still reads checks older than
+    // Default's delay, never sooner: the cadence slows the timer, not the user's return.
     const returnReadDue = (now: number): boolean => {
-      const cadence = ownerCadence()
-      const defaultDelay =
-        cadence === 'reduced' || cadence === 'minimal' ? policyDelay('default') : null
+      const defaultDelay = ownerCadence() === 'default' ? null : policyDelay('default')
       return defaultDelay !== null && now - lastAttemptAtRef.current >= defaultDelay
     }
+    const stoppedByCadence = (): boolean =>
+      ownerCadence() === 'off' && policyDelay('default') !== null
     const cleanup = installWindowVisibilityTimeoutPoller({
       run: async ({ trigger }) => {
         if (inFlightRef.current?.identity === requestIdentity) {
@@ -102,7 +102,7 @@ export function useChecksDetailTimer({
               ? now < nextAttemptAt
               : nextAttemptAt === Infinity &&
                 !forceNextFetchRef.current &&
-                now - lastAttemptAtRef.current < 60_000))
+                (stoppedByCadence() || now - lastAttemptAtRef.current < 60_000)))
         ) {
           return
         }
@@ -152,7 +152,7 @@ export function useChecksDetailTimer({
       },
       // Returning to the window is a promised foreground read in every mode: when only the owning
       // host's cadence (not settled checks) stopped the timer, focus still reads once.
-      refreshOnFocusWhileStopped: () => ownerCadence() === 'off' && policyDelay('default') !== null
+      refreshOnFocusWhileStopped: stoppedByCadence
     })
     refreshRef.current = cleanup.refresh
     // A cadence change (this app's or the owning host's) re-plans a mounted panel at once: a timer

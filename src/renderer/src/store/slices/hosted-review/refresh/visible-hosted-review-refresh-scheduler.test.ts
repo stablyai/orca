@@ -40,6 +40,26 @@ describe('visible hosted review scheduler', () => {
     vi.useRealTimers()
   })
 
+  it('retrieves a deferred completion with an ordinary timer read and resets on a head change', async () => {
+    const refresh = vi.fn(async () => ({ succeeded: true, retryAfterMs: 10_000 }))
+    const row = target({ fetchedAt: Date.now() - 120_000, refresh })
+    const scheduler = setup([row])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refresh.mock.calls[0]).toEqual([true, expect.any(AbortSignal), 'discovery'])
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(refresh.mock.calls[1]).toEqual([false, expect.any(AbortSignal), 'timer'])
+    scheduler.update([{ ...row, revision: 'new-head|' }])
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(refresh.mock.calls[2]).toEqual([true, expect.any(AbortSignal), 'discovery'])
+  })
+
+  it('keeps successful same-age cache replies on the normal interval without a receipt', async () => {
+    const refresh = vi.fn(async () => ({ succeeded: true }))
+    setup([target({ fetchedAt: Date.now() - 120_000, refresh })])
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(refresh.mock.calls[1]).toEqual([false, expect.any(AbortSignal), 'timer'])
+  })
+
   it.each(['remove', 'hide', 'dispose'])(
     'aborts abandoned demand on %s without releasing native work early',
     async (action) => {
@@ -86,46 +106,19 @@ describe('visible hosted review scheduler', () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
-  it('still retries a failed read with backoff when the cadence is not off', async () => {
-    const refresh = vi.fn(async () => false)
-    setup([target({ fetchedAt: null, intervalMs: null, cadence: 'default', refresh })])
-    await vi.advanceTimersByTimeAsync(0)
-    expect(refresh).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(refresh).toHaveBeenCalledTimes(2)
-  })
-
-  it('marks a window-return read as foreground and a timer tick as not', async () => {
-    const calls: boolean[] = []
-    const refresh = vi.fn(async (_force?: boolean, _signal?: AbortSignal, foreground = false) => {
-      calls.push(foreground)
-      return true
-    })
-    const scheduler = setup([
-      target({ fetchedAt: Date.now() - 30_000, intervalMs: 60_000, refresh })
-    ])
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(calls).toEqual([false])
-    scheduler.setVisible(false)
-    await vi.advanceTimersByTimeAsync(5 * 60_000)
-    scheduler.setVisible(true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(calls).toEqual([false, true])
-  })
-
-  it('marks a read after the branch identity changed as foreground', async () => {
-    const calls: boolean[] = []
-    const refresh = vi.fn(async (_force?: boolean, _signal?: AbortSignal, foreground = false) => {
-      calls.push(foreground)
-      return true
-    })
-    const row = target({ fetchedAt: Date.now(), intervalMs: null, cadence: 'off', refresh })
+  it('arms no receipt retry under off, including for a reply that lands after off was chosen', async () => {
+    let finish!: (result: { succeeded: boolean; retryAfterMs: number }) => void
+    const refresh = vi.fn(
+      () =>
+        new Promise<{ succeeded: boolean; retryAfterMs: number }>((resolve) => (finish = resolve))
+    )
+    const row = target({ fetchedAt: Date.now() - 120_000, cadence: 'default', refresh })
     const scheduler = setup([row])
     await vi.advanceTimersByTimeAsync(0)
-    expect(calls).toEqual([])
-    scheduler.update([{ ...row, revision: 'head-2|' }])
-    await vi.advanceTimersByTimeAsync(0)
-    expect(calls).toEqual([true])
+    scheduler.update([{ ...row, cadence: 'off', intervalMs: null }])
+    finish({ succeeded: true, retryAfterMs: 10_000 })
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(refresh).toHaveBeenCalledTimes(1)
   })
 
   describe('a cadence change reconciles a retry armed after a failure', () => {
@@ -165,67 +158,75 @@ describe('visible hosted review scheduler', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(refresh).toHaveBeenCalledTimes(2)
     })
-
-    it('a target that comes back after failing retries by the cadence it comes back with', async () => {
-      const refresh = vi.fn(async () => false)
-      // Fetched 31 s ago with a 30 s interval: due now, and not yet stale enough (60 s) for a
-      // re-added target to read once on its own when it comes back.
-      const row = target({
-        fetchedAt: Date.now() - 31_000,
-        intervalMs: 30_000,
-        cadence: 'default',
-        refresh
-      })
-      const scheduler = setup([row])
-      await vi.advanceTimersByTimeAsync(0)
-      expect(refresh).toHaveBeenCalledTimes(1)
-      scheduler.update([])
-      scheduler.update([{ ...row, cadence: 'off', intervalMs: null }])
-      await vi.advanceTimersByTimeAsync(60 * 60_000)
-      expect(refresh).toHaveBeenCalledTimes(1)
-    })
   })
 
-  describe('window return under a stretched cadence', () => {
-    function reducedRow(calls: boolean[]) {
-      return target({
+  describe('window return under a stretched or stopped cadence', () => {
+    it('reads once the Default interval has passed, then waits the stretched interval', async () => {
+      const row = target({
         fetchedAt: Date.now(),
         intervalMs: 5 * 60_000,
         foregroundIntervalMs: 60_000,
         cadence: 'reduced',
-        selected: true,
-        refresh: vi.fn(async (_force?: boolean, _signal?: AbortSignal, foreground = false) => {
-          calls.push(foreground)
-          return true
-        })
+        selected: true
       })
-    }
-
-    it('reads at once as a foreground read, then waits the stretched interval', async () => {
-      const calls: boolean[] = []
-      const scheduler = setup([reducedRow(calls)])
-      await vi.advanceTimersByTimeAsync(0)
-      expect(calls).toEqual([])
-      scheduler.setVisible(false)
-      await vi.advanceTimersByTimeAsync(2 * 60_000)
-      scheduler.setVisible(true)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(calls).toEqual([true])
-
-      await vi.advanceTimersByTimeAsync(5 * 60_000 - 1_000)
-      expect(calls).toEqual([true])
-      await vi.advanceTimersByTimeAsync(1_000)
-      expect(calls).toEqual([true, false])
-    })
-
-    it('does not read on a return sooner than the Default interval', async () => {
-      const calls: boolean[] = []
-      const scheduler = setup([reducedRow(calls)])
+      const scheduler = setup([row])
       scheduler.setVisible(false)
       await vi.advanceTimersByTimeAsync(30_000)
       scheduler.setVisible(true)
       await vi.advanceTimersByTimeAsync(0)
-      expect(calls).toEqual([])
+      expect(row.refresh).not.toHaveBeenCalled()
+
+      scheduler.setVisible(false)
+      await vi.advanceTimersByTimeAsync(90_000)
+      scheduler.setVisible(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(row.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
+      await vi.advanceTimersByTimeAsync(5 * 60_000 - 1_000)
+      expect(row.refresh).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(row.refresh).toHaveBeenLastCalledWith(false, expect.any(AbortSignal), 'timer')
+    })
+
+    it('never re-reads a no-PR row on return faster than Default would under off', async () => {
+      const noPR = target({ intervalMs: null, foregroundIntervalMs: 15 * 60_000, cadence: 'off' })
+      const scheduler = setup([noPR])
+      for (let returns = 0; returns < 10; returns += 1) {
+        scheduler.setVisible(false)
+        await vi.advanceTimersByTimeAsync(70_000)
+        scheduler.setVisible(true)
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(noPR.refresh).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(4 * 60_000)
+      scheduler.setVisible(false)
+      scheduler.setVisible(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(noPR.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
     })
   })
+})
+
+it('limits refocus discovery to opted-in open GitHub rows and the existing stopped interval', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_000_000)
+  const github = target({
+    key: 'github',
+    fetchedAt: Date.now(),
+    intervalMs: 120_000,
+    refreshOnForeground: true
+  })
+  const closed = target({ key: 'closed', fetchedAt: Date.now(), intervalMs: 900_000 })
+  const other = target({ key: 'other', fetchedAt: Date.now(), intervalMs: 120_000 })
+  const stopped = target({ key: 'stopped', fetchedAt: Date.now(), intervalMs: null })
+  const scheduler = setup([github, closed, other, stopped])
+  scheduler.setVisible(false)
+  await vi.advanceTimersByTimeAsync(130_000)
+  scheduler.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(github.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
+  expect(stopped.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
+  expect(closed.refresh).not.toHaveBeenCalled()
+  expect(other.refresh).toHaveBeenCalledWith(false, expect.any(AbortSignal), 'timer')
+  scheduler.dispose()
+  vi.useRealTimers()
 })

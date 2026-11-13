@@ -99,18 +99,17 @@ describe('foreground exposure freshness', () => {
     _resetPRAutoRefreshCadencesForTests()
   })
 
-  it('compares a window return against the Default interval under a stretched cadence', async () => {
-    const { reviewForegroundFreshnessMs } = await import('./review-refresh-policy')
-    expect(reviewForegroundFreshnessMs({ selected: true }, 'default')).toBe(60_000)
-    expect(reviewForegroundFreshnessMs({ selected: true }, 'reduced')).toBe(60_000)
-    expect(reviewForegroundFreshnessMs({ selected: false }, 'minimal')).toBe(120_000)
-  })
-
-  it('keeps the cooldown where no timer runs at all', async () => {
-    const { reviewForegroundFreshnessMs } = await import('./review-refresh-policy')
-    expect(reviewForegroundFreshnessMs({ selected: true }, 'off')).toBe(10_000)
-    expect(
-      reviewForegroundFreshnessMs({ state: 'merged', checksStatus: 'success' }, 'reduced')
-    ).toBe(10_000)
-  })
+  it.each(['default', 'reduced', 'minimal', 'off'] as const)(
+    'compares a window return against the Default interval when the cadence is %s',
+    async (cadence) => {
+      const { reviewForegroundFreshnessMs, setPRAutoRefreshCadence } =
+        await import('./review-refresh-policy')
+      setPRAutoRefreshCadence(cadence)
+      expect(reviewForegroundFreshnessMs({ selected: true })).toBe(60_000)
+      expect(reviewForegroundFreshnessMs({ selected: false })).toBe(120_000)
+      expect(reviewForegroundFreshnessMs({ hasReview: false, selected: false })).toBe(15 * 60_000)
+      // Default itself runs no timer for settled data, so only the cooldown applies.
+      expect(reviewForegroundFreshnessMs({ state: 'merged', checksStatus: 'success' })).toBe(10_000)
+    }
+  )
 })

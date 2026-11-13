@@ -1,5 +1,5 @@
 import type { HostedReviewState } from './source-control/hosted-review/hosted-review-contracts'
-import type { CheckStatus } from './github/pull-request-types'
+import type { CheckStatus } from './github/pull-requests/pull-request-types'
 
 export const REVIEW_REFRESH_COOLDOWN_MS = 10_000
 export const CLOSED_REVIEW_REFRESH_INTERVAL_MS = 15 * 60_000
@@ -161,15 +161,11 @@ export function reviewRefreshIntervalMs(
 }
 
 /** How old data must be before a foreground exposure (the window coming back, a row shown again)
- *  reads it again. A stretched cadence slows the timers, not the user's return, so this is the
- *  Default interval in "reduced" and "minimal"; where no timer runs at all ("off", settled data)
- *  only the cooldown applies, as before. */
+ *  reads it again: the Default interval in every mode, since a cadence slows the timers, never the
+ *  user's return, and never makes it faster than Default; the cooldown where Default itself runs
+ *  no timer (settled data). */
 export function reviewForegroundFreshnessMs(
-  input: Parameters<typeof reviewRefreshIntervalMs>[0],
-  cadence: PRAutoRefreshCadence = processCadence
+  input: Parameters<typeof reviewRefreshIntervalMs>[0]
 ): number {
-  if (scaleReviewRefreshInterval(defaultReviewRefreshIntervalMs(input), cadence) === null) {
-    return REVIEW_REFRESH_COOLDOWN_MS
-  }
   return defaultReviewRefreshIntervalMs(input) ?? REVIEW_REFRESH_COOLDOWN_MS
 }

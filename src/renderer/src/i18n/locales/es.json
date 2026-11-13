@@ -1624,9 +1624,6 @@
         "pasteTooLarge": "El contenido pegado es demasiado grande."
       },
       "useMacosTccPromptNotice": {
-        "title": "¿Ves avisos de “Orca quiere acceder…”?",
-        "description": "Los mensajes de permisos de macOS pueden aparecer cuando un agente o una herramienta de terminal que se ejecuta en Orca intenta acceder a archivos protegidos. Concede acceso total al disco en Ajustes para reducir estos avisos.",
-        "openSettings": "Abrir ajustes",
         "dismiss": "No volver a mostrar"
       },
       "useInstalledAgentSkills": {
@@ -3306,7 +3303,6 @@
             "7eee951968": "Verificando seguridad del espacio de trabajo",
             "191f0bc98e": "Cerrar",
             "7ae2ad30f4": "Actualizar",
-            "b2c1331844": "Eliminar espacios de trabajo inactivos",
             "7f451a3e2c": "No se pudo ignorar la sugerencia de limpieza",
             "662b8ec3f8": "Falló el escaneo de limpieza del espacio de trabajo",
             "9cc26c019d": "Eliminar",
@@ -3316,7 +3312,6 @@
             "1d3503357d": "Puedes cerrar esto y volver mientras la eliminación continúa.",
             "4c2990886e": "{{value0}}/{{value1}} eliminados",
             "86ba852118": "{{value0}}, {{value1}} fallidos",
-            "deleteButtonCount": "Eliminar {{value0}}",
             "archivedStatus": "Archivado",
             "74f6c16279": "Atrás"
           },
@@ -3354,7 +3349,6 @@
             "runningTerminalBlocker": "Proceso de terminal en ejecución",
             "terminalLivenessUnknownBlocker": "Estado del terminal desconocido",
             "dirtyEditorBufferBlocker": "Búfer del editor sin guardar",
-            "volatileLocalContextBlocker": "Contexto local volátil",
             "recentVisibleContextBlocker": "Pestañas visitadas recientemente",
             "liveAgentBlocker": "Agente activo",
             "sshDisconnectedBlocker": "Remoto no disponible",
@@ -3516,6 +3510,8 @@
             "15dd899676": "Añadir a {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "Problema del terminal",
+            "errorTitle": "Error del terminal",
             "e4aa243f8c": "Reiniciar servicio",
             "a7e2fd2699": "abre un issue",
             "5c8ce20be6": "Si esto persiste, por favor",
@@ -3908,7 +3904,6 @@
             "1d411fb6a5": "Guarda un comando rápido para este repositorio",
             "8f1e971966": "Agregar comando rápido",
             "3220e2da27": "Este comando rápido se eliminará de tu lista guardada.",
-            "e8e1a52edb": "¿Eliminar \"{{value0}}\"?",
             "37e1bb90ce": "Ejecutar: {{value0}}",
             "77ac113df0": "Iniciar {{value0}}: {{value1}}",
             "7b1c9d6ae1": "Ejecutar",
@@ -5367,7 +5362,6 @@
           "loading": "Cargando contenidos…",
           "deleteFailed": "Orca no pudo eliminar esto de la nube.",
           "deleted": "Eliminado de la nube",
-          "confirmDelete": "Confirmar eliminación",
           "moreActions": "Otras acciones para {{name}}",
           "deletePackage": "Eliminar de la nube"
         },
@@ -5623,8 +5617,6 @@
           "5cc1a6701c": "Abrir Ajustes",
           "2b56b35f53": "Puedes cambiar esto en Ajustes.",
           "dd3a45bbbd": "Omitiremos esta confirmación la próxima vez.",
-          "fc23c4cbdf": "Eliminar espacio de trabajo",
-          "86f0ae1257": "Eliminar espacios de trabajo",
           "removeFolderProjectInstead": "Quita el proyecto de carpeta en lugar de eliminar este espacio de trabajo.",
           "gitBlocksMainWorktree": "Git no permite quitar el worktree principal.",
           "removeBatchFolder_one": "Eliminar <target>{{count}} espacio de trabajo</target> de Orca. Las carpetas de los proyectos en disco no se borrarán.",
@@ -5744,11 +5736,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancelar",
-          "591f330288": "Eliminar grupo de proyectos",
           "2c14ce677a": "Eliminando...",
           "0e0e6764af": "Proyectos contenidos",
           "55f75628c0": "Las carpetas de los proyectos en el disco no se eliminan.",
-          "fec7e9c8ae": "Eliminar grupo",
           "removeContainedProjects_one": "Quitar {{count}} proyecto del grupo",
           "removeContainedProjects_other": "Quitar {{count}} proyectos del grupo",
           "removeContainedProjects_many": "Quitar {{count}} proyectos del grupo",
@@ -6494,9 +6484,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "Cancelar",
           "cf95e3b5bb": "Cerrar",
-          "deleteWorkspace": "Eliminar espacio de trabajo",
           "deleting": "Eliminando...",
-          "forceDelete": "Forzar eliminación",
           "forceDeleting": "Forzando eliminación..."
         },
         "LinearAgentSkillSetupPrompt": {
@@ -6815,17 +6803,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "Revisar sucursales mantenidas",
           "f21976c9a8": "Seleccione las sucursales locales que desea forzar la eliminación. Las sucursales no seleccionadas permanecen en sus repositorios.",
           "38c947f7c5": "Seleccionar todo",
           "9602129d38": "{{value0}} de {{value1}} seleccionado",
           "ee39e872d5": "Puede estar desfusionado",
           "676db406fd": "Cabeza no disponible",
-          "285e1e4882": "Cancelar",
-          "a0f9863597_one": "Forzar eliminación de rama {{count}}",
-          "a0f9863597_other": "Forzar eliminación de ramas {{count}}",
-          "a0f9863597_many": "Forzar eliminación de ramas {{count}}",
-          "a0f9863597": "Forzar eliminación de ramas {{count}}"
+          "285e1e4882": "Cancelar"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Saltar hacia arriba"
@@ -7320,8 +7303,6 @@
             "ba1d9a0607": "Tinte de la barra lateral"
           },
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
-          "interfaceDefaultFont": "Fuente predeterminada",
-          "terminalDefaultFont": "Fuente predeterminada",
           "interfaceTitle": "Interfaz",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barra lateral, barra de estado y explorador de archivos",
@@ -8147,7 +8128,6 @@
           "c6b155911b": "Todos los comandos",
           "c36912efd5": "Ejecútalos desde el botón Comandos rápidos en la barra de pestañas o haz clic derecho dentro de cualquier terminal.",
           "3d9dc558e8": "Este comando rápido se eliminará de tu lista guardada.",
-          "3edf3deaf8": "¿Eliminar \"{{value0}}\"?",
           "9fcfc29519": "Insertar",
           "9b3e338d62": "Enter",
           "4ccc63da87": "Agente",
@@ -8200,16 +8180,12 @@
           "5426ecbdcb": "Los scripts locales no se ejecutarán",
           "95a0411b3e": "plantilla",
           "175daba180": "Ejemplo",
-          "b20c5df6ca": "Agrega un archivo `orca.yaml` para habilitar valores predeterminados compartidos de configuración, archivado o automatización de Issues para este repositorio. Plantilla de ejemplo:",
-          "56f9a4a1d0": "Usando `orca.yaml`",
           "623e0c9f31": "No se pudo analizar `orca.yaml`",
-          "5a67e4793d": "No se detectó `orca.yaml`",
           "07ba35bc68": "Revisa la indentación bajo `scripts:`. Las claves de hooks deben usar dos espacios y las líneas de comandos deben usar cuatro.",
           "787ca433ef": "Define solo las claves admitidas: `scripts`, `setup`, `archive` e `issueCommand`.",
           "ecc73d9125": "Compara tu archivo con la plantilla funcional de abajo y copia esa estructura si hace falta.",
           "0cc712b823": "El archivo de configuración principal existe en la raíz del repositorio, pero Orca aún no pudo analizar las definiciones de hooks admitidas.",
           "aba825233f": "El archivo contiene claves de configuración que esta versión de Orca no reconoce. Es posible que necesites actualizar Orca o revisar el archivo en busca de errores tipográficos.",
-          "ca424ff135": "Los valores predeterminados compartidos de hooks y automatización de Issues están definidos en el repositorio y disponibles para todos los que lo usan.",
           "8bfe65fc60": "Usar comandos locales",
           "8d6c56bff8": "Ejecutar ambos",
           "0fa21e19ec": "Nombre del workspace, normalmente basado en el nombre de la rama.",
@@ -8605,8 +8581,7 @@
           "60f8a673a7": "Volver a la app",
           "6503182299": "Checklist de onboarding",
           "82db1b7de4": "Checklist de onboarding, {{value0}} de {{value1}} completados. Mostrar guía de configuración.",
-          "df38d612b7": "Aún no se han agregado proyectos.",
-          "3e483e256b": "No hay ajustes de proyecto coincidentes."
+          "df38d612b7": "Aún no se han agregado proyectos."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Estado",
@@ -13153,7 +13128,6 @@
             "abf59262fb": "Revisa y edita la entrada de comando completa antes de iniciar un agente.",
             "4ede779461": "Resolver conflictos de revisión con IA",
             "3b203c62f8": "Esto eliminará permanentemente el comentario del PR.",
-            "ea9b649ce3": "¿Eliminar comentario?",
             "5788d1059d": "No se pudo actualizar el hilo de revisión. Revisa el presupuesto de la API de GitHub.",
             "07871c0589": "Vincular otro PR",
             "7f4489f370": "Actualizar",
@@ -14056,8 +14030,7 @@
                   "5ddd8cac7f": "¿Descartar todos los cambios staged?",
                   "d4df3a61df": "¿Descartar cambios en \"{{value0}}\"?",
                   "5c0bdbc4cb": "¿Restaurar \"{{value0}}\"?",
-                  "d97bf697c9": "Esto eliminará permanentemente este archivo. Esto no se puede deshacer.",
-                  "96c772bee9": "¿Eliminar \"{{value0}}\"?"
+                  "d97bf697c9": "Esto eliminará permanentemente este archivo. Esto no se puede deshacer."
                 },
                 "dialog": {
                   "3bc61dc989": "Cancelar",
@@ -14303,7 +14276,6 @@
             "unresolved": "No se pudo determinar qué host posee este espacio de trabajo. Comprueba la conexión e inténtalo de nuevo."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "¿Eliminar '{{value0}}' permanentemente?",
             "92276aceb7": "Eliminar",
             "7fb9435c86": "Esto elimina permanentemente el directorio y su contenido en el host remoto. Esto no se puede deshacer.",
             "23e98f192f": "Esto elimina permanentemente el archivo en el host remoto. Esto no se puede deshacer.",
@@ -14500,7 +14472,6 @@
             "resumeInNewCliTooltipChat": "Este chat permanece sin cambios."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "¿Eliminar esta sesión?",
             "description": "\"{{value0}}\" se eliminará. Una vez eliminada, tampoco podrá reanudarse desde la línea de comandos propia de {{value1}}.",
             "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
@@ -16207,7 +16178,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Quitar enlace",
           "cdfe166f6f": "Editar enlace",
-          "bfc813e909": "Abrir enlace",
           "7b0b945fdc": "Pega o escribe un enlace…",
           "copyLink": "Copiar enlace"
         },
@@ -16910,6 +16880,14 @@
                     "logins": {
                       "title": "Mantén la sesión iniciada",
                       "body": "Lleva tus inicios de sesión existentes a Orca para seguir conectado de inmediato."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Extensiones de Chrome",
+                        "body": "Instala extensiones desde Chrome Web Store y fíjalas junto a la barra de direcciones.",
+                        "action": "Abrir Web Store",
+                        "secondaryAction": "Entendido"
+                      }
                     }
                   },
                   "tasks": {
@@ -17299,7 +17277,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Mostrar menos",
-          "showMore": "Mostrar más"
+          "showMore": "Mostrar más",
+          "copied": "Copiado",
+          "copyFailed": "No se pudo copiar",
+          "copyPrompt": "Copiar prompt"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -17338,7 +17319,14 @@
           "precheckNone": "Ninguna",
           "migrate": "Migrar",
           "migrateNotice": "{{host}} se actualizó a un nuevo host remoto. Migra esta automatización para que siga ejecutándose.",
-          "needsMigration": "Requiere migración"
+          "needsMigration": "Requiere migración",
+          "repeats": "Se repite",
+          "missedRunGrace": "Período de gracia",
+          "execution": "Ejecución",
+          "notRunYet": "Aún no se ha ejecutado",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} ejecución informada",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",
@@ -17439,9 +17427,7 @@
           "2faecab10b": "Ejecutar ahora",
           "13118faadf": "Proyecto desconocido",
           "73f630b49d": "Cancelar",
-          "9adfab2596": "Eliminar automatización externa",
           "1e2e41392f": "no vuelvas a preguntar",
-          "080dcb5fbb": "Eliminar automatización",
           "19a6e30eae": "Actualizar automatizaciones",
           "77c2778945": "Automatizaciones",
           "e1bf9b1512": "El espacio de trabajo no está disponible.",
@@ -18332,7 +18318,6 @@
       },
       "artifacts": {
         "ArtifactsPage": {
-          "deleteTitle": "¿Eliminar el artefacto?",
           "deleteDescription": "“{{name}}” ya no estará disponible en su enlace público.",
           "delete": "Eliminar",
           "title": "Artefactos",
@@ -20340,9 +20325,6 @@
         },
         "stopAgents": {
           "descriptionOne": "La eliminación detendrá el trabajo actual del agente.",
-          "titleMany": "¿Detener a estos agentes?",
-          "confirm": "Detener agentes y eliminar",
-          "confirmOne": "Detener agente y eliminar",
           "descriptionMany": "La eliminación detendrá el trabajo actual de estos agentes."
         },
         "candidateRow": {
@@ -20563,6 +20545,7 @@
           "about": {
             "parakeetV3": "Rápido. {{languages}} idiomas europeos.",
             "parakeetV2": "Rápido. Solo inglés, y el más preciso en él.",
+            "parakeetUnifiedEn": "Solo inglés. Las palabras aparecen mientras hablas.",
             "whisperTiny": "La descarga más pequeña. Bueno para probar el dictado.",
             "whisperTurbo": "La mayoría de idiomas, unos 100. Lento sin GPU.",
             "senseVoice": "Rápido. Para chino, japonés y coreano.",
@@ -21153,7 +21136,8 @@
       "remove": "Eliminar…",
       "empty": "No hay extensiones activadas para este perfil",
       "visitWebStore": "Visitar Chrome Web Store",
-      "manage": "Administrar extensiones"
+      "manage": "Administrar extensiones",
+      "openWebStoreFailed": "No se pudo abrir Chrome Web Store."
     },
     "viewport": {
       "mobile-s": "Móvil S — 320 × 568",
@@ -21391,8 +21375,7 @@
     "trashFailed": {
       "titleRecycleBin": "No se pudo mover '{{name}}' a la Papelera de reciclaje. ¿Eliminarlo permanentemente?",
       "titleTrash": "No se pudo mover '{{name}}' a la Papelera. ¿Eliminarlo permanentemente?",
-      "description": "Esto no se puede deshacer.",
-      "confirm": "Eliminar permanentemente"
+      "description": "Esto no se puede deshacer."
     }
   },
   "sparsePreset": {
@@ -21477,7 +21460,6 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
-      "chatTitle": "Chats de Antigravity",
       "chatSignIn": "Iniciar sesión",
       "chatChangeAccount": "Cambiar de cuenta",
       "chatRetry": "Reintentar inicio de sesión",
@@ -21498,20 +21480,10 @@
       "retry": "Reintentar",
       "remove": "Eliminar",
       "usage": "Actualizar uso",
-      "signIn": "Inicia agy en este host y completa su inicio de sesión en el navegador, luego guarda la cuenta actual. Para agregar otra cuenta, usa /logout en agy e inicia sesión de nuevo.",
-      "docs": "Instrucciones de inicio de sesión",
-      "identityUnknown": "Identidad de sesión no disponible",
-      "signedOut": "No hay ninguna cuenta nativa de agy con sesión iniciada.",
       "changed": "La cuenta nativa cambió. Selecciona de nuevo una cuenta guardada antes de iniciar agy.",
-      "save": "Guardar cuenta actual",
       "refresh": "Actualizar cuentas",
-      "working": "Actualizando cuenta",
       "usageReading": "Sesión: {{session}} · Semanal: {{weekly}}",
       "saved": "Cuenta de Google guardada",
-      "nativeActive": "Cuenta nativa",
-      "selected": "Seleccionada",
-      "select": "Seleccionar",
-      "sessions": "La selección se aplica a las nuevas sesiones de agy en este host. Las sesiones existentes pueden conservar su cuenta anterior.",
       "searchDescription": "Guarda y selecciona cuentas nativas de Google de agy en el host de ejecución.",
       "title": "Antigravity",
       "keyword": {
@@ -21523,7 +21495,6 @@
       "authMethod": "Iniciar sesión con",
       "personal": "Cuenta de Google",
       "gcpProject": "Proyecto de Google Cloud",
-      "gcpLocation": "Ubicación de Google Cloud",
       "settingsIncomplete": "Elige un tipo de cuenta de Antigravity e introduce su proyecto y ubicación de Google Cloud.",
       "settingsLoadFailed": "Orca no pudo cargar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "settingsSaveFailed": "Orca no pudo guardar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
@@ -21912,7 +21883,8 @@
   },
   "common": {
     "retry": "Reintentar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "delete": "Borrar"
   },
   "terminal": {
     "codexTerminalServerIsolationNotice": {
@@ -22056,10 +22028,6 @@
       "restore": "Restaurar",
       "discard": "Descartar",
       "discardAll": "Descartar todo",
-      "deleteUntrackedTitle_one": "¿Eliminar {{count}} archivo sin seguimiento?",
-      "deleteUntrackedTitle_other": "¿Eliminar {{count}} archivos sin seguimiento?",
-      "deleteUntrackedTitle_many": "¿Eliminar {{count}} archivos sin seguimiento?",
-      "deleteCount": "Eliminar {{count}}",
       "deleteUntrackedFilesDescription_one": "Esto eliminará permanentemente {{count}} archivo sin seguimiento. No se puede deshacer.",
       "unstagedFilesIncludingUntrackedDescription_one": "Esto revertirá los cambios no preparados de {{count}} archivo y lo eliminará permanentemente si no tiene seguimiento. No se puede deshacer."
     },
@@ -22509,7 +22477,6 @@
     "nestedRemoval": {
       "refreshFailed": "No se pudo actualizar la lista de espacios de trabajo",
       "review": "Eliminar con worktrees anidados…",
-      "title": "¿Eliminar el espacio de trabajo y los worktrees anidados?",
       "description": "Esto elimina de forma permanente \"{{name}}\", todos los worktrees anidados que se indican a continuación y todos los archivos que contienen, incluidos los cambios sin confirmar. Se detendrán sus terminales y agentes.",
       "detached": "HEAD desacoplado",
       "loading": "Comprobando worktrees anidados…",
@@ -22517,7 +22484,6 @@
       "cancel": "Cancelar",
       "retry": "Revisar de nuevo",
       "deleting": "Eliminando…",
-      "confirm": "Eliminar todos los worktrees indicados",
       "preservedBranches": "Se conservaron algunas ramas de worktrees anidados"
     },
     "setupTerminalTitle": "Configuración",

@@ -3,7 +3,7 @@ import {
   isBackgroundLaunch,
   revealWindowsAwaitingAppActive,
   showWhenAppActive
-} from '../../../../window/foreground-activation-policy'
+} from '../../../../window/activation/foreground-activation-policy'
 import {
   discardBrowserPopupContents,
   prepareNativeBrowserPopup

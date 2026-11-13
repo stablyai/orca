@@ -1,25 +1,27 @@
 import {
   resolveGitHubWorkItemTarget,
   githubWorkItemTargetKey
-} from '../../../../src/shared/github/work-item-target'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/work-items/work-item-target'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitPushTarget } from '../../../../src/shared/worktree/types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
+import type { GitHubPrForBranchRead } from './pr-for-branch-revalidation'
+import type { HostReadIntent } from '../../query/host-read-intent'
 import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/github-pr-suppression'
 import {
   prBranchFallbackNeedsHint,
   resolvePRBranchFallback,
   shouldAcceptMergedFallbackPR
-} from '../../../../src/shared/github/pr-branch-fallback-rule'
+} from '../../../../src/shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../src/shared/github/linked-pr-staleness'
+} from '../../../../src/shared/github/pull-requests/refresh/linked-pr-staleness'
 import type { MobileWorktreeSummary } from '../mobile-worktree-metadata-operations'
 import type { WorktreeGitHubPRLink } from '../mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
@@ -80,10 +82,9 @@ export type PrSidebarLoadDeps = {
       acceptMergedFallbackPR?: boolean
       currentHeadOid?: string | null
       refresh?: boolean
-      background?: boolean
-      foreground?: boolean
+      intent?: HostReadIntent
     }
-  ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
+  ) => Promise<GitHubPrForBranchRead>
 }
 
 // The guard desktop applies before persisting the clear, or null when the link still holds.
@@ -120,11 +121,14 @@ function resolveStaleLink(
 /** The hosted-review hint a branch lookup fell back to, kept so a branch with no PR isn't asked twice per read. */
 export type PrBranchHint = { number: number | null; readAt: number }
 
-/** The branch's GitHub review: its PR and the workspace's push target, or none. */
+/** The branch's GitHub review: its PR and the workspace's push target, or none. `retryAfterMs`:
+ *  the host is still revalidating this answer, so the screen reads again that soon. */
 export type PrBranchReview =
   // linkedPRNumber: the link the PR was read with, so a later link change drops it as a fallback.
-  | { kind: 'found'; pr: PRInfo; pushTarget: GitPushTarget | null; linkedPRNumber: number | null }
-  | { kind: 'none'; hint?: PrBranchHint }
+  (
+    | { kind: 'found'; pr: PRInfo; pushTarget: GitPushTarget | null; linkedPRNumber: number | null }
+    | { kind: 'none'; hint?: PrBranchHint }
+  ) & { retryAfterMs?: number }
 
 // The host re-reads a selected branch's hosted review once a minute, so a younger hint is still its answer.
 const BRANCH_HINT_STALE_MS = 60_000
@@ -143,10 +147,7 @@ export async function loadPrBranchReview(
     branch: string
     headSha?: string | null
     refresh?: boolean
-    /** The screen's timer: the host may pace this read; an action, open or foreground read never is. */
-    background?: boolean
-    /** The app just came back: the host reads fresh instead of reusing its own recent lookup. */
-    foreground?: boolean
+    intent?: HostReadIntent
     previous?: PrBranchReview
   }
 ): Promise<PrBranchReview> {
@@ -195,12 +196,21 @@ export async function loadPrBranchReview(
         : {}),
       currentHeadOid: requestHeadOid,
       ...(args.refresh ? { refresh: true } : {}),
-      ...(args.background && !args.refresh ? { background: true } : {}),
-      ...(args.foreground && !args.refresh && !args.background ? { foreground: true } : {})
+      // Only a revalidation of an answer already shown may be told to wait.
+      ...(args.intent === 'background' && !args.previous ? {} : { intent: args.intent })
     })
   }
   let linkedPR = link.linkedPR
+  // The host kept no answer for this read: what is shown, and the link it was read with, stay.
+  const unanswered = (outcome: GitHubPrForBranchRead) =>
+    outcome.ok && outcome.revalidationOnly && args.previous
+      ? { ...args.previous, retryAfterMs: outcome.retryAfterMs }
+      : null
   let prOutcome = await fetchPR(linkedPR, fallbackPR(linkedPR))
+  const unchanged = unanswered(prOutcome)
+  if (unchanged) {
+    return unchanged
+  }
   const staleLink = prOutcome.ok
     ? resolveStaleLink(prOutcome.result, link, args.branch, requestHeadOid)
     : null
@@ -212,6 +222,10 @@ export async function loadPrBranchReview(
       deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
       fetchPR(null, null)
     ])
+    const relinked = unanswered(prOutcome)
+    if (relinked) {
+      return relinked
+    }
   }
   if (!prOutcome.ok) {
     throw new Error(prOutcome.error)
@@ -224,13 +238,18 @@ export async function loadPrBranchReview(
     )
   ) {
     const hint = await hintRead
-    return hint ? { kind: 'none', hint } : { kind: 'none' }
+    return {
+      kind: 'none',
+      ...(hint ? { hint } : {}),
+      ...(prOutcome.retryAfterMs === undefined ? {} : { retryAfterMs: prOutcome.retryAfterMs })
+    }
   }
   return {
     kind: 'found',
     pr: prOutcome.result,
     pushTarget: link.pushTarget,
-    linkedPRNumber: linkedPR
+    linkedPRNumber: linkedPR,
+    ...(prOutcome.retryAfterMs === undefined ? {} : { retryAfterMs: prOutcome.retryAfterMs })
   }
 }
 

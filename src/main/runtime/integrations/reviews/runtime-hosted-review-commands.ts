@@ -1,34 +1,37 @@
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  CreateStackedHostedReviewInput,
-  CreateStackedHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewForBranchReply
-} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import type {
-  GitHubPRRefreshReason,
-  PRRefreshOutcome
-} from '../../../../shared/github/pull-request-refresh-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import {
-  getPRForBranchOutcome,
-  readPacedClientPROutcome,
+  preparePRBranchRead,
   readRecentPhonePROutcome
 } from '../../../github/client/lookup/pr-for-branch-outcome'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type {
+  GitHubPRRefreshReason,
+  PRSnapshotReply
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
-import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
 import {
   admissionTierForRefreshReason,
-  isBudgetedBackground
-} from '../../../github/pr-refresh-candidate-policy'
-import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
-import { runHostedPRRead } from '../../../github/pr-refresh-coordinator'
+  bypassesFreshnessDelay
+} from '../../../github/pull-requests/refresh/pr-refresh-candidate-policy'
+import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
+import {
+  runHostedPRRead,
+  runHostedPRSnapshot
+} from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import { HOSTED_PR_COMPLETION_WAIT_MS } from '../../../github/pull-requests/refresh/hosted-pr-read-jobs'
+import {
+  type CreateHostedReviewInput,
+  type CreateHostedReviewResult,
+  type CreateStackedHostedReviewInput,
+  type CreateStackedHostedReviewResult,
+  type HostedReviewCreationEligibility,
+  type HostedReviewCreationEligibilityArgs,
+  type HostedReviewForBranchReply,
+  hostedReviewForBranchReply
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
-import { hostedReviewForBranchReply } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+
 import { readHostedReviewForBranch } from '../../../source-control/hosted-review'
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'
@@ -83,9 +86,11 @@ export class RuntimeHostedReviewCommands {
     reason?: GitHubPRRefreshReason,
     userRefresh?: boolean,
     clientKind?: DeviceScope,
-    /** The user just came back to this (window return, re-opened screen): read now, within budget. */
-    foreground?: boolean
-  ): Promise<PRRefreshOutcome> {
+    signal?: AbortSignal,
+    acceptRevalidationOnly = false,
+    selected = false
+  ): Promise<PRSnapshotReply> {
+    const deadline = Date.now() + HOSTED_PR_COMPLETION_WAIT_MS
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
       ...this.deps.getExecutionOptions(
@@ -96,19 +101,18 @@ export class RuntimeHostedReviewCommands {
     if (userRefresh === true) {
       lookupOptions.userRefresh = true
     }
+    if (reason && bypassesFreshnessDelay(reason)) {
+      lookupOptions.resetQuietBackoff = true
+    }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
     }
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
     }
-    const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
-      Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
-    // Desktop callers and reason-carrying refreshes keep their own GitHub read. The phone reuse is
-    // for a screen opening right after this host's own lookup; a phone that just came back to the
-    // foreground (`foreground`) is the user looking again and reads fresh.
-    if (clientKind === 'mobile' && reason === undefined && foreground !== true) {
+    // Legacy phone reads retain their narrower thirty-second reuse contract.
+    if (clientKind === 'mobile' && reason === undefined) {
       const recent = await readRecentPhonePROutcome(
         repo.path,
         branch,
@@ -121,43 +125,31 @@ export class RuntimeHostedReviewCommands {
         return recent
       }
     }
-    // This host's cadence caps every client's timed reads, so more clients add no GitHub calls.
-    // A foreground read (the window or screen came back) is budgeted but never served stale.
-    if (reason !== undefined && isBudgetedBackground(reason) && foreground !== true) {
-      const paced = await readPacedClientPROutcome(
-        repo.path,
-        branch,
-        linkedPRNumber ?? null,
-        connectionId,
-        fallbackPRNumber ?? null,
-        lookupOptions,
-        getPRAutoRefreshCadence()
-      )
-      if (paced) {
-        return paced
-      }
+    const candidate = {
+      cacheKey: `${repo.path}::${branch}`,
+      repoKind: repo.kind ?? ('git' as const),
+      repoId: repo.id,
+      repoPath: repo.path,
+      branch,
+      connectionId,
+      currentHeadOid: lookupOptions.currentHeadOid ?? null,
+      linkedPRNumber: linkedPRNumber ?? null,
+      fallbackPRNumber: linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
+      localGitOptions: lookupOptions.localGitExecOptions,
+      isSelected: reason === 'swr' && userRefresh !== true && selected
     }
-    // Through the coordinator, so a client's read also serves this server's CI-line watches.
-    return runHostedPRRead(
-      {
-        cacheKey: `${repo.path}::${branch}`,
-        repoKind: repo.kind ?? 'git',
-        repoId: repo.id,
-        repoPath: repo.path,
-        branch,
-        connectionId,
-        linkedPRNumber: linkedPRNumber ?? null
-      },
-      () =>
-        getPRForBranchOutcome(
-          repo.path,
-          branch,
-          linkedPRNumber ?? null,
-          connectionId,
-          linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-          ...lookupOptionArgs
-        )
+    const prepared = await preparePRBranchRead(
+      repo.path,
+      branch,
+      linkedPRNumber ?? null,
+      connectionId,
+      linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
+      lookupOptions
     )
+    if (reason === 'swr' && userRefresh !== true) {
+      return runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
+    }
+    return runHostedPRRead(candidate, prepared.read, prepared.didRead, prepared.release)
   }
 
   async getHostedReviewForBranch(args: {

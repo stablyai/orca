@@ -55,9 +55,11 @@ export function createGitStatusRefreshScheduler(
     pacing?: GitStatusRefreshPacing
     // Multiplies the activity floor and safety interval at schedule time (e.g. while unfocused).
     cadenceScale?: () => number
+    activityCadenceScale?: () => number
   }
 ): GitStatusRefreshScheduler {
   let disposed = false
+  let paused = false
   let safetyEnabled = false
   let inFlight = false
   let pendingActivity = false
@@ -89,7 +91,7 @@ export function createGitStatusRefreshScheduler(
     slowTaskRequiredIdleMs(
       pacing.lastRunDurationMs,
       options.slowTaskBackoff.changeSignalMultiplier,
-      options.activityMinGapMs * cadenceScale(),
+      options.activityMinGapMs * (options.activityCadenceScale?.() ?? cadenceScale()),
       options.slowTaskBackoff.maxIntervalMs
     )
 
@@ -119,7 +121,7 @@ export function createGitStatusRefreshScheduler(
   }
 
   const scheduleActivityRun = (minDelayMs: number): void => {
-    if (disposed) {
+    if (disposed || paused) {
       return
     }
     if (inFlight) {
@@ -150,7 +152,7 @@ export function createGitStatusRefreshScheduler(
   }
 
   const startRun = (reason: GitStatusRefreshReason): void => {
-    if (disposed || inFlight) {
+    if (disposed || paused || inFlight) {
       return
     }
     clearActivityTimer()
@@ -183,7 +185,7 @@ export function createGitStatusRefreshScheduler(
           activeController = null
         }
         inFlight = false
-        if (disposed) {
+        if (disposed || paused) {
           return
         }
         if (pendingActivity) {
@@ -202,6 +204,7 @@ export function createGitStatusRefreshScheduler(
       if (disposed) {
         return
       }
+      paused = false
       const wasEnabled = safetyEnabled
       safetyEnabled = true
       if (wasEnabled) {
@@ -216,6 +219,7 @@ export function createGitStatusRefreshScheduler(
       scheduleActivityRun(0)
     },
     pause: () => {
+      paused = true
       safetyEnabled = false
       pendingActivity = false
       clearActivityTimer()
@@ -223,25 +227,26 @@ export function createGitStatusRefreshScheduler(
       activeController?.abort()
     },
     suspendSafety: () => {
+      paused = false
       safetyEnabled = false
       clearSafetyTimer()
     },
     signal: () => {
-      if (disposed) {
+      if (disposed || paused) {
         return
       }
       clearSafetyTimer()
       scheduleActivityRun(options.activityDebounceMs)
     },
     refreshNow: () => {
-      if (disposed) {
+      if (disposed || paused) {
         return
       }
       clearSafetyTimer()
       scheduleActivityRun(0)
     },
     retime: () => {
-      if (disposed || inFlight) {
+      if (disposed || paused || inFlight) {
         return
       }
       if (activityTimer !== null) {

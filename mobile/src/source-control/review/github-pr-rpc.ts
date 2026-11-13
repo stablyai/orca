@@ -1,22 +1,21 @@
 import { GITHUB_CONNECTION_CHANGED, githubOperationResponse } from './github-target-invocation'
 import { captureMobilePRCheckContract } from './pr-check-observation-contract'
-import { acceptPRCheckObservation } from '../../../../src/shared/github/complete-pr-check-owner'
+import { acceptPRCheckObservation } from '../../../../src/shared/github/checks/complete-pr-check-owner'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { withGitHubTargetOperation } from './github-work-item-operation'
-import { requireGitHubWorkItemTargetDetails } from '../../../../src/shared/github/work-item-target'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/github/check-types'
+import { requireGitHubWorkItemTargetDetails } from '../../../../src/shared/github/work-items/work-item-target'
 import type {
-  GitHubAssignableUser,
-  GitHubOwnerRepo,
-  PRInfo
-} from '../../../../src/shared/github/pull-request-types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../src/shared/github/checks/check-types'
+import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import '../mobile-pr-create'
 import { mobileRepoSelectorFromWorktreeId } from '../mobile-hosted-review-service'
-import type { GitHubPrForBranchOutcome } from './github-pr-read-reply-schema'
 import {
   githubPrAssignableUsersRead,
   githubPrCheckDetailsRead,
@@ -30,6 +29,12 @@ import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { translate } from '../../i18n/mobile-i18n'
+import type { HostReadIntent } from '../../query/host-read-intent'
+import {
+  prForBranchIntentParams,
+  resolveGithubPrForBranchOutcome,
+  type GitHubPrForBranchRead
+} from './pr-for-branch-revalidation'
 
 export type GitHubPrReadOutcome<T> = { ok: true; result: T } | { ok: false; error: string }
 
@@ -104,17 +109,11 @@ export async function fetchPRForBranch(
     currentHeadOid?: string | null
     // An action's read: re-learn host status, and join no host lookup begun before it.
     refresh?: boolean
-    // The screen's own timer: the host may answer from its last read at its PR auto-refresh cadence.
-    background?: boolean
-    // The app just came back to the foreground: the host must not answer from a recent lookup.
-    foreground?: boolean
+    intent?: HostReadIntent
   }
-): Promise<GitHubPrReadOutcome<PRInfo | null>> {
+): Promise<GitHubPrForBranchRead> {
   return observe(true, args.refresh === true)
-  async function observe(
-    adopt: boolean,
-    refresh = false
-  ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
+  async function observe(adopt: boolean, refresh = false): Promise<GitHubPrForBranchRead> {
     const contract = await captureMobilePRCheckContract(
       client,
       {
@@ -124,7 +123,7 @@ export async function fetchPRForBranch(
     )
     try {
       let sourceMismatch = false
-      const result = await settleGithubPrRead(
+      const read = await settleGithubPrRead(
         {
           operation: githubPrForBranchRead.operation,
           interpret: (reply) =>
@@ -139,9 +138,7 @@ export async function fetchPRForBranch(
               fallbackPRNumber: args.fallbackPRNumber ?? null,
               ...(args.acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {}),
               currentHeadOid: args.currentHeadOid ?? null,
-              ...(args.refresh ? { userRefresh: true } : {}),
-              ...(args.background && !args.refresh ? { reason: 'swr' } : {}),
-              ...(args.foreground && !args.refresh && !args.background ? { foreground: true } : {})
+              ...prForBranchIntentParams(args)
             }),
             contract.options
           )
@@ -154,6 +151,7 @@ export async function fetchPRForBranch(
       if (adopt && sourceMismatch && contract.routeCurrent()) {
         return observe(false, true)
       }
+      const result: GitHubPrForBranchRead = read.ok ? { ok: true, ...read.result } : read
       if (!contract.current()) {
         if (adopt && !contract.complete && contract.routeCurrent()) {
           return observe(false)
@@ -162,7 +160,7 @@ export async function fetchPRForBranch(
       }
       if (result.ok && result.result && contract.complete) {
         return {
-          ok: true,
+          ...result,
           result: acceptPRCheckObservation(result.result, null, {
             scope: contract.scope!,
             complete: true,
@@ -175,16 +173,6 @@ export async function fetchPRForBranch(
       contract.retire()
     }
   }
-}
-
-function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | null): PRInfo | null {
-  if (outcome === null) {
-    return null
-  }
-  if (outcome.kind === 'upstream-error') {
-    throw new Error(outcome.message)
-  }
-  return outcome.kind === 'found' ? outcome.pr : null
 }
 
 export async function fetchWorkItemDetails(

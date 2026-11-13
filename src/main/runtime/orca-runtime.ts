@@ -4,8 +4,8 @@ import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
 import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
-import { publishWorkspaceViewChanges } from './sidebar-inputs/runtime-workspace-view-change-events'
-import { syncPRAutoRefreshCadence } from '../github/pr-auto-refresh-cadence-sync'
+import { publishWorkspaceViewChanges } from './client/settings/runtime-workspace-view-change-events'
+import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
@@ -29,6 +29,7 @@ import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-r
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
+import { registerWorktreeCatalogRoutes } from './workspaces/catalog/worktree-catalog-live-route'
 import {
   listReferenceWorkspaces,
   selectWarmedReferenceWorkspace,
@@ -49,15 +50,15 @@ import {
   installStructuredAgentAvailability as installAvailability,
   type StructuredAgentAvailabilityReader as AvailabilityReader
 } from './agent-session/launch/structured-agent-availability'
-import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
-import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
-import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
+import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
+import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
+import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows/workspace-rows-producer'
 import { getMainHttpClient } from '../network/http-client'
 import { getRuntimeDesktopSurface } from './construction/runtime-desktop-surface'
-import { CollapseWriteOrder } from './sidebar-inputs/workspace-view-collapse-writes'
-import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
+import { CollapseWriteOrder } from './client/settings/workspace-view-collapse-writes'
+import { SidebarInputsFeed } from './sidebar-inputs/feed/sidebar-inputs-feed'
 import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
-import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
+import { requireSwitchedOn } from './construction/require-sidebar-inputs-enabled'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
@@ -202,6 +203,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+    registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))

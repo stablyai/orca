@@ -57,7 +57,8 @@ function nativeChatLaunchNotice(
     details?.reason,
     agentLabel,
     details && 'account' in details ? details.account : undefined,
-    t
+    t,
+    setup?.host
   )
   return {
     content: signInContent,

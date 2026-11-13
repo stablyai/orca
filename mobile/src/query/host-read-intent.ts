@@ -17,12 +17,12 @@ export function wasAppForegroundedRecently(now = Date.now()): boolean {
 /**
  * What a PR read is to the host:
  * - `action`: a Refresh or an action's read; it also re-learns host status.
- * - `open`: the first read of a screen, or one that only has a copy from an earlier launch.
- * - `foreground`: the app just came back to the foreground; the user is looking again.
- * - `background`: the screen's own timer, which the host may answer from its last read at its
- *   PR auto-refresh cadence.
- * Everything but `background` reads fresh in every mode; `foreground` also bypasses the host's
- * short reuse of its own desktop lookup, which exists for a screen opening right after it.
+ * - `open`: the first read of a screen, or one that only has a copy from an earlier launch; the
+ *   host may reuse its own lookup from moments ago.
+ * - `foreground`: the app just came back to the foreground; the user is looking again and the
+ *   host reads fresh.
+ * - `background`: the screen's own timer, which the host may answer from its last read at its PR
+ *   auto-refresh cadence, saying when to read again while it revalidates.
  */
 export type HostReadIntent = 'action' | 'open' | 'foreground' | 'background'
 
@@ -38,20 +38,4 @@ export function hostReadIntent(
     return 'open'
   }
   return recentlyForegrounded() ? 'foreground' : 'background'
-}
-
-export function isBackgroundHostRead(
-  read: HostQueryRead,
-  previous: unknown,
-  recentlyForegrounded: () => boolean = wasAppForegroundedRecently
-): boolean {
-  return hostReadIntent(read, previous, recentlyForegrounded) === 'background'
-}
-
-export function isForegroundHostRead(
-  read: HostQueryRead,
-  previous: unknown,
-  recentlyForegrounded: () => boolean = wasAppForegroundedRecently
-): boolean {
-  return hostReadIntent(read, previous, recentlyForegrounded) === 'foreground'
 }

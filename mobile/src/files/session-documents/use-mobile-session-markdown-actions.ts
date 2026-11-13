@@ -19,6 +19,7 @@ export type MobileSessionMarkdownActionsScope = Pick<
   | 'hostId'
   | 'worktreeId'
   | 'router'
+  | 'standalone'
   | 'client'
   | 'sessionTabs'
   | 'setMarkdownDocs'
@@ -39,6 +40,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     hostId,
     worktreeId,
     router,
+    standalone,
     client,
     sessionTabs,
     setMarkdownDocs,
@@ -124,13 +126,14 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
   }, [markdownDocs, sessionTabs, t])
 
   const leaveSession = useCallback(() => {
-    if (router.canGoBack()) {
+    // A standalone session has no list beneath; the page's Back hands the exit to the shell.
+    if (router.canGoBack() || standalone) {
       router.back()
       return
     }
     // Why: Android back can fire at the root route; replace avoids React Navigation's dev-only GO_BACK warning.
     router.replace(`/h/${hostId}`)
-  }, [hostId, router])
+  }, [hostId, router, standalone])
 
   // The sheet's Copy and Discard both settle the phone's drafts, so none is offered back next time.
   const leaveSessionDroppingDrafts = useCallback(

@@ -3,9 +3,9 @@ import { useFocusEffect } from 'expo-router'
 import {
   ChecksDetailPollingPolicy,
   nextChecksPollBackoffMs
-} from '../../../../src/shared/github/checks-detail-polling-policy'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/checks/checks-detail-polling-policy'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { PRAutoRefreshCadence } from '../../../../src/shared/review-refresh-policy'
 import { useHostQuery } from '../../query/host-query'
 import {
@@ -48,6 +48,7 @@ type Cadence = {
 }
 
 const FIRST_BACKOFF_MS = 60_000
+const REVALIDATION_RETRY_FLOOR_MS = 10_000
 const NO_HOST = { hostId: '', client: null }
 const NO_TARGET = { exec: 'local' as const }
 
@@ -150,7 +151,11 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
   const refetchInterval = delay ?? false
   useHostQuery(prBranchReviewQuery, host, target, queries?.branchInput ?? NO_BRANCH, {
     enabled: running && queries?.branchInput != null,
-    refetchInterval
+    // A host still revalidating the shown answer asks to be read again soon; "off" asks nothing.
+    refetchInterval: (review) =>
+      running && hostCadence !== 'off' && review?.retryAfterMs !== undefined
+        ? Math.max(REVALIDATION_RETRY_FLOOR_MS, review.retryAfterMs)
+        : refetchInterval
   })
   const checksRead = useHostQuery(prChecksQuery, host, target, queries?.checksInput ?? NO_CHECKS, {
     enabled: running && queries?.checksInput != null,
@@ -171,5 +176,7 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
     setCadence(next)
   }
 
-  return { polling: pr !== null && running && (pr.state === 'open' || pr.state === 'draft') }
+  return {
+    polling: pr !== null && delay !== null && (pr.state === 'open' || pr.state === 'draft')
+  }
 }

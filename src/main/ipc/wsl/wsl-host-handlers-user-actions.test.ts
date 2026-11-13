@@ -25,7 +25,9 @@ vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: vi.fn(),
   readFakeWslHostsConfig: () => null
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
+  hasOrcadTemplate: () => true
+}))
 vi.mock('../runtime-environments/runtime-environment-removal-cleanup', () => ({
   retireRemovedRuntimeEnvironment: vi.fn()
 }))

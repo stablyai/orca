@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks-detail-polling-policy'
+import { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks/checks-detail-polling-policy'
 import {
   _resetPRAutoRefreshCadencesForTests,
   setPRAutoRefreshCadence,

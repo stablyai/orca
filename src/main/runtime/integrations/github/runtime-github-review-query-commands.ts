@@ -1,21 +1,14 @@
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { getIssue } from '../../../github/issues'
+import { getIssue } from '../../../github/issues/issues'
 import { getPRCheckDetails } from '../../../github/client/check/get-pr-check-details'
 import { getPRChecks } from '../../../github/client/check/get-pr-checks'
 import { getPRComments } from '../../../github/client/fetch/get-pr-comments'
-import { getPRFileContents } from '../../../github/work-item-details'
+import { getPRFileContents } from '../../../github/pull-requests/files/pull-request-file-contents'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-request-refresh-types'
-import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
-import { isBudgetedBackground } from '../../../github/pr-refresh-candidate-policy'
-import {
-  pacedPRChecksKey,
-  readPacedPRChecks,
-  recordPRChecksRead,
-  startPRChecksRead
-} from '../../../github/client/check/pr-checks-last-outcome'
+import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -49,51 +42,20 @@ export class RuntimeGitHubReviewQueryCommands {
       noCache?: boolean
       userRefresh?: boolean
       reason?: GitHubPRRefreshReason
-      foreground?: boolean
     }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const connectionId = getRepoRoutingConnectionId(repo)
-    const localGitArgs = this.deps.getLocalGitArgs(repo)
-    const read = () =>
-      getPRChecks(
-        repo.path,
-        prNumber,
-        headSha,
-        prRepo ?? null,
-        options,
-        connectionId,
-        ...localGitArgs
-      )
-    // A client's timed checks read is capped by this host's cadence like its PR read; an opened panel,
-    // a returned window, a refresh and a changed-state read (noCache) still go to the provider.
-    const timed =
-      options?.reason !== undefined &&
-      isBudgetedBackground(options.reason) &&
-      options.foreground !== true &&
-      options.userRefresh !== true &&
-      options.noCache !== true
-    const key = pacedPRChecksKey(
+    const { reason, ...readOptions } = options ?? {}
+    return getPRChecks(
       repo.path,
-      connectionId,
       prNumber,
       headSha,
       prRepo ?? null,
-      localGitArgs[0] ?? {}
+      // Only a client's timer is capped by this host's cadence; other reasons stay fresh.
+      { ...readOptions, timed: reason === 'swr' },
+      getRepoRoutingConnectionId(repo),
+      ...this.deps.getLocalGitArgs(repo)
     )
-    if (timed) {
-      const paced = readPacedPRChecks(key, getPRAutoRefreshCadence())
-      if (paced) {
-        return paced
-      }
-    }
-    // Every successful full read becomes the host's last answer, so a foreground or manual read
-    // never loses to the older timed one a later timed client would otherwise be handed back.
-    // The start sequence keeps an older read that settles later from replacing a newer answer.
-    const start = startPRChecksRead()
-    const checks = await read()
-    recordPRChecksRead(key, start, checks)
-    return checks
   }
 
   async getRepoPRCheckDetails(

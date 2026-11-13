@@ -7,11 +7,11 @@ import { getCommitMessageModelDiscoveryHostKey } from '../../../../shared/source
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { withLinkedIssueDraftContext } from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { getStagedCommitContext } from '../../../git/source-control/staged-commit-context'
+import { getStagedCommitContext } from '../../../git/source-control/mutations/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../../providers/ssh-host-not-served-error'
 import { loadPullRequestLinkedIssue } from '../../../source-control/pull-request-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../../source-control/pull-request-template'
-import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/commit-message-agent-environment'
+import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -25,7 +25,7 @@ import type {
   GenerateCommitMessageResult
 } from '../../../text-generation/source-control-text-generation-types'
 import type { GeneratePullRequestFieldsResult } from '../../../text-generation/commit-message-text-generation'
-import { getPullRequestDraftContext } from '../../../text-generation/pull-request-context'
+import { getPullRequestDraftContext } from '../../../text-generation/pull-request-context/pull-request-context'
 import {
   localGitOptionsForTarget,
   runtimeGitRouteForTarget,

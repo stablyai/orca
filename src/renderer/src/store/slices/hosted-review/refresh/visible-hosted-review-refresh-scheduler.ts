@@ -9,25 +9,33 @@ export type VisibleHostedReviewRefreshTarget = {
   aliasRevisions?: ReadonlyMap<string, string>
   fetchedAt: number | null
   intervalMs: number | null
-  /** The interval under the Default cadence. When `intervalMs` is stretched beyond it, a window
-   *  return still reads data older than this: the cadence slows timers, not the user's return. */
+  /** The interval under the Default cadence. When `intervalMs` is stretched or stopped, a window
+   *  return still reads data this old: the cadence slows timers, not the user's return. */
   foregroundIntervalMs?: number | null
   selected: boolean
-  /** The owning host's auto-refresh cadence; "off" also stops timed retries after a failure. */
+  /** The owning host's auto-refresh cadence; "off" also stops timed and receipt retries. */
   cadence?: PRAutoRefreshCadence
-  /** `foreground`: the window came back or the branch identity changed, not a timer tick. */
-  refresh: (force?: boolean, signal?: AbortSignal, foreground?: boolean) => Promise<boolean>
+  refreshOnForeground?: boolean
+  refresh: (
+    force?: boolean,
+    signal?: AbortSignal,
+    intent?: 'discovery' | 'timer'
+  ) => Promise<VisibleHostedReviewRefreshResult>
 }
+
+export type VisibleHostedReviewRefreshResult =
+  | boolean
+  | { succeeded: boolean; retryAfterMs?: number }
 
 type Entry = {
   target: VisibleHostedReviewRefreshTarget
   lastAttemptAt: number
   failures: number
-  /** When the last attempt failed; the retry is re-timed from it whenever the cadence changes. */
+  /** When the last attempt failed; its retry is re-timed from it whenever the cadence changes. */
   failedAt: number | null
   retryAt: number | null
   discovery: boolean
-  foreground: boolean
+  deferredUntil: number | null
 }
 
 /** The timed retry a failed read earns under the entry's current cadence: none under "off" (a
@@ -84,6 +92,9 @@ export function createVisibleHostedReviewRefreshScheduler() {
 
   const dueAt = (entry: Entry): number => {
     const cooldown = entry.lastAttemptAt + REVIEW_REFRESH_COOLDOWN_MS
+    if (entry.deferredUntil !== null && !entry.discovery) {
+      return Math.max(cooldown, entry.deferredUntil)
+    }
     if (entry.retryAt !== null) {
       return Math.max(cooldown, entry.retryAt)
     }
@@ -112,8 +123,9 @@ export function createVisibleHostedReviewRefreshScheduler() {
     key: string,
     startedAt: number,
     target: VisibleHostedReviewRefreshTarget,
-    succeeded: boolean
+    result: VisibleHostedReviewRefreshResult
   ): void => {
+    const succeeded = typeof result === 'boolean' ? result : result.succeeded
     const cancelled = inFlight.get(key)?.controller.signal.aborted
     inFlight.get(key)?.controller.abort()
     inFlight.delete(key)
@@ -122,11 +134,22 @@ export function createVisibleHostedReviewRefreshScheduler() {
     }
     const entry = entries.get(key) ?? recent.get(key)
     if (entry && entry.lastAttemptAt === startedAt) {
-      if (cancelled) {
+      if (cancelled || discoveryIdentityChanged(target, entry.target)) {
         entry.discovery = true
-      } else if (!succeeded || !discoveryIdentityChanged(target, entry.target)) {
+        entry.deferredUntil = null
+      } else {
         entry.discovery = false
         entry.failures = succeeded ? 0 : entry.failures + 1
+        const retry = typeof result === 'boolean' ? undefined : result.retryAfterMs
+        // Read against the current target, so a reply arriving after Off was chosen arms nothing.
+        entry.deferredUntil =
+          succeeded &&
+          entry.target.cadence !== 'off' &&
+          retry !== undefined &&
+          Number.isFinite(retry) &&
+          retry >= 0
+            ? Date.now() + Math.max(REVIEW_REFRESH_COOLDOWN_MS, retry)
+            : null
         entry.failedAt = succeeded ? null : Date.now()
         entry.retryAt = retryAtFor(entry)
       }
@@ -157,15 +180,14 @@ export function createVisibleHostedReviewRefreshScheduler() {
         continue
       }
       const force = entry.discovery || entry.failures > 0 || entry.target.fetchedAt === null
-      const foreground = entry.foreground
+      const intent = entry.discovery || entry.target.fetchedAt === null ? 'discovery' : 'timer'
       entry.lastAttemptAt = now
       entry.discovery = false
-      entry.foreground = false
       const startedTarget = entry.target
       const controller = new AbortController()
       inFlight.set(key, { target: startedTarget, controller })
       try {
-        void entry.target.refresh(force, controller.signal, foreground).then(
+        void entry.target.refresh(force, controller.signal, intent).then(
           (succeeded) => finish(key, now, startedTarget, succeeded),
           () => finish(key, now, startedTarget, false)
         )
@@ -209,8 +231,6 @@ export function createVisibleHostedReviewRefreshScheduler() {
           const preserveFailure =
             previous !== undefined &&
             (target.fetchedAt ?? -Infinity) <= (previous.target.fetchedAt ?? -Infinity)
-          const identityChanged =
-            previous !== undefined && discoveryIdentityChanged(previous.target, target)
           entry = {
             target,
             lastAttemptAt: previous?.lastAttemptAt ?? -Infinity,
@@ -218,10 +238,10 @@ export function createVisibleHostedReviewRefreshScheduler() {
             failedAt: preserveFailure ? previous.failedAt : null,
             retryAt: null,
             discovery:
-              identityChanged ||
+              (previous !== undefined && discoveryIdentityChanged(previous.target, target)) ||
               target.fetchedAt === null ||
               Date.now() - target.fetchedAt >= (target.intervalMs ?? 60_000),
-            foreground: identityChanged
+            deferredUntil: null
           }
           // A kept failure retries by this target's cadence, not the one it failed under.
           entry.retryAt = retryAtFor(entry)
@@ -232,7 +252,7 @@ export function createVisibleHostedReviewRefreshScheduler() {
           entry.target.cadence !== target.cadence || entry.target.intervalMs !== target.intervalMs
         if (discoveryIdentityChanged(entry.target, target)) {
           entry.discovery = true
-          entry.foreground = true
+          entry.deferredUntil = null
         } else if (
           (target.fetchedAt ?? -Infinity) > (entry.target.fetchedAt ?? -Infinity) &&
           (!inFlight.has(target.key) ||
@@ -242,12 +262,16 @@ export function createVisibleHostedReviewRefreshScheduler() {
           entry.failedAt = null
           entry.retryAt = null
           entry.discovery = false
+          entry.deferredUntil = null
         }
         entry.target = target
         // The owning host's cadence changed: a retry armed under the old cadence is dropped under
         // "off" and re-timed otherwise, so a stretched cadence never keeps the shorter retry.
         if (cadenceChanged) {
           entry.retryAt = retryAtFor(entry)
+          if (target.cadence === 'off') {
+            entry.deferredUntil = null
+          }
         }
       }
       reconcile()
@@ -258,6 +282,9 @@ export function createVisibleHostedReviewRefreshScheduler() {
       }
       visible = next
       if (!visible) {
+        for (const entry of entries.values()) {
+          entry.deferredUntil = null
+        }
         for (const request of inFlight.values()) {
           request.controller.abort()
         }
@@ -265,26 +292,21 @@ export function createVisibleHostedReviewRefreshScheduler() {
       if (visible) {
         const now = Date.now()
         for (const entry of entries.values()) {
+          const { intervalMs, fetchedAt, refreshOnForeground } = entry.target
+          const defaultMs =
+            entry.target.foregroundIntervalMs === undefined
+              ? intervalMs
+              : entry.target.foregroundIntervalMs
+          const returnAgeMs = Math.max(60_000, defaultMs ?? 60_000)
+          // A stretched or stopped cadence still reads on return, never sooner than Default would.
+          const stretched = defaultMs !== null && (intervalMs === null || defaultMs < intervalMs)
           if (
-            entry.target.intervalMs === null &&
-            now - (entry.target.fetchedAt ?? -Infinity) >= 60_000
+            stretched
+              ? now - Math.max(fetchedAt ?? -Infinity, entry.lastAttemptAt) >= returnAgeMs
+              : (intervalMs === null || refreshOnForeground === true) &&
+                now - (fetchedAt ?? -Infinity) >= returnAgeMs
           ) {
             entry.discovery = true
-          }
-          const returnMs = entry.target.foregroundIntervalMs ?? null
-          if (
-            returnMs !== null &&
-            entry.target.intervalMs !== null &&
-            returnMs < entry.target.intervalMs &&
-            entry.retryAt === null &&
-            now - Math.max(entry.target.fetchedAt ?? -Infinity, entry.lastAttemptAt) >= returnMs
-          ) {
-            entry.discovery = true
-          }
-          // A read the window's return makes due now is the user looking; the host must not pace
-          // it. One that is not due yet keeps its timer, which stays a background read.
-          if (dueAt(entry) <= now) {
-            entry.foreground = true
           }
         }
       }

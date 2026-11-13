@@ -1,9 +1,16 @@
 import type { PRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { IssueInfo, PRInfo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GetProjectViewTableResult } from '../../../../../shared/github/project-result-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type {
+  GitHubPRRefreshReason,
+  PRSnapshotReply
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type {
+  IssueInfo,
+  PRInfo
+} from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GetProjectViewTableResult } from '../../../../../shared/github/projects/project-result-types'
 import type { LinkedReviewClearScope } from '../pull-requests/linked-review-clear'
 import type { AppState } from '../../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from '../cache/cache-identity'
@@ -13,6 +20,9 @@ export type InflightPR = {
   force: boolean
   generation: number
   lookupHintKey: string
+  reason?: GitHubPRRefreshReason
+  superseded?: boolean
+  outcome?: PRSnapshotReply
 }
 export type InflightChecks = {
   promise: Promise<PRCheckDetail[]>

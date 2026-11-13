@@ -29,6 +29,7 @@ import {
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
 import { isWslHostOffForForge } from '../../../github/repositories/wsl-host-off-forge'
+import type { PRSnapshotReply } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 export function* getVisibleHostedReviewWorkspaces(
   state: AppState,
@@ -193,9 +194,12 @@ export function getVisibleHostedReviewRefreshTargets(
           : fetchedAt,
       selected,
       cadence,
+      refreshOnForeground:
+        !!runtime && knownGitHub && (review?.state === 'open' || review?.state === 'draft'),
       intervalMs: reviewRefreshIntervalMs(intervalInput, cadence),
       foregroundIntervalMs: reviewRefreshIntervalMs(intervalInput, 'default'),
-      refresh: async (force = true, _signal, foreground = false) => {
+      refresh: async (force = true, signal, intent) => {
+        let outcome: PRSnapshotReply | undefined
         const before = getState()
         const beforeFetchedAt = knownGitHub
           ? before.prCache[candidate.cacheKey]?.fetchedAt
@@ -203,9 +207,12 @@ export function getVisibleHostedReviewRefreshTargets(
         await (runtime
           ? before.fetchPRForBranch(candidate.repoPath, candidate.branch, {
               force: true,
-              reason: 'visible',
-              // Window return or a changed identity: the host must answer fresh, not from its pace.
-              ...(foreground ? { foreground: true } : {}),
+              signal,
+              reason: (intent ? intent === 'discovery' : force) ? 'active' : 'swr',
+              selected,
+              onReadOutcome: (next) => {
+                outcome = next
+              },
               repoId: candidate.repoId,
               repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
               worktreeId: id,
@@ -225,6 +232,12 @@ export function getVisibleHostedReviewRefreshTargets(
               admissionTier: selected ? 'interactive' : 'background'
             }))
         const after = getState()
+        if (runtime && outcome) {
+          return {
+            succeeded: !('kind' in outcome) || outcome.kind !== 'upstream-error',
+            retryAfterMs: outcome.revalidation?.retryAfterMs
+          }
+        }
         const afterFetchedAt = knownGitHub
           ? after.prCache[candidate.cacheKey]?.fetchedAt
           : after.hostedReviewCache[key]?.fetchedAt

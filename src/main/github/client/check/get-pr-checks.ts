@@ -1,18 +1,20 @@
-import { normalizePRCheckHeadSha } from '../../../../shared/github/pr-check-head'
+import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
+import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import {
   withGitHubRepoExecution,
-  githubRepoContext,
-  ghRepoExecOptions
-} from '../../github-repository-identity'
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-item-ssh-error'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
+import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { mapCheckStatus, mapCheckConclusion } from '../../mappers'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { mapCheckStatus, mapCheckConclusion } from '../../api/github-read-response'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { PR_CHECKS_ROLLUP_QUERY, type GraphQLPRChecksResponse } from './pr-checks-graphql-query'
@@ -26,6 +28,14 @@ import {
 } from './pr-checks-response-mapping'
 import { parseActionsRunId } from './check-detail-field-mapping'
 import { checkRunTimes } from '../../../../shared/source-control/checks/pr-check-time'
+import {
+  latestPRChecks,
+  prChecksResourceKey,
+  readPacedPRChecks,
+  recordPRChecksRead,
+  startPRChecksRead,
+  type PRChecksRead
+} from './pr-checks-last-outcome'
 import {
   readRestPRCheckRuns,
   readRestPRCommitStatuses,
@@ -234,36 +244,57 @@ async function readPRChecks(
   }
 }
 
-const checksReads: CoalescedProbes<PRCheckDetail[]> = new Map()
+const checksReads: CoalescedProbes<PRChecksRead> = new Map()
 
+/** `timed`: a client's timer tick, which this host may answer from its last read at its PR
+ *  auto-refresh cadence. A manual read (`userRefresh`, `noCache`) always reaches the provider. */
 export function getPRChecks(
   repoPath: string,
   prNumber: number,
   headSha?: string,
   prRepo?: GitHubApiRepository | null,
-  options?: { noCache?: boolean; userRefresh?: boolean },
+  options?: { noCache?: boolean; userRefresh?: boolean; timed?: boolean },
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    const key = JSON.stringify([
+    const resource = prChecksResourceKey(
       repoPath,
+      connectionId,
       prNumber,
-      headSha ?? null,
+      headSha,
       prRepo ?? null,
-      Boolean(options?.noCache),
-      connectionId ?? null,
-      githubReadExecutionScope(
-        ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-      )
-    ])
-    return runCoalescedProbe(
+      localGitOptions
+    )
+    if (options?.timed && !options.noCache && !options.userRefresh) {
+      const paced = readPacedPRChecks(resource, getPRAutoRefreshCadence())
+      if (paced) {
+        return paced
+      }
+    }
+    // The resource key carries the review generation, so a read after a PR mutation never joins
+    // one that started before it; the producer records its own result at its own start order.
+    const read = await runCoalescedProbe(
       checksReads,
-      key,
-      () =>
-        readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions),
+      JSON.stringify([resource, Boolean(options?.noCache)]),
+      async () => {
+        const start = startPRChecksRead()
+        const checks = await readPRChecks(
+          repoPath,
+          prNumber,
+          headSha,
+          prRepo,
+          options,
+          connectionId,
+          localGitOptions
+        )
+        const read = { start, checks }
+        recordPRChecksRead(resource, read)
+        return read
+      },
       undefined,
       { userRefresh: options?.userRefresh === true }
     )
+    return latestPRChecks(resource, read)
   })
 }
