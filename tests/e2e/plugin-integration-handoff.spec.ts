@@ -90,6 +90,7 @@ test('a plugin integration creates a stable code target and hands it to an expli
 
   await page.getByRole('button', { name: 'Connection settings', exact: true }).click()
   await page.getByRole('button', { name: 'Manage plugin', exact: true }).click()
+  await page.getByRole('tab', { name: /^Installed\b/ }).click()
   await page.getByRole('button', { name: 'More actions for AcmeTasks', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Remove development folder…', exact: true }).click()
   const remove = page.getByRole('dialog', {
