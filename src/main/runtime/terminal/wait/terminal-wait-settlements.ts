@@ -72,6 +72,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     {
       terminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
       inFlight: (ptyId) => this.orchestrationMailboxPointerDelivery.isDeliveryInFlight(ptyId),
+      recovering: (ptyId) => this.orchestrationMailboxPointerDelivery.hasRecoveryFlight(ptyId),
       held: (ptyId) => this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId),
       hasMail: (terminal) => this.orchestrationMailboxNotifications.hasDeliverableMail(terminal),
       settle: (ptyId) =>
@@ -79,12 +80,13 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
           this.getOrchestrationMailboxTerminal(ptyId)
         ),
       readinessDelay: (terminal) => {
-        const delivery = this.orchestrationMailboxPointerDelivery
         if (
           !isMailboxTerminalTakingInput(terminal) &&
-          (delivery.stagedPointerText(terminal.ptyId) === undefined ||
-            (!delivery.requiresCurrentScreen(terminal.ptyId) &&
-              (!terminal.lastAgentStatusObservedLive || terminal.lastAgentStatus !== null)))
+          !(
+            terminal.lastAgentStatusObservedLive &&
+            terminal.lastAgentStatus === null &&
+            this.orchestrationMailboxPointerDelivery.stagedPointerText(terminal.ptyId) !== undefined
+          )
         ) {
           return null
         }
@@ -244,10 +246,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
       this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(ptyId) ||
         (pty.lastAgentStatus === null && (foreground === 'agent' || pointerText !== undefined)),
-      () =>
-        readTerminalComposerTypedText(
-          this.readWholeScreenModel(pty.ptyId)?.emulator.getCursorLineContext()
-        ),
+      () => this.readMailboxComposerText(pty.ptyId),
       !!agent,
       stagedText
     )

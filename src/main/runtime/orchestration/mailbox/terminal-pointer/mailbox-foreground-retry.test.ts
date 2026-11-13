@@ -45,7 +45,12 @@ describe('owed mailbox foreground revalidation', () => {
       }
       const db = createDatabase('orca-mail-unknown-')
       const { runtime } = createRuntime(db)
-      const write = vi.fn((_ptyId: string, _data: string) => true)
+      const write = vi.fn((_ptyId: string, data: string) => {
+        if (data !== '\r') {
+          runtime.onPtyData(PTY_ID, `\x1b[37;3H\x1b[0m\x1b[K${data.trim()}\x1b[37;3H`, Date.now())
+        }
+        return true
+      })
       let mode: 'shell' | 'failed' | 'agent' = 'shell'
       let inspections = 0
       runtime.setPtyController({
@@ -211,6 +216,22 @@ describe('owed mailbox foreground revalidation', () => {
       getAgentStatusSnapshotForPane: () => [row],
       getAgentStatusSnapshot: () => [row]
     })
+    write.mockImplementation((_ptyId, data) => {
+      if (data !== '\r') {
+        runtime.onPtyData(
+          PTY_ID,
+          `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`,
+          Date.now()
+        )
+      } else {
+        runtime.onPtyData(
+          PTY_ID,
+          readRuntimeFixture('claude-2-1-316-default-unlabelled-empty'),
+          Date.now()
+        )
+      }
+      return true
+    })
     let mode: 'shell' | 'unknown' | 'other' | 'agent' = 'shell'
     runtime.setPtyController({
       write,
@@ -258,7 +279,7 @@ describe('owed mailbox foreground revalidation', () => {
     expect(write).not.toHaveBeenCalled()
     mode = 'agent'
     runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(10000)
     expect(db.getMessageById(initial.id)).toMatchObject({
       delivered_at: expect.any(String),
       pointer_enter_pending: 0
@@ -316,6 +337,12 @@ describe('owed mailbox foreground revalidation', () => {
       vi.useFakeTimers()
       const db = createDatabase('orca-mail-other-program-')
       const { runtime, write } = createRuntime(db)
+      write.mockImplementation((_ptyId, data) => {
+        if (data !== '\r') {
+          runtime.onPtyData(PTY_ID, `\x1b[37;3H\x1b[0m\x1b[K${data.trim()}\x1b[37;3H`, Date.now())
+        }
+        return true
+      })
       let name = 'zsh'
       runtime.setPtyController({
         write,

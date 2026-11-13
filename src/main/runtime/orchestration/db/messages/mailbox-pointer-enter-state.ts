@@ -88,7 +88,8 @@ export function stageMailboxPointerEnter(
 export function markMailboxPointerWriteAttempted(
   this: OrchestrationDb,
   ids: string[],
-  target: MailboxPointerReservationTarget
+  target: MailboxPointerReservationTarget,
+  expectedPhase = MAILBOX_POINTER_RESERVED
 ): boolean {
   return (
     mutatePointerMessages(
@@ -102,7 +103,7 @@ export function markMailboxPointerWriteAttempted(
             AND id IN (${placeholders})`,
         leadingParams: [
           MAILBOX_POINTER_WRITE_ATTEMPTED,
-          MAILBOX_POINTER_RESERVED,
+          expectedPhase,
           target.ptyId,
           target.processIncarnation
         ]

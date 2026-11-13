@@ -5,6 +5,7 @@ export type MailboxDeliveryDecision = { foreground?: boolean; reset?: boolean; s
 type RecheckReaders = {
   terminal(ptyId: string): OrchestrationMailboxTerminal | null
   inFlight(ptyId: string): boolean
+  recovering?(ptyId: string): boolean
   held(ptyId: string): boolean
   hasMail(terminal: OrchestrationMailboxTerminal): boolean
   settle(ptyId: string): boolean
@@ -56,15 +57,21 @@ export class MailboxDeliveryRecheck {
       if (foreground) {
         this.foregroundPending.add(ptyId)
       }
-      const readinessDelay = terminal && !foreground ? this.read.readinessDelay(terminal) : null
-      if (!terminal || (!foreground && readinessDelay === null) || !this.read.hasMail(terminal)) {
+      const backoffRequired = foreground || this.read.recovering?.(ptyId) === true
+      const readinessDelay =
+        terminal && !backoffRequired ? this.read.readinessDelay(terminal) : null
+      if (
+        !terminal ||
+        (!backoffRequired && readinessDelay === null) ||
+        !this.read.hasMail(terminal)
+      ) {
         this.retire(ptyId)
         return
       }
       const backoff = this.delays.get(ptyId) ?? 5000
       const stagger = [...ptyId].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 1000, 0)
-      const delay = foreground ? backoff + stagger : readinessDelay!
-      if (foreground) {
+      const delay = backoffRequired ? backoff + stagger : readinessDelay!
+      if (backoffRequired) {
         this.delays.set(ptyId, Math.min(backoff * 2, 60000))
       }
       const timer = setTimeout(() => {

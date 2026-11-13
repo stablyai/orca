@@ -64,6 +64,16 @@ describe('terminal-owned foreground work', () => {
         return matches
       }
     })
+    write.mockImplementation((ptyId, data) => {
+      runtime.onPtyData(
+        ptyId,
+        data === '\r'
+          ? '\x1b[37;3H\x1b[0m\x1b[K'
+          : `\x1b[37;3H\x1b[0m\x1b[K${data.trim()}\x1b[37;3H`,
+        Date.now()
+      )
+      return true
+    })
     let inspections = 0
     let concurrent = 0
     let peak = 0
@@ -220,7 +230,7 @@ describe('terminal-owned foreground work', () => {
     shell = false
     await vi.advanceTimersByTimeAsync(62000)
     expect(write).toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(20000)
+    await vi.advanceTimersByTimeAsync(20000 * mailboxes)
     expect(
       messages.every(
         (id) =>

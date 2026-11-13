@@ -1,3 +1,4 @@
+import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import {
   readTerminalComposerTypedText,
@@ -53,7 +54,12 @@ export function mailboxDeliveryRefusal(
                 null,
                 () => {
                   const text = readComposerText()
-                  return text === '' || text === stagedText
+                  return (
+                    text === stagedText ||
+                    (text === '' &&
+                      (pty.lastAgentStatus === null ||
+                        agentStatusTakesTypedInput(pty.lastAgentStatus)))
+                  )
                 },
                 source.quiescenceMs
               )),

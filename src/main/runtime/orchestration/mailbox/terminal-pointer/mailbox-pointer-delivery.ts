@@ -1,3 +1,4 @@
+import { recoveryFlightDecision } from './mailbox-recovery-flight'
 import { resumeDeferredMailboxPointer } from './mailbox-pointer-submit'
 import { MailboxForegroundDelivery } from './mailbox-foreground-delivery'
 import type {
@@ -57,30 +58,19 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         return
       }
       terminal = target.terminal
+      if (this.resumeDeferredEnter(terminal)) {
+        this.state.parkDelivery(ptyId, mailboxHandle, options.reservedTypes)
+        return
+      }
       const foregroundHeld =
         options.foreground === undefined &&
         (this.needsForegroundEvaluation(ptyId) || this.deps.isForegroundCandidate?.(terminal))
-      const hasFlight = this.state.hasFlight(ptyId)
       if (
-        (!foregroundHeld || hasFlight) &&
-        ((!isMailboxTerminalTakingInput(terminal) && !hasFlight) ||
-          !this.deps.isAgentSettledForDelivery(ptyId, options.foreground, undefined))
+        !foregroundHeld &&
+        (!isMailboxTerminalTakingInput(terminal) ||
+          !this.deps.isAgentSettledForDelivery(ptyId, options.foreground))
       ) {
         this.parkRedelivery(mailboxHandle, options.reservedTypes)
-        return
-      }
-      // As in observeAgentWorking: a cold-parked terminal's deferred Enter waits for rest.
-      const deferredEnter =
-        this.coldParkedPtys.has(ptyId) && terminal.lastAgentStatus !== 'idle'
-          ? null
-          : this.state.takeDeferredEnter(ptyId)
-      if (deferredEnter) {
-        this.state.parkDelivery(ptyId, mailboxHandle, options.reservedTypes)
-        deferredEnter()
-        return
-      }
-      if (this.state.hasFlight(ptyId)) {
-        this.state.parkDelivery(ptyId, mailboxHandle, options.reservedTypes)
         return
       }
       if (this.state.hasActiveWatermark(mailboxHandle)) {
@@ -204,6 +194,16 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     )
   }
 
+  hasRecoveryFlight(ptyId: string): boolean {
+    return recoveryFlightDecision(this.state, ptyId, this.state.flightForPty(ptyId)) !== 'ordinary'
+  }
+
+  observeOutput(ptyId: string): void {
+    if (this.hasRecoveryFlight(ptyId)) {
+      this.deps.onDeliveryDecision(ptyId, { reset: true })
+    }
+  }
+
   isDeliveryInFlight(ptyId: string): boolean {
     return this.state.hasActiveFlight(ptyId) || this.state.foreground.hasForegroundProbe(ptyId)
   }
@@ -225,6 +225,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   observeTerminal(ptyId: string, status?: string): void {
+    this.observeOutput(ptyId)
     if (this.state.foreground.observeTerminal(ptyId, status)) {
       this.deps.onDeliveryDecision(ptyId, { reset: true })
       queueMicrotask(() => this.deps.redriveTerminal(ptyId))

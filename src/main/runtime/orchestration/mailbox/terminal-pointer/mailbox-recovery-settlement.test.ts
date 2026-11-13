@@ -131,6 +131,18 @@ it.each(['consumed', 'still-owed'] as const)(
         expect(db.getMessageById(later.id)).toMatchObject({ read: 0, delivered_at: null })
         row.state = 'done'
         row.receivedAt = Date.now()
+        write.mockImplementation((_ptyId, data) => {
+          if (data !== '\r') {
+            runtime.onPtyData(
+              PTY_ID,
+              `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`,
+              Date.now()
+            )
+          } else {
+            runtime.onPtyData(PTY_ID, composer, Date.now())
+          }
+          return true
+        })
         runtime.onPtyData(PTY_ID, composer, Date.now())
         await vi.advanceTimersByTimeAsync(65000)
       }

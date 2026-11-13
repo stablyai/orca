@@ -42,6 +42,7 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
     foreground?: MailboxForeground,
     stagedText?: string
   ) => OrchestrationMailboxPointerSubmitTarget | null
+  readComposerText?: (ptyId: string) => string | null
   readForeground: (ptyId: string) => Promise<MailboxForeground>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isForegroundCandidate?: (terminal: OrchestrationMailboxTerminal) => boolean

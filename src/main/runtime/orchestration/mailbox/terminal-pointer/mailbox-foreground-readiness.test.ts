@@ -10,6 +10,7 @@ import {
   insertDirectRunMessage,
   PTY_ID,
   PANE_KEY,
+  LEAF_ID,
   TAB_ID,
   WORKTREE_ID,
   temporaryDirectories
@@ -31,6 +32,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn(() => null) }
 }))
 
+function pointerComposer(text: string) {
+  return `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${text.trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`
+}
+
 const COMPOSER = `\x1b[2J\x1b[H${readRuntimeFixture('claude-2-1-316-default-unlabelled-empty').replaceAll('\x1b]0;✳ Claude Code\x07', '')}`
 
 describe('mail-local foreground recovery readiness', () => {
@@ -47,13 +52,18 @@ describe('mail-local foreground recovery readiness', () => {
     { status: 'working', hydration: true },
     { status: 'permission', hydration: false },
     { status: 'permission', hydration: true },
-    { status: 'permission', hydration: false, inconclusive: true }
+    { status: 'permission', hydration: false, inconclusive: true },
+    { status: 'permission', hydration: false, repair: 'parked' },
+    { status: 'permission', hydration: false, repair: 'refused' },
+    { status: 'idle', hydration: false, repair: 'emptied' },
+    { status: 'permission', hydration: false, repair: 'unruled' }
   ])(
-    'submits silent recovery with retained $status (hydration=$hydration, inconclusive=$inconclusive)',
-    async ({ status, hydration, inconclusive = false }) => {
+    'submits silent recovery with retained $status (hydration=$hydration, inconclusive=$inconclusive, repair=$repair)',
+    async ({ status, hydration, inconclusive = false, repair }) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-mail-silent-enter-')
-      const { runtime, write } = createRuntime(db, { launchAgent: 'claude' })
+      const agent = repair === 'unruled' ? 'grok' : 'claude'
+      const { runtime, write } = createRuntime(db, { launchAgent: agent })
       let shell = true
       let hydrate = false
       let unknown = false
@@ -63,7 +73,14 @@ describe('mail-local foreground recovery readiness', () => {
       })
       runtime.setPtyController({
         write,
-        writeWithSettlement: settledWriteStub(write),
+        writeWithSettlement: (ptyId, data) => {
+          write(ptyId, data)
+          return data === '\r' &&
+            repair === 'refused' &&
+            write.mock.calls.filter(([, text]) => text === '\r').length === 1
+            ? { outcome: 'refused', reason: 'provider_refused_write' }
+            : { outcome: 'accepted' }
+        },
         kill: vi.fn(),
         getSize: () => ({ cols: 100, rows: 30 }),
         getForegroundProcess: async () => null,
@@ -72,7 +89,7 @@ describe('mail-local foreground recovery readiness', () => {
           unknown
             ? { foregroundProcess: null, hasChildProcesses: false }
             : {
-                foregroundProcess: shell ? 'zsh' : 'claude',
+                foregroundProcess: shell ? 'zsh' : agent,
                 hasChildProcesses: !shell,
                 foregroundObservation: {
                   ptyId: PTY_ID,
@@ -83,7 +100,7 @@ describe('mail-local foreground recovery readiness', () => {
                   verdict: 'observed',
                   source: 'pty-master',
                   foregroundKind: shell ? 'shell' : 'non-shell',
-                  processName: shell ? 'zsh' : 'claude'
+                  processName: shell ? 'zsh' : agent
                 }
               },
         hasRendererSerializer: () => hydrate,
@@ -107,7 +124,37 @@ describe('mail-local foreground recovery readiness', () => {
             stagedAt = Date.now()
             unknown = inconclusive
             pointerScreen = `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`
-            runtime.onPtyData(PTY_ID, `\x1b]0;Claude ${status}\x07${pointerScreen}`, Date.now())
+            runtime.onPtyData(
+              PTY_ID,
+              `\x1b]0;${agent} ${repair === 'unruled' && write.mock.calls.length > 1 ? 'working' : status}\x07${repair === 'unruled' && write.mock.calls.length === 1 ? COMPOSER : pointerScreen}`,
+              Date.now()
+            )
+            if (repair === 'parked') {
+              runtime.syncWindowGraph(1, {
+                tabs: [
+                  {
+                    tabId: TAB_ID,
+                    worktreeId: WORKTREE_ID,
+                    title: 'Claude',
+                    activeLeafId: LEAF_ID,
+                    layout: null
+                  }
+                ],
+                leaves: [
+                  {
+                    tabId: TAB_ID,
+                    worktreeId: WORKTREE_ID,
+                    leafId: LEAF_ID,
+                    paneRuntimeId: 1,
+                    ptyId: PTY_ID,
+                    parked: true
+                  }
+                ]
+              })
+            }
+            if (repair === 'emptied' && write.mock.calls.length === 1) {
+              runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
+            }
             if (hydration) {
               // A stream gap drops the mirror without changing the live process or flight.
               runtime.notePtyDataGap(PTY_ID)
@@ -143,9 +190,32 @@ describe('mail-local foreground recovery readiness', () => {
           })
           unknown = false
         }
-        await vi.advanceTimersByTimeAsync(4000)
+        if (repair === 'refused') {
+          await vi.advanceTimersByTimeAsync(6000)
+          expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(1)
+          expect(db.getMessageById(message.id)).toMatchObject({
+            read: 0,
+            delivered_at: null,
+            pointer_enter_pending: 2
+          })
+        }
+        if (repair === 'unruled') {
+          await vi.advanceTimersByTimeAsync(65000)
+          expect(write).toHaveBeenCalledTimes(1)
+          expect(db.getMessageById(message.id)).toMatchObject({
+            read: 0,
+            delivered_at: null,
+            pointer_enter_pending: 2
+          })
+          runtime.onPtyData(PTY_ID, '\x1b]0;grok working\x07', Date.now())
+        }
+        await vi.advanceTimersByTimeAsync(65000)
         expect(write.mock.calls.map(([, data]) => data)).toEqual([
           expect.stringContaining('You have 1 orchestration message'),
+          ...(repair === 'emptied' || repair === 'unruled'
+            ? [expect.stringContaining('You have 1 orchestration message')]
+            : []),
+          ...(repair === 'refused' ? ['\r'] : []),
           '\r'
         ])
         expect(db.getMessageById(message.id)).toMatchObject({
@@ -155,7 +225,9 @@ describe('mail-local foreground recovery readiness', () => {
         })
         const attempts = vi.spyOn(runtime, 'deliverPendingMessagesForPty')
         await vi.advanceTimersByTimeAsync(65000)
-        expect(write).toHaveBeenCalledTimes(2)
+        expect(write).toHaveBeenCalledTimes(
+          ['emptied', 'unruled', 'refused'].includes(repair ?? '') ? 3 : 2
+        )
         expect(attempts).not.toHaveBeenCalled()
       } finally {
         finishSnapshot({ data: '', cols: 100, rows: 30 })
@@ -356,6 +428,12 @@ describe('mail-local foreground recovery readiness', () => {
           runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', Date.now())
         }
         const run = createBoundRun(db, 'Current readiness after long hold')
+        write.mockImplementation((_ptyId, text) => {
+          if (text !== '\r') {
+            runtime.onPtyData(PTY_ID, pointerComposer(text), Date.now())
+          }
+          return true
+        })
         const message = insertDirectRunMessage(db, run.id, 'Wait for the composer')
         runtime.notifyMessageArrived(`run:${run.id}`, 'status')
         await vi.advanceTimersByTimeAsync(31 * 60 * 1000)
@@ -620,7 +698,11 @@ describe('mail-local foreground recovery readiness', () => {
         if (kind === 'permission-edge') {
           runtime.onPtyData(PTY_ID, '\x1b]0;✳ Claude Code\x07', Date.now())
         }
-        runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
+        runtime.onPtyData(
+          PTY_ID,
+          recovering ? pointerComposer(write.mock.calls[0][1]) : COMPOSER,
+          Date.now()
+        )
         await vi.advanceTimersByTimeAsync(10000)
         expect(write.mock.calls.map(([, data]) => data)).toEqual([
           expect.stringContaining('You have 1 orchestration message'),

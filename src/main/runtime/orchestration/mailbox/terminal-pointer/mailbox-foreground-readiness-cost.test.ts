@@ -34,10 +34,12 @@ it.each([
   { m: 2, status: null },
   { m: 20, status: null },
   { m: 2, status: 'permission' },
-  { m: 20, status: 'permission' }
+  { m: 20, status: 'permission' },
+  { m: 2, status: 'permission', unknown: true },
+  { m: 20, status: 'permission', unknown: true }
 ])(
-  'bounds blocked-flight readiness with $status independently of $m owed mailboxes',
-  async ({ m, status }) => {
+  'bounds blocked-flight readiness with $status (unknown=$unknown) independently of $m owed mailboxes',
+  async ({ m, status, unknown = false }) => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mail-screen-cost-')
     const row: AgentStatusIpcPayload = {
@@ -56,6 +58,7 @@ it.each([
     })
     let shell = true
     let inspections = 0
+    let unavailable = false
     const composer = `\x1b[2J\x1b[H${readRuntimeFixture('claude-2-1-316-default-unlabelled-empty').replaceAll('\x1b]0;✳ Claude Code\x07', '')}`
     runtime.setPtyController({
       write,
@@ -66,6 +69,9 @@ it.each([
       supportsForegroundObservation: () => true,
       inspectProcess: async () => {
         inspections++
+        if (unavailable) {
+          return { foregroundProcess: null, hasChildProcesses: false }
+        }
         return {
           foregroundProcess: shell ? 'zsh' : 'claude',
           hasChildProcesses: !shell,
@@ -129,22 +135,32 @@ it.each([
         runtime.onPtyData(PTY_ID, '\x1b]0;Claude permission\x07', Date.now())
         await vi.advanceTimersByTimeAsync(0)
       }
+      if (unknown) {
+        runtime.onPtyData(
+          PTY_ID,
+          `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${write.mock.calls[0][1].trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`,
+          Date.now()
+        )
+        unavailable = true
+      }
       const attempts = vi.spyOn(runtime, 'deliverPendingMessagesForPty')
       const screens = vi.spyOn(runtime.idleEvidenceSource, 'readScreenLines')
       const work = countForegroundSqlWork(db)
       const priorInspections = inspections
-      await vi.advanceTimersByTimeAsync(60000)
+      await vi.advanceTimersByTimeAsync(600000)
       const count = attempts.mock.calls.length
-      // The blocked recovery keeps its wake throughout the minute, including retained permission.
-      expect(count).toBeGreaterThanOrEqual(60000 / 2000 - 1)
-      // One terminal decision every two seconds, plus the scheduling edge.
-      expect(count).toBeLessThanOrEqual(60000 / 2000 + 1)
+      // 5 + 10 + 20 + 40 seconds, then at most one wake each minute; allow one phase edge.
+      expect(count).toBeGreaterThanOrEqual(9)
+      expect(count).toBeLessThanOrEqual(4 + Math.floor((600000 - 75000) / 60000) + 1)
       expect(screens.mock.calls.length).toBeLessThanOrEqual(count)
-      expect(inspections - priorInspections).toBe(0)
+      expect(inspections - priorInspections).toBeLessThanOrEqual(unknown ? count : 0)
+      if (unknown) {
+        expect(inspections - priorInspections).toBeGreaterThanOrEqual(count - 1)
+      }
       // One reservation and its owner at wake and rearm; no mailbox inventory per attempt.
-      expect(work.counts.statements).toBeLessThanOrEqual(4 * (count + 1))
-      expect(work.counts.owners).toBeLessThanOrEqual(2 * (count + 1))
-      expect(work.counts.messages).toBeLessThanOrEqual(2 * (count + 1))
+      expect(work.counts.statements).toBeLessThanOrEqual((unknown ? 8 : 4) * (count + 1))
+      expect(work.counts.owners).toBeLessThanOrEqual((unknown ? 4 : 2) * (count + 1))
+      expect(work.counts.messages).toBeLessThanOrEqual((unknown ? 4 : 2) * (count + 1))
       expect(write).toHaveBeenCalledTimes(1)
       console.info(
         'blocked-flight contract',
@@ -160,7 +176,12 @@ it.each([
       work.stop()
       // Consume the other obligations before readiness to isolate this flight's single Enter.
       db.markAsReadAndDelivered(otherMessages)
-      runtime.onPtyData(PTY_ID, composer, Date.now())
+      unavailable = false
+      runtime.onPtyData(
+        PTY_ID,
+        `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${write.mock.calls[0][1].trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`,
+        Date.now()
+      )
       await vi.advanceTimersByTimeAsync(10000)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
         expect.stringContaining('You have 1 orchestration message'),

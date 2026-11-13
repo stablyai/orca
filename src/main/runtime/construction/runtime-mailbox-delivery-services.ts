@@ -24,5 +24,6 @@ export abstract class RuntimeMailboxDeliveryServices {
   protected abstract deliverPendingMessagesForPty(ptyId: string): void
   protected abstract needsMailboxForegroundEvaluation(ptyId: string): boolean
   protected abstract armDeliveryRecheck(ptyId: string, decision?: MailboxDeliveryDecision): void
+  protected abstract readMailboxComposerText(ptyId: string): string | null
   protected abstract readMailboxForeground(ptyId: string): Promise<MailboxForeground>
 }

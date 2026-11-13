@@ -33,7 +33,16 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-shell-mail-hold-')
     const { runtime } = createRuntime(db, { launchAgent: null })
-    const write = vi.fn((_ptyId: string, _data: string) => true)
+    const write = vi.fn((_ptyId: string, data: string) => {
+      runtime.onPtyData(
+        PTY_ID,
+        data === '\r'
+          ? '\x1b[37;3H\x1b[0m\x1b[K'
+          : `\x1b[37;3H\x1b[0m\x1b[K${data.trim()}\x1b[37;3H`,
+        Date.now()
+      )
+      return true
+    })
     let foreground: 'codex' | 'zsh' = 'codex'
     let nextForegroundRead: Promise<void> | undefined
     let nextExitNameRead: Promise<void> | undefined
@@ -135,7 +144,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
     await vi.advanceTimersByTimeAsync(4000)
     releaseShell()
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(10000)
     expect(await delayedReceipt).toBeNull()
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
       expect.stringContaining('You have 1 orchestration message'),
@@ -163,13 +172,12 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     expect(db.getMessageById(nextMessage.id)).toMatchObject({
       read: 0,
       delivered_at: null,
-      pointer_enter_pending: 0
+      pointer_enter_pending: 2
     })
     foreground = 'codex'
     runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
-    await vi.advanceTimersByTimeAsync(7000)
+    await vi.advanceTimersByTimeAsync(15000)
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
-      expect.stringContaining('You have 1 orchestration message'),
       expect.stringContaining('You have 1 orchestration message'),
       '\r'
     ])
@@ -190,7 +198,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
     await vi.advanceTimersByTimeAsync(4000)
     releaseEnterShell()
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(10000)
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
       expect.stringContaining('You have 1 orchestration message'),
       '\r'
@@ -263,16 +271,14 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       let shell = false
       let inspections = 0
       const write = vi.fn((_ptyId: string, data: string) => {
-        if (longHold) {
-          const composer =
-            data === '\r'
-              ? readRuntimeFixture('claude-2-1-316-default-unlabelled-empty').replaceAll(
-                  '\x1b]0;✳ Claude Code\x07',
-                  ''
-                )
-              : `\x1b[2J\x1b[H\x1b[?25h${'─'.repeat(40)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(40)}\x1b[2;${data.trim().length + 3}H`
-          runtime.onPtyData(PTY_ID, composer, Date.now())
-        }
+        const composer =
+          data === '\r'
+            ? readRuntimeFixture('claude-2-1-316-default-unlabelled-empty').replaceAll(
+                '\x1b]0;✳ Claude Code\x07',
+                ''
+              )
+            : `\x1b[2J\x1b[H\x1b[?25h${'─'.repeat(40)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(40)}\x1b[2;${data.trim().length + 3}H`
+        runtime.onPtyData(PTY_ID, composer, Date.now())
         return true
       })
       runtime.setPtyController({
@@ -330,7 +336,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       }
       // Only the physical foreground changes; the hook timestamp remains expired and untouched.
       shell = false
-      await vi.advanceTimersByTimeAsync(longHold ? 65000 : 12000)
+      await vi.advanceTimersByTimeAsync(longHold ? 65000 : 20000)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
         expect.stringContaining('You have 1 orchestration message'),
         '\r'
@@ -358,7 +364,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       })
       shell = false
       expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toBeNull()
-      await vi.advanceTimersByTimeAsync(7000)
+      await vi.advanceTimersByTimeAsync(15000)
       expect(db.getMessageById(second.id)).toMatchObject({
         read: 0,
         delivered_at: expect.any(String),

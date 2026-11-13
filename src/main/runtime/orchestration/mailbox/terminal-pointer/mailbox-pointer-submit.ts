@@ -1,3 +1,4 @@
+import { recoveryFlightDecision, submitRecoveryMailboxPointer } from './mailbox-recovery-flight'
 import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
@@ -18,7 +19,7 @@ import type {
 } from './mailbox-pointer-state'
 import type { WriteSettlement } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-type PointerSubmitDependencies = {
+export type PointerSubmitDependencies = {
   mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
@@ -32,6 +33,7 @@ type PointerSubmitDependencies = {
     foreground?: MailboxForeground,
     stagedText?: string
   ) => boolean
+  readComposerText?: (ptyId: string) => string | null
   readForeground: (ptyId: string) => Promise<MailboxForeground>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
@@ -58,27 +60,33 @@ export function resumeDeferredMailboxPointer<T extends OrchestrationMessageWaite
   }
   if (
     !state.hasActiveFlight(ptyId) &&
-    (!coldParked || terminal.lastAgentStatus === 'idle') &&
-    deps.isAgentSettledForDelivery(ptyId)
+    (recoveryFlightDecision(state, ptyId, state.flightForPty(ptyId)) !== 'ordinary' ||
+      ((!coldParked || terminal.lastAgentStatus === 'idle') &&
+        deps.isAgentSettledForDelivery(ptyId)))
   ) {
     state.takeDeferredEnter(ptyId)?.()
   }
   return true
 }
 
+export type PointerSubmitInput = {
+  mailboxHandle: string
+  messages: readonly { id: string; type: string }[]
+  newestSequence: number
+  ptyId: string
+  flight: OrchestrationMailboxDeliveryFlight
+  expectedTarget: OrchestrationMailboxPointerSubmitTarget
+  stagedText?: string
+  foregroundFollowup?: boolean
+}
+
 export function submitOrchestrationMailboxPointer(
   deps: PointerSubmitDependencies,
-  input: {
-    mailboxHandle: string
-    messages: readonly { id: string; type: string }[]
-    newestSequence: number
-    ptyId: string
-    flight: OrchestrationMailboxDeliveryFlight
-    expectedTarget: OrchestrationMailboxPointerSubmitTarget
-    stagedText?: string
-    foregroundFollowup?: boolean
-  }
+  input: PointerSubmitInput
 ): void {
+  if (submitRecoveryMailboxPointer(deps, input)) {
+    return
+  }
   let clearAndRedrive = false
   let redriveClearedPointer = true
   let submitted = false
@@ -140,14 +148,15 @@ export function submitOrchestrationMailboxPointer(
         }
         preserveFlight = true
       } else if (deps.state.foreground.foregroundHold(input.ptyId)) {
-        clearAndRedrive = true
-        redriveClearedPointer = false
+        if (submitRecoveryMailboxPointer(deps, input)) {
+          preserveFlight = true
+        } else {
+          clearAndRedrive = true
+          redriveClearedPointer = false
+        }
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
-        (queueSafe
-          ? !settled
-          : deps.state.foreground.screenRecovery(input.ptyId) ===
-            input.expectedTarget.processIncarnation) ||
+        (queueSafe && !settled) ||
         deps.isPtyAwaitingUserInput(input.ptyId)
       ) {
         // Keep staged text pending until admission is safe; Enter could answer a dialog.
