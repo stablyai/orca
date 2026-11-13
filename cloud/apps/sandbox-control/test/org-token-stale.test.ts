@@ -73,10 +73,11 @@ describe('a token minted before a role change: 401 stale_token where it matters'
 
   it('a token re-minted just after the change (iat backdated 30 s by auth) is fresh, so the retry works', async () => {
     const { h } = await setup()
-    // Auth stamps iat = mint time - 30 s: a token minted 5 s after the change carries iat 25 s before it.
-    const reminted = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
-    h.advance(25_000)
+    // The harness mints like auth (iat = mint time - 30 s): a token minted 5 s after the change carries an
+    // iat 25 s before it, and must still count as fresh.
     await recordMemberChange(h.env.SANDBOX_DB, 'org:acme', 'alice', 'role', h.now())
+    h.advance(5_000)
+    const reminted = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
     const res = await h.call('GET', '/v1/secrets', { bearer: reminted })
     expect(res.body?.reason).not.toBe('stale_token')
   })
