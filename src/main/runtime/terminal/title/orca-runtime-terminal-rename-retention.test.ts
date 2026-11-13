@@ -74,7 +74,7 @@ describe('terminal rename before renderer graph hydration', () => {
     }
   )
 
-  it('publishes the name to paired clients while no window pane holds the terminal', async () => {
+  it('publishes the name over the window snapshot while no window pane holds the terminal', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
@@ -101,7 +101,33 @@ describe('terminal rename before renderer graph hydration', () => {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID
     })
-    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'window',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'host-tab',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `host-tab::${HEADLESS_LEAF_ID}`,
+              parentTabId: 'host-tab',
+              leafId: HEADLESS_LEAF_ID,
+              ptyId: 'paired-client-pty',
+              title: 'Terminal',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const published: RuntimeMobileSessionTabsResult[] = []
     runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot), 'paired-desktop')
 
@@ -112,6 +138,10 @@ describe('terminal rename before renderer graph hydration', () => {
         .at(-1)
         ?.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab')
     ).toMatchObject({ customTitle: 'Cafe24 - 44793' })
+    // A headless epoch here would let later merges resurrect tabs the window closed.
+    const after = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(after.publicationEpoch).toBe('window')
+    expect(after.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
   })
 })
 
