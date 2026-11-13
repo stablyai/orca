@@ -49,6 +49,86 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     vi.useRealTimers()
   })
 
+  it.each([100, 1000])(
+    'materializes unchanged tails at most once per sweep for %i pending panes',
+    async (population) => {
+      const lines = ['ordinary hook output']
+      const scans = vi.spyOn(lines, 'map')
+      const resolved = vi.fn()
+      const polls = new RuntimeTerminalIdlePolls({
+        intervalMs: INTERVAL_MS,
+        quiescenceMs: 1500,
+        getForegroundProcess: () => null,
+        hasCommandPainted: () => false,
+        getAdoptedPtyIdleStatus: () => null,
+        getPaneAgent: () => null,
+        getFirstPartyAgentStatus: () => null,
+        readScreenLines: () => null,
+        readVisibleScreen: async () => null,
+        startupObservation: {
+          read: () => ({ kind: 'pending', candidate: 'claude' }),
+          watch: () => () => {},
+          refresh: () => {}
+        },
+        resolve: resolved
+      })
+      const waiters = Array.from({ length: population }, (_, index) => {
+        const waiter = makeWaiter(`pending-${index}`)
+        polls.start(waiter, makePty(`pty-${index}`, { tailBuffer: lines }))
+        return waiter
+      })
+      try {
+        await vi.advanceTimersByTimeAsync(60_000)
+        // Thirty required sweeps, one tail materialization each; awaits must not multiply it.
+        expect(scans.mock.calls.length).toBeGreaterThan(0)
+        expect(scans.mock.calls.length).toBeLessThanOrEqual(population * 30)
+        expect(resolved).not.toHaveBeenCalled()
+      } finally {
+        for (const waiter of waiters) {
+          waiter.cancelIdlePoll?.()
+        }
+        scans.mockRestore()
+      }
+    }
+  )
+
+  it('rebuilds a changed tail and re-ranks current readiness after an awaited screen read', async () => {
+    const before = ['before read']
+    const after = ['after read']
+    const beforeScan = vi.spyOn(before, 'map')
+    const afterScan = vi.spyOn(after, 'map')
+    const pty = makePty('changing-pty', { tailBuffer: before })
+    const resolved = vi.fn()
+    const polls = new RuntimeTerminalIdlePolls({
+      intervalMs: INTERVAL_MS,
+      quiescenceMs: 1500,
+      getForegroundProcess: () => null,
+      hasCommandPainted: () => true,
+      getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => null,
+      getFirstPartyAgentStatus: () => null,
+      readScreenLines: () => null,
+      readVisibleScreen: async () => {
+        pty.tailBuffer = after
+        pty.lastAgentStatus = 'idle'
+        return null
+      },
+      resolve: resolved
+    })
+    const waiter = makeWaiter('changing')
+    polls.start(waiter, pty)
+    try {
+      await vi.advanceTimersByTimeAsync(INTERVAL_MS)
+      expect(beforeScan).toHaveBeenCalledTimes(1)
+      expect(afterScan).toHaveBeenCalledTimes(1)
+      expect(resolved).toHaveBeenCalledWith(waiter, expect.objectContaining({ satisfied: true }))
+    } finally {
+      waiter.cancelIdlePoll?.()
+      beforeScan.mockRestore()
+      afterScan.mockRestore()
+    }
+  })
+
   it('allocates one interval for 20 concurrent waiters and still resolves them on the first tick', () => {
     const resolved: { handle: string; result: RuntimeTerminalWait }[] = []
     const polls = new RuntimeTerminalIdlePolls({

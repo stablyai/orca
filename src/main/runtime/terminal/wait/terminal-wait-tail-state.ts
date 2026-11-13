@@ -1,7 +1,10 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 import { buildTailLines } from '../output/tail/terminal-tail-state'
 import { tailMayContainBlockedSignal } from '../output/tail/terminal-tail-sentinel-index'
-import { findActionableTerminalWaitBlockedSignal } from './terminal-wait-detection'
+import {
+  detectTerminalWaitBlockedReason,
+  findActionableTerminalWaitBlockedSignal
+} from './terminal-wait-detection'
 import { terminalWaitBlockedSentinelRe } from '../../agent-state-rules/blocked-text-layer'
 
 export function buildTerminalWaitText(
@@ -15,6 +18,43 @@ export function buildTerminalWaitText(
     .join('\n')
   // Readiness headers can fall outside the short preview.
   return waitText.length > 0 ? waitText : preview
+}
+
+/** Re-rank live state after awaits without rebuilding an unchanged tail within that tick. */
+export function createTerminalWaitTailReader(record: {
+  tailBuffer: string[]
+  tailPartialLine: string
+  preview: string
+}) {
+  let lines: string[] | undefined
+  let partialLine = ''
+  let preview = ''
+  let text: string | undefined
+  let blocked: RuntimeTerminalWaitBlockedReason | null | undefined
+  const readText = () => {
+    if (
+      lines !== record.tailBuffer ||
+      partialLine !== record.tailPartialLine ||
+      preview !== record.preview
+    ) {
+      lines = record.tailBuffer
+      partialLine = record.tailPartialLine
+      preview = record.preview
+      text = undefined
+      blocked = undefined
+    }
+    return (text ??= buildTerminalWaitText(record.tailBuffer, partialLine, preview))
+  }
+  return {
+    readText,
+    readBlockedReason: () => {
+      const current = readText()
+      if (blocked === undefined) {
+        blocked = detectTerminalWaitBlockedReason(current)
+      }
+      return blocked
+    }
+  }
 }
 
 export type TerminalTailWaitState = {

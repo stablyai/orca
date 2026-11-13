@@ -5,14 +5,19 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { readRuntimeFixture } from '../../../terminal/wait/agent-transcript-replay-test-harness'
+import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 import {
+  createBoundRun,
+  insertDirectRunMessage,
   createRuntime,
   PANE_KEY,
   pointerCount,
   PTY_ID,
   TAB_ID,
   LEAF_ID,
-  WORKTREE_ID
+  WORKTREE_ID,
+  TERMINAL_HANDLE
 } from './orchestration-mailbox-notification-test-harness'
 
 type Host = 'headless' | 'window-empty-graph' | 'window-graph-unavailable'
@@ -59,6 +64,52 @@ describe('orchestration mailbox pointer for a terminal no pane shows', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('does not assign an earlier synchronized frame to a later command in the same read', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const { runtime } = createRuntime(db, { launchAgent: null, headless: true })
+    const write = vi.fn<(id: string, data: string) => boolean>(() => true)
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getSize: () => ({ cols: 120, rows: 40 }),
+      getForegroundProcess: async () => 'zsh'
+    })
+    const run = createBoundRun(db, 'coalesced predecessor frame')
+    await runtime.listTerminals()
+    runtime.terminalRunFacts.recordSpawnCommit({ id: PTY_ID })
+    // Freebuff 0.1.2's recorded initial alternate screen, at its recorded grid size.
+    const recording = readRuntimeFixture('freebuff-ready')
+    const readyFrame = recording.slice(recording.indexOf('\x1b[?1049h'))
+    try {
+      runtime.onPtyData(
+        PTY_ID,
+        `\x1b]133;C\x07\x1b]0;Freebuff: \x07${readyFrame}\x1b[?1049l\x1b]133;D;0\x07\x1b]133;A\x07\x1b]133;C\x07\x1b]0;claude\x07new invocation hook\r\n`,
+        Date.now()
+      )
+      const settled = vi.fn()
+      const wait = runtime.waitForTerminal(TERMINAL_HANDLE, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+      wait.then(settled, () => {})
+      insertDirectRunMessage(db, run.id, 'After current readiness')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(12_000)
+      expect(settled).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+      runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=claude-code\x07', Date.now())
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(wait).resolves.toMatchObject({ satisfied: true })
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+    } finally {
+      db.close()
+    }
   })
 
   it('points an already idle coordinator at Run mail', async () => {

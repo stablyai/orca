@@ -7,7 +7,7 @@ import type {
   AgentSubagentSnapshot,
   AgentSubagentState
 } from '../agent-status/contracts/agent-status-subagent-snapshot'
-import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status/contracts/agent-status-subagent-snapshot'
+import { boundedProgramStatusChildId } from './program-status-child-id'
 import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 import { foldMainAgentWithRowChildWork } from '../agent-hook-listener/state/agent-hook-row-child-work-fold'
 import {
@@ -37,19 +37,6 @@ function agentTypeForProgramStatusApp(app: string | undefined): string | undefin
   }
   // Why hasOwn: `app=constructor` must not resolve to an Object.prototype member.
   return Object.hasOwn(APP_TO_AGENT_TYPE, app) ? APP_TO_AGENT_TYPE[app] : app
-}
-
-/** A child id within the snapshot cap; long ids keep their leaf and a hash of the whole path. */
-function boundedChildId(id: string): string {
-  if (id.length <= AGENT_SUBAGENT_ID_MAX_LENGTH) {
-    return id
-  }
-  let hash = 0x811c9dc5
-  for (let index = 0; index < id.length; index += 1) {
-    hash = Math.imul(hash ^ id.charCodeAt(index), 0x01000193) >>> 0
-  }
-  const prefix = `${hash.toString(16).padStart(8, '0')}~`
-  return prefix + id.slice(-(AGENT_SUBAGENT_ID_MAX_LENGTH - prefix.length))
 }
 
 function blockedState(record: ProgramStatusRecord): 'waiting' | 'blocked' {
@@ -114,7 +101,10 @@ export function lapsedProgramStatusChildHold(
 type ProgramStatusProjector = {
   /** Return lifecycle payloads/root changes in chunk order (including unchanged store projections); facet is new, null when removed,
    * or absent when unchanged. */
-  process: (data: string) => {
+  process: (
+    data: string,
+    readinessBoundary?: number
+  ) => {
     payloads: ProgramStatusPayload[]
     readiness?: { payload: ParsedAgentStatusPayload | null; offset: number }
     rootChanges: ProgramStatusRootChange[]
@@ -135,6 +125,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
   // Set when the program ends; the next projection starts a new invocation.
   let invocationEnded = false
   let reportedSinceEnd = false
+  let rootReadinessCurrent = false
   const childStartedAt = new Map<string, number>()
 
   const projectRoot = (
@@ -183,7 +174,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
       if (record.id === null || state === null) {
         continue
       }
-      const id = boundedChildId(record.id)
+      const id = boundedProgramStatusChildId(record.id)
       live.add(id)
       const startedAt = childStartedAt.get(id) ?? at
       childStartedAt.set(id, startedAt)
@@ -271,7 +262,10 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
   }
 
   return {
-    process: (data) => {
+    process: (data, readinessBoundary = -1) => {
+      if (readinessBoundary >= 0) {
+        rootReadinessCurrent = false
+      }
       const events = scan(data)
       const payloads: ProgramStatusPayload[] = []
       const rootChanges: ProgramStatusRootChange[] = []
@@ -295,6 +289,11 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
             break
         }
         const ended = event.type !== 'report'
+        if (ended) {
+          rootReadinessCurrent = false
+        } else if (event.report.id === null) {
+          rootReadinessCurrent = event.report.state !== 'clear' && event.offset >= readinessBoundary
+        }
         const endsInvocation = ended && reportedSinceEnd
         if (endsInvocation) {
           // The kept done/error record is for display; the program itself no longer speaks.
@@ -321,9 +320,13 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
             payloads.push({ payload, offset: event.offset })
           }
         }
-        readiness = {
-          payload: !ended && records.root() ? latestProjection : null,
-          offset: event.offset
+        if (ended || (event.type === 'report' && event.report.id === null)) {
+          readiness = {
+            payload: rootReadinessCurrent ? latestProjection : null,
+            offset: event.offset
+          }
+        } else if (rootReadinessCurrent) {
+          readiness = { payload: latestProjection, offset: event.offset }
         }
         // After the ending event's own projection, so only the next report opens a new invocation.
         if (endsInvocation) {

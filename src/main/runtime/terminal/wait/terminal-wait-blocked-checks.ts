@@ -162,13 +162,17 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     this.waitBlockedCheckStateByPtyId.delete(ptyId)
   }
 
-  protected processAgentStatusOscForPty(ptyId: string, data: string): ProcessedAgentStatusChunk {
+  protected processAgentStatusOscForPty(
+    ptyId: string,
+    data: string,
+    readinessBoundary?: number
+  ): ProcessedAgentStatusChunk {
     let processor = this.agentStatusOscProcessorsByPtyId.get(ptyId)
     if (!processor) {
       processor = createTerminalAgentStatusProcessor()
       this.agentStatusOscProcessorsByPtyId.set(ptyId, processor)
     }
-    return processor(data)
+    return processor(data, readinessBoundary)
   }
 
   /** Emit the facts batched while applying one chunk/frame as a single

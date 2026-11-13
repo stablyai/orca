@@ -29,7 +29,8 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
   ): { cwd: string | null; cwdChanged: boolean }
   protected abstract processAgentStatusOscForPty(
     ptyId: string,
-    data: string
+    data: string,
+    readinessBoundary?: number
   ): ProcessedAgentStatusChunk
   protected abstract recordRecentPtyOutput(ptyId: string, data: string): void
   protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
@@ -39,7 +40,8 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     data: string,
     outputSequence: number,
     forwardQueryReplies?: boolean,
-    isCurrentAction?: () => boolean
+    isCurrentAction?: () => boolean,
+    actionBoundary?: number
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
@@ -106,7 +108,6 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
-    const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
     this.recordRecentPtyOutput(ptyId, data)
     // Use advertised dev-server URLs for workspace ports instead of kernel bind addresses.
     advertisedUrlWatcher.ingest(ptyId, data, at)
@@ -162,12 +163,15 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       this.scheduleWaitBlockedCheck(ptyId, normalized.text, at)
     }
 
+    const actionBoundary = pty?.commandPaint?.lastBoundaryEnd ?? -1
+    const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data, actionBoundary)
     this.trackHeadlessTerminalData(
       ptyId,
       data,
       outputSequence,
       forwardQueryReplies,
-      this.ptyForegroundAgent.captureGeneration(ptyId)
+      this.ptyForegroundAgent.captureGeneration(ptyId),
+      actionBoundary
     )
 
     for (const leaf of this.getLeavesForPty(ptyId)) {

@@ -8,7 +8,7 @@ import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { createTerminalWaitTailReader } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, type QuietForegroundLane, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
@@ -119,15 +119,16 @@ export class RuntimeTerminalIdlePolls {
     }
   }
 
-  private sample(entry: IdlePollEntry): IdlePollSample {
+  private sample(
+    entry: IdlePollEntry,
+    tail: ReturnType<typeof createTerminalWaitTailReader>
+  ): IdlePollSample {
     const { handle } = entry.waiter
     // PTY records mutate in place, so this captured reference remains live.
     const { pty } = entry
-    const readWaitText = () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     return {
       verdict: evaluateTuiIdle({
-        ...ptyTuiIdleEvidence(this.deps, pty, readWaitText),
+        ...ptyTuiIdleEvidence(this.deps, pty, tail.readText, tail.readBlockedReason),
         launchReadiness: entry.waiter.launchReadiness
       }),
       ptyId: pty.ptyId,
@@ -146,7 +147,8 @@ export class RuntimeTerminalIdlePolls {
     }
     let startedForegroundPoll = false
     try {
-      let sample = this.sample(entry)
+      const tail = createTerminalWaitTailReader(entry.pty)
+      let sample = this.sample(entry, tail)
       let { verdict } = sample
       const { ptyId } = sample
       const isCurrent = this.deps.captureGeneration?.(ptyId) ?? (() => true)
@@ -171,7 +173,7 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       if (screenRead) {
-        sample = this.sample(entry)
+        sample = this.sample(entry, tail)
         verdict = sample.verdict
         if (verdict.kind === 'ready-strong' || verdict.kind === 'blocked') {
           this.settle(
@@ -212,7 +214,7 @@ export class RuntimeTerminalIdlePolls {
         if (!this.entries.has(entry) || !isCurrent()) {
           return
         }
-        sample = this.sample(entry)
+        sample = this.sample(entry, tail)
         const latest = sample.verdict
         if (latest.kind === 'blocked') {
           this.settle(entry, sample.blocked(latest.reason))

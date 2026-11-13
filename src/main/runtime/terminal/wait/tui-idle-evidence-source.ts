@@ -2,6 +2,7 @@
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
@@ -125,7 +126,8 @@ function lazyWaitText(readWaitText: () => string): () => string {
 export function ptyTuiIdleEvidence(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
-  readWaitText: () => string
+  readWaitText: () => string,
+  readTailBlockedReason?: () => RuntimeTerminalWaitBlockedReason | null
 ): TuiIdleEvaluationInput {
   const waitText = lazyWaitText(readWaitText)
   const startup = source.startupObservation?.read(pty.ptyId)
@@ -141,7 +143,8 @@ export function ptyTuiIdleEvidence(
   const record = evidenceRecord(source, pty)
   return {
     record,
-    readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readTailBlockedReason:
+      readTailBlockedReason ?? (() => detectTerminalWaitBlockedReason(waitText())),
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' &&
         agent !== 'qoder-cn' &&

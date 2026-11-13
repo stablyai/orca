@@ -21,12 +21,16 @@ type ProgramStatusSideEffectScan = {
 
 /** Stateful per-PTY OSC 7501 reader for side effects: status payloads, activity and the facet. */
 export function createProgramStatusSideEffectScanner(): (
-  data: string
+  data: string,
+  readinessBoundary?: number
 ) => ProgramStatusSideEffectScan {
   const programStatus = createProgramStatusProjector()
   let lastActivity: AgentStatus | null = null
-  return (data) => {
-    const { payloads, rootChanges, facet, readiness } = programStatus.process(data)
+  return (data, readinessBoundary) => {
+    const { payloads, rootChanges, facet, readiness } = programStatus.process(
+      data,
+      readinessBoundary
+    )
     const activity: ProgramActivityChange[] = []
     for (const change of rootChanges) {
       const next = programStatusActivity(change.root)
@@ -60,7 +64,10 @@ function mergeInBandStatusPayloads(
 }
 
 /** Merge stripped OSC 9999 and retained OSC 7501 statuses for main’s side-effect scan. */
-export function createTerminalAgentStatusProcessor(): (data: string) => ProcessedAgentStatusChunk {
+export function createTerminalAgentStatusProcessor(): (
+  data: string,
+  readinessBoundary?: number
+) => ProcessedAgentStatusChunk {
   let rawStart = 0
   const stripped: { cleanOffset: number; rawEnd: number }[] = []
   let latestHook: ProcessedAgentStatusChunk['readinessStatus']
@@ -78,9 +85,20 @@ export function createTerminalAgentStatusProcessor(): (data: string) => Processe
     }
   })
   const scanProgramStatus = createProgramStatusSideEffectScanner()
-  return (data) => {
+  return (data, readinessBoundary = -1) => {
     const chunk = processAgentStatusOsc(data)
-    const scan = scanProgramStatus(chunk.cleanData)
+    let cleanBoundary = readinessBoundary
+    if (readinessBoundary >= 0) {
+      let delta = rawStart
+      for (const frame of stripped) {
+        if (frame.rawEnd > readinessBoundary) {
+          break
+        }
+        delta = frame.rawEnd - frame.cleanOffset
+      }
+      cleanBoundary -= delta
+    }
+    const scan = scanProgramStatus(chunk.cleanData, cleanBoundary)
     let readinessStatus = latestHook
     if (scan.readiness) {
       let delta = rawStart

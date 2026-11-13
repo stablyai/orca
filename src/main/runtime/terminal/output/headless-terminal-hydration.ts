@@ -225,7 +225,8 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     data: string,
     outputSequence: number,
     forwardQueryReplies = false,
-    isCurrentAction = this.ptyForegroundAgent.captureGeneration(ptyId)
+    isCurrentAction = this.ptyForegroundAgent.captureGeneration(ptyId),
+    actionBoundary = -1
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
@@ -248,13 +249,15 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           await state.emulator.write(escapeTail)
         }
       }
+      let frameEnd = 0
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
+        frameEnd += chunk.length
         await state.emulator.write(chunk, { forwardQueryReplies })
         const pty = this.ptysById.get(ptyId)
         if (!pty || this.headlessTerminals.get(ptyId) !== state) {
           continue
         }
-        if (!isCurrentAction()) {
+        if (frameEnd <= actionBoundary || !isCurrentAction()) {
           continue
         }
         const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
