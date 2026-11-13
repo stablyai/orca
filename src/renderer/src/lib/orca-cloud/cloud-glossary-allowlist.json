@@ -1,128 +1,128 @@
 [
   {
     "path": "src/renderer/src/components/cloud-environment/EnvironmentForm.tsx",
-    "line": 127,
     "term": "container",
+    "match": "Reads Conductor and Dev Container setup from a local project.",
     "reason": "Dev Containers spec name"
   },
   {
     "path": "src/renderer/src/components/settings/virtual-machines/runtimes/CloudVmSetupGuide.tsx",
-    "line": 20,
     "term": "VM",
+    "match": "Cloud VMs",
     "reason": "BYOC recipe VMs (experimental), not Orca Cloud"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmBuildFailureActions.tsx",
-    "line": 372,
     "term": "VM",
+    "match": "Delete VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmBuildFailureCard.tsx",
-    "line": 138,
     "term": "VM",
+    "match": "The VM is running until you choose.",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmDeleteConfirmDialog.tsx",
-    "line": 38,
     "term": "VM",
+    "match": "Delete this VM?",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmDeleteConfirmDialog.tsx",
-    "line": 49,
     "term": "VM",
+    "match": "The VM and anything on it are destroyed, and the workspace isn’t created.",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmDeleteConfirmDialog.tsx",
-    "line": 63,
     "term": "VM",
+    "match": "Delete VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-failure-copy.ts",
-    "line": 55,
     "term": "VM",
+    "match": "The VM is up, but some environment checks need attention",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-failure-copy.ts",
-    "line": 59,
     "term": "VM",
+    "match": "The VM is up, but {{count}} environment checks failed",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-failure-copy.ts",
-    "line": 62,
     "term": "VM",
+    "match": "The VM is up, but {{count}} environment check failed",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-recipe-failure-copy.ts",
-    "line": 15,
     "term": "VM",
+    "match": "The VM recipe failed",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-recipe-failure-copy.ts",
-    "line": 19,
     "term": "VM",
+    "match": "Your VM recipe stopped with an error before the VM was ready.",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-recipe-failure-copy.ts",
-    "line": 25,
     "term": "VM",
+    "match": "Couldn’t create the workspace on the VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-recipe-failure-copy.ts",
-    "line": 29,
     "term": "VM",
+    "match": "The VM started, but creating the workspace on it stopped with an error.",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-sheet-copy.ts",
-    "line": 10,
     "term": "VM",
+    "match": "Provision VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-sheet-copy.ts",
-    "line": 69,
     "term": "VM",
+    "match": "Building your VM workspace",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-sheet-copy.ts",
-    "line": 74,
     "term": "VM",
+    "match": "Your VM workspace is ready",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-sheet-copy.ts",
-    "line": 79,
     "term": "VM",
+    "match": "Your VM workspace needs attention",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-sheet-copy.ts",
-    "line": 84,
     "term": "VM",
+    "match": "Couldn’t build your VM workspace",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/orca-cloud/use-cloud-terminal-error-override.ts",
-    "line": 13,
     "term": "VM",
+    "match": "This workspace's VM is asleep",
     "reason": "match pattern for older builds' saved terminal errors; never rendered"
   },
   {
     "path": "src/renderer/src/components/orca-cloud/use-cloud-terminal-error-override.ts",
-    "line": 14,
     "term": "VM",
+    "match": "This workspace's VM could not wake up",
     "reason": "match pattern for older builds' saved terminal errors; never rendered"
   }
 ]

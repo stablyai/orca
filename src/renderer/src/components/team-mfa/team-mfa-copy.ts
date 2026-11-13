@@ -44,7 +44,12 @@ export function mfaUrgency(enforceAt: number, now: number, blocked: boolean): Te
 }
 
 /** "Acme requires MFA in 2 days": the title once the deadline is close. */
-export function mfaSoonTitle(teamName: string, enforceAt: number, now: number, t: Translate): string {
+export function mfaSoonTitle(
+  teamName: string,
+  enforceAt: number,
+  now: number,
+  t: Translate
+): string {
   const days = mfaDaysLeft(enforceAt, now)
   if (days <= 0) {
     return t('auto.components.teamMfa.soonTitleNow', '{{value0}} requires MFA now', {
