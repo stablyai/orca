@@ -2,6 +2,7 @@ import { CircleAlert, Copy, ExternalLink, TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { PasteCodeForm } from './AgentSignInPasteCodeForm'
 import type { AgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate'
@@ -172,24 +173,15 @@ export function AgentSignInCard({
       {view.step === 'paste' ? (
         <>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
+            <OpenExternalSplitButton
+              link={view.url}
               variant="outline"
               size="sm"
               onClick={() => actions.openLink(view.url)}
             >
               <ExternalLink />
               {t('agentSignIn.openPage', 'Open sign-in page')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => actions.copyText(view.url)}
-            >
-              <Copy />
-              {t('agentSignIn.copyLink', 'Copy link')}
-            </Button>
+            </OpenExternalSplitButton>
           </div>
           <PasteCodeForm
             submitting={view.submitting}
@@ -214,15 +206,15 @@ export function AgentSignInCard({
             {t('agentSignIn.copyCode', 'Copy code')}
           </Button>
           <span className="flex-1" />
-          <Button
-            type="button"
+          <OpenExternalSplitButton
+            link={view.url}
             variant="outline"
             size="sm"
             onClick={() => actions.openLink(view.url)}
           >
             <ExternalLink />
             {t('agentSignIn.openPageShort', 'Open page')}
-          </Button>
+          </OpenExternalSplitButton>
         </div>
       ) : null}
 
@@ -244,24 +236,15 @@ export function AgentSignInCard({
 
       {view.step === 'signed' ? null : view.step === 'waiting' ? (
         <div className="flex items-center gap-1">
-          <Button
-            type="button"
+          <OpenExternalSplitButton
+            link={view.url}
             variant="ghost"
             size="xs"
             onClick={() => actions.openLink(view.url)}
           >
             <ExternalLink />
             {t('agentSignIn.openAgain', 'Open again')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => actions.copyText(view.url)}
-          >
-            <Copy />
-            {t('agentSignIn.copyLink', 'Copy link')}
-          </Button>
+          </OpenExternalSplitButton>
           <span className="flex-1" />
           {cancel}
         </div>

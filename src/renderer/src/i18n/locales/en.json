@@ -23880,7 +23880,6 @@
         "switchTeam": "Switch team",
         "switchFirst": "Switch to {{team}} first",
         "switchTeamFirst": "Switch to a team first",
-        "linkCopied": "Setup link copied. Open it in the browser you use for Orca.",
         "error": {
           "timedOut": "Setup didn’t finish in your browser. Your prompt is still here.",
           "checkoutCanceled": "Checkout canceled. Nothing was charged.",
@@ -23931,6 +23930,7 @@
         "privateLabel": "Private",
         "menuGroup": "Orca Cloud",
         "addRepositoryMenu": "Add a GitHub repository…",
+        "copyAddRepositoryLink": "Copy GitHub link",
         "waitingForGitHubAccess": "Waiting for GitHub access…",
         "noNewRepositoryYet": "No new repository yet.",
         "checkAgain": "Check again",
@@ -27375,7 +27375,6 @@
     "pasteBody": "Sign in on the page, then paste the code it shows.",
     "deviceBody": "Open the page and enter this code.",
     "openPage": "Open sign-in page",
-    "copyLink": "Copy link",
     "copyCode": "Copy code",
     "openPageShort": "Open page",
     "sending": "Starting {{agent}} and sending",
@@ -28980,7 +28979,6 @@
       "title": "Checking your Orca Cloud account…"
     },
     "continueInBrowser": "Continue in browser",
-    "copyLink": "Copy link",
     "done": {
       "lead": "Starting your cloud workspace…",
       "title": "All set",
@@ -29345,5 +29343,11 @@
   "cloudAgentConfig": {
     "title": "Skills, agents & memory",
     "autoSyncHint": "Copies your Claude and Codex skills, commands, subagents, output styles and memory you’ve turned on into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten."
+  },
+  "openExternal": {
+    "copyLink": "Copy link",
+    "moreOptions": "More link options",
+    "copyLinkFailed": "Couldn’t copy the link.",
+    "linkCopied": "Link copied"
   }
 }

@@ -21,6 +21,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { Translate } from '@/i18n/use-translate'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
+import { gitHubInstallLinkSource } from '@/lib/orca-cloud/github-link-sources'
 import type { VmBuildFailure } from './vm-build-failure'
 
 export type VmBuildFailureActions = {
@@ -52,6 +55,8 @@ type Action = {
   pending?: boolean
   /** Outline even when first: a way around the problem, not its fix. */
   secondary?: boolean
+  /** Opens this page in the browser: a chevron beside it offers "Copy link". */
+  link?: ExternalLinkSource
 }
 
 /** At most two visible actions; the rest sit in a More menu so the way forward stays obvious. */
@@ -245,7 +250,9 @@ function failureActions(
                 ),
             icon: connectingGitHub ? <Loader2 className="animate-spin" /> : <Github />,
             onClick: actions.onConnectGitHub,
-            pending: connectingGitHub
+            pending: connectingGitHub,
+            // The same install page connectOrcaCloudGitHub opens (no repository preselected).
+            link: gitHubInstallLinkSource()
           },
           tryAgain
         ],
@@ -311,21 +318,37 @@ export function FailureActionRow({
   const destroys = vmKept
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {primary.map((action, index) => (
-        <Button
-          key={action.key}
-          type="button"
-          size="sm"
-          variant={index === 0 && !action.secondary ? 'default' : 'outline'}
-          onClick={action.pending ? undefined : action.onClick}
-          disabled={action.disabled}
-          aria-disabled={action.pending || undefined}
-          aria-busy={action.pending || undefined}
-        >
-          {action.icon}
-          {action.label}
-        </Button>
-      ))}
+      {primary.map((action, index) =>
+        action.link ? (
+          <OpenExternalSplitButton
+            key={action.key}
+            size="sm"
+            variant={index === 0 && !action.secondary ? 'default' : 'outline'}
+            link={action.link}
+            onClick={() => (action.pending ? undefined : action.onClick())}
+            disabled={action.disabled}
+            aria-disabled={action.pending || undefined}
+            aria-busy={action.pending || undefined}
+          >
+            {action.icon}
+            {action.label}
+          </OpenExternalSplitButton>
+        ) : (
+          <Button
+            key={action.key}
+            type="button"
+            size="sm"
+            variant={index === 0 && !action.secondary ? 'default' : 'outline'}
+            onClick={action.pending ? undefined : action.onClick}
+            disabled={action.disabled}
+            aria-disabled={action.pending || undefined}
+            aria-busy={action.pending || undefined}
+          >
+            {action.icon}
+            {action.label}
+          </Button>
+        )
+      )}
       {more.length > 0 ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>

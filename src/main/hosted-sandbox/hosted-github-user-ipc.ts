@@ -9,6 +9,7 @@ import { failure } from './hosted-workspace-runtime'
 export const HOSTED_GITHUB_USER_CHANNELS = [
   CH.getGitHubUser,
   CH.connectGitHubUser,
+  CH.gitHubUserConnectLink,
   CH.disconnectGitHubUser
 ] as const
 
@@ -26,15 +27,28 @@ export function registerHostedGitHubUserHandlers(
     }
   })
 
+  // Only ever hand out a GitHub page, whatever the response says.
+  const mintAuthorizeUrl = async (): Promise<string> => {
+    const { authorizeUrl } = await client.connectGitHubUser()
+    if (new URL(authorizeUrl).origin !== 'https://github.com') {
+      throw new Error('Unexpected GitHub connect URL.')
+    }
+    return authorizeUrl
+  }
+
   ipcMain.handle(CH.connectGitHubUser, async () => {
     try {
-      const { authorizeUrl } = await client.connectGitHubUser()
-      // Only ever hand the browser a GitHub page, whatever the response says.
-      if (new URL(authorizeUrl).origin !== 'https://github.com') {
-        return { ok: false, code: 'failed', message: 'Unexpected GitHub connect URL.' }
-      }
-      await shell.openExternal(authorizeUrl)
+      await shell.openExternal(await mintAuthorizeUrl())
       return { ok: true, value: null }
+    } catch (error) {
+      return failure(error)
+    }
+  })
+
+  // "Copy link": the same OAuth page, for another browser or profile; nothing opens here.
+  ipcMain.handle(CH.gitHubUserConnectLink, async () => {
+    try {
+      return { ok: true, value: await mintAuthorizeUrl() }
     } catch (error) {
       return failure(error)
     }

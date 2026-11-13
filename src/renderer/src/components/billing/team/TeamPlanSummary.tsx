@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
 import { PaymentIssueNotice } from '../PaymentIssueNotice'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import { billingPortalLink } from '../billing-link'
 import { PlanStatusBadge } from '../PlanStatusBadge'
 import { formatCents, perSeatMonthlyCents } from '../plans/plans-pricing'
 import { seatCountLabel } from './team-copy'
@@ -151,16 +153,16 @@ export function TeamSeatsCard({
             <Button type="button" variant="outline" size="sm" onClick={onSeePlans}>
               {t('auto.components.billing.team.usage', 'Usage & plan')}
             </Button>
-            <Button
-              type="button"
+            <OpenExternalSplitButton
               variant="outline"
               size="sm"
               disabled={busy}
+              link={billingPortalLink}
               onClick={onManageBilling}
             >
               {t('auto.components.billing.manageBilling', 'Manage billing')}
               <ExternalLink />
-            </Button>
+            </OpenExternalSplitButton>
           </>
         ) : null}
       </div>

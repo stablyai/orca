@@ -3,6 +3,7 @@ import { Circle, CircleCheck, ExternalLink, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import {
   precheckHostAgentSignIn,
   readHostAgentSignInReport,
@@ -132,10 +133,15 @@ export function VmBuildAgentSignInRowView({
     meta = cardStep ? null : (
       <>
         {view?.step === 'waiting' ? (
-          <Button type="button" variant="ghost" size="xs" onClick={() => openSignInPage(view.url)}>
+          <OpenExternalSplitButton
+            link={view.url}
+            variant="ghost"
+            size="xs"
+            onClick={() => openSignInPage(view.url)}
+          >
             <ExternalLink />
             {t('agentSignIn.openAgain', 'Open again')}
-          </Button>
+          </OpenExternalSplitButton>
         ) : null}
         <Button type="button" variant="ghost" size="xs" onClick={actions.cancel}>
           {t('agentSignIn.cancel', 'Cancel')}

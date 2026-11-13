@@ -42,6 +42,8 @@ function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorks
     connectGitHub: vi.fn(async () => ok(null)),
     getGitHubUser: vi.fn(async () => ok({ connected: false as const })),
     connectGitHubUser: vi.fn(async () => ok(null)),
+    gitHubInstallLink: vi.fn(async () => ok('https://github.com/apps/x/installations/new')),
+    gitHubUserConnectLink: vi.fn(async () => ok('https://github.com/login/oauth/authorize')),
     disconnectGitHubUser: vi.fn(async () => ok({ connected: false as const })),
     getRepoAccess: vi.fn(async () =>
       ok({ access: 'granted' as const, owner: 'a', repo: 'https://github.com/a/b' })
