@@ -12,6 +12,7 @@ import {
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import {
   usesInstalledAgentModelCatalog,
+  unpickedFastModeIsOff,
   usesModelSpecificAcpEfforts
 } from './agent-model-catalog-ownership'
 import {
@@ -156,7 +157,7 @@ export function applyStructuredAgentSessionModelCatalog(
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
       : {
-          fastMode: 'policy',
+          ...(unpickedFastModeIsOff(state.record.agent) ? { fastMode: 'policy' as const } : {}),
           ...Object.fromEntries(
             Object.entries(state.acceptedInputSources ?? {}).filter(
               ([, source]) => source !== 'policy'
@@ -262,6 +263,12 @@ export function commitStructuredAgentSessionOption(
   }
   // Keep other picks after a model change; the host reconciles independent values.
   state.record.values[id] = { value: decoded, source: 'dispatched' }
+  // An unpicked reported Fast was the old model's; the new one runs its own default.
+  const fast = state.record.values.fastMode
+  const fastUnpicked = !state.acceptedInputSources?.fastMode && fast?.source === 'reported'
+  if (id === 'model' && fastUnpicked && !unpickedFastModeIsOff(state.record.agent)) {
+    delete state.record.values.fastMode
+  }
   return {
     ...state,
     acceptedInputSources:

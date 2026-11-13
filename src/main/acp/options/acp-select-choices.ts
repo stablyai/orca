@@ -22,3 +22,18 @@ export function acpSelectChoices(option: SelectOption): SessionConfigSelectOptio
   }
   return choices
 }
+
+/** An agent may list an on/off thinking switch beside its effort levels; effort is the longer menu. */
+export function acpEffortOption(options: readonly SessionConfigOption[]): SelectOption | null {
+  let effort: SelectOption | null = null
+  for (const option of options) {
+    if (
+      option.category === 'thought_level' &&
+      option.type === 'select' &&
+      (!effort || acpSelectChoices(option).length > acpSelectChoices(effort).length)
+    ) {
+      effort = option
+    }
+  }
+  return effort
+}

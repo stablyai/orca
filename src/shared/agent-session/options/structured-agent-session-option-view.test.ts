@@ -189,6 +189,73 @@ describe('a Claude chat on the model id an older host lists by alias', () => {
 })
 
 describe('what a send carries', () => {
+  it("shows the picked Cursor model's own Fast, not the running model's, unless Fast was chosen", () => {
+    const seed = structuredAgentSessionSeedCatalog('cursor')
+    const row = (id: string, defaultFastMode: boolean) => ({
+      id,
+      label: id,
+      isDefault: false,
+      efforts: [],
+      supportsFastMode: true,
+      defaultFastMode
+    })
+    const running = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('cursor', seed),
+      seed,
+      {
+        models: [row('composer-2.5', true), row('claude-opus-4-8', false)],
+        fastModeSupport: { supported: true },
+        current: { model: 'composer-2.5', fastMode: true, confirmed: ['model', 'fastMode'] }
+      }
+    )
+    const picked = commitStructuredAgentSessionOption(running, 'model', 'claude-opus-4-8')
+    expect(
+      structuredAgentSessionOptionSnapshot(picked).find((option) => option.id === 'fastMode')?.kind
+    ).toMatchObject({ type: 'boolean', currentValue: false })
+    const saved = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('cursor', seed),
+      seed,
+      {
+        models: [row('composer-2.5', true), row('claude-opus-4-8', false)],
+        fastModeSupport: { supported: true },
+        current: {
+          model: 'composer-2.5',
+          fastMode: true,
+          confirmed: ['model', 'fastMode'],
+          acceptedInputSources: { model: 'saved', fastMode: 'saved' }
+        }
+      }
+    )
+    expect(
+      structuredAgentSessionMessageSelection(
+        commitStructuredAgentSessionOption(saved, 'model', 'claude-opus-4-8')
+      )
+    ).toMatchObject({ model: 'claude-opus-4-8', fastMode: 'true' })
+  })
+
+  it("shows and keeps a Cursor model's own Fast default until the person picks Fast", () => {
+    const seed = structuredAgentSessionSeedCatalog('cursor')
+    const composer = {
+      id: 'composer-2.5',
+      label: 'Composer 2.5',
+      isDefault: true,
+      efforts: [],
+      supportsFastMode: true,
+      defaultFastMode: true
+    }
+    const listed = applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('cursor', seed),
+      seed,
+      { origin: 'probe', fetchedAt: 1, models: [composer], fastModeSupport: { supported: true } },
+      { newLaunch: true }
+    )
+    const picked = commitStructuredAgentSessionOption(listed, 'model', 'composer-2.5')
+    expect(structuredAgentSessionMessageSelection(picked)).toEqual({ model: 'composer-2.5' })
+    expect(
+      structuredAgentSessionOptionSnapshot(picked).find((option) => option.id === 'fastMode')?.kind
+    ).toMatchObject({ type: 'boolean', currentValue: true })
+  })
+
   it('keeps a provisional Codex effort out of capture across a reply and catalog refresh', () => {
     const catalog: AgentSessionModelCatalogResult = {
       origin: 'probe',
