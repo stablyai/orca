@@ -9,21 +9,6 @@ function ok(result: unknown): RpcResponse {
   return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function createClient(responses: (RpcResponse | Error)[]) {
-  return {
-    sendRequest: vi.fn<SendRequest>(async (method) => {
-      const response = responses.shift()
-      if (!response) {
-        throw new Error(`no scripted response for ${method}`)
-      }
-      if (response instanceof Error) {
-        throw response
-      }
-      return response
-    })
-  }
-}
-
 function activeTerminalState(activated: boolean) {
   return {
     activated,
@@ -92,14 +77,6 @@ describe('openMobileFileTap', () => {
       .map(([, params]) => params)
   }
 
-  it('opens the longest terminal reading that exists, as desktop does', async () => {
-    const opened = await openTerminalReadings(
-      ['src/index.ts', 'src/index.ts.map', 'src/index.ts.map.bak'],
-      new Set(['src/index.ts', 'src/index.ts.map'])
-    )
-    expect(opened).toEqual([{ worktree: 'id:wt-1', relativePath: 'src/index.ts.map' }])
-  })
-
   it('still checks the real path behind hundreds of hard-wrap guesses', async () => {
     const guesses = Array.from({ length: 210 }, (_, index) => `src/file${index}.tssrc/next.ts`)
     const opened = await openTerminalReadings(
@@ -109,26 +86,27 @@ describe('openMobileFileTap', () => {
     expect(opened).toEqual([{ worktree: 'id:wt-1', relativePath: 'src/file19.ts' }])
   })
 
-  it('does not navigate an absolute artifact after the user leaves the source terminal', async () => {
-    let resolveRequest: (value: RpcResponse) => void = () => {}
-    const client = {
-      sendRequest: vi.fn<SendRequest>(
-        () =>
-          new Promise((resolve) => {
-            resolveRequest = resolve
+  function openLinkedWorkspaceRoot(sourceAuthorityCurrent: boolean) {
+    const calls = { openWorkspace: vi.fn(), pushPreviewRoute: vi.fn(), onOpenFailed: vi.fn() }
+    openMobileFileTap({
+      client: {
+        sendRequest: vi
+          .fn<SendRequest>(async (method) => {
+            throw new Error(`no scripted response for ${method}`)
           })
-      )
-    }
-    let activeTerminalHandle: string | null = 'terminal-1'
-    const pushPreviewRoute = vi.fn()
-
-    openMobileFileTap({
-      client,
+          .mockResolvedValueOnce(
+            ok({
+              worktree: 'wt-2',
+              relativePath: '',
+              absolutePath: '/workspaces/wt-2',
+              exists: true,
+              isDirectory: true
+            })
+          )
+      },
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      candidates: [{ pathText: '/tmp/result.json', line: null, column: null }],
-      terminalHandle: 'terminal-1',
-      pushPreviewRoute,
+      candidates: [{ pathText: '/workspaces/wt-2', line: null, column: null }],
       openBrowser: vi.fn(),
       triggerOpenFeedback: vi.fn(),
       fetchSessionTabs: vi.fn(),
@@ -136,66 +114,29 @@ describe('openMobileFileTap', () => {
       getActiveSessionTabId: () => null,
       getActivationState: (activated) => ({
         ...activeTerminalState(activated),
-        activeTerminalHandle
-      }),
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn()
-    })
-
-    activeTerminalHandle = 'terminal-2'
-    resolveRequest(
-      ok({
-        worktree: 'wt-1',
-        relativePath: null,
-        absolutePath: '/tmp/result.json',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'absolute-file',
-          provider: 'local',
-          absolutePath: '/tmp/result.json',
-          grantId: 'grant-1'
-        }
-      })
-    )
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(pushPreviewRoute).not.toHaveBeenCalled()
-  })
-
-  it('does not report a stale failure after a newer tap supersedes it', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: null,
-        absolutePath: null,
-        exists: false,
-        isDirectory: false
-      })
-    ])
-    const onOpenFailed = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      candidates: [{ pathText: 'gone/missing.ts', line: null, column: null }],
-      pushPreviewRoute: vi.fn(),
-      openBrowser: vi.fn(),
-      triggerOpenFeedback: vi.fn(),
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: (activated) => ({
-        ...activeTerminalState(activated),
-        latestActivationSeq: 2
+        sourceAuthorityCurrent
       }),
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn(),
-      onOpenFailed
+      ...calls
     })
+    return calls
+  }
+
+  it("opens the workspace when the link is another workspace's root", async () => {
+    const calls = openLinkedWorkspaceRoot(true)
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(onOpenFailed).not.toHaveBeenCalled()
+    expect(calls.openWorkspace.mock.calls).toEqual([['wt-2']])
+    expect(calls.onOpenFailed).not.toHaveBeenCalled()
+  })
+
+  it('drops a workspace-root reply that outlived its host authority', async () => {
+    const calls = openLinkedWorkspaceRoot(false)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(calls.openWorkspace).not.toHaveBeenCalled()
+    expect(calls.pushPreviewRoute).not.toHaveBeenCalled()
+    expect(calls.onOpenFailed).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,7 @@
 import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { Label } from '../../ui/label'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { PR_CREATION_DEFAULTS_SETTING_ID } from './commit-message-ai-search'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -78,6 +79,7 @@ export function HostedReviewCreationDefaults({
   return (
     <SearchableSetting
       key="pr-creation-defaults"
+      id={PR_CREATION_DEFAULTS_SETTING_ID}
       title={t(
         'auto.components.settings.CommitMessageAiPane.2dafc7646e',
         'Hosted-review creation defaults'

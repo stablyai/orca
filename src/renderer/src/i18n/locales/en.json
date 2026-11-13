@@ -1423,6 +1423,17 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "search": {
+      "clear": "Clear search",
+      "results": "Settings search results",
+      "noResults": "No settings match “{{value0}}”",
+      "moreResults": "{{value0}} more · keep typing to narrow"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "Clean up dictated text before it lands."
+      }
     }
   },
   "menu": {
@@ -8372,8 +8383,6 @@
             "df205a675e": "Tint strength",
             "ba1d9a0607": "Sidebar tint"
           },
-          "interfaceDefaultFont": "Default font",
-          "terminalDefaultFont": "Default font",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Sidebar, status bar, and file explorer",
@@ -9306,16 +9315,12 @@
           "5426ecbdcb": "Local scripts will not run",
           "95a0411b3e": "template",
           "175daba180": "Example",
-          "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
-          "56f9a4a1d0": "Using `orca.yaml`",
           "623e0c9f31": "`orca.yaml` could not be parsed",
-          "5a67e4793d": "No `orca.yaml` detected",
           "07ba35bc68": "Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.",
           "787ca433ef": "Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.",
           "ecc73d9125": "Compare your file against the working template below and copy that shape if needed.",
           "0cc712b823": "The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.",
           "aba825233f": "The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.",
-          "ca424ff135": "Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.",
           "8bfe65fc60": "Use local commands",
           "8d6c56bff8": "Run both",
           "0fa21e19ec": "Name of the workspace, usually based on the branch name.",
@@ -9358,7 +9363,11 @@
           "da00f141c2": "Custom GitHub issue command",
           "88c6d1e54a": "Command source",
           "01bdba296f": "Worktree hooks",
-          "1ecf0b115a": "Setup script"
+          "1ecf0b115a": "Setup script",
+          "yamlDetected": "<yaml>orca.yaml</yaml> detected",
+          "yamlNotDetected": "No <yaml>orca.yaml</yaml> detected",
+          "yamlNotDetectedDescription": "Add one to share scripts with your team.",
+          "copyTemplate": "Copy template"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -9719,7 +9728,6 @@
           "6503182299": "Onboarding checklist",
           "82db1b7de4": "Onboarding checklist, {{value0}} of {{value1}} done. Show setup guide.",
           "df38d612b7": "No projects added yet.",
-          "3e483e256b": "No matching project settings.",
           "progressComplete": "{{value0}}/{{value1}} complete"
         },
         "ShortcutFilterRail": {
@@ -12053,7 +12061,10 @@
               "shortcutDescription": "The key that starts dictation.",
               "shortcutKeyword": "keyboard",
               "keepLoadedTitle": "Keep model loaded",
-              "gpuKeyword": "graphics card"
+              "gpuKeyword": "graphics card",
+              "cleanupDescription": "Fix punctuation, numbers and spoken corrections with your agent before text lands.",
+              "cleanupKeyword": "correction word",
+              "cleanupScratchKeyword": "scratch that"
             }
           }
         },
@@ -14797,6 +14808,11 @@
             "locallyResolvedConflictOfKind": "Conflict resolved locally ({{kind}})",
             "locallyResolvedConflict": "Conflict resolved locally",
             "pushesToForkTarget": "Pushes to fork {{target}}",
+            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
+            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
+            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
+            "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
+            "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",
             "abortMergeConfirmTitle": "Abort merge?",
             "abortRebaseConfirmDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
@@ -17426,7 +17442,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Remove link",
           "cdfe166f6f": "Edit link",
-          "bfc813e909": "Open link",
           "7b0b945fdc": "Paste or type a link…",
           "copyLink": "Copy link"
         },
@@ -18558,7 +18573,8 @@
           "missedRunGrace": "Missed-run grace",
           "execution": "Execution",
           "notRunYet": "Not run yet",
-          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} run reported",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported",
           "createdBy": "Created by",
           "createdByPluginTitle": "Plugin {{plugin}}",
           "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
@@ -21267,6 +21283,9 @@
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
       },
+      "signIn": {
+        "title": "Sign in to {{agent}} to start chatting"
+      },
       "claudeSignIn": {
         "signingIn": "Signing in…"
       },
@@ -21898,7 +21917,11 @@
       "TerminalContextMenu": {
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
-        "copySessionIdError": "Unable to copy session ID"
+        "copySessionIdError": "Unable to copy session ID",
+        "copyOrcaSessionId": "Copy Orca Session ID",
+        "orcaSessionIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
+        "orcaSessionIdCopied": "Orca session ID copied",
+        "orcaSessionIdCopyFailed": "Unable to copy Orca session ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
@@ -22070,6 +22093,7 @@
           "about": {
             "parakeetV3": "Fast. {{languages}} European languages.",
             "parakeetV2": "Fast. English only, and the most accurate at it.",
+            "parakeetUnifiedEn": "English only. Words appear as you speak.",
             "whisperTiny": "Smallest download. Good for trying dictation out.",
             "whisperTurbo": "Most languages, about 100. Slow without a GPU.",
             "senseVoice": "Fast. For Chinese, Japanese and Korean.",
@@ -22108,7 +22132,13 @@
           "listening": "{{model}} is listening too…",
           "heardLabel": "{{model}} heard",
           "heardNothing": "No words. Try speaking louder.",
-          "heardFailed": "{{model}} couldn’t transcribe the recording."
+          "heardFailed": "{{model}} couldn’t transcribe the recording.",
+          "cleaningUp": "Cleaning up…",
+          "tryCleanup": "Try cleanup",
+          "cleanupFailed": "Cleanup failed: {{reason}}",
+          "cleanupTimedOut": "Cleanup took too long.",
+          "cleanupOff": "AI cleanup is off.",
+          "afterCleanup": "After cleanup · {{agent}}, {{model}} · {{seconds}} s"
         },
         "silenceStop": {
           "off": "Off",
@@ -22141,6 +22171,44 @@
         },
         "gpu": {
           "description": "Turn off if dictation freezes your computer."
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "{{company}}, through {{agent}} on this computer. Counts toward your {{plan}} plan.",
+            "goesToAgent": "Wherever {{agent}} on this computer is set up to send prompts.",
+            "sentLabel": "Sent",
+            "sent": "The dictated text, your vocabulary and your instructions.",
+            "notSentLabel": "Not sent",
+            "notSent": "Audio, files, or what’s on screen.",
+            "goesToLabel": "Goes to",
+            "waitLabel": "Wait",
+            "wait": "Text lands a few seconds later.",
+            "title": "Turn on AI cleanup?",
+            "description": "After each dictation, Orca sends the text to {{agent}} to tidy it before it lands.",
+            "cancel": "Cancel",
+            "confirm": "Turn on"
+          },
+          "instructions": {
+            "label": "Instructions",
+            "custom": "Your own instructions.",
+            "builtIn": "Built-in: fix punctuation, numbers and corrections. Keep my wording.",
+            "edit": "Edit",
+            "emptyHint": "Leave empty for the built-in ones.",
+            "reset": "Reset",
+            "cancel": "Cancel",
+            "save": "Save"
+          },
+          "saveFailed": "Could not save AI cleanup.",
+          "noAgent": "No agent can run AI cleanup. Pick one below.",
+          "title": "Cleanup",
+          "label": "AI cleanup",
+          "description": "Fixes punctuation, numbers and spoken corrections before text lands. Sends the text to {{agent}}, never audio.",
+          "anAgent": "an AI agent",
+          "agent": "Agent and model",
+          "agentDescription": "Runs on this computer. A small, fast model keeps the wait short.",
+          "correctionWord": "Correction word",
+          "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
+          "correctionWordOff": "None"
         }
       },
       "repositoryHooks": {
@@ -22420,7 +22488,16 @@
       "notWritableSelection": "The {{target}} agent did not accept the selection."
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
+      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence",
+      "cleanupNotice": {
+        "timedOut": "Cleanup took too long. Inserted as heard.",
+        "failed": "Cleanup failed. Inserted as heard.",
+        "dismiss": "Dismiss"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "Cleaning up…",
+        "skipCleanup": "Skip cleanup and insert as heard"
+      }
     }
   },
   "notch": {
@@ -22829,7 +22906,10 @@
         "kimiProviderLimited": "Kimi reached a provider limit or the provider is busy. Wait before retrying or reduce request frequency.",
         "kimiContextOverflow": "Kimi ran out of context. Shorten the prompt or start a new session, then retry.",
         "kimiConfigInvalid": "Kimi has invalid configuration. Check the model and provider configuration on the execution host before retrying.",
-        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying."
+        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying.",
+        "commandTemplateEmptyDictationCleanup": "Command template is empty for dictation cleanup.",
+        "dictationCleanupAgentUnsupported": "Choose a supported agent for AI cleanup in Settings -> Voice -> Cleanup. Supported agents: {{agents}}, or Custom command.",
+        "agentCannotGenerateDictationCleanup": "Agent \"{{agent}}\" does not support dictation cleanup. Supported agents: {{agents}}, or Custom command."
       },
       "enableSourceControlAi": "Enable Source Control AI in Settings -> Git.",
       "chooseBaseBranch": "Choose a base branch before generating.",
@@ -23393,6 +23473,7 @@
       "location": "Location",
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
+      "signInEllipsis": "Sign in…",
       "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
       "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
       "loadFailed": "Couldn't load agy accounts",

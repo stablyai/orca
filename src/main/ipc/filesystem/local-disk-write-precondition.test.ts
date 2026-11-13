@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
-import { createLocalFilesystemProvider } from '../../providers/local-filesystem-provider'
+import { createLocalFilesystemProvider } from '../../providers/filesystem/local-provider'
 import type * as LocalRegularFileRead from './local-regular-file-read'
 import type * as NodeFsPromises from 'node:fs/promises'
 

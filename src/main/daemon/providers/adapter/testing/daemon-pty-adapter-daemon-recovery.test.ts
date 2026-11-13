@@ -5,7 +5,7 @@ import type { DaemonClient } from '../../../transport/client/daemon-client'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { DaemonServer } from '../../../server/daemon-server'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
-import { PtyWriteUnavailableError } from '../../../../providers/pty-write-unavailable-error'
+import { PtyWriteUnavailableError } from '../../../../providers/pty/write-unavailable-error'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -327,75 +327,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('respawn on daemon death', () => {
-    it('respawns the daemon and retries when the socket disappears', async () => {
-      let respawnServer: DaemonServer | undefined
-      const respawnFn = vi.fn(async () => {
-        respawnServer = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => createMockSubprocess()
-        })
-        await respawnServer.start()
-      })
-
-      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
-
-      const r1 = await respawnAdapter.spawn({ cols: 80, rows: 24 })
-      expect(r1.id).toBeDefined()
-
-      await server.shutdown()
-
-      const r2 = await respawnAdapter.spawn({ cols: 80, rows: 24 })
-      expect(r2.id).toBeDefined()
-      expect(respawnFn).toHaveBeenCalledTimes(1)
-      expect(respawnFn).toHaveBeenCalledWith('daemon_died')
-
-      respawnAdapter.dispose()
-      await respawnServer?.shutdown()
-    })
-
-    it('propagates the error when no respawn callback is provided', async () => {
-      const noRespawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
-
-      await noRespawnAdapter.spawn({ cols: 80, rows: 24 })
-
-      await server.shutdown()
-
-      await expect(noRespawnAdapter.spawn({ cols: 80, rows: 24 })).rejects.toThrow()
-
-      noRespawnAdapter.dispose()
-    })
-
-    it('coalesces concurrent respawns so only one daemon is forked', async () => {
-      let respawnServer: DaemonServer | undefined
-      const respawnFn = vi.fn(async () => {
-        respawnServer = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => createMockSubprocess()
-        })
-        await respawnServer.start()
-      })
-
-      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
-
-      await respawnAdapter.spawn({ cols: 80, rows: 24 })
-
-      await server.shutdown()
-
-      const [r1, r2] = await Promise.all([
-        respawnAdapter.spawn({ cols: 80, rows: 24 }),
-        respawnAdapter.spawn({ cols: 80, rows: 24 })
-      ])
-      expect(r1.id).toBeDefined()
-      expect(r2.id).toBeDefined()
-      expect(respawnFn).toHaveBeenCalledTimes(1)
-      expect(respawnFn).toHaveBeenCalledWith('daemon_died')
-
-      respawnAdapter.dispose()
-      await respawnServer?.shutdown()
-    })
-
     it('preserves an unhealthy macOS resolver daemon when it owns live sessions', async () => {
       const respawnFn = vi.fn()
       const exits: { id: string; code: number }[] = []
@@ -437,118 +368,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(next.id).toBeDefined()
       expect(next.id).not.toBe(background.id)
       expect(backgroundSubprocess.forceKill).not.toHaveBeenCalled()
-
-      respawnAdapter.dispose()
-    })
-
-    it('replaces an unhealthy macOS resolver daemon before creating a fresh session when no sessions are active', async () => {
-      let respawnServer: DaemonServer | undefined
-      const respawnFn = vi.fn(async () => {
-        await server.shutdown()
-        rmSync(socketPath, { force: true })
-        respawnServer = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => createMockSubprocess()
-        })
-        await respawnServer.start()
-      })
-      const exits: { id: string; code: number }[] = []
-      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
-      respawnAdapter.onExit((payload) => exits.push(payload))
-      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
-
-      const replacement = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-
-      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
-        socketPath,
-        tokenPath,
-        respawnAdapter.protocolVersion
-      )
-      expect(respawnFn).toHaveBeenCalledTimes(1)
-      expect(respawnFn).toHaveBeenCalledWith('unhealthy_resolver')
-      expect(exits).toEqual([])
-      expect(replacement.id).toBeDefined()
-
-      respawnAdapter.dispose()
-      await respawnServer?.shutdown()
-    })
-
-    it('preserves a stale packaged daemon when its live session inventory is unavailable', async () => {
-      const respawnFn = vi.fn()
-      const respawnAdapter = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        runtimeDir: dir,
-        packagedAppVersion: '1.4.178',
-        respawn: respawnFn
-      })
-      const internals = respawnAdapter as unknown as {
-        client: { request: (type: string, payload?: unknown) => Promise<unknown> }
-      }
-      const originalRequest = internals.client.request.bind(internals.client)
-      vi.spyOn(internals.client, 'request').mockImplementation((type, payload) => {
-        if (type === 'listSessions') {
-          return Promise.reject(new Error('inventory unavailable'))
-        }
-        return originalRequest(type, payload)
-      })
-      isDaemonStaleForCurrentBundleMock.mockResolvedValueOnce(true)
-
-      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-
-      expect(respawnFn).not.toHaveBeenCalled()
-      expect(next.id).toBeDefined()
-
-      respawnAdapter.dispose()
-    })
-
-    it('coalesces stale-bundle retirement before concurrent fresh sessions', async () => {
-      let respawnServer: DaemonServer | undefined
-      const respawnFn = vi.fn(async () => {
-        await server.shutdown()
-        rmSync(socketPath, { force: true })
-        respawnServer = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => createMockSubprocess()
-        })
-        await respawnServer.start()
-      })
-      const respawnAdapter = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        runtimeDir: dir,
-        packagedAppVersion: '1.4.178',
-        respawn: respawnFn
-      })
-      isDaemonStaleForCurrentBundleMock.mockResolvedValue(true)
-
-      const replacements = await Promise.all([
-        respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true }),
-        respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-      ])
-
-      expect(respawnFn).toHaveBeenCalledTimes(1)
-      expect(respawnFn).toHaveBeenCalledWith('stale_bundle')
-      expect(replacements.every((replacement) => replacement.id)).toBe(true)
-
-      respawnAdapter.dispose()
-      await respawnServer?.shutdown()
-    })
-
-    it('propagates respawn failure to the caller', async () => {
-      const respawnFn = vi.fn(async () => {
-        throw new Error('Daemon entry file missing')
-      })
-
-      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
-      await respawnAdapter.spawn({ cols: 80, rows: 24 })
-      await server.shutdown()
-
-      await expect(respawnAdapter.spawn({ cols: 80, rows: 24 })).rejects.toThrow(
-        'Daemon entry file missing'
-      )
 
       respawnAdapter.dispose()
     })

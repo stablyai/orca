@@ -8,7 +8,7 @@ import type { AdoptStablePaneResult } from './ipc/spawn-types'
 import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StablePaneOwner } from './pane/stable-owner'
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 
 /** One host result; reply adapters never decide how the owning operation settles. */
 export type PtySpawnOutcome = {

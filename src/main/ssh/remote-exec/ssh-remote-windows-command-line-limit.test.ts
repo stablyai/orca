@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../../providers/windows-shell-args'
+import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../../providers/shell-launch/windows/shell-args'
 import { decodeRemotePowerShellScript, powerShellCommand } from './ssh-remote-powershell'
 
 // Stock sshd's cmd.exe DefaultShell rejects oversized exec lines with localized diagnostics.

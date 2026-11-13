@@ -102,7 +102,7 @@ export type ComputerActionMetadata = {
   fallbackReason?: string | null
   targetWindowId?: number | null
   targetWindowIndex?: number | null
-  // Absent from providers that predate background input (Linux, Windows, older macOS helpers).
+  // Absent from providers that predate background input (Linux, older Windows and macOS helpers).
   delivery?: 'background' | 'foreground'
   verification?: ComputerActionVerification
 }
@@ -110,7 +110,7 @@ export type ComputerActionMetadata = {
 export type ComputerActionVerification =
   | {
       state: 'verified'
-      property: 'focusedText' | 'selection' | 'value'
+      property: 'focusedText' | 'elementText' | 'selection' | 'value'
     }
   | {
       state: 'unverified'
@@ -124,6 +124,8 @@ export type ComputerActionVerification =
         | 'value_mismatch'
         // The accessibility call succeeded but the window and the app's windows looked the same about a second later.
         | 'suspected_noop'
+        // Typed or pasted text was read back and the focused field does not hold what inserting it should produce.
+        | 'text_mismatch'
       // Only on value_mismatch from a non-secure field; results never repeat the requested value.
       actualPreview?: string | null
     }
@@ -169,6 +171,8 @@ export type ComputerProviderCapabilities = {
     actions: {
       click: boolean
       typeText: boolean
+      // Absent from providers that predate element-targeted typing; they type at focus and ignore the element.
+      typeTextElement?: boolean
       pressKey: boolean
       hotkey: boolean
       pasteText: boolean

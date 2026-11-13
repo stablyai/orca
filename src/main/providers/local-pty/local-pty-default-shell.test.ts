@@ -11,7 +11,7 @@ vi.mock('./local-pty-executable-spawn', () => ({
   ensureNodePtySpawnHelperExecutable: vi.fn()
 }))
 
-vi.mock('../working-directory-validation', () => ({
+vi.mock('../working-directory/validation', () => ({
   validateWorkingDirectory: vi.fn()
 }))
 

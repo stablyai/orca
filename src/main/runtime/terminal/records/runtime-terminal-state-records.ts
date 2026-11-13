@@ -13,7 +13,7 @@ import type { TerminalTitleTracker } from '../../../../shared/terminal/output/te
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { RetainedTailRedrawCursor } from '../output/tail/terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from '../wait/terminal-wait-tail-state'
 import type { TerminalCommandPaint } from '../input/terminal-command-paint'

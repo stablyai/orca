@@ -431,6 +431,60 @@ describe('MobileNativeChatQueuedMessages', () => {
     }
   })
 
+  it('places a failed row by the height a returning message lays out at, not the one it left with', async () => {
+    const scrollTo = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (node) =>
+        node.type === 'ScrollView'
+          ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+          : null
+    })
+    renderer = mounted
+    // Rows render in queue order.
+    const layRow = async (index: number, height: number) => {
+      const row = rows(mounted)[index]!
+      await act(async () => row.props.onLayout({ nativeEvent: { layout: { height } } }))
+    }
+    await act(async () =>
+      mounted.update(
+        element({
+          cards: [card({ messageId: 'a' }), card({ messageId: 'b' }), card({ messageId: 'c' })]
+        })
+      )
+    )
+    const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+    await act(async () => {
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+      scroll.props.onContentSizeChange(0, 300)
+    })
+    // b leaves tall (an open editor or expanded text), then comes back as a plain 60pt row.
+    await layRow(0, 60)
+    await layRow(1, 180)
+    await layRow(2, 60)
+    await act(async () =>
+      mounted.update(element({ cards: [card({ messageId: 'a' }), card({ messageId: 'c' })] }))
+    )
+    scrollTo.mockClear()
+    await act(async () =>
+      mounted.update(
+        element({
+          cards: [
+            card({ messageId: 'a' }),
+            card({ messageId: 'b' }),
+            card({ messageId: 'c', needsAttention: true, caption: "Couldn't send" })
+          ]
+        })
+      )
+    )
+    // The failed row reports before b does; b's old height must not place it.
+    await layRow(2, 60)
+    expect(scrollTo).not.toHaveBeenCalled()
+    await layRow(1, 60)
+    // c spans 120–180 of a 100pt list: the nearest scroll that shows it, clear of the edge fade.
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(scrollTo).toHaveBeenCalledWith({ y: 96, animated: false })
+  })
+
   it('scrolls to a failure the list mounts open for, and settles when no row lays out again', async () => {
     vi.useFakeTimers()
     try {

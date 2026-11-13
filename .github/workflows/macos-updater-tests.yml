@@ -16,7 +16,7 @@ on:
       - 'src/main/window/dashboard-popout-window*'
       - 'src/packages/process-host/**'
       - 'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers*'
-      - 'src/main/providers/macos-tcc-login-shell*'
+      - 'src/main/providers/shell-launch/macos/tcc-login-shell*'
       - 'src/shared/process-table-snapshot*'
       - 'src/shared/darwin-process-table-capture*'
       - 'src/shared/update-status-types.ts'
