@@ -17,7 +17,7 @@ import { PassThrough } from 'node:stream'
 import { spawnProcess } from '@orca/process-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { openJournalDatabase } from './database/journal-database'
+import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
 import {
   initializeJournalDomainDatabase,
   openJournalDomainDatabase
@@ -42,7 +42,6 @@ import {
 } from './journal-legacy-retirement-state'
 import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journal-sql-maintenance'
-import { runJournalTransaction } from './database/journal-database'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { prepareJournalDomainImport } from './journal-domain-import'

@@ -18,7 +18,7 @@ afterEach(async () => {
   }
 })
 
-it.skipIf(!process.env.CI)(
+it.skipIf(process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST !== '1')(
   'excludes a real SQLite process without altering source bytes, then releases on EOF',
   async () => {
     expect(existsSync(await journalLegacyFileLockPath())).toBe(true)
