@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { createRef } from 'react'
 import { act, cleanup, render, waitFor, within } from '@testing-library/react'
-import { Editor, type JSONContent } from '@tiptap/react'
+import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
@@ -136,7 +136,7 @@ describe('side chat pill', () => {
     expect(saved.text).toBe('/btw why?')
     expect(JSON.stringify(saved.document)).not.toContain('nativeChatSideChat')
 
-    const older = new Editor({ extensions: [StarterKit], content: saved.document as JSONContent })
+    const older = new Editor({ extensions: [StarterKit], content: saved.document ?? null })
     older.commands.insertContentAt(older.state.doc.content.size - 1, ' now')
     expect(older.getText()).toBe('/btw why? now')
     older.destroy()
