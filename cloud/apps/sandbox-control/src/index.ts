@@ -222,7 +222,7 @@ import {
   resolveLink,
   workspaceViews
 } from './workspaces'
-import { rememberCallerName } from './member-names'
+import { MemberNamesSchema, rememberMemberNames, rememberCallerName } from './member-names'
 import { TeamPresenceError, teamPresenceRoute } from './team-presence'
 import { sweepSessionCpu } from './session-cpu'
 import type { SandboxCaller } from './auth'
@@ -1339,11 +1339,20 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       const auditIngest = url.pathname === '/v1/internal/audit-events' && request.method === 'POST'
       const memberPush =
         request.method === 'POST' && (url.pathname === '/v1/internal/org-members/removed' || url.pathname === '/v1/internal/members/role-changed')
-      const authOnly = (memberPush || teamDelete !== null || auditIngest) && (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
+      // Display names for a team's members, as labels (member-names.ts).
+      const memberNames = url.pathname === '/v1/internal/member-names' && request.method === 'POST'
+      const authOnly = (memberPush || teamDelete !== null || auditIngest || memberNames) && (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
       // Billing's bearer (CONTROL_PLANE_TOKEN) reaches this one route, for billing events only.
       const billingOnly = !authOnly && auditIngest && (await isOperator(request, env.CONTROL_PLANE_TOKEN))
       if (!authOnly && !billingOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
+      }
+      if (memberNames) {
+        const body = MemberNamesSchema.safeParse(await readJson(request, MAX_API_JSON_BYTES))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        return json({ saved: await rememberMemberNames(env.SANDBOX_DB, body.data, (deps.now ?? Date.now)()) })
       }
       if (auditIngest) {
         // Append-only, and needs no sandbox provider: events from auth and billing for the team audit log.
