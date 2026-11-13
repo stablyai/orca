@@ -688,6 +688,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
         run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
 
   dependency-security:
@@ -866,6 +867,7 @@ jobs:
       - name: Run skill package, transaction, and compatibility suites
         env:
           ORCA_REAL_PROCESS_SKILL_TEST: '1'
+          ORCA_VITEST_ISOLATE_EVERY_FILE: '1'
           ORCA_REAL_WINDOWS_SKILL_TEST: ${{ runner.os == 'Windows' && '1' || '0' }}
         run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
 
@@ -925,6 +927,7 @@ jobs:
       - name: Run skill package, transaction, and compatibility suites
         env:
           ORCA_REAL_PROCESS_SKILL_TEST: '1'
+          ORCA_VITEST_ISOLATE_EVERY_FILE: '1'
         run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
 
       - name: Archive bounded skill-sharing results

@@ -25,3 +25,5 @@ tests/e2e/cross-version-wire/release-module-locations.ts src/main/runtime/rpc/me
 tests/e2e/cross-version-wire/release-module-locations.ts src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
 # Release tags with flat skill owners need the restored harness beside that actual source.
 .github/workflows/release-cut.yml src/main/skills/skill-provider-runtime-roots.test.ts
+# Released source trees before the structured-chat fixture move require the old exact test path.
+.github/workflows/node-server-tests.yml src/main/orcad/orcad-packaged-structured-chat.integration.test.ts
