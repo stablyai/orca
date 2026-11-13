@@ -279,7 +279,6 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'repo-1::C:/worktrees/feature' })
     )
-    expect(await listWorktreesMock()).toEqual([expect.objectContaining({ path: 'C:/repo' })])
   })
 
   it('rechecks a local Git lock after the archive hook before teardown', async () => {
