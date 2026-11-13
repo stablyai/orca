@@ -487,14 +487,14 @@ describe('what is recorded', () => {
     const id: string = created.body.sandbox.id
     h.advance(1000)
     expect((await h.call('PATCH', `/v1/team/workspaces/${id}`, { bearer: admin, body: { ownerUserId: 'bob' } })).status).toBe(200)
-    const [changed] = (await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[]
+    const changed = ((await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[]).find((event) => event.action === 'workspace.owner_changed')
     expect(changed).toMatchObject({ action: 'workspace.owner_changed', actor: { userId: 'ada' }, target: { type: 'workspace', id }, detail: { fromUserId: 'ada', toUserId: 'bob' } })
     // Nobody can name Bob yet (he has never called the API): no name, not marked as gone.
     expect(changed!.detail).toEqual({ fromUserId: 'ada', toUserId: 'bob' })
     // Once he has, the same row names him; once he has left, it says so.
     const bob = await h.token('bob', 'acme', 'sandbox', { org_role: 'member', name: 'Bob Member' })
     expect((await h.call('GET', '/v1/me', { bearer: bob })).status).toBe(200)
-    const read = async (): Promise<Event> => ((await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[])[0]!
+    const read = async (): Promise<Event> => ((await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[]).find((event) => event.action === 'workspace.owner_changed')!
     expect((await read()).detail).toEqual({ fromUserId: 'ada', toUserId: 'bob', toUserName: 'Bob Member' })
     const removed = await createRemoval(h, 'bob')
     expect(removed).toBe(200)

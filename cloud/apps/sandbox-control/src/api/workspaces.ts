@@ -55,6 +55,8 @@ export function workspaceView(row: WorkspaceRow) {
     lastActivityAt: row.last_activity_at ?? row.updated_at,
     session,
     lastError: row.last_error,
+    // Set once the owner was ever changed: it runs in shared mode for credentials from then on.
+    ownershipTransferredAt: row.ownership_transferred_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
