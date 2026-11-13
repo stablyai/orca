@@ -184,7 +184,20 @@ async function profile(seed?: (db: Database.Database) => void) {
 }
 
 it('accounts for an unopened folder chat, removes only the certified file and keeps current history', async () => {
-  const test = await profile()
+  const test = await profile((legacy) => {
+    legacy
+      .prepare(
+        `INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason,queued_epoch,queued_sequence)
+         VALUES('unopened','saved-card',1,?,'f',1,'h','waiting','manual','epoch',1)`
+      )
+      .run(
+        JSON.stringify({
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'saved queued text survives retirement' }]
+        })
+      )
+  })
   const allocated = () => ({
     files: Object.fromEntries(
       readdirSync(test.root).map((name) => {
@@ -216,6 +229,13 @@ it('accounts for an unopened folder chat, removes only the certified file and ke
       )
       .get()
   ).toBeDefined()
+  expect(
+    test.db
+      .prepare(
+        "SELECT payload_json FROM journal_queue_cards WHERE session_id='unopened' AND message_id='saved-card'"
+      )
+      .get()!.payload_json
+  ).toContain('saved queued text survives retirement')
   await test.retirement.run()
   expect(existsSync(test.filename)).toBe(false)
   test.db.pragma('wal_checkpoint(TRUNCATE)')

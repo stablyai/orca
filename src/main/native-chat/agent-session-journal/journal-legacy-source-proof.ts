@@ -143,18 +143,14 @@ export function readJournalLegacyProofPage(
               )
               .get(row.generation!)
           : row
+      const matchEpoch = table !== 'queued_messages' || session?.epoch != null
       if (
         !session ||
         !db
           .prepare(
-            `SELECT 1 FROM journal_sessions WHERE session_id=?${
-              table === 'queued_messages' ? '' : ' AND epoch=?'
-            }`
+            `SELECT 1 FROM journal_sessions WHERE session_id=?${matchEpoch ? ' AND epoch=?' : ''}`
           )
-          .get(
-            session.session_id!,
-            ...(table === 'queued_messages' && session.epoch == null ? [] : [session.epoch!])
-          )
+          .get(session.session_id!, ...(matchEpoch ? [session.epoch!] : []))
       ) {
         throw new Error('legacy source has orphan content')
       }
