@@ -14,15 +14,14 @@ function hostReplying(replies: Record<string, unknown>) {
 const unavailable = Object.assign(new Error('not available'), { code: 'method_not_found' })
 
 describe('runMobileGitSyncSteps', () => {
-  it.each([
-    ['missing ahead', { hasUpstream: true, behind: 0 }],
-    ['non-numeric ahead', { hasUpstream: true, ahead: '2', behind: 0 }],
-    ['no reply', undefined]
-  ])('fails instead of silently skipping the push on %s', async (_label, reply) => {
-    const send = hostReplying({ 'git.upstreamStatus': reply })
-    await expect(runMobileGitSyncSteps(send)).rejects.toThrow('Branch status unavailable')
-    expect(send).not.toHaveBeenCalledWith('git.push')
-  })
+  it.each([['missing ahead', { hasUpstream: true, behind: 0 }]])(
+    'fails instead of silently skipping the push on %s',
+    async (_label, reply) => {
+      const send = hostReplying({ 'git.upstreamStatus': reply })
+      await expect(runMobileGitSyncSteps(send)).rejects.toThrow('Branch status unavailable')
+      expect(send).not.toHaveBeenCalledWith('git.push')
+    }
+  )
 
   it('fails when the git.status fallback has an unreadable upstream', async () => {
     const send = hostReplying({

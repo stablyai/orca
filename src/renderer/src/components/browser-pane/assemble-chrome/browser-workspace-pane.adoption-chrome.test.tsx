@@ -136,6 +136,7 @@ vi.mock('../browser-client-page-renderer-installation', () => ({
 }))
 
 import { useAppStore } from '@/store'
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installClientHostedPaneApi } from '../client-hosted-browser-pane-test-rig'
 import { clearBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
@@ -227,59 +228,74 @@ function browserWorkspace(): BrowserWorkspace {
 /** The optimistic handle a staged tab carries: a page id the host has not published yet. */
 function stageHandle(): void {
   useAppStore.setState({
-    remoteBrowserPageHandlesByPageId: {
-      [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a', staged: true }
-    }
+    remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+      {
+        [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a', staged: true }
+      },
+      [PAGE_ID]
+    )
   })
 }
 
 /** The optimistic handle for a page this client already expects to host itself. */
 function stageClientHostedHandle(): void {
   useAppStore.setState({
-    remoteBrowserPageHandlesByPageId: {
-      [PAGE_ID]: {
-        environmentId: ENVIRONMENT_ID,
-        remotePageId: 'remote-page-a',
-        staged: true,
-        stagedClientHosted: true
-      }
-    }
+    remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+      {
+        [PAGE_ID]: {
+          environmentId: ENVIRONMENT_ID,
+          remotePageId: 'remote-page-a',
+          staged: true,
+          stagedClientHosted: true
+        }
+      },
+      [PAGE_ID]
+    )
   })
 }
 
 /** Restored client-hosted pages have a real host ID but no placement until host recovery. */
 function restoreClientHostedHandle(): void {
   useAppStore.setState({
-    remoteBrowserPageHandlesByPageId: {
-      [PAGE_ID]: {
-        environmentId: ENVIRONMENT_ID,
-        remotePageId: 'remote-page-a',
-        restoredFromSession: true,
-        restoredClientHosted: true
-      }
-    }
+    remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+      {
+        [PAGE_ID]: {
+          environmentId: ENVIRONMENT_ID,
+          remotePageId: 'remote-page-a',
+          restoredFromSession: true,
+          restoredClientHosted: true
+        }
+      },
+      [PAGE_ID]
+    )
   })
 }
 
 /** The host snapshot arriving: the staged flag drops and the page lands on this desktop. */
 function adoptOntoClient(pageHostGeneration = CLIENT_PLACEMENT.pageHostGeneration): void {
   useAppStore.setState({
-    remoteBrowserPageHandlesByPageId: {
-      [PAGE_ID]: {
-        environmentId: ENVIRONMENT_ID,
-        remotePageId: 'remote-page-a',
-        placement: { ...CLIENT_PLACEMENT, pageHostGeneration }
-      }
-    }
+    remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+      {
+        [PAGE_ID]: {
+          environmentId: ENVIRONMENT_ID,
+          remotePageId: 'remote-page-a',
+          placement: { ...CLIENT_PLACEMENT, pageHostGeneration }
+        }
+      },
+      [PAGE_ID]
+    )
   })
 }
 
 /** The same snapshot for a headless host: the page stays streamed, so the pane never swaps. */
 function adoptOntoServer(): void {
   useAppStore.setState({
-    remoteBrowserPageHandlesByPageId: {
-      [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
-    }
+    remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+      {
+        [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
+      },
+      [PAGE_ID]
+    )
   })
 }
 

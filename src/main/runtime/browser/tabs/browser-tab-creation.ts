@@ -37,6 +37,7 @@ type BrowserTabCreateCaller = {
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'
   opensPageLink?: boolean
+  signal?: AbortSignal
 }
 
 export class RuntimeBrowserTabCreation {
@@ -121,7 +122,8 @@ export class RuntimeBrowserTabCreation {
           this.host,
           params,
           params.profileId ?? browserSessionRegistry.getDefaultProfile().id,
-          offscreen ? createOffscreen : undefined
+          offscreen ? createOffscreen : undefined,
+          caller?.signal
         )
       }
       return createOffscreen()
@@ -217,10 +219,13 @@ export class RuntimeBrowserTabCreation {
     return { browserPageId: created.browserPageId }
   }
 
-  async browserOpenUrlOnClient(params: {
-    url: string
-    worktree: string
-  }): Promise<{ browserPageId: string }> {
-    return openBrowserUrlOnClient(this.host, params)
+  async browserOpenUrlOnClient(
+    params: {
+      url: string
+      worktree: string
+    },
+    options?: { signal?: AbortSignal }
+  ): Promise<{ browserPageId: string }> {
+    return openBrowserUrlOnClient(this.host, params, options?.signal)
   }
 }

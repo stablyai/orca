@@ -85,7 +85,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
     legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
     storageScope: 'a'.repeat(64),
     maxPages: options.maxPages,
-    retainNetworkRoute: vi.fn(async () => {
+    retainNetworkRoute: vi.fn(async (_key: string, _signal: AbortSignal) => {
       order.push('retain-route')
       return route
     }),

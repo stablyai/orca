@@ -60,8 +60,6 @@ export type NativeChatMessageListHandle = {
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
   /** What the row drawing this message copies from its Copy button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
-  /** Open a subagent's activity where it sits in the conversation and bring it into view. */
-  revealSubagent: (agentId: string) => void
 }
 
 /** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
@@ -97,9 +95,8 @@ export function useNativeChatMessageListHandle(
     scrollToBottom,
     onSent,
     revealFindMatch,
-    slots,
-    revealSubagent
-  }: Pick<NativeChatMessageListHandle, 'readerAtEnd' | 'revealFindMatch' | 'revealSubagent'> & {
+    slots
+  }: Pick<NativeChatMessageListHandle, 'readerAtEnd' | 'revealFindMatch'> & {
     beginNavigation: () => void
     scrollToBottom: (reason: 'send') => void
     /** The reader answered, whether or not the view moves. */
@@ -124,9 +121,8 @@ export function useNativeChatMessageListHandle(
       revealLatest,
       readerAtEnd,
       revealFindMatch,
-      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId),
-      revealSubagent
+      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
     }),
-    [readerAtEnd, revealLatest, revealFindMatch, revealSubagent, slots]
+    [readerAtEnd, revealLatest, revealFindMatch, slots]
   )
 }

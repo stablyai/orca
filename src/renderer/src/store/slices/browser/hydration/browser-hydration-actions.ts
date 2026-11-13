@@ -1,3 +1,4 @@
+import { markHydratedBrowserPageHandles } from '../hosts/browser-initialization-presentation-ownership'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
@@ -53,7 +54,11 @@ export function createBrowserHydrationActions(
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-        return projectHydratedBrowserSession(s, session, validWorktreeIds)
+        const restored = projectHydratedBrowserSession(s, session, validWorktreeIds)
+        if (restored.remoteBrowserPageHandlesByPageId !== s.remoteBrowserPageHandlesByPageId) {
+          markHydratedBrowserPageHandles(restored.remoteBrowserPageHandlesByPageId)
+        }
+        return restored
       })
 
       const state = get()

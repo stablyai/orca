@@ -86,7 +86,10 @@ export type ClosedBrowserWorkspaceSnapshot = {
   position?: RecentlyClosedTabPosition
 }
 
+import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
+
 export type RemoteBrowserPageHandle = {
+  initializationPresentation?: BrowserInitializationPresentation
   environmentId: string
   remotePageId: string
   /** Profile identity confirmed by the host's current page snapshot. */
