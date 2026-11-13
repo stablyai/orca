@@ -10,6 +10,7 @@ import {
   KIMI_VALUE_OPTIONS
 } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
+import { museReadOnlyRecipeArgs } from '../../../shared/source-control/ai/generation/commit-message-recipe-options'
 import { parseWslUncPath, wslDistroForCommand } from '../../../shared/wsl-paths'
 import { CODEX_DISABLE_PLUGINS_ARGS } from '../../codex-cli/codex-read-only-app-server-args'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
@@ -159,6 +160,21 @@ async function antigravityPolicy(
   }
 }
 
+function musePolicy(plan: CommitMessagePlan): CommitMessagePlan {
+  const terminator = plan.args.indexOf('--')
+  const head = terminator === -1 ? plan.args.slice(0, -1) : plan.args.slice(0, terminator)
+  const tail = terminator === -1 ? plan.args.slice(-1) : plan.args.slice(terminator)
+  const args = museReadOnlyRecipeArgs(head)
+  for (const flag of ['--disable-shell', '--disable-write', '--disable-web-tools']) {
+    if (!args.includes(flag)) {
+      args.push(flag)
+    }
+  }
+  // Muse rejects a repeated --approval-mode, so the stripped head gets exactly one forced pair.
+  args.push('--approval-mode', 'on-request', '--approval-judge', 'off')
+  return { ...plan, args: [...args, ...tail] }
+}
+
 function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
   const plugin = `export const inject = ['tools']\nexport function apply(ctx) {\n  ctx.tools.guard(exec => exec.name === 'read' ? undefined : 'This text task permits only file reads')\n  ctx.provide('orcaTextReadPolicy', Object.freeze({}))\n}\n`
   const patch = JSON.stringify([
@@ -216,7 +232,10 @@ export function prepareSourceControlReadOnlyPlan(input: {
   async function prepare(): Promise<CommitMessagePlan> {
     const { plan, target, signal } = input
     const naming = input.operation === 'conversation-name'
-    if (input.agentId === 'amp' || input.agentId === 'muse') {
+    if (input.agentId === 'muse') {
+      return musePolicy(plan)
+    }
+    if (input.agentId === 'amp') {
       if (naming) {
         return plan
       }

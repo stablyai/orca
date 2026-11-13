@@ -23,7 +23,7 @@ async function directory() {
   owned.push(result)
   return result
 }
-function planned(agentId: 'codex' | 'kimi' | 'antigravity', agentArgs?: string) {
+function planned(agentId: 'codex' | 'kimi' | 'antigravity' | 'muse', agentArgs?: string) {
   const result = planCommitMessageGeneration(
     { agentId, model: agentId === 'codex' ? 'gpt-5.4-mini' : 'default', agentArgs },
     'Name this chat'
@@ -97,6 +97,32 @@ it('disables every effective Codex MCP name, including dotted names, after recip
       spawnAgent
     }).result
   ).rejects.toThrow('Unsupported configuration query')
+})
+
+it('forces Muse source-control tasks read-only, dropping recipe overrides that reopen tools', async () => {
+  const policy = await prepareSourceControlReadOnlyPlan({
+    agentId: 'muse',
+    plan: planned('muse', '--yolo --approval-mode never --model muse-wonder-1.0'),
+    target: { kind: 'local', cwd: '/workspace' },
+    signal: new AbortController().signal,
+    spawnAgent,
+    operation: 'commit-message'
+  }).result
+  expect(policy.args).toEqual([
+    'exec',
+    '--no-session-log',
+    '--disable-shell',
+    '--disable-write',
+    '--disable-web-tools',
+    '--model',
+    'muse-wonder-1.0',
+    '--approval-mode',
+    'on-request',
+    '--approval-judge',
+    'off',
+    '--',
+    'Name this chat'
+  ])
 })
 
 it('copies an explicit Kimi profile with its prompt and identity preserved and an empty tool policy', async () => {

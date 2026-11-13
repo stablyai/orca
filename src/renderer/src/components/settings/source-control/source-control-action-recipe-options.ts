@@ -65,8 +65,8 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
   )
 }))
 
-// Their CLIs can't take the read-only tool policy, so they run only naming tasks (source-control-read-only-policy.ts).
-const NAMING_ONLY_TEXT_AGENT_IDS = new Set<string>(['amp', 'muse'])
+// Its CLI can't take the read-only tool policy, so it runs only naming tasks (source-control-read-only-policy.ts).
+const NAMING_ONLY_TEXT_AGENT_IDS = new Set<string>(['amp'])
 
 const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
 

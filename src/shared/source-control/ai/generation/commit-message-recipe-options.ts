@@ -1,7 +1,37 @@
 import { findOptionOccurrence } from '../../../command-option-occurrence'
 import { compactRecipeOptions, findRecipeOption } from './commit-message-generation-options'
 
+const MUSE_POLICY_VALUE_OPTIONS = [
+  '--approval-mode',
+  '--approval-judge',
+  '--permission-profile',
+  '--preset'
+]
+const MUSE_POLICY_BARE_FLAGS = [
+  '--yolo',
+  '--disable-approval',
+  '--disable-sandbox',
+  '--trust-workspace',
+  '--allow-workspace-switch',
+  '--enable-shell-tool'
+]
+
+/** Drop recipe options that would override the forced read-only Muse invocation. */
+export function museReadOnlyRecipeArgs(args: string[]): string[] {
+  return compactRecipeOptions(
+    [...args],
+    MUSE_POLICY_VALUE_OPTIONS,
+    MUSE_POLICY_VALUE_OPTIONS
+  ).filter(
+    (token) =>
+      !MUSE_POLICY_BARE_FLAGS.some((flag) => token === flag || token.startsWith(`${flag}=`))
+  )
+}
+
 export function taskPolicyRecipeArgs(agent: string, args: string[]): string[] {
+  if (agent === 'muse') {
+    return museReadOnlyRecipeArgs(args)
+  }
   if (agent === 'jcode') {
     return compactRecipeOptions(args, ['--tool-profile', '--tools'])
   }
