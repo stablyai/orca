@@ -12,10 +12,10 @@ import { getCommitMessageModel } from '../../shared/source-control/ai/generation
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
-} from '../text-generation/commit-message-agent-environment'
-import { resolveTextGenerationParams } from '../text-generation/commit-message-text-generation'
-import { generateDictationCleanup } from '../text-generation/dictation-cleanup-generation-request'
-import { cancelLocalGeneration } from '../text-generation/source-control-generation-lanes'
+} from '../text-generation/execution/commit-message-agent-environment'
+import { resolveCommitMessageSettings as resolveTextGenerationParams } from '../text-generation/commit-message-text-generation'
+import { generateDictationCleanup } from '../text-generation/requests/dictation-cleanup-generation-request'
+import { cancelLocalGeneration } from '../text-generation/execution/source-control-generation-lanes'
 
 export type DictationCleanupDeps = {
   getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] & { voice?: VoiceSettings }
