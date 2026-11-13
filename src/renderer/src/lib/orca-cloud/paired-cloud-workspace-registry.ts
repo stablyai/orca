@@ -1,11 +1,15 @@
 // PAIRED-STATUS: registers each PAIRED cloud workspace's own row with the cloud workspace store, so
 // its status (state word, hovercard, archive, git-setup) reads through main's paired path like an
-// owned one. A paired row is the main checkout on a "<name> (cloud)" server that main marked
+// owned one. A paired row is the workspace's own row on a "<name> (cloud)" server that main marked
 // `orcaCloudPaired` in the runtime catalog; this desktop has no runtime record for it.
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { eachLimited } from './each-limited'
+import {
+  pickWorkspaceWorktree,
+  type WorkspaceWorktreeCandidate
+} from '@/components/cloud-workspaces/workspace-worktree-pick'
 import {
   getCloudWorkspaceSnapshot,
   refreshCloudWorkspaceStatus,
@@ -16,12 +20,24 @@ const STATUS_READ_CONCURRENCY = 4
 
 type RegistryState = {
   worktreesByRepo: Readonly<
-    Record<string, readonly { id: string; hostId?: string | null; isMainWorktree?: boolean }[]>
+    Record<
+      string,
+      readonly {
+        id: string
+        hostId?: string | null
+        isMainWorktree?: boolean
+        branch?: string | null
+      }[]
+    >
   >
   runtimeEnvironments?: readonly { id: string; orcaCloudPaired?: true }[] | null
 }
 
-/** Sidebar id → server environment id, for every paired cloud workspace's own row. */
+/**
+ * Sidebar id → server environment id, for every paired cloud workspace's own row: per project on a
+ * paired server, the workspace's linked worktree (a teammate's shared workspace, where the base
+ * checkout is hidden, PAIRED-REGISTRY-ROW), else its main checkout (a GitHub-only workspace).
+ */
 export function pairedCloudWorkspacesFromState(state: RegistryState): Record<string, string> {
   const paired = new Set(
     (state.runtimeEnvironments ?? [])
@@ -33,13 +49,24 @@ export function pairedCloudWorkspacesFromState(state: RegistryState): Record<str
     return result
   }
   for (const worktrees of Object.values(selectWorktreesByRepo(state))) {
+    const byEnvironment = new Map<string, WorkspaceWorktreeCandidate[]>()
     for (const worktree of worktrees) {
-      if (!worktree.isMainWorktree) {
+      const host = parseExecutionHostId(worktree.hostId ?? undefined)
+      if (host?.kind !== 'runtime' || !paired.has(host.environmentId)) {
         continue
       }
-      const host = parseExecutionHostId(worktree.hostId ?? undefined)
-      if (host?.kind === 'runtime' && paired.has(host.environmentId)) {
-        result[worktree.id] = host.environmentId
+      const candidates = byEnvironment.get(host.environmentId) ?? []
+      candidates.push({
+        id: worktree.id,
+        branch: worktree.branch,
+        isMainWorktree: worktree.isMainWorktree === true
+      })
+      byEnvironment.set(host.environmentId, candidates)
+    }
+    for (const [environmentId, candidates] of byEnvironment) {
+      const own = pickWorkspaceWorktree(candidates)
+      if (own) {
+        result[own] = environmentId
       }
     }
   }
