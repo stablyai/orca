@@ -285,6 +285,9 @@ export function WorkspaceCleanupSettingsPane({
         return
       }
     }
+    if (!mountedRef.current) {
+      return
+    }
     if (await update(change.change(latest))) {
       setPendingChange(null)
       finishChange(true)
