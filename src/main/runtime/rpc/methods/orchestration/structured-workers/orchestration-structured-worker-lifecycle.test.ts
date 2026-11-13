@@ -23,7 +23,7 @@ vi.mock('./orchestration-structured-worker-session', () => ({
 const { readStructuredWorkerJournal, stopStructuredWorker } =
   await import('./orchestration-structured-worker-lifecycle')
 await import('../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority')
-await import('../worker/worker-archive-read')
+await import('../worker/output/worker-archive-read')
 
 const IDENTITY: StructuredWorkerIdentity = {
   handle: 'structworker_1',

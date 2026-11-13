@@ -12,7 +12,7 @@ import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { fingerprintAuthenticatedPairingCredential } from '../../../server/pairing/device-principal'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { syncFederationBarrier } from './federation-sync-barrier.test-support'
+import { syncFederationBarrier } from './testing/federation-sync-barrier.test-support'
 
 describe('orchestration federation control mail', () => {
   const homeToken = 'run-home-device-token'
