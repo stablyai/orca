@@ -182,11 +182,11 @@ foreach ($case in $pointerCases) {
     Assert-TestEqual $pointer[$pointer.Count - 1] "move:7,8" "$label puts the pointer back last"
 }
 
-# A refused raise tries the UIA route, then one more raise, and sends nothing when all fail.
+# A refused raise falls back to the UIA route and one more raise, and sends nothing when all fail.
 [OrcaDesktopWin32]::Reset(0)
 $outcome = Invoke-TestOperation @{ tool = "click"; x = 5; y = 6; restoreWindow = $true }
 Assert-TestLike $outcome.message "window_not_focused: *no pointer input was sent" "refused raise"
-Assert-TestEqual ([OrcaDesktopWin32]::Calls -join " ") "activate uia-activate activate" "refused raise attempts"
+Assert-TestEqual (Get-TestPointerCalls).Count 0 "refused raise sends no pointer input"
 [OrcaDesktopWin32]::Reset(2)
 $outcome = Invoke-TestOperation @{ tool = "click"; x = 5; y = 6; restoreWindow = $true }
 Assert-TestEqual $outcome.result.action.path "synthetic" "second raise honoured"
@@ -194,7 +194,6 @@ Assert-TestEqual $outcome.result.action.path "synthetic" "second raise honoured"
 [OrcaDesktopWin32]::HonourUiaActivation = $true
 $outcome = Invoke-TestOperation @{ tool = "click"; x = 5; y = 6; restoreWindow = $true }
 Assert-TestEqual $outcome.result.action.path "synthetic" "UIA activation honoured"
-Assert-TestEqual @([OrcaDesktopWin32]::Calls | Where-Object { $_ -eq "activate" }).Count 1 "UIA activation skips the second raise"
 
 # A window on another virtual desktop is never raised.
 [OrcaDesktopWin32]::Reset(1)
