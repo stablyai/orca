@@ -9,7 +9,7 @@ describe('CAP-GATE-DESKTOP copy', () => {
 
   it('offers "contact us" only when [Contact us] is shown', () => {
     const withLink = currentStepCopy(
-      { current, action: 'capability-off', contactUrl: 'https://onorca.dev/contact-sales' },
+      { current, action: 'capability-off', contactUrl: 'https://orca.dev/enterprise' },
       t
     )
     expect(withLink.title).toBe('Orca Cloud isn’t turned on for your team yet')

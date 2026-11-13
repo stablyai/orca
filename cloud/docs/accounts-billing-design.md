@@ -234,4 +234,4 @@ tokens) answer 404 there and fall back to the Checkout request's quantity / the 
 
 ## Open decisions
 
-1. Real Enterprise contact URL (placeholder `https://onorca.dev/contact-sales`). 2. When to enable Stripe Tax.
+1. When to enable Stripe Tax. (Decided: the Enterprise contact URL is `https://orca.dev/enterprise`.)

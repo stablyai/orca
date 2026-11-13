@@ -109,7 +109,7 @@ export const capabilityOff = defineFixture({
       'claude',
       'Claude',
       false,
-      { contactUrl: 'https://onorca.dev/contact-sales' }
+      { contactUrl: 'https://orca.dev/enterprise' }
     )
 })
 
