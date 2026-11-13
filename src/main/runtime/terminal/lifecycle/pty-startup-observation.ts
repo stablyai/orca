@@ -13,7 +13,7 @@ import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { PtyForegroundProcessRead } from './pty-foreground-observation-state'
 
 export type StartupAgentObservation =
-  | { kind: 'pending'; candidate: TuiAgent }
+  | { kind: 'shell'; candidate: TuiAgent }
   | { kind: 'agent'; agent: TerminalAgent }
   | { kind: 'non-agent' }
 
@@ -56,6 +56,7 @@ export class PtyStartupObservation {
     }
     const controller = this.deps.getController()
     let entry = this.entries.get(ptyId)
+    let cleared = false
     if (
       !entry ||
       entry.pty !== pty ||
@@ -65,6 +66,7 @@ export class PtyStartupObservation {
       entry.paint !== pty.commandPaint ||
       entry.commandEpoch !== (pty.commandPaint?.commandEpoch ?? 0)
     ) {
+      cleared = entry?.result != null
       entry = {
         pty,
         controller,
@@ -83,8 +85,19 @@ export class PtyStartupObservation {
       this.entries.set(ptyId, entry)
     }
     if (entry.outputAt !== pty.lastOutputAt) {
+      cleared ||= entry.result != null
       entry.result = null
       entry.outputAt = pty.lastOutputAt
+    }
+    if (cleared) {
+      const clearedEntry = entry
+      queueMicrotask(() => {
+        if (this.entries.get(ptyId) === clearedEntry) {
+          for (const changed of Array.from(clearedEntry.listeners)) {
+            changed()
+          }
+        }
+      })
     }
     return entry
   }
@@ -99,22 +112,18 @@ export class PtyStartupObservation {
       return undefined
     }
     const signal = agentPaintSignal(candidate)
-    if (!signal) {
-      return undefined
-    }
-    if (!pty.commandPaint?.commandActive) {
-      return pty.commandPaint?.commandEpoch ? { kind: 'non-agent' } : undefined
+    if (pty.commandPaint?.commandActive !== true) {
+      return pty.commandPaint?.commandActive === false ? { kind: 'non-agent' } : undefined
     }
     if (pty.foregroundAgent) {
       return undefined
     }
     const entry = this.entry(ptyId)
-    if (entry?.listeners.size && entry.result) {
-      return entry.result
+    if (signal && pty.commandPaint.hasObservedAgentComposer(signal)) {
+      return { kind: 'agent', agent: candidate }
     }
-    return pty.commandPaint.hasObservedAgentComposer(signal)
-      ? { kind: 'agent', agent: candidate }
-      : { kind: 'pending', candidate }
+    this.refresh(ptyId)
+    return entry?.listeners.size ? (entry.result ?? undefined) : undefined
   }
 
   watch(ptyId: string, changed: () => void): () => void {
@@ -126,6 +135,7 @@ export class PtyStartupObservation {
       entry.result = null
     }
     entry.listeners.add(changed)
+    this.refresh(ptyId)
     return () => this.entries.get(ptyId)?.listeners.delete(changed)
   }
 
@@ -138,7 +148,11 @@ export class PtyStartupObservation {
       entry.flight ||
       entry.unsupported ||
       Date.now() < entry.nextAttemptAt ||
-      this.read(ptyId)?.kind !== 'pending'
+      entry.pty.commandPaint?.commandActive !== true ||
+      entry.pty.launchAgent ||
+      entry.pty.launchCommandAgent ||
+      entry.pty.foregroundAgent ||
+      !isTuiAgent(resolveTerminalTitlePolicyAgentType(entry.pty.lastOscTitle ?? ''))
     ) {
       return
     }
@@ -147,18 +161,25 @@ export class PtyStartupObservation {
       return
     }
     const outputAt = entry.pty.lastOutputAt
+    const previous = entry.result
     entry.flight = read
       .then((sample) => {
         if (!this.current(ptyId, entry) || entry.pty.lastOutputAt !== outputAt) {
           return
         }
         entry.unsupported = sample.unsupported === true
+        entry.result = null
         if (!sample.available || !sample.process) {
           return
         }
         const agent = sample.agent ?? recognizeAgentProcess(sample.process)?.agent
         if (agent) {
           entry.result = { kind: 'agent', agent }
+        } else if (isShellProcess(sample.process)) {
+          const candidate = resolveTerminalTitlePolicyAgentType(entry.pty.lastOscTitle ?? '')
+          if (isTuiAgent(candidate)) {
+            entry.result = { kind: 'shell', candidate }
+          }
         } else if (
           sample.observation?.verdict === 'observed' &&
           sample.observation.foregroundKind === 'non-shell' &&
@@ -169,7 +190,11 @@ export class PtyStartupObservation {
           entry.result = { kind: 'non-agent' }
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (this.current(ptyId, entry)) {
+          entry.result = null
+        }
+      })
       .finally(() => {
         if (this.entry(ptyId) !== entry) {
           return
@@ -177,7 +202,7 @@ export class PtyStartupObservation {
         entry.flight = null
         entry.nextAttemptAt = Date.now() + entry.retryMs
         entry.retryMs = Math.min(entry.retryMs * 2, 16_000)
-        if (entry.result) {
+        if (entry.result || previous) {
           for (const changed of Array.from(entry.listeners)) {
             changed()
           }

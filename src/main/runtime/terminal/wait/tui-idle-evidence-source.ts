@@ -17,8 +17,18 @@ import {
   type AgentStateVerdict
 } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
-import { hasTerminalAgentPainted } from '../input/terminal-command-paint'
+import {
+  hasTerminalAgentPainted,
+  terminalTitleIsPredecessor,
+  terminalOriginIsPredecessor
+} from '../input/terminal-command-paint'
+import { readTerminalActionText, type TerminalActionText } from '../output/terminal-action-text'
+import type {
+  TerminalContentOrigin,
+  TerminalSupportQuery
+} from '../../../../shared/terminal/output/terminal-content-origin'
 import type { PtyStartupObservation } from '../lifecycle/pty-startup-observation'
+import type { TerminalPermissionDecision } from './terminal-permission-evidence'
 import type {
   FirstPartyAgentStatus,
   TuiIdleEvaluationInput,
@@ -27,6 +37,12 @@ import type {
 
 /** The runtime state every tui-idle site reads its evidence from. */
 export type TuiIdleEvidenceSource = {
+  readPermissionEvidence?(
+    ptyId: string,
+    text: TerminalActionText,
+    reason: RuntimeTerminalWaitBlockedReason | null,
+    screen?: readonly string[] | null
+  ): TerminalPermissionDecision
   captureGeneration?(ptyId: string): () => boolean
   quiescenceMs: number
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
@@ -81,12 +97,16 @@ function readAgentRuleVerdict(
   agent: TuiAgent | null,
   record: TuiIdleEvidenceRecord,
   readScreenLines: () => readonly string[] | null,
-  waitText: () => string
+  waitText: () => string,
+  textSupport?: TerminalSupportQuery,
+  contentScope?: TerminalContentOrigin
 ): AgentStateVerdict | null {
   return evaluateAgentStateRules(agent, {
     readScreenLines,
     readText: () => waitText().toLowerCase(),
     readTitleStatus: () => record.lastAgentStatus,
+    textSupport,
+    contentScope,
     hasOutputClock: record.lastOutputAt !== null
   })
 }
@@ -118,22 +138,21 @@ function screenInputVetoReader(
   }
 }
 
-function lazyWaitText(readWaitText: () => string): () => string {
-  let waitText: string | null = null
-  return () => (waitText ??= readWaitText())
-}
-
 export function ptyTuiIdleEvidence(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
   readWaitText: () => string,
-  readTailBlockedReason?: () => RuntimeTerminalWaitBlockedReason | null
+  readTailBlockedReason?: () => RuntimeTerminalWaitBlockedReason | null,
+  actionView?: TerminalActionText
 ): TuiIdleEvaluationInput {
-  const waitText = lazyWaitText(readWaitText)
+  const actionText = actionView ?? readTerminalActionText(pty, readWaitText)
+  const waitText = () => actionText.text
+  const scope = pty.commandPaint?.contentOrigin
+  const oldTitle = terminalTitleIsPredecessor(pty)
   const startup = source.startupObservation?.read(pty.ptyId)
   const commandBoundaryPending = pty.commandPaint?.commandBoundaryPending === true
   const terminalAgent =
-    commandBoundaryPending || startup?.kind === 'non-agent' || startup?.kind === 'pending'
+    commandBoundaryPending || startup?.kind === 'non-agent' || startup?.kind === 'shell'
       ? null
       : ((source.getPaneTerminalAgent
           ? source.getPaneTerminalAgent(pty.ptyId)
@@ -141,29 +160,66 @@ export function ptyTuiIdleEvidence(
   const agent = isTuiAgent(terminalAgent) ? terminalAgent : null
   const readScreen = screenReader(source, agent, pty.ptyId)
   const record = evidenceRecord(source, pty)
+  if (oldTitle) {
+    record.lastOscTitle = null
+  }
+  const statusOrigin = pty.commandPaint?.titleStatusOrigin
+  if (pty.commandPaint && terminalOriginIsPredecessor(pty.commandPaint, statusOrigin)) {
+    record.lastAgentStatus = null
+  }
+  let blocked: RuntimeTerminalWaitBlockedReason | null | undefined
+  const readBlocked = (): RuntimeTerminalWaitBlockedReason | null => {
+    if (blocked !== undefined) {
+      return blocked
+    }
+    blocked = actionText.query
+      ? detectTerminalWaitBlockedReason(waitText(), actionText.query)
+      : readTailBlockedReason
+        ? readTailBlockedReason()
+        : detectTerminalWaitBlockedReason(waitText())
+    if (source.readPermissionEvidence) {
+      const decision = source.readPermissionEvidence(
+        pty.ptyId,
+        actionText,
+        blocked,
+        actionView ? (source.readRuledScreen?.(pty.ptyId)?.lines ?? null) : undefined
+      )
+      blocked = decision.kind === 'superseded' || decision.kind === 'none' ? null : decision.reason
+    }
+    return blocked
+  }
   return {
     record,
-    readTailBlockedReason:
-      readTailBlockedReason ?? (() => detectTerminalWaitBlockedReason(waitText())),
+    readTailBlockedReason: readBlocked,
     readPositiveBodyEvidence: () =>
-      (agent !== 'qoder' &&
+      (!oldTitle &&
+        agent !== 'qoder' &&
         agent !== 'qoder-cn' &&
         agent !== 'hermes' &&
         source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
-      isKnownReadyPromptBody(waitText(), agent, readScreen, record.lastOutputAt !== null),
-    readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
-    readAgentRuleVerdict: () => readAgentRuleVerdict(agent, record, readScreen, waitText),
+      isKnownReadyPromptBody(
+        waitText(),
+        agent,
+        readScreen,
+        record.lastOutputAt !== null,
+        actionText.query,
+        scope
+      ),
+    readQuietReadyBodyEvidence: () =>
+      isQuietReadyScreenBody(waitText(), agent, readScreen, actionText.query, scope),
+    readAgentRuleVerdict: () =>
+      readAgentRuleVerdict(agent, record, readScreen, waitText, actionText.lowerQuery, scope),
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
     terminalAgent,
     commandBoundaryPending,
-    startupPending: startup?.kind === 'pending',
+    shellStartup: startup?.kind === 'shell',
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
     // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
     readCommandPainted: () =>
-      hasTerminalAgentPainted(pty, startup?.kind === 'pending' ? startup.candidate : agent)
+      hasTerminalAgentPainted(pty, startup?.kind === 'shell' ? startup.candidate : agent)
   }
 }

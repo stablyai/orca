@@ -13,7 +13,7 @@ const D0 = '\x1b]133;D;0\x07'
 const A = '\x1b]133;A\x07'
 const B = '\x1b]133;B\x07'
 
-function scanChunks(chunks: string[]) {
+function scanChunks(chunks: string[], qualifyScreen = false) {
   const finished: (number | null)[] = []
   let started = 0
   let shellStarted = 0
@@ -24,7 +24,8 @@ function scanChunks(chunks: string[]) {
     },
     () => {
       shellStarted += 1
-    }
+    },
+    { qualifyScreen }
   )
   for (const chunk of chunks) {
     scanner.scan(chunk)
@@ -103,5 +104,48 @@ describe('OSC 133 zone an app closes for itself', () => {
     scanner.reset()
     scanner.scan(D0)
     expect(finished).toHaveBeenCalledExactlyOnceWith(0)
+  })
+})
+
+describe('application markers on the alternate screen', () => {
+  it('qualifies adopted application output from the proven pre-chunk screen', () => {
+    const finished = vi.fn()
+    const started = vi.fn()
+    const scanner = createOsc133CommandFinishedScanner(finished, undefined, started, {
+      qualifyScreen: true
+    })
+    scanner.scan(`${B}${C}answer${D0}`, true)
+    expect(started).not.toHaveBeenCalled()
+    expect(finished).not.toHaveBeenCalled()
+    scanner.scan(`\x1b[?1049l${C}shell${D0}`)
+    expect(started).toHaveBeenCalledOnce()
+    expect(finished).toHaveBeenCalledExactlyOnceWith(0)
+  })
+  it.each([1, 7, 1000])(
+    'keeps the shell execution through application markers (chunks of %d)',
+    (size) => {
+      const application = `${C}\x1b[?1049h${B}${C}answer${D0}\x1b[?1049l${D0}`
+      expect(scanChunks(splitEvery(application, size), true)).toEqual({
+        started: 2,
+        shellStarted: 1,
+        finished: [0]
+      })
+    }
+  )
+
+  it('commits a normal-screen deferred start before entering an application screen', () => {
+    expect(scanChunks([`${B}${C}`, '\x1b[?1049hanswer', `${B}${C}more`], true)).toEqual({
+      started: 2,
+      shellStarted: 1,
+      finished: []
+    })
+  })
+
+  it('keeps alternate-screen context across DECSTR and returns to shell semantics on RIS', () => {
+    expect(scanChunks(['\x1b[?47h', '\x1b[!p', C, D0, '\x1bc', C, D0], true)).toEqual({
+      started: 2,
+      shellStarted: 1,
+      finished: [0]
+    })
   })
 })

@@ -72,6 +72,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
+    this.wakeInterestedTerminalDelivery(ptyId)
   }
 
   /** Record one derived side-effect fact: batched per chunk while applying

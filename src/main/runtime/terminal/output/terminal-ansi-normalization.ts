@@ -4,6 +4,11 @@ import {
   type TerminalEscapeIntroducer
 } from '../../../../shared/terminal/protocol/escape/terminal-escape-introducer'
 import { ownRetainedString } from '../../../../shared/own-retained-string'
+import {
+  sliceTerminalOrigins,
+  writeTerminalOrigins,
+  type TerminalOriginRuns
+} from '../../../../shared/terminal/output/terminal-content-origin'
 
 export function parseAnsiControlSequence(
   value: string,
@@ -95,14 +100,32 @@ export function containsTerminalVerticalLineControl(value: string): boolean {
 
 export function normalizeTerminalChunk(
   chunk: string,
-  pendingAnsi: string = ''
-): { text: string; pendingAnsi: string } {
+  pendingAnsi: string = '',
+  origins?: { chunk: TerminalOriginRuns; pending?: TerminalOriginRuns }
+): {
+  text: string
+  pendingAnsi: string
+  origins?: TerminalOriginRuns
+  pendingOrigins?: TerminalOriginRuns
+} {
   // Skip ANSI/OSC scanning for plain-text chunks on the high-throughput PTY path.
   if (pendingAnsi.length === 0 && !terminalChunkNeedsNormalization(chunk)) {
-    return { text: chunk, pendingAnsi: '' }
+    return {
+      text: chunk,
+      pendingAnsi: '',
+      ...(origins ? { origins: origins.chunk, pendingOrigins: [] } : {})
+    }
   }
   const combined = `${pendingAnsi}${chunk}`
-  const out = new NormalizedTerminalText(combined)
+  const combinedOrigins = origins
+    ? writeTerminalOrigins(
+        origins.pending ?? [],
+        pendingAnsi.length,
+        combined.length,
+        origins.chunk
+      )
+    : undefined
+  const out = new NormalizedTerminalText(combined, combinedOrigins)
   let textStart = 0
   // Copy spans and skip parameter parsing for controls the preview discards.
   for (let index = 0; index < combined.length; index += 1) {
@@ -137,7 +160,7 @@ export function normalizeTerminalChunk(
     }
     if (code === 0x0d) {
       out.appendSpan(textStart, index)
-      out.deferCarriageReturn()
+      out.deferCarriageReturn(index)
       textStart = index + 1
       continue
     }
@@ -161,8 +184,14 @@ export function normalizeTerminalChunk(
 class NormalizedTerminalText {
   private readonly parts: string[] = []
   private carriageReturnPending = false
+  private length = 0
+  private origins: TerminalOriginRuns = []
+  private carriageReturnIndex = 0
 
-  constructor(private readonly value: string) {}
+  constructor(
+    private readonly value: string,
+    private readonly sourceOrigins?: TerminalOriginRuns
+  ) {}
 
   appendSpan(start: number, end: number): void {
     if (end <= start) {
@@ -170,20 +199,61 @@ class NormalizedTerminalText {
     }
     if (this.carriageReturnPending && this.value.charCodeAt(start) !== 0x0a) {
       this.parts.push('\r')
+      this.appendOrigins(this.carriageReturnIndex, this.carriageReturnIndex + 1)
     }
     this.carriageReturnPending = false
     this.parts.push(this.value.slice(start, end))
+    this.appendOrigins(start, end)
   }
 
-  deferCarriageReturn(): void {
+  deferCarriageReturn(index: number): void {
     this.carriageReturnPending = true
+    this.carriageReturnIndex = index
+  }
+
+  private appendOrigins(start: number, end: number): void {
+    if (this.sourceOrigins) {
+      this.origins = writeTerminalOrigins(
+        this.origins,
+        this.length,
+        this.length + end - start,
+        sliceTerminalOrigins(this.sourceOrigins, start, end)
+      )
+    }
+    this.length += end - start
   }
 
   /** An undecided CR stays pending: it may be half of a CRLF split across chunks. */
-  finish(pendingTail: string): { text: string; pendingAnsi: string } {
+  finish(pendingTail: string): {
+    text: string
+    pendingAnsi: string
+    origins?: TerminalOriginRuns
+    pendingOrigins?: TerminalOriginRuns
+  } {
+    const pendingStart = this.value.length - pendingTail.length
+    const pendingOrigins = this.sourceOrigins
+      ? sliceTerminalOrigins(this.sourceOrigins, pendingStart)
+      : []
     return {
       text: this.parts.join(''),
-      pendingAnsi: this.carriageReturnPending ? `\r${pendingTail}` : pendingTail
+      pendingAnsi: this.carriageReturnPending ? `\r${pendingTail}` : pendingTail,
+      ...(this.sourceOrigins
+        ? {
+            origins: this.origins,
+            pendingOrigins: this.carriageReturnPending
+              ? writeTerminalOrigins(
+                  sliceTerminalOrigins(
+                    this.sourceOrigins,
+                    this.carriageReturnIndex,
+                    this.carriageReturnIndex + 1
+                  ),
+                  1,
+                  1 + pendingTail.length,
+                  pendingOrigins
+                )
+              : pendingOrigins
+          }
+        : {})
     }
   }
 }

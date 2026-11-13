@@ -1,3 +1,4 @@
+import type { TerminalOriginRuns } from '../../../../shared/terminal/output/terminal-content-origin'
 import { OrcaRuntimeWithOnPtyData } from '../output/pty-output-ingestion'
 
 import {
@@ -46,7 +47,12 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     >
   ): ReturnType<OrcaRuntimeWithGetUnpersistedTrackedTitleForPty['getOrCreatePtyTitleTrackerEntry']>
 
-  protected scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void {
+  protected scheduleWaitBlockedCheck(
+    ptyId: string,
+    appendedText: string,
+    at: number,
+    origins?: TerminalOriginRuns
+  ): void {
     let state = this.waitBlockedCheckStateByPtyId.get(ptyId)
     if (!state) {
       state = createWaitBlockedCheckState()
@@ -57,7 +63,7 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     const keywordHit = WAIT_BLOCKED_KEYWORD_PATTERN.test(keywordWindow)
     // Own the tiny retained carry so it cannot pin the full lowercased output window.
     state.keywordCarry = ownRetainedString(keywordWindow.slice(-WAIT_BLOCKED_KEYWORD_CARRY_CHARS))
-    appendWaitBlockedCarry(state.appended, appendedText)
+    appendWaitBlockedCarry(state.appended, appendedText, origins)
     const elapsed = at - state.lastAt
     if (keywordHit || elapsed >= WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS || elapsed < 0) {
       this.runWaitBlockedCheck(ptyId, state, at)
@@ -94,18 +100,22 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     const nextWaitState = computeTerminalTailWaitState(
       pty.tailBuffer,
       pty.tailPartialLine,
-      pty.preview
+      pty.preview,
+      pty
     )
     const previousWaitState = state.lastWaitState ?? {
       waitText: '',
       signal: null,
       fromTail: false
     }
+    const appended = readWaitBlockedCarry(state.appended)
     if (
       tailGainedNewerBlockedReason(
         previousWaitState,
         nextWaitState,
-        readWaitBlockedCarry(state.appended)
+        appended.text,
+        appended.origins,
+        pty.commandPaint?.contentOrigin
       )
     ) {
       pty.waitBlockedAt = at
@@ -149,7 +159,8 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
       state.lastWaitState = computeTerminalTailWaitState(
         pty.tailBuffer,
         pty.tailPartialLine,
-        pty.preview
+        pty.preview,
+        pty
       )
     }
   }

@@ -35,6 +35,7 @@ export type TranscriptPaneOptions = {
   onShellForegroundProof?: () => void
   onWrite?: (data: string) => void
   writeWithSettlement?: RuntimePtyController['writeWithSettlement']
+  serializeProviderBuffer?: RuntimePtyController['serializeProviderBuffer']
 }
 
 function transcriptLayoutStore(): RuntimeStore {
@@ -96,6 +97,9 @@ export async function createTranscriptPane(
       return true
     },
     ...(options.writeWithSettlement ? { writeWithSettlement: options.writeWithSettlement } : {}),
+    ...(options.serializeProviderBuffer
+      ? { serializeProviderBuffer: options.serializeProviderBuffer }
+      : {}),
     kill: () => true,
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {

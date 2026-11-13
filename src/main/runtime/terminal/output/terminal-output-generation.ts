@@ -9,6 +9,8 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 import { readLaunchCommandOutput } from '../wait/launched-agent-exit-watch'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
+  protected abstract wakeInterestedTerminalDelivery(ptyId: string): void
+
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
   private readonly publishedOutputRings = new TerminalPublishedOutputRings()
 
@@ -125,6 +127,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.forgetProviderVisibleState(ptyId)
     // A phone that saw the previous process gets a fresh snapshot, never a resume across the respawn.
     this.resetPublishedTerminalOutputCoverage(ptyId)
+    this.wakeInterestedTerminalDelivery(ptyId)
   }
 
   /** Ends resume onto output published so far: the phone's next subscribe gets a snapshot. */
@@ -234,6 +237,19 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   readRecentTerminalOutput(ptyId: string): string | undefined {
     return this.recentPtyOutputById.get(ptyId)?.read()
+  }
+
+  readKnownTerminalAlternateScreen(ptyId: string): boolean | undefined {
+    const mode = this.providerModeTrackersByPtyId.get(ptyId)
+    if (mode?.hasObservedAlternateScreenSwitch) {
+      return mode.isAlternateScreen
+    }
+    const state = this.readWholeScreenModel(ptyId)
+    // A caught-up alternate grid proves a switch; a fresh emulator's normal default proves none.
+    return state?.outputSequence === this.getPtyOutputSequence(ptyId) &&
+      state.emulator.isAlternateScreen
+      ? true
+      : undefined
   }
 
   /** The exit frees the buffer, so keep what the PTY's last command printed for its start failure. */

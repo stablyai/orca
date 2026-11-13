@@ -1,3 +1,7 @@
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { createTerminalInputReservation } from './terminal-input-admission'
+import { resolvePtyWriteHostPlatform } from './pty-write-host-platform'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-sessions/structured-session-ownership'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
@@ -19,6 +23,38 @@ type TerminalSendAction = { text?: string; enter?: boolean; interrupt?: boolean 
  *  await. */
 export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRuntimeWithControllerKnowsPtyIsLive {
   protected readonly pluginHookOrder = new TerminalPluginHookOrder()
+
+  protected getPtyAgent(ptyId: string): TerminalAgent | null {
+    const pty = this.ptysById.get(ptyId)
+    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+  }
+
+  protected writeTerminalAction(
+    ptyId: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    payload: string,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<WriteSettlement | undefined> {
+    return this.terminalWriter.writeAction(ptyId, action, payload, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
+  }
+
+  protected writeTerminalInputChunks(
+    ptyId: string,
+    text: string,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<WriteSettlement | undefined> {
+    return this.terminalWriter.writeChunks(ptyId, text, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
+  }
+
+  protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
+    return resolvePtyWriteHostPlatform(this.ptysById.get(ptyId))
+  }
 
   async sendTerminal(
     handle: string,

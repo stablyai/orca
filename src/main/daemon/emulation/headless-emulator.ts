@@ -24,15 +24,18 @@ import {
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
-import type { TerminalModes } from '../protocol/terminal-modes'
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../../shared/terminal/input/terminal-composer-draft'
 import { readTerminalCursorLineContext } from '../../../shared/terminal/input/terminal-cursor-line-context'
 import {
   readHeadlessTerminalRows,
+  isHeadlessCursorOnEmptyPrompt,
+  readHeadlessVisibleBufferRange,
   readHeadlessTerminalLines,
   type HeadlessTerminalRow
 } from './headless-terminal-rows'
+import { HeadlessContentOrigins } from './headless-content-origins'
+import type { TerminalContentOrigin } from '../../../shared/terminal/output/terminal-content-origin'
 
 /** windowsPty: ConPTY repaints its own grid after a resize, so growing rows must not pull scrollback. */
 export type HeadlessEmulatorOptions = Pick<ITerminalOptions, 'windowsPty'> & {
@@ -47,6 +50,7 @@ export type HeadlessEmulatorOptions = Pick<ITerminalOptions, 'windowsPty'> & {
 }
 
 export type HeadlessEmulatorWriteOptions = {
+  contentOrigin?: TerminalContentOrigin
   /** Opt in only for live chunks; seed, hydration and snapshot writes must never reply. */
   forwardQueryReplies?: boolean
 }
@@ -75,6 +79,7 @@ export class HeadlessEmulator {
   private queryReplyForwardingDepth = 0
   // serialize() omits parser state, so preserve an incomplete escape for the next live chunk.
   private partialEscapeTail = ''
+  private contentOrigins?: HeadlessContentOrigins
 
   constructor(opts: HeadlessEmulatorOptions) {
     this.pathFlavor = opts.pathFlavor
@@ -175,14 +180,20 @@ export class HeadlessEmulator {
     }
 
     const forwardQueryReplies = opts.forwardQueryReplies === true
-    if (this.tryWriteSync(data, { forwardQueryReplies })) {
+    if (opts.contentOrigin && !this.contentOrigins) {
+      this.contentOrigins = new HeadlessContentOrigins(this.terminal)
+    }
+    if (this.tryWriteSync(data, opts)) {
       return Promise.resolve()
     }
     this.oscText.scan(data)
     // The empty-write callback opens forwarding at this chunk’s position in xterm’s async FIFO.
-    if (forwardQueryReplies) {
+    if (forwardQueryReplies || this.contentOrigins) {
       this.terminal.write('', () => {
-        this.queryReplyForwardingDepth += 1
+        if (forwardQueryReplies) {
+          this.queryReplyForwardingDepth += 1
+        }
+        this.contentOrigins?.begin(opts.contentOrigin)
       })
     }
     return new Promise<void>((resolve) => {
@@ -190,6 +201,7 @@ export class HeadlessEmulator {
         if (forwardQueryReplies) {
           this.queryReplyForwardingDepth -= 1
         }
+        this.contentOrigins?.end()
         this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
         resolve()
       })
@@ -198,10 +210,7 @@ export class HeadlessEmulator {
 
   /** Apply cold-restore bytes before snapshotting; return false if the private sync API is unavailable. */
   writeSync(data: string): boolean {
-    if (this.disposed) {
-      return false
-    }
-    return this.tryWriteSync(data)
+    return !this.disposed && this.tryWriteSync(data)
   }
 
   private tryWriteSync(data: string, opts: HeadlessEmulatorWriteOptions = {}): boolean {
@@ -215,9 +224,11 @@ export class HeadlessEmulator {
       this.queryReplyForwardingDepth += 1
     }
     // Queued PTY writes could leave a snapshot with half-cleared TUI rows.
+    this.contentOrigins?.begin(opts.contentOrigin)
     try {
       writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
     } finally {
+      this.contentOrigins?.end()
       if (forwardQueryReplies) {
         this.queryReplyForwardingDepth -= 1
       }
@@ -234,6 +245,7 @@ export class HeadlessEmulator {
     this.restoredOscLinks = []
     const writeSync = this.partialEscapeTail ? null : (data: string) => void this.writeSync(data)
     resizeLikeOwnPty(this.terminal, cols, rows, writeSync)
+    this.contentOrigins?.resized()
   }
 
   // Report applied dimensions so the renderer can detect a dropped resize.
@@ -242,7 +254,7 @@ export class HeadlessEmulator {
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
-    const modes = this.getModes()
+    const modes = readTerminalModes(this.terminal)
     // Absolute cursor restore avoids wrap-pending drift; carry the saved register for DECRC.
     const serializedAnsi = serializeWithAbsoluteCursor(
       this.serializer,
@@ -286,18 +298,15 @@ export class HeadlessEmulator {
 
   /** Ctrl+L is safe at an empty PSReadLine prompt; PowerShell’s continuation prompt (>>) is excluded. */
   isCursorOnEmptyPromptLine(): boolean {
-    const buffer = this.terminal.buffer.active
-    const line = buffer.getLine(buffer.baseY + buffer.cursorY)
-    if (!line) {
-      return false
-    }
-    const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
-    const fullLine = line.translateToString(true).trimEnd()
-    return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
+    return isHeadlessCursorOnEmptyPrompt(this.terminal)
   }
 
   getVisibleLines(): string[] {
     return readHeadlessTerminalLines(this.terminal)
+  }
+
+  getVisibleActionLines(scope: TerminalContentOrigin): string[] {
+    return this.contentOrigins?.read(scope) ?? this.getVisibleLines()
   }
 
   getVisibleRows(): HeadlessTerminalRow[] {
@@ -313,13 +322,7 @@ export class HeadlessEmulator {
   }
 
   getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {
-    const buffer = this.terminal.buffer.active
-    const start = buffer.viewportY
-    return {
-      start,
-      endExclusive: Math.min(buffer.length, start + this.terminal.rows),
-      totalLength: buffer.length
-    }
+    return readHeadlessVisibleBufferRange(this.terminal)
   }
 
   getCursorLineContext(rowsAbove = this.terminal.rows): TerminalCursorContext | null {
@@ -354,9 +357,5 @@ export class HeadlessEmulator {
   dispose(): void {
     this.disposed = true
     this.terminal.dispose()
-  }
-
-  private getModes(): TerminalModes {
-    return readTerminalModes(this.terminal)
   }
 }

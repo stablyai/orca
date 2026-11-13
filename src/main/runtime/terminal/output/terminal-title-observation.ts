@@ -137,6 +137,15 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
         pty.lastOscTitleAt = identityOnlyTitle ? null : observedAt
         pty.lastOscTitleEpochMs = observedAtEpochMs
       }
+      if (pty.commandPaint) {
+        const receipt = pty.commandPaint.titleReceipt
+        pty.commandPaint.titleStatusOrigin =
+          status === undefined &&
+          !identityOnlyTitle &&
+          this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity == null
+            ? receipt?.origin
+            : undefined
+      }
       pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
       if (prevStatus === 'working' && agentStatus === null) {
@@ -240,7 +249,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
    *  teardown so it cannot fire into pruned records. */
   protected disposePtyTitleTracker(ptyId: string, preserveStartupInterest = false): void {
-    this.clearDeliveryRecheck(ptyId)
+    if (!preserveStartupInterest) {
+      this.clearDeliveryRecheck(ptyId)
+    }
     this.observeClaudeTerminalEvidence(ptyId, { kind: 'reset' })
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
@@ -263,6 +274,10 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       pty.lastOscTitle = null
+      if (pty.commandPaint) {
+        pty.commandPaint.titleReceipt = undefined
+        pty.commandPaint.titleStatusOrigin = undefined
+      }
       pty.lastOscTitleAt = null
       pty.lastOscTitleEpochMs = null
       pty.titleDisplayClear = null

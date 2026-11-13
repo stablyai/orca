@@ -112,14 +112,25 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     describe('prompts the runtime already matched but never surfaced', () => {
-      it('still lets a live working title clear a stale startup prompt', async () => {
-        // Startup prompt text lacks dismissal markers; a live non-permission title proves staleness for both status and send guards.
+      it('reports the current trust dialog and clears it after the recorded answer repaint', async () => {
+        // A current modal outranks an earlier working title; only the subsequent repaint clears it.
         const { runtime, handle } = await createPane({
           paneTitle: '✻ Claude Code',
           foregroundProcess: 'claude',
+          size: { cols: 120, rows: 40 },
           data: CLAUDE_TRUST
         })
-
+        await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
+          reason: 'agent-trust-workspace'
+        })
+        runtime.onPtyData(
+          PTY_ID,
+          `${readFileSync(
+            join(__dirname, '../../__fixtures__/claude-dialog-trust-workspace-answered.txt'),
+            'utf8'
+          )}\x1b]0;✻ Claude Code\x07`,
+          Date.now()
+        )
         await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
       })
     })

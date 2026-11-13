@@ -1,5 +1,10 @@
-import { describe, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import './agent-transcript-replay-test-harness'
+import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 import { describeScreenRuledAgentTranscripts } from './screen-ruled-agent-transcript-suite'
 
 vi.mock('electron', () => ({
@@ -30,6 +35,36 @@ const NOT_READY = [
 ]
 
 describe('Prime Agent readiness from captured bytes', () => {
+  it('keeps live application zones in the restored alternate screen without a provider capture', async () => {
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Prime Agent',
+      foregroundProcess: 'prime-agent',
+      data: '',
+      size: { cols: 120, rows: 40 }
+    })
+    const enter = '\x1b[?1049h'
+    runtime.seedHeadlessTerminal(
+      TRANSCRIPT_PANE_PTY_ID,
+      enter,
+      { cols: 120, rows: 40 },
+      { replaceExisting: true }
+    )
+    await runtime.readTerminal(handle, { screen: true })
+    const recording = readRuntimeFixture('prime-agent-0-9-8-turn-ended')
+    vi.useFakeTimers()
+    try {
+      runtime.onPtyData(
+        TRANSCRIPT_PANE_PTY_ID,
+        recording.slice(recording.indexOf(enter) + enter.length),
+        Date.now()
+      )
+      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+      await vi.advanceTimersByTimeAsync(4_000)
+      await expect(wait).resolves.toMatchObject({ satisfied: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   describeScreenRuledAgentTranscripts({
     agent: 'prime-agent',
     foregroundProcess: 'prime-agent',

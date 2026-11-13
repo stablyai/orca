@@ -23,6 +23,8 @@ function findAgentStatusPrefixCarry(data: string): string {
 }
 
 export type ProcessedAgentStatusChunk = {
+  /** Local scanner coordinate map; never persisted or sent as a terminal fact. */
+  rawOffsetAt?: (cleanOffset: number) => number
   /** Latest action evidence at its raw chunk offset, including unchanged live program reports; null retires an ended program. */
   readinessStatus?: {
     payload: ParsedAgentStatusPayload | null

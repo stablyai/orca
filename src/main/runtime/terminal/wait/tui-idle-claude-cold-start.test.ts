@@ -134,8 +134,15 @@ describe('tui-idle on a slow-starting Claude', () => {
   })
 
   it('keeps holding a title-only Claude pane while the quiet foreground is Claude itself, not a pager', async () => {
-    // Native Claude's foreground name is its node process; the probe must not relax the gate for it.
-    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Terminal',
+      foregroundProcess: 'node',
+      processInspection: inspectedForeground('node'),
+      confirmedForegroundProcess: 'claude',
+      data: ''
+    })
+    vi.useFakeTimers()
+    const write = (chunk: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
     write(SHELL_RUNS_CLAUDE + LATER_PREEXEC_HOOK_PRINTS)
     const settled = vi.fn()
     const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
@@ -146,6 +153,14 @@ describe('tui-idle on a slow-starting Claude', () => {
 
     write(CLAUDE_COMPOSER_BARE_TITLE)
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('keeps the ordinary fallback when an opaque node foreground cannot be attributed to Claude', async () => {
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
+    write(SHELL_RUNS_CLAUDE + LATER_PREEXEC_HOOK_PRINTS)
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 
@@ -229,7 +244,7 @@ describe('tui-idle on a slow-starting Claude', () => {
   })
 
   it.each([null, 'zsh', 'error'])(
-    'recovers from %s to an observed pager with no new output',
+    'uses positive %s foreground evidence and preserves the fallback when it is unavailable',
     async (initial) => {
       const inspection = inspectedForeground(initial === 'error' ? null : initial)
       let failing = initial === 'error'
@@ -255,6 +270,10 @@ describe('tui-idle on a slow-starting Claude', () => {
       const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
       wait.then(settled, () => {})
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
+      if (initial !== 'zsh') {
+        await expect(wait).resolves.toMatchObject({ satisfied: true })
+        return
+      }
       expect(settled).not.toHaveBeenCalled()
       failing = false
       Object.assign(inspection, inspectedForeground('less'))

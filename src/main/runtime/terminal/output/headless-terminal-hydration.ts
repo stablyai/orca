@@ -1,3 +1,4 @@
+import type { TerminalContentOrigin } from '../../../../shared/terminal/output/terminal-content-origin'
 import type {
   RuntimeHeadlessTerminal,
   RuntimePtyWorktreeRecord
@@ -226,7 +227,11 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     outputSequence: number,
     forwardQueryReplies = false,
     isCurrentAction = this.ptyForegroundAgent.captureGeneration(ptyId),
-    actionBoundary = -1
+    actionBoundary = -1,
+    contentScopes?: readonly {
+      offset: number
+      origin: TerminalContentOrigin
+    }[]
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
@@ -252,7 +257,26 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       let frameEnd = 0
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         frameEnd += chunk.length
-        await state.emulator.write(chunk, { forwardQueryReplies })
+        const frameStart = frameEnd - chunk.length
+        let start = frameStart
+        const scopes = contentScopes ?? []
+        let origin = scopes[0]?.origin
+        for (const scope of scopes) {
+          if (scope.offset <= frameStart) {
+            origin = scope.origin
+          } else if (scope.offset < frameEnd) {
+            await state.emulator.write(data.slice(start, scope.offset), {
+              forwardQueryReplies,
+              contentOrigin: origin
+            })
+            start = scope.offset
+            origin = scope.origin
+          }
+        }
+        await state.emulator.write(data.slice(start, frameEnd), {
+          forwardQueryReplies,
+          contentOrigin: origin
+        })
         const pty = this.ptysById.get(ptyId)
         if (!pty || this.headlessTerminals.get(ptyId) !== state) {
           continue
@@ -278,7 +302,14 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
               pty.launchAgent,
               readStatus,
               outputObservedAt
-            ) ?? observeFreebuffTerminalStatus(state.emulator, chunk, command, pty.launchAgent)
+            ) ??
+            observeFreebuffTerminalStatus(
+              state.emulator,
+              chunk,
+              command,
+              pty.launchAgent,
+              pty.commandPaint?.contentOrigin
+            )
           if (payload) {
             pty.lastExplicitAgentStatus = {
               state: payload.state,

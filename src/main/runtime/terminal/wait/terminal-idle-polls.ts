@@ -3,6 +3,10 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
+import {
+  joinedTerminalOrigins,
+  terminalSupportQuery
+} from '../../../../shared/terminal/output/terminal-content-origin'
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
@@ -41,7 +45,7 @@ type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   /** Whether the pane's running command has painted anything of its own. */
   hasCommandPainted(ptyId: string): boolean
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
-  readVisibleScreen(ptyId: string): Promise<string | null> | null
+  readVisibleScreen(ptyId: string): Promise<string | readonly string[] | null> | null
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
 }
 
@@ -147,6 +151,7 @@ export class RuntimeTerminalIdlePolls {
     }
     let startedForegroundPoll = false
     try {
+      this.deps.startupObservation?.refresh(entry.pty.ptyId)
       const tail = createTerminalWaitTailReader(entry.pty)
       let sample = this.sample(entry, tail)
       let { verdict } = sample
@@ -196,9 +201,6 @@ export class RuntimeTerminalIdlePolls {
       }
       const lane = verdict.quietForeground
       if (lane === 'closed') {
-        if (sample.isQuiet(lane)) {
-          this.deps.startupObservation?.refresh(ptyId)
-        }
         return
       }
       // Why quiet before the read too: a streaming or not-yet-painted pane cannot settle, so it
@@ -250,7 +252,19 @@ export class RuntimeTerminalIdlePolls {
     }
     entry.screenReadInFlight = true
     return screenRead
-      .then((screen) => (screen ? detectTerminalWaitBlockedReason(screen) : null))
+      .then((screen) => {
+        if (!screen) {
+          return null
+        }
+        if (typeof screen === 'string') {
+          return detectTerminalWaitBlockedReason(screen)
+        }
+        const joined = joinedTerminalOrigins(screen)
+        return detectTerminalWaitBlockedReason(
+          joined.text,
+          terminalSupportQuery(joined.origins, entry.pty.commandPaint?.contentOrigin)
+        )
+      })
       .finally(() => {
         entry.screenReadInFlight = false
       })

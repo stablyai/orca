@@ -296,6 +296,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           agent,
           readScreen: () => this.readCaughtUpRuledScreen(ptyId),
           readOutputClockAt: () => this.readOutputClockAt(ptyId),
+          readContentScope: () => this.ptysById.get(ptyId)?.commandPaint?.contentOrigin,
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })

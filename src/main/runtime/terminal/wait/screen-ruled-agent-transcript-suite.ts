@@ -6,7 +6,7 @@ import {
   waitForTranscriptIdle
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 import {
-  finalReadProjection,
+  finalProviderSnapshot,
   finalReplayFrame,
   readRuntimeFixture,
   type TranscriptReplayResize
@@ -177,29 +177,19 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
     )
 
     // Why no bytes: a restored pane has no output clock, so the provider's screen is all it has.
-    // Why the read projection: it is what the probe's screen read returns, draft blanked.
     async function probedVerdict(fixture: ScreenRuledFixture): Promise<boolean> {
-      const { lines, draft } = await finalReadProjection(fixture.name, fixture.cols, fixture.rows)
+      const snapshot = await finalProviderSnapshot(fixture.name, fixture.cols, fixture.rows)
       const { runtime, handle } = await createTranscriptPane({
         paneTitle: 'Terminal',
         foregroundProcess: suite.foregroundProcess,
         launchAgent: agent,
-        data: ''
-      })
-      const read = vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
-        handle,
-        status: 'running',
-        tail: lines,
-        ...(draft === undefined ? {} : { draft }),
-        truncated: false,
-        nextCursor: null,
-        source: 'screen'
+        data: '',
+        size: { cols: fixture.cols, rows: fixture.rows },
+        serializeProviderBuffer: async () => snapshot
       })
       const result = await waitForTranscriptIdle({ runtime, handle }, 2_500).catch(() => ({
         satisfied: false
       }))
-      // Presence precondition: the visible-screen probe actually ran.
-      expect(read).toHaveBeenCalled()
       return result.satisfied === true
     }
 

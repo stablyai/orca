@@ -1,4 +1,12 @@
 import { isTerminalWaitWhitespace } from '../terminal/wait/terminal-wait-tail-window'
+import {
+  lastSupportedIndex,
+  supportedRegexMatches
+} from '../../../shared/terminal/output/terminal-supported-occurrences'
+import {
+  offsetTerminalSupport,
+  type TerminalSupportQuery
+} from '../../../shared/terminal/output/terminal-content-origin'
 
 /** agy 1.2.7 adds edit mode to the caret row; accept it without admitting >-prefixed menu choices. */
 function isComposerLine(value: string): boolean {
@@ -29,8 +37,11 @@ function isModelRow(line: string): boolean {
 }
 
 /** Cursor-addressed chrome makes row anchors unstable, requiring a whole-tail composer scan. */
-export function findAntigravityComposerIndex(normalized: string): number | null {
-  const contentStart = normalized.lastIndexOf('antigravity cli')
+export function findAntigravityComposerIndex(
+  normalized: string,
+  support?: TerminalSupportQuery
+): number | null {
+  const contentStart = lastSupportedIndex(normalized, 'antigravity cli', support)
   if (contentStart === -1) {
     return null
   }
@@ -53,10 +64,11 @@ export function findAntigravityComposerIndex(normalized: string): number | null 
       trimmedEnd -= 1
     }
     const lineValue = normalized.slice(trimmedStart, trimmedEnd)
-    if (trimmedStart >= contentStart && isComposerLine(lineValue)) {
+    const eligible = !support || support(trimmedStart, trimmedEnd)
+    if (trimmedStart >= contentStart && isComposerLine(lineValue) && eligible) {
       composerStart = trimmedStart
       modelAfterComposer = false
-    } else if (trimmedStart >= contentStart) {
+    } else if (trimmedStart >= contentStart && eligible) {
       const value = lineValue
       const isWorkspace =
         value.startsWith('~/') || value.startsWith('/') || /^[a-z]:\\/i.test(value)
@@ -77,9 +89,11 @@ export function findAntigravityComposerIndex(normalized: string): number | null 
   }
   // Menus also retain a caret; only the latest screen can prove readiness.
   if (
-    /do you trust|sign in|select a model|collect usage|choose a theme|press enter to continue/.test(
-      normalized.slice(contentStart)
-    )
+    supportedRegexMatches(
+      normalized.slice(contentStart),
+      /do you trust|sign in|select a model|collect usage|choose a theme|press enter to continue/,
+      offsetTerminalSupport(support, contentStart)
+    ).length > 0
   ) {
     return null
   }

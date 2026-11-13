@@ -8,6 +8,11 @@ import {
   showsHoldAnchor,
   type BlockedTextSignal
 } from './agent-state-text-anchors'
+import { lastSupportedIndex } from '../../../shared/terminal/output/terminal-supported-occurrences'
+import {
+  offsetTerminalSupport,
+  type TerminalSupportQuery
+} from '../../../shared/terminal/output/terminal-content-origin'
 
 // Any pane can contain another agent's dialog; the latest live blocker wins.
 
@@ -30,7 +35,7 @@ const LIVE_PROMPT_TAIL_LINES = 12
 /** `wholeText` scans every line: a grid holds only what is painted, and a tall dialog's keyword sits above the window. */
 export function findTerminalWaitBlockedSignal(
   fullTail: string,
-  options: { wholeText?: boolean } = {}
+  options: { wholeText?: boolean; support?: TerminalSupportQuery } = {}
 ): BlockedTextSignal | null {
   const windowStart = options.wholeText
     ? 0
@@ -39,59 +44,68 @@ export function findTerminalWaitBlockedSignal(
   if (!terminalWaitBlockedSentinelRe().test(normalized)) {
     return null
   }
-  const signal = findBlockedSignalInLiveWindow(normalized)
+  const signal = findBlockedSignalInLiveWindow(
+    normalized,
+    offsetTerminalSupport(options.support, windowStart)
+  )
   // Convert the live-window index to full-tail coordinates for ready-header comparison.
   return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
 }
 
-export function isUnblockedAfter(normalized: string, readyIndex: number | null): boolean {
+export function isUnblockedAfter(
+  normalized: string,
+  readyIndex: number | null,
+  support?: TerminalSupportQuery
+): boolean {
   if (readyIndex === null) {
     return false
   }
-  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+  const blockedSignal = findTerminalWaitBlockedSignal(normalized, { support })
   return blockedSignal === null || blockedSignal.index <= readyIndex
 }
 
-export function isSettledAfter(normalized: string, readyIndex: number | null): boolean {
-  return isUnblockedAfter(normalized, readyIndex) && !showsHoldAnchor(normalized)
+export function isSettledAfter(
+  normalized: string,
+  readyIndex: number | null,
+  support?: TerminalSupportQuery
+): boolean {
+  return isUnblockedAfter(normalized, readyIndex, support) && !showsHoldAnchor(normalized, support)
 }
 
-function findBlockedSignalInLiveWindow(normalized: string): BlockedTextSignal | null {
-  const candidates = findStartupDialogBlockedSignals(normalized)
-  const trustIndex = Math.max(
-    normalized.lastIndexOf('do you trust'),
-    normalized.lastIndexOf('trust this'),
-    normalized.lastIndexOf('trusted workspace')
-  )
-  const trustSegment = trustIndex === -1 ? '' : normalized.slice(trustIndex)
+function findBlockedSignalInLiveWindow(
+  normalized: string,
+  support?: TerminalSupportQuery
+): BlockedTextSignal | null {
+  const candidates = findStartupDialogBlockedSignals(normalized, support)
+  const last = (term: string) => lastSupportedIndex(normalized, term, support)
+  const trustIndex = Math.max(last('do you trust'), last('trust this'), last('trusted workspace'))
   if (
     trustIndex !== -1 &&
-    (trustSegment.includes('workspace') ||
-      trustSegment.includes('folder') ||
-      trustSegment.includes('directory') ||
-      trustSegment.includes('repo'))
+    ['workspace', 'folder', 'directory', 'repo'].some((term) => last(term) >= trustIndex)
   ) {
     // Workspace-trust wording identifies no particular agent.
     candidates.push({ reason: 'agent-trust-workspace', index: trustIndex })
   }
   const interactivePromptIndex = Math.max(
-    normalized.lastIndexOf('press enter to confirm'),
-    normalized.lastIndexOf('press enter to continue'),
-    normalized.lastIndexOf('press enter to view'),
-    normalized.lastIndexOf('press enter to insert'),
-    normalized.lastIndexOf('press t to trust')
+    last('press enter to confirm'),
+    last('press enter to continue'),
+    last('press enter to view'),
+    last('press enter to insert'),
+    last('press t to trust')
   )
   const interactivePromptContext =
     interactivePromptIndex === -1
       ? ''
       : normalized.slice(Math.max(0, interactivePromptIndex - 600), interactivePromptIndex + 200)
   // Codex in scrollback widens dialog detection but cannot identify the pane's agent.
-  const hasInteractiveDialogContext =
-    interactivePromptContext.includes('codex') ||
-    interactivePromptContext.includes('permission') ||
-    interactivePromptContext.includes('sandbox') ||
-    interactivePromptContext.includes('trust') ||
-    interactivePromptContext.includes('hook')
+  const hasInteractiveDialogContext = ['codex', 'permission', 'sandbox', 'trust', 'hook'].some(
+    (term) =>
+      lastSupportedIndex(
+        interactivePromptContext,
+        term,
+        offsetTerminalSupport(support, Math.max(0, interactivePromptIndex - 600))
+      ) !== -1
+  )
   if (interactivePromptIndex !== -1 && hasInteractiveDialogContext) {
     const contextStart = Math.max(0, interactivePromptIndex - 600)
     const hasSpecificPromptInContext = candidates.some(
@@ -101,15 +115,17 @@ function findBlockedSignalInLiveWindow(normalized: string): BlockedTextSignal | 
       candidates.push({ reason: 'agent-interactive-prompt', index: interactivePromptIndex })
     }
   }
-  candidates.push(...findBlockedAnchorSignals(normalized))
-  const permissionPromptIndex = Math.max(
-    normalized.lastIndexOf('permission required'),
-    normalized.lastIndexOf('requires permission')
-  )
+  candidates.push(...findBlockedAnchorSignals(normalized, support))
+  const permissionPromptIndex = Math.max(last('permission required'), last('requires permission'))
   if (permissionPromptIndex !== -1) {
     const permissionSegment = normalized.slice(permissionPromptIndex, permissionPromptIndex + 1_500)
-    const decisionCount = ['allow once', 'allow always', 'reject', 'deny'].filter((choice) =>
-      permissionSegment.includes(choice)
+    const decisionCount = ['allow once', 'allow always', 'reject', 'deny'].filter(
+      (choice) =>
+        lastSupportedIndex(
+          permissionSegment,
+          choice,
+          offsetTerminalSupport(support, permissionPromptIndex)
+        ) !== -1
     ).length
     if (decisionCount >= 2) {
       // Named choices identify no agent; retain the old codex-* alias for mixed-version receipts.

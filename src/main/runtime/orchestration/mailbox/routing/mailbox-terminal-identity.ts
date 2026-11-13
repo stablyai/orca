@@ -5,6 +5,12 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 
 /** Which live terminal orchestration types mail into, and the handle it is known by. */
 export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+  protected terminalHasCurrentAgentMailAuthority(pty: RuntimePtyWorktreeRecord): boolean {
+    const startup = this.ptyForegroundAgent.startup.read(pty.ptyId)
+    const ended = pty.commandPaint?.commandActive === false
+    const unrelated = startup?.kind === 'non-agent' || startup?.kind === 'shell'
+    return !(ended || unrelated) || !!pty.foregroundAgent || !!pty.lastExplicitAgentStatus
+  }
   protected getMailboxTerminalForPaneKey(paneKey: string): OrchestrationMailboxTerminal | null {
     const pty = this.getPtyRecordForPaneKey(paneKey)
     return pty ? this.getOrchestrationMailboxTerminal(pty.ptyId) : null
@@ -35,8 +41,15 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
   ): OrchestrationMailboxTerminal | null {
     const paneKeys = this.getMailboxPaneKeysForPty(pty)
     const { ptyId, lastAgentStatus, lastAgentStatusObservedLive } = pty
+    const current = this.terminalHasCurrentAgentMailAuthority(pty)
     return paneKeys.length > 0
-      ? { ptyId, handle, paneKeys, lastAgentStatus, lastAgentStatusObservedLive }
+      ? {
+          ptyId,
+          handle,
+          paneKeys,
+          lastAgentStatus: current ? lastAgentStatus : null,
+          lastAgentStatusObservedLive: current ? lastAgentStatusObservedLive : true
+        }
       : null
   }
 

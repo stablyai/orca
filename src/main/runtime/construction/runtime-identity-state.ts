@@ -87,6 +87,10 @@ export type MobileSessionTabSubscription = {
 }
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+  protected abstract readCommonTerminalPermission(
+    ...args: Parameters<NonNullable<TuiIdleEvidenceSource['readPermissionEvidence']>>
+  ): ReturnType<NonNullable<TuiIdleEvidenceSource['readPermissionEvidence']>>
+
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
   }
@@ -334,6 +338,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   // Every tui-idle site must rank the same pane evidence identically.
   protected readonly tuiIdleEvidenceSource: TuiIdleEvidenceSource = {
+    readPermissionEvidence: (...args) => this.readCommonTerminalPermission(...args),
     captureGeneration: (ptyId) => this.ptyForegroundAgent.captureGeneration(ptyId),
     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
@@ -363,9 +368,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)
-        ? this.readHeadlessVisibleTerminalState(ptyId).then(
-            (screen) => screen?.lines.join('\n') ?? null
-          )
+        ? this.readHeadlessVisibleTerminalState(ptyId).then((screen) => screen?.lines ?? null)
         : null,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })

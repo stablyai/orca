@@ -10,7 +10,7 @@ import {
 } from './terminal-wait-results'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { readTerminalActionText } from '../output/terminal-action-text'
 import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
@@ -83,7 +83,7 @@ export class RuntimeTerminalWait {
     if (condition !== 'exit' && getPtyTerminalState(pty) === 'exited') {
       throw buildPtyTerminalWaitExitError(pty)
     }
-    const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const waitText = readTerminalActionText(pty).text
     // Only strong verdicts settle synchronously; weak evidence needs the poll's rendered-screen check.
     const verdict = condition === 'tui-idle' ? this.evaluate(pty, waitText) : null
     if (verdict?.kind === 'blocked') {

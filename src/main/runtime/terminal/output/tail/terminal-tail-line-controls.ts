@@ -3,6 +3,12 @@ import {
   parseAnsiControlSequence
 } from '../terminal-ansi-normalization'
 import { MAX_TAIL_CHARS, MAX_TAIL_LINES, MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
+import {
+  sliceTerminalOrigins,
+  writeTerminalOrigins,
+  setTerminalLineOrigins,
+  type TerminalOriginRuns
+} from '../../../../../shared/terminal/output/terminal-content-origin'
 
 export function trimTerminalLineRight(line: string): string {
   let end = line.length
@@ -62,25 +68,38 @@ export function splitRetainedTerminalTailSegments(value: string): {
   }
 }
 
-export function processTerminalTailCompleteSegments(segments: string[]): string[] {
+export function processTerminalTailCompleteSegments(
+  segments: string[],
+  origins?: readonly TerminalOriginRuns[]
+): string[] {
   const processed: string[] = []
+  const processedOrigins: TerminalOriginRuns[] = []
   let totalChars = 0
   for (let index = segments.length - 1; index >= 0; index -= 1) {
-    const line = applyTerminalLineControls(segments[index]!).text
+    const result = applyTerminalLineControls(segments[index]!, origins?.[index])
+    const line = result.text
     processed.push(line)
+    processedOrigins.push(result.origins ?? [])
     totalChars += line.length
     if (totalChars > MAX_TAIL_CHARS) {
       break
     }
   }
   processed.reverse()
+  if (origins) {
+    setTerminalLineOrigins(processed, processedOrigins.toReversed())
+  }
   return processed
 }
 
-export function applyTerminalLineControls(line: string): {
+export function applyTerminalLineControls(
+  line: string,
+  origins?: TerminalOriginRuns
+): {
   text: string
   cursorColumn: number
   hadControl: boolean
+  origins?: TerminalOriginRuns
 } {
   const carriageIndex = line.lastIndexOf('\r')
   const latestRedraw = carriageIndex !== -1 ? line.slice(carriageIndex + 1) : line
@@ -88,16 +107,19 @@ export function applyTerminalLineControls(line: string): {
     return {
       text: latestRedraw,
       cursorColumn: latestRedraw.length,
-      hadControl: carriageIndex !== -1
+      hadControl: carriageIndex !== -1,
+      ...(origins ? { origins: sliceTerminalOrigins(origins, carriageIndex + 1) } : {})
     }
   }
 
   const chars: string[] = []
+  let keptOrigins: TerminalOriginRuns = []
+  const sourceOrigins = sliceTerminalOrigins(origins, carriageIndex + 1)
   let cursor = 0
   const moveCursorTo = (nextCursor: number): void => {
     cursor = clampTerminalPreviewCursor(nextCursor)
   }
-  const writeChar = (char: string): void => {
+  const writeChar = (char: string, at: number): void => {
     if (cursor > chars.length) {
       const oldLength = chars.length
       chars.length = cursor
@@ -107,6 +129,14 @@ export function applyTerminalLineControls(line: string): {
       chars.push(char)
     } else {
       chars[cursor] = char
+    }
+    if (origins) {
+      keptOrigins = writeTerminalOrigins(
+        keptOrigins,
+        cursor,
+        cursor + 1,
+        sliceTerminalOrigins(sourceOrigins, at, at + 1)
+      )
     }
     cursor += 1
   }
@@ -132,11 +162,14 @@ export function applyTerminalLineControls(line: string): {
         const mode = parsed.firstParam ?? 0
         if (mode === 0) {
           chars.length = cursor
+          keptOrigins = sliceTerminalOrigins(keptOrigins, 0, cursor)
         } else if (mode === 1) {
           const deleteCount = Math.min(cursor + 1, chars.length)
           chars.fill(' ', 0, deleteCount)
+          keptOrigins = writeTerminalOrigins(keptOrigins, 0, deleteCount)
         } else if (mode === 2) {
           chars.length = 0
+          keptOrigins = []
         }
       } else if (parsed.final === 'G' || parsed.final === '`') {
         moveCursorTo((parsed.firstParam ?? 1) - 1)
@@ -146,10 +179,15 @@ export function applyTerminalLineControls(line: string): {
         moveCursorTo(cursor + (parsed.firstParam ?? 1))
       }
     } else {
-      writeChar(char)
+      writeChar(char, index)
     }
   }
-  return { text: chars.join(''), cursorColumn: cursor, hadControl: true }
+  return {
+    text: chars.join(''),
+    cursorColumn: cursor,
+    hadControl: true,
+    ...(origins ? { origins: keptOrigins } : {})
+  }
 }
 
 export function clampTerminalPreviewCursor(nextCursor: number): number {

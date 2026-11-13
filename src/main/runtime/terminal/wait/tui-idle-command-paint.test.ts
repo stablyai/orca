@@ -7,6 +7,8 @@ import {
   TRANSCRIPT_PANE_PTY_ID
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 
+import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
+
 const POLL_INTERVAL_MS = 2_000
 
 describe('tui-idle on an agent with no rest signal', () => {
@@ -121,11 +123,28 @@ describe('tui-idle on an agent with no rest signal', () => {
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 
-  it('discards a predecessor visible read after a genuine new command, then accepts current readiness', async () => {
+  it('discards a pre-command visible probe and requests positive shell evidence for an existing wait', async () => {
+    const inspected = vi.fn()
     const { runtime, handle } = await createTranscriptPane({
       paneTitle: 'Terminal',
       foregroundProcess: 'zsh',
-      data: ''
+      data: '',
+      onProcessInspection: inspected,
+      processInspection: {
+        foregroundProcess: 'zsh',
+        hasChildProcesses: true,
+        foregroundObservation: {
+          ptyId: TRANSCRIPT_PANE_PTY_ID,
+          ptyIncarnationId: 'inc-1',
+          authorityGeneration: 'host-1',
+          observationEpoch: 1,
+          capturedAgeMs: 0,
+          verdict: 'observed',
+          source: 'pty-master',
+          foregroundKind: 'shell',
+          processName: 'zsh'
+        }
+      }
     })
     vi.useFakeTimers()
     let finishRead: ((read: RuntimeTerminalRead) => void) | undefined
@@ -157,12 +176,14 @@ describe('tui-idle on an agent with no rest signal', () => {
       truncated: false,
       nextCursor: null
     })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(inspected).toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(12_000)
     expect(settled).not.toHaveBeenCalled()
+    read.mockRestore()
     runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b[?2031h\x1b[?2004h❯\u00a0', Date.now())
     await vi.advanceTimersByTimeAsync(4_000)
     await expect(idle).resolves.toMatchObject({ satisfied: true })
-    read.mockRestore()
   })
 
   it('does not finish a command-start marker cut off by dropped output', async () => {
@@ -183,4 +204,145 @@ describe('tui-idle on an agent with no rest signal', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
+})
+
+it('excludes the retained inline screen of an identified predecessor, then accepts current repaint', async () => {
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: 'codex',
+    data: '',
+    size: { cols: 120, rows: 40 }
+  })
+  vi.useFakeTimers()
+  try {
+    const ingest = (data: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, Date.now())
+    const header =
+      'OpenAI Codex (v0.157.0)\r\nmodel: gpt-6.1-sol\r\ndirectory: /repo/app\r\n· /model to change\r\n'
+    ingest(`\x1b]133;C\x07\x1b]0;codex\x07${header}`)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await runtime.readTerminal(handle, { screen: true })
+    ingest(
+      '/quit\r\n\x1b]133;D;0\x07\x1b]133;A\x07\x1b]0;qa-shell\x07qa$ codex\r\n\x1b]133;C\x07\x1b]0;codex\x07'
+    )
+    await runtime.listTerminals()
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(settled).not.toHaveBeenCalled()
+    expect((await runtime.readTerminal(handle, { screen: true })).tail.join('\n')).toContain(
+      'OpenAI Codex'
+    )
+    ingest(`\x1b[H${header}`)
+    await vi.advanceTimersByTimeAsync(4_000)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('does not inherit a prior emitted ready title through the pane copy, and accepts identical current emission', async () => {
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: 'claude',
+    data: ''
+  })
+  vi.useFakeTimers()
+  try {
+    const ingest = (data: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, Date.now())
+    ingest('\x1b]133;C\x07\x1b]0;✳ Claude Code\x07')
+    await vi.advanceTimersByTimeAsync(2_000)
+    ingest('\x1b]133;C\x07')
+    await runtime.listTerminals()
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(settled).not.toHaveBeenCalled()
+    ingest('\x1b]0;✳ Claude Code\x07')
+    await vi.advanceTimersByTimeAsync(2_000)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('keeps the compatibility fallback for an unattributed recovered ready screen', async () => {
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: 'codex',
+    data: '',
+    size: { cols: 120, rows: 40 }
+  })
+  runtime.seedTerminalRestoreTail(TRANSCRIPT_PANE_PTY_ID, {
+    text: 'OpenAI Codex (v0.157.0)\r\nmodel: gpt-6.1-sol\r\ndirectory: /repo/app\r\n· /model to change\r\n',
+    lastTitle: 'codex'
+  })
+  vi.useFakeTimers()
+  try {
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]133;C\x07', Date.now())
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    await vi.advanceTimersByTimeAsync(6_000)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('does not promote a retained Qoder composer after replacement until it is repainted', async () => {
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: 'qodercli-1.1.64',
+    data: '',
+    size: { cols: 100, rows: 32 }
+  })
+  vi.useFakeTimers()
+  try {
+    const write = (data: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, Date.now())
+    const ready = readRuntimeFixture('qoder-ready')
+    write(`\x1b]133;C\x07${ready}`)
+    await runtime.readTerminal(handle, { screen: true })
+    write('\x1b]133;C\x07')
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60000 })
+    wait.then(settled, () => {})
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(settled).not.toHaveBeenCalled()
+    write(ready)
+    await vi.advanceTimersByTimeAsync(4000)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('does not turn old Freebuff ready support into fresh status when only the working row is erased', async () => {
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: 'freebuff',
+    launchAgent: 'freebuff',
+    data: '',
+    size: { cols: 120, rows: 40 }
+  })
+  vi.useFakeTimers()
+  try {
+    const write = (data: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, Date.now())
+    const recording = readRuntimeFixture('freebuff-ready')
+    const ready = `${recording.slice(recording.indexOf('\x1b[?1049h')).split('\x1b[?2026l')[0]!}\x1b[?2026l`
+    write(`\x1b]133;C\x07\x1b]0;Freebuff: task\x07\x1b[?1049h\x1b[H${ready}`)
+    await runtime.readTerminal(handle, { screen: true })
+    write('\x1b[33;1Hworking...')
+    await runtime.readTerminal(handle, { screen: true })
+    write('\x1b]133;C\x07\x1b[33;1H\x1b[2K')
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60000 })
+    wait.then(settled, () => {})
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(settled).not.toHaveBeenCalled()
+    write(`\x1b[H${ready}`)
+    await vi.advanceTimersByTimeAsync(4000)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  } finally {
+    vi.useRealTimers()
+  }
 })

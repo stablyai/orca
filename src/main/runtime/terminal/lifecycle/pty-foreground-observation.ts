@@ -2,6 +2,7 @@ import {
   recognizeAgentProcess,
   isAgentForegroundWrapperProcess
 } from '../../../../shared/agent-status/process/agent-process-recognition'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { PtyForegroundProcessRead } from './pty-foreground-observation-state'
@@ -70,6 +71,7 @@ async function confirmStartupAgent(
   if (
     !agent &&
     sample.process &&
+    !isShellProcess(sample.process) &&
     isCurrent() &&
     (isAgentForegroundWrapperProcess(sample.process) || /^\d+\.\d+\.\d+$/.test(sample.process))
   ) {

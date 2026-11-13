@@ -9,10 +9,7 @@ import type {
   AgentPromptExpectedBinding,
   RuntimeAgentPromptWriteOptions
 } from './agent-prompt-write-options'
-import type {
-  RuntimeTerminalPromptDelivery,
-  RuntimeTerminalSend
-} from '../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
 
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
@@ -94,9 +91,13 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       ? null
       : this.createAgentPromptRenderGate(ptyId, pasteIngestMs, options.promptForSchedule)
     const waitTextCache: AgentPromptWaitTextCache = {}
-    const preSubmitBaseline = submitWithPaste
-      ? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
-      : undefined
+    let preSubmitBaseline: AgentPromptActivity | undefined
+    let owned:
+      | ReturnType<OrcaRuntimeWithWriteTerminalAgentPrompt['beginAgentPromptOperation']>
+      | undefined
+    let checkpointed = false
+    let settlementAgent: 'antigravity' | 'claude' | 'codex' | null = null
+    let submittedBinding = this.getTerminalPromptRequestBinding(handle)
     const incarnationId = pty?.incarnationId
     const lifecycleSignal = this.getPtyLifecycleSignal(ptyId)
     const deliverySignal = options.signal
@@ -130,181 +131,181 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     }
     let baseline: AgentPromptActivity
     try {
-      await beforeWrite(admissionSignal)
-      assertWritable(admissionSignal)
-      if (options.onPermission === 'wait') {
-        this.throwIfAgentPromptPermissionReturned(
+      try {
+        await beforeWrite(admissionSignal)
+        assertWritable(admissionSignal)
+        if (options.onPermission === 'wait') {
+          this.throwIfAgentPromptPermissionReturned(
+            permissionBaseline,
+            this.getAgentPromptActivity(handle, ptyId)
+          )
+        }
+        this.assertAgentPromptPermissionSafe(
           permissionBaseline,
           this.getAgentPromptActivity(handle, ptyId)
         )
-      }
-      this.assertAgentPromptPermissionSafe(
-        permissionBaseline,
-        this.getAgentPromptActivity(handle, ptyId)
-      )
-      // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
-      renderGate?.arm()
-      const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
-      assertTerminalInputAdmitted(this, ptyId, options.inputSource)
-      if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
-        throw new Error('terminal_not_writable')
-      }
-      if (submitWithPaste) {
-        options.onSubmitWritten?.()
-      }
-      if (!submitWithPaste) {
-        // Once paste is accepted, only host cancellation can suppress its first Enter.
-        if (renderGate) {
-          await waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
-        } else if (options.composerReady) {
-          await waitForAgentPromptDelay(
-            AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + pasteIngestMs,
-            deliverySignal
-          )
-        } else {
-          const agent = this.getPtyAgent(ptyId)
-          const submitDelayMs = options.promptForSchedule
-            ? resolveAgentPromptSubmitDelayForAgent(
-                writeHostPlatform,
-                options.promptForSchedule,
-                agent
-              )
-            : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
-          await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
+        // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
+        renderGate?.arm()
+        const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
+        assertTerminalInputAdmitted(this, ptyId, options.inputSource)
+        if (submitWithPaste) {
+          preSubmitBaseline = this.getAgentPromptActivity(handle, ptyId, waitTextCache)
         }
-        try {
-          await beforeWrite(deliverySignal)
-        } catch (error) {
-          if (options.suffixFailureError) {
-            throw new Error(options.suffixFailureError)
-          }
-          throw error
-        }
-      }
-      assertWritable(deliverySignal)
-      baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
-      this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-      if (
-        !submitWithPaste &&
-        !this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
-      ) {
-        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
-      }
-      if (!submitWithPaste) {
-        options.onSubmitWritten?.()
-      }
-    } catch (error) {
-      this.assertAgentPromptGeneration(ptyId, generation)
-      throw error
-    } finally {
-      renderGate?.dispose()
-    }
-    const submits = submitWithPaste
-      ? 1
-      : 1 +
-        (await this.resubmitHeldAgentPrompt(
+        const current = this.ptysById.get(ptyId)
+        const submittedAgent = current?.foregroundAgent ?? current?.launchAgent
+        settlementAgent = isTerminalSendSettlementAgent(submittedAgent) ? submittedAgent : null
+        submittedBinding = this.getTerminalPromptRequestBinding(handle)
+        owned = this.beginAgentPromptOperation(
           ptyId,
           generation,
-          {
-            ...options,
-            signal: admissionSignal,
-            beforeWrite: () => beforeWrite(admissionSignal)
-          },
-          {
-            baseline,
-            readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-            prompt: options.promptForSchedule,
-            heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
-              writeHostPlatform,
-              this.getPtyAgent(ptyId),
-              pastePayload
+          options.acceptQueued && settlementAgent ? options.requestId : undefined
+        )
+        if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
+          throw new Error('terminal_not_writable')
+        }
+        if (submitWithPaste) {
+          owned.acceptBaseline(preSubmitBaseline!)
+          options.onSubmitWritten?.()
+        }
+        if (!submitWithPaste) {
+          // Once paste is accepted, only host cancellation can suppress its first Enter.
+          if (renderGate) {
+            await waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
+          } else if (options.composerReady) {
+            await waitForAgentPromptDelay(
+              AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + pasteIngestMs,
+              deliverySignal
             )
+          } else {
+            const agent = this.getPtyAgent(ptyId)
+            const submitDelayMs = options.promptForSchedule
+              ? resolveAgentPromptSubmitDelayForAgent(
+                  writeHostPlatform,
+                  options.promptForSchedule,
+                  agent
+                )
+              : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
+            await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
           }
-        ))
-    const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
-    if (!options.acceptQueued || !options.requestId) {
-      await verifyAgentPromptSubmission({
-        baseline,
-        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-        timeoutMs: effectTimeoutMs,
-        signal: observationSignal
-      })
-      return { submits }
-    }
-    const binding = this.getTerminalPromptRequestBinding(handle)
-    const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
-    const launchAgent = this.ptysById.get(ptyId)?.launchAgent
-    const settlementAgent = isTerminalSendSettlementAgent(foregroundAgent)
-      ? foregroundAgent
-      : isTerminalSendSettlementAgent(launchAgent)
-        ? launchAgent
-        : null
-    const inputAccepted: RuntimeTerminalPromptDelivery = {
-      requestId: options.requestId,
-      stages: ['input_accepted'],
-      provider: settlementAgent ?? 'unsupported',
-      observation: settlementAgent ? 'supported' : 'unsupported',
-      processIncarnation: binding.processIncarnation,
-      generation,
-      baselineWorkingSequence: baseline.workingSequence,
-      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
-      baselinePermissionSequence: baseline.permissionSequence
-    }
-    const checkpoint: RuntimeTerminalSend = {
-      handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + submits,
-      prompt: inputAccepted
-    }
-    options.onInputAccepted?.(checkpoint)
-    // Without a lifecycle verifier, report accepted input; inability to prove submission must not fail Dispatch.
-    if (!settlementAgent) {
-      return { submits, prompt: inputAccepted }
-    }
-    this.registerAgentPromptRequest(
-      ptyId,
-      generation,
-      options.requestId,
-      baseline.workingSequence,
-      baseline.explicitWorkingStartedAt
-    )
-    try {
-      await verifyAgentPromptSubmission({
-        baseline,
-        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-        acceptTurnStart: (evidence) =>
-          this.acceptAgentPromptTurnStart(
+          try {
+            await beforeWrite(deliverySignal)
+          } catch (error) {
+            if (options.suffixFailureError) {
+              throw new Error(options.suffixFailureError)
+            }
+            throw error
+          }
+        }
+        assertWritable(deliverySignal)
+        baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
+        this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
+        if (
+          !submitWithPaste &&
+          !this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
+        ) {
+          throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+        }
+        if (!submitWithPaste) {
+          owned.acceptBaseline(baseline)
+          options.onSubmitWritten?.()
+        }
+      } catch (error) {
+        this.assertAgentPromptGeneration(ptyId, generation)
+        throw error
+      } finally {
+        renderGate?.dispose()
+      }
+      const submits = submitWithPaste
+        ? 1
+        : 1 +
+          (await this.resubmitHeldAgentPrompt(
             ptyId,
             generation,
-            options.requestId!,
-            baseline.workingSequence,
-            baseline.explicitWorkingStartedAt,
-            evidence
-          ),
-        allowOutputEvidence: false,
-        signal: observationSignal,
-        timeoutMs: options.observationTimeoutMs ?? effectTimeoutMs
-      })
-      this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
-      return {
-        submits,
-        prompt: {
-          ...inputAccepted,
-          stages: ['input_accepted', 'turn_started']
-        }
+            {
+              ...options,
+              signal: admissionSignal,
+              beforeWrite: () => beforeWrite(admissionSignal)
+            },
+            {
+              baseline,
+              isCurrent: () => owned!.isCurrent(),
+              readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+              prompt: options.promptForSchedule,
+              heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
+                writeHostPlatform,
+                this.getPtyAgent(ptyId),
+                pastePayload
+              )
+            }
+          ))
+      const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
+      if (!options.acceptQueued || !options.requestId) {
+        await verifyAgentPromptSubmission({
+          baseline,
+          readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+          timeoutMs: effectTimeoutMs,
+          signal: observationSignal
+        })
+        return { submits }
       }
-    } catch (error) {
-      if (error instanceof Error && error.message === 'agent_prompt_stalled') {
+      const inputAccepted: RuntimeTerminalPromptDelivery = {
+        requestId: options.requestId,
+        stages: ['input_accepted'],
+        provider: settlementAgent ?? 'unsupported',
+        observation: settlementAgent ? 'supported' : 'unsupported',
+        processIncarnation: submittedBinding.processIncarnation,
+        generation,
+        baselineWorkingSequence: baseline.workingSequence,
+        baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
+        baselinePermissionSequence: baseline.permissionSequence
+      }
+      options.onInputAccepted?.({
+        handle,
+        accepted: true,
+        bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + submits,
+        prompt: inputAccepted
+      })
+      checkpointed = !!settlementAgent
+      // Without a lifecycle verifier, report accepted input; inability to prove submission must not fail Dispatch.
+      if (!settlementAgent || !owned!.isCurrent()) {
         return { submits, prompt: inputAccepted }
       }
-      if (error instanceof Error && error.message === 'agent_prompt_blocked') {
-        this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
+      try {
+        await verifyAgentPromptSubmission({
+          baseline,
+          readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+          acceptTurnStart: (evidence) =>
+            owned!.isCurrent() &&
+            this.acceptAgentPromptTurnStart(ptyId, owned!.operation, evidence),
+          allowOutputEvidence: false,
+          signal: observationSignal,
+          timeoutMs: options.observationTimeoutMs ?? effectTimeoutMs
+        })
+        owned!.forget()
         return {
           submits,
-          prompt: { ...inputAccepted, observation: 'permission' }
+          prompt: {
+            ...inputAccepted,
+            stages: ['input_accepted', 'turn_started']
+          }
         }
+      } catch (error) {
+        if (error instanceof Error && error.message === 'agent_prompt_stalled') {
+          return { submits, prompt: inputAccepted }
+        }
+        if (error instanceof Error && error.message === 'agent_prompt_blocked') {
+          owned!.forget()
+          return {
+            submits,
+            prompt: { ...inputAccepted, observation: 'permission' }
+          }
+        }
+        throw error
       }
-      throw error
+    } finally {
+      if (!checkpointed) {
+        owned?.forget()
+      }
     }
   }
 }

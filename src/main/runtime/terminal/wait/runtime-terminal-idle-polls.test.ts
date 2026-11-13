@@ -53,7 +53,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     'materializes unchanged tails at most once per sweep for %i pending panes',
     async (population) => {
       const lines = ['ordinary hook output']
-      const scans = vi.spyOn(lines, 'map')
+      const scans = vi.spyOn(lines, 'forEach')
       const resolved = vi.fn()
       const polls = new RuntimeTerminalIdlePolls({
         intervalMs: INTERVAL_MS,
@@ -66,7 +66,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
         readScreenLines: () => null,
         readVisibleScreen: async () => null,
         startupObservation: {
-          read: () => ({ kind: 'pending', candidate: 'claude' }),
+          read: () => ({ kind: 'shell', candidate: 'claude' }),
           watch: () => () => {},
           refresh: () => {}
         },
@@ -95,8 +95,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
   it('rebuilds a changed tail and re-ranks current readiness after an awaited screen read', async () => {
     const before = ['before read']
     const after = ['after read']
-    const beforeScan = vi.spyOn(before, 'map')
-    const afterScan = vi.spyOn(after, 'map')
+    const beforeScan = vi.spyOn(before, 'forEach')
+    const afterScan = vi.spyOn(after, 'forEach')
     const pty = makePty('changing-pty', { tailBuffer: before })
     const resolved = vi.fn()
     const polls = new RuntimeTerminalIdlePolls({

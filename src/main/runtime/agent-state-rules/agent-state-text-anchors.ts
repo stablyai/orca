@@ -9,36 +9,66 @@ import type {
   TextAnchorCondition
 } from './agent-state-rules-schema'
 import { findAntigravityComposerIndex } from './antigravity-text-composer'
+import {
+  offsetTerminalSupport,
+  type TerminalSupportQuery
+} from '../../../shared/terminal/output/terminal-content-origin'
 
 export type BlockedTextSignal = { reason: RuntimeTerminalWaitBlockedReason; index: number }
 
 type TextAnchorHit = { answer: Anchor['answer']; index: number }
 
-export type TextAnchorFinder = (normalized: string) => TextAnchorHit | null
+export type TextAnchorFinder = (
+  normalized: string,
+  support?: TerminalSupportQuery
+) => TextAnchorHit | null
 
-const NAMED_TEXT_ANCHOR_FINDERS: Record<NamedTextAnchor, (normalized: string) => number | null> = {
+const NAMED_TEXT_ANCHOR_FINDERS: Record<
+  NamedTextAnchor,
+  (normalized: string, support?: TerminalSupportQuery) => number | null
+> = {
   'antigravity-text-composer': findAntigravityComposerIndex
 }
 
-function compileFind(find: TextAnchorCondition['find']): (text: string) => number | null {
+function compileFind(
+  find: TextAnchorCondition['find']
+): (text: string, support?: TerminalSupportQuery, before?: number) => number | null {
   if ('predicate' in find) {
     return NAMED_TEXT_ANCHOR_FINDERS[find.predicate]
   }
-  return (text) => {
-    const index = text.lastIndexOf(find.lastOf)
-    return index === -1 ? null : index
+  return (text, support, before = text.length) => {
+    for (
+      let index = text.lastIndexOf(find.lastOf, before - 1);
+      index >= 0;
+      index = text.lastIndexOf(find.lastOf, index - 1)
+    ) {
+      if (!support || support(index, index + find.lastOf.length)) {
+        return index
+      }
+      if (index === 0) {
+        break
+      }
+    }
+    return null
   }
 }
 
 function compileLineCount(lines: NonNullable<TextAnchorCondition['lines']>): TextMatcher {
   const test = compileTextTest(lines.test)
-  return (text) => {
+  return (text, support) => {
     const rows = text.split('\n')
     while (rows.length > 0 && rows.at(-1)?.trim() === '') {
       rows.pop()
     }
+    let offset = 0
+    const matched = rows.map((row) => {
+      const result = test(row, offsetTerminalSupport(support, offset))
+      offset += row.length + 1
+      return result
+    })
     return (
-      rows.filter(test).length >= lines.atLeast && (!lines.includingLast || test(rows.at(-1) ?? ''))
+      matched.filter(Boolean).length >= lines.atLeast &&
+      (!lines.includingLast || matched.at(-1) === true)
     )
   }
 }
@@ -51,11 +81,16 @@ export function compileTextAnchor(
   const find = compileFind(when.find)
   const after = when.after ? compileTextTest(when.after) : null
   const lines = when.lines ? compileLineCount(when.lines) : null
-  return (text) => {
+  return (text, support) => {
     const start = withinLastLines ? startOfLastLines(text, withinLastLines) : 0
     const region = text.slice(start)
-    const index = find(region)
-    if (index === null || (after && !after(region.slice(index))) || (lines && !lines(region))) {
+    const query = offsetTerminalSupport(support, start)
+    const index = find(region, query, region.length + 1)
+    if (
+      index === null ||
+      (after && !after(region.slice(index), offsetTerminalSupport(query, index))) ||
+      (lines && !lines(region, query))
+    ) {
       return null
     }
     return { answer, index: start + index }
@@ -103,22 +138,28 @@ export function blockedAnchorLiterals(): readonly string[] {
   return textAnchors().blockedLiterals
 }
 
-export function findBlockedAnchorSignals(window: string): BlockedTextSignal[] {
+export function findBlockedAnchorSignals(
+  window: string,
+  support?: TerminalSupportQuery
+): BlockedTextSignal[] {
   return textAnchors().blocked.flatMap((find) => {
-    const hit = find(window)
+    const hit = find(window, support)
     return hit?.answer.state === 'blocked' ? [{ reason: hit.answer.reason, index: hit.index }] : []
   })
 }
 
 /** Latest live prompt cancels earlier blockers; only the latest idle prompt can settle readiness. */
-export function findPromptAnchorIndexes(normalized: string): {
+export function findPromptAnchorIndexes(
+  normalized: string,
+  support?: TerminalSupportQuery
+): {
   live: number | null
   ready: number | null
 } {
   let live: number | null = null
   let ready: number | null = null
   for (const find of textAnchors().prompts) {
-    const hit = find(normalized)
+    const hit = find(normalized, support)
     if (hit === null) {
       continue
     }
@@ -130,8 +171,8 @@ export function findPromptAnchorIndexes(normalized: string): {
   return { live, ready }
 }
 
-export function showsHoldAnchor(normalized: string): boolean {
-  return textAnchors().holds.some((find) => find(normalized) !== null)
+export function showsHoldAnchor(normalized: string, support?: TerminalSupportQuery): boolean {
+  return textAnchors().holds.some((find) => find(normalized, support) !== null)
 }
 
 export function showsScreenProbeBanner(text: string): boolean {

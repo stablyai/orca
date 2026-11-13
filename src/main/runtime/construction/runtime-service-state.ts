@@ -205,6 +205,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     flushPendingBlockedStamp: (ptyId) => this.flushPendingWaitBlockedCheck(ptyId),
     readScreenClearingBlockedTail: (ptyId, lastOutputAt) =>
       readScreenClearingBlockedTail({
+        contentScope: this.ptysById.get(ptyId)?.commandPaint?.contentOrigin,
         lastOutputAt,
         quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
         agent: () => this.getPaneAgentForTuiIdle(ptyId),

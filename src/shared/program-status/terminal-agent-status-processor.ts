@@ -87,6 +87,18 @@ export function createTerminalAgentStatusProcessor(): (
   const scanProgramStatus = createProgramStatusSideEffectScanner()
   return (data, readinessBoundary = -1) => {
     const chunk = processAgentStatusOsc(data)
+    const frames = stripped.slice()
+    const startOffset = rawStart
+    chunk.rawOffsetAt = (offset) => {
+      let delta = startOffset
+      for (const frame of frames) {
+        if (frame.cleanOffset >= offset) {
+          break
+        }
+        delta = frame.rawEnd - frame.cleanOffset
+      }
+      return offset + delta
+    }
     let cleanBoundary = readinessBoundary
     if (readinessBoundary >= 0) {
       let delta = rawStart

@@ -52,6 +52,33 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 describe('agent prompt submission runtime', () => {
   afterEach(() => vi.useRealTimers())
 
+  it('keeps an unsupported prompt non-claiming during its accepted-input callback', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle } = await createPromptRuntime((runtime, data) => {
+      if (data === '\r') {
+        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      }
+    })
+    let observed: ReturnType<OrcaRuntimeService['observeTerminalAgentPrompt']> | undefined
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving',
+      acceptQueued: true,
+      requestId: 'unsupported-checkpoint',
+      onInputAccepted: (result) => {
+        observed = runtime.observeTerminalAgentPrompt(handle, result.prompt!, 0)
+      }
+    })
+    await vi.runAllTimersAsync()
+    await expect(submission).resolves.toMatchObject({
+      prompt: { observation: 'unsupported', stages: ['input_accepted'] }
+    })
+    expect(observed).toBeDefined()
+    await expect(observed).resolves.toMatchObject({
+      observation: 'unsupported',
+      stages: ['input_accepted']
+    })
+  })
+
   it('does not paste when split status stripping completes a permission title', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {

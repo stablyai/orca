@@ -1,7 +1,15 @@
 import type { Terminal } from '@xterm/headless'
 import type { RuntimeTerminalRowMetadata } from '../../../shared/runtime-terminal-contracts'
+import {
+  getTerminalLineOrigins,
+  type TerminalOriginRuns
+} from '../../../shared/terminal/output/terminal-content-origin'
 
-export type HeadlessTerminalRow = { text: string; metadata: RuntimeTerminalRowMetadata }
+export type HeadlessTerminalRow = {
+  text: string
+  metadata: RuntimeTerminalRowMetadata
+  origins?: TerminalOriginRuns
+}
 
 function terminalRowRange(terminal: Terminal, limit?: number) {
   const buffer = terminal.buffer.active
@@ -43,5 +51,44 @@ export function readHeadlessTerminalRows(
       }
     })
   }
+  return rows
+}
+
+export function isHeadlessCursorOnEmptyPrompt(terminal: Terminal): boolean {
+  const buffer = terminal.buffer.active
+  const line = buffer.getLine(buffer.baseY + buffer.cursorY)
+  if (!line) {
+    return false
+  }
+  const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
+  const fullLine = line.translateToString(true).trimEnd()
+  return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
+}
+
+export function readHeadlessVisibleBufferRange(terminal: Terminal) {
+  const buffer = terminal.buffer.active
+  const start = buffer.viewportY
+  return {
+    start,
+    endExclusive: Math.min(buffer.length, start + terminal.rows),
+    totalLength: buffer.length
+  }
+}
+
+const actionRows = new WeakMap<readonly string[], HeadlessTerminalRow[]>()
+export function readHeadlessActionRows(
+  emulator: { getVisibleRows(): HeadlessTerminalRow[] },
+  lines: string[]
+): HeadlessTerminalRow[] {
+  const cached = actionRows.get(lines)
+  if (cached) {
+    return cached
+  }
+  const origins = getTerminalLineOrigins(lines)
+  const rows = emulator.getVisibleRows().map((row, index) => ({
+    ...row,
+    origins: origins?.[index]
+  }))
+  actionRows.set(lines, rows)
   return rows
 }

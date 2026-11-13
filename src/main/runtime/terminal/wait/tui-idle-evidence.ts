@@ -147,6 +147,7 @@ export type TuiIdleEvaluationInput = {
   terminalAgent?: TerminalAgent | null
   commandBoundaryPending?: boolean
   startupPending?: boolean
+  shellStartup?: boolean
   firstPartyStatus: FirstPartyAgentStatus
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
@@ -286,6 +287,9 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   }
   if (input.record.lastAgentStatus === 'working') {
     return WORKING
+  }
+  if (input.shellStartup) {
+    return { kind: 'pending', quietForeground: 'closed' }
   }
   // Screen rules veto weak name/process guesses and replace sustained-title inference.
   const ruled = input.readAgentRuleVerdict()

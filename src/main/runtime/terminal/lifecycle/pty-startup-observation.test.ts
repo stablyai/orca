@@ -136,7 +136,7 @@ describe('PTY-owned startup observation', () => {
       getForegroundProcess: () => null,
       hasCommandPainted: () => true,
       getAdoptedPtyIdleStatus: () => null,
-      getPaneAgent: () => null,
+      getPaneAgent: () => 'claude',
       getFirstPartyAgentStatus: () => null,
       readScreenLines: () => null,
       readVisibleScreen: () => null,
@@ -240,7 +240,7 @@ describe('PTY-owned startup observation', () => {
     expect(inspect).toHaveBeenCalledTimes(1)
     resolve(inspection('less'))
     await flush()
-    expect(owner.startup.read('pty-1')).toEqual({ kind: 'pending', candidate: 'claude' })
+    expect(owner.startup.read('pty-1')).toBeUndefined()
     expect(changed).not.toHaveBeenCalled()
     stop()
   })
@@ -379,7 +379,41 @@ describe('PTY-owned startup observation', () => {
     })
     owner.startup.refresh('pty-1')
     await flush()
-    expect(owner.startup.read('pty-1')).toEqual({ kind: 'pending', candidate: 'claude' })
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    stop()
+  })
+
+  it('retires a positive bash refusal when the latest observation becomes unavailable', async () => {
+    vi.useFakeTimers()
+    let available = true
+    const { owner, pty } = fixture(async () => (available ? inspection('bash') : inspection(null)))
+    pty.lastOscTitle = 'codex'
+    pty.lastAgentStatus = 'idle'
+    const changed = vi.fn()
+    const stop = owner.startup.watch('pty-1', changed)
+    await flush()
+    expect(owner.startup.read('pty-1')).toEqual({ kind: 'shell', candidate: 'codex' })
+    const source = {
+      quiescenceMs: 1500,
+      getPaneAgent: () => null,
+      getAdoptedPtyIdleStatus: () => null,
+      getFirstPartyAgentStatus: () => null,
+      readScreenLines: () => null,
+      startupObservation: owner.startup
+    }
+    expect(evaluateTuiIdle(ptyTuiIdleEvidence(source, pty, () => 'hook output'))).toMatchObject({
+      kind: 'pending',
+      quietForeground: 'closed'
+    })
+    available = false
+    await vi.advanceTimersByTimeAsync(2000)
+    owner.startup.refresh('pty-1')
+    await flush()
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    expect(evaluateTuiIdle(ptyTuiIdleEvidence(source, pty, () => 'hook output')).kind).toBe(
+      'ready-weak'
+    )
+    expect(changed).toHaveBeenCalledTimes(2)
     stop()
   })
 
@@ -404,4 +438,31 @@ describe('PTY-owned startup observation', () => {
     expect(owner.startup.read('pty-1')).toEqual({ kind: 'agent', agent: 'claude' })
     stop()
   })
+})
+
+it('admits an existing interested candidate on read after C and re-admits after output invalidation', async () => {
+  vi.useFakeTimers()
+  try {
+    const inspect = vi.fn(async () => inspection('zsh'))
+    const { owner, pty } = fixture(inspect)
+    pty.commandPaint!.observe('\x1b]133;D;0\x07', '')
+    const stop = owner.startup.watch('pty-1', () => {})
+    expect(inspect).not.toHaveBeenCalled()
+    pty.commandPaint!.observe('\x1b]133;C\x07hook', 'hook')
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    await flush()
+    expect(inspect).toHaveBeenCalledOnce()
+    expect(owner.startup.read('pty-1')).toEqual({ kind: 'shell', candidate: 'claude' })
+    pty.lastOutputAt = 2
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    expect(inspect).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(2000)
+    owner.startup.read('pty-1')
+    await flush()
+    expect(inspect).toHaveBeenCalledTimes(2)
+    expect(owner.startup.read('pty-1')).toEqual({ kind: 'shell', candidate: 'claude' })
+    stop()
+  } finally {
+    vi.useRealTimers()
+  }
 })

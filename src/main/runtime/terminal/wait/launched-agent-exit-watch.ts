@@ -21,7 +21,8 @@ const SHELL_RETURN_READ_DELAYS_MS = [
 export type LaunchedAgentExitRuntime = Pick<
   OrcaRuntimeService,
   'readLaunchedAgentForeground' | 'subscribeToTerminalData' | 'readRecentTerminalOutput'
->
+> &
+  Partial<Pick<OrcaRuntimeService, 'readKnownTerminalAlternateScreen'>>
 
 /** What the launch command printed, from the shell's last finished command in the pane's recent bytes.
  * A PTY that died mid-command never finished it, so its output runs to the end. */
@@ -98,18 +99,22 @@ export function failOnLaunchedAgentExit<T>(
           void checkForExit().catch(() => {})
         }
       },
+      undefined,
       () => {
         commandStarted = true
         marks += 1
-      }
+      },
+      { qualifyScreen: true }
     )
-    unsubscribe = runtime.subscribeToTerminalData(ptyId, scanner.scan)
-    wait(signal ? AbortSignal.any([signal, stop.signal]) : stop.signal).then(resolve, reject)
     // The launch can have ended before this wait began.
     const replay = runtime.readRecentTerminalOutput(ptyId)
     if (replay) {
       scanner.scan(replay)
     }
+    // A current mode can seed live bytes, never the older retained replay.
+    scanner.scan('', runtime.readKnownTerminalAlternateScreen?.(ptyId))
+    unsubscribe = runtime.subscribeToTerminalData(ptyId, (data) => scanner.scan(data))
+    wait(signal ? AbortSignal.any([signal, stop.signal]) : stop.signal).then(resolve, reject)
   }).finally(() => {
     unsubscribe()
     stop.abort()

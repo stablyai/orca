@@ -1,3 +1,9 @@
+import {
+  terminalScreenSupport,
+  type TerminalContentOrigin,
+  type TerminalScreenSupportQuery
+} from '../../../../shared/terminal/output/terminal-content-origin'
+import { supportedRegexMatches } from '../../../../shared/terminal/output/terminal-supported-occurrences'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 // Why a cap: Esc posts no hook, so a dismissed dialog's row can outlive it; a draft can be abandoned.
@@ -10,11 +16,15 @@ const CURSORED_OPTION_RE = new RegExp(String.raw`^\s*\u276F \d+\. `)
 const OPTION_RE = /^\s+\d+\. /
 
 /** Plan approval has no footer: its cursored option sits directly above or below another one. */
-function hasCursoredOptionList(lines: readonly string[]): boolean {
+function hasCursoredOptionList(
+  lines: readonly string[],
+  support?: TerminalScreenSupportQuery
+): boolean {
   return lines.some(
     (line, index) =>
-      CURSORED_OPTION_RE.test(line) &&
-      (OPTION_RE.test(lines[index - 1] ?? '') || OPTION_RE.test(lines[index + 1] ?? ''))
+      matchesDialogRow(line, CURSORED_OPTION_RE, index, support) &&
+      (matchesDialogRow(lines[index - 1] ?? '', OPTION_RE, index - 1, support) ||
+        matchesDialogRow(lines[index + 1] ?? '', OPTION_RE, index + 1, support))
   )
 }
 
@@ -24,6 +34,7 @@ export function isClaudeDialogHoldingPane(args: {
   row: AgentStatusIpcPayload | null
   respawnedAt: number | undefined
   readScreenLines: () => readonly string[] | null
+  contentScope?: TerminalContentOrigin
   now?: number
 }): boolean {
   const { row } = args
@@ -36,12 +47,40 @@ export function isClaudeDialogHoldingPane(args: {
     return false
   }
   const lines = args.readScreenLines()
-  return lines === null || showsClaudeDialog(lines)
+  return lines === null || showsClaudeDialog(lines, args.contentScope)
 }
 
-export function showsClaudeDialog(lines: readonly string[]): boolean {
-  const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
-  return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
+function matchesDialogRow(
+  line: string,
+  pattern: RegExp,
+  row: number,
+  support?: TerminalScreenSupportQuery
+): boolean {
+  return (
+    supportedRegexMatches(
+      line,
+      pattern,
+      support ? (start, end) => support(row, start, end) : undefined
+    ).length > 0
+  )
+}
+
+export function showsClaudeDialog(
+  lines: readonly string[],
+  scope?: TerminalContentOrigin
+): boolean {
+  const rows = lines
+    .flatMap((line, index) => (line.trim() ? [index] : []))
+    .slice(-DIALOG_REGION_LINES)
+  const region = rows.map((index) => lines[index]!)
+  const query = terminalScreenSupport(lines, scope)
+  const support: TerminalScreenSupportQuery | undefined = query
+    ? (row, start, end) => query(rows[row] ?? -1, start, end)
+    : undefined
+  return (
+    region.some((line, row) => matchesDialogRow(line, DIALOG_FOOTER_RE, row, support)) ||
+    hasCursoredOptionList(region, support)
+  )
 }
 
 // Claude's permission dialog: "Claude Code will automatically block this request in 1:59, ...".

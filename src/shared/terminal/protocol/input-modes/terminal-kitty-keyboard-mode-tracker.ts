@@ -122,8 +122,8 @@ export class TerminalKittyKeyboardModeTracker {
     }
   }
 
-  scan(data: string): void {
-    this.scanInternal(data, false)
+  scan(data: string, onScreen?: (end: number, alternate: boolean) => void): void {
+    this.scanInternal(data, false, onScreen)
   }
 
   /** Replayed one-time pushes act as idempotent sets so reconnects cannot grow stacks and strand Option chords in Kitty mode.
@@ -132,12 +132,17 @@ export class TerminalKittyKeyboardModeTracker {
     this.scanInternal(data, true)
   }
 
-  private scanInternal(data: string, replay: boolean): void {
+  private scanInternal(
+    data: string,
+    replay: boolean,
+    onScreen?: (end: number, alternate: boolean) => void
+  ): void {
     // Why: unchecked main-process callers can pass a snapshot field that is absent.
     const chunk = typeof data === 'string' ? data : ''
     if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
       return
     }
+    const carried = this.scanTail.length
     const input = this.scanTail + chunk
     this.scanTail = this.extractScanTail(input)
     const kittyModeRe =
@@ -151,6 +156,7 @@ export class TerminalKittyKeyboardModeTracker {
         this.reset()
         this.scanTail = tail
         this.alternateScreenSwitchObserved = true
+        onScreen?.(kittyModeRe.lastIndex - carried, false)
         continue
       }
       if (match[0].endsWith('!p')) {
@@ -158,7 +164,9 @@ export class TerminalKittyKeyboardModeTracker {
         continue
       }
       if (match[1] !== undefined) {
-        this.applyScreenSwitch(match[1], match[2] === 'h')
+        if (this.applyScreenSwitch(match[1], match[2] === 'h')) {
+          onScreen?.(kittyModeRe.lastIndex - carried, this.alternateScreenActive)
+        }
         continue
       }
       if (match[3] === undefined) {
@@ -187,13 +195,15 @@ export class TerminalKittyKeyboardModeTracker {
     this.altStackComplete = true
   }
 
-  private applyScreenSwitch(params: string, enabled: boolean): void {
+  private applyScreenSwitch(params: string, enabled: boolean): boolean {
+    let observed = false
     for (const rawParam of params.split(';')) {
       const param = Number(rawParam)
       if (param !== 47 && param !== 1047 && param !== 1049) {
         continue
       }
       this.alternateScreenSwitchObserved = true
+      observed = true
       // Mirror xterm’s unconditional 47/1047/1049 slot swaps, including repeated enables/disables; carry proof with each numeric slot.
       if (enabled) {
         this.mainFlags = this.currentFlags
@@ -209,6 +219,7 @@ export class TerminalKittyKeyboardModeTracker {
         this.alternateScreenActive = false
       }
     }
+    return observed
   }
 
   private applyKittySequence(prefix: string, params: string, replay: boolean): void {

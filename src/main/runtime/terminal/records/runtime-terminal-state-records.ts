@@ -21,12 +21,15 @@ import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirro
 import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { TerminalOriginRuns } from '../../../../shared/terminal/output/terminal-content-origin'
 
 type RuntimeTerminalTailState = {
   tailBuffer: string[]
   tailTranscriptBuffer: string[]
   tailTranscriptChars: number
   tailPartialLine: string
+  tailPartialOrigins?: TerminalOriginRuns
+  tailPendingOrigins?: TerminalOriginRuns
   tailPendingAnsi: string
   tailRedrawCursor: RetainedTailRedrawCursor | null
   tailTruncated: boolean
@@ -187,6 +190,7 @@ export type RuntimeVisibleTerminalState = {
   isAlternateScreen: boolean
   sequence: number
   generation: number
+  grid: { cols: number; rows: number } | null
 }
 
 export type ProviderTerminalBufferWait = {

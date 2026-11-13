@@ -1,5 +1,19 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { Terminal } from '@xterm/headless'
+import { HeadlessContentOrigins } from '../headless-content-origins'
+import {
+  originTerminalCore,
+  type OriginBufferLine,
+  type OriginLineState
+} from '../headless-content-origin-lines'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HeadlessEmulator } from '../headless-emulator'
+import { compileTextTest } from '../../../runtime/agent-state-rules/agent-state-rule-matchers'
+import {
+  joinedTerminalOrigins,
+  terminalSupportQuery,
+  terminalScreenSupport,
+  type TerminalOriginRuns
+} from '../../../../shared/terminal/output/terminal-content-origin'
 
 function expectedNativePath(posixPath: string): string {
   return posixPath
@@ -207,4 +221,214 @@ describe('HeadlessEmulator', () => {
       restored.dispose()
     })
   })
+})
+
+describe('action support follows the live terminal editor', () => {
+  it('keeps predecessor text old through mixed writes, shifts, erase and identical repaint', async () => {
+    const emulator = new HeadlessEmulator({ cols: 24, rows: 3 })
+    const owner = {}
+    const old = { owner, epoch: 1 }
+    const current = { owner, epoch: 2 }
+    const readable = () => {
+      const lines = emulator.getVisibleActionLines(current)
+      return compileTextTest({ contains: 'ready' })(
+        lines[0]!,
+        terminalScreenSupport(lines, current)
+          ? (start, end) => terminalScreenSupport(lines, current)!(0, start, end)
+          : undefined
+      )
+    }
+    try {
+      await emulator.write('ready old', { contentOrigin: old })
+      await emulator.write('\r\x1b[6Gnew', { contentOrigin: current })
+      expect(readable()).toBe(false)
+      await emulator.write('\r\x1b[2@', { contentOrigin: current })
+      expect(emulator.getVisibleLines()[0]).toBe('  readynewd')
+      expect(readable()).toBe(false)
+      await emulator.write('\r\x1b[2P', { contentOrigin: current })
+      expect(readable()).toBe(false)
+      await emulator.write('\rready', { contentOrigin: current })
+      expect(readable()).toBe(true)
+      await emulator.write('\r\x1b[2K', { contentOrigin: current })
+      expect(readable()).toBe(false)
+    } finally {
+      emulator.dispose()
+    }
+  })
+
+  it('preserves a combined base and copied wide glyph while later repaint becomes eligible', async () => {
+    const emulator = new HeadlessEmulator({ cols: 12, rows: 3 })
+    const owner = {}
+    const current = { owner, epoch: 2 }
+    const eligible = (term: string) => {
+      const lines = emulator.getVisibleActionLines(current)
+      const joined = joinedTerminalOrigins(lines)
+      return compileTextTest({ contains: term })(
+        joined.text,
+        terminalSupportQuery(joined.origins, current)
+      )
+    }
+    try {
+      await emulator.write('e界 old', { contentOrigin: { owner, epoch: 1 } })
+      await emulator.write('\r\x1b[C\u0301', { contentOrigin: current })
+      expect(eligible('e\u0301')).toBe(false)
+      emulator.resize(5, 4)
+      expect(eligible('界')).toBe(false)
+      await emulator.write('\x1b[He\u0301界', { contentOrigin: current })
+      expect(eligible('e\u0301界')).toBe(true)
+    } finally {
+      emulator.dispose()
+    }
+  })
+
+  it('keeps an opaque seed eligible and tracks future writes in rows created by resize', async () => {
+    const emulator = new HeadlessEmulator({ cols: 20, rows: 2 })
+    const owner = {}
+    const current = { owner, epoch: 2 }
+    const eligible = () => {
+      const joined = joinedTerminalOrigins(emulator.getVisibleActionLines(current))
+      return compileTextTest({ contains: 'ready' })(
+        joined.text,
+        terminalSupportQuery(joined.origins, current)
+      )
+    }
+    try {
+      await emulator.write('ready')
+      expect(eligible()).toBe(true)
+      emulator.resize(20, 4)
+      await emulator.write('\x1b[4;1Hready', { contentOrigin: { owner, epoch: 1 } })
+      await emulator.write('\x1b[H\x1b[2K', { contentOrigin: current })
+      expect(eligible()).toBe(false)
+      await emulator.write('\x1b[4;1Hready', { contentOrigin: current })
+      expect(eligible()).toBe(true)
+    } finally {
+      emulator.dispose()
+    }
+  })
+})
+
+it.each([100, 1000])(
+  'bounds attribution work for %i wide and joined glyphs on the real editor',
+  async (count) => {
+    const owner = {}
+    const scope = { owner, epoch: 1 }
+    const terminal = new Terminal({ cols: count * 2 + 2, rows: 2, allowProposedApi: true })
+    const origins = new HeadlessContentOrigins(terminal)
+    let runVisits = 0
+    let componentCopies = 0
+    const arrays = new WeakMap<TerminalOriginRuns, TerminalOriginRuns>()
+    const maps = new WeakMap<Map<number, TerminalOriginRuns>, Map<number, TerminalOriginRuns>>()
+    const observeRuns = (runs: TerminalOriginRuns): TerminalOriginRuns => {
+      const cached = arrays.get(runs)
+      if (cached) {
+        return cached
+      }
+      const observed = new Proxy(runs, {
+        get(target, key, receiver) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            runVisits++
+          }
+          return Reflect.get(target, key, receiver)
+        }
+      })
+      arrays.set(runs, observed)
+      arrays.set(observed, observed)
+      return observed
+    }
+    const observeComponents = (components: Map<number, TerminalOriginRuns>) => {
+      const cached = maps.get(components)
+      if (cached) {
+        return cached
+      }
+      const observed = new Proxy(components, {
+        get(target, key) {
+          if (key === Symbol.iterator || key === 'entries') {
+            return function* () {
+              for (const entry of target) {
+                componentCopies++
+                yield entry
+              }
+            }
+          }
+          const value = Reflect.get(target, key, target)
+          return typeof value === 'function' ? value.bind(target) : value
+        }
+      })
+      maps.set(components, observed)
+      maps.set(observed, observed)
+      return observed
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test observes only this instance's existing assignment seam.
+    const seam = origins as unknown as {
+      assign(line: OriginBufferLine, state: OriginLineState): void
+    }
+    const assign = seam.assign.bind(origins)
+    const spy = vi.spyOn(seam, 'assign').mockImplementation((line, state) => {
+      assign(line, {
+        runs: observeRuns(state.runs),
+        components: observeComponents(state.components)
+      })
+    })
+    const write = async (data: string) => {
+      origins.begin(scope)
+      await new Promise<void>((resolve) => terminal.write(data, resolve))
+      origins.end()
+    }
+    let visible: string[] = []
+    try {
+      await write('界'.repeat(count))
+      await write(`\r\n${'e\u0301'.repeat(count)}`)
+      visible = origins.read(scope)
+      expect(origins.read(scope)).toBe(visible)
+    } finally {
+      spy.mockRestore()
+      terminal.dispose()
+    }
+    expect(visible[0]).toBe('界'.repeat(count))
+    expect(visible[1]).toBe('e\u0301'.repeat(count))
+    // Two input codepoints per joined cell, at most eight bounded metadata passes plus projection.
+    expect(runVisits).toBeLessThanOrEqual(count * 32)
+    // Printing same-origin joins never copies exceptional entries from the rest of the row.
+    expect(componentCopies).toBe(0)
+  }
+)
+
+it('keeps loaded-cell snapshots and copied mixed glyphs independent of later source edits', async () => {
+  const terminal = new Terminal({ cols: 12, rows: 2, allowProposedApi: true })
+  const origins = new HeadlessContentOrigins(terminal)
+  const owner = {}
+  const old = { owner, epoch: 1 }
+  const current = { owner, epoch: 2 }
+  const write = async (data: string, scope = old) => {
+    origins.begin(scope)
+    await new Promise<void>((resolve) => terminal.write(data, resolve))
+    origins.end()
+  }
+  const eligible = (start: number, end: number) =>
+    terminalScreenSupport(origins.read(current), current)?.(0, start, end) ?? true
+  try {
+    await write('eX')
+    const line = originTerminalCore(terminal)!.buffers.active.lines.get(0)!
+    const cell = terminal.buffer.active.getLine(0)!.getCell(1)!
+    line.loadCell(1, cell)
+    await write('\r\x1b[CZ', current)
+    line.setCell(4, cell)
+    expect(terminal.buffer.active.getLine(0)!.translateToString(true)).toBe('eZ  X')
+    expect(eligible(4, 5)).toBe(false)
+    await write('\r\x1b[C\u0301', current)
+    const copy = line.clone()
+    await write('\rQ', current)
+    line.copyFrom(copy)
+    expect(eligible(0, 2)).toBe(false)
+    origins.begin(current)
+    copy.setCellFromCodepoint(0, 81, 1, {})
+    origins.end()
+    expect(eligible(0, 2)).toBe(false)
+    origins.begin(current)
+    line.copyCellsFrom(line, 0, 1, 2, false)
+    origins.end()
+    expect(eligible(1, 3)).toBe(false)
+  } finally {
+    terminal.dispose()
+  }
 })

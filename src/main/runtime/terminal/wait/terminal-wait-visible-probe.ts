@@ -5,6 +5,7 @@ import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapsho
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
+import { buildTerminalActionText } from '../output/terminal-action-text'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -76,7 +77,9 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
             }
           },
           pty,
-          () => projection.tail.join('\n')
+          () => projection.tail.join('\n'),
+          undefined,
+          buildTerminalActionText(projection.tail, pty.commandPaint?.contentOrigin)
         )
         const verdict = evaluateTuiIdle(evidence)
         const blockedReason = verdict.kind === 'blocked' ? verdict.reason : null
