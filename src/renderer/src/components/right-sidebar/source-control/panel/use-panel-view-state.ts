@@ -6,6 +6,12 @@ import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
+import {
+  isBranchSectionAutoCollapsed,
+  markBranchSectionToggledByUser,
+  mergedBranchSectionOwnerKey,
+  type MergedBranchSectionOwner
+} from '../listing/merged-branch-section-disclosure'
 
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 
@@ -25,10 +31,13 @@ function readCollapsedSections(worktreeId: string | null): Set<string> {
 
 export function useSourceControlPanelViewState({
   activeWorktreeId,
+  activeWorktreeOwner,
   settings,
   updateSettings
 }: {
   activeWorktreeId: string | null
+  /** Host and checkout identity; automatic disclosure must not leak to a same-ID twin. */
+  activeWorktreeOwner: MergedBranchSectionOwner | null
   settings: SourceControlWorktreeContext['settings']
   updateSettings: SourceControlStoreActions['updateSettings']
 }) {
@@ -37,7 +46,7 @@ export function useSourceControlPanelViewState({
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const [filterExpanded, setFilterExpanded] = useState(false)
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() =>
+  const [storedCollapsedSections, setCollapsedSections] = useState<Set<string>>(() =>
     readCollapsedSections(activeWorktreeId)
   )
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
@@ -48,7 +57,28 @@ export function useSourceControlPanelViewState({
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [filterQuery, setFilterQuery] = useState('')
-  const isGitHistoryExpanded = !collapsedSections.has('history')
+  const isGitHistoryExpanded = !storedCollapsedSections.has('history')
+
+  // The automatic collapse lives in the host-qualified record, not the raw-ID cache shared by twins.
+  const ownerKey = activeWorktreeOwner ? mergedBranchSectionOwnerKey(activeWorktreeOwner) : null
+  const [branchAutoCollapse, setBranchAutoCollapse] = useState(() => ({
+    ownerKey,
+    collapsed: activeWorktreeOwner ? isBranchSectionAutoCollapsed(activeWorktreeOwner) : false
+  }))
+  if (branchAutoCollapse.ownerKey !== ownerKey) {
+    setBranchAutoCollapse({
+      ownerKey,
+      collapsed: activeWorktreeOwner ? isBranchSectionAutoCollapsed(activeWorktreeOwner) : false
+    })
+  }
+  const isBranchAutoCollapsed =
+    branchAutoCollapse.ownerKey === ownerKey && branchAutoCollapse.collapsed
+  const collapsedSections = useMemo(() => {
+    if (!isBranchAutoCollapsed || storedCollapsedSections.has('branch')) {
+      return storedCollapsedSections
+    }
+    return new Set(storedCollapsedSections).add('branch')
+  }, [isBranchAutoCollapsed, storedCollapsedSections])
 
   const handleToggleSourceControlViewMode = useCallback(() => {
     const current = useAppStore.getState().settings
@@ -77,8 +107,8 @@ export function useSourceControlPanelViewState({
 
   const toggleSection = useCallback(
     (section: string) => {
-      const next = new Set(collapsedSections)
-      if (next.has(section)) {
+      const next = new Set(storedCollapsedSections)
+      if (collapsedSections.has(section)) {
         next.delete(section)
       } else {
         next.add(section)
@@ -87,8 +117,18 @@ export function useSourceControlPanelViewState({
       if (activeWorktreeId) {
         collapsedSectionsByWorktree.set(activeWorktreeId, next)
       }
+      if (section === 'branch' && activeWorktreeOwner) {
+        markBranchSectionToggledByUser(activeWorktreeOwner)
+        setBranchAutoCollapse({ ownerKey, collapsed: false })
+      }
     },
-    [activeWorktreeId, collapsedSections]
+    [activeWorktreeId, activeWorktreeOwner, collapsedSections, ownerKey, storedCollapsedSections]
+  )
+
+  // Automatic disclosure leaves the user's toggle ownership untouched.
+  const setBranchSectionAutoCollapsed = useCallback(
+    (collapsed: boolean) => setBranchAutoCollapse({ ownerKey, collapsed }),
+    [ownerKey]
   )
 
   const toggleTreeDir = useCallback((key: string) => {
@@ -114,6 +154,7 @@ export function useSourceControlPanelViewState({
     isGitHistoryExpanded,
     isMac,
     setBaseRefDialogOpen,
+    setBranchSectionAutoCollapsed,
     setFileListScrollElement,
     setFilterExpanded,
     setFilterQuery,

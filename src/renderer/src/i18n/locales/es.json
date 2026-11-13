@@ -13476,6 +13476,8 @@
             "aaf1451654": "Crear borrador {{value0}}",
             "26511c22b4": "Creando...",
             "d7ae61269b": "Commits en la rama",
+            "branchSectionMerged": "Fusionada",
+            "branchSectionReviewMerged": "{{review}} está fusionada",
             "48a003c1b1": "Cambios preparados",
             "d4ef4bafc5": "Cambios",
             "9339382454": "Quitar todo del stage",

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
@@ -6,6 +6,7 @@ import type {
   GitBranchCompareSummary
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import type { SourceControlRowOpenEvent } from './split-open'
 import { BranchEntryRow } from './branch-entry-row'
@@ -13,6 +14,9 @@ import { SectionHeader } from './section-header'
 import { formatSourceControlRefLabel } from '../panel/branch-context-stats'
 import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
 import { VirtualizedList } from '../../../virtualized-list'
+import { MergedBranchChip } from './merged-branch-chip'
+import { useMergedBranchSectionDisclosure } from './use-merged-branch-section-disclosure'
+import type { MergedBranchSectionOwner } from './merged-branch-section-disclosure'
 
 export function SourceControlBranchSection({
   activeOpenRowKeys,
@@ -21,6 +25,13 @@ export function SourceControlBranchSection({
   totalBranchEntryCount,
   collapsedSections,
   toggleSection,
+  setBranchSectionAutoCollapsed,
+  worktreeOwner,
+  review,
+  statusHeadOid,
+  uncommittedCount,
+  isMainWorktree,
+  isBranchDiffEditorActive,
   sourceControlViewMode,
   visibleBranchTreeRows,
   fileListScrollElement,
@@ -40,6 +51,15 @@ export function SourceControlBranchSection({
   totalBranchEntryCount: number
   collapsedSections: Set<string>
   toggleSection: (section: string) => void
+  setBranchSectionAutoCollapsed: (collapsed: boolean) => void
+  worktreeOwner: MergedBranchSectionOwner
+  /** Null for folder workspaces and branches without a review. */
+  review: HostedReviewInfo | null
+  /** HEAD from the latest successful status read; null while unknown. */
+  statusHeadOid: string | null
+  uncommittedCount: number
+  isMainWorktree: boolean
+  isBranchDiffEditorActive: boolean
   sourceControlViewMode: SourceControlViewMode
   visibleBranchTreeRows: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[]
   fileListScrollElement: HTMLDivElement | null
@@ -74,12 +94,25 @@ export function SourceControlBranchSection({
         )
       : undefined
 
+  const sectionRef = useRef<HTMLDivElement | null>(null)
+  const { mergedReview } = useMergedBranchSectionDisclosure({
+    owner: worktreeOwner,
+    isMainWorktree,
+    review,
+    statusHeadOid,
+    uncommittedCount,
+    branchDiffEditorActive: isBranchDiffEditorActive,
+    setBranchSectionAutoCollapsed,
+    sectionRef
+  })
+
   return (
-    <div>
+    <div ref={sectionRef}>
       <SectionHeader
         label={t('auto.components.right.sidebar.SourceControl.d7ae61269b', 'Committed on Branch')}
         count={fileCount}
         countTitle={countTitle}
+        status={mergedReview ? <MergedBranchChip review={mergedReview} /> : undefined}
         isCollapsed={collapsedSections.has('branch')}
         onToggle={() => toggleSection('branch')}
         actions={
@@ -95,7 +128,9 @@ export function SourceControlBranchSection({
               }
             }}
           >
-            {t('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
+            <span className="truncate">
+              {t('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
+            </span>
           </Button>
         }
       />

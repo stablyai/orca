@@ -28,7 +28,10 @@ import {
 import '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
-import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
+import {
+  announceAuthoritativeWorktreeRemovals,
+  rememberAuthoritativelyRemovedWorktrees
+} from '../listing/authoritative-worktree-removal-memory'
 import { rememberPreservedBranchCleanup } from './preserved-branch-cleanup-target'
 import {
   isRuntimeRepoNotFoundError,
@@ -106,6 +109,7 @@ export function createRemoveWorktree(
         worktreeId,
         requiredExecutionHostId
       )
+      const removedWorktree = { id: worktreeId, instanceId: worktreeBeforeRemoval?.instanceId }
       let beforeRemoval = captureWorktreeStateBeforeRemoval(get(), worktreeId, hostId)
       if (!policy.forgetLocalOnly) {
         removalGenerationGuard?.assertCurrent()
@@ -193,6 +197,7 @@ export function createRemoveWorktree(
             set,
             worktreeId,
             requiredExecutionHostId,
+            removedWorktree,
             confirmedSurvivingHostId,
             options?.ignoreWorkspaceCleanupScanSurvivors === true
           )
@@ -202,6 +207,7 @@ export function createRemoveWorktree(
               get,
               worktreeId,
               requiredExecutionHostId,
+              removedWorktree,
               removalResult,
               removalRoute,
               target,
@@ -218,7 +224,9 @@ export function createRemoveWorktree(
       forgetWorktreeSleepIntent(worktreeId)
       // Record unreachable forget-local removal to fence in-flight metadata reads; disconnected polls cannot correct resurrection.
       if (hostId && parseExecutionHostId(hostId)?.kind === 'ssh') {
-        rememberAuthoritativelyRemovedWorktrees(hostId, [worktreeId])
+        rememberAuthoritativelyRemovedWorktrees(hostId, [worktreeId], [removedWorktree])
+      } else if (hostId) {
+        announceAuthoritativeWorktreeRemovals(hostId, [removedWorktree])
       }
 
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()

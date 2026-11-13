@@ -13417,6 +13417,8 @@
             "aaf1451654": "创建草稿 {{value0}}",
             "26511c22b4": "创建中...",
             "d7ae61269b": "已提交的更改",
+            "branchSectionMerged": "已合并",
+            "branchSectionReviewMerged": "{{review}} 已合并",
             "48a003c1b1": "已暂存的更改",
             "d4ef4bafc5": "更改",
             "9339382454": "全部取消暂存",

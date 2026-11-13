@@ -31,6 +31,7 @@ export function useSourceControlPanelState() {
   })
   const viewState = useSourceControlPanelViewState({
     activeWorktreeId,
+    activeWorktreeOwner: activeWorktree ?? null,
     settings,
     updateSettings: storeActions.updateSettings
   })

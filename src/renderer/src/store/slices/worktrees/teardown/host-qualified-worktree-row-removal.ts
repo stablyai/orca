@@ -2,7 +2,11 @@ import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualized
 import { getWorktreeOperationOwnerHostIds } from '@/lib/workspace/ownership/worktree-operation-route'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
+import {
+  announceAuthoritativeWorktreeRemovals,
+  rememberAuthoritativelyRemovedWorktrees,
+  type RemovedWorktreeInstance
+} from '../listing/authoritative-worktree-removal-memory'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -56,6 +60,7 @@ export function dropConfirmedHostRow(
   set: WorktreeSliceSet,
   worktreeId: string,
   requiredExecutionHostId: ExecutionHostId,
+  removedWorktree: RemovedWorktreeInstance,
   fallbackSurvivingHostId: ExecutionHostId | null = null,
   ignoreWorkspaceCleanupScanSurvivors = false
 ): boolean {
@@ -135,7 +140,13 @@ export function dropConfirmedHostRow(
     }
   })
   if (parseExecutionHostId(requiredExecutionHostId)?.kind === 'ssh') {
-    rememberAuthoritativelyRemovedWorktrees(requiredExecutionHostId, [worktreeId])
+    rememberAuthoritativelyRemovedWorktrees(
+      requiredExecutionHostId,
+      [worktreeId],
+      [removedWorktree]
+    )
+  } else {
+    announceAuthoritativeWorktreeRemovals(requiredExecutionHostId, [removedWorktree])
   }
   return sameIdSurvives
 }
@@ -144,6 +155,7 @@ export function prepareHostScopedRemovalCompletion(
   set: WorktreeSliceSet,
   worktreeId: string,
   requiredExecutionHostId: ExecutionHostId,
+  removedWorktree: RemovedWorktreeInstance,
   fallbackSurvivingHostId: ExecutionHostId | null,
   ignoreWorkspaceCleanupScanSurvivors = false
 ): boolean {
@@ -151,6 +163,7 @@ export function prepareHostScopedRemovalCompletion(
     set,
     worktreeId,
     requiredExecutionHostId,
+    removedWorktree,
     fallbackSurvivingHostId,
     ignoreWorkspaceCleanupScanSurvivors
   )

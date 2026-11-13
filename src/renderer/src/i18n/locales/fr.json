@@ -13747,6 +13747,8 @@
             "aaf1451654": "Créer un brouillon de {{value0}}",
             "26511c22b4": "Création...",
             "d7ae61269b": "Committé sur la branche",
+            "branchSectionMerged": "Fusionnée",
+            "branchSectionReviewMerged": "{{review}} est fusionnée",
             "48a003c1b1": "Modifications stagées",
             "d4ef4bafc5": "Modifications",
             "9339382454": "Déstager tout",

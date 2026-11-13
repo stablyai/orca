@@ -10,6 +10,7 @@ export function SectionHeader({
   count,
   countTitle,
   conflictCount = 0,
+  status,
   isCollapsed,
   onToggle,
   actions
@@ -19,6 +20,8 @@ export function SectionHeader({
   /** Spells out what the count measures — e.g. files changed against a compare base. */
   countTitle?: string
   conflictCount?: number
+  /** Inline status after the count; part of the toggle's accessible name. */
+  status?: React.ReactNode
   isCollapsed: boolean
   onToggle: () => void
   actions?: React.ReactNode
@@ -28,7 +31,14 @@ export function SectionHeader({
   const compact = useSourceControlScope() !== null
   // Share the rounded container so hover styling spans the whole row.
   return (
-    <div className={cn('pl-1 pr-3 pt-3', compact ? 'pb-0' : 'pb-1')}>
+    <div
+      className={cn(
+        'pl-1 pr-3 pt-3',
+        compact ? 'pb-0' : 'pb-1',
+        // Status chips size against the whole row, so long action labels don't shrink them early.
+        status && '@container/section-header'
+      )}
+    >
       <div className="group/section flex items-center gap-x-1 rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
         <Button
           type="button"
@@ -36,6 +46,8 @@ export function SectionHeader({
           size={compact ? 'chip' : 'xs'}
           className={cn(
             'h-auto min-w-0 flex-1 justify-start text-left',
+            // Narrow rows reserve chevron, 4ch of title, count and icon chip; the actions yield the rest.
+            status && '@max-[15rem]/section-header:min-w-[6.5rem]',
             compact ? 'min-h-4' : 'min-h-6'
           )}
           onClick={onToggle}
@@ -46,13 +58,15 @@ export function SectionHeader({
           />
           <span className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground">
             <span className="flex min-w-0 items-center gap-1">
-              <span className="min-w-0 truncate" title={label}>
+              {/* With a status chip, keep a few title characters readable before chip and count. */}
+              <span className={cn('truncate', status ? 'min-w-[4ch]' : 'min-w-0')} title={label}>
                 {label}
               </span>
               {/* Use title only; aria-label here would replace the parent toggle's accessible name. */}
               <span className="shrink-0 text-[11px] font-medium tabular-nums" title={countTitle}>
                 {count}
               </span>
+              {status}
             </span>
             {conflictCount > 0 && (
               <span className="block truncate text-[11px] font-medium text-destructive/80">
@@ -65,7 +79,13 @@ export function SectionHeader({
             )}
           </span>
         </Button>
-        <div className={cn('ml-auto flex shrink-0 items-center justify-end', compact && '-my-1')}>
+        <div
+          className={cn(
+            'ml-auto flex items-center justify-end',
+            status ? 'min-w-0 shrink [&>*]:min-w-0 [&>*]:shrink' : 'shrink-0',
+            compact && '-my-1'
+          )}
+        >
           {actions}
         </div>
       </div>

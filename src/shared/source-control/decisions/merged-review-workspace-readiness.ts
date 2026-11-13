@@ -23,11 +23,19 @@ export function resolveMergedReviewWorkspaceReadiness(input: {
   if (uncommittedCount > 0) {
     return { kind: 'uncommitted-changes', count: uncommittedCount }
   }
-  const head = input.headOid?.trim().toLowerCase() ?? ''
+  return mergedReviewIncludesHead(review, input.headOid)
+    ? { kind: 'safe-to-delete' }
+    : { kind: 'head-unverified' }
+}
+
+/** HEAD is the review's head, or GitHub confirmed the review contains it. */
+export function mergedReviewIncludesHead(
+  review: Pick<HostedReviewInfo, 'headSha' | 'confirmedContainedHeadOid'>,
+  headOid: string | null | undefined
+): boolean {
+  const head = headOid?.trim().toLowerCase() ?? ''
   const reviewHeads = [review.headSha, review.confirmedContainedHeadOid].map(
     (oid) => oid?.trim().toLowerCase() ?? ''
   )
   return head.length > 0 && reviewHeads.includes(head)
-    ? { kind: 'safe-to-delete' }
-    : { kind: 'head-unverified' }
 }
