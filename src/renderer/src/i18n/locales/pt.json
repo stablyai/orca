@@ -21767,6 +21767,7 @@
         "unmute": "Ativar microfone",
         "mute": "Silenciar microfone",
         "awaitingApproval": "Aguardando sua aprovação no chat",
+        "awaitingAnswer": "Aguardando sua resposta no chat",
         "you": "Você",
         "voice": "Voz",
         "disclosure": "A fala usa o serviço de voz da OpenAI no Codex; o trabalho continua no Codex desta conversa.",

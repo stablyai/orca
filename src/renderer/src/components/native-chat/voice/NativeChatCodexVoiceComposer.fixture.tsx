@@ -24,7 +24,7 @@ function composer(voice: NativeChatCodexVoice | null): () => React.JSX.Element {
         {voice?.call ? (
           <NativeChatCodexVoiceStrip
             call={voice.call}
-            awaitingApproval={false}
+            awaitingInput={null}
             onMute={() => {}}
             onEnd={() => {}}
             onDismiss={() => {}}

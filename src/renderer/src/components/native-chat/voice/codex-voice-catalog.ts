@@ -35,7 +35,8 @@ export async function refreshCodexVoiceCatalog(): Promise<void> {
       'agentSession.codexVoices',
       { sessionId: source.sessionId }
     )
-    if (listing === latestListing && voices && voices.length > 0) {
+    // An empty list is an answer; null means this Codex could not say, so the last one stays.
+    if (listing === latestListing && voices !== null) {
       useCodexVoiceCatalog.setState({ voices })
     }
   } catch {

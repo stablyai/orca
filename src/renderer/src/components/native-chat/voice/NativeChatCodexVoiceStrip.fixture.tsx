@@ -22,12 +22,15 @@ const live: CodexVoiceCallState = {
   failure: null
 }
 
-function strip(call: CodexVoiceCallState, awaitingApproval = false): () => React.JSX.Element {
+function strip(
+  call: CodexVoiceCallState,
+  awaitingInput: 'approval' | 'question' | null = null
+): () => React.JSX.Element {
   return () => (
     <div className="native-chat-appearance p-4 pt-6">
       <NativeChatCodexVoiceStrip
         call={call}
-        awaitingApproval={awaitingApproval}
+        awaitingInput={awaitingInput}
         onMute={() => {}}
         onEnd={() => {}}
         onDismiss={() => {}}
@@ -48,7 +51,7 @@ export const speaking = defineFixture({ width: 720, render: strip(live) })
 
 export const mutedAwaitingApproval = defineFixture({
   width: 720,
-  render: strip({ ...live, muted: true, speaking: null }, true)
+  render: strip({ ...live, muted: true, speaking: null }, 'approval')
 })
 
 export const failed = defineFixture({

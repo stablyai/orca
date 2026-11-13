@@ -20,18 +20,22 @@ export function NativeChatCodexVoiceProvider(props: {
   return <NativeChatCodexVoiceContext value={voice}>{props.children}</NativeChatCodexVoiceContext>
 }
 
-/** Stays mounted while an approval card replaces the composer, so the call survives it. */
+/** Stays mounted while a prompt card replaces the composer, and after the chat stops reading, so
+ *  a live call keeps its controls. */
 export function NativeChatCodexVoiceStripSlot(props: {
-  awaitingApproval: boolean
+  /** The kind of the chat's open prompt, if any. */
+  promptKind?: string
 }): React.JSX.Element | null {
   const voice = useNativeChatCodexVoiceControl()
   if (!voice?.call) {
     return null
   }
+  const awaitingInput =
+    props.promptKind === 'approval' || props.promptKind === 'question' ? props.promptKind : null
   return (
     <NativeChatCodexVoiceStrip
       call={voice.call}
-      awaitingApproval={props.awaitingApproval}
+      awaitingInput={awaitingInput}
       onMute={voice.setMuted}
       onEnd={voice.stop}
       onDismiss={voice.dismiss}
