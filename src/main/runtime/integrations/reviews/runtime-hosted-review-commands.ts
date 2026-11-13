@@ -1,18 +1,25 @@
 import {
-  getPRForBranchOutcome,
+  preparePRBranchRead,
   readRecentPhonePROutcome
 } from '../../../github/client/lookup/pr-for-branch-outcome'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type {
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
-import { admissionTierForRefreshReason } from '../../../github/pull-requests/refresh/pr-refresh-candidate-policy'
+import {
+  admissionTierForRefreshReason,
+  bypassesFreshnessDelay
+} from '../../../github/pull-requests/refresh/pr-refresh-candidate-policy'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
-import { runHostedPRRead } from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import {
+  runHostedPRRead,
+  runHostedPRSnapshot
+} from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import { HOSTED_PR_COMPLETION_WAIT_MS } from '../../../github/pull-requests/refresh/hosted-pr-read-jobs'
 import {
   type CreateHostedReviewInput,
   type CreateHostedReviewResult,
@@ -78,8 +85,11 @@ export class RuntimeHostedReviewCommands {
     currentHeadOid?: string | null,
     reason?: GitHubPRRefreshReason,
     userRefresh?: boolean,
-    clientKind?: DeviceScope
-  ): Promise<PRRefreshOutcome> {
+    clientKind?: DeviceScope,
+    signal?: AbortSignal,
+    acceptRevalidationOnly = false
+  ): Promise<PRSnapshotReply> {
+    const deadline = Date.now() + HOSTED_PR_COMPLETION_WAIT_MS
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
       ...this.deps.getExecutionOptions(
@@ -90,16 +100,17 @@ export class RuntimeHostedReviewCommands {
     if (userRefresh === true) {
       lookupOptions.userRefresh = true
     }
+    if (reason && bypassesFreshnessDelay(reason)) {
+      lookupOptions.resetQuietBackoff = true
+    }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
     }
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
     }
-    const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
-      Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
-    // Desktop callers and reason-carrying refreshes keep their own GitHub read.
+    // Legacy phone reads retain their narrower thirty-second reuse contract.
     if (clientKind === 'mobile' && reason === undefined) {
       const recent = await readRecentPhonePROutcome(
         repo.path,
@@ -113,27 +124,30 @@ export class RuntimeHostedReviewCommands {
         return recent
       }
     }
-    // Through the coordinator, so a client's read also serves this server's CI-line watches.
-    return runHostedPRRead(
-      {
-        cacheKey: `${repo.path}::${branch}`,
-        repoKind: repo.kind ?? 'git',
-        repoId: repo.id,
-        repoPath: repo.path,
-        branch,
-        connectionId,
-        linkedPRNumber: linkedPRNumber ?? null
-      },
-      () =>
-        getPRForBranchOutcome(
-          repo.path,
-          branch,
-          linkedPRNumber ?? null,
-          connectionId,
-          linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-          ...lookupOptionArgs
-        )
+    const candidate = {
+      cacheKey: `${repo.path}::${branch}`,
+      repoKind: repo.kind ?? ('git' as const),
+      repoId: repo.id,
+      repoPath: repo.path,
+      branch,
+      connectionId,
+      currentHeadOid: lookupOptions.currentHeadOid ?? null,
+      linkedPRNumber: linkedPRNumber ?? null,
+      fallbackPRNumber: linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
+      localGitOptions: lookupOptions.localGitExecOptions
+    }
+    const prepared = await preparePRBranchRead(
+      repo.path,
+      branch,
+      linkedPRNumber ?? null,
+      connectionId,
+      linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
+      lookupOptions
     )
+    if (reason === 'swr' && userRefresh !== true) {
+      return runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
+    }
+    return runHostedPRRead(candidate, prepared.read, prepared.didRead, prepared.release)
   }
 
   async getHostedReviewForBranch(args: {

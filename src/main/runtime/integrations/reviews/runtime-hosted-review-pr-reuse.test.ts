@@ -153,6 +153,6 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       userRefresh,
       clientKind
     )
-    expect(outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
+    expect('kind' in outcome && outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
   })
 })

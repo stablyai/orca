@@ -2,6 +2,10 @@ import type { PRCheckContract } from '@/lib/source-control/checks/pr-check-obser
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
+  GitHubPRRefreshReason,
+  PRSnapshotReply
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type {
   IssueInfo,
   PRInfo
 } from '../../../../../shared/github/pull-requests/pull-request-types'
@@ -16,6 +20,9 @@ export type InflightPR = {
   force: boolean
   generation: number
   lookupHintKey: string
+  reason?: GitHubPRRefreshReason
+  superseded?: boolean
+  outcome?: PRSnapshotReply
 }
 export type InflightChecks = {
   promise: Promise<PRCheckDetail[]>

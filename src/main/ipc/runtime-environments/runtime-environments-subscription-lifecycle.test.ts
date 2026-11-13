@@ -118,6 +118,63 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
+  it('holds timed signal-route admission after setup while foreground and status subscriptions remain runnable', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers use only the fixture settings methods.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const finish: (() => void)[] = []
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (_connection, _method, _params, _timeout, callbacks) => {
+        finish.push(() =>
+          callbacks.onResponse({ id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'runtime' } })
+        )
+        return { requestId: `request-${finish.length}`, close: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+    const add = handler<{ name: string; pairingCode: string }, unknown>(
+      'runtimeEnvironments:addFromPairingCode'
+    )
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const sender = {
+      id: 1,
+      isDestroyed: () => false,
+      send: vi.fn(),
+      on: vi.fn(),
+      removeListener: vi.fn()
+    }
+    const subscribe = handler<
+      {
+        selector: string
+        method: string
+        params: { reason?: string }
+        subscriptionId: string
+      },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const start = (subscriptionId: string, reason: string, method = 'github.prForBranch') =>
+      subscribe({ sender }, { selector: 'desk', subscriptionId, method, params: { reason } })
+    await start('timer-1', 'swr')
+    await start('timer-2', 'swr')
+    const third = start('timer-3', 'swr')
+    const cancelled = expect(third).rejects.toThrow()
+    await start('manual', 'manual')
+    await start('status', '', 'git.status')
+    await start('review', '', 'hostedReview.forBranch')
+    expect(finish).toHaveLength(5)
+    const cancel = handler<{ subscriptionId: string }, unknown>('runtimeEnvironments:unsubscribe')
+    await cancel({ sender }, { subscriptionId: 'timer-3' })
+    await cancelled
+    const fourth = start('timer-4', 'swr')
+    finish[0]()
+    await fourth
+    expect(finish).toHaveLength(6)
+    const unsubscribe = handler<{ subscriptionId: string }, unknown>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    for (const subscriptionId of ['timer-1', 'timer-2', 'timer-4', 'manual', 'status', 'review']) {
+      await unsubscribe({ sender }, { subscriptionId })
+    }
+  })
+
   it('rejects cross-window streaming subscription control', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()

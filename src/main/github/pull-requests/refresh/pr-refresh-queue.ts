@@ -1,4 +1,5 @@
 import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../shared/review-refresh-policy'
+import type { HostedPRReadJob } from './hosted-pr-read-jobs'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -30,6 +31,7 @@ export type PRRefreshQueueEntry = {
   windowId?: number
   /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
   watch?: { prKey: string; headSha?: string }
+  hosted?: HostedPRReadJob
 }
 
 export type PRRefreshEnqueue = {
@@ -106,6 +108,10 @@ export class PRRefreshQueue {
 
   ownsRequest(key: string, requestSequence: number): boolean {
     return this.backgroundNotBefore.get(key)?.requestSequence === requestSequence
+  }
+
+  backgroundGateUntil(key: string): number {
+    return this.backgroundNotBefore.get(key)?.until ?? 0
   }
 
   retimeVisible(

@@ -10,6 +10,7 @@ import type {
 import type { GitHubPRBranchLookupOptions } from '../../client/lookup/pull-request-lookup-data'
 import { PR_CHECK_PAGE_LIMIT } from '../../client/check/pr-check-rollup'
 import { parsePRKey } from '../../pr-watch/pr-watch-types'
+import { quietPRIntervalForCandidate } from '../../client/lookup/pr-quiet-policy-evidence'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -26,6 +27,9 @@ export function hostedReviewOptionArgs(
 ): [] | [GitHubPRBranchLookupOptions] {
   const options: GitHubPRBranchLookupOptions =
     requestOptions.userRefresh === true ? { userRefresh: true } : {}
+  if (bypassesFreshnessDelay(reason)) {
+    options.resetQuietBackoff = true
+  }
   options.localGitExecOptions = {
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }
@@ -189,6 +193,12 @@ export function hasStaleHead(candidate: GitHubPRRefreshCandidate): boolean {
 }
 
 export function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): number {
+  if (candidate.cachedFetchedAt != null && !hasStaleHead(candidate)) {
+    const quiet = quietPRIntervalForCandidate(candidate)
+    if (quiet !== null) {
+      return quiet
+    }
+  }
   return (
     reviewRefreshIntervalMs({
       state: candidate.cachedPRState,

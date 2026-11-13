@@ -4,6 +4,8 @@ import type {
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { lookupBackoffDelayMs } from '../../../source-control/hosted-review-refresh-pacing'
 import { refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
+import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import type { PRRefreshQueue } from './pr-refresh-queue'
 
 export class PRRefreshRetryState {
   private readonly errorBackoff = new Map<string, { failures: number; retryAt: number }>()
@@ -49,5 +51,34 @@ export class PRRefreshRetryState {
       ...outcome,
       nextAutoRetryAt: cooldownUntil !== undefined ? Math.max(retryAt, cooldownUntil) : retryAt
     }
+  }
+
+  errorFollowUpAt(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    outcome: PRRefreshOutcome,
+    visible: boolean
+  ): number | undefined {
+    return outcome.kind === 'upstream-error'
+      ? (outcome.nextAutoRetryAt ??
+          (visible ? this.nextVisibleErrorRetryAt(key, candidate) : undefined))
+      : undefined
+  }
+
+  settleProducerError(
+    outcome: PRRefreshOutcome,
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    prepared: PreparedPRBranchRead,
+    queue: PRRefreshQueue
+  ): PRRefreshOutcome {
+    const retryAt = this.nextVisibleErrorRetryAt(key, candidate)
+    const result = this.withErrorSchedule(outcome, retryAt)
+    prepared.scheduleError(outcome, result)
+    queue.protectBackgroundUntil(
+      key,
+      Math.max(retryAt, outcome.kind === 'upstream-error' ? (outcome.retryDisabledUntil ?? 0) : 0)
+    )
+    return result
   }
 }
