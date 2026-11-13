@@ -56,6 +56,24 @@ describe('evaluateWorkspaceCleanup', () => {
     ).toEqual({ action: 'keep', cause: 'terminal-running', reason: 'merged' })
   })
 
+  it('removes finished automation runs and released workers only when their rule is on', () => {
+    const run = workspace({ reasons: ['automation-run'] })
+    expect(evaluateWorkspaceCleanup(run, MERGED_ON, NOW)).toEqual({
+      action: 'keep',
+      cause: 'no-rule-matched'
+    })
+    expect(
+      evaluateWorkspaceCleanup(run, policy({ automationRuns: { enabled: true } }), NOW)
+    ).toEqual({ action: 'delete', reason: 'automation-run' })
+    expect(
+      evaluateWorkspaceCleanup(
+        workspace({ reasons: ['orchestration-worker'], blockers: ['unpushed-commits'] }),
+        policy({ orchestrationWorkers: { enabled: true } }),
+        NOW
+      )
+    ).toEqual({ action: 'keep', cause: 'unpushed-commits', reason: 'orchestration-worker' })
+  })
+
   it('keeps a merged workspace whose git status was never read', () => {
     const unread = workspace({
       reasons: ['merged'],
