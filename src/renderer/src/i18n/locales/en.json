@@ -28388,8 +28388,6 @@
       "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
       "cancel": "Cancel",
       "save": "Save",
-      "guestOwner": "In a shared workspace, Personal values come from its owner, {{owner}}, not from you.",
-      "guest": "In a shared workspace, Personal values come from its owner, not from you.",
       "empty": "No variables from Cloud secrets yet.",
       "overrides": "overrides {{scopes}}",
       "sharedNoPersonal": "A shared workspace gets nobody’s Personal values, not even its owner’s, so only Repository and Shared apply."
