@@ -249,19 +249,16 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
 }
 
 export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string, memberPlaceholders: readonly string[] = []) {
-  const git: CredentialRoute[] = gitToken
-    ? [
-        {
-          // git (libcurl) is unaffected by the transform-rule framing hang, so it is injected inline.
-          host: 'github.com',
-          header: 'authorization',
-          placeholders: [gitBasicAuthorization(githubPlaceholderToken(row))],
-          via: 'transform',
-          value: gitBasicAuthorization(gitToken)
-        }
-      ]
-    : []
   const proxyUrl = deps.config.egressProxyUrl
+  const gitPlaceholder = gitBasicAuthorization(githubPlaceholderToken(row))
+  // The workspace repo's installation token. With the egress proxy (every deployed env) it is forwarded and
+  // swapped there, so the real token never sits in Vercel's policy store; the inline transform is the
+  // no-proxy fallback only (git/libcurl is unaffected by the transform framing hang).
+  const git: CredentialRoute[] = !gitToken
+    ? []
+    : proxyUrl
+      ? [{ host: 'github.com', header: 'authorization', placeholders: [gitPlaceholder], via: 'forward', forwardURL: proxyUrl }]
+      : [{ host: 'github.com', header: 'authorization', placeholders: [gitPlaceholder], via: 'transform', value: gitBasicAuthorization(gitToken) }]
   const credentials: CredentialRoute[] = proxyUrl
     ? [
         // Members' own GitHub identities: forwarded so the proxy can pin them to the workspace repo.

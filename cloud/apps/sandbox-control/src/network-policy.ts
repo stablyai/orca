@@ -109,10 +109,13 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
 export type EgressPreset = 'open' | 'limited'
 export const DEFAULT_EGRESS_PRESET: EgressPreset = 'open'
 
-/** Operator setting (SANDBOX_EGRESS_PRESET); unset or unknown values fall back to the default. */
+/** Operator setting (SANDBOX_EGRESS_PRESET): unset means the default; a value we don't know fails closed. */
 export function parseEgressPreset(value: string | undefined): EgressPreset {
   const preset = value?.trim().toLowerCase()
-  return preset === 'open' || preset === 'limited' ? preset : DEFAULT_EGRESS_PRESET
+  if (!preset) {
+    return DEFAULT_EGRESS_PRESET
+  }
+  return preset === 'open' ? 'open' : 'limited'
 }
 
 export type CredentialRoute = {

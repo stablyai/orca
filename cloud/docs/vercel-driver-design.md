@@ -117,6 +117,9 @@ Compiled per sandbox by `compileNetworkPolicy()` (workspace sandboxes: `egressPo
 - GitHub: VM sets `http.https://github.com/.extraheader = Authorization: Basic b64(x-access-token:<placeholder>)` so
   every git request carries the placeholder (git otherwise sends an unauthenticated probe first, which the trailing
   deny would 403). The control plane mints a 1h GitHub App installation token and rewrites the policy before expiry.
+  With the egress proxy configured (every deployed env), the github.com claim is a `forwardURL` rule and the proxy
+  swaps in `Basic x-access-token:<installation token>`, so the token never enters Vercel's policy store (E3 security
+  review F1); the inline `transform` is the no-proxy fallback only.
 - **Node fetch hang**: with a `transform` rule, the Vercel proxy answers HTTP/1.1 with no `content-length` or
   `transfer-encoding`; undici waits forever. curl/git (libcurl) and Go (`gh`) are fine. Handling: (1) `transform` is
   used only for hosts whose clients are curl/Go (github.com git traffic); (2) hosts Node clients use

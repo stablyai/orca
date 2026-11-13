@@ -92,10 +92,13 @@ describe('compileNetworkPolicy', () => {
     ])
   })
 
-  it('defaults workspace sandboxes to open egress; limited is an explicit operator choice', () => {
+  it('defaults workspace sandboxes to open egress; an unknown setting fails closed to limited', () => {
     expect(DEFAULT_EGRESS_PRESET).toBe('open')
     expect(parseEgressPreset(undefined)).toBe('open')
-    expect(parseEgressPreset('bogus')).toBe('open')
+    expect(parseEgressPreset('')).toBe('open')
+    expect(parseEgressPreset('bogus')).toBe('limited')
+    expect(parseEgressPreset('opne')).toBe('limited')
+    expect(parseEgressPreset('allow-all')).toBe('limited')
     expect(parseEgressPreset(' Limited ')).toBe('limited')
     expect(parseEgressPreset('open')).toBe('open')
   })
