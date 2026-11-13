@@ -25,6 +25,8 @@ import type { TeamPageArrival } from './team-page-store'
 export type TeamPageViewProps = {
   /** The active team, or null on a personal account. */
   org: { orgId: string; name: string } | null
+  /** The team's MFA requirement for this person: the countdown banner or the setup screen. */
+  mfaNotice?: React.ReactNode
   viewerUserId: string | null
   roster: OrcaProfileOrgMembersListResult | null
   billing: OrcaBillingStatusResult | null
@@ -152,6 +154,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      {props.mfaNotice ?? null}
       <header className="flex items-center gap-3">
         <TeamMark name={props.org.name} />
         <div className="min-w-0 flex-1">

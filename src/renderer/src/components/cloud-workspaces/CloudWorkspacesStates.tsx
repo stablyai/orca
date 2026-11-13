@@ -34,7 +34,7 @@ export function ErrorState({
   onSignIn: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  if (error === 'unauthorized') {
+  if (error === 'unauthorized' && reason !== 'mfa_required') {
     return <SignInAgainNotice className="m-1" onSignIn={onSignIn} />
   }
   // At the running-sandbox limit a retry can't help: show your workspaces so one can go to sleep.

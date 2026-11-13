@@ -21738,7 +21738,8 @@
         "remindOne": "Remind",
         "reminded_one": "Reminder sent to {{count}} member.",
         "reminded_other": "Reminder sent to {{count}} members.",
-        "remindedNoEmail": "Reminder recorded, but email delivery is off on this server, so nothing was sent."
+        "remindedNoEmail": "Reminder recorded, but email delivery is off on this server, so nothing was sent.",
+      "requiredInline": "Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces."
       }
     },
     "i18n": {

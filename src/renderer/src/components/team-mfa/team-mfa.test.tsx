@@ -7,6 +7,7 @@ import { RequireMfaRow, type RequireMfaRowProps } from './RequireMfaRow'
 import { TeamMfaBanner } from './TeamMfaBanner'
 import { TeamMfaBlockedScreen } from './TeamMfaBlockedScreen'
 import { mfaCountdownLabel, mfaDaysLeft, teamMfaSurface } from './team-mfa-copy'
+import { describeError, describeInlineError } from '../cloud-workspaces/cloud-workspace-errors'
 
 afterEach(cleanup)
 
@@ -199,5 +200,17 @@ describe('Require MFA row', () => {
     })
     expect(view.container.textContent).toContain('nothing was sent')
     expect(view.container.textContent).not.toContain('Reminder sent')
+  })
+})
+
+describe('the server refusal in cloud workspace errors', () => {
+  it('says to set up MFA, never to sign in again', () => {
+    for (const describe of [describeError, describeInlineError]) {
+      const message = describe('unauthorized', 'mfa_required', translate)
+      expect(message).toContain('requires two-factor authentication')
+      expect(message).not.toMatch(/sign in/i)
+    }
+    // Any other unauthorized answer is still the sign-in message.
+    expect(describeInlineError('unauthorized', undefined, translate)).not.toContain('two-factor')
   })
 })

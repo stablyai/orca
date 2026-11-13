@@ -22,6 +22,19 @@ export type HostedSandboxConfig = {
   invalidateAccessToken?: () => void
 }
 
+/** `reason` on the provider error when the team's MFA policy refused the token. */
+export const MFA_REQUIRED_REASON = 'mfa_required'
+
+/** Reads a copy of the body, so the caller can still read the response. */
+export async function isMfaRequiredRefusal(response: Response): Promise<boolean> {
+  try {
+    const body = (await response.clone().json()) as { error?: unknown } | null
+    return body?.error === MFA_REQUIRED_REASON
+  } catch {
+    return false
+  }
+}
+
 const SandboxTokenBody = z.object({
   sandboxToken: z.string().min(1).max(8192),
   expiresAt: z.number().int().positive()
@@ -161,6 +174,15 @@ async function mintSandboxToken(
         redirect: 'error',
         signal: AbortSignal.timeout(15_000)
       })
+      if (response.status === 403 && (await isMfaRequiredRefusal(response))) {
+        // The team requires MFA and this person has none past the deadline. Signing in again
+        // would not help, so this is not a session error: the reason lets the UI show setup.
+        throw new EnvironmentProviderError(
+          'unauthorized',
+          'Your team requires two-factor authentication. Set it up to use its cloud workspaces.',
+          MFA_REQUIRED_REASON
+        )
+      }
       if (response.status === 401 || response.status === 403) {
         throw new OrcaCloudRequestError(response.status)
       }
