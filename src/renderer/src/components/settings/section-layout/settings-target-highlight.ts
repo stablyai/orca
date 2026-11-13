@@ -1,4 +1,4 @@
-import { useCallback, useRef, type RefCallback } from 'react'
+import { useCallback, useLayoutEffect, useRef, type RefCallback } from 'react'
 
 export const SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME = 'settings-target-highlight'
 
@@ -61,7 +61,9 @@ export function useSettingsTargetReveal<T extends HTMLElement>(
   onReveal: () => void
 ): RefCallback<T> {
   const onRevealRef = useRef(onReveal)
-  onRevealRef.current = onReveal
+  useLayoutEffect(() => {
+    onRevealRef.current = onReveal
+  })
   return useCallback((node: T | null) => {
     if (!node) {
       return
