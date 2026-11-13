@@ -20,7 +20,14 @@ export function showTerminalDropTargetGone(paths: readonly string[]): void {
       action: {
         label: translate('menu.copy', 'Copy'),
         onClick: () => {
-          void window.api.ui.writeClipboardText(copyText)
+          window.api.ui.writeClipboardText(copyText).catch(() => {
+            toast.error(
+              translate(
+                'auto.components.terminal.pane.terminal.drop.handler.writeTargetGoneCopyFailed',
+                "Couldn't copy the paths."
+              )
+            )
+          })
         }
       }
     }

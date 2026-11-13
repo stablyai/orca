@@ -3934,6 +3934,7 @@
                 "uploadingFilesToRemote_one": "Transfert de {{count}} fichier vers l’hôte distant…",
                 "uploadingFilesToRemote_other": "Transfert de {{count}} fichiers vers l’hôte distant…",
                 "writeTargetGone": "L'envoi est terminé, mais le terminal n'était plus disponible pour saisir le chemin. Les fichiers se trouvent dans :",
+                "writeTargetGoneCopyFailed": "Impossible de copier les chemins.",
                 "uploadingFilesToRemote_many": "Transfert de {{count}} fichiers vers l’hôte distant…"
               }
             }

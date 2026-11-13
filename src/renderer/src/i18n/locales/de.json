@@ -4171,7 +4171,8 @@
                 "uploadingFiles_other": "{{count}} Dateien werden in die Laufzeitumgebung hochgeladen…",
                 "uploadingFilesToRemote_one": "{{count}} Datei wird auf den Remote-Host hochgeladen…",
                 "uploadingFilesToRemote_other": "{{count}} Dateien werden auf den Remote-Host hochgeladen…",
-                "writeTargetGone": "Der Upload ist abgeschlossen, aber das Terminal stand zum Eingeben des Pfads nicht mehr bereit. Dateien liegen unter:"
+                "writeTargetGone": "Der Upload ist abgeschlossen, aber das Terminal stand zum Eingeben des Pfads nicht mehr bereit. Dateien liegen unter:",
+                "writeTargetGoneCopyFailed": "Pfade konnten nicht kopiert werden."
               }
             }
           },

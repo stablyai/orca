@@ -16795,6 +16795,7 @@
                 "uploadingFilesToRemote_one": "Enviando {{count}} arquivo para o host remoto…",
                 "uploadingFilesToRemote_other": "Enviando {{count}} arquivos para o host remoto…",
                 "writeTargetGone": "O envio terminou, mas o terminal não estava disponível para digitar o caminho. Os arquivos estão em:",
+                "writeTargetGoneCopyFailed": "Não foi possível copiar os caminhos.",
                 "uploadingFilesToRemote_many": "Enviando {{count}} arquivos para o host remoto…"
               }
             }

@@ -3575,7 +3575,8 @@
                 "failedUploads_other": "파일 {{count}}개를 업로드하지 못했습니다.",
                 "uploadingFiles_other": "파일 {{count}}개를 런타임에 업로드 중…",
                 "uploadingFilesToRemote_other": "파일 {{count}}개를 원격으로 업로드 중…",
-                "writeTargetGone": "업로드가 완료되었지만 경로를 입력할 터미널이 열려 있지 않았습니다. 파일 위치:"
+                "writeTargetGone": "업로드가 완료되었지만 경로를 입력할 터미널이 열려 있지 않았습니다. 파일 위치:",
+                "writeTargetGoneCopyFailed": "경로를 복사하지 못했습니다."
               }
             }
           },

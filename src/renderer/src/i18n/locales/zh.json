@@ -3770,7 +3770,8 @@
                 "failedUploads_other": "{{count}} 个文件上传失败",
                 "uploadingFiles_other": "正在将 {{count}} 个文件上传到运行时…",
                 "uploadingFilesToRemote_other": "正在将 {{count}} 个文件上传到远端…",
-                "writeTargetGone": "上传已完成，但终端未能用于输入路径。文件位于："
+                "writeTargetGone": "上传已完成，但终端未能用于输入路径。文件位于：",
+                "writeTargetGoneCopyFailed": "无法复制路径。"
               }
             }
           },

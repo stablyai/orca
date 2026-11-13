@@ -3643,6 +3643,7 @@
                 "uploadingFilesToRemote_one": "Subiendo {{count}} archivo al host remoto…",
                 "uploadingFilesToRemote_other": "Subiendo {{count}} archivos al host remoto…",
                 "writeTargetGone": "La carga terminó, pero la terminal ya no estaba disponible para escribir la ruta. Los archivos están en:",
+                "writeTargetGoneCopyFailed": "No se pudieron copiar las rutas.",
                 "uploadingFilesToRemote_many": "Subiendo {{count}} archivos al host remoto…"
               }
             }

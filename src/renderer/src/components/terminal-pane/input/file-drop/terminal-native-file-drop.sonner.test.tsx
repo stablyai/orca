@@ -159,3 +159,20 @@ it('copies the landed paths from the toast Copy action', async () => {
   })
   expect(writeClipboardText).toHaveBeenCalledWith(uploadedPath)
 })
+
+it('reports a failed copy from the toast Copy action', async () => {
+  const writeClipboardText = vi.fn(() => Promise.reject(new Error('clipboard unavailable')))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the toast action reads only ui.writeClipboardText off window.api; any other member would fail this test at call time.
+  window.api = { ui: { writeClipboardText } } as never
+  mockImportResults([{ status: 'imported', destPath: uploadedPath }])
+  const view = render(<Toaster closeButton />)
+  const { args } = createDropArgs([])
+
+  await deliverDrop(args)
+
+  await act(async () => {
+    view.getByText('Copy').click()
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(view.queryByText("Couldn't copy the paths.")).not.toBeNull()
+})
