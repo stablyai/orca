@@ -191,7 +191,7 @@ describe('OrcaRuntimeService', () => {
           worktreeId: TEST_WORKTREE_ID,
           title: 'Claude',
           activeLeafId: HEADLESS_LEAF_ID,
-          layout: fixture.getSession().terminalLayoutsByTabId['host-tab'] ?? null
+          layout: fixture.getSession().terminalLayoutsByTabId['host-tab']?.root ?? null
         }
       ],
       leaves: [
