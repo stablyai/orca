@@ -118,13 +118,11 @@ export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: str
   }
   const candidates = seeded.filter(isCandidate)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects exactly these columns.
-  const positions = this.db
-    .prepare(RUN_POSITION_SQL)
-    .all(
-      JSON.stringify(candidates.map((row) => row.database_id)),
-      runId,
-      Math.min(...candidates.map((row) => row.database_id))
-    ) as {
+  const positions = this.db.prepare(RUN_POSITION_SQL).all(
+    JSON.stringify(candidates.map((row) => row.database_id)),
+    runId,
+    candidates.reduce((min, row) => Math.min(min, row.database_id), Infinity)
+  ) as {
     database_id: number
     position: number
   }[]
