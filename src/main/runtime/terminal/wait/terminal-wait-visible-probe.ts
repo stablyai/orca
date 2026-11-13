@@ -10,6 +10,7 @@ import {
 } from './terminal-wait-detection'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
+import { isBodyReadinessAgent, hasFreshWorkingFirstPartyStatus } from './tui-idle-evidence'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -22,9 +23,47 @@ import { outputClockOf } from './tui-idle-evidence-source'
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
+const TUI_IDLE_VISIBLE_PROBE_RETRY_MS = 2_000
+
+/** Only a visibly working body-read agent needs the screen read again; every other outcome keeps the one-shot probe. */
+export function visibleProbeNeedsRetry(
+  agent: TuiAgent | null,
+  working: boolean,
+  remainingMs: number
+): boolean {
+  return isBodyReadinessAgent(agent) && working && remainingMs > TUI_IDLE_VISIBLE_PROBE_RETRY_MS
+}
+
+/** The probe settles only what the live screen would: agent rules for screen-ruled and body-read agents, else a settled ready preview. */
+export function visibleProbeReady(args: {
+  agent: TuiAgent | null
+  screenRule: boolean
+  snapshotText: string
+  restoredLines: readonly string[]
+  hasOutputClock: boolean
+  /** First-party or title evidence that a turn is still open; body-read agents rank it above the composer. */
+  working: boolean
+}): boolean {
+  if (isBodyReadinessAgent(args.agent) && args.working) {
+    return false
+  }
+  return args.screenRule || isBodyReadinessAgent(args.agent)
+    ? isKnownReadyPromptBody(
+        args.snapshotText,
+        args.agent,
+        () => args.restoredLines,
+        args.hasOutputClock
+      )
+    : isKnownReadyPromptSettled(args.snapshotText)
+}
+
+/** A body-read agent needs a real screen: its composer rule cannot judge a stream tail. */
+export function visibleProbeReadsScreen(agent: TuiAgent | null, screenRule: boolean): boolean {
+  return screenRule || isBodyReadinessAgent(agent)
+}
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded readiness read for adopted PTYs with lost metadata; later working-to-idle transitions belong to the poll. */
+  /** One bounded readiness read for adopted PTYs with lost metadata; a working body-read agent retries until its composer returns. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -34,9 +73,22 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))
     )
+    this.probeTuiIdleVisibleScreen(waiter, Date.now() + waiterTimeoutMs, agent, settleMarginMs)
+  }
+
+  private probeTuiIdleVisibleScreen(
+    waiter: TerminalWaiter,
+    deadline: number,
+    agent: TuiAgent | null,
+    settleMarginMs: number
+  ): void {
+    const remaining = deadline - Date.now()
+    if (remaining < 1 || !this.terminalWaiters.has(waiter)) {
+      return
+    }
     const probeTimeoutMs = Math.min(
       VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS + settleMarginMs,
-      Math.max(0, waiterTimeoutMs - settleMarginMs)
+      Math.max(0, remaining - settleMarginMs)
     )
     const providerTimeoutMs = Math.min(
       VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -47,13 +99,17 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     }
     const screenRule = readsTrustedScreen(agent)
     void withTimeout(
-      this.readTerminal(waiter.handle, screenRule ? { screen: true } : {}, {
-        timeoutMs: providerTimeoutMs,
-        retireOnTimeout: true,
-        // Why: the ready banner stays in scrollback for the whole session, so
-        // classifying history would call a working agent idle (#15569 review).
-        visibleScreenOnly: true
-      } satisfies RuntimeProviderSnapshotReadOptions),
+      this.readTerminal(
+        waiter.handle,
+        visibleProbeReadsScreen(agent, screenRule) ? { screen: true } : {},
+        {
+          timeoutMs: providerTimeoutMs,
+          retireOnTimeout: true,
+          // Why: the ready banner stays in scrollback for the whole session, so
+          // classifying history would call a working agent idle (#15569 review).
+          visibleScreenOnly: true
+        } satisfies RuntimeProviderSnapshotReadOptions
+      ),
       probeTimeoutMs,
       null
     )
@@ -67,18 +123,32 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         ) {
           return
         }
+        const working =
+          pty.lastAgentStatus === 'working' ||
+          hasFreshWorkingFirstPartyStatus(
+            this.tuiIdleEvidenceSource.getFirstPartyAgentStatus(pty.ptyId)
+          )
+        // Why: a working turn can paint either prompt text, so never resolve readiness or a block from it.
+        if (isBodyReadinessAgent(agent) && working) {
+          if (visibleProbeNeedsRetry(agent, working, deadline - Date.now())) {
+            setTimeout(
+              () => this.probeTuiIdleVisibleScreen(waiter, deadline, agent, settleMarginMs),
+              TUI_IDLE_VISIBLE_PROBE_RETRY_MS
+            ).unref?.()
+          }
+          return
+        }
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse.
-        const ready = screenRule
-          ? isKnownReadyPromptBody(
-              snapshotText,
-              agent,
-              () => restoreProjectedComposerDraft(projection.tail, projection.draft),
-              // Why read now: output since the probe started makes the pane clocked.
-              outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
-            )
-          : isKnownReadyPromptSettled(snapshotText)
+        const ready = visibleProbeReady({
+          agent,
+          screenRule,
+          snapshotText,
+          restoredLines: restoreProjectedComposerDraft(projection.tail, projection.draft),
+          // Why read now: output since the probe started makes the pane clocked.
+          hasOutputClock: outputClockOf(this.tuiIdleEvidenceSource, pty) !== null,
+          working
+        })
         if (!blockedReason && !ready) {
           return
         }

@@ -11,7 +11,7 @@ import {
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
+import { evaluateTuiIdle, isBodyReadinessAgent, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
   ptyTuiIdleEvidence,
@@ -24,14 +24,18 @@ import type { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 
 /** Probe unseen/provider-only panes and clockless screen-ruled agents with untrusted restored models; clocked panes settle through quiet polling. profile.screenProbeBanner also opts in. */
-function shouldProbeVisibleScreen(
+export function shouldProbeVisibleScreen(
   paneAgent: TuiAgent | null,
   record: Pick<RuntimePtyWorktreeRecord, 'lastAgentStatus'>,
   outputClockAt: number | null,
-  waitText: string
+  waitText: string,
+  /** False when the live model is provider-preferred or still hydrating, so its screen cannot answer. */
+  hasLiveScreen: boolean
 ): boolean {
   return (
     (record.lastAgentStatus === null && waitText.length === 0) ||
+    // A body-read agent cannot settle from the live model here, so its provider screen is the only answer.
+    (isBodyReadinessAgent(paneAgent) && !hasLiveScreen) ||
     showsScreenProbeBanner(waitText) ||
     (readsTrustedScreen(paneAgent) && outputClockAt === null)
   )
@@ -126,7 +130,15 @@ export class RuntimeTerminalWait {
         // Ready previews can precede idle OSC titles; keep polling both.
         this.polls.start(waiter, pty, verdict)
         const paneAgent = this.deps.getPaneAgent(pty.ptyId)
-        if (shouldProbeVisibleScreen(paneAgent, pty, outputClockOf(this.deps, pty), waitText)) {
+        if (
+          shouldProbeVisibleScreen(
+            paneAgent,
+            pty,
+            outputClockOf(this.deps, pty),
+            waitText,
+            this.deps.readScreenLines(pty.ptyId) !== null
+          )
+        ) {
           this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
         }
       }
