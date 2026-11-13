@@ -51,4 +51,32 @@ describe('a worker-start that fails', () => {
     expect(lost?.from_handle).toMatch(/^dispatch:/)
     expect(h.runtime.orchestrationSenderNames.sender(lost!.from_handle).agent).toBe('claude')
   })
+
+  it('treats a reuse start that failed before binding as never started', async () => {
+    h.setup()
+    vi.spyOn(h.runtime, 'waitForTerminal').mockResolvedValue({
+      handle: 'term_reused',
+      condition: 'tui-idle',
+      satisfied: false,
+      status: 'running',
+      exitCode: null
+    })
+    const task = h.db.createTask({ spec: 'follow up on the PR', runId: h.activeRunId })
+    const receipt = await h.call('orchestration.workerStart', {
+      task: task.id,
+      from: 'term_coord',
+      terminal: 'term_reused'
+    })
+    expect(receipt).toMatchObject({ state: 'failed' })
+    const dispatchId = h.db.getDispatchContext(task.id)?.id
+
+    const [lost] = h.db.getUnreadRunMailbox(h.activeRunId, 100, ['escalation'])
+    expect(lost?.body).not.toContain('worker-read')
+    await expect(
+      h.call('orchestration.workerRead', { dispatch: dispatchId })
+    ).rejects.toMatchObject({
+      code: 'worker_never_started',
+      message: expect.stringContaining('never started: Agent did not become ready')
+    })
+  })
 })
