@@ -27,7 +27,9 @@ import {
 } from '../cloud-api/cloud-api-parts'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { EnterpriseUpsell, EnterpriseUpsellLine, type EnterpriseContact } from './EnterpriseUpsell'
-import { auditCategoryLabel, auditEventSentence } from './enterprise-audit-copy'
+import { auditCategoryLabel, auditEventSentence, unnamedPersonIn } from './enterprise-audit-copy'
+import { useAppStore } from '@/store'
+import { useOrgRoster } from '../../billing/team/use-org-roster'
 
 export type AuditLogFilters = { category: CloudAuditCategory | null; actor: string | null }
 
@@ -214,10 +216,28 @@ function Filters({
   )
 }
 
+/**
+ * Names teammates from the team roster (the directory the Team page uses), for sentences that
+ * point at someone the control plane could not name. Read only when a row on screen needs it.
+ */
+function useRosterNames(events: readonly CloudAuditEvent[]): (userId: string) => string | null {
+  const orgId = useAppStore((s) => s.orcaProfileAuthStatus?.cloud?.activeOrgId ?? null)
+  const needed = events.some((event) => unnamedPersonIn(event) !== null)
+  const roster = useOrgRoster(needed ? orgId : null)
+  const members = roster.result?.status === 'ok' ? roster.result.roster.members : null
+  return (userId) => {
+    const member = members?.find((candidate) => candidate.userId === userId)
+    return member?.displayName?.trim() || member?.email || null
+  }
+}
+
+const NO_EVENTS: readonly CloudAuditEvent[] = []
+
 export function EnterpriseAuditLog(props: EnterpriseAuditLogProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
   const { log, filters, exportState } = props
+  const nameOf = useRosterNames(log.status === 'ok' ? log.events : NO_EVENTS)
   const filtered = filters.category !== null || filters.actor !== null
   const canExport = log.status === 'ok' && log.events.length > 0
   return (
@@ -347,7 +367,7 @@ export function EnterpriseAuditLog(props: EnterpriseAuditLogProps): React.JSX.El
                   className="flex items-center gap-3 py-2 text-xs"
                 >
                   <span className="min-w-0 flex-1 truncate text-foreground" title={event.action}>
-                    {auditEventSentence(event, t, locale)}
+                    {auditEventSentence(event, t, locale, nameOf)}
                   </span>
                   <span className="w-28 shrink-0 truncate text-muted-foreground">
                     {auditCategoryLabel(event.category, t)}

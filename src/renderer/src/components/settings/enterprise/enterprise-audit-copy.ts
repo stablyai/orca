@@ -173,9 +173,22 @@ const ACTIONS: Record<string, ActionCopy> = {
 }
 
 /** The name to put in the sentence: what the control plane labelled the target, else a recorded name. */
-function targetName(event: CloudAuditEvent): string | null {
+/** A teammate the row is about whom the control plane could not name (see unnamedPersonIn). */
+function unnamedMemberTarget(event: CloudAuditEvent): string | null {
+  const target = event.target
+  return target?.type === 'member' && target.id && !target.label?.trim() ? target.id : null
+}
+
+function targetName(
+  event: CloudAuditEvent,
+  nameOf: (userId: string) => string | null
+): string | null {
   const recorded = event.detail?.name
-  const name = event.target?.label ?? (typeof recorded === 'string' ? recorded : null)
+  const member = unnamedMemberTarget(event)
+  const name =
+    event.target?.label ??
+    (typeof recorded === 'string' ? recorded : null) ??
+    (member ? nameOf(member) : null)
   const clean = name?.trim()
   return clean ? clean.slice(0, 80) : null
 }
@@ -184,15 +197,17 @@ function targetName(event: CloudAuditEvent): string | null {
 export function auditEventSentence(
   event: CloudAuditEvent,
   t: Translate = translate,
-  locale?: string
+  locale?: string,
+  /** Names a teammate by id from the team roster; the control plane only knows people who have used Orca Cloud. */
+  nameOf: (userId: string) => string | null = () => null
 ): string {
   const copy = ACTIONS[event.action]
   if (!copy) {
     return event.action
   }
-  const name = targetName(event)
+  const name = targetName(event, nameOf)
   const detailed = event.detail
-    ? copy.detailed?.(t, event.detail, locale, { name, actorUserId: event.actor.userId })
+    ? copy.detailed?.(t, event.detail, locale, { name, actorUserId: event.actor.userId, nameOf })
     : null
   if (detailed) {
     return detailed
@@ -203,4 +218,18 @@ export function auditEventSentence(
 /** Whether this version words the action (the rest show their machine name). */
 export function isKnownAuditAction(action: string): boolean {
   return action in ACTIONS
+}
+
+/**
+ * The teammate a row names in its sentence whom the control plane could not name (it only knows
+ * people who have used Orca Cloud in this team), so the roster is read only when a row needs it.
+ */
+export function unnamedPersonIn(event: CloudAuditEvent): string | null {
+  if (event.action !== 'workspace.owner_changed') {
+    // A role change or removal whose member the control plane could not name.
+    return unnamedMemberTarget(event)
+  }
+  const owner = event.detail?.toUserId
+  const named = typeof event.detail?.toUserName === 'string' && event.detail.toUserName.trim()
+  return typeof owner === 'string' && !named && owner !== event.actor.userId ? owner : null
 }
