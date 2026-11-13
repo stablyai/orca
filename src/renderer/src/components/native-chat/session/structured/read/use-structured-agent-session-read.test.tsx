@@ -306,6 +306,69 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(mocks.subscribe).toHaveBeenCalledTimes(4)
     expect(unsubscribe).toHaveBeenCalledTimes(4)
   })
+
+  it('receives a completed turn while its project is hidden instead of showing stale Working on return', async () => {
+    mocks.call.mockResolvedValue({
+      ok: true,
+      page: page('tail', [message('prompt', 1, 'user')], false)
+    })
+    const subscriptions: {
+      emit: (event: AgentSessionSubscribeEvent) => void
+      unsubscribe: ReturnType<typeof vi.fn>
+    }[] = []
+    mocks.subscribe.mockImplementation((_target, _params, emit) => {
+      const subscription = { emit, unsubscribe: vi.fn() }
+      subscriptions.push(subscription)
+      return Promise.resolve(subscription)
+    })
+    const view = renderHook(
+      ({ visible }: { visible: boolean }) =>
+        useStructuredAgentSessionRead({
+          sessionId: 'session-a',
+          target: LOCAL_TARGET,
+          isVisible: visible
+        }),
+      { initialProps: { visible: true } }
+    )
+    await waitFor(() => expect(subscriptions).toHaveLength(1))
+    act(() => {
+      subscriptions[0]!.emit({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 501 },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        fence: 1,
+        working: true
+      })
+    })
+    expect(view.result.current.state.working).toBe(true)
+    view.rerender({ visible: false })
+    expect(subscriptions[0]!.unsubscribe).not.toHaveBeenCalled()
+    act(() => {
+      subscriptions[0]!.emit({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 502 },
+          items: [message('answer', 502, 'assistant')],
+          removedItemIds: [],
+          submissions: []
+        },
+        fence: 1,
+        working: false
+      })
+    })
+    await waitFor(() => expect(view.result.current.state.working).toBe(false))
+    expect(view.result.current.state.items.some((item) => item.itemId === 'answer')).toBe(true)
+    await waitFor(() => expect(subscriptions[0]!.unsubscribe).toHaveBeenCalledTimes(1))
+    view.rerender({ visible: true })
+    expect(view.result.current.state.working).toBe(false)
+    view.unmount()
+  })
 })
 
 // Workspace deletion briefly leaves mounted chats with unknown ownership; an older-page failure must not replace the conversation the stream is retiring.

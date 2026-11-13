@@ -19,8 +19,12 @@ export function useStructuredAgentSessionTransport(args: {
     surface: 'desktop-chat',
     enabled: providerVisible
   })
-  // A message sent from here is settled by its own reply, so a hidden pane reads nothing.
-  const read = useStructuredAgentSessionRead({ sessionId, target, isVisible: providerVisible })
+  const read = useStructuredAgentSessionRead({
+    sessionId,
+    target,
+    isVisible: providerVisible,
+    keepReadingWhileHidden: enabled
+  })
   const stateRef = useRef(read.state)
   const mutation = useStructuredAgentSessionMutate({
     sessionId,
