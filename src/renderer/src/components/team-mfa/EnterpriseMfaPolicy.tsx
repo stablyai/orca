@@ -211,7 +211,10 @@ export function EnterpriseMfaGroup({
       }
     >
       {manage.available ? (
-        <RequireMfaRow policy={policy} {...row} />
+        // Padded like every other row in a settings card, so it does not sit on the card's edge.
+        <div data-settings-row="" className="py-4">
+          <RequireMfaRow policy={policy} {...row} />
+        </div>
       ) : underBanner ? (
         <EnterpriseUpsellLine>{upsellBody}</EnterpriseUpsellLine>
       ) : (
