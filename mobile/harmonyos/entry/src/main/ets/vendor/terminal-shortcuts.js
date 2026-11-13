@@ -19,7 +19,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // orca-terminal-shortcuts-entry.ts
 var orca_terminal_shortcuts_entry_exports = {};
 __export(orca_terminal_shortcuts_entry_exports, {
-  TERMINAL_SHORTCUT_SPECIAL_KEYS: () => TERMINAL_SHORTCUT_SPECIAL_KEYS,
+  TERMINAL_SHORTCUT_SPECIAL_KEYS: () => TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS,
   buildTerminalShortcutKey: () => buildTerminalShortcutKey,
   describeBuiltInShortcut: () => describeBuiltInShortcut,
   normalizeShortcutKeyInput: () => normalizeShortcutKeyInput,
@@ -47,7 +47,7 @@ function translate(key, fallback, values) {
   return values ? text.replace(/{{(\w+)}}/g, (token, name) => values[name] ?? token) : text;
 }
 
-// mobile/src/terminal/terminal-key-definitions.ts
+// mobile/src/terminal/key-input/terminal-key-definitions.ts
 var SPECIAL_KEY_LABELS = {
   escape: "Esc",
   tab: "Tab",
@@ -277,7 +277,7 @@ var TERMINAL_ACCESSORY_KEY_DEFINITIONS = [
   }
 ];
 
-// mobile/src/terminal/terminal-accessory-keys.ts
+// mobile/src/terminal/key-input/terminal-accessory-keys.ts
 var ESC = "\x1B";
 var MODIFIER_LABELS = {
   ctrl: "Ctrl",
@@ -358,8 +358,6 @@ var CSI_TILDE_SPECIAL_KEYS = {
   f11: 23,
   f12: 24
 };
-var TERMINAL_SHORTCUT_SPECIAL_KEYS = TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS;
-var TERMINAL_ACCESSORY_KEYS = TERMINAL_ACCESSORY_KEY_DEFINITIONS;
 function buildTerminalShortcutKey(binding) {
   const key = normalizeShortcutKey(binding.key);
   if (!key) {
@@ -512,9 +510,9 @@ function displayKeyLabel(key) {
   return key.length === 1 && key >= "a" && key <= "z" ? key.toUpperCase() : key;
 }
 
-// mobile/src/terminal/terminal-accessory-layout.ts
+// mobile/src/terminal/key-input/terminal-accessory-layout.ts
 function builtInIds() {
-  return TERMINAL_ACCESSORY_KEYS.map((key) => key.id);
+  return TERMINAL_ACCESSORY_KEY_DEFINITIONS.map((key) => key.id);
 }
 function defaultPreference(ids = builtInIds(), directionPadAvailable = false) {
   return {
@@ -632,6 +630,6 @@ function terminalAccessoryLayout(value, directionPadAvailable) {
   return normalizeTerminalAccessoryLayoutPreference(value, void 0, directionPadAvailable);
 }
 function describeBuiltInShortcut(id, translator2) {
-  const key = TERMINAL_ACCESSORY_KEYS.find((entry) => entry.id === id);
+  const key = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((entry) => entry.id === id);
   return withTranslation(translator2, () => key ? { label: key.label, title: key.accessibilityLabel ?? key.label } : { label: id, title: id });
 }

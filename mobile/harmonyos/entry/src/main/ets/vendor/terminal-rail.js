@@ -80,7 +80,7 @@ function sideRailStripAboveKeyboard(strip, keyboardHeight) {
   return height > 0 ? { ...strip, bottom: keyboardHeight, height } : null;
 }
 
-// mobile/src/terminal/terminal-accessory-repeat.ts
+// mobile/src/terminal/key-input/terminal-accessory-repeat.ts
 var TERMINAL_ACCESSORY_REPEAT_DELAY_MS = 400;
 var TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS = 45;
 function createTerminalAccessoryRepeatController() {

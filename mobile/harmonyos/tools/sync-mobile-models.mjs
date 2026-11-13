@@ -29,16 +29,17 @@ const models = [
     provenance: 'orcaTerminalRail',
     contents: `
       export { getSideRailStrip, hasTerminalDirectionPadSpace, sideRailStripAboveKeyboard } from './mobile/src/layout/side-rail-strip'
-      export { createTerminalAccessoryRepeatController, TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from './mobile/src/terminal/terminal-accessory-repeat'
+      export { createTerminalAccessoryRepeatController, TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from './mobile/src/terminal/key-input/terminal-accessory-repeat'
     `
   },
   {
     file: 'terminal-shortcuts',
     provenance: 'orcaTerminalShortcuts',
     contents: `
-      export { buildTerminalShortcutKey, normalizeShortcutKeyInput, TERMINAL_SHORTCUT_SPECIAL_KEYS } from './mobile/src/terminal/terminal-accessory-keys'
-      import { TERMINAL_ACCESSORY_KEYS } from './mobile/src/terminal/terminal-accessory-keys'
-      import { normalizeTerminalAccessoryLayoutPreference } from './mobile/src/terminal/terminal-accessory-layout'
+      export { buildTerminalShortcutKey, normalizeShortcutKeyInput } from './mobile/src/terminal/key-input/terminal-accessory-keys'
+      export { TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS } from './mobile/src/terminal/key-input/terminal-key-definitions'
+      import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from './mobile/src/terminal/key-input/terminal-key-definitions'
+      import { normalizeTerminalAccessoryLayoutPreference } from './mobile/src/terminal/key-input/terminal-accessory-layout'
       import { withTranslation } from 'orca-diagnostic-translation'
       export function terminalAccessoryLayout(value, directionPadAvailable) {
         return normalizeTerminalAccessoryLayoutPreference(value, undefined, directionPadAvailable)

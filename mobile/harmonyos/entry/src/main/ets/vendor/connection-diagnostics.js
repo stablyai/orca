@@ -351,7 +351,7 @@ function getUtf8ByteLengthForCodePoint(codePoint) {
   return 4;
 }
 
-// mobile/src/transport/hosts/host-app-version.ts
+// mobile/src/host-descriptors/host-app-version.ts
 var MAX_VERSION_LENGTH = 64;
 function normalizeHostAppVersion(value) {
   if (typeof value !== "string") {
@@ -491,7 +491,7 @@ function formatAgo(ms) {
 }
 
 // mobile/src/diagnostics/connection-diagnostics-submission.ts
-var CONNECTION_DIAGNOSTICS_ENDPOINT = "https://www.onorca.dev/v1/feedback";
+var CONNECTION_DIAGNOSTICS_ENDPOINT = "https://orca.dev/v1/feedback";
 var MAX_SUBMISSION_BYTES = 64 * 1024;
 function serializeConnectionDiagnosticsSubmission(submission) {
   return JSON.stringify({
