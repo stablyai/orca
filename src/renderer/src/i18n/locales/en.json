@@ -710,7 +710,8 @@
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
-        "museToggleDescription": "Show Muse subscription quota from the Muse CLI."
+        "museToggleDescription": "Show Muse subscription quota from the Muse CLI.",
+        "kiroToggleDescription": "Show Kiro monthly credit usage when signed in via kiro-cli."
       },
       "menuBarIcon": {
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar.",
@@ -5266,7 +5267,8 @@
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
             "windowWeeks": "{{value0}}wk",
-            "museUsageMenu": "Muse Usage"
+            "museUsageMenu": "Muse Usage",
+            "kiroUsageMenu": "Kiro Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -5495,7 +5497,14 @@
             "updatedAgo": "Updated {{time}}",
             "notYetUpdated": "Not yet updated",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
-            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available"
+            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "kiro": {
+              "overage": "Overage",
+              "refresh": {
+                "label": "Run Kiro to refresh",
+                "message": "Run kiro-cli in a terminal on the computer running Orca and wait for it to start. If prompted, sign in, then retry usage."
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -10596,7 +10605,11 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "kiroUsageTitle": "Kiro Usage",
+            "kiroUsageDescription": "Show Kiro monthly credit usage in the status bar.",
+            "kiro": "kiro",
+            "credits": "credits"
           }
         },
         "auto": {

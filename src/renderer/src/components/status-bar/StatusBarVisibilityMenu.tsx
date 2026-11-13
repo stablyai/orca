@@ -155,6 +155,18 @@ export function StatusBarVisibilityMenu({
             {t('auto.components.status.bar.StatusBar.museUsageMenu', 'Muse Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        {isStatusBarItemAvailable('kiro', detectedAgentIds) && (
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('kiro')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('kiro')
+            }}
+          >
+            <AgentIcon agent="kiro" size={14} />
+            {t('auto.components.status.bar.StatusBar.kiroUsageMenu', 'Kiro Usage')}
+          </DropdownMenuCheckboxItem>
+        )}
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('cursor')}
           onCheckedChange={() => {

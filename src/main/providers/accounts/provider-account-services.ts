@@ -156,6 +156,8 @@ export function createProviderAccountServices(
   )
   // Hidden Muse meters must not spawn the Muse CLI.
   rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
+  // Same switch for Kiro: a hidden meter does not call kiro-cli's usage service.
+  rateLimits.setKiroUsageEnabledResolver(() => store.getUI().statusBarItems.includes('kiro'))
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()
   )

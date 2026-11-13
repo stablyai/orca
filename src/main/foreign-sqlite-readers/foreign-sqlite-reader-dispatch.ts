@@ -3,6 +3,7 @@ import type {
   ForeignSqliteReaderResponse
 } from './foreign-sqlite-reader-protocol'
 import { readCursorProfile } from './readers/cursor-profile'
+import { readKiroCliCredentials } from './readers/kiro-cli-credentials'
 import { readOpenCodeBinderSessions } from './readers/opencode-binder-sessions'
 import { readOpenCodePromptFailure } from './readers/opencode-prompt-failure'
 
@@ -16,6 +17,8 @@ export function handleForeignSqliteReaderRequest(
     switch (kind) {
       case 'cursorProfile':
         return { id, ok: true, value: readCursorProfile(request.dbPath) }
+      case 'kiroCliCredentials':
+        return { id, ok: true, value: readKiroCliCredentials(request.dbPath) }
       case 'openCodeBinderSessions':
         return { id, ok: true, value: readOpenCodeBinderSessions(request.dbPath, request.cursor) }
       case 'openCodePromptFailure':

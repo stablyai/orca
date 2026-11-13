@@ -196,6 +196,9 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'Z'
     case 'muse':
       return 'S'
+    case 'kiro':
+      // Kimi already uses K.
+      return 'I'
     case 'codex':
       return 'X'
   }

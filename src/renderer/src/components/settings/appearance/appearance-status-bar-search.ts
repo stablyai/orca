@@ -8,6 +8,7 @@ import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-
 import { getCursorStatusBarToggleSearchEntry } from './appearance-status-bar-cursor-toggle-search'
 import { getZcodeStatusBarToggleSearchEntry } from './appearance-status-bar-zcode-toggle-search'
 import { getMuseStatusBarToggleSearchEntry } from './appearance-status-bar-muse-toggle-search'
+import { getKiroStatusBarToggleSearchEntry } from './appearance-status-bar-kiro-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
@@ -173,6 +174,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
     getCursorStatusBarToggleSearchEntry(),
     getZcodeStatusBarToggleSearchEntry(),
     getMuseStatusBarToggleSearchEntry(),
+    getKiroStatusBarToggleSearchEntry(),
     {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.20b33a61c8', 'Remote hosts'),

@@ -12,6 +12,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'cursor',
   'zcode',
   'muse',
+  'kiro',
   'ssh',
   'resource-usage',
   'ports'

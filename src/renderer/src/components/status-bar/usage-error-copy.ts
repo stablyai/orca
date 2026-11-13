@@ -45,12 +45,12 @@ function isUsageAuthError(message: string | null): boolean {
 
 function getDelegatedCliRefreshProvider(
   p: ProviderRateLimits
-): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi'> | null {
+): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi' | 'kiro'> | null {
   if (p.usageMetadata?.failureKind !== 'delegated-refresh-required') {
     return null
   }
   // Only these providers require a CLI-run credential rotation; Claude reports the same kind in-app.
-  return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
+  return p.provider === 'grok' || p.provider === 'kimi' || p.provider === 'kiro' ? p.provider : null
 }
 
 /** An idle login's access token lapsed, not the login: Claude refreshes it the next time it runs. */
@@ -75,6 +75,9 @@ export function getProviderUsageStatusLabel(
   }
   if (delegatedCliProvider === 'kimi') {
     return t('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
+  if (delegatedCliProvider === 'kiro') {
+    return translate('auto.components.status.bar.tooltip.kiro.refresh.label', 'Run Kiro to refresh')
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -156,6 +159,12 @@ export function getProviderUsageErrorMessage(
     return t(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  }
+  if (delegatedCliProvider === 'kiro') {
+    return translate(
+      'auto.components.status.bar.tooltip.kiro.refresh.message',
+      'Run kiro-cli in a terminal on the computer running Orca and wait for it to start. If prompted, sign in, then retry usage.'
     )
   }
   if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {

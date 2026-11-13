@@ -33,6 +33,9 @@ export function getExtraUsageLabel(
   if (provider === 'codex') {
     return t('auto.components.status.bar.tooltip.f21b2ba897', 'Credits')
   }
+  if (provider === 'kiro') {
+    return t('auto.components.status.bar.tooltip.kiro.overage', 'Overage')
+  }
   return t('auto.components.status.bar.tooltip.c03c61f53f', 'Balance')
 }
 

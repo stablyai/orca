@@ -146,6 +146,8 @@ export type PersistedUIState = {
   _zcodeStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Muse status item. */
   _museStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Kiro status item. */
+  _kiroStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   /** Why: this is client-side presentation, not a provider/account or execution-host setting. */

@@ -104,6 +104,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'muse') {
     return <AgentIcon agent="muse" size={13} />
   }
+  if (provider === 'kiro') {
+    return <AgentIcon agent="kiro" size={13} />
+  }
   if (provider === 'cursor') {
     return <AgentIcon agent="cursor" size={13} />
   }

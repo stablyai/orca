@@ -168,7 +168,8 @@
         "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
         "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다.",
         "cursorToggleDescription": "cursor-agent 또는 Cursor IDE로 로그인한 경우 Cursor 플랜 사용량을 표시합니다.",
-        "zcodeToggleDescription": "ZCode Coding Plan 할당량 사용량을 표시합니다."
+        "zcodeToggleDescription": "ZCode Coding Plan 할당량 사용량을 표시합니다.",
+        "kiroToggleDescription": "kiro-cli로 로그인한 경우 Kiro 월간 크레딧 사용량을 표시합니다."
       },
       "menuBarIcon": {
         "description": "macOS 메뉴 바에 Orca 바로가기 및 활동 표시기를 유지합니다.",
@@ -4097,7 +4098,8 @@
             "hiddenUsageProviders": "그 외: {{value0}}",
             "zcodeUsageMenu": "ZCode 사용",
             "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능",
-            "staleCodexSessions_other": "Codex 세션 {{count}}개가 아직 이전 계정을 사용하고 있습니다."
+            "staleCodexSessions_other": "Codex 세션 {{count}}개가 아직 이전 계정을 사용하고 있습니다.",
+            "kiroUsageMenu": "Kiro 사용"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -4292,7 +4294,14 @@
             "hoursAgo": "{{hours}}시간 전",
             "updatedAgo": "{{time}} 업데이트됨",
             "notYetUpdated": "아직 업데이트되지 않음",
-            "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능"
+            "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능",
+            "kiro": {
+              "overage": "초과 사용",
+              "refresh": {
+                "label": "Kiro를 실행하여 새로 고침",
+                "message": "Orca를 실행하는 컴퓨터의 터미널에서 kiro-cli를 실행하고 시작될 때까지 기다리세요. 메시지가 표시되면 로그인한 후 사용량 조회를 다시 시도하세요."
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
@@ -9163,7 +9172,11 @@
             "c29089716e": "Kimi 사용량",
             "96e32c1118": "MiniMax 사용량",
             "aff6e6afdf": "IDE 글꼴",
-            "ba1f9d39a6": "Antigravity 사용량"
+            "ba1f9d39a6": "Antigravity 사용량",
+            "kiroUsageTitle": "Kiro 사용",
+            "kiroUsageDescription": "상태 표시줄에 Kiro 월간 크레딧 사용량을 표시합니다.",
+            "kiro": "kiro",
+            "credits": "크레딧"
           }
         },
         "auto": {
