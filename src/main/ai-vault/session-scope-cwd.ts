@@ -112,6 +112,10 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
     (record) => (record.type === 'session_meta' ? asRecord(record.payload)?.cwd : undefined),
     64 * 1024
   ),
+  trae: head(
+    (record) => (record.type === 'session_meta' ? asRecord(record.payload)?.cwd : undefined),
+    64 * 1024
+  ),
   qoder: head((record) => record.cwd),
   omp: SESSION_HEADER,
   'prime-agent': SESSION_HEADER,

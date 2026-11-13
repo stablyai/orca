@@ -1,3 +1,8 @@
+import { structuredAgentSessionGoalChange } from './structured-agent-session-goal-mode'
+export {
+  structuredAgentSessionGoalChange,
+  structuredAgentSessionGoalObjective
+} from './structured-agent-session-goal-mode'
 import { agentSessionInteractionCommand } from '../options/agent-session-interaction-mode'
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
@@ -117,20 +122,26 @@ export function structuredSessionSlashCommands(
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
   reported: readonly AgentSessionSlashCommand[] | undefined,
   compactInstructions?: boolean,
-  interactionModeSupported = false
+  interactionModeSupported = false,
+  threadGoalSupported = false
 ): readonly SlashCommandSuggestion[] {
   const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
     ? [
         { name: 'plan', description: 'Switch to Plan mode', orcaOwned: true },
-        ...(agent === 'codex'
+        ...(agent === 'codex' || agent === 'trae'
           ? [{ name: 'default', description: 'Switch to Build mode', orcaOwned: true as const }]
           : [])
       ]
     : []
   const hostOwned = [
+    ...(threadGoalSupported
+      ? [{ name: 'goal', description: 'Set or view the goal', orcaOwned: true as const }]
+      : []),
     ...modeCommands,
     ...structuredSlashCommands(conversationCommands, agent, compactInstructions).filter(
-      ({ name }) => !modeCommands.some((entry) => entry.name === name)
+      ({ name }) =>
+        !modeCommands.some((entry) => entry.name === name) &&
+        !(threadGoalSupported && name === 'goal')
     )
   ]
   if (reported === undefined) {
@@ -202,17 +213,6 @@ export function isStructuredAgentSessionGoalCommand(text: string): boolean {
   return commandParts(text)?.name === 'goal'
 }
 
-const GOAL_CONTROLS: ReadonlyMap<string, AgentSessionThreadGoalChange> = new Map([
-  ['pause', { kind: 'status', status: 'paused' }],
-  ['resume', { kind: 'status', status: 'active' }],
-  ['clear', { kind: 'clear' }]
-])
-
-/** `/goal pause|resume|clear` controls the current goal; any other text is a new objective. */
-export function structuredAgentSessionGoalChange(argument: string): AgentSessionThreadGoalChange {
-  return GOAL_CONTROLS.get(argument.toLowerCase()) ?? { kind: 'set', objective: argument }
-}
-
 /** `/clear`, `/compact` and goal changes that start work change the conversation; pausing or clearing a goal does not. */
 export function structuredAgentSessionCommandChangesConversation(text: string): boolean {
   const command = commandParts(text)
@@ -227,12 +227,6 @@ export function structuredAgentSessionCommandChangesConversation(text: string): 
 export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
   const command = commandParts(text)
   return command?.name === 'goal' && command.argument === ''
-}
-
-/** Goal mode strips an optional /goal prefix instead of treating it as objective text. */
-export function structuredAgentSessionGoalObjective(text: string): string {
-  const goal = /^\/goal(?:\s+([\s\S]*))?$/i.exec(text.trimEnd())
-  return goal ? (goal[1]?.trim() ?? '') : text.trim()
 }
 
 function unavailable(name: string): StructuredAgentSessionCommandOutcome {

@@ -15,6 +15,7 @@ import {
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
+import { providerTimelineRewindCut } from '../../agent-session-timeline/provider-timeline-rewind-cut'
 // Derive cuts from the journal’s retained old epoch so admission and recovery agree without copying history.
 
 export type StructuredRewindCut = {
@@ -42,6 +43,17 @@ export function structuredRewindCut(
   const { providerKey, omitted, nativeIdentity } = savedRewindKeys(snapshot.submissions)
   const selected = items.find((item) => item.itemId === target.itemId)
   const key = selected ? nativeIdentity(selected.itemId) : null
+  if (target.provider === 'trae') {
+    const cut = providerTimelineRewindCut(items, target.itemId, target.nativeId)
+    return cut
+      ? {
+          beforeTurnId: cut.beforeTurnId,
+          kept: cut.kept
+            .filter((item) => !omitted.has(item.itemId))
+            .map((item) => keptRow(journal, item))
+        }
+      : null
+  }
   if (key?.provider === 'claude' && target.provider === 'claude') {
     // Messages before an earlier fork still cut at their original position.
     const boundary = items.findIndex((item) => item.itemId === target.itemId)

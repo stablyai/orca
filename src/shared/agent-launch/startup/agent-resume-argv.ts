@@ -26,6 +26,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'conversation_id' ? ['cursor-agent', '--resume', id] : null
     case 'codex':
       return providerSession.key === 'session_id' ? ['codex', 'resume', id] : null
+    case 'trae':
+      return providerSession.key === 'session_id' ? ['traecli', 'resume', id] : null
     case 'qoder-cn':
       return providerSession.key === 'session_id' ? ['qoderclicn', '--resume', id] : null
     case 'qwen-code':
@@ -104,6 +106,7 @@ const FORK_ARGV: Partial<
 const FORKS_THROUGH_CHAT: ReadonlySet<string> = new Set<ResumableTuiAgent>([
   'opencode',
   'opencode2',
+  'trae',
   'omp'
 ])
 

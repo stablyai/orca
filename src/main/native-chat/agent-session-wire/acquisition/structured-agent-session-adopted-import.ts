@@ -12,6 +12,7 @@ import type { JournalReplacementItem } from '../../agent-session-journal/context
 import { prepareLegacyTranscriptImport } from '../../agent-session-journal/history-import/journal-legacy-import'
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 
 export async function prepareCreateTranscript(
   context: StructuredAgentSessionAttachContext,
@@ -19,7 +20,7 @@ export async function prepareCreateTranscript(
 ) {
   const acquisition = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
   try {
-    return await prepareAdoptedTranscript(params, acquisition.signal)
+    return await prepareAdoptedTranscript(params, acquisition.signal, context.deps.adapter)
   } finally {
     acquisition.end()
   }
@@ -27,7 +28,8 @@ export async function prepareCreateTranscript(
 
 export async function prepareAdoptedTranscript(
   params: AgentSessionAttachParams,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  adapter?: Pick<StructuredAgentSessionAdapter, 'readConversationHistory'>
 ): Promise<
   | { ok: true; items: JournalReplacementItem[] | null }
   | { ok: false; refusal: AgentSessionWireRefusal }
@@ -40,7 +42,7 @@ export async function prepareAdoptedTranscript(
   }
   try {
     throwIfSignalAborted(signal)
-    const items = await readAdoptedTranscript(params, signal)
+    const items = await readAdoptedTranscript(params, signal, adapter)
     throwIfSignalAborted(signal)
     return { ok: true, items }
   } catch (error) {
@@ -60,7 +62,8 @@ export async function prepareAdoptedTranscript(
 // Validate before a new record can claim the provider conversation.
 async function readAdoptedTranscript(
   params: AgentSessionAttachParams,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  adapter?: Pick<StructuredAgentSessionAdapter, 'readConversationHistory'>
 ): Promise<JournalReplacementItem[] | null> {
   const adopt = params.adopt
   if (!adopt) {
@@ -71,11 +74,22 @@ async function readAdoptedTranscript(
       reason: 'transcriptNotFound'
     })
   }
-  const prepared = await prepareLegacyTranscriptImport({
+  const native = await adapter?.readConversationHistory?.({
+    sessionId: params.envelope.sessionId,
     agent: params.agent,
-    sessionId: adopt.providerHandle.nativeId,
-    options: { filePath: adopt.transcriptPath, source: adopt.source, signal }
+    accountHome: params.accountHome,
+    providerSessionId: adopt.providerHandle.nativeId,
+    transcriptPath: adopt.transcriptPath,
+    source: adopt.source,
+    signal
   })
+  const prepared = native
+    ? { ok: true as const, ...native }
+    : await prepareLegacyTranscriptImport({
+        agent: params.agent,
+        sessionId: adopt.providerHandle.nativeId,
+        options: { filePath: adopt.transcriptPath, source: adopt.source, signal }
+      })
   if (!prepared.ok) {
     throw new Error(prepared.error)
   }

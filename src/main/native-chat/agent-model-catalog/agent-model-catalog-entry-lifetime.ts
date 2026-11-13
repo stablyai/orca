@@ -21,7 +21,11 @@ export function agentModelCatalogEntryIsStale(
     !entry.discovered ||
     (independentAgentModelCatalog(entry.agent) && entry.discovered.complete !== true) ||
     now - entry.discovered.at >=
-      (independentAgentModelCatalog(entry.agent) ? 2 * 60_000 : AGENT_MODEL_CATALOG_FRESH_MS)
+      (entry.agent === 'trae'
+        ? 30_000
+        : independentAgentModelCatalog(entry.agent)
+          ? 2 * 60_000
+          : AGENT_MODEL_CATALOG_FRESH_MS)
   )
 }
 

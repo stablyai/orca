@@ -36,7 +36,7 @@ export type NativeChatNoticeLook =
   | {
       kind: 'settled-permission'
       decision: 'approved' | 'safety-review' | 'denied'
-      agent: 'Codex' | 'Claude'
+      agent: 'Codex' | 'Claude' | 'TRAE CLI'
       tone: NativeChatNoticeTone
     }
   /** A boxed line with its icon when it has a tone; plain text when it has none. */
@@ -96,13 +96,16 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   // Declared notification kinds select disclosure; prose and nested failures do not.
   if (presentation === undefined && !block.failure && !block.orcaStop) {
     const frame = block.providerFrame
-    if (frame?.provider === 'codex' && frame.kind === 'notification:guardianWarning') {
+    if (
+      (frame?.provider === 'codex' || frame?.provider === 'trae') &&
+      frame.kind === 'notification:guardianWarning'
+    ) {
       // Codex also reports approvals here; its own TUI hides them by this prefix.
       const approved = block.text.startsWith('Automatic approval review approved (')
       return {
         kind: 'settled-permission',
         decision: approved ? 'approved' : 'safety-review',
-        agent: 'Codex',
+        agent: frame.provider === 'trae' ? 'TRAE CLI' : 'Codex',
         tone: approved ? 'notice' : 'warning'
       }
     }

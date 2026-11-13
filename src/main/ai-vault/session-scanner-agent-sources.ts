@@ -28,6 +28,7 @@ import {
   wslHomeSessionDirs
 } from './session-scanner-roots'
 import { getHermesHome } from '../hermes/hermes-default-home'
+import { TRAEX_AI_VAULT_SOURCE } from '../traex/traex-session-discovery'
 import { isClaudeProjectBucketDirectory } from './scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
@@ -87,6 +88,7 @@ type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource>
 
 // OpenCode and Antigravity use dedicated discovery for their storage layouts.
 export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
+  trae: TRAEX_AI_VAULT_SOURCE,
   claude: {
     rootDirs: (options, wslHomeDirs) =>
       claudeProjectsRootDirs({

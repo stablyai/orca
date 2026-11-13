@@ -60,6 +60,7 @@ export type ProviderTimelineEvent =
       /** Absent provider verdict remains unknown. */
       outcome?: AgentJournalTurnOutcome
       durationMs?: number
+      providerTurnId?: string
     }
   /** Background-task messages outlive their initiating call/turn and become unverifiable on session end. */
   | ({ type: 'item.open'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)

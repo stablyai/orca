@@ -1,3 +1,11 @@
+import {
+  RESUMABLE_TUI_AGENTS,
+  type ResumableTuiAgent
+} from '../../agent-launch/catalog/resumable-tui-agents'
+export {
+  RESUMABLE_TUI_AGENTS,
+  type ResumableTuiAgent
+} from '../../agent-launch/catalog/resumable-tui-agents'
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
 import { readClaudePermissionMode } from './provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
@@ -8,37 +16,6 @@ import type {
 import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
-
-export const RESUMABLE_TUI_AGENTS = [
-  'claude',
-  'codebuddy',
-  'codex',
-  'qoder',
-  'qoder-cn',
-  'qwen-code',
-  'gemini',
-  'antigravity',
-  'opencode',
-  'opencode2',
-  'pi',
-  'mimo-code',
-  'droid',
-  'grok',
-  'devin',
-  'omp',
-  'prime-agent',
-  'copilot',
-  'cursor',
-  'kimi',
-  'muse',
-  'zcode',
-  'dsh',
-  'jcode',
-  'kiro',
-  'hermes'
-] as const satisfies readonly TuiAgent[]
-
-export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
 
 export type AgentProviderSessionKey = 'session_id' | 'conversation_id'
 

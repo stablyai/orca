@@ -4,6 +4,11 @@ import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { StructuredAgentSessionState } from '../structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from '../journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
+import {
   agentSessionContextFloorSequence,
   isAgentSessionContextClear
 } from '../agent-session-context-clear'
@@ -15,15 +20,43 @@ export function agentSessionRewindTargetIds(
 ): ReadonlySet<string> {
   const opener = turnOpeners(items)
   const keys = savedRewindKeys(submissions)
+  const providerOpeners = acceptedProviderTurnOpeners(items, submissions)
   return new Set(
     items
       .filter(
         (item) =>
           item.sequence > floor &&
-          (keys.nativeIdentity(item.itemId) !== null || !keys.hasSubmission(item.itemId)) &&
+          (keys.nativeIdentity(item.itemId) !== null ||
+            !keys.hasSubmission(item.itemId) ||
+            providerOpeners.has(item.itemId)) &&
           isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
       )
       .map((item) => item.itemId)
+  )
+}
+
+function acceptedProviderTurnOpeners(
+  items: StructuredAgentSessionState['items'],
+  submissions: StructuredAgentSessionState['submissions']
+): ReadonlySet<string> {
+  const accepted = new Set(
+    submissions
+      .filter((submission) => submission.dispatchState === 'accepted')
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
+  return new Set(
+    items.flatMap((item) => {
+      const turn = readAgentJournalTurn(item.body)
+      const identity = parseAgentJournalItemKey(item.itemId)
+      return isRootAgentJournalItem(item) &&
+        turn?.userItemId &&
+        accepted.has(turn.userItemId) &&
+        identity?.provider === 'legacy' &&
+        turn.turnId.startsWith('p:') &&
+        identity.recordId === `turn-lifecycle:${turn.turnId}`
+        ? [turn.userItemId]
+        : []
+    })
   )
 }
 

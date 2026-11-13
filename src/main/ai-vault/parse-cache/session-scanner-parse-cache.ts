@@ -4,6 +4,7 @@ import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault
 import { inSessionParseFileLane } from './session-parse-file-lane'
 import { createAntigravitySessionResumeState } from '../scanners/antigravity/session-scanner-antigravity-parser'
 import { createCodexSessionResumeState } from '../scanners/codex/session-scanner-codex-parser'
+import { createTraexSessionHistoryScan } from '../../traex/traex-session-history-scan'
 import { createDroidSessionResumeState } from '../scanners/droid/session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from '../scanners/session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-primary-parsers'
@@ -55,6 +56,8 @@ function resumableStateFactoryFor(
     case 'codex':
       return (messages) =>
         createCodexSessionResumeState(candidate.file, candidate.codexHome, messages)
+    case 'trae':
+      return (messages) => createTraexSessionHistoryScan(candidate.file, messages)
     case 'cursor':
       return (messages) => createCursorSessionResumeState(candidate.file, messages)
     case 'copilot':

@@ -3,6 +3,7 @@
 export const CLI_CONVERSATION_ADOPTING_AGENTS = {
   claude: ['claude'],
   codex: ['codex'],
+  trae: ['trae'],
   grok: ['grok'],
   omp: ['omp'],
   opencode: ['opencode'],

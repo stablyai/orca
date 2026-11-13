@@ -181,6 +181,7 @@ function buildAgentResumeInvocation(
 ): string {
   switch (agent) {
     case 'codex':
+    case 'trae':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
       // Why: the base is the full launch command, as a settings override is.

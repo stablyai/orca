@@ -25,6 +25,7 @@ const ANTIGRAVITY_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
 const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermissionModeSupport>([
   ['claude', CLAUDE_CHAT_PERMISSION_MODES],
   ['codex', CODEX_CHAT_PERMISSION_MODES],
+  ['trae', CODEX_CHAT_PERMISSION_MODES],
   ['grok', ACP_CHAT_PERMISSION_MODES],
   ['opencode', ACP_CHAT_PERMISSION_MODES],
   ['opencode2', ACP_CHAT_PERMISSION_MODES],

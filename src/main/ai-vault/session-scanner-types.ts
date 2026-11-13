@@ -20,6 +20,7 @@ export type AiVaultScanOptions = {
   codebuddyProjectsDir?: string
   qoderProjectsDir?: string
   codexSessionsDir?: string
+  traeSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
   // Override the default Codex home to test unprefixed resume commands without reading user data.
   defaultCodexHomeDir?: string

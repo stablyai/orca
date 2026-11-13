@@ -14,7 +14,7 @@ export function parseCodexAsyncQuestionsInput(input: unknown): AskPrompt | null 
       const options: unknown[] = 'options' in raw && Array.isArray(raw.options) ? raw.options : []
       questions.push({
         question: raw.title,
-        multiSelect: false,
+        multiSelect: 'multiSelect' in raw && raw.multiSelect === true,
         options: options.flatMap((label) => (typeof label === 'string' ? [{ label }] : []))
       })
     }

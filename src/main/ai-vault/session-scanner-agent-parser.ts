@@ -27,6 +27,7 @@ import {
 import { parseClaudeSessionFile } from './scanners/claude/session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './scanners/gemini/session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './scanners/codex/session-scanner-codex-parser'
+import { parseTraexSessionHistory } from '../traex/traex-session-history-scan'
 import { parseCopilotSessionFile } from './scanners/copilot/session-scanner-copilot-parser'
 import { parseCursorSessionFile } from './scanners/cursor/session-scanner-cursor-parser'
 import { parseHermesSessionFile } from './scanners/hermes/session-scanner-hermes-parser'
@@ -86,6 +87,8 @@ export async function parseAgentSessionFile(
       return parseCodebuddySessionFile(candidate.file, platform, messages)
     case 'claude':
       return parseClaudeSessionFile(candidate.file, platform, messages)
+    case 'trae':
+      return parseTraexSessionHistory(candidate.file, platform, messages)
     case 'codex':
       return parseCodexSessionFile(
         candidate.file,

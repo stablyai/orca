@@ -1,3 +1,4 @@
+import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
 import type { NativeChatPickerItem } from '../../native-chat/input/native-chat-picker-items'
 import { applyPickerSuggestion } from '../../native-chat/input/native-chat-picker-triggers'
 
@@ -24,4 +25,21 @@ export function structuredAgentSessionModePickDraft(
     draft: inserted.draft.slice(0, tokenStart) + inserted.draft.slice(inserted.caret),
     caret: tokenStart
   }
+}
+
+const GOAL_CONTROLS: ReadonlyMap<string, AgentSessionThreadGoalChange> = new Map([
+  ['pause', { kind: 'status', status: 'paused' }],
+  ['resume', { kind: 'status', status: 'active' }],
+  ['clear', { kind: 'clear' }]
+])
+
+/** `/goal pause|resume|clear` controls the current goal; any other text is a new objective. */
+export function structuredAgentSessionGoalChange(argument: string): AgentSessionThreadGoalChange {
+  return GOAL_CONTROLS.get(argument.toLowerCase()) ?? { kind: 'set', objective: argument }
+}
+
+/** Goal mode strips an optional /goal prefix instead of treating it as objective text. */
+export function structuredAgentSessionGoalObjective(text: string): string {
+  const goal = /^\/goal(?:\s+([\s\S]*))?$/i.exec(text.trimEnd())
+  return goal ? (goal[1]?.trim() ?? '') : text.trim()
 }

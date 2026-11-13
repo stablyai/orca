@@ -236,6 +236,11 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return adapter.copyConversation(input)
   }
 
+  readConversationHistory: NonNullable<Adapter['readConversationHistory']> = (input) => {
+    const { adapter } = this.requireAgent(input)
+    return adapter.readConversationHistory?.(input) ?? Promise.resolve(null)
+  }
+
   closeSession: NonNullable<Adapter['closeSession']> = (...args) =>
     this.stopSession(args[0], (adapter) => adapter.closeSession?.(...args))
 

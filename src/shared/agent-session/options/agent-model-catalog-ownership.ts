@@ -1,5 +1,5 @@
 export function independentAgentModelCatalog(agent: string): boolean {
-  return agent === 'claude' || agent === 'codex'
+  return agent === 'claude' || agent === 'codex' || agent === 'trae'
 }
 
 export function usesModelSpecificAcpEfforts(agent: string): boolean {

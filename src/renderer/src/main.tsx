@@ -48,8 +48,8 @@ if (
     enableFlag: import.meta.env.VITE_ENABLE_REACT_GRAB
   })
 ) {
+  // React Grab styles its shadow root; its global CSS overrides the app's utilities.
   void import('react-grab').then(({ init }) => init())
-  void import('react-grab/styles.css')
 }
 
 applyWindowMaterialToDocument()

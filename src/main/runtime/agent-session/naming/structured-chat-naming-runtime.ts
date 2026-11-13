@@ -181,7 +181,12 @@ export function structuredChatNamingDeps(
       })
       const useChatAgent = !recipe.agentId && !recipe.agentArgs?.trim()
       const log = { scope: 'conversation-name', sessionId: record.sessionId }
-      if (useChatAgent && (record.provider === 'grok' || record.provider === 'antigravity')) {
+      if (
+        useChatAgent &&
+        (record.provider === 'grok' ||
+          record.provider === 'antigravity' ||
+          record.provider === 'trae')
+      ) {
         const generateText = getStructuredAgentSessionHost()?.deps.adapter.generateText
         try {
           if (!generateText) {
@@ -206,7 +211,9 @@ export function structuredChatNamingDeps(
           throw new Error('The naming agent returned an empty title')
         } catch (error) {
           logger.warn('Native chat naming failed', { ...log, error })
-          return chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
+          return record.provider === 'trae'
+            ? chatNamingFailure('agentNotRun')
+            : chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
         }
       }
       const settings = resolveChatNamingParams(current, record.provider, recipe)
