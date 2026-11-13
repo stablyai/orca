@@ -48,7 +48,10 @@ export async function wakePairedCloudWorkspace(
   }
   const startedAt = Date.now()
   const source = options.source ?? 'open'
-  const report = (phase: 'waking' | 'ready' | 'failed', message?: string): void => {
+  const report = (
+    phase: 'waking' | 'ready' | 'failed',
+    failure?: { message: string; reason?: string }
+  ): void => {
     if (!options.quiet) {
       noteCloudWakeProgress({
         workspaceId,
@@ -56,7 +59,11 @@ export async function wakePairedCloudWorkspace(
         source,
         startedAt,
         at: Date.now(),
-        ...(message ? { message } : {})
+        ...(failure ? { message: failure.message } : {}),
+        // The plan refused it: the card says why (and offers plans), never the raw code.
+        ...(failure?.message === 'entitlement_denied'
+          ? { billingDenial: { reason: failure.reason ?? null } }
+          : {})
       })
     }
   }
@@ -69,7 +76,7 @@ export async function wakePairedCloudWorkspace(
   if (result.ok) {
     report('ready')
   } else {
-    report('failed', result.error)
+    report('failed', { message: result.error, ...(result.reason ? { reason: result.reason } : {}) })
   }
   await refreshCloudWorkspaceStatus(workspaceId)
   return result.ok

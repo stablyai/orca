@@ -32,7 +32,7 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
   }
   if (result.code === 'entitlement_denied') {
     // The shared classifier: the actual reason (plan, hours, spend cap, payment, limits), and
-    // "See plans" only where buying fixes it and only for people who can (owner or admin).
+    // "Compare plans" only where buying fixes it and only for people who can (owner or admin).
     const denial = classifyEntitlementDenial(result.reason)
     const canFixWithPlans =
       (denial === 'plan' || denial === 'hours') && getBillingSummary().canManageBilling
@@ -41,7 +41,7 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
       ...(canFixWithPlans
         ? {
             action: {
-              label: translate('orcaCloudWorkspace.error.seePlans', 'See plans'),
+              label: translate('auto.components.billing.comparePlans', 'Compare plans'),
               onClick: () => openPlansPage('sandbox')
             }
           }

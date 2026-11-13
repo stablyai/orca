@@ -85,6 +85,24 @@ describe('waking a paired workspace', () => {
     expect(getCloudWorkspaceSnapshot().wake[ROW]?.phase).toBe('failed')
   })
 
+  it('a plan refusal marks the failed wake as billing, so the card says why (never the code)', async () => {
+    wake.mockResolvedValueOnce({
+      ok: false,
+      error: 'entitlement_denied',
+      reason: 'included_hours_exhausted'
+    })
+    await wakePairedCloudWorkspace(ROW)
+    expect(getCloudWorkspaceSnapshot().wake[ROW]?.billingDenial).toEqual({
+      reason: 'included_hours_exhausted'
+    })
+  })
+
+  it('any other refusal is not marked as billing', async () => {
+    wake.mockResolvedValueOnce({ ok: false, error: 'Sandbox hours used up', reason: 'quota' })
+    await wakePairedCloudWorkspace(ROW)
+    expect(getCloudWorkspaceSnapshot().wake[ROW]?.billingDenial).toBeUndefined()
+  })
+
   it('a predictive (quiet) wake that is refused leaves no failed card behind', async () => {
     wake.mockResolvedValueOnce({ ok: false, error: 'Sandbox hours used up', reason: 'quota' })
     expect((await wakePairedCloudWorkspace(ROW, { quiet: true })).ok).toBe(false)
