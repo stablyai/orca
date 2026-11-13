@@ -14,14 +14,17 @@ runs:
       run: |
         set -euo pipefail
         git -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --depth=1 origin "$RELEASE_REF"
-        mapfile -t files < <(git ls-tree -r FETCH_HEAD -- \
+        set --
+        while IFS= read -r file; do
+          set -- "$@" "$file"
+        done < <(git ls-tree -r FETCH_HEAD -- \
           pnpm-lock.yaml pnpm-workspace.yaml mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml \
           native config/patches mobile/patches | \
           awk '$1 ~ /^100(644|755)$/ {sub(/^[^\t]*\t/, ""); print}' | \
           grep -E '(^|/)(pnpm-lock.yaml|pnpm-workspace.yaml)$|^native/[^/]+/Cargo\.(toml|lock)$|^(config|mobile)/patches/.*\.patch$')
-        test "${#files[@]}" -gt 0
+        test "$#" -gt 0
         mkdir candidate
-        git archive --worktree-attributes FETCH_HEAD -- "${files[@]}" | tar -x -C candidate
+        git archive --worktree-attributes FETCH_HEAD -- "$@" | tar -x -C candidate
         for file in pnpm-lock.yaml pnpm-workspace.yaml mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml; do
           test -f "candidate/$file"
           test ! -L "candidate/$file"
