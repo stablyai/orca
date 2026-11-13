@@ -40,6 +40,7 @@ import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
+  ORCA_SUPPORT_URL,
   PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
 import {
@@ -55,7 +56,6 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-clone-progress'
 
 const NO_STAMPS: readonly number[] = []
-const SUPPORT_URL = 'https://github.com/stablyai/orca/issues/new'
 
 // Lazy: the agent-launch graph is heavy and only needed once the user asks for it.
 function startFixWithAgent(args: {
@@ -376,7 +376,7 @@ export function VmBuildSheet({
                 onSignIn: signIn,
                 // Your workspaces on Home, where you can put one to sleep or delete it.
                 onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
-                onContactSupport: () => openAppHttpLink(SUPPORT_URL),
+                onContactSupport: () => openAppHttpLink(ORCA_SUPPORT_URL),
                 onConnectGitHub: connectGitHub,
                 onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)
               }}

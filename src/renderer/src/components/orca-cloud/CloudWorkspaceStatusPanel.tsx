@@ -30,6 +30,7 @@ import { CloudWorkspaceSyncSection } from './CloudWorkspaceSyncSection'
 import { CloudWorkspaceCardDetails, MeterSkeleton } from './CloudWorkspaceCardDetails'
 import { CloudWorkspaceCardMenu } from './CloudWorkspaceCardMenu'
 import { CloudCardPrimaryAction as PrimaryAction } from './cloud-card-primary-action'
+import { isPairedCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import {
   cloudCardAttentionLabel,
@@ -126,6 +127,7 @@ export function CloudWorkspaceStatusPanel({
   const anyBusy = pending !== undefined
   const live = state === 'running' || state === 'unresponsive'
   const canArchive = state === 'running' || state === 'sleeping' || state === 'unresponsive'
+  const paired = useCloudWorkspace((s) => isPairedCloudStatusRow(s, workspaceId))
   const canRestart = live || state === 'failed' || state === 'wakeFailed'
   const attention = attentionOverride === undefined ? liveAttention : attentionOverride
   const name = nameOverride ?? storeName
@@ -307,7 +309,9 @@ export function CloudWorkspaceStatusPanel({
         </p>
       ) : null}
 
-      {state === 'archived' ? null : (
+      {/* ARCHIVED-DEAD-ACTIONS: .context sync and mirroring run for this desktop's own cloud
+          workspaces only, so a paired card doesn't offer them. */}
+      {state === 'archived' || paired ? null : (
         <OnComputerRow view={sync} onOpen={() => setLayer('onComputer')} />
       )}
 

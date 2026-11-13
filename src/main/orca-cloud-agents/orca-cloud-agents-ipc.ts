@@ -43,6 +43,7 @@ const CHANNELS = [
   'orcaCloudAgents:start',
   'orcaCloudAgents:cancel',
   'orcaCloudAgents:reopen',
+  'orcaCloudAgents:signInLink',
   'orcaCloudAgents:usePaste',
   'orcaCloudAgents:pasteClaudeToken',
   'orcaCloudAgents:acknowledge',
@@ -139,6 +140,10 @@ export function registerOrcaCloudAgentsHandlers(userDataPath: string): void {
   ipcMain.handle('orcaCloudAgents:reopen', (_event, raw: unknown) => {
     const request = AgentRequest.safeParse(raw)
     return request.success ? service.reopen(request.data.agent) : false
+  })
+  ipcMain.handle('orcaCloudAgents:signInLink', (_event, raw: unknown) => {
+    const request = AgentRequest.safeParse(raw)
+    return request.success ? service.signInLink(request.data.agent) : null
   })
   ipcMain.handle('orcaCloudAgents:usePaste', () => service.usePaste())
   ipcMain.handle('orcaCloudAgents:submitClaudeCode', (_event, raw: unknown) => {

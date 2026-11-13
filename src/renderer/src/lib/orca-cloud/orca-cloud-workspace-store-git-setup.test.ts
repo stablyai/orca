@@ -47,6 +47,8 @@ function stub(
     connectGitHub: vi.fn(unused),
     getGitHubUser: vi.fn(unused),
     connectGitHubUser: vi.fn(unused),
+    gitHubInstallLink: vi.fn(unused),
+    gitHubUserConnectLink: vi.fn(unused),
     disconnectGitHubUser: vi.fn(unused),
     getRepoAccess: vi.fn(unused),
     listGitHubRepositories: vi.fn(unused),

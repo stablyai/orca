@@ -10,7 +10,7 @@ import {
 import { PaymentIssueNotice } from '../PaymentIssueNotice'
 import { PlanStatusBadge } from '../PlanStatusBadge'
 import type { PlanBillingNotice } from '../PlanBillingSection'
-import { seatCountLabel } from '../team/team-copy'
+import { PlanSeatFacts } from '../team/TeamPlanSummary'
 import { formatHours, formatHoursUsed, includedUsagePercent } from '../plan-billing-format'
 import {
   includedUsageTone,
@@ -36,6 +36,12 @@ export type PlansViewProps = {
   /** Seats Checkout will bill: org members, or 1 for a personal account. */
   seats: number
   onCheckout: (args: { planId: string; interval: OrcaBillingInterval; seats: number }) => void
+  /** "Copy link" on the checkout button: the Checkout URL it would open (absent: no chevron). */
+  checkoutLink?: (args: {
+    planId: string
+    interval: OrcaBillingInterval
+    seats: number
+  }) => Promise<string | null>
   onManage: () => void
   onContactSales: (url: string) => void
   onRetry: () => void
@@ -50,9 +56,11 @@ export function isSubscribed(result: OrcaBillingStatusResult | null): boolean {
 }
 
 function CurrentPlanStrip({
-  entitlement
+  entitlement,
+  members
 }: {
   entitlement: OrcaBillingEntitlement
+  members: number
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -64,15 +72,6 @@ function CurrentPlanStrip({
     <div className="space-y-2 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-medium">{entitlement.planLabel}</span>
-        <span className="text-muted-foreground">
-          {t('auto.components.billing.plans.seatsPeriod', '{{value0}} · {{value1}}', {
-            value0: seatCountLabel(entitlement.seats, t),
-            value1:
-              entitlement.interval === 'year'
-                ? t('auto.components.billing.annual', 'Annual')
-                : t('auto.components.billing.monthly', 'Monthly')
-          })}
-        </span>
         <PlanStatusBadge entitlement={entitlement} />
       </div>
       <Progress
@@ -108,6 +107,8 @@ function CurrentPlanStrip({
         </span>
       </div>
       {warning ? <p className="text-xs font-medium">{warning}</p> : null}
+      {/* Seat facts moved here from the Team dialog, which now only links to Plan & billing. */}
+      <PlanSeatFacts entitlement={entitlement} members={members} />
     </div>
   )
 }
@@ -180,7 +181,7 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
             busy={props.busy}
             onUpdatePayment={props.onManage}
           />
-          <CurrentPlanStrip entitlement={entitlement} />
+          <CurrentPlanStrip entitlement={entitlement} members={props.seats} />
         </>
       ) : isOrcaCloudTrial(entitlement) ? (
         // The trial's strip: the plan cards right below are the way out of it (spec T1).
@@ -208,6 +209,11 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
           notice={props.notice}
           hideManage={paymentIssue}
           onCheckout={() => props.onCheckout({ planId: team.planId, interval, seats })}
+          checkoutLink={
+            props.checkoutLink
+              ? () => props.checkoutLink!({ planId: team.planId, interval, seats })
+              : undefined
+          }
           onManage={props.onManage}
         />
         {enterprise ? (

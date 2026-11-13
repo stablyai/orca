@@ -62,7 +62,7 @@ export function showVmBuildFailureToast(
     ...(failure.kind === 'plan'
       ? {
           action: {
-            label: translate('auto.lib.orcaCloudSession.seePlans', 'See plans'),
+            label: translate('auto.components.billing.comparePlans', 'Compare plans'),
             onClick: () => openPlansPage('sandbox')
           }
         }

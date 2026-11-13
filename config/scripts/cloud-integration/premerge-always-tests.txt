@@ -1,0 +1,3 @@
+# Tests every targeted premerge runs, whatever the PR changed. For source-scanning lints that read files instead of
+# importing them, so vitest's module graph never selects them (premerge-check.sh). One repo path per line.
+src/renderer/src/lib/orca-cloud/cloud-glossary-lint.test.ts

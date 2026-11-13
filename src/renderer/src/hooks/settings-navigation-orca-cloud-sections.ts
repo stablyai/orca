@@ -4,6 +4,7 @@ import {
 } from '@/components/settings/cloud-api/cloud-api-search'
 import {
   getOrcaCloudBillingSearchEntries,
+  getOrcaCloudEnterpriseSearchEntries,
   getOrcaCloudEnvironmentsSearchEntries,
   getOrcaCloudLocalCommandsSearchEntries,
   getOrcaCloudMcpSearchEntries,
@@ -13,11 +14,15 @@ import {
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavSection, SettingsNavTarget } from '@/components/settings/navigation/settings-navigation-types'
+import type {
+  SettingsNavSection,
+  SettingsNavTarget
+} from '@/components/settings/navigation/settings-navigation-types'
 import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
 import {
   BookOpenText,
   Boxes,
+  Building2,
   CreditCard,
   KeySquare,
   LockKeyhole,
@@ -31,7 +36,7 @@ import { CLOUD_ROUTINES_UI_ENABLED } from '../../../shared/cloud-api/cloud-routi
 
 /** One home for everything Orca Cloud; only builds with a control plane show it. */
 export function buildOrcaCloudSettingsSections(
-  { isWebClient, isOrcaCloudApiAvailable }: SettingsNavigationBuildOptions,
+  { isWebClient, isOrcaCloudApiAvailable, isOrcaTeamAdmin }: SettingsNavigationBuildOptions,
   t: Translate = translate
 ): SettingsNavSection[] {
   if (isWebClient || !isOrcaCloudApiAvailable) {
@@ -61,6 +66,22 @@ export function buildOrcaCloudSettingsSections(
       searchEntries: getOrcaCloudTeamSearchEntries(),
       group
     },
+    // Team owners and admins only; members and personal accounts never see the entry.
+    ...(isOrcaTeamAdmin
+      ? [
+          {
+            id: 'cloud-enterprise',
+            title: t('settings.enterprise.title', 'Enterprise'),
+            description: t(
+              'settings.enterprise.description',
+              'Single sign-on, sign-in policies and the audit log for your team.'
+            ),
+            icon: Building2,
+            searchEntries: getOrcaCloudEnterpriseSearchEntries(),
+            group
+          }
+        ]
+      : []),
     {
       id: 'cloud-secrets',
       title: t('cloudSecrets.title', 'Cloud secrets'),

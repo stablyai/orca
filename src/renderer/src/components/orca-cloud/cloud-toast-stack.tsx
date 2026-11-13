@@ -13,6 +13,8 @@ import React, { useSyncExternalStore } from 'react'
 import { TriangleAlert, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
@@ -27,6 +29,8 @@ export type CloudToastAction = {
   primary?: boolean
   icon?: React.ReactNode
   pending?: boolean
+  /** The action opens this page in the browser: its chevron offers "Copy link". */
+  link?: ExternalLinkSource
 }
 
 export type CloudToastLine = {
@@ -364,7 +368,19 @@ export function CloudToastCard({
                   <p className={cn('text-xs', BANNER_BODY_TEXT)}>{line.description}</p>
                 ) : null}
               </div>
-              {line.action ? (
+              {line.action?.link ? (
+                <OpenExternalSplitButton
+                  size="xs"
+                  variant={line.action.primary ? 'default' : 'outline'}
+                  link={line.action.link}
+                  onClick={() => (line.action?.pending ? undefined : line.action?.onClick())}
+                  aria-disabled={line.action.pending || undefined}
+                  aria-busy={line.action.pending || undefined}
+                >
+                  {line.action.icon}
+                  {line.action.label}
+                </OpenExternalSplitButton>
+              ) : line.action ? (
                 <Button
                   type="button"
                   size="xs"

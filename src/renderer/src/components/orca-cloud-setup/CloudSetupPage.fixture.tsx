@@ -34,8 +34,9 @@ function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
     installGitHub: noop,
     checkAgain: noop,
     contactUrl: null,
-    copyLink: null,
-    reopenBrowser: noop
+    reopenBrowser: noop,
+    reopenLink: null,
+    installGitHubLink: null
   }
 }
 
@@ -108,7 +109,7 @@ export const capabilityOff = defineFixture({
       'claude',
       'Claude',
       false,
-      { contactUrl: 'https://onorca.dev/contact-sales' }
+      { contactUrl: 'https://orca.dev/enterprise' }
     )
 })
 
@@ -179,6 +180,6 @@ export const signedOutWaitingBrowser = defineFixture({
       'claude',
       'Claude',
       false,
-      { signingIn: true, inBrowser: true, copyLink: noop }
+      { signingIn: true, inBrowser: true, reopenLink: 'https://orca.dev/setup/example' }
     )
 })

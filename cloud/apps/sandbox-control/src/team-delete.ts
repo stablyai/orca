@@ -49,11 +49,14 @@ export async function purgeTeamSecrets(
   }
   // repo secrets are owned by '<account id>#<repo>'; escape LIKE wildcards in the account id.
   const prefix = `${accountId.replace(/[\\%_]/g, (char) => `\\${char}`)}#%`
-  const result = await db
-    .prepare(
-      `DELETE FROM secrets WHERE (scope = 'org' AND owner_id = ?) OR (scope = 'repo' AND owner_id LIKE ? ESCAPE '\\')`
-    )
-    .bind(accountId, prefix)
-    .run()
-  return { ok: true, purged: Number(result.meta?.changes ?? 0) }
+  const [result] = await db.batch([
+    db
+      .prepare(
+        `DELETE FROM secrets WHERE (scope = 'org' AND owner_id = ?) OR (scope = 'repo' AND owner_id LIKE ? ESCAPE '\\')`
+      )
+      .bind(accountId, prefix),
+    // The team's secret activity (names, who, when) goes with the team.
+    db.prepare('DELETE FROM secret_events WHERE account_id = ?').bind(accountId)
+  ])
+  return { ok: true, purged: Number(result?.meta?.changes ?? 0) }
 }

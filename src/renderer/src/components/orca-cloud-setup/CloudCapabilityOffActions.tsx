@@ -1,6 +1,7 @@
 import React from 'react'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -23,10 +24,14 @@ export function CloudCapabilityOffActions({
         {t('cloudSetupPage.capability.tryAgain', 'Try again')}
       </Button>
       {contactUrl ? (
-        <Button type="button" variant="outline" onClick={() => openAppHttpLink(contactUrl)}>
+        <OpenExternalSplitButton
+          variant="outline"
+          link={contactUrl}
+          onClick={() => openAppHttpLink(contactUrl)}
+        >
           {t('cloudSetupPage.capability.contact', 'Contact us')}
           <ExternalLink aria-hidden />
-        </Button>
+        </OpenExternalSplitButton>
       ) : null}
     </div>
   )

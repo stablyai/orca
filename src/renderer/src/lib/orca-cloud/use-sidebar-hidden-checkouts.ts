@@ -20,22 +20,26 @@ type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
  * otherwise (another team's, or one whose team is not known yet). Newline-joined so the selector
  * compares by value.
  *
- * A PAIRED server (`orcaCloudPaired`, PAIRED-NO-ROW) is left out: its owner is never in
- * `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), so scoping it hid
- * every row of a workspace this desktop just paired with, a GitHub-only create included. And its
- * primary checkout IS the workspace's row, so the `+host` treatment would hide it too.
+ * A PAIRED server (`orcaCloudPaired`, PAIRED-NO-ROW) of the active account is left out: its owner is
+ * never in `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), and its
+ * primary checkout IS the workspace's row, so either treatment would hide a workspace this desktop
+ * just paired with, a GitHub-only create included. A paired server stamped with ANOTHER account
+ * (PAIRED-ACCOUNT-FILTER) is `-host`, like another team's owned sandbox; one saved before pairings
+ * were stamped stays visible until the prune stamps it from the active team's list.
  */
 export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
   const active = orcaCloudAccountId(state.orcaProfileAuthStatus?.cloud)
   const owners = state.cloudAccountIdByEnvironmentId ?? {}
   return (state.runtimeEnvironments ?? [])
-    .filter(
-      (environment) =>
-        isOrcaCloudRuntimeEnvironment(environment) && environment.orcaCloudPaired !== true
-    )
-    .map((environment) => {
+    .filter((environment) => isOrcaCloudRuntimeEnvironment(environment))
+    .flatMap((environment) => {
+      const hostId = toRuntimeExecutionHostId(environment.id)
+      if (environment.orcaCloudPaired === true) {
+        const account = environment.orcaCloudPairedAccountId
+        return account && account !== active ? [`-${hostId}`] : []
+      }
       const inTeam = active !== null && owners[environment.id] === active
-      return `${inTeam ? '+' : '-'}${toRuntimeExecutionHostId(environment.id)}`
+      return [`${inTeam ? '+' : '-'}${hostId}`]
     })
     .join('\n')
 }

@@ -19,12 +19,29 @@ export type MemberRemoval = {
   readerKeysRevoked: number
 }
 
+/**
+ * The audit actor for a membership event auth pushed: the person who made the change when auth
+ * names one, else the system with the affected member in user_id (how older rows were written).
+ */
+export function memberEventActor(accountId: string, memberId: string, actorUserId?: string) {
+  return actorUserId
+    ? { accountId, type: 'user', id: actorUserId, userId: actorUserId }
+    : { accountId, type: 'system', id: 'auth', userId: memberId }
+}
+
+/** With a named actor the member is the target; without one they stay in user_id (see above). */
+export function memberEventTarget(memberId: string, actorUserId?: string): { targetType?: string; targetId?: string } {
+  return actorUserId ? { targetType: 'member', targetId: memberId } : {}
+}
+
 export async function removeMember(
   life: LifecycleDeps,
   accountId: string,
   userId: string,
   now: number,
-  reportedAt?: number
+  reportedAt?: number,
+  /** Who removed them in auth, when it says; the same id means they left by themselves. */
+  actorUserId?: string
 ): Promise<MemberRemoval> {
   // First, so their desktop tokens minted before this stop working (and can't enroll or re-sync).
   await recordMemberChange(life.db, accountId, userId, 'removed', memberChangeTime(now, reportedAt))
@@ -55,6 +72,11 @@ export async function removeMember(
     routinesDisabled: routines.disabled,
     readerKeysRevoked
   }
-  await audit(life.db, { accountId, type: 'system', id: 'auth', userId }, { action: 'member.removed', detail: { ...result, runsCancelled: routines.cancelled } }, now)
+  await audit(
+    life.db,
+    memberEventActor(accountId, userId, actorUserId),
+    { action: actorUserId === userId ? 'member.left' : 'member.removed', ...memberEventTarget(userId, actorUserId), detail: { ...result, runsCancelled: routines.cancelled } },
+    now
+  )
   return result
 }

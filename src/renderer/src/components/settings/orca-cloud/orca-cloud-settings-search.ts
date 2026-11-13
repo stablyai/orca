@@ -34,6 +34,24 @@ export const getOrcaCloudTeamSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getOrcaCloudEnterpriseSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.enterprise.title', 'Enterprise'),
+    description: translate(
+      'settings.enterprise.searchDescription',
+      'Single sign-on and directory sync, and the audit log of changes across your team.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.enterprise.keywordAudit', 'audit log'),
+      ...translateSearchKeyword('settings.enterprise.keywordActivity', 'activity'),
+      ...translateSearchKeyword('settings.enterprise.keywordSso', 'sso'),
+      ...translateSearchKeyword('settings.enterprise.keywordSaml', 'saml'),
+      ...translateSearchKeyword('settings.enterprise.keywordScim', 'scim'),
+      ...translateSearchKeyword('settings.enterprise.keywordCompliance', 'compliance')
+    ]
+  }
+])
+
 export const getOrcaCloudSecretsSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('cloudSecrets.title', 'Cloud secrets'),

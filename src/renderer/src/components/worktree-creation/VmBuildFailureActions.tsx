@@ -3,9 +3,11 @@ import {
   Bot,
   ChevronDown,
   CreditCard,
+  ExternalLink,
   Github,
   Loader2,
   LifeBuoy,
+  Link2,
   LogIn,
   Monitor,
   PanelLeft,
@@ -21,6 +23,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { Translate } from '@/i18n/use-translate'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import {
+  copyExternalLink,
+  type ExternalLinkSource
+} from '@/components/open-external/copy-external-link'
+import { ORCA_SUPPORT_URL, PUSH_TO_GITHUB_URL } from './vm-build-repo-actions'
+import { gitHubInstallLinkSource } from '@/lib/orca-cloud/github-link-sources'
 import type { VmBuildFailure } from './vm-build-failure'
 
 export type VmBuildFailureActions = {
@@ -52,6 +61,10 @@ type Action = {
   pending?: boolean
   /** Outline even when first: a way around the problem, not its fix. */
   secondary?: boolean
+  /** Opens this page in the browser: a chevron beside it offers "Copy link". */
+  link?: ExternalLinkSource
+  /** A More-menu row that leaves Orca for the browser: marked like the Help menu's. */
+  external?: boolean
 }
 
 /** At most two visible actions; the rest sit in a More menu so the way forward stays obvious. */
@@ -103,7 +116,7 @@ function failureActions(
             primary: [
               {
                 key: 'plans',
-                label: t('auto.lib.orcaCloudSession.seePlans', 'See plans'),
+                label: t('auto.components.billing.comparePlans', 'Compare plans'),
                 onClick: actions.onSeePlans
               },
               // Paying elsewhere (another device, the portal) is picked up by trying again.
@@ -225,7 +238,19 @@ function failureActions(
               'Contact support'
             ),
             icon: <LifeBuoy />,
-            onClick: actions.onContactSupport
+            onClick: actions.onContactSupport,
+            external: true
+          },
+          // A menu row can't carry the split's chevron: the same page, copied for another browser
+          // (COPY-LINK-RULE, as "Copy GitHub link" under "Add a GitHub repository…").
+          {
+            key: 'copySupportLink',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.copySupportLink',
+              'Copy support link'
+            ),
+            icon: <Link2 />,
+            onClick: () => void copyExternalLink(ORCA_SUPPORT_URL)
           }
         ]
       }
@@ -245,7 +270,9 @@ function failureActions(
                 ),
             icon: connectingGitHub ? <Loader2 className="animate-spin" /> : <Github />,
             onClick: actions.onConnectGitHub,
-            pending: connectingGitHub
+            pending: connectingGitHub,
+            // The same install page connectOrcaCloudGitHub opens (no repository preselected).
+            link: gitHubInstallLinkSource()
           },
           tryAgain
         ],
@@ -261,7 +288,8 @@ function failureActions(
               'How to push to GitHub'
             ),
             icon: <SquareArrowOutUpRight />,
-            onClick: actions.onPushToGitHub
+            onClick: actions.onPushToGitHub,
+            link: PUSH_TO_GITHUB_URL
           },
           // After pushing, the same create works without leaving the sheet.
           tryAgain
@@ -311,21 +339,37 @@ export function FailureActionRow({
   const destroys = vmKept
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {primary.map((action, index) => (
-        <Button
-          key={action.key}
-          type="button"
-          size="sm"
-          variant={index === 0 && !action.secondary ? 'default' : 'outline'}
-          onClick={action.pending ? undefined : action.onClick}
-          disabled={action.disabled}
-          aria-disabled={action.pending || undefined}
-          aria-busy={action.pending || undefined}
-        >
-          {action.icon}
-          {action.label}
-        </Button>
-      ))}
+      {primary.map((action, index) =>
+        action.link ? (
+          <OpenExternalSplitButton
+            key={action.key}
+            size="sm"
+            variant={index === 0 && !action.secondary ? 'default' : 'outline'}
+            link={action.link}
+            onClick={() => (action.pending ? undefined : action.onClick())}
+            disabled={action.disabled}
+            aria-disabled={action.pending || undefined}
+            aria-busy={action.pending || undefined}
+          >
+            {action.icon}
+            {action.label}
+          </OpenExternalSplitButton>
+        ) : (
+          <Button
+            key={action.key}
+            type="button"
+            size="sm"
+            variant={index === 0 && !action.secondary ? 'default' : 'outline'}
+            onClick={action.pending ? undefined : action.onClick}
+            disabled={action.disabled}
+            aria-disabled={action.pending || undefined}
+            aria-busy={action.pending || undefined}
+          >
+            {action.icon}
+            {action.label}
+          </Button>
+        )
+      )}
       {more.length > 0 ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
@@ -343,6 +387,9 @@ export function FailureActionRow({
               >
                 {action.icon}
                 {action.label}
+                {action.external ? (
+                  <ExternalLink aria-hidden className="ml-auto size-3 text-muted-foreground" />
+                ) : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
