@@ -129,3 +129,5 @@ export type TopLevelView =
   | 'skills'
   | 'artifacts'
   | 'mobile'
+  /** A plugin panel opened as a page; `activePluginPageTabKey` names it. */
+  | 'plugin-page'

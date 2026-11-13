@@ -33,6 +33,8 @@ type PluginDeclarativePanelProps = {
   onUnresponsive: () => void
   /** Dev folder: saves swap the guest under this panel, keeping its last tree and memory atoms. */
   hotReload?: boolean
+  /** Shown as a page, so the right sidebar's state does not hide it. */
+  page?: boolean
 }
 
 function subscribeDocumentVisibility(onChange: () => void): () => void {
@@ -42,9 +44,9 @@ function subscribeDocumentVisibility(onChange: () => void): () => void {
 
 /**
  * A components panel: a hidden guest runs the plugin's module, Orca draws the tree it sends.
- * The guest lives while this panel is the open right-sidebar tab (also while the sidebar is
- * collapsed or Orca's window is hidden, which `visible` reports); switching tabs or closing it
- * ends the guest, and only persisted atoms carry over.
+ * The guest lives while this panel is the open right-sidebar tab or page (also while the sidebar
+ * is collapsed or Orca's window is hidden, which `visible` reports); switching tabs, pages or
+ * closing it ends the guest, and only persisted atoms carry over.
  */
 export function PluginDeclarativePanel({
   tabKey,
@@ -54,13 +56,14 @@ export function PluginDeclarativePanel({
   frameKey,
   sessionToken,
   onUnresponsive,
-  hotReload = false
+  hotReload = false,
+  page = false
 }: PluginDeclarativePanelProps): React.JSX.Element {
   const frameRef = useRef<PluginFrameElement | null>(null)
   const sendToGuest = useCallback((event: string, payload: unknown) => {
     pluginFrameWindowOf(frameRef.current)?.postMessage(pluginEvent(event, payload), '*')
   }, [])
-  const sidebarOpen = useAppStore((store) => store.rightSidebarOpen)
+  const surfaceOpen = useAppStore((store) => page || store.rightSidebarOpen)
   const windowVisible = useSyncExternalStore(
     subscribeDocumentVisibility,
     () => document.visibilityState !== 'hidden'
@@ -68,7 +71,7 @@ export function PluginDeclarativePanel({
   const state = usePluginDeclarativeState({
     panelId,
     sessionToken,
-    visible: sidebarOpen && windowVisible,
+    visible: surfaceOpen && windowVisible,
     sendToGuest,
     hotReload
   })

@@ -177,7 +177,8 @@ export function sanitizeWorkspaceCleanupDismissals(
 
 export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
-  if (!isTopLevelView(value)) {
+  // A plugin page's panel is not persisted, so a restart cannot reopen it.
+  if (!isTopLevelView(value) || value === 'plugin-page') {
     return 'terminal'
   }
   return value

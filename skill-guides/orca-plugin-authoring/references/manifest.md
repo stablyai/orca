@@ -33,7 +33,7 @@
 
 ## Contribution points (`contributes`)
 
-- `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
+- `panels` (PanelContribution[], since 1.4.160): Panels, shown as right-sidebar tabs or pages. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
 - `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 5.
 - `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.
@@ -54,13 +54,14 @@ Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `ta
 
 ## PanelContribution
 
-A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
+A panel, shown as a right-sidebar tab or, with `placement: "page"`, as a page. Requires the `sandboxed-ui` execution profile or higher.
 
 - `id` (string, required, since 1.4.160): Panel id, unique among this plugin's panels. The reserved names `constructor` and `prototype` are refused.
 - `title` (string, required, since 1.4.160): Title shown on the panel tab and its tooltip.
-- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.160): Icon shown in the right-sidebar activity bar. Defaults to `plug`.
+- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.160): Icon shown in the right-sidebar activity bar, or the left sidebar for a `page` panel. Defaults to `plug`.
 - `entry` (string, required, since 1.4.160): What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust.
 - `ui` ("html" | "components", since 1.4.246): How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls.
+- `placement` ("sidebar" | "page", since 1.4.259): Where the panel opens. `sidebar` (default) adds a right-sidebar tab; `page` adds an entry, with `title` and `icon`, to the left sidebar's top navigation that opens the panel as a full page instead. At most 1 `page` panel per plugin.
 
 ## CommandContribution
 

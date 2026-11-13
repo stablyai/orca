@@ -4,9 +4,16 @@ import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'
 import { pluginPanelUnavailableReason } from './plugin-contribution-action-availability'
 
-/** Leaves Settings for the workspace it came from and reveals the panel there. */
-export function openPluginPanelFromSettings(panel: Pick<PluginHostPanel, 'tabKey'>): void {
+/** Leaves Settings for the panel's page, or for the workspace it came from and reveals the panel there. */
+export function openPluginPanelFromSettings(
+  panel: Pick<PluginHostPanel, 'tabKey' | 'placement'>
+): void {
   const state = useAppStore.getState()
+  if (panel.placement === 'page') {
+    state.closeSettingsPage()
+    state.openPluginPage(panel.tabKey)
+    return
+  }
   // Why re-check: the store may have moved on since this rendered.
   if (pluginPanelUnavailableReason(state)) {
     return
@@ -22,7 +29,9 @@ export function PluginContributionActionPanel({
   panel: PluginHostPanel
 }): React.JSX.Element {
   const t = useTranslate()
-  const unavailableReason = useAppStore((state) => pluginPanelUnavailableReason(state))
+  const unavailableReason = useAppStore((state) =>
+    panel.placement === 'page' ? null : pluginPanelUnavailableReason(state)
+  )
   return (
     <span className="flex items-center gap-2">
       {unavailableReason ? (

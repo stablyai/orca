@@ -121,7 +121,8 @@ export const TopLevelViewSchema = z.enum([
   'space',
   'skills',
   'artifacts',
-  'mobile'
+  'mobile',
+  'plugin-page'
 ])
 
 export const UiUpdateFields = z

@@ -142,7 +142,7 @@ export const pluginContributesFields = {
   panels: contributionList(
     pluginPanelContributionSchema,
     PLUGIN_PANEL_LIMIT,
-    'Sidebar panels.',
+    'Panels, shown as right-sidebar tabs or pages.',
     V1
   ),
   commands: contributionList(

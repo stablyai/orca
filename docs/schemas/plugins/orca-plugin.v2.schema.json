@@ -188,7 +188,7 @@
       "properties": {
         "panels": {
           "default": [],
-          "description": "Sidebar panels. At most 64.",
+          "description": "Panels, shown as right-sidebar tabs or pages. At most 64.",
           "x-orca-since": "1.4.160",
           "maxItems": 64,
           "type": "array",
@@ -483,7 +483,7 @@
           ]
         },
         "icon": {
-          "description": "Icon shown in the right-sidebar activity bar. Defaults to `plug`.",
+          "description": "Icon shown in the right-sidebar activity bar, or the left sidebar for a `page` panel. Defaults to `plug`.",
           "x-orca-since": "1.4.160",
           "examples": [
             "database"
@@ -599,6 +599,18 @@
             "html",
             "components"
           ]
+        },
+        "placement": {
+          "description": "Where the panel opens. `sidebar` (default) adds a right-sidebar tab; `page` adds an entry, with `title` and `icon`, to the left sidebar's top navigation that opens the panel as a full page instead. At most 1 `page` panel per plugin.",
+          "x-orca-since": "1.4.259",
+          "examples": [
+            "page"
+          ],
+          "type": "string",
+          "enum": [
+            "sidebar",
+            "page"
+          ]
         }
       },
       "required": [
@@ -607,7 +619,7 @@
         "entry"
       ],
       "additionalProperties": false,
-      "description": "A sidebar panel. Requires the `sandboxed-ui` execution profile or higher."
+      "description": "A panel, shown as a right-sidebar tab or, with `placement: \"page\"`, as a page. Requires the `sandboxed-ui` execution profile or higher."
     },
     "CommandContribution": {
       "type": "object",

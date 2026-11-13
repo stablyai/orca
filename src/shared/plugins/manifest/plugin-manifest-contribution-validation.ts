@@ -7,6 +7,7 @@ import {
 } from '../contributions/plugin-event-contribution'
 import type { PluginFileMatch } from '../contributions/plugin-file-match'
 import { validatePluginStatusBarItems } from '../contributions/plugin-status-bar-item-contribution'
+import { PLUGIN_PAGE_PANEL_LIMIT } from '../contributions/plugin-panel-contribution'
 
 type IdentifiedContribution = { id: string }
 type PathContribution = { path: string }
@@ -14,7 +15,7 @@ type PathContribution = { path: string }
 type ContributionValidationManifest = {
   main?: string
   contributes: {
-    panels: IdentifiedContribution[]
+    panels: (IdentifiedContribution & { placement?: string })[]
     commands: (IdentifiedContribution & {
       action?: string
       replaces?: string
@@ -80,6 +81,16 @@ export function validatePluginManifestContributions(
       `${path} id`,
       ctx
     )
+  }
+  let pagePanels = 0
+  for (const [index, panel] of manifest.contributes.panels.entries()) {
+    if (panel.placement === 'page' && ++pagePanels > PLUGIN_PAGE_PANEL_LIMIT) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'panels', index, 'placement'],
+        message: `at most ${PLUGIN_PAGE_PANEL_LIMIT} panel per plugin may use placement "page"`
+      })
+    }
   }
   rejectDuplicateValues(
     manifest.contributes.syntaxes.map((syntax) => syntax.scopeName),

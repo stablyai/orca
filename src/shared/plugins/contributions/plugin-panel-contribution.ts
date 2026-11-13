@@ -5,12 +5,15 @@ import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
+  PLUGIN_PANEL_PLACEMENT_SINCE,
   PLUGIN_PANEL_UI_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_PANEL_LIMIT = 64
+/** Page panels each add a left-sidebar entry, which every plugin shares. */
+export const PLUGIN_PAGE_PANEL_LIMIT = 1
 
 /** Icons a panel (and a component panel's controls) may name; the renderer bundles exactly
  *  these. One vocabulary for manifests and components. Grow additively, with a since below. */
@@ -95,6 +98,9 @@ export function canonicalPluginPanelIcon(name: string): PluginPanelIconName | nu
  *  component tree Orca draws with its own controls. */
 export const PLUGIN_PANEL_UI_KINDS = ['html', 'components'] as const
 export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
+/** `sidebar`: a right-sidebar tab. `page`: a left-sidebar entry that opens the panel as a page. */
+export const PLUGIN_PANEL_PLACEMENTS = ['sidebar', 'page'] as const
+export type PluginPanelPlacement = (typeof PLUGIN_PANEL_PLACEMENTS)[number]
 const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
 export const pluginPanelContributionSchema = z
@@ -116,7 +122,7 @@ export const pluginPanelContributionSchema = z
       .optional()
       .meta({
         ...pluginFieldDoc(
-          'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
+          'Icon shown in the right-sidebar activity bar, or the left sidebar for a `page` panel. Defaults to `plug`.',
           PLUGIN_SCHEMA_SINCE_V1,
           ['database']
         ),
@@ -138,6 +144,16 @@ export const pluginPanelContributionSchema = z
           PLUGIN_PANEL_UI_SINCE,
           ['components']
         )
+      ),
+    placement: z
+      .enum(PLUGIN_PANEL_PLACEMENTS)
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          `Where the panel opens. \`sidebar\` (default) adds a right-sidebar tab; \`page\` adds an entry, with \`title\` and \`icon\`, to the left sidebar's top navigation that opens the panel as a full page instead. At most ${PLUGIN_PAGE_PANEL_LIMIT} \`page\` panel per plugin.`,
+          PLUGIN_PANEL_PLACEMENT_SINCE,
+          ['page']
+        )
       )
   })
   .strict()
@@ -147,7 +163,8 @@ export const pluginPanelContributionSchema = z
   })
   .meta({
     id: 'PanelContribution',
-    description: 'A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.'
+    description:
+      'A panel, shown as a right-sidebar tab or, with `placement: "page"`, as a page. Requires the `sandboxed-ui` execution profile or higher.'
   })
 
 export type PluginPanelContribution = z.infer<typeof pluginPanelContributionSchema>

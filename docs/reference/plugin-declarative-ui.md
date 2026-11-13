@@ -76,6 +76,11 @@ The module runs while its panel is the open right-sidebar tab, including while t
 Orca's window is hidden. Switching to another tab, closing the panel, disabling the plugin or reloading it
 ends the run; only persisted atoms carry over to the next one.
 
+A panel with `"placement": "page"` (Orca 1.4.259 and later) gets an entry in the left sidebar's top
+navigation instead of a right-sidebar tab, and opens across the main area like Orca's own pages. It runs
+while that page is shown and ends when the person opens another page or workspace. An open page is
+not restored after a restart.
+
 An optional `setup` export runs once, after persisted atoms load and before the first render:
 
 ```ts
