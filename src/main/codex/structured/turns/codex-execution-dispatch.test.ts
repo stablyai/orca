@@ -217,6 +217,47 @@ it('retains the reported opening roots and stops a bounded child on native setti
   }
 })
 
+it.each([
+  { totalTokens: 100 },
+  { reasoningOutputTokens: 20 },
+  { totalTokens: 110, inputTokens: 90, cachedInputTokens: 60, outputTokens: 20 },
+  { totalTokens: 110, inputTokens: 90, outputTokens: 20, reasoningOutputTokens: 15 }
+])('keeps inconsistent cumulative usage unknown after later valid frames: %j', async (change) => {
+  const { adapter, codex } = await bounded({ type: 'chatgpt', id: 'account-1', planType: 'pro' })
+  try {
+    await adapter.dispatch(input)
+    const total = {
+      totalTokens: 99,
+      inputTokens: 80,
+      cachedInputTokens: 32,
+      outputTokens: 19,
+      reasoningOutputTokens: 12
+    }
+    const update = (value: typeof total) =>
+      codex.connections[0]!.handlers.onNotification?.('thread/tokenUsage/updated', {
+        threadId: THREAD_ID,
+        tokenUsage: { total: value }
+      })
+    update(total)
+    update({ ...total, ...change })
+    expect(
+      (await adapter.readExecutionEvidence({ sessionId: 'session-1', fence: 7 }))?.evidence.usage
+    ).toBeUndefined()
+    update({
+      ...total,
+      totalTokens: 120,
+      inputTokens: 100,
+      cachedInputTokens: 40,
+      outputTokens: 20
+    })
+    expect(
+      (await adapter.readExecutionEvidence({ sessionId: 'session-1', fence: 7 }))?.evidence.usage
+    ).toBeUndefined()
+  } finally {
+    await adapter.closeAll()
+  }
+})
+
 it('reports cumulative primary-thread usage and never substitutes last-context or another thread', async () => {
   const { adapter, codex } = await bounded({ type: 'chatgpt', id: 'account-1', planType: 'pro' })
   try {

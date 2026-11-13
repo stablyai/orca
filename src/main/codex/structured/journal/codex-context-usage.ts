@@ -35,10 +35,13 @@ export function readCodexCumulativeUsage(
   const [totalTokens, inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens] =
     fields.map((key) => Number(total[key]))
   if (
-    totalTokens! < inputTokens! + outputTokens! ||
+    totalTokens! !== inputTokens! + outputTokens! ||
     cachedInputTokens! > inputTokens! ||
-    totalTokens! < (previous?.totalTokens ?? 0) ||
-    reasoningOutputTokens! > totalTokens!
+    reasoningOutputTokens! > outputTokens! ||
+    cachedInputTokens! - (previous?.cachedInputTokens ?? 0) >
+      inputTokens! - (previous?.inputTokens ?? 0) ||
+    reasoningOutputTokens! - (previous?.reasoningOutputTokens ?? 0) >
+      outputTokens! - (previous?.outputTokens ?? 0)
   ) {
     return undefined
   }
