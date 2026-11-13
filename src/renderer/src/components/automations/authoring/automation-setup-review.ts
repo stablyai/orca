@@ -90,10 +90,6 @@ export async function reviewAutomationSkippedSetup(
 }
 
 /**
- * Saving an automation whose last run skipped changed setup re-confirms that setup: the skipped
- * content when the host recorded it, else the repo's current one. Returns the hash to store.
- */
-/**
  * A save's setup approval: prompt when the target or setup choice changed, else re-review a skipped run.
  * The hash is stored with `run` so later runs execute only this content.
  */
@@ -125,6 +121,10 @@ export async function confirmAutomationSaveSetup(
   return { trust, setupTrustHash }
 }
 
+/**
+ * Saving an automation whose last run skipped changed setup re-confirms that setup: the skipped
+ * content when the host recorded it, else the content at the automation's base. Returns the hash to store.
+ */
 async function reconfirmSkippedSetup(
   context: Pick<AutomationSaveContext, 'local' | 'list'>,
   trust: HookTrustApproval | null,
