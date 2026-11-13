@@ -237,6 +237,12 @@ final class Provider {
         switch method {
         case "handshake":
             return providerHandshake()
+        case "permissionStatus":
+            let status = permissionStatusSnapshotSettled()
+            return [
+                "accessibility": status.accessibilityGranted ? "granted" : "not-granted",
+                "screenshots": status.screenshotsGranted ? "granted" : "not-granted"
+            ]
         case "listApps":
             return ["apps": listApps().map(renderListedApp)]
         case "listWindows":
@@ -1363,7 +1369,10 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleW
         if let window = settledWindow, outcome.settled {
             return window
         }
-        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings.")
+        guard accessibilityTrustedSettled() else {
+            throw ProviderError.coded("permission_denied", "The automation helper does not have Accessibility permission. Grant Orca Computer Use access in System Settings.")
+        }
+        throw ProviderError.coded("accessibility_error", "app '\(app.name)' has visible windows but no accessible window after \(outcome.waitedMs)ms. The automation helper is trusted; check that the app's window is available on the current desktop and the display is unlocked.")
     }
     throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
 }

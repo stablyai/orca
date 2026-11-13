@@ -14,6 +14,7 @@ import {
 } from '../macos-native/macos-native-provider-paths'
 import { RuntimeClientError } from '../runtime-client-error'
 import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission-status-cleanup'
+import { callComputerSidecarPermissionStatus } from '../sidecar-transport/sidecar-client'
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
 
@@ -48,7 +49,9 @@ async function getComputerUsePermissionStatusAsync(
     )
   }
 
-  const raw = await readPermissionStatusFromHelperApp(helperAppPath, onHelperSpawn)
+  const raw =
+    (await callComputerSidecarPermissionStatus()) ??
+    (await readPermissionStatusFromHelperApp(helperAppPath, onHelperSpawn))
 
   return {
     platform: process.platform,

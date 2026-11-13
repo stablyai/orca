@@ -14,6 +14,10 @@ import {
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from '../action-contracts/computer-sidecar-paste-validation'
 import { RuntimeClientError } from '../runtime-client-error'
+import {
+  parseNativePermissionStatus,
+  type NativePermissionStatus
+} from '../macos-native/macos-native-provider-contract'
 import { getForkedChildEntryPath } from '../../worker-threads/forked-child-entry-path'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
@@ -21,6 +25,7 @@ export const COMPUTER_SIDECAR_ENTRY_FILENAME = 'computer-sidecar.js'
 
 type ComputerSidecarMethod =
   | 'capabilities'
+  | 'permissionStatus'
   | 'listApps'
   | 'listWindows'
   | 'getAppState'
@@ -64,6 +69,12 @@ export async function callComputerSidecarCapabilities(): Promise<ComputerProvide
   return (await getComputerSidecar().call('capabilities', {})) as ComputerProviderCapabilities
 }
 
+export async function callComputerSidecarPermissionStatus(): Promise<NativePermissionStatus | null> {
+  // Null means no automation helper is running, so the caller probes a separate helper instead.
+  const result = sidecar?.isRunning() ? await sidecar.call('permissionStatus', {}) : null
+  return result === null || result === undefined ? null : parseNativePermissionStatus(result)
+}
+
 export async function callComputerSidecarListWindows(
   params: unknown
 ): Promise<ComputerListWindowsResult> {
@@ -79,7 +90,7 @@ export async function callComputerSidecarSnapshot(
 export async function callComputerSidecarAction(
   method: Exclude<
     ComputerSidecarMethod,
-    'capabilities' | 'listApps' | 'listWindows' | 'getAppState'
+    'capabilities' | 'permissionStatus' | 'listApps' | 'listWindows' | 'getAppState'
   >,
   params: unknown
 ): Promise<ComputerActionResult> {
@@ -119,6 +130,10 @@ class ComputerSidecarProcess {
   private queueGeneration = 0
 
   constructor(private readonly entryPath: string) {}
+
+  isRunning(): boolean {
+    return this.child?.connected === true && !this.child.killed
+  }
 
   call(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
     const generation = this.queueGeneration

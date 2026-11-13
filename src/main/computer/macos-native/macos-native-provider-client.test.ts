@@ -161,4 +161,46 @@ describe('MacOSNativeProviderClient', () => {
     )
     await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
   })
+
+  it('reads permission status from the running helper and never starts one to ask', async () => {
+    connectMacOSProviderSocketMock.mockImplementation(async () => {
+      const socket = new FakeSocket()
+      socket.write = (line, callback) => {
+        const request: { id: number; method: string } = JSON.parse(line)
+        const result =
+          request.method === 'handshake'
+            ? { protocolVersion: 1, supports: {} }
+            : { accessibility: 'not-granted', screenshots: 'granted' }
+        queueMicrotask(() => {
+          socket.emit('data', `${JSON.stringify({ id: request.id, ok: true, result })}\n`)
+        })
+        callback?.()
+        return true
+      }
+      sockets.push(socket)
+      return socket
+    })
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    await expect(client.permissionStatusIfStarted()).resolves.toBeNull()
+    expect(spawnMock).not.toHaveBeenCalled()
+
+    await client.capabilities()
+    await expect(client.permissionStatusIfStarted()).resolves.toEqual({
+      accessibility: 'not-granted',
+      screenshots: 'granted'
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    client.shutdown()
+  })
+
+  it('never reads a malformed helper permission reply as a grant', async () => {
+    const { parseNativePermissionStatus } = await import('./macos-native-provider-contract')
+
+    expect(parseNativePermissionStatus(null)).toEqual({})
+    expect(parseNativePermissionStatus({ accessibility: true, screenshots: 'granted' })).toEqual({
+      screenshots: 'granted'
+    })
+  })
 })
