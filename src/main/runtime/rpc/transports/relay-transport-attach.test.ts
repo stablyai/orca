@@ -31,7 +31,7 @@ class FakeDataSocket extends EventEmitter {
 
 function setup() {
   const sockets: FakeDataSocket[] = []
-  const outcomes: [string, number | null][] = []
+  const outcomes: [string, number | null, boolean][] = []
   const transport = new CloudRelayTransport({
     cellUrl: 'https://relay-c1.example',
     relayHostId: 'host',
@@ -42,7 +42,8 @@ function setup() {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every socket member openConnection and stop use.
       return socket as unknown as WebSocket
     },
-    onDataDialSettled: (connectionId, opened) => outcomes.push([connectionId, opened])
+    onDataDialSettled: (connectionId, openedAfterMs, attached) =>
+      outcomes.push([connectionId, openedAfterMs, attached])
   })
   let next = 0
   const open = () =>
@@ -60,7 +61,7 @@ describe('CloudRelayTransport data dial outcome', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('reports a dial that never opened: deadline or socket error', async () => {
+  it('reports a dial that never opened once: deadline or socket error', async () => {
     const { sockets, outcomes, open } = setup()
     const timedOut = open()
     const timeoutSettled = expect(timedOut).rejects.toThrow()
@@ -71,16 +72,16 @@ describe('CloudRelayTransport data dial outcome', () => {
     sockets[1].emit('error', new Error('ECONNRESET'))
     await expect(errored).rejects.toThrow('ECONNRESET')
     expect(outcomes).toEqual([
-      ['conn-1', null],
-      ['conn-2', null]
+      ['conn-1', null, false],
+      ['conn-2', null, false]
     ])
   })
 
-  it('reports an opened dial once and ignores what the phone does after', async () => {
+  it('reports an open that ended before the first frame, whatever ended it', async () => {
     const { sockets, outcomes, open } = setup()
-    // Phone leaves mid-attach (edge answers 4401), drops before its first frame (4408), or goes
-    // quiet until the attach deadline: none of these say anything about this host's path.
-    for (const phoneBehaviour of [
+    // 4401 (phone left, or the relay's first-frame timeout), 4408 (phone dropped), or a quiet
+    // phone until the attach deadline: the owner weighs these by how late the dial opened.
+    for (const ending of [
       (socket: FakeDataSocket) => socket.closeWith(4401),
       (socket: FakeDataSocket) => socket.closeWith(4408),
       () => vi.advanceTimersByTimeAsync(10_000)
@@ -89,21 +90,24 @@ describe('CloudRelayTransport data dial outcome', () => {
       const socket = sockets.at(-1)!
       socket.open()
       await opening
-      await phoneBehaviour(socket)
+      await ending(socket)
     }
     expect(outcomes).toEqual([
-      ['conn-1', 0],
-      ['conn-2', 0],
-      ['conn-3', 0]
+      ['conn-1', 0, false],
+      ['conn-2', 0, false],
+      ['conn-3', 0, false]
     ])
   })
 
-  it('reports how long the dial took to open', async () => {
+  it('reports the open latency and the first frame once', async () => {
     const { sockets, outcomes, open } = setup()
     const opening = open()
     await vi.advanceTimersByTimeAsync(7_000)
     sockets[0].open()
     await opening
-    expect(outcomes).toEqual([['conn-1', 7_000]])
+    sockets[0].emit('message', Buffer.from('{}'), false)
+    sockets[0].emit('message', Buffer.from('{}'), false)
+    sockets[0].closeWith(1000)
+    expect(outcomes).toEqual([['conn-1', 7_000, true]])
   })
 })

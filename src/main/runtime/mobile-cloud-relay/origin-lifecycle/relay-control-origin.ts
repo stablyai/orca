@@ -47,10 +47,10 @@ export class RelayControlOrigin {
       generation: 0,
       createSocket: options.createDataSocket,
       onConnectionClosed: (connectionId) => options.onConnectionReleased(connectionId, this),
-      onDataDialSettled: (connectionId, openedAfterMs) => {
+      onDataDialSettled: (connectionId, openedAfterMs, attached) => {
         // Closing terminates sockets mid-dial; that is not evidence about the path.
         if (!this.closed) {
-          this.attachHealth.note(connectionId, openedAfterMs)
+          this.attachHealth.note(connectionId, openedAfterMs, attached)
         }
       }
     })

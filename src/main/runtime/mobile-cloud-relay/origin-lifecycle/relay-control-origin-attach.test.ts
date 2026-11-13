@@ -126,6 +126,19 @@ describe('RelayControlOrigin data-path health', () => {
     await origin.close()
   })
 
+  it('ignores slow opens whose attach then succeeds', async () => {
+    const { origin, open, onDataPathUnhealthy } = await originWithDataPath()
+    // A slow-but-working path (or a stall / wake from sleep): late open, then the relay's frame.
+    for (const connId of ['conn-1', 'conn-2', 'conn-3']) {
+      const socket = open(connId)
+      await vi.advanceTimersByTimeAsync(7_000)
+      socket.open()
+      socket.emit('message', Buffer.from('{}'), false)
+    }
+    expect(onDataPathUnhealthy).not.toHaveBeenCalled()
+    await origin.close()
+  })
+
   it('lets a fast open clear a slow one', async () => {
     const { origin, open, onDataPathUnhealthy } = await originWithDataPath()
     for (const [connId, openAfterMs] of [
