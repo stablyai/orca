@@ -420,7 +420,7 @@ module.exports = {
         buildJournalFileLock(
           join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', lockName),
           context.arch === 3 ? 'arm64' : 'x64',
-          { glibcFloor: context.electronPlatformName === 'linux' }
+          { glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false }
         )
       }
     )
