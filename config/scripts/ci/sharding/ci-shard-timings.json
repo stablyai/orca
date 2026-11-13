@@ -2956,7 +2956,6 @@
       "src/main/runtime/integrations/linear/linear-save-markdown.test.ts": 930,
       "src/main/runtime/workspaces/creation/managed-worktree-create-registry.test.ts": 4143,
       "src/main/runtime/workspaces/creation/managed-worktree-create-telemetry.test.ts": 4152,
-      "src/main/runtime/workspaces/removal/missing-worktree-terminal-reconciliation.test.ts": 432,
       "src/main/runtime/mobile-cloud-relay/testing/desktop-relay-service-installer.test.ts": 48,
       "src/main/runtime/mobile-cloud-relay/testing/mobile-relay-e2ee.integration.test.ts": 408,
       "src/main/runtime/mobile-cloud-relay/authentication/relay-auth-coordinator-readiness.test.ts": 580,
