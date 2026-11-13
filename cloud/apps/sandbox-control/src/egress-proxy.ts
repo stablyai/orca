@@ -4,6 +4,7 @@
 // enter the VM or Vercel's policy store.
 import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import type { SandboxRow } from './store'
+import { secretLog } from './secret-log'
 
 const VERCEL_OIDC_HOSTNAME = 'oidc.vercel.com'
 /** Hosts whose clients are Node (undici); git/curl hosts use transform rules instead. Model hosts are per session. */
@@ -144,7 +145,7 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   }
   if (typeof credential !== 'string') {
     if (credential.answer) {
-      console.log(JSON.stringify({ event: 'egress_denied', sandboxId: row.id, host, reason: credential.deny }))
+      secretLog('egress_denied', { sandboxId: row.id, host, reason: credential.deny })
       return new Response(credential.answer.body, {
         status: credential.answer.status,
         headers: { 'content-type': credential.answer.contentType }
@@ -174,9 +175,7 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
     redirect: 'manual'
   })
   // Names only: which sandbox, host and credential were swapped, and what the provider answered.
-  console.log(
-    JSON.stringify({ event: 'egress_swap', sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status })
-  )
+  secretLog('egress_swap', { sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status }, [credential])
   route.onUpstreamStatus?.(upstream.status, { method: request.method, path })
   if (route.keepResponseFields) {
     return onlyFields(upstream, route.keepResponseFields)

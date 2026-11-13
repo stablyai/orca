@@ -10,6 +10,7 @@ import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } 
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
+import { secretLog } from './secret-log'
 
 export type SessionSecrets = {
   env: Record<string, string>
@@ -104,7 +105,7 @@ export async function sessionSecretEnv(
   const scopes = deriveProviderScopes(stored, env, storedScopes)
   const egressAllowHosts = providerHosts(env).join(',') || null
   // Counts only.
-  console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
+  secretLog('session_secrets', { sandboxId: row.id, injected: Object.keys(env).length, skipped })
   if (!swap) {
     return { env, egressSecretHosts: null, egressAllowHosts }
   }

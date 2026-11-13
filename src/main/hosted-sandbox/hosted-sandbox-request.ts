@@ -12,6 +12,11 @@ export type HostedSandboxControlPlaneClientOptions = {
   baseUrl: string
   /** Mints an Orca Cloud token with aud=orca-sandbox; never a provider credential. */
   getAccessToken: (signal?: AbortSignal) => Promise<string>
+  /**
+   * Drops the cached token. When set, a 401 `stale_token` (the token predates a role change, or is too
+   * old for an admin-only write) is retried once with a freshly minted token.
+   */
+  invalidateAccessToken?: () => void
   fetch?: typeof fetch
   /** Per-call ceilings; create/resume/rollover include a VM boot and orcad start. */
   timeouts?: Partial<Record<'boot' | 'control', number>>
@@ -41,7 +46,7 @@ export function createHostedSandboxRequest(
   const doFetch = options.fetch ?? fetch
   const timeouts = { ...DEFAULT_TIMEOUTS, ...options.timeouts }
 
-  return async function call<T>(
+  const attempt = async function attempt<T>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     schema: z.ZodType<T>,
@@ -98,6 +103,33 @@ export function createHostedSandboxRequest(
     }
     return parsed.data
   }
+
+  return async function call<T>(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    schema: z.ZodType<T>,
+    init: Parameters<HostedSandboxRequest>[3]
+  ): Promise<T> {
+    try {
+      return await attempt(method, path, schema, init)
+    } catch (error) {
+      if (!options.invalidateAccessToken || !isStaleToken(error)) {
+        throw error
+      }
+      // The control plane refused this token as older than a role change or the write window; the
+      // request did nothing, so one retry with a newly minted token is safe.
+      options.invalidateAccessToken()
+      return attempt(method, path, schema, init)
+    }
+  }
+}
+
+function isStaleToken(error: unknown): boolean {
+  return (
+    error instanceof HostedSandboxRefusalError &&
+    error.httpStatus === 401 &&
+    error.reason === 'stale_token'
+  )
 }
 
 function parseBaseUrl(value: string): URL {
