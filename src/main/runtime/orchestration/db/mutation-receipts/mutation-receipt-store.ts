@@ -4,6 +4,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from './mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 import { MUTATION_RECEIPT_COLUMN_LIST } from '../row-column-lists'
+import { compactMutationReceipts } from './mutation-receipt-compaction'
 
 export function getOrCreateLocalMutationCallerFingerprint(this: OrchestrationDb): string {
   if (this.localMutationCallerFingerprint) {
@@ -207,6 +208,7 @@ export type MutationReceiptStoreMethods = {
   countPendingMutationReceipts: typeof countPendingMutationReceipts
   settlePendingMutationReceipts: typeof settlePendingMutationReceipts
   getMutationReceipt: typeof getMutationReceipt
+  compactMutationReceipts: typeof compactMutationReceipts
 }
 
 export function attachMutationReceiptStore(ctor: { prototype: object }): void {
@@ -218,6 +220,7 @@ export function attachMutationReceiptStore(ctor: { prototype: object }): void {
     discardPendingMutationReceipt,
     countPendingMutationReceipts,
     settlePendingMutationReceipts,
-    getMutationReceipt
+    getMutationReceipt,
+    compactMutationReceipts
   })
 }

@@ -258,6 +258,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
   /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
   orchestrationWorkerAutoReleaseEnabled?: boolean
+  /** Hours a settled Run keeps its orchestration records after its last activity; absent means 24, 0 keeps them. */
+  orchestrationRunRetentionHours?: number
   /** Coordinator agents may allow workers' permission prompts on this machine; absent means off. Not in any agent-writable settings RPC. */
   orchestrationCoordinatorApprovalsEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */

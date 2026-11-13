@@ -33,6 +33,7 @@ import { attachMutationReceiptStore } from './mutation-receipts/mutation-receipt
 import { attachLifecycleTransition } from './lifecycle-transition'
 import { attachQuestionThreads } from './questions/question-threads'
 import { attachOrchestrationReset } from './reset/orchestration-reset'
+import { attachOrchestrationRetention } from './retention/orchestration-retention'
 import { attachRunBinding } from './runs/run-binding'
 import { attachRunCoordinatorMailRouting } from './runs/run-coordinator-mail-routing'
 import { attachRunCreate } from './runs/run-create'
@@ -123,5 +124,6 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachDecisionGateStore(ctor)
   attachCoordinatorRunStore(ctor)
   attachOrchestrationReset(ctor)
+  attachOrchestrationRetention(ctor)
   attachCrewMutationNotifications(ctor)
 }

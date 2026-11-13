@@ -4,6 +4,9 @@ import {
 } from '../../../../../../shared/orchestration/orchestration-mutation-request'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchestration-runs-mutation-request-show-params'
+import { expandCompactedMutationReceipt } from '../../../../orchestration/db/mutation-receipts/mutation-receipt-compaction'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { readReceiptMessage } from '../messaging/mailbox-message-receipt'
 
 export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
   defineOrchestrationMethod({
@@ -37,7 +40,7 @@ export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
         method: row.method,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
-        ...(row.receipt ? { receipt: parseReceipt(row.receipt) } : {}),
+        ...(row.receipt ? { receipt: readReceipt(db, params.request, row.receipt) } : {}),
         interpretation: describeMutationRequestState({
           requestId: params.request,
           state: row.state,
@@ -48,10 +51,18 @@ export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
   })
 ]
 
-function parseReceipt(receipt: string): unknown {
+function readReceipt(db: OrchestrationDb, requestId: string, receipt: string): unknown {
+  let parsed: unknown
   try {
-    return JSON.parse(receipt)
+    parsed = JSON.parse(receipt)
   } catch {
     return undefined
+  }
+  try {
+    return expandCompactedMutationReceipt(parsed, requestId, (messageId) =>
+      readReceiptMessage(db, messageId)
+    )
+  } catch {
+    return parsed
   }
 }

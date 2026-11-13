@@ -1,4 +1,5 @@
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
+import { getOrchestrationRetentionScheduler } from '../retention/orchestration-retention-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
@@ -30,6 +31,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       this.continueRestoredWorkerMail(this._orchestrationDb)
       // No terminal prompt's hold survives a restart; its card must not stay answerable.
       closeOrphanedTerminalApprovals(this._orchestrationDb)
+      getOrchestrationRetentionScheduler(this).start()
     }
     return this._orchestrationDb
   }

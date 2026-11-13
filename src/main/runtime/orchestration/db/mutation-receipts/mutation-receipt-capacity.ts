@@ -2,7 +2,7 @@ import type Database from '../../../../sqlite/sync-database'
 import { OrchestrationError } from '../../orchestration-error'
 
 export const MUTATION_RECEIPT_MAX_ROWS = 10_000
-const MUTATION_RECEIPT_MAX_AGE_DAYS = 30
+const MUTATION_RECEIPT_MAX_AGE_HOURS = 24
 const MUTATION_RECEIPT_PRUNE_BATCH_SIZE = 64
 
 export function migrateMutationReceiptCapacity(db: Database.Database): void {
@@ -54,8 +54,8 @@ export function ensureMutationReceiptCapacity(db: Database.Database): void {
   db.prepare(
     `DELETE FROM mutation_receipts
      WHERE state = 'completed'
-       AND updated_at < datetime('now', ?)`
-  ).run(`-${MUTATION_RECEIPT_MAX_AGE_DAYS} days`)
+       AND julianday(updated_at) < julianday('now', ?)`
+  ).run(`-${MUTATION_RECEIPT_MAX_AGE_HOURS} hours`)
 
   const count = receiptCount(db)
   if (count >= MUTATION_RECEIPT_MAX_ROWS) {

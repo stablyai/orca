@@ -22,6 +22,14 @@ export function exposeMessage(message: MessageRow): MailboxMessageReceipt {
   return exposeMessages([message])[0]!
 }
 
+export function readReceiptMessage(
+  db: OrchestrationDb,
+  messageId: string
+): MailboxMessageReceipt | undefined {
+  const message = db.getMessageById(messageId)
+  return message ? exposeMessage(message) : undefined
+}
+
 export function exposeMessages(messages: MessageRow[]): MailboxMessageReceipt[] {
   return messages.map((message) => {
     const exposed: Partial<MessageRow> = { ...message }
