@@ -38,8 +38,11 @@ export function activeCloudWorkspaceLeftTeam(
   if (!hostId || previousScopeKey === nextScopeKey) {
     return false
   }
+  const previous = parseOrcaCloudHostScopeKey(previousScopeKey)
+  // TEAM-SWITCH-STALE-PANE: a paired cloud workspace of the team (`~host`, since #690) leaves too,
+  // or another team's workspace stayed open in the main pane after the switch (n57).
   return (
-    parseOrcaCloudHostScopeKey(previousScopeKey).primaryHostIds.has(hostId) &&
+    (previous.primaryHostIds.has(hostId) || previous.pairedHostIds.has(hostId)) &&
     parseOrcaCloudHostScopeKey(nextScopeKey).hiddenHostIds.has(hostId)
   )
 }

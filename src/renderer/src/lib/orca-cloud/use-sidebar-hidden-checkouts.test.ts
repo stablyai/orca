@@ -6,6 +6,7 @@ import {
   parseOrcaCloudHostScopeKey,
   selectOrcaCloudHiddenHostIds,
   selectOrcaCloudHostScopeKey,
+  withoutHiddenHostEnvironments,
   withoutHiddenHostRepos
 } from './use-sidebar-hidden-checkouts'
 
@@ -182,5 +183,16 @@ describe('hidden cloud hosts for Run on and the reconnect banner (STALE-RUN-TARG
     expect(selectOrcaCloudHiddenHostIds(state('noplan'))).toBe(
       selectOrcaCloudHiddenHostIds(state('noplan'))
     )
+  })
+})
+
+describe('the status bar host list after a team switch (TEAM-SWITCH-STALE-PANE)', () => {
+  it("drops another team's cloud servers and keeps the rest", () => {
+    const envs = [{ id: 'eval' }, { id: 'acme' }, { id: 'ssh-box' }]
+    expect(withoutHiddenHostEnvironments(envs, new Set(['runtime:eval']))).toEqual([
+      { id: 'acme' },
+      { id: 'ssh-box' }
+    ])
+    expect(withoutHiddenHostEnvironments(envs, new Set())).toBe(envs)
   })
 })

@@ -9,6 +9,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store/index'
+import {
+  selectOrcaCloudHiddenHostIds,
+  withoutHiddenHostEnvironments
+} from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -58,6 +62,8 @@ export function SshStatusSegment({
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  // Another team's cloud sandboxes are not this team's hosts (same scope as the sidebar, #722).
+  const hiddenCloudHostIds = useAppStore(selectOrcaCloudHiddenHostIds)
   const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
   const setActiveView = useAppStore((s) => s.setActiveView)
@@ -73,7 +79,10 @@ export function SshStatusSegment({
     [repos]
   )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const userManagedEnvironments = runtimeEnvironments.filter(isListedRemoteServer)
+  const userManagedEnvironments = withoutHiddenHostEnvironments(
+    runtimeEnvironments.filter(isListedRemoteServer),
+    hiddenCloudHostIds
+  )
   // Why the registry: a managed server and its SSH host are one machine, shown on its active route.
   const visibleHosts = new Map(
     pickerExecutionHosts(

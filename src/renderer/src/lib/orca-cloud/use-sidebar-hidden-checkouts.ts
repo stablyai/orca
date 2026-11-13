@@ -101,6 +101,23 @@ export function useSidebarHiddenCheckouts(): HiddenVmCheckouts {
   )
 }
 
+/**
+ * TEAM-SWITCH-STALE-PANE: runtime servers without another team's cloud sandboxes, so the status bar's
+ * host list and count follow the same team scope as the sidebar (n57: "3 hosts" after the switch).
+ */
+export function withoutHiddenHostEnvironments<E extends { id: string }>(
+  environments: readonly E[],
+  hiddenHostIds: ReadonlySet<string>
+): readonly E[] {
+  if (hiddenHostIds.size === 0) {
+    return environments
+  }
+  const kept = environments.filter(
+    (environment) => !hiddenHostIds.has(toRuntimeExecutionHostId(environment.id))
+  )
+  return kept.length === environments.length ? environments : kept
+}
+
 /** Repos without another team's sandbox projects, so none surfaces as its own project header. */
 export function withoutHiddenHostRepos<R extends Pick<Repo, 'connectionId' | 'executionHostId'>>(
   repos: readonly R[],

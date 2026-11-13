@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import { installLeaveOutOfTeamCloudWorkspace } from './leave-out-of-team-cloud-workspace'
+import {
+  activeCloudWorkspaceLeftTeam,
+  installLeaveOutOfTeamCloudWorkspace
+} from './leave-out-of-team-cloud-workspace'
 
 const environments = [
   { id: 'cusk', name: 'push-test sandbox 1a2b3c4d', source: 'ephemeral-vm' },
@@ -86,5 +89,22 @@ describe('leaving an out-of-team cloud workspace', () => {
     h.set(team('team-one'))
     expect(h.setActiveWorktree).not.toHaveBeenCalled()
     expect(h.active()).toBe('repo::/w/cusk')
+  })
+})
+
+describe('a paired cloud workspace of the team switched away (TEAM-SWITCH-STALE-PANE)', () => {
+  it('leaves it: the paired host went from the team (~) to hidden (-)', () => {
+    expect(activeCloudWorkspaceLeftTeam('~runtime:eval', '-runtime:eval', 'runtime:eval')).toBe(
+      true
+    )
+  })
+
+  it('stays when the paired host is still the team scope, or the host is another one', () => {
+    expect(
+      activeCloudWorkspaceLeftTeam('~runtime:eval', '~runtime:eval\n-runtime:x', 'runtime:eval')
+    ).toBe(false)
+    expect(activeCloudWorkspaceLeftTeam('~runtime:eval', '-runtime:eval', 'runtime:other')).toBe(
+      false
+    )
   })
 })
