@@ -51,15 +51,41 @@ const DENIED =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 const AUTHORIZE_HOSTS = new Set(['claude.ai', 'claude.com', 'console.anthropic.com'])
 const LINK = /https:\/\/[^\s"'<>]+(?=\s)/g
-// The CLI's answer to a pasted code it could not exchange; it then waits for Enter to start over.
-const CODE_REJECTED = /code wasn.t accepted|Invalid authorization code|OAuth error/i
+// The CLI's answer to a pasted code it could not take; it then waits for Enter to start over. RS-1: the
+// wording is Claude Code's own (2.1.323): an exchange the server refused ("That code wasn't accepted…"),
+// a paste without both halves ("Invalid code. Please make sure the full code was copied."), and a code
+// from another sign-in ("That code is not from this sign-in…").
+const CODE_REJECTED =
+  /code wasn.t accepted|Invalid authorization code|Invalid code\b|code is not from this sign-in|OAuth error/i
 // Ink reads a chunk ending in Enter as a paste; the code and the Enter go in separately.
 const ENTER_AFTER_CODE_MS = 150
 // Long enough to read the rejection; then Enter starts a fresh sign-in (new link, new code).
 const RETRY_AFTER_REJECT_MS = 500
 
 function plainText(raw: string): string {
-  return raw.replace(INLINE_ESCAPE, '').replace(TERMINAL_ESCAPE, '\n')
+  // RS-1: a pseudo-terminal ends lines with CRLF; one line break, not two (a blank line means a gap).
+  return raw.replace(/\r\n/g, '\n').replace(INLINE_ESCAPE, '').replace(TERMINAL_ESCAPE, '\n')
+}
+
+// RS-1: Claude Code prints the token as one Ink <Text>, which wraps at the terminal's width (2.1.323:
+// `Your OAuth token (valid for …):`, the token, then a blank line and `Store this token securely…`).
+// Orca's pty is 1000 columns, so it shouldn't wrap; if it ever does, the continuation is the very next
+// line and holds only token characters, while the line after the whole token is blank. Join those, so a
+// wrapped token is never captured cut short.
+// A line that starts a new copy of the token (a repaint) is never a continuation.
+const WRAPPED_TOKEN =
+  /(sk-ant-oat01-[A-Za-z0-9_-]+)[ \t]*\n[ \t]*(?!sk-ant-)([A-Za-z0-9_-]+)[ \t]*(?=\n|$)/g
+
+function joinWrappedToken(plain: string): string {
+  let joined = plain
+  for (let pass = 0; pass < 8; pass += 1) {
+    const next = joined.replace(WRAPPED_TOKEN, '$1$2')
+    if (next === joined) {
+      return joined
+    }
+    joined = next
+  }
+  return joined
 }
 
 /**
@@ -68,7 +94,7 @@ function plainText(raw: string): string {
  * a repaint never beats the whole one. Exported for tests; callers never log its result.
  */
 export function findSetupToken(text: string, final: boolean): string | null {
-  const plain = plainText(text)
+  const plain = joinWrappedToken(plainText(text))
   let found: string | null = null
   for (const match of plain.matchAll(TOKEN_CANDIDATE)) {
     const end = (match.index ?? 0) + match[0].length
