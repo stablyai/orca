@@ -8,9 +8,9 @@ import {
   Smartphone
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
-import { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
-import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal-accessory-repeat'
-import { getVisibleTerminalAccessoryKeys } from '../terminal-accessory-layout'
+import { createTerminalLiveAccessoryInput } from '../live-input/terminal-live-accessory-input'
+import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../key-input/terminal-accessory-repeat'
+import { getVisibleTerminalAccessoryKeys } from '../key-input/terminal-accessory-layout'
 import { useDirectionPadAvailable } from '../../layout/use-shell-side-rail'
 import { isTerminalPhoneDisplayMode } from './terminal-phone-display-mode'
 import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
@@ -25,7 +25,7 @@ import {
   AGENT_SMART_KEY_STEP_MS,
   type AgentSmartKey
 } from '../../../../src/shared/terminal/input/agent-smart-keys'
-import type { TerminalAccessoryKey } from '../terminal-accessory-keys'
+import type { TerminalAccessoryKey } from '../key-input/terminal-accessory-keys'
 import { resolveMobileTerminalTabSmartKeys } from './mobile-terminal-tab-agent'
 import { MobileSessionSmartKeys } from './MobileSessionSmartKeys'
 import { MobileSessionLatchKeys } from './MobileSessionLatchKeys'

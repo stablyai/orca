@@ -17,7 +17,7 @@ export const sessionMarkdownNoteCreate = bindDeferredRpcOperation(
   })
 )
 
-import '../../terminal/terminal-reply-schema'
+import '../../terminal/host-operations/terminal-reply-schema'
 import { markdownTabDocumentSchema } from './mobile-markdown-tab-reply-schema'
 
 // Inspect renderer_unavailable before interpretation so headless hosts can fall back to disk.

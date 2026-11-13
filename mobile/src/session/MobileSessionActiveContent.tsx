@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
+import { computeActiveTerminalKeyboardLift } from '../terminal/keyboard/terminal-keyboard-avoidance-lift'
 import {
   terminalPaneDirection,
   terminalPaneKeyboardLayout

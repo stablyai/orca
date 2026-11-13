@@ -4,12 +4,12 @@ import { createLiveInputCapture } from '../terminal/session/live-input-capture'
 import { Animated } from 'react-native'
 import type { MobileAnimatedValue } from '../platform/animated-handles'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
-import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
+import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/webview/terminal-webview-contract'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys
-} from '../terminal/terminal-accessory-layout'
-import type { CustomKey } from '../terminal/terminal-custom-keys'
+} from '../terminal/key-input/terminal-accessory-layout'
+import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from '../terminal/session/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'

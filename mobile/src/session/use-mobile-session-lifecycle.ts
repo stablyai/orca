@@ -9,12 +9,15 @@ import { loadHosts } from '../host-catalog/host-store'
 import {
   loadTerminalAccessoryLayout,
   saveTerminalSmartRail
-} from '../terminal/terminal-accessory-layout'
+} from '../terminal/key-input/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
-} from '../terminal/terminal-foreground-recovery'
-import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-custom-keys'
+} from '../terminal/webview/terminal-foreground-recovery'
+import {
+  loadCustomKeys,
+  subscribeStoredCustomKeys
+} from '../terminal/key-input/terminal-custom-keys'
 import type { MobileSessionTabReconciliationModel } from './tabs/use-mobile-session-tab-reconciliation'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {

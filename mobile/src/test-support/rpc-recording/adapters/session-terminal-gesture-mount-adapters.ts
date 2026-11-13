@@ -1,10 +1,10 @@
 import type * as UseMobileSessionTerminalInputModule from '../../../terminal/session/use-mobile-session-terminal-input'
-import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
+import type * as MobileTerminalOperations from '../../../terminal/host-operations/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { TerminalModes } from '../../../terminal/terminal-webview-contract'
+import type { TerminalModes } from '../../../terminal/webview/terminal-webview-contract'
 import type {
   Terminal,
   TerminalGestureInputBucket,
@@ -36,7 +36,7 @@ export function sessionTerminalGestureMountAdapters(
       ).useMobileSessionTerminalInput
 
       const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
-        'mobile/src/terminal/mobile-terminal-operations.ts'
+        'mobile/src/terminal/host-operations/mobile-terminal-operations.ts'
       )
 
       const buckets = { current: new Map<string, TerminalGestureInputBucket>() }
