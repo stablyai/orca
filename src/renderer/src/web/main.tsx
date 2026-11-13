@@ -22,7 +22,7 @@ import { WebPairingSecurityNotice } from './WebPairingSecurityNotice'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { useTranslate } from '@/i18n/use-translate'
 import { installOsFileDropCancellationGuard } from '../lib/files/drop/os-file-drop-cancellation-guard'
-import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
+import { installBodyOverlayAttributes } from '../lib/overlay-interaction/body-overlay-attributes'
 import { installAppKeyboardRouter } from '../lib/keyboard/app-keyboard-router'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()

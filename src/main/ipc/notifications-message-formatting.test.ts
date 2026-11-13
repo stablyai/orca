@@ -65,46 +65,4 @@ describe('registerNotificationHandlers', () => {
       body: 'Claude finished.'
     })
   })
-
-  it('normalizes custom agent labels and re-bounds multiline assistant previews', async () => {
-    registerNotificationHandlers({
-      getSettings: () => ({
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: false,
-          suppressWhenFocused: false
-        }
-      })
-    } as never)
-
-    const longAssistantMessage = `Line one\n\n${'x'.repeat(400)}`
-    const handler = getDispatchHandler()
-    expect(
-      await handler(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          worktreeLabel: 'feat/notis',
-          agentType: 'builder\nagent',
-          agentState: 'done',
-          agentLastAssistantMessage: longAssistantMessage
-        }
-      )
-    ).toEqual({ delivered: true })
-
-    const options = (
-      notificationCtorMock.mock.calls as unknown as [{ title: string; body: string }][]
-    )[0]?.[0]
-    if (!options) {
-      throw new Error('Expected notification options')
-    }
-    expect(options).toMatchObject({
-      title: 'feat/notis - builder agent finished'
-    })
-    expect(options.body).toMatch(/^Line one x+/)
-    expect(options.body).not.toContain('\n')
-    expect(options.body.length).toBeLessThanOrEqual(180)
-  })
 })

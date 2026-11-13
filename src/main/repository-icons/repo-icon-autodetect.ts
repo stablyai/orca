@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { GitHubRepositoryIdentity } from '../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../shared/github/repositories/repository-identity'
 import type { RepoKind } from '../../shared/repo-types'
 import {
   faviconUrlFromWebsite,

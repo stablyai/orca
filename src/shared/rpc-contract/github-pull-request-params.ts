@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { GitHubPRRefreshReason } from '../github/pull-request-refresh-types'
+import type { GitHubPRRefreshReason } from '../github/pull-requests/refresh/pull-request-refresh-types'
 import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 

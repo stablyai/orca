@@ -9,7 +9,7 @@ import {
   reserveMobileAgentLaunch
 } from './mobile-existing-agent-launch'
 import { agentPromptNotSentMessage } from '../../source-control/review/pr-ai-triage-launch'
-import { readAgentLaunchNotice } from '../../tasks/agent-launch-request'
+import { readAgentLaunchNotice } from './agent-launch-request'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   isLaunchedSurfaceListed,

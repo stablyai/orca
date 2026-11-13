@@ -1,7 +1,7 @@
 import type { TaskPageGitHubDetailModel } from './use-task-page-github-detail'
 import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import {
   patchTaskPageGitHubWorkItemPages,
   overlayPendingOnTaskPagePages

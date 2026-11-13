@@ -1,0 +1,3 @@
+# Legacy synchronous crypto uses per file; counts may only go DOWN.
+# Only explicit worker/utility entry files are exempt; their imports remain guarded.
+3 src/main/browser/cookies/sources/browser-cookie-key.ts

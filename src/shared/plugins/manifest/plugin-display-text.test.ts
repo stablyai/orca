@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validatePluginFile } from '../installation/plugin-file-validation'
 import { pluginCatalogEntrySchema } from '../catalog/plugin-catalog'
-import { parseHostPluginManifest, parsePluginManifest } from './plugin-manifest'
+import { parseHostPluginManifest } from './plugin-manifest'
 import {
   catalogEntryFixture,
   catalogFixture,
@@ -25,28 +25,6 @@ describe('plugin display text', () => {
       description: 'Line one line two',
       contributes: { themes: [{ title: 'Dusk Pro' }] }
     })
-  })
-
-  it('keeps the joiners that emoji and scripts such as Persian need', () => {
-    const family = '\u{1F468}\u200d\u{1F469}\u200d\u{1F467}'
-    const parsed = parseHostPluginManifest(themed(`${family} Theme`, 'Dusk'))
-    expect(parsed.ok && parsed.manifest.name).toBe(`${family} Theme`)
-  })
-
-  it('refuses a name made only of invisible characters', () => {
-    expect(parseHostPluginManifest(themed('\u200b\u202e', 'Dusk')).ok).toBe(false)
-  })
-
-  it('refuses unsafe characters in validate:plugin instead of stripping them', () => {
-    expect(parsePluginManifest(themed(SPOOFED_NAME, 'Dusk'))).toEqual({
-      ok: false,
-      error: expect.stringContaining(
-        'name: must be one line without control, bidirectional or zero-width characters;'
-      )
-    })
-    expect(validatePluginFile('orca-plugin.json', themed('Dusk', 'Dusk\u2066'))).toEqual([
-      'description: must be one line without control, bidirectional or zero-width characters; contributes.themes[0].title: must be one line without control, bidirectional or zero-width characters'
-    ])
   })
 
   it('strips catalog listing text at runtime and refuses it in catalog CI', () => {

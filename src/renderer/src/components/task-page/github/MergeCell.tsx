@@ -1,5 +1,5 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState } from 'react'
@@ -13,7 +13,7 @@ import {
   getPullRequestMergeMethodLabel
 } from '@/components/github/pull-request-confirmation-copy'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
+import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   DropdownMenu,

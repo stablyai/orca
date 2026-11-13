@@ -56,7 +56,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         partition,
         sandbox: true,
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        // Sandboxed and without Node, this only runs the session's preloads in iframes too.
+        nodeIntegrationInSubFrames: true
       }
     })
 

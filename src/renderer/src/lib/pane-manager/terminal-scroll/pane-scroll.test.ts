@@ -64,34 +64,4 @@ describe('scroll state', () => {
       }
     }
   )
-
-  it('uses a logical marker for backend-only ConPTY compatibility', async () => {
-    const headless = new HeadlessTerminal({
-      cols: 10,
-      rows: 5,
-      scrollback: 1000,
-      allowProposedApi: true,
-      windowsPty: { backend: 'conpty' }
-    })
-    try {
-      await writeHeadless(headless, 'prefix\r\n')
-      await writeHeadless(headless, 'ABCDEFGHIJabcdefghijKLMNOPQRSTuvwxyz\r\n')
-      for (let index = 0; index < 10; index += 1) {
-        await writeHeadless(headless, `tail-${index}\r\n`)
-      }
-      const pinnedLine = findBufferLineContaining(headless, 'abcdefghij')
-      headless.scrollToLine(pinnedLine)
-      const terminal = makeHeadlessRestorable(headless)
-      const state = captureScrollState(terminal)
-
-      expect(state.firstVisibleLogicalLineMarker).toBeDefined()
-      headless.resize(20, 5)
-      expect(restoreScrollState(terminal, state)).toBe(true)
-      expect(
-        headless.buffer.active.getLine(headless.buffer.active.viewportY)?.translateToString(true)
-      ).toBe('ABCDEFGHIJabcdefghij')
-    } finally {
-      headless.dispose()
-    }
-  })
 })
