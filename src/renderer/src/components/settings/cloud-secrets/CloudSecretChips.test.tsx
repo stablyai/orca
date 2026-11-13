@@ -13,7 +13,7 @@ describe('CloudSecretChips', () => {
   it('tags every key the egress proxy swaps, from the shared swap rule', () => {
     for (const name of CLOUD_SWAPPED_CREDENTIALS) {
       const { container } = render(<CloudSecretChips name={name} />)
-      expect(container.textContent, name).toBe('Agent key')
+      expect(container.textContent, name).toBe('Kept out of sandbox')
       cleanup()
     }
   })

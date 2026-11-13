@@ -28350,7 +28350,8 @@
       "paste": "Paste .env",
       "savedAnnounce": "Saved {{names}}",
       "agentSetting": "Agent setting",
-      "agentKey": "Agent key"
+      "agentKey": "Agent key",
+      "keptOutOfSandbox": "Kept out of sandbox"
     },
     "precedence": {
       "envSentence": "Variables set in more than one place: {{first}} wins over {{second}}, which wins over {{third}}.",

@@ -5,7 +5,6 @@ import {
   cloudSecretSwapped
 } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
 import { Badge } from '../../ui/badge'
-import { cloudSecretKindLabel } from './cloud-secrets-copy'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 
 /**
@@ -68,7 +67,7 @@ export function CloudSecretChips({ name }: { name: string }): React.JSX.Element 
     <span className="flex flex-wrap items-center gap-1.5">
       <Badge variant="referenceLabel">
         <KeyRound />
-        {cloudSecretKindLabel(name, t)}
+        {t('cloudSecrets.list.keptOutOfSandbox', 'Kept out of sandbox')}
       </Badge>
     </span>
   )
