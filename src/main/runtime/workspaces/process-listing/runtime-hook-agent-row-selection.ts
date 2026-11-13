@@ -11,6 +11,7 @@ import type { AgentProviderSessionMetadata } from '../../../../shared/agent-sess
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
+import { mainAgentState } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 
 /** One hook-server row projected into the shape the runtime's own readers consume. */
 export type RuntimeAgentRowSnapshot = {
@@ -25,6 +26,7 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  orcaSessionId?: string | null
   programStatus?: ProgramStatusFacet
 }
 
@@ -37,10 +39,22 @@ type HookRowJoin = {
   handles: Iterable<string>
   paneKeys: Iterable<string>
   hookRows: readonly AgentStatusIpcPayload[]
+  /** Lets a restored permission wait stand while the pane's screen could still show its dialog. */
+  screenMayHoldDialog?: () => boolean
 }
 
 function isPermissionState(state: AgentStatusEntry['state']): boolean {
   return mapExplicitAgentStateToRuntimeTerminalStatus(state) === 'permission'
+}
+
+// No input reaches a pane while its runtime is down, so a dialog open at shutdown is still open (#35962).
+function isHeldRestoredPermission(row: AgentStatusIpcPayload, join: HookRowJoin): boolean {
+  return (
+    row.restoredUnconfirmed === true &&
+    row.providerSessionOnly !== true &&
+    isPermissionState(row.state) &&
+    join.screenMayHoldDialog?.() === true
+  )
 }
 
 /** The freshest live hook row for a terminal, joined on any of its handles or pane keys. */
@@ -53,10 +67,12 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     if (!(row.terminalHandle && handles.has(row.terminalHandle)) && !paneKeys.has(row.paneKey)) {
       continue
     }
-    if (!row.state || !isLiveObservation(row) || typeof row.receivedAt !== 'number') {
-      continue
-    }
-    if (now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) {
+    if (
+      !row.state ||
+      typeof row.receivedAt !== 'number' ||
+      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS ||
+      !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
+    ) {
       continue
     }
     if (
@@ -75,23 +91,32 @@ export function selectFreshExplicitAgentStatus(args: {
   handle: string
   paneKey: string | null
   hookRows: readonly AgentStatusIpcPayload[]
+  screenMayHoldDialog?: () => boolean
 }): {
   status: NonNullable<RuntimeTerminalAgentStatus['status']>
   updatedAt: number
   stateStartedAt: number
+  /** When the main agent's own turn began; null while it rests, even if child work keeps the row working. */
+  mainAgentWorkingStartedAt: number | null
 } | null {
   const row = selectFreshExplicitAgentStatusRow({
     handles: [args.handle],
     paneKeys: args.paneKey ? [args.paneKey] : [],
-    hookRows: args.hookRows
+    hookRows: args.hookRows,
+    screenMayHoldDialog: args.screenMayHoldDialog
   })
-  return row
-    ? {
-        status: mapExplicitAgentStateToRuntimeTerminalStatus(row.state),
-        updatedAt: row.receivedAt,
-        stateStartedAt: typeof row.stateStartedAt === 'number' ? row.stateStartedAt : row.receivedAt
-      }
-    : null
+  if (!row) {
+    return null
+  }
+  const stateStartedAt =
+    typeof row.stateStartedAt === 'number' ? row.stateStartedAt : row.receivedAt
+  return {
+    status: mapExplicitAgentStateToRuntimeTerminalStatus(row.state),
+    updatedAt: row.receivedAt,
+    stateStartedAt,
+    mainAgentWorkingStartedAt:
+      mainAgentState(row) === 'working' ? (row.mainAgent?.stateStartedAt ?? stateStartedAt) : null
+  }
 }
 
 /** Prefer the pane's own key, then its terminal binding when the pane key has moved. */
@@ -137,6 +162,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...pickHostTurnEnd(match),
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
+    ...(match.orcaSessionId !== undefined ? { orcaSessionId: match.orcaSessionId } : {}),
     ...(match.programStatus ? { programStatus: match.programStatus } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }

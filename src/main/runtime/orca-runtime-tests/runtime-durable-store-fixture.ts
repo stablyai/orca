@@ -1,18 +1,18 @@
 import type { DurableProfileStateMutation } from '../../persistence/loading-store/store-runtime-state'
-import { profileStateWriterFailureOutcome } from '../../persistence/profile-state/profile-state-writer-errors'
-import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
+import { profileStateWriterFailureOutcome } from '../../persistence/profile-state/writer/profile-state-writer-errors'
+import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {
   admitPaneToSession,
   withdrawPaneFromSession,
   type PaneLayoutChange,
   type TerminalPaneAdmission
-} from '../../persistence/terminal-topology/terminal-pane-admission'
+} from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import type {
   CommandOf,
   LayoutRefusalCode
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { clearReplacedPaneBinding } from '../../persistence/loading-store/replaced-pane-binding'
+import { clearReplacedPaneBinding } from '../../persistence/loading-store/terminal-bindings/replaced-pane-binding'
 
 /** Keep runtime fakes on the same reserved, durable-before-ack contract as Store. */
 export function withDurableRuntimeStore<

@@ -1,3 +1,4 @@
+import { getWorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import {
   uniqueDraggedIds,
   uniqueDraggedKeys,
@@ -243,7 +244,9 @@ export function useWorktreeNativeDrag(args: {
       })
       ctx.clearReorderedWorktreeParents({
         draggedIds: dragSession.draggedIds,
-        sourceGroupKey: dragSession.sourceGroupKey
+        sourceGroupKey: dragSession.sourceGroupKey,
+        pickedCopies: dragSession.pickedCopies,
+        dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
       })
       clearWorktreeDrag()
     },

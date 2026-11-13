@@ -1,3 +1,6 @@
+import type { GitCommitAction } from '../../../shared/git/commands/git-commit-action'
+import { applyCommit, recoverSequencer } from '../../git/worktrees/checkout/commit-actions'
+import { createBranch } from '../../git/worktrees/checkout/create-branch'
 import { ipcMain } from 'electron'
 import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -8,6 +11,63 @@ import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
+  ipcMain.handle(
+    'git:createBranch',
+    async (
+      _event,
+      args: { worktreePath: string; name: string; startPoint: string; connectionId?: string }
+    ) => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return createBranch(worktreePath, args.name, args.startPoint, {
+        ...getLocalGitOptionsForRegisteredWorktree(store, args.worktreePath, worktreePath),
+        admissionTier: 'interactive'
+      })
+    }
+  )
+  for (const action of ['abort', 'continue'] as const) {
+    const method = action === 'abort' ? 'sequencerAbort' : 'sequencerContinue'
+    ipcMain.handle(
+      `git:${method}`,
+      async (
+        _event,
+        args: { worktreePath: string; operation: GitCommitAction; connectionId?: string }
+      ) => {
+        requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+          store,
+          args.worktreePath,
+          worktreePath
+        )
+        return recoverSequencer(worktreePath, args.operation, action, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
+      }
+    )
+  }
+  for (const [method, operation] of [
+    ['cherryPick', 'cherry-pick'],
+    ['revert', 'revert']
+  ] as const) {
+    ipcMain.handle(
+      `git:${method}`,
+      async (_event, args: { worktreePath: string; commitId: string; connectionId?: string }) => {
+        requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+          store,
+          args.worktreePath,
+          worktreePath
+        )
+        return applyCommit(worktreePath, operation, args.commitId, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
+      }
+    )
+  }
   ipcMain.handle(
     'git:commit',
     async (

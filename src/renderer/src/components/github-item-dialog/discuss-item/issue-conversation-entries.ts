@@ -2,8 +2,9 @@ import type {
   GitHubIssueTimelineItem,
   GitHubIssueTimelineTarget,
   PRComment
-} from '../../../../../shared/github/comment-types'
+} from '../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type IssueConversationEntry =
   | { kind: 'comment'; id: string; createdAt: string; comment: PRComment; index: number }
@@ -47,15 +48,16 @@ export function getIssueConversationEntries(
   })
 }
 
-export function getTimelineTargetLabel(target: GitHubIssueTimelineTarget): string {
+export function getTimelineTargetLabel(
+  target: GitHubIssueTimelineTarget,
+  t: Translate = translate
+): string {
   const reference =
     target.type === 'pr'
-      ? translate(
-          'auto.components.GitHubItemDialog.timeline.pullRequestReference',
-          'PR #{{number}}',
-          { number: target.number }
-        )
-      : translate('auto.components.GitHubItemDialog.timeline.issueReference', 'issue #{{number}}', {
+      ? t('auto.components.GitHubItemDialog.timeline.pullRequestReference', 'PR #{{number}}', {
+          number: target.number
+        })
+      : t('auto.components.GitHubItemDialog.timeline.issueReference', 'issue #{{number}}', {
           number: target.number
         })
   return target.title ? `${reference} ${target.title}` : reference

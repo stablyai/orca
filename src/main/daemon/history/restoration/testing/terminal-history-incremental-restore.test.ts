@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, truncateSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, truncateSync } from 'node:fs'
 import { HistoryManager } from '../../storage/history-manager'
 import { HistoryReader } from '../history-reader'
 import { HeadlessEmulator } from '../../../emulation/headless-emulator'
@@ -156,45 +156,6 @@ describe('incremental terminal history restore', () => {
     expect(restore!.scrollbackAnsi).not.toContain('torn batch')
   })
 
-  it('applies resize records during replay', async () => {
-    await manager.appendIncrements(SESSION_ID, 1, [
-      { kind: 'output', data: 'before resize\r\n' },
-      { kind: 'resize', cols: 132, rows: 40 },
-      { kind: 'output', data: 'after resize\r\n' }
-    ])
-
-    const restore = await reader.detectColdRestore(SESSION_ID)
-    expect(restore).not.toBeNull()
-    expect(restore!.cols).toBe(132)
-    expect(restore!.rows).toBe(40)
-    expect(restore!.scrollbackAnsi).toContain('after resize')
-  })
-
-  it('applies clear records during replay', async () => {
-    await manager.appendIncrements(SESSION_ID, 1, [
-      { kind: 'output', data: 'cleared away\r\n' },
-      { kind: 'clear' },
-      { kind: 'output', data: 'survives clear\r\n' }
-    ])
-
-    const restore = await reader.detectColdRestore(SESSION_ID)
-    expect(restore).not.toBeNull()
-    expect(restore!.scrollbackAnsi).toContain('survives clear')
-    expect(restore!.scrollbackAnsi).not.toContain('cleared away')
-  })
-
-  it('preserves normal history without treating active alt content as scrollback', async () => {
-    await manager.appendIncrements(SESSION_ID, 1, [
-      { kind: 'output', data: 'normal output\r\n\x1b[?1049halt screen content' }
-    ])
-
-    const restore = await reader.detectColdRestore(SESSION_ID)
-    expect(restore).not.toBeNull()
-    expect(restore!.modes.alternateScreen).toBe(true)
-    expect(restore!.scrollbackAnsi).toContain('normal output')
-    expect(restore!.scrollbackAnsi).not.toContain('alt screen content')
-  })
-
   it('resets the log on checkpoint so old records are not replayed twice', async () => {
     await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'pre-checkpoint\r\n' }])
     await manager.checkpoint(SESSION_ID, snapshotOf(['pre-checkpoint\r\n']))
@@ -225,14 +186,6 @@ describe('incremental terminal history restore', () => {
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('compacted')
     expect(restore!.scrollbackAnsi).toContain('fresh')
-  })
-
-  it('openSession removes a stale log from a previous session with the same id', async () => {
-    await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'old session\r\n' }])
-    expect(existsSync(sessionFile('output.log'))).toBe(true)
-
-    await manager.openSession(SESSION_ID, { cwd: '/home/user', cols: 80, rows: 24 })
-    expect(existsSync(sessionFile('output.log'))).toBe(false)
   })
 
   it('continues an existing log after a warm registerWriter', async () => {

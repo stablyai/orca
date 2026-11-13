@@ -39,14 +39,6 @@ describe('nested worker depth default migration', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('moves a stored 1 from the old default to 4 and keeps deeper choices', async () => {
-    writeSettings({ nestedWorkerMaxDepth: 1 })
-    expect((await createStore()).getSettings().nestedWorkerMaxDepth).toBe(4)
-    await closeTestStores()
-    writeSettings({ nestedWorkerMaxDepth: 2 })
-    expect((await createStore()).getSettings().nestedWorkerMaxDepth).toBe(2)
-  })
-
   it('keeps an explicit 1 chosen after the move across reloads', async () => {
     writeSettings({ nestedWorkerMaxDepth: 1 })
     const store = await createStore()

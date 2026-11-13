@@ -1,21 +1,22 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
-  RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
+  RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
+import type { RuntimeTerminalDriverState } from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
+import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
-import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
+import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
+import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -34,6 +35,20 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:call')
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
+  ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
+  ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
+
+  // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
+  ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
+    toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId))
+  )
+  // Suspend VM with nothing open; a workspace with open panels sleeps, which suspends it after.
+  ipcMain.handle('ephemeralVm:suspendWorkspace', (_event, args: { workspaceId: string }) =>
+    toWorkspaceLifecycleResult(async () => {
+      await runtime.suspendWorkspaceVm(args.workspaceId)
+      return null
+    })
+  )
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
@@ -81,6 +96,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
+          // The renderer ships with this main process, so it always speaks the current contract.
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
           method: args.method,
           params: args.params
         },
@@ -112,7 +129,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
+      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreamingObjects(
         {
           id: args.subscriptionId,
           authToken: 'desktop-ipc',
@@ -121,7 +138,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         (response) => {
           if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-            event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
+            event.sender.send(channel, response)
           }
         },
         {
@@ -172,7 +189,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:getBrowserDrivers')
   ipcMain.handle(
     'runtime:getBrowserDrivers',
-    (): { browserPageId: string; driver: RuntimeBrowserDriverState }[] => {
+    (): { browserPageId: string; driver: RuntimeTerminalDriverState }[] => {
       const drivers = runtime.getAllBrowserDrivers()
       return Array.from(drivers.entries()).map(([browserPageId, driver]) => ({
         browserPageId,

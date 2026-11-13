@@ -3,11 +3,11 @@ import type { AgentJournalMessageItem } from '../../../../shared/agent-session/j
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import type { CodexTurnHost } from './codex-structured-turn-start'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { codexSessionCapabilities } from '../catalog/codex-structured-catalog-entry'
 import { codexServiceTierOfFastMode } from '../catalog/codex-structured-session-options'
@@ -37,12 +37,13 @@ export async function resolvedCodexMessageOptions(
   return compileCodexMessageOptions(session, choices)
 }
 
-function compileCodexMessageOptions(
-  session: CodexSession,
+export function compileCodexMessageOptions(
+  session: Pick<CodexSession, 'options' | 'catalogAccess'> &
+    Partial<Pick<CodexSession, 'reportedOptions' | 'appliedTurnOptions'>>,
   choices: Readonly<Record<string, string | undefined>>
 ): Readonly<Record<string, string>> {
   const compiled: Record<string, string> = {}
-  for (const key of ['model', 'effort', 'personality', 'serviceTier'] as const) {
+  for (const key of ['model', 'effort', 'personality', 'serviceTier', 'interactionMode'] as const) {
     const value = choices[key]
     if (value !== undefined) {
       compiled[key] = value
@@ -57,7 +58,29 @@ function compileCodexMessageOptions(
   return codexTurnRequestOptions(session, compiled)
 }
 
-/** The same sparse controls as dispatch, compared under the exact acquisition that took them. */
+/** Compare retained input choices, without reinterpreting them through a later catalog. */
+export function codexMessageInputOptions(
+  choices: Readonly<Record<string, string | undefined>>,
+  inherited: Readonly<Record<string, string>> = {},
+  applied: Readonly<Record<string, string>> = {}
+): Readonly<Record<string, string>> {
+  const next = { ...inherited }
+  for (const key of ['model', 'effort', 'personality', 'serviceTier', 'interactionMode'] as const) {
+    if (choices[key] !== undefined) {
+      next[key] = choices[key]
+    }
+  }
+  if (choices.serviceTier === undefined && choices.fastMode !== undefined) {
+    const legacy = codexServiceTierOfFastMode(choices.fastMode, undefined)
+    const inheritedTier = inherited.serviceTier
+    const tier =
+      inheritedTier === 'priority' || inheritedTier === 'fast' ? inheritedTier : applied.serviceTier
+    next.serviceTier = legacy === 'fast' && (tier === 'priority' || tier === 'fast') ? tier : legacy
+  }
+  return next
+}
+
+/** Intent belongs to this exact acquisition; catalog/readback differences are not send barriers. */
 export function readCodexAppliedInputOptions(
   session: CodexSession | undefined,
   input: Parameters<NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']>>[0]
@@ -68,13 +91,13 @@ export function readCodexAppliedInputOptions(
     session.connection.closed ||
     session.fence !== input.fence ||
     session.acquisitionGeneration !== input.acquisitionGeneration ||
-    !session.appliedTurnOptions
+    !session.appliedTurnInputOptions
   ) {
     return null
   }
-  const active = session.appliedTurnOptions
+  const active = session.appliedTurnInputOptions
   const requested = input.next ?? Object.fromEntries(session.options)
-  return { active, next: { ...active, ...compileCodexMessageOptions(session, requested) } }
+  return { active, next: codexMessageInputOptions(requested, active, session.appliedTurnOptions) }
 }
 
 /** Check the live binding after options settle and again whenever the provider is about to write. */

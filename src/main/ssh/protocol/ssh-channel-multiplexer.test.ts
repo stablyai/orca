@@ -1,0 +1,189 @@
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
+import type { MultiplexerTransport } from './ssh-multiplexer-transport-writer'
+import { encodeFrame, MessageType, encodeKeepAliveFrame } from './remote-frame-protocol'
+import { HEADER_LENGTH } from '../../../shared/relay-frame-decoder'
+
+function createMockTransport(): MultiplexerTransport & {
+  dataCallbacks: ((data: Buffer) => void)[]
+  closeCallbacks: (() => void)[]
+  written: Buffer[]
+} {
+  const dataCallbacks: ((data: Buffer) => void)[] = []
+  const closeCallbacks: (() => void)[] = []
+  const written: Buffer[] = []
+
+  return {
+    write: (data: Buffer) => {
+      written.push(data)
+    },
+    onData: (cb) => dataCallbacks.push(cb),
+    onClose: (cb) => closeCallbacks.push(cb),
+    dataCallbacks,
+    closeCallbacks,
+    written
+  }
+}
+
+function makeResponseFrame(requestId: number, result: unknown, seq: number): Buffer {
+  const payload = Buffer.from(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: requestId,
+      result
+    })
+  )
+  return encodeFrame(MessageType.Regular, seq, 0, payload)
+}
+
+function makeNotificationFrame(
+  method: string,
+  params: Record<string, unknown>,
+  seq: number
+): Buffer {
+  const payload = Buffer.from(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      method,
+      params
+    })
+  )
+  return encodeFrame(MessageType.Regular, seq, 0, payload)
+}
+
+describe('SshChannelMultiplexer', () => {
+  let transport: ReturnType<typeof createMockTransport>
+  let mux: SshChannelMultiplexer
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    transport = createMockTransport()
+    mux = new SshChannelMultiplexer(transport)
+  })
+
+  afterEach(() => {
+    mux.dispose()
+    vi.useRealTimers()
+  })
+
+  describe('request/response', () => {
+    it('runs beforeResolve before an adjacent notification in the same decoder turn', async () => {
+      const order: string[] = []
+      mux.onNotification(() => order.push('notification'))
+      const promise = mux.request(
+        'pty.attach',
+        { id: 'pty-1' },
+        {
+          beforeResolve: () => order.push('beforeResolve')
+        }
+      )
+
+      transport.dataCallbacks[0](
+        Buffer.concat([
+          makeResponseFrame(1, { incarnationId: 'incarnation-1' }, 1),
+          makeNotificationFrame('pty.data', { id: 'pty-1', data: 'first' }, 2)
+        ])
+      )
+
+      expect(order).toEqual(['beforeResolve', 'notification'])
+      await expect(promise).resolves.toEqual({ incarnationId: 'incarnation-1' })
+    })
+
+    it('times out after 30s with no response', async () => {
+      const promise = mux.request('pty.spawn')
+
+      // Keep connection liveness healthy while testing the longer request timeout.
+      for (let i = 0; i < 6; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
+      }
+      vi.advanceTimersByTime(1_000)
+
+      await expect(promise).rejects.toThrow('timed out')
+      const cancelFrame = transport.written.findLast((frame) => frame[0] === MessageType.Regular)
+      if (!cancelFrame) {
+        throw new Error('Missing RPC cancellation frame')
+      }
+      const cancelPayload = JSON.parse(
+        cancelFrame.subarray(HEADER_LENGTH, HEADER_LENGTH + cancelFrame.readUInt32BE(9)).toString()
+      )
+      expect(cancelPayload).toMatchObject({
+        method: 'rpc.cancel',
+        params: { id: 1 }
+      })
+    })
+  })
+
+  describe('notifications', () => {
+    it('contains generic notification handler failures', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const badHandler = vi.fn(() => {
+        throw new Error('subscriber exploded')
+      })
+      const goodHandler = vi.fn()
+      mux.onNotification(badHandler)
+      mux.onNotification(goodHandler)
+
+      expect(() =>
+        transport.dataCallbacks[0](makeNotificationFrame('pty.data', { id: 'pty-1' }, 1))
+      ).not.toThrow()
+
+      expect(badHandler).toHaveBeenCalled()
+      expect(goodHandler).toHaveBeenCalledWith('pty.data', { id: 'pty-1' })
+      expect(mux.isDisposed()).toBe(false)
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[ssh-mux] Notification handler failed for pty.data: subscriber exploded'
+      )
+    })
+  })
+
+  describe('keepalive', () => {
+    it('turns transport write failures into connection loss instead of throwing from the timer', () => {
+      const writeError = new Error('write EPIPE')
+      transport.write = vi.fn(() => {
+        throw writeError
+      })
+
+      expect(() => vi.advanceTimersByTime(5_000)).not.toThrow()
+      expect(mux.isDisposed()).toBe(true)
+    })
+  })
+
+  describe('wake guard (timer pause across system sleep, #7773)', () => {
+    it('keeps the link alive after wake when frames resume', () => {
+      vi.advanceTimersByTime(5_000)
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+      vi.advanceTimersByTime(5_000)
+
+      // The relay answers the post-wake probe; the link must stay up.
+      let seq = 1
+      for (let i = 0; i < 8; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(seq++, 0))
+      }
+      expect(mux.isDisposed()).toBe(false)
+    })
+
+    it('still detects a genuinely dead link within the next window after wake', () => {
+      vi.advanceTimersByTime(5_000)
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+      vi.advanceTimersByTime(5_000)
+
+      expect(mux.isDisposed()).toBe(false)
+      // No frames arrive after the guard reset; the honest window expires.
+      vi.advanceTimersByTime(25_000)
+      expect(mux.isDisposed()).toBe(true)
+    })
+  })
+
+  describe('transport close', () => {
+    it('disposes multiplexer when transport closes', async () => {
+      const promise = mux.request('pty.spawn')
+
+      transport.closeCallbacks[0]()
+
+      await expect(promise).rejects.toThrow('SSH connection lost, reconnecting...')
+      expect(mux.isDisposed()).toBe(true)
+    })
+  })
+})

@@ -5,7 +5,7 @@ import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 
 // Pipe the baseline client module on stdin. Native process/filesystem operations are forbidden here.
-const entry = path.resolve('src/main/computer/macos-native-provider-client.ts')
+const entry = path.resolve('src/main/computer/macos-native/macos-native-provider-client.ts')
 const sources = [readFileSync(0, 'utf8'), readFileSync(entry, 'utf8')]
 assert(sources.every((source) => source.includes('export class MacOSNativeProviderClient')))
 async function load(source) {

@@ -1,4 +1,4 @@
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { getMatchingJiraSites, parseJiraIssueUrl } from '../../../../shared/jira/jira-issue-url'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
 import {
@@ -8,7 +8,7 @@ import {
   buildJiraWorkspaceSource,
   type WorkspaceSourceLinkedItem
 } from '../../../../shared/new-workspace/workspace-source'
-import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/repositories/links'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import { bindJiraIssueSourceContext } from './use-jira-url-source'
 import type { RowEntry } from './smart-workspace-name-field-model'

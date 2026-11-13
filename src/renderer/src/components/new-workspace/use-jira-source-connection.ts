@@ -4,9 +4,9 @@ import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { JiraConnectionStatus } from '../../../../shared/jira/jira-types'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 
 export type JiraSourceConnection = {
   status: JiraConnectionStatus | null

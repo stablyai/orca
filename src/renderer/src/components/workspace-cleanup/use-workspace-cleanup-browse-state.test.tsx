@@ -7,7 +7,7 @@ import type { AppState } from '@/store/types'
 import {
   createWorkspaceCleanupBrowseSlice,
   resetWorkspaceCleanupBrowsePersistTimer
-} from '@/store/slices/workspace-cleanup-browse'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-browse'
 import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 
 import {

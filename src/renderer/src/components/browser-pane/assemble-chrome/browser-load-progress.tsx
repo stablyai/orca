@@ -91,10 +91,9 @@ export function BrowserLoadProgress({
   }, [])
 
   return (
-    // Why -inset-px: the line sits on the bar's bottom border instead of a pixel above it.
     <div
       aria-hidden
-      className="pointer-events-none absolute -inset-px overflow-hidden rounded-[inherit]"
+      className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
     >
       <div
         ref={barRef}

@@ -1,16 +1,16 @@
-import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-composer-context'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { MobileQueuedMessageComposerContext } from './input/mobile-queued-message-composer-context'
+import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { useMobileNativeChatProjection } from './transcript/use-mobile-native-chat-projection'
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
-import type { MobileNativeChatStructuredComposer } from './composer/MobileNativeChatComposer'
+import type { MobileNativeChatStructuredComposer } from './composer/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerTray } from './composer/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from './visual/mobile-native-chat-visual-context'
-import { MobileNativeChatRootItemSourceContext } from './mobile-native-chat-item-read'
+import { MobileNativeChatRootItemSourceContext } from './transcript/mobile-native-chat-item-read'
 import { useMobileNativeChatMessageDetail } from './transcript/use-mobile-native-chat-message-detail'
 import {
   MobileNativeChatReplyRevealsContext,
@@ -19,12 +19,12 @@ import {
 import { MobileNativeChatRowOverlaysHost } from './transcript/MobileNativeChatRowOverlaysHost'
 import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
+import { MobileNativeChatNoticeContext } from './transcript/mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
 import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
-import type { ConnectionState } from '../../transport/types'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
@@ -54,6 +54,8 @@ type Props = {
   keyboardInset: number
   /** The Orca host that runs this chat, named for notices; null when unnamed. */
   hostName: string | null
+  /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
+  onOpenAccounts?: () => void
   /** Offered for tapped links; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
   /** Opens a host terminal tab in this chat's workspace running `command`. */
@@ -61,8 +63,27 @@ type Props = {
   hostOutage?: MobileNativeChatHostOutage | null
 }
 
-// Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
-export function MobileNativeChatOverlay({
+// Hide the last chat behind its terminal instead of unmounting it, so returning keeps its rows and parsed markdown.
+export function MobileNativeChatOverlay(props: Props): React.JSX.Element | null {
+  const shown = props.controller.showNativeChat
+  // While hidden, the live lane is starved to an empty chat; draw the last shown props so the hidden tree does no work.
+  const [lastShown, setLastShown] = useState<Props | null>(null)
+  if (shown && lastShown !== props) {
+    setLastShown(props)
+  }
+  const drawn = shown ? props : lastShown
+  // The same element while hidden lets React skip the hidden tree.
+  const content = useMemo(
+    () => (drawn ? <MobileNativeChatOverlayContent {...drawn} /> : null),
+    [drawn]
+  )
+  if (!content) {
+    return null
+  }
+  return <Activity mode={shown ? 'visible' : 'hidden'}>{content}</Activity>
+}
+
+function MobileNativeChatOverlayContent({
   controller,
   imageSource,
   worktreePath,
@@ -88,17 +109,25 @@ export function MobileNativeChatOverlay({
   hostName,
   onOpenUrlInOrca,
   onRunInTerminal,
-  hostOutage = null
-}: Props): React.JSX.Element | null {
+  hostOutage = null,
+  onOpenAccounts
+}: Props): React.JSX.Element {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMemo(
-    () => foldMobileNativeChatMessages(fullContent.messages, agent),
-    [fullContent.messages, agent]
+  const folded = useMobileNativeChatProjection(
+    fullContent.messages,
+    agent,
+    [
+      sendSurfaceId,
+      sessionId,
+      controller.nativeChatItemSource?.client,
+      controller.nativeChatItemSource?.sessionId
+    ],
+    controller.nativeChatShowsCiResultLines
   )
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
@@ -155,6 +184,9 @@ export function MobileNativeChatOverlay({
     () => ({
       agent,
       structured: structuredComposer ?? null,
+      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
+        (entry) => entry.id === 'interactionMode'
+      ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
       filePaths: controller.nativeChatFilePaths,
@@ -171,6 +203,7 @@ export function MobileNativeChatOverlay({
     [
       agent,
       structuredComposer,
+      controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
       controller.nativeChatFilePaths,
@@ -198,6 +231,8 @@ export function MobileNativeChatOverlay({
       hostName,
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
+      usageLimit: controller.nativeChatUsageLimit,
+      ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
             continuation: {
@@ -211,7 +246,15 @@ export function MobileNativeChatOverlay({
           }
         : {})
     }),
-    [hostName, agent, continuation, onClearSendError, runInTerminal]
+    [
+      hostName,
+      agent,
+      continuation,
+      onClearSendError,
+      runInTerminal,
+      controller.nativeChatUsageLimit,
+      onOpenAccounts
+    ]
   )
   const markdownLinks = useMobileNativeChatMarkdownLinks({
     enabled: controller.showNativeChat,
@@ -222,9 +265,6 @@ export function MobileNativeChatOverlay({
     isWorking: controller.nativeChatTurnActive
   })
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
-  if (!controller.showNativeChat) {
-    return null
-  }
   return (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
@@ -245,6 +285,7 @@ export function MobileNativeChatOverlay({
                       status={session.status}
                       error={session.error}
                       readFailedFinally={session.readFailedFinally === true}
+                      clearing={session.clearing === true}
                       agent={controller.nativeChatAgent}
                       sessionLive={controller.nativeChatSessionLive}
                       agentWorking={controller.nativeChatTurnActive}
@@ -351,5 +392,5 @@ export function MobileNativeChatOverlay({
 }
 
 const styles = StyleSheet.create({
-  overlay: StyleSheet.absoluteFillObject
+  overlay: StyleSheet.absoluteFill
 })

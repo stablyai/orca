@@ -1,5 +1,5 @@
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { prepareBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
 import {
   getBrowserExtensionSessionForProfile,

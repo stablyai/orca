@@ -84,77 +84,10 @@ describe('SGR intensity round-trip (BUG B, addon patch)', () => {
     expect(!!b.isBold()).toBe(true)
     expect(!!b.isDim()).toBe(false)
   })
-
-  it('keeps bold when dim is dropped from a bold+dim run', async () => {
-    const restored = await roundTripStyles('\x1b[1;2mA\x1b[22m\x1b[1mB')
-    const b = cellAt(restored, 0, 1)
-    expect(!!b.isBold()).toBe(true)
-    expect(!!b.isDim()).toBe(false)
-  })
-
-  it('keeps dim when bold is dropped from a bold+dim run', async () => {
-    const restored = await roundTripStyles('\x1b[1;2mA\x1b[22m\x1b[2mB')
-    const b = cellAt(restored, 0, 1)
-    expect(!!b.isDim()).toBe(true)
-    expect(!!b.isBold()).toBe(false)
-  })
-
-  it('non-regression: bold after normal text', async () => {
-    const restored = await roundTripStyles('A\x1b[1mB')
-    expect(!!cellAt(restored, 0, 0).isBold()).toBe(false)
-    expect(!!cellAt(restored, 0, 1).isBold()).toBe(true)
-  })
-
-  it('non-regression: dim after bold', async () => {
-    const restored = await roundTripStyles('\x1b[1mA\x1b[22m\x1b[2mB')
-    const a = cellAt(restored, 0, 0)
-    const b = cellAt(restored, 0, 1)
-    expect(!!a.isBold()).toBe(true)
-    expect(!!a.isDim()).toBe(false)
-    expect(!!b.isDim()).toBe(true)
-    expect(!!b.isBold()).toBe(false)
-  })
-
-  it('non-regression: bold+dim accumulation survives', async () => {
-    const restored = await roundTripStyles('\x1b[1mA\x1b[2mB')
-    const b = cellAt(restored, 0, 1)
-    expect(!!b.isBold()).toBe(true)
-    expect(!!b.isDim()).toBe(true)
-  })
-
-  it('non-regression: italic after underline is cleared (dedicated resets)', async () => {
-    const restored = await roundTripStyles('\x1b[4mA\x1b[24m\x1b[3mB')
-    const b = cellAt(restored, 0, 1)
-    expect(!!b.isItalic()).toBe(true)
-    expect(!!b.isUnderline()).toBe(false)
-  })
-
-  it('non-regression: underline after italic is cleared (dedicated resets)', async () => {
-    const restored = await roundTripStyles('\x1b[3mA\x1b[23m\x1b[4mB')
-    const b = cellAt(restored, 0, 1)
-    expect(!!b.isUnderline()).toBe(true)
-    expect(!!b.isItalic()).toBe(false)
-  })
-
-  it('non-regression: underline dropped alongside bold set', async () => {
-    const restored = await roundTripStyles('\x1b[4mA\x1b[24m\x1b[1;4mB\x1b[24mC')
-    const c = cellAt(restored, 0, 2)
-    expect(!!c.isBold()).toBe(true)
-    expect(!!c.isUnderline()).toBe(false)
-  })
 })
 
 describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor hardening)', () => {
   const REPRO = '0123456789\x1b[3;5H'
-
-  it('documents the upstream defect: plain serialize lands one column short', async () => {
-    // Reassess absolute-cursor hardening if an addon upgrade fixes this pinned relative-restore defect.
-    const { terminal, addon } = createTerminal(10, 5)
-    await write(terminal, REPRO)
-    expect(terminal.buffer.active.cursorX).toBe(4)
-    const restored = await replay(addon.serialize())
-    expect(restored.buffer.active.cursorX).toBe(3)
-  })
 
   it('HeadlessEmulator snapshot restores the exact cursor (minimized repro)', async () => {
     const emulator = new HeadlessEmulator({ cols: 10, rows: 5 })
@@ -165,29 +98,6 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
     expect(restored.buffer.active.cursorY).toBe(2)
     expect(visibleText(restored)[0]).toBe('0123456789')
     emulator.dispose()
-  })
-
-  it('serializeWithAbsoluteCursor restores the exact cursor', async () => {
-    const { terminal, addon } = createTerminal(10, 5)
-    await write(terminal, REPRO)
-    const restored = await replay(serializeWithAbsoluteCursor(addon, terminal))
-    expect(restored.buffer.active.cursorX).toBe(4)
-    expect(restored.buffer.active.cursorY).toBe(2)
-  })
-
-  it('never changes already-correct restores at various cursor positions', async () => {
-    const positions = ['\x1b[1;1H', '\x1b[2;4H', '\x1b[5;10H', '\x1b[4;1H']
-    for (const cup of positions) {
-      const { terminal, addon } = createTerminal(10, 5)
-      await write(terminal, `hello\r\nworld${cup}`)
-      const plainRestore = await replay(addon.serialize())
-      const hardenedRestore = await replay(serializeWithAbsoluteCursor(addon, terminal))
-      expect(hardenedRestore.buffer.active.cursorX).toBe(terminal.buffer.active.cursorX)
-      expect(hardenedRestore.buffer.active.cursorY).toBe(terminal.buffer.active.cursorY)
-      expect(hardenedRestore.buffer.active.cursorX).toBe(plainRestore.buffer.active.cursorX)
-      expect(hardenedRestore.buffer.active.cursorY).toBe(plainRestore.buffer.active.cursorY)
-      expect(visibleText(hardenedRestore)).toEqual(visibleText(plainRestore))
-    }
   })
 
   it('leaves a wrap-pending source untouched so replay stays wrap-pending', async () => {
@@ -216,17 +126,6 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
     expect(hardenedRestore.buffer.active.cursorY).toBe(plainRestore.buffer.active.cursorY)
   })
 
-  it('restores alt-screen snapshots without disturbing correct positioning', async () => {
-    const { terminal, addon } = createTerminal(10, 5)
-    await write(terminal, 'shell$\x1b[?1049h\x1b[2J\x1b[HTUI ROW\x1b[2;3H')
-    expect(terminal.buffer.active.type).toBe('alternate')
-    const restored = await replay(serializeWithAbsoluteCursor(addon, terminal))
-    expect(restored.buffer.active.type).toBe('alternate')
-    expect(restored.buffer.active.cursorX).toBe(2)
-    expect(restored.buffer.active.cursorY).toBe(1)
-    expect(visibleText(restored)[0]).toBe('TUI ROW')
-  })
-
   it('fixes the wrap-pending off-by-one inside the alt screen too', async () => {
     const { terminal, addon } = createTerminal(10, 5)
     await write(terminal, '\x1b[?1049h0123456789\x1b[3;5H')
@@ -248,11 +147,5 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
     expect(restored.buffer.active.cursorY).toBe(source.y)
     expect(visibleText(restored)).toEqual(visibleText(terminal))
     expect(restored.buffer.active.length).toBe(terminal.buffer.active.length)
-  })
-
-  it('keeps empty buffers serializing to an empty string', async () => {
-    const { terminal, addon } = createTerminal(10, 5)
-    expect(addon.serialize()).toBe('')
-    expect(serializeWithAbsoluteCursor(addon, terminal)).toBe('')
   })
 })

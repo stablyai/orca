@@ -1,7 +1,7 @@
 import {
   providerExitObserved,
   startupAcquisitionRefusal
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 
 /** One acquisition's startup: its first ending cause is the one its open rejects with. */
 export type ClaudeStartupOutcome = {

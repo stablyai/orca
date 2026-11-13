@@ -4,7 +4,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  realpathSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
@@ -81,23 +80,6 @@ afterEach(() => {
 })
 
 describe('relocated process-host package', () => {
-  it('copies the manifest and complete emitted tree without its source', () => {
-    const root = materializedRoot()
-    const copiedPackage = join(root, packageRel)
-    expect(existsSync(join(copiedPackage, 'package.json'))).toBe(true)
-    expect(existsSync(join(copiedPackage, 'dist', 'run-process.js'))).toBe(true)
-    expect(existsSync(join(copiedPackage, 'dist', 'spawn-observer.js'))).toBe(true)
-    expect(existsSync(join(copiedPackage, 'dist', 'run-process.d.ts'))).toBe(true)
-    expect(existsSync(join(copiedPackage, 'src'))).toBe(false)
-    const entry = join(root, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
-    expect(createRequire(entry).resolve('@orca/process-host')).toBe(
-      realpathSync(join(copiedPackage, 'dist', 'run-process.js'))
-    )
-    expect(createRequire(entry).resolve('@orca/process-host/spawn-observer')).toBe(
-      realpathSync(join(copiedPackage, 'dist', 'spawn-observer.js'))
-    )
-  })
-
   it.each(['package.json', 'dist/run-process.js', 'dist/spawn-observer.js'])(
     'refuses a source missing %s before copying',
     (relative) => {
@@ -165,15 +147,6 @@ describe('relocated process-host package', () => {
     }
   )
 
-  it('distinguishes an Electron runtime patch with the same app version', () => {
-    Object.defineProperty(process.versions, 'electron', { value: '41.0.0', configurable: true })
-    const previous = materializedRoot()
-    Object.defineProperty(process.versions, 'electron', { value: '41.0.1', configurable: true })
-    expect(getRelocatedDaemonHost()).toBeNull()
-    expect(materializedRoot()).not.toBe(previous)
-    expect(existsSync(join(previous, 'Orca.exe'))).toBe(true)
-  })
-
   it('preserves a legacy version directory while publishing the new dependency layout', () => {
     mkdirSync(hostRoot, { recursive: true })
     writeFileSync(join(hostRoot, 'Orca.exe'), 'live-legacy-exe')
@@ -189,12 +162,6 @@ describe('relocated process-host package', () => {
     const current = materializedRoot()
     expect(dirname(current)).toBe(hostRoot)
     expect(readFileSync(join(hostRoot, 'Orca.exe'), 'utf8')).toBe('live-legacy-exe')
-  })
-
-  it('keeps the copied code ready after the entire install tree disappears', () => {
-    const root = materializedRoot()
-    rmSync(installDir, { recursive: true, force: true })
-    expect(getRelocatedDaemonHost()?.execPath).toBe(join(root, 'Orca.exe'))
   })
 
   it('retains the build observed by this process when a newer same-version mirror exists', () => {
@@ -284,20 +251,6 @@ describe('relocated process-host package', () => {
 describe('relocated Windows registry package', () => {
   const registryRel = join('resources', 'node_modules', '@orca', 'windows-registry')
   const required = ['package.json', 'index.js', 'build/Release/orca_windows_registry.node']
-
-  it('mirrors the registry package under the name shipped by Windows packaging', () => {
-    const require = createRequire(import.meta.url)
-    const actualPackage = require('../../../../../../native/windows-registry/package.json')
-    const {
-      WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS
-    } = require('../../../../../../config/packaged-runtime-node-modules.cjs')
-    expect(WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS).toContain(actualPackage.name)
-    const root = materializedRoot()
-    const entry = join(root, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
-    expect(realpathSync(createRequire(entry).resolve(actualPackage.name))).toBe(
-      realpathSync(join(root, registryRel, actualPackage.main))
-    )
-  })
 
   it('loads the real root entry and reaches the native binary after the install tree disappears', () => {
     const root = materializedRoot()

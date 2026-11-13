@@ -1,7 +1,7 @@
 import type { AgentMessageSender } from './agent-session/agent-session-message-source'
-import type { OrchestrationPartyLocationResult } from './orchestration-caller-status'
+import type { OrchestrationPartyLocationResult } from './orchestration/orchestration-caller-status'
 import type { AgentSessionWorkspaceKind } from './agent-session/lifecycle/agent-session-record'
-import { workspaceKindForWorktreeId } from './workspace-launch-kind'
+import { workspaceKindForWorktreeId } from './agent-launch/contracts/workspace-launch-kind'
 
 export type StructuredSessionWorkspaceRemovedDetails = {
   workspaceKind: AgentSessionWorkspaceKind

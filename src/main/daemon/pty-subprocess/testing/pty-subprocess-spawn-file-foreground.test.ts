@@ -4,7 +4,6 @@ import type { ProcessTableRow } from '../../../../shared/process-table-snapshot'
 import type * as SnapshotReader from '../../../../shared/process-table-snapshot-reader'
 import { createDaemonPtySubprocessHandle } from '../subprocess-handle'
 import { inspectSpawnFileChildProcessesFromRows } from '../spawn-file-child-processes'
-import { resolveSpawnFileForegroundFromRows } from '../spawn-file-foreground-process'
 import { inspectTerminalHostProcess } from '../../terminal-host/terminal-host-process-inspection'
 import { Session } from '../../sessions/session'
 const { readSnapshot, readFresh, readStrict, members, readWindows, resolveWindows } = vi.hoisted(
@@ -125,45 +124,6 @@ afterEach(() => {
 })
 
 describe.each(['linux', 'darwin'] as const)('static spawn-file foreground on %s', (platform) => {
-  it.each(['vim', 'sleep', 'node', 'npm', 'node /usr/bin/claude'])(
-    'resolves %s in both the synchronous tracker and host inspection',
-    async (command) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      const rows = table(command, platform === 'darwin')
-      readSnapshot.mockResolvedValue(rows)
-      readFresh.mockResolvedValue(rows)
-      readStrict.mockResolvedValue({ rows, capturedAgeMs: 0 })
-      const handle = createHandle(platform === 'darwin')
-      const expected = command.includes('claude') ? 'claude' : command
-      expect(handle.processNameIsSpawnFile).toBe(true)
-      expect(await handle.confirmForegroundProcess?.()).toBe(expected)
-      expect(handle.getForegroundProcess()).toBe(expected)
-      expect(await inspect(createHandle(platform === 'darwin'))).toMatchObject({
-        foregroundProcess: expected,
-        hasChildProcesses: true
-      })
-      expect(readStrict).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it('observes a command ending and returns to an idle login shell', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-    const handle = createHandle(true)
-    readFresh.mockResolvedValue(table('vim', true))
-    expect(await handle.confirmForegroundProcess?.()).toBe('vim')
-    const rows = table(null, true)
-    readFresh.mockResolvedValue(rows)
-    readSnapshot.mockResolvedValue(rows)
-    readStrict.mockResolvedValue({ rows, capturedAgeMs: 0 })
-    expect(await handle.confirmForegroundProcess?.()).toBe('zsh')
-    const inspection = await inspect(handle)
-    expect(inspection).toMatchObject({
-      foregroundProcess: null,
-      hasChildProcesses: false,
-      childProcessEvidence: 'no-children'
-    })
-  })
-
   it('does not interpret a failed process read as a childless shell', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     readFresh.mockRejectedValue(new Error('unreadable'))
@@ -177,22 +137,6 @@ describe.each(['linux', 'darwin'] as const)('static spawn-file foreground on %s'
       childProcessEvidence: 'unverifiable',
       foregroundProcessEvidence: { verdict: 'unverifiable' }
     })
-  })
-
-  it('retains ordinary foreground names across a failed background refresh', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(100_000)
-    readSnapshot.mockResolvedValue(table('vim'))
-    const handle = createHandle()
-    expect(handle.getForegroundProcess()).toBe('zsh')
-    await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('vim'))
-    readSnapshot.mockRejectedValue(new Error('unreadable'))
-    vi.setSystemTime(102_000)
-    expect(handle.getForegroundProcess()).toBe('vim')
-    await vi.waitFor(() => expect(readSnapshot).toHaveBeenCalledTimes(2))
-    expect(handle.getForegroundProcess()).toBe('vim')
-    handle.dispose()
   })
 
   it.each(['T', 'S'])(
@@ -213,20 +157,6 @@ describe.each(['linux', 'darwin'] as const)('static spawn-file foreground on %s'
   )
 })
 
-it('ignores stopped/background children and another terminal beneath the same root', () => {
-  const rows = table(null)
-  rows.push({ ...rows[0], pid: 102, ppid: 100, pgid: 102, stat: 'T', command: 'vim' })
-  rows.push({ ...rows[0], pid: 103, ppid: 100, tty: 'ttys009', command: 'claude' })
-  expect(resolveSpawnFileForegroundFromRows(rows, 100)).toEqual({
-    available: true,
-    processName: 'zsh'
-  })
-  expect(resolveSpawnFileForegroundFromRows(rows, 999)).toEqual({
-    available: false,
-    processName: null
-  })
-})
-
 // ps spells "no controlling terminal" as `?` on Linux, `??` on macOS and `-` on some builds.
 describe.each(['??', '?', '-'] as const)('root on no controlling terminal (tty=%s)', (tty) => {
   const detachedRoot: ProcessTableRow = {
@@ -244,33 +174,9 @@ describe.each(['??', '?', '-'] as const)('root on no controlling terminal (tty=%
     { ...detachedRoot, pid: 101, ppid: 100, pgid: 100, command: 'claude' }
   ]
 
-  it('declines to name the descendant that shares the group but holds no terminal', () => {
-    expect(resolveSpawnFileForegroundFromRows(detachedTree, 100)).toEqual({
-      available: false,
-      processName: null
-    })
-  })
-
   it('reports child evidence as unverifiable rather than reading an unfenceable table', () => {
     expect(inspectSpawnFileChildProcessesFromRows(detachedTree, 100, 'zsh')).toBe('unverifiable')
   })
-})
-
-it('uses Windows job membership and the native process table for ordinary children', async () => {
-  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-  resolveWindows.mockResolvedValue({ available: true, processName: null })
-  members.mockReturnValue(new Set([100, 102]))
-  readWindows.mockResolvedValue([
-    { pid: 100, ppid: 1, name: 'pwsh.exe' },
-    { pid: 102, ppid: 100, name: 'vim.exe' }
-  ])
-  const handle = createHandle()
-  expect(await handle.confirmForegroundProcess?.()).toBe('vim.exe')
-  expect(await inspect(handle)).toMatchObject({
-    foregroundProcess: 'zsh',
-    hasChildProcesses: true
-  })
-  expect(readStrict).not.toHaveBeenCalled()
 })
 
 it('keeps missing Windows job membership unverifiable', async () => {

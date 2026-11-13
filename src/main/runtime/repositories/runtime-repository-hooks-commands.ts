@@ -1,5 +1,5 @@
-import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
-import { createHash } from 'node:crypto'
+import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared/execution-host'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../../shared/repo-types'
@@ -18,6 +18,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { hashOrcaHookTrustContent } from '../../workspace-hooks/created-worktree-setup-trust'
 
 type RuntimeRepositoryHooksCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -29,8 +30,8 @@ export class RuntimeRepositoryHooksCommands {
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
     const connectionId = getRepoDialableSshTargetId(repo)
-    // Why: an `ssh:` repo is not served here; it reports no hooks file.
-    if (connectionId) {
+    // Why: an `ssh:` repo is not served here, nor a folder another host owns; neither reports hooks.
+    if (connectionId || (isFolderRepo(repo) && !isRepoOnCatalogHost(repo))) {
       return {
         hasHooksFile: false,
         hooks: null,
@@ -40,8 +41,8 @@ export class RuntimeRepositoryHooksCommands {
     }
     const hasFile = hasHooksFile(repo.path)
     const hooks = getEffectiveHooks(repo)
-    const sharedHooks = hasFile ? loadHooks(repo.path) : null
-    const setupConfig = isFolderRepo(repo) ? null : getSetupConfig(repo, sharedHooks)
+    const sharedHooks = scopeHooksToRepoKind(repo, hasFile ? loadHooks(repo.path) : null)
+    const setupConfig = getSetupConfig(repo, sharedHooks)
     return {
       hasHooksFile: hasFile,
       hooks,
@@ -61,7 +62,7 @@ export class RuntimeRepositoryHooksCommands {
 
   async checkRepoHooks(repoSelector: string, options: { background?: boolean } = {}) {
     const repo = await this.deps.resolveRepo(repoSelector)
-    if (isFolderRepo(repo)) {
+    if (isFolderRepo(repo) && !isRepoOnCatalogHost(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
     const connectionId = getRepoDialableSshTargetId(repo)
@@ -83,7 +84,7 @@ export class RuntimeRepositoryHooksCommands {
       }
     }
     const has = hasHooksFile(repo.path)
-    const hooks = has ? loadHooks(repo.path) : null
+    const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
     return {
       status: 'ok' as const,
       hasHooks: has,
@@ -116,17 +117,13 @@ export class RuntimeRepositoryHooksCommands {
 }
 
 function hookTrust(scriptContent: string): { contentHash: string; scriptContent: string } {
-  return { contentHash: createHash('sha256').update(scriptContent).digest('hex'), scriptContent }
+  return { contentHash: hashOrcaHookTrustContent(scriptContent), scriptContent }
 }
 
 function archiveTrust(
   repo: Repo,
   sharedHooks: OrcaHooks | null
 ): { contentHash: string; scriptContent: string } | null {
-  // Folder removal never runs hooks.
-  if (isFolderRepo(repo)) {
-    return null
-  }
   const localArchive = repo.hookSettings?.scripts.archive?.trim()
   const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
     hasLocalScript: Boolean(localArchive)

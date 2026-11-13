@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {

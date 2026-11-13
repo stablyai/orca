@@ -15,8 +15,8 @@ import {
   getRemoteHostPlatform,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
 
 const INSTALL_LOCK_POLL_MS = 1_000

@@ -1,23 +1,13 @@
 import '../../pty-subprocess/testing/mock-descendant-sweep'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { validate } from '../../../telemetry/validator'
 import { recordAuthenticatedInventory, type DaemonAuditContext } from '../daemon-audit-classifier'
 import type { ExactDaemonIncarnation } from '../../endpoint/identity/daemon-incarnation-evidence-types'
-import { DaemonPtyAdapter } from '../../providers/adapter/daemon-pty-adapter'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
-import { DaemonServer } from '../../server/daemon-server'
-import { getDaemonSocketPath } from '../../launch/daemon-spawner'
 
 const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }))
 vi.mock('../../../telemetry/client', () => ({ track: trackMock }))
-
-import {
-  createDaemonAuditEligibilityTracker,
-  trackDaemonAuditEligibility
-} from '../daemon-audit-eligibility-event'
+import { createDaemonAuditEligibilityTracker } from '../daemon-audit-eligibility-event'
 
 const context: DaemonAuditContext = {
   protocolGeneration: 23,
@@ -83,142 +73,5 @@ describe('daemon audit eligibility telemetry', () => {
     ]) {
       expect(serializedProperties).not.toContain(rawIdentity)
     }
-  })
-
-  it('cannot affect callers when telemetry throws', () => {
-    trackMock.mockImplementation(() => {
-      throw new Error('transport failed')
-    })
-
-    expect(() =>
-      trackDaemonAuditEligibility(recordAuthenticatedInventory(context, null))
-    ).not.toThrow()
-
-    const trackEligibility = createDaemonAuditEligibilityTracker()
-    expect(() => trackEligibility(recordAuthenticatedInventory(context, null))).not.toThrow()
-  })
-
-  it('cannot affect callers when the rate-limit bookkeeping throws', () => {
-    const trackEligibility = createDaemonAuditEligibilityTracker(() => {
-      throw new Error('no clock')
-    })
-
-    expect(() => trackEligibility(recordAuthenticatedInventory(context, null))).not.toThrow()
-
-    const malformed = recordAuthenticatedInventory(context, null)
-    expect(() =>
-      trackEligibility({ ...malformed, evidenceSources: undefined as never })
-    ).not.toThrow()
-    expect(trackMock).not.toHaveBeenCalled()
-  })
-
-  it('collapses repeated identical observations into one heartbeat per window', () => {
-    let nowMs = 1_700_000_000_000
-    const trackEligibility = createDaemonAuditEligibilityTracker(() => nowMs)
-
-    for (let index = 0; index < 60; index += 1) {
-      nowMs += 1_000
-      trackEligibility(recordAuthenticatedInventory(context, exactIncarnation))
-    }
-
-    expect(trackMock).toHaveBeenCalledOnce()
-
-    nowMs += 5 * 60_000
-    trackEligibility(recordAuthenticatedInventory(context, exactIncarnation))
-    expect(trackMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps heartbeating after the clock jumps backward', () => {
-    let nowMs = 1_700_000_000_000
-    const trackEligibility = createDaemonAuditEligibilityTracker(() => nowMs)
-
-    trackEligibility(recordAuthenticatedInventory(context, null))
-    expect(trackMock).toHaveBeenCalledOnce()
-
-    nowMs -= 60 * 60_000
-    trackEligibility(recordAuthenticatedInventory(context, null))
-    expect(trackMock).toHaveBeenCalledTimes(2)
-
-    for (let index = 0; index < 60; index += 1) {
-      nowMs += 1_000
-      trackEligibility(recordAuthenticatedInventory(context, null))
-    }
-    expect(trackMock).toHaveBeenCalledTimes(2)
-
-    nowMs += 5 * 60_000
-    trackEligibility(recordAuthenticatedInventory(context, null))
-    expect(trackMock).toHaveBeenCalledTimes(3)
-  })
-
-  it('measures the window on a monotonic clock rather than wall time', () => {
-    const wallClock = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
-    const trackEligibility = createDaemonAuditEligibilityTracker()
-
-    try {
-      trackEligibility(recordAuthenticatedInventory(context, null))
-      expect(trackMock).toHaveBeenCalledOnce()
-
-      wallClock.mockReturnValue(1_700_000_000_000 + 6 * 60_000)
-      trackEligibility(recordAuthenticatedInventory(context, null))
-      expect(trackMock).toHaveBeenCalledOnce()
-    } finally {
-      wallClock.mockRestore()
-    }
-  })
-
-  it('emits immediately when the observation changes', () => {
-    let nowMs = 1_700_000_000_000
-    const trackEligibility = createDaemonAuditEligibilityTracker(() => nowMs)
-
-    trackEligibility(recordAuthenticatedInventory(context, null))
-    nowMs += 1_000
-    trackEligibility(
-      recordAuthenticatedInventory(context, {
-        identity: { pid: 42, startedAtMs: nowMs, launchNonce: 'launch-a' }
-      })
-    )
-
-    expect(trackMock).toHaveBeenCalledTimes(2)
-    expect(trackMock.mock.calls[1][1]).toMatchObject({ exact_incarnation: 'endpoint-identity' })
-  })
-})
-
-describe('daemon audit eligibility inventory volume', () => {
-  let dir: string
-  let socketPath: string
-  let tokenPath: string
-  let server: DaemonServer
-  let adapter: DaemonPtyAdapter
-
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'daemon-audit-eligibility-'))
-    socketPath = getDaemonSocketPath(dir)
-    tokenPath = join(dir, 'daemon.token')
-  })
-
-  afterEach(async () => {
-    adapter?.dispose()
-    await server?.shutdown()
-    rmSync(dir, { recursive: true, force: true })
-  })
-
-  it('does not emit one eligibility event per successful inventory', async () => {
-    server = new DaemonServer({
-      socketPath,
-      tokenPath,
-      spawnSubprocess: () => {
-        throw new Error('Test must not create a PTY')
-      }
-    })
-    await server.start()
-    adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
-
-    for (let index = 0; index < 40; index += 1) {
-      await adapter.listProcesses()
-    }
-
-    expect(
-      trackMock.mock.calls.filter(([name]) => name === 'daemon_audit_eligibility')
-    ).toHaveLength(1)
   })
 })

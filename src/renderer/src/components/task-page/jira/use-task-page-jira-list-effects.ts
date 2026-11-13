@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/runtime-provider-search-bounds'
+import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/issue-search/runtime-provider-search-bounds'
 import { withCurrentSprintClause } from '../../../../../shared/jira/jira-jql-predicate'
 import {
   buildJiraStatusCatalog,
@@ -18,7 +18,7 @@ import { searchTaskPageJiraIssues } from '@/components/task-page/jira/task-page-
 import { JIRA_ITEM_LIMIT } from '../task-page-source-context'
 import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { buildJiraPresetJql } from '../../../../../shared/jira/jira-preset-jql'
 import { restrictJiraQueryToProject } from '../../../../../shared/jira/jira-project-reference'
 import type { JiraIssueSuggestions } from '../../../../../shared/jira/jira-types'

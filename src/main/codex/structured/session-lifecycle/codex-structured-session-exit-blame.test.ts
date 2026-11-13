@@ -7,7 +7,7 @@ import {
 
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { withMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
 

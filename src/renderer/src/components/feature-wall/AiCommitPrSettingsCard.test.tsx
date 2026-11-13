@@ -34,9 +34,12 @@ it('uses the shared AI-author picker without saving on cancel and preserves Cust
     ctrlKey: false
   })
   fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  fireEvent.click(screen.getByRole('option', { name: /^More models/ }))
   fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
   fireEvent.keyDown(screen.getByLabelText('Search models'), { key: 'Escape' })
-  fireEvent.keyDown(screen.getByPlaceholderText('Search agents and setups…'), { key: 'Escape' })
+  fireEvent.keyDown(screen.getByPlaceholderText('Search, e.g. Opus 5.5…'), {
+    key: 'Escape'
+  })
   expect(persist).not.toHaveBeenCalled()
   expect(useAppStore.getState().settings?.commitMessageAi?.selectedModelByAgent.codex).toBe(
     'gpt-5.5'
@@ -46,6 +49,7 @@ it('uses the shared AI-author picker without saving on cancel and preserves Cust
     ctrlKey: false
   })
   fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  // The draft still names legacy GPT-5.4, so its section opens by itself.
   fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
   fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
   fireEvent.click(screen.getByRole('button', { name: /^Use$/ }))

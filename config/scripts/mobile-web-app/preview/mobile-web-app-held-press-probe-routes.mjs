@@ -5,13 +5,15 @@ export function commandDockProbeRouteSource({
   commandDockModule,
   keyDefinitionsModule,
   accessorySelectionModule,
-  dockKeysModule
+  dockKeysModule,
+  liveInputCaptureModule
 }) {
   return `import { useLayoutEffect, useRef, useState } from 'react'
 import { MobileSessionCommandDock } from ${JSON.stringify(commandDockModule)}
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from ${JSON.stringify(keyDefinitionsModule)}
 import { useMobileSessionAccessorySelection } from ${JSON.stringify(accessorySelectionModule)}
 import { useTerminalDockKeys } from ${JSON.stringify(dockKeysModule)}
+import { createLiveInputCapture } from ${JSON.stringify(liveInputCaptureModule)}
 
 const noop = () => {}
 const KEYS = TERMINAL_ACCESSORY_KEY_DEFINITIONS
@@ -49,6 +51,7 @@ export default function CommandDockProbeRoute() {
   })
   const dockKeys = useTerminalDockKeys({ activeHandle, sendInput: send })
   const liveInputRef = useRef(null)
+  const [liveInputCapture] = useState(createLiveInputCapture)
   globalThis.__orcaHeldPressProbe = {
     sent: () => [...sentRef.current],
     deliveries: () => [...deliveriesRef.current],
@@ -58,7 +61,7 @@ export default function CommandDockProbeRoute() {
   }
   const controller = {
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
-    liveInputCapture: '',
+    liveInputCapture,
     activeHandle,
     activeSessionTab: null,
     dockKeys,
@@ -106,7 +109,7 @@ export default function CommandDockProbeRoute() {
     activeMarkdownTab: null,
     activeFileTab: null,
     activeBrowserTab: null,
-    keyboardLift: 0
+    dockBottomInset: 0
   }
   return <MobileSessionCommandDock controller={controller} />
 }

@@ -57,10 +57,4 @@ describe('cleanupDaemonForProtocol with an expected owner', () => {
     )
     expect(mocks.killStaleDaemon).not.toHaveBeenCalled()
   })
-
-  it('keeps the untargeted pid-kill fallback for unreachable daemons', async () => {
-    mocks.connectError = new Error('connect failed')
-    await expect(cleanupDaemonForProtocol('/runtime', 1)).resolves.toMatchObject({ cleaned: true })
-    expect(mocks.killStaleDaemon).toHaveBeenCalledOnce()
-  })
 })

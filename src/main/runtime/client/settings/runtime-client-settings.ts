@@ -1,10 +1,10 @@
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { isArtifactSharingEnabled } from '../../../../shared/artifact-sharing-gate'
+import { isArtifactSharingEnabled } from '../../../../shared/artifacts/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../../../shared/agent-skill-sharing-gate'
 import { applyPRBotAuthorOverride } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import { TASK_PROVIDERS } from '../../../../shared/task-providers'
+import { TASK_PROVIDERS } from '../../../../shared/work-items/task-providers'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
@@ -17,13 +17,15 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import { recordManagedHookInstallFailure } from '../../../agent-hooks/install-telemetry'
-import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
+import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
+import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
@@ -104,15 +106,23 @@ export class RuntimeClientSettingsController {
         ? {}
         : { artifactSharingEnabled: isArtifactSharingEnabled(settings) }),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
+      workspaceCleanupPolicy: settings.workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules(),
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
       nativeChatAutoContinueAfterUsageLimit:
         settings.nativeChatAutoContinueAfterUsageLimit === true,
       machineName: settings.machineName ?? '',
+      // A paired browser dictates through this host, which refuses unless these allow it.
+      voice: {
+        enabled: settings.voice?.enabled === true,
+        sttModel: settings.voice?.sttModel ?? ''
+      },
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
       // Mirror the host preference; delivery still depends on queue capability.
       nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
+      // Resolved, so a phone can tell a reported value from an older host's absence.
+      nativeChatCiResultLines: nativeChatShowsCiResultLines(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -153,6 +163,8 @@ export class RuntimeClientSettingsController {
       this.notifyReposChanged?.()
     }
     if (
+      // An explicit enable while already enabled is a repair request (`orca agent hooks on`), so a wiped hook config reinstalls.
+      updates.agentStatusHooksEnabled === true ||
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
       (updates.disabledTuiAgents !== undefined &&

@@ -2,6 +2,8 @@ import { normalizeDesktopTerminalSnapshotRows } from '../../../../shared/termina
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
+import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
+import { focusLossReportSupport } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
@@ -179,6 +181,22 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   async resetInputModes(id: string): Promise<void> {
     await this.client.request('resetInputModes', { sessionId: id })
     this.markSessionDirty(id)
+  }
+
+  async reportFocusLost(id: string): Promise<void> {
+    const support = focusLossReportSupport(this.protocolVersion)
+    if (support === 'unsupported' || (support === 'ask' && this.focusLossReportRejected)) {
+      return
+    }
+    try {
+      await this.client.request('reportFocusLost', { sessionId: id })
+    } catch (error) {
+      if (support !== 'ask' || !isUnknownRequestTypeError(error)) {
+        throw error
+      }
+      // A v55 daemon from 1.4.251 predates the request; its replacement is asked again.
+      this.focusLossReportRejected = true
+    }
   }
 
   acknowledgeDataEvent(_id: string, _charCount: number): void {}

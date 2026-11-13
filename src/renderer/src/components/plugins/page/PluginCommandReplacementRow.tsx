@@ -1,6 +1,6 @@
 import { Replace } from 'lucide-react'
 import { getKeybindingDefinition, isKeybindingActionId } from '../../../../../shared/keybindings'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Switch } from '../../ui/switch'
 import { DetailRow } from './PluginDetailSections'
@@ -16,6 +16,7 @@ export function PluginCommandReplacementRow({
 }: {
   command: { title: string; replaces: string; replacedBy?: string }
 }): React.JSX.Element {
+  const t = useTranslate()
   const turnedOff = useAppStore((state) => state.settings?.pluginReplacementsOff)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const action = builtInActionTitle(command.replaces)
@@ -27,7 +28,7 @@ export function PluginCommandReplacementRow({
   return (
     <DetailRow
       icon={<Replace />}
-      title={translate(
+      title={t(
         'auto.components.plugins.PluginCommandReplacementRow.title',
         '{{value0}} runs instead of Orca’s {{value1}}',
         { value0: command.title, value1: action }
@@ -36,12 +37,12 @@ export function PluginCommandReplacementRow({
       detailTone={command.replacedBy ? 'warning' : 'default'}
       detail={
         command.replacedBy
-          ? translate(
+          ? t(
               'auto.components.plugins.PluginCommandReplacementRow.conflict',
               'Not used: {{value0}}, installed first, replaces it',
               { value0: command.replacedBy }
             )
-          : translate(
+          : t(
               'auto.components.plugins.PluginCommandReplacementRow.detail',
               'From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.'
             )
@@ -51,7 +52,7 @@ export function PluginCommandReplacementRow({
           <Switch
             checked={on}
             onCheckedChange={setOn}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.plugins.PluginCommandReplacementRow.switch',
               'Use {{value0}} instead of Orca’s {{value1}}',
               { value0: command.title, value1: action }

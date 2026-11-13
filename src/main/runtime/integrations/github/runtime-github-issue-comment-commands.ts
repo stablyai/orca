@@ -1,30 +1,90 @@
-import '../../../github/rate-limit'
+import '../../../github/api/rate-limit'
 import type {
   GitHubCreateIssueFields,
   GitHubIssueUpdate
 } from '../../../../shared/issue-mutation-types'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import type { GitHubPRReviewCommentInput } from '../../../../shared/github/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRReviewCommentInput } from '../../../../shared/github/comments/comment-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { addIssueComment } from '../../../github/issue-comment'
+import { addIssueComment } from '../../../github/issues/issue-comment'
 import {
   addPRReviewComment,
   addPRReviewCommentReply
 } from '../../../github/client/create/add-pr-review-comment'
-import { createIssue } from '../../../github/issue-create'
-import { updateIssue } from '../../../github/issue-update'
+import { createIssue } from '../../../github/issues/issue-create'
+import { updateIssue } from '../../../github/issues/issue-update'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github-attachment-params'
+import { uploadGitHubImage } from '../../../github/attachments/image-attachment-upload'
+import {
+  resolveGitHubRepoExecution,
+  resolveIssueGitHubApiRepositorySource
+} from '../../../github/repositories/github-api-repository'
+import { projectGhExecOptions } from '../../../github/project-view/project-host-execution'
+import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/hosted-cli/default-wsl-cli-fallback'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
 type RuntimeGitHubIssueCommentCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
+  resolveTarget: (args: {
+    repoSelector: string
+    worktreeSelector?: string
+  }) => Promise<{ repo: Repo; repoPath: string }>
   getLocalGitArgs: (repo: Repo) => LocalGitArgs
 }
 
 export class RuntimeGitHubIssueCommentCommands {
   constructor(private readonly deps: RuntimeGitHubIssueCommentCommandsDeps) {}
+
+  async uploadGitHubAttachment(
+    args: { target: GitHubAttachmentTarget; fileName: string; contentType: string },
+    bytes: Buffer,
+    signal?: AbortSignal
+  ): Promise<{ url: string }> {
+    const target = args.target
+    const upload = () =>
+      uploadGitHubImage({
+        ...args,
+        bytes,
+        signal,
+        resolve: async (uploadSignal) => {
+          if (target.kind === 'slug') {
+            return {
+              ownerRepo: target,
+              ghOptions: { ...projectGhExecOptions(target.host), signal: uploadSignal }
+            }
+          }
+          const { repo, repoPath } = await this.deps.resolveTarget({
+            repoSelector: target.repo,
+            worktreeSelector: target.worktree
+          })
+          const connectionId = getRepoRoutingConnectionId(repo)
+          const options = { ...this.deps.getLocalGitArgs(repo)[0], signal: uploadSignal }
+          return resolveGitHubRepoExecution(
+            repoPath,
+            target.ownerRepo ??
+              (target.source === 'issue'
+                ? async () =>
+                    (
+                      await resolveIssueGitHubApiRepositorySource(
+                        repoPath,
+                        repo.issueSourcePreference,
+                        connectionId,
+                        options
+                      )
+                    ).source
+                : undefined),
+            connectionId,
+            options
+          )
+        }
+      })
+    return target.kind === 'slug' && target.wakeWslDistro
+      ? runAsDefaultWslCliUserAct(upload)
+      : upload()
+  }
 
   async createRepoIssue(
     repoSelector: string,

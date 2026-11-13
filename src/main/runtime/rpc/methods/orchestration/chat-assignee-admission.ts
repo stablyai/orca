@@ -3,15 +3,18 @@ import {
   formatOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { observeChatAssignee } from '../../../orchestration/chat-assignee'
-import type { OrchestrationDb } from '../../../orchestration/db'
+import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import type { OrchestrationParty } from '../../../orchestration/orchestration-party'
-import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
-import { refuseUndeliverableSessionRecipient } from './messaging/session-recipient'
+import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import {
+  refuseUndeliverableSessionRecipient,
+  resolveTerminalAgentRecipient
+} from './messaging/session-recipient'
 
 const NO_EFFECTS = 'No effects were applied.'
 
@@ -31,11 +34,14 @@ export async function admitChatAssignee(
 ): Promise<AgentSessionConversationView> {
   // A failed install leaves no store, which the refusal below names.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const terminalRecipient = await resolveTerminalAgentRecipient(sessionId)
+  // Read after every wait: the store this admission checks is the one it then observes.
   const store = readAgentSessionRecordStore()
   const refusal = refuseUndeliverableSessionRecipient(
     { sessionId, address: formatOrcaSessionAddress(sessionId) },
     store,
     db,
+    terminalRecipient,
     NO_EFFECTS
   )
   if (refusal) {

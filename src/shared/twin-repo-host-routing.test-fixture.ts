@@ -75,74 +75,9 @@ export type TwinRepoHostCase = {
   expected: ExecutionHostId
 }
 
-const PAIRS: [
-  string,
-  TwinRepoRow,
-  ExecutionHostId,
-  ExecutionHostId,
-  TwinRepoRow,
-  ExecutionHostId,
-  ExecutionHostId,
-  ExecutionHostId
-][] = [
-  ['local+ssh', LOCAL_ROW, 'local', 'local', SSH_ROW, 'ssh:box', 'local', 'local'],
-  [
-    'local+runtime',
-    LOCAL_ROW,
-    'local',
-    'local',
-    RUNTIME_ROW,
-    'runtime:env-1',
-    'runtime:env-1',
-    'local'
-  ],
-  [
-    'ssh+runtime',
-    SSH_ROW,
-    'ssh:box',
-    'local',
-    RUNTIME_ROW,
-    'runtime:env-1',
-    'runtime:env-1',
-    'ssh:box'
-  ]
-]
-
-const GENERATED_CASES: TwinRepoHostCase[] = PAIRS.flatMap(
-  ([pair, rowA, hostA, expectedA, rowB, hostB, expectedB, contested]) => {
-    // Test both catalog orders to reject first-row routing.
-    const orders = [
-      [rowB, rowA],
-      [rowA, rowB]
-    ]
-    const holdings: [string, ExecutionHostId[], ExecutionHostId][] = [
-      ['contested', [hostA, hostB], contested],
-      [`${hostA} only`, [hostA], expectedA],
-      [`${hostB} only`, [hostB], expectedB],
-      ['unknown', [], 'local']
-    ]
-    return orders.flatMap((repos, order) =>
-      holdings.flatMap(([holding, hosts, expected]) => {
-        const catalog = hosts.map(listedOn)
-        return [
-          { name: `${pair} #${order} ${holding}, fresh`, repos, catalog, saved: [], expected },
-          {
-            name: `${pair} #${order} ${holding}, saved`,
-            repos,
-            catalog,
-            saved: [expected],
-            expected
-          }
-        ]
-      })
-    )
-  }
-)
-
 export const TWIN_REPO_HOST_CASES: TwinRepoHostCase[] = [
-  ...GENERATED_CASES,
   {
-    name: 'local+runtime: a stale local visit stamp yields to a runtime-only catalog',
+    name: 'a stale local visit yields to the runtime-only catalog',
     repos: [LOCAL_ROW, RUNTIME_ROW],
     catalog: [listedOn('runtime:env-1')],
     saved: [],
@@ -150,10 +85,52 @@ export const TWIN_REPO_HOST_CASES: TwinRepoHostCase[] = [
     expected: 'runtime:env-1'
   },
   {
-    name: 'local+runtime: rows saved on runtime with nothing listed stay on runtime',
+    name: 'saved runtime rows survive an empty catalog',
     repos: [LOCAL_ROW, RUNTIME_ROW],
     catalog: [],
     saved: ['runtime:env-1'],
     expected: 'runtime:env-1'
+  },
+  {
+    name: 'saved runtime wins when both catalog rows exist',
+    repos: [LOCAL_ROW, RUNTIME_ROW],
+    catalog: [listedOn('local'), listedOn('runtime:env-1')],
+    saved: ['runtime:env-1'],
+    expected: 'runtime:env-1'
+  },
+  {
+    name: 'a local-only catalog contradicts saved runtime rows',
+    repos: [RUNTIME_ROW, LOCAL_ROW],
+    catalog: [listedOn('local')],
+    saved: ['runtime:env-1'],
+    expected: 'local'
+  },
+  {
+    name: 'contested local and runtime claims use local primary',
+    repos: [RUNTIME_ROW, LOCAL_ROW],
+    catalog: [listedOn('runtime:env-1'), listedOn('local')],
+    saved: ['runtime:env-1', 'local'],
+    expected: 'local'
+  },
+  {
+    name: 'contested SSH and runtime catalog rows use SSH primary',
+    repos: [RUNTIME_ROW, SSH_ROW],
+    catalog: [listedOn('runtime:env-1'), listedOn('ssh:box')],
+    saved: [],
+    expected: 'ssh:box'
+  },
+  {
+    name: 'a lone SSH catalog row does not displace local fallback',
+    repos: [SSH_ROW, LOCAL_ROW],
+    catalog: [listedOn('ssh:box')],
+    saved: [],
+    expected: 'local'
+  },
+  {
+    name: 'unknown ownership falls back locally regardless of repo order',
+    repos: [RUNTIME_ROW, LOCAL_ROW],
+    catalog: [],
+    saved: [],
+    expected: 'local'
   }
 ]

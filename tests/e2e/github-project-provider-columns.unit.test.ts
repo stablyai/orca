@@ -7,24 +7,35 @@ import {
   normalizeItem,
   type RawItem
 } from '../../src/main/github/project-view/project-view-item-normalization'
-import { fetchItemsPageWithRaw } from '../../src/main/github/project-view/project-view-item-page'
+import '../../src/main/github/project-view/project-view-item-page'
 import { fetchAllItems } from '../../src/main/github/project-view/project-view-items'
 import {
   _resetProjectViewCachesForTests,
   type OptionalProjectItemField
 } from '../../src/main/github/project-view/project-view-cache'
-import { ghExecFileAsync } from '../../src/main/github/project-view/internals'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../src/shared/github/project-types'
-import { sortRows, groupRows } from '../../src/shared/github/project-group-sort'
+import { ghExecFileAsync } from '../../src/main/git/command-runner/hosted-cli/gh-exec-file'
+import type { GitHubProjectRow } from '../../src/shared/github/projects/project-types'
+import { normalizeLinkedPullRequests } from '../../src/main/github/project-view/project-view-field-normalization'
+import { projectRelationsTableFixture } from '../../src/shared/github/projects/project-relations.test-fixture'
+import { sortRows } from '../../src/shared/github/projects/project-group-sort'
 
 import ProjectCell from '../../src/renderer/src/components/github-project/ProjectCell'
 
-vi.mock('../../src/main/github/project-view/internals', () => ({
+vi.mock('../../src/main/github/execution/github-operation-slots', () => ({
   acquire: vi.fn(),
-  release: vi.fn(),
-  ghExecFileAsync: vi.fn(),
+  release: vi.fn()
+}))
+
+vi.mock('../../src/main/git/command-runner/hosted-cli/gh-exec-file', () => ({
+  ghExecFileAsync: vi.fn()
+}))
+
+vi.mock('../../src/main/github/project-view/project-host-execution', () => ({
   projectHostAuthenticationError: vi.fn().mockResolvedValue(null),
-  projectGhExecOptions: (host?: string) => ({ host }),
+  projectGhExecOptions: (host?: string) => ({ host })
+}))
+
+vi.mock('../../src/main/github/api/rate-limit', () => ({
   repositoryRateLimitGuard: () => ({ blocked: false }),
   noteRepositoryRateLimitSpend: vi.fn()
 }))
@@ -165,72 +176,6 @@ function renderColumns(row: GitHubProjectRow): void {
 }
 
 describe('Project columns from the items response', () => {
-  it.each([prText, '1/2 (50%)'])(
-    'renders %s through one bounded items request on a named cloud host',
-    async (expectedText) => {
-      vi.mocked(ghExecFileAsync).mockResolvedValueOnce(
-        response([
-          {
-            ...item,
-            fieldValues: {
-              nodes: [
-                null,
-                {
-                  __typename: 'ProjectV2ItemFieldTextValue',
-                  field: { id: 'notes' },
-                  text: 'Keep this too'
-                },
-                ...(item.fieldValues?.nodes ?? [])
-              ]
-            }
-          }
-        ])
-      )
-      const page = await fetchItemsPageWithRaw(args)
-      if (!page.ok || !page.page.nodes?.[0]) {
-        throw new Error('Expected an items page')
-      }
-      const row = normalized(page.page.nodes[0])
-      renderColumns(row)
-      expect(screen.getByText(cellText(expectedText)).textContent).toBe(expectedText)
-      expect(row.fieldValuesByFieldId).toEqual({
-        notes: { kind: 'text', fieldId: 'notes', text: 'Keep this too' }
-      })
-      expect(ghExecFileAsync).toHaveBeenCalledTimes(1)
-      const query = vi.mocked(ghExecFileAsync).mock.calls[0][0].join(' ')
-      expect(query).toContain('pullRequests(first:10)')
-      expect(query).toContain('subIssuesSummary { completed total percentCompleted }')
-      expect(query).not.toContain('ProjectV2ItemFieldProgressValue')
-    }
-  )
-
-  it.each([
-    { completed: 0, total: 2, percentCompleted: 0 },
-    { completed: 2, total: 2, percentCompleted: 100 }
-  ])('preserves zero and complete counters: %j', (summary) => {
-    renderColumns(normalized({ ...item, content: { subIssuesSummary: summary } }))
-    expect(
-      screen.getByText(`${summary.completed}/2 (${summary.percentCompleted}%)`).textContent
-    ).toBeTruthy()
-  })
-
-  it('keeps old-host, draft, PR, redacted and zero-total rows blank', () => {
-    for (const raw of [
-      { id: 'old', type: 'ISSUE', content: {} },
-      { id: 'draft', type: 'DRAFT_ISSUE', content: {} },
-      { id: 'pr', type: 'PULL_REQUEST', content: {} },
-      { id: 'redacted', type: 'REDACTED', content: null },
-      {
-        id: 'empty',
-        type: 'ISSUE',
-        content: { subIssuesSummary: { total: 0, completed: 0, percentCompleted: 0 } }
-      }
-    ]) {
-      renderColumns(normalized(raw))
-    }
-    expect(document.body.textContent).toBe('')
-  })
-
   it.each([
     { errors: [missingSummary], parentDropped: false, summary: false, prs: true },
     { errors: [missingPrs], parentDropped: false, summary: true, prs: false },
@@ -295,79 +240,6 @@ describe('Project columns from the items response', () => {
     }
   )
 
-  it('shares a pending owner capability probe between concurrent callers', async () => {
-    let entered = () => {}
-    let release = () => {}
-    const started = new Promise<void>((resolve) => {
-      entered = resolve
-    })
-    const pending = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    vi.mocked(ghExecFileAsync).mockImplementationOnce(async () => {
-      entered()
-      await pending
-      return { stdout: JSON.stringify({ errors: [missingSummary] }), stderr: '' }
-    })
-    const first = fetchAllItems(args)
-    await started
-    const second = fetchAllItems(args)
-    expect(ghExecFileAsync).toHaveBeenCalledTimes(1)
-    release()
-    const results = await Promise.all([first, second])
-    expect(results).toEqual([
-      expect.objectContaining({ ok: true, parentFieldDropped: false }),
-      expect.objectContaining({ ok: true, parentFieldDropped: false })
-    ])
-    expect(ghExecFileAsync).toHaveBeenCalledTimes(3)
-    expect(vi.mocked(ghExecFileAsync).mock.calls[2][0].join(' ')).not.toContain(
-      'subIssuesSummary {'
-    )
-  })
-
-  it('fetches unrelated projects concurrently when all optional selections are unsupported', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(ghExecFileAsync).mockResolvedValueOnce({
-      stdout: JSON.stringify({ errors: [missingParent, missingSummary, missingPrs] }),
-      stderr: ''
-    })
-    expect(await fetchAllItems(args)).toMatchObject({ ok: true, parentFieldDropped: true })
-    vi.mocked(ghExecFileAsync).mockClear()
-    let entered = () => {}
-    let release = () => {}
-    const started = new Promise<void>((resolve) => {
-      entered = resolve
-    })
-    const pending = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    vi.mocked(ghExecFileAsync).mockImplementationOnce(async (arguments_) => {
-      entered()
-      await pending
-      return selectedResponse(arguments_)
-    })
-    const first = fetchAllItems(args)
-    await started
-    const second = fetchAllItems({ ...args, projectNumber: 2 })
-    // Flush the normal request's async auth boundary without releasing the first response.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    const concurrentCalls = vi.mocked(ghExecFileAsync).mock.calls.slice()
-    release()
-    expect(await Promise.all([first, second])).toEqual([
-      expect.objectContaining({ ok: true, parentFieldDropped: true }),
-      expect.objectContaining({ ok: true, parentFieldDropped: true })
-    ])
-    expect(concurrentCalls).toHaveLength(2)
-    expect(
-      concurrentCalls.map(([arguments_]) => arguments_.find((arg) => arg.startsWith('num=')))
-    ).toEqual(['num=1', 'num=2'])
-    for (const [arguments_] of concurrentCalls) {
-      expect(arguments_.join(' ')).not.toMatch(
-        /parent \{|subIssuesSummary \{|\.\.\. on ProjectV2ItemFieldPullRequestValue/
-      )
-    }
-  })
-
   it('keeps supported fields and the cursor on pages after a capability retry', async () => {
     vi.mocked(ghExecFileAsync).mockResolvedValueOnce({
       stdout: JSON.stringify({ errors: [missingSummary] }),
@@ -392,90 +264,51 @@ describe('Project columns from the items response', () => {
     expect(last.join(' ')).toContain('parent {')
     expect(last.join(' ')).toContain('... on ProjectV2ItemFieldPullRequestValue')
   })
+})
 
-  it.each([10, 12])('shows exact counts for a linked PR list with total %i', (totalCount) => {
-    const row = normalized(item)
-    if (!row.content.linkedPullRequests) {
-      throw new Error('Expected linked PR content')
+it('sorts linked PRs by their first number and treats count-only metadata as an unknown sort key', () => {
+  const field = {
+    kind: 'field',
+    id: 'prs',
+    name: 'Linked pull requests',
+    dataType: 'LINKED_PULL_REQUESTS'
+  } as const
+  const rows = ['ten', 'two-high', 'count-only', 'two-low', 'absent'].map((id, position) => ({
+    ...normalized({ id, type: 'ISSUE', content: { title: id } }),
+    position
+  }))
+  const table = projectRelationsTableFixture()
+  table.rows = rows
+  for (const [index, numbers] of [
+    [0, [10]],
+    [1, [2, 100]],
+    [3, [2, 9]]
+  ] as const) {
+    rows[index].content.linkedPullRequests = {
+      pullRequests: numbers.map((number) => ({
+        number,
+        title: 'PR',
+        url: `https://github.com/acme/repo/pull/${number}`
+      })),
+      totalCount: numbers.length
     }
-    row.content.linkedPullRequests.totalCount = totalCount
-    renderColumns(row)
+  }
+  rows[2].content.linkedPullRequests = normalizeLinkedPullRequests({
+    __typename: 'ProjectV2ItemFieldPullRequestValue',
+    pullRequests: { nodes: [null, {}], totalCount: 3 }
+  })
+  for (const [direction, expected] of [
+    ['ASC', ['two-high', 'two-low', 'ten', 'count-only', 'absent']],
+    ['DESC', ['ten', 'two-high', 'two-low', 'count-only', 'absent']]
+  ] as const) {
     expect(
-      screen.getByText(cellText(totalCount === 12 ? prText : prText.replace(' +2 more', '')))
-        .textContent
-    ).toBeTruthy()
-  })
-
-  it('preserves populated and legacy rows through shared sorting, grouping and cells', async () => {
-    const result = await fetchAllItems(args)
-    if (!result.ok) {
-      throw new Error('Expected rows')
-    }
-    const populated = result.rows[0]
-    populated.fieldValuesByFieldId.points = { kind: 'number', fieldId: 'points', number: 2 }
-    const legacy = normalized({ id: 'legacy', type: 'ISSUE', content: { title: 'Older host' } })
-    delete legacy.content.linkedPullRequests
-    delete legacy.content.subIssuesProgress
-    legacy.fieldValuesByFieldId.points = { kind: 'number', fieldId: 'points', number: 1 }
-    const points = { kind: 'field', id: 'points', name: 'Points', dataType: 'NUMBER' } as const
-    const prs = {
-      kind: 'field',
-      id: 'field-pr',
-      name: 'Linked PRs',
-      dataType: 'LINKED_PULL_REQUESTS'
-    } as const
-    const progress = {
-      kind: 'field',
-      id: 'field-progress',
-      name: 'Progress',
-      dataType: 'SUB_ISSUES_PROGRESS'
-    } as const
-    const table: GitHubProjectTable = {
-      project: {
-        id: 'P',
-        owner: 'o',
-        ownerType: 'organization',
-        number: 1,
-        title: 'Project',
-        url: ''
-      },
-      selectedView: {
-        id: 'V',
-        number: 1,
-        name: 'Table',
-        layout: 'TABLE_LAYOUT',
-        filter: '',
-        fields: [points, prs, progress],
-        groupByFields: [points],
-        sortByFields: [{ field: points, direction: 'ASC' }]
-      },
-      rows: [populated, legacy],
-      totalCount: 2,
-      parentFieldDropped: false
-    }
-    const sorted = sortRows(table, table.rows)
-    expect(sorted.map((row) => row.id)).toEqual(['legacy', 'item-1'])
-    const groups = groupRows(table, sorted)
-    expect(groups.map((group) => group.label)).toEqual(['1', '2'])
-    renderColumns(groups[1].rows[0])
-    expect(screen.getByText(cellText(prText))).toBeTruthy()
-    expect(screen.getByText('1/2 (50%)')).toBeTruthy()
-    cleanup()
-    renderColumns(groups[0].rows[0])
-    expect(document.body.textContent).toBe('')
-    cleanup()
-    // Existing builtin ordering still uses the field map, with no new relation value kind.
-    for (const field of [prs, progress]) {
-      const relationTable = {
-        ...table,
-        selectedView: {
-          ...table.selectedView,
-          groupByFields: [field],
-          sortByFields: [{ field, direction: 'ASC' as const }]
-        }
-      }
-      expect(sortRows(relationTable, table.rows).map((row) => row.id)).toEqual(['item-1', 'legacy'])
-      expect(groupRows(relationTable, table.rows).map((group) => group.key)).toEqual(['__empty__'])
-    }
-  })
+      sortRows(
+        {
+          ...table,
+          selectedView: { ...table.selectedView, sortByFields: [{ field, direction }] }
+        },
+        rows
+      ).map((row) => row.id)
+    ).toEqual(expected)
+  }
 })

@@ -5,7 +5,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type WorkspaceKanbanCardProps = {
@@ -39,6 +39,7 @@ function WorkspaceKanbanCard({
   onContextMenuSelect,
   onAssignWorkspaceStatus
 }: WorkspaceKanbanCardProps): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const worktreeIdentity = getWorktreeHostIdentity(worktree)
   const contextWorktrees =
@@ -58,7 +59,7 @@ function WorkspaceKanbanCard({
         <Badge
           variant="outline"
           className="pointer-events-none absolute right-2 top-1.5 z-10 flex size-4 items-center justify-center rounded-full bg-background/90 p-0 text-muted-foreground"
-          aria-label={translate('auto.components.sidebar.WorkspaceKanbanCard.cefae8983e', 'Pinned')}
+          aria-label={t('auto.components.sidebar.WorkspaceKanbanCard.cefae8983e', 'Pinned')}
         >
           <Pin className="size-2.5" />
         </Badge>

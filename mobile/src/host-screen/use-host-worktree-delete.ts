@@ -1,18 +1,16 @@
 import { useCallback, useRef, useState } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import {
-  ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
-  worktreeRemovalReplyTimeoutMs
-} from '../../../src/shared/worktree/archive-hook-removal-gate'
+import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../src/shared/worktree/archive-hook-removal-gate'
 import type { OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
 import { newWorkspaceUiStateRead } from '../components/new-workspace-operations'
 import { canUseRepoWideTrust } from '../../../src/shared/orca-hook-trust-entries'
 import {
   persistOrcaHookTrustApproval,
   wasOrcaHookPreviouslyApproved
-} from '../tasks/setup-hook-trust'
+} from '../new-workspace/creation/setup-hook-trust'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { buildWorktreeRemoveRequest } from './worktree-remove-request'
 import { removeWorktreeRow } from '../worktree/worktree-host-row-identity'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import { worktreeArchiveHookTrustRead, worktreeRemove } from './host-screen-operations'
@@ -132,12 +130,10 @@ export function useHostWorktreeDelete(args: {
     ) => {
       hideRow(item)
       try {
-        const reply = await worktreeRemove.request(
-          clients.rowClient,
-          { worktree: `id:${item.worktreeId}`, force: true, ...hooks },
-          // The host runs the archive hook before it replies; outlast it as desktop does (#19334).
-          { timeoutMs: worktreeRemovalReplyTimeoutMs(hooks.runHooks) }
-        )
+        const request = buildWorktreeRemoveRequest(item, hooks)
+        const reply = await worktreeRemove.request(clients.rowClient, request.params, {
+          timeoutMs: request.timeoutMs
+        })
         if (worktreeRemove.interpret(reply).accepted) {
           triggerSuccess()
         } else {
@@ -150,6 +146,9 @@ export function useHostWorktreeDelete(args: {
               item,
               message: reply.error.message
             })
+          } else if (!reply.ok && item.recipeEnvironment) {
+            // Say why: the desktop may have removed the checkout but not destroyed the environment.
+            setActionError(reply.error.message)
           }
         }
         void fetchWorktrees()
@@ -158,7 +157,7 @@ export function useHostWorktreeDelete(args: {
         restoreRow(item)
       }
     },
-    [fetchWorktrees, hideRow, restoreRow]
+    [fetchWorktrees, hideRow, restoreRow, setActionError]
   )
 
   // Every attempt, Delete Anyway included, re-reads the script: it may have changed since approval.

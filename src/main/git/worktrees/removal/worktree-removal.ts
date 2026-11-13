@@ -1,4 +1,5 @@
 import { lstat } from 'node:fs/promises'
+import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/git-no-prompt-env'
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
@@ -9,9 +10,10 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
-import type { RemoveWorktreeOptions } from '../worktree-operation-options'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
+
 import {
+  type RemoveWorktreeOptions,
   getErrorCode,
   gitExecOptions,
   normalizeLocalBranchRef
@@ -24,7 +26,7 @@ import { runUnderWorktreeDeleteLimit } from './worktree-delete-limit'
 import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-worktree-removal'
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
-import { runKeyedSerializedOperation } from '../../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
@@ -73,7 +75,7 @@ async function performRemoveWorktree(
   const execOptions = {
     ...gitExecOptions(repoPath, options),
     ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {}),
-    ...removalGitEnv(),
+    ...gitEnvWithoutYesNoPrompt(),
     admissionExempt: true as const
   }
   const args = [...longPathArgs, 'worktree', 'remove']
@@ -189,19 +191,6 @@ async function localBranchExists(
   } catch {
     return false
   }
-}
-
-// Git for Windows may invoke GIT_ASK_YESNO for locked files; removal must never launch a prompt.
-function removalGitEnv(): { env?: NodeJS.ProcessEnv } {
-  const inherited = Object.keys(process.env).filter((key) => key.toUpperCase() === 'GIT_ASK_YESNO')
-  if (inherited.length === 0) {
-    return {}
-  }
-  const env = { ...process.env }
-  for (const key of inherited) {
-    delete env[key]
-  }
-  return { env }
 }
 
 // Git for Windows can exit 0 leaving junctions and parent directories; finish that accepted delete.

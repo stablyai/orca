@@ -311,6 +311,11 @@ export const BrowserNetworkTunnelAttachParams = BrowserHostLeaseAuthority.extend
 })
 
 export const BrowserNetworkTunnelEvent = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('ready'), tunnelGeneration: Generation }),
+  z.object({
+    type: z.literal('ready'),
+    tunnelGeneration: Generation,
+    /** Tunnel capabilities the host accepted from the attach; older hosts omit it. */
+    capabilities: z.array(z.string().max(128)).max(16).optional()
+  }),
   z.object({ type: z.literal('closed'), tunnelGeneration: Generation })
 ])

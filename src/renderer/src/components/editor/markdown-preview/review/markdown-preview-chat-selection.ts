@@ -1,6 +1,6 @@
 import { fencedCode } from '../../selection-copy'
-import type { QuotableSelection } from '../../../native-chat/SelectionAddToChatPopover'
-import { selectedTextEdges } from '../../../native-chat/native-chat-quote-selection'
+import type { QuotableSelection } from '../../../native-chat/selection-quotes/SelectionAddToChatPopover'
+import { selectedTextEdges } from '../../../native-chat/selection-quotes/native-chat-quote-selection'
 
 function sourceLines(node: Node, root: HTMLElement): [number, number] | null {
   const block = node.parentElement?.closest<HTMLElement>('[data-source-line][data-source-end-line]')

@@ -1,9 +1,9 @@
 import React from 'react'
 import { FolderKanban } from 'lucide-react'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskPageGitHubCloseAction } from '@/components/task-page/github/task-page-github-status-actions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { GHEditSectionStatusPopover } from './gh-edit-section-status-popover'
 import { GHEditSectionAssigneesColumn } from './gh-edit-section-assignees'
 import { GHEditSectionLabelsColumn } from './gh-edit-section-labels'
@@ -73,11 +73,12 @@ export function GHEditSectionTopColumns({
   onAssigneeToggle: (login: string) => void
   onLabelToggle: (label: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <aside className="grid grid-cols-2 gap-x-6 gap-y-5 text-[13px] sm:grid-cols-4">
       <section className="min-w-0">
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {translate('auto.components.GitHubItemDialog.00ccdf9b5a', 'Status')}
+          {t('auto.components.GitHubItemDialog.00ccdf9b5a', 'Status')}
         </div>
         <GHEditSectionStatusPopover
           item={item}
@@ -120,7 +121,7 @@ export function GHEditSectionTopColumns({
       <section className="min-w-0">
         {/* Keep the primary workspace action in the issue header; these columns show metadata. */}
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {translate('auto.components.GitHubItemDialog.2e4d806c92', 'Workspace')}
+          {t('auto.components.GitHubItemDialog.2e4d806c92', 'Workspace')}
         </div>
         {attachedWorkspaceLabel ? (
           <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -129,7 +130,7 @@ export function GHEditSectionTopColumns({
           </div>
         ) : (
           <div className="text-[12px] text-muted-foreground">
-            {translate('auto.components.GitHubItemDialog.886a64b081', 'None yet')}
+            {t('auto.components.GitHubItemDialog.886a64b081', 'None yet')}
           </div>
         )}
       </section>

@@ -1,4 +1,7 @@
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
 import { getCheckConclusion } from '../../../../../../shared/source-control/checks/pr-check-status-label'
 import { getIntlLocale } from '@/i18n/i18n'
 
@@ -43,7 +46,10 @@ export function isFailedCheck(check: PRCheckDetail): boolean {
   )
 }
 
-export function formatCheckTimestamp(input: string | null | undefined): string | null {
+export function formatCheckTimestamp(
+  input: string | null | undefined,
+  intlLocale: string = getIntlLocale()
+): string | null {
   if (!input) {
     return null
   }
@@ -51,7 +57,7 @@ export function formatCheckTimestamp(input: string | null | undefined): string |
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleString(getIntlLocale(), {
+  return date.toLocaleString(intlLocale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

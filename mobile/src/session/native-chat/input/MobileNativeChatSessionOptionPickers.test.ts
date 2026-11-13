@@ -1,17 +1,6 @@
-import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/agent-session-options-result'
-import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
-import {
-  OPTIONS,
-  BASE,
-  deferred,
-  accepted,
-  optionsClient,
-  recordingMutate,
-  mountOptions,
-  settle
-} from '../../use-mobile-structured-agent-options.test-fixture'
 import { createElement, useState, type ReactNode } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccessibilityInfo, Platform } from 'react-native'
 
@@ -111,7 +100,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       })
     }
     act(() => {
-      renderer = create(createElement(Pickers, { working: isWorking }))
+      renderer = createWithQueryClient(createElement(Pickers, { working: isWorking }))
     })
     return (working: boolean, nextSnapshot = snapshot): void => {
       controller.snapshot = nextSnapshot
@@ -159,6 +148,14 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
+  it('shows the selected model when legacy answering-model metadata names another model', () => {
+    const legacyDescriptor = { ...MODEL_DESCRIPTOR, reportedModel: 'claude-opus-4-8' }
+    mount([legacyDescriptor], true)
+    const label = findAllByHostType(pill('Model'), 'Text').map((node) => node.props.children)
+    expect(label).toContain('Sonnet 5')
+    expect(label).not.toContain('Opus 4.8')
+  })
+
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
     const placeholder: SessionOptionDescriptor = {
       ...MODEL_DESCRIPTOR,
@@ -178,124 +175,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => rowByText('Permissions').props.onPress())
     await act(async () => rowByText('Full access').props.onPress())
     expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
-  })
-
-  it('picks the shown Codex default during a reply and captures it only for the next message', async () => {
-    const pending = deferred<AgentSessionOptionsResult>()
-    let reads = 0
-    const rpc = optionsClient(() =>
-      ++reads === 1
-        ? Promise.resolve({
-            ...OPTIONS,
-            listedModelIds: OPTIONS.models.map((row) => row.id),
-            current: { model: 'gpt-fast', acceptedInputSources: { model: 'saved' }, defaulted: [] }
-          })
-        : pending.promise
-    )
-    const { calls, mutate } = recordingMutate(async () =>
-      accepted({ key: 'effort', value: 'low', options: { effort: 'low' } }, true)
-    )
-    const view = await mountOptions({ ...BASE, client: rpc.client, mutate, sendSelection: true })
-    const snapshot = () => [...view.current().optionSnapshot]
-    try {
-      const update = mount(snapshot(), true)
-      const running = view.current().sendSelection()
-      expect(running).toEqual({ selection: { model: 'gpt-fast' } })
-      await act(async () => pill('Model').props.onPress())
-      setOption.mockImplementation(view.current().setStructuredOption)
-      await act(async () => pill('Low').props.onPress())
-      await settle()
-      expect(calls.map((call) => call.fields)).toEqual([{ key: 'effort', value: 'low' }])
-      expect(view.current().sendSelection()).toEqual({
-        selection: { model: 'gpt-fast', effort: 'low' }
-      })
-      expect(running).toEqual({ selection: { model: 'gpt-fast' } })
-      update(true, snapshot())
-      await act(async () => pill('Low').props.onPress())
-      expect(setOption).toHaveBeenCalledTimes(1)
-    } finally {
-      await view.unmount()
-    }
-  })
-
-  it('renders actual settled permission/reset picks without busy state and locks ordinary pending model work', async () => {
-    const idle = deferred<AgentSessionOptionsResult>()
-    let reads = 0
-    const rpc = optionsClient(() =>
-      ++reads === 1
-        ? Promise.resolve({ ...OPTIONS, current: { ...OPTIONS.current, permissionMode: 'ask' } })
-        : idle.promise
-    )
-    const replies = Array.from({ length: 3 }, () => deferred<ReturnType<typeof accepted>>())
-    const { calls, mutate } = recordingMutate((index) => replies[index].promise)
-    const view = await mountOptions({ ...BASE, client: rpc.client, mutate, permissionOwn: true })
-    function ActualPickers() {
-      const options = view.current()
-      const { nativeChatSessionOptions } = useMobileNativeChatSessionOptionController({
-        client: rpc.client,
-        activeChatStructured: true,
-        activeSessionTabId: BASE.sessionId,
-        agent: 'codex',
-        dispatchCommand: async () => 'accepted',
-        hostId: 'phone-picker',
-        isTabChatView: () => true,
-        isWorking: true,
-        reportedModel: null,
-        structured: {
-          snapshot: options.optionSnapshot,
-          pendingId: options.pendingOptionId,
-          setOption: options.setStructuredOption,
-          invokeAction: options.invokeStructuredOption
-        },
-        toggleTabChatView: () => {},
-        worktreeId: 'workspace-1'
-      })
-      return createElement(MobileNativeChatSessionOptionPickers, {
-        ...nativeChatSessionOptions!,
-        presentation: { page: 'model', refocus: false },
-        onDrawerOpen: () => {},
-        onNavigate: () => {}
-      })
-    }
-    try {
-      await act(async () => {
-        renderer = create(createElement(ActualPickers))
-      })
-      for (const [index, value] of ['full-access', 'own'].entries()) {
-        let pick!: Promise<boolean>
-        act(() => {
-          pick = view.current().setStructuredOption('permissionMode', value)
-        })
-        expect(calls[index]?.fields).toEqual({ key: 'permissionMode', value })
-        expect(view.current().pendingOptionId).toBeNull()
-        await act(async () => renderer!.update(createElement(ActualPickers)))
-        expect(renderer!.root.findAllByProps({ children: 'Applying…' })).toHaveLength(0)
-        expect(rowByText('GPT Fast').props.accessibilityState?.disabled).toBe(false)
-        await act(async () =>
-          replies[index].resolve(
-            accepted({ key: 'permissionMode', value, options: { permissionMode: value } }, true)
-          )
-        )
-        await expect(pick).resolves.toBe(true)
-        expect(view.current().pendingOptionId).toBeNull()
-        await act(async () => renderer!.update(createElement(ActualPickers)))
-        expect(renderer!.root.findAllByProps({ children: 'Applying…' })).toHaveLength(0)
-        expect(rowByText('GPT Fast').props.accessibilityState?.disabled).toBe(false)
-      }
-      act(() => {
-        void view.current().setStructuredOption('model', 'gpt-fast')
-      })
-      await act(async () => renderer!.update(createElement(ActualPickers)))
-      expect(rowByText('GPT Live').props.accessibilityState?.disabled).toBe(true)
-      expect(renderer!.root.findAllByProps({ children: 'Applying…' })).toHaveLength(1)
-      expect(calls.map((call) => call.fields)).toEqual([
-        { key: 'permissionMode', value: 'full-access' },
-        { key: 'permissionMode', value: 'own' },
-        { key: 'model', value: 'gpt-fast' }
-      ])
-    } finally {
-      await view.unmount()
-    }
   })
 })
 

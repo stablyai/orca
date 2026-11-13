@@ -1,22 +1,22 @@
-import { ClaudeControlRequestError } from '../../claude-agent-sdk-control-requests'
+import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import {
   AgentSessionOptionRejectedError,
   ClaudeEffortValidationError
-} from '../../../native-chat/agent-session-wire/structured-agent-session-option-error'
+} from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import {
   observeClaudeSettingsApplied,
   observeClaudeSettingsEffort,
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
 import { beginClaudeOptionMutation } from '../claude-structured-execution-observations'
 import {
   CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS
-} from '../../claude-cli-flag-support'
+} from '../../cli-capabilities/claude-cli-flag-support'
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
@@ -59,7 +59,7 @@ export function restoredClaudeStructuredSessionOptions(
   )
 }
 
-const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode'])
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode', 'interactionMode'])
 
 export function isClaudeStructuredOptionKey(key: string): boolean {
   return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)

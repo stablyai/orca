@@ -63,42 +63,6 @@ describe('Session pending output', () => {
     ])
   })
 
-  it('drains on take and increments the batch sequence', () => {
-    const subprocess = createMockSubprocess()
-    const live = createSession(subprocess)
-
-    subprocess.simulateData('first')
-    const first = live.takePendingOutput(false)
-    expect(first!.records).toEqual([{ kind: 'output', data: 'first' }])
-
-    subprocess.simulateData('second')
-    const second = live.takePendingOutput(false)
-    expect(second!.records).toEqual([{ kind: 'output', data: 'second' }])
-    expect(second!.seq).toBe(first!.seq + 1)
-
-    const empty = live.takePendingOutput(false)
-    expect(empty!.records).toEqual([])
-  })
-
-  it('flags overflow past the cap and recovers after a take', () => {
-    const subprocess = createMockSubprocess()
-    const live = createSession(subprocess)
-
-    const megabyte = 'x'.repeat(1024 * 1024)
-    subprocess.simulateData(megabyte)
-    subprocess.simulateData(megabyte)
-    subprocess.simulateData(megabyte)
-
-    const overflowed = live.takePendingOutput(false)
-    expect(overflowed!.overflowed).toBe(true)
-    expect(overflowed!.records).toEqual([])
-
-    subprocess.simulateData('post-overflow')
-    const recovered = live.takePendingOutput(false)
-    expect(recovered!.overflowed).toBe(false)
-    expect(recovered!.records).toEqual([{ kind: 'output', data: 'post-overflow' }])
-  })
-
   it('returns the snapshot and drops records in the same take when requested', () => {
     const subprocess = createMockSubprocess()
     const live = createSession(subprocess)

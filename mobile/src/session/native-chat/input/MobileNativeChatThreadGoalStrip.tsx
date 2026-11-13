@@ -17,7 +17,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { COMPOSER_TUCK } from '../composer/mobile-native-chat-composer-styles'
 import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
-import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
+import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 
 type Translate = ReturnType<typeof useMobileTranslation>
 

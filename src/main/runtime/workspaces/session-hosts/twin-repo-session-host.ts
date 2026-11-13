@@ -14,7 +14,7 @@ import {
   pickPrimaryHostForClaims
 } from '../../../../shared/workspace-session/workspace-session-contested-primary-host'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type CachedWorktreeHost = Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 
@@ -22,22 +22,29 @@ type TwinRepoStore = Pick<RuntimeStore, 'getWorkspaceSession' | 'getWorkspaceSes
 
 const WORKTREE_KEYED_FIELDS = new Set(
   Object.entries(WORKSPACE_SESSION_FIELD_OWNERSHIP)
-    .filter(([, ownership]) => ownership === 'worktreeKeyed')
+    .filter(
+      (entry): entry is [keyof WorkspaceSessionState, 'worktreeKeyed'] =>
+        entry[1] === 'worktreeKeyed'
+    )
     .map(([field]) => field)
 )
 
-function partitionHoldsWorktree(
+export function partitionHoldsWorktree(
   session: WorkspaceSessionState | undefined,
   worktreeId: string
 ): boolean {
   const workspaceKey = worktreeWorkspaceKey(worktreeId)
-  return Object.entries(session ?? {}).some(
-    ([field, record]: [string, unknown]) =>
-      WORKTREE_KEYED_FIELDS.has(field) &&
+  for (const field of WORKTREE_KEYED_FIELDS) {
+    const record: unknown = session?.[field]
+    if (
       typeof record === 'object' &&
       record !== null &&
       (Object.hasOwn(record, worktreeId) || Object.hasOwn(record, workspaceKey))
-  )
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function cachedWorktreeHostId(worktree: CachedWorktreeHost): ExecutionHostId | null {

@@ -14,6 +14,7 @@ const expo = vi.hoisted(() => ({
 
 vi.mock('expo-clipboard', () => ({ getImageAsync: expo.getImageAsync }))
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: expo.getDocumentAsync }))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
   launchImageLibraryAsync: expo.launchImageLibraryAsync,
@@ -27,7 +28,7 @@ vi.mock('expo-file-system', () => ({
       this.uri = parts.join('/')
     }
     create(): void {}
-    write(content: string | Uint8Array): void {
+    writeSync(content: string | Uint8Array): void {
       if (typeof content !== 'string') {
         expo.copiedBytes.push({ uri: this.uri, bytes: [...content] })
       }

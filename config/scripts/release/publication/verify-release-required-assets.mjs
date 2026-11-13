@@ -103,6 +103,10 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
       continue
     }
     const manifestText = await fetchAssetText(repo, manifestAsset, token)
+    // Without it, updaters on a dropped macOS install a build that cannot launch.
+    if (manifestName === 'latest-mac.yml' && !/^minimumSystemVersion:/m.test(manifestText)) {
+      throw new Error(`Release ${tag} latest-mac.yml has no minimumSystemVersion gate.`)
+    }
     for (const referencedName of extractManifestAssetNames(manifestText)) {
       requiredNames.add(referencedName)
     }

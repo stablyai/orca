@@ -13,13 +13,13 @@ export type EphemeralVmRecipeCleanupPayload = {
   projectId?: string
   workspaceId?: string
   workspaceName?: string
-  recipeResult: EphemeralVmRecipeResult
+  recipeResult?: EphemeralVmRecipeResult
 }
 
 export function buildEphemeralVmRecipeCleanupPayload(args: {
   recipe: Pick<OrcaVmRecipe, 'id'>
   context: EphemeralVmRecipeContext
-  recipeResult: EphemeralVmRecipeResult
+  recipeResult?: EphemeralVmRecipeResult
 }): EphemeralVmRecipeCleanupPayload {
   return buildEphemeralVmRecipeLifecyclePayload({ ...args, mode: 'destroy' })
 }
@@ -28,7 +28,7 @@ export function buildEphemeralVmRecipeLifecyclePayload(args: {
   mode: EphemeralVmRecipeLifecycleMode
   recipe: Pick<OrcaVmRecipe, 'id'>
   context: EphemeralVmRecipeContext
-  recipeResult: EphemeralVmRecipeResult
+  recipeResult?: EphemeralVmRecipeResult
 }): EphemeralVmRecipeCleanupPayload {
   return {
     schemaVersion: 1,
@@ -38,7 +38,7 @@ export function buildEphemeralVmRecipeLifecyclePayload(args: {
     projectId: args.context.projectId,
     workspaceId: args.context.workspaceId,
     workspaceName: args.context.workspaceName,
-    recipeResult: args.recipeResult
+    ...(args.recipeResult ? { recipeResult: args.recipeResult } : {})
   }
 }
 

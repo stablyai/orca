@@ -11,8 +11,8 @@ import {
   type CodexSession,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export function handleCodexSessionExit(input: {
   sessions: Map<string, CodexSession>

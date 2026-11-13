@@ -1,14 +1,14 @@
 // Lost channels drop their sockets but keep the listener; tunnel reconnect logic owns recovery.
-import { OrcadStdioBridgeUnavailableError } from '../../orcad/orcad-host-unavailable'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import { OrcadStdioBridgeUnavailableError } from '../../orcad/diagnostics/orcad-host-unavailable'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
 import {
   checkOrcadStdioBridge,
   openOrcadStdioBridgeChannel,
   resolveOrcadStdioBridge,
   type OrcadStdioBridge
-} from '../../ssh/orcad-stdio-bridge'
+} from './orcad-stdio-bridge'
 import { listenOrcadStdioBridge } from './orcad-stdio-bridge-listener'
-import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
+
 import type { RemoteCommandChannel } from '../install/remote-install-transport'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type {
@@ -39,7 +39,7 @@ export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvid
   }
 
   start(conn: SshConnection, options: PortForwardStartOptions): Promise<StartedPortForward> {
-    return startOrcadStdioBridge(sshOrcadHostTransport(conn), options, this.dependencies)
+    return startOrcadStdioBridge(conn, options, this.dependencies)
   }
 }
 

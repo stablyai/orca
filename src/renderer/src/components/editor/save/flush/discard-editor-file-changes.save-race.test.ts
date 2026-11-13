@@ -9,7 +9,7 @@ import {
 import { registerPendingEditorFlush } from './editor-pending-flush'
 
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
-import type * as MutationClient from '@/runtime/runtime-file-mutation-client'
+import type * as MutationClient from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   createEditorStore,
   createFakeEditorDisk,
@@ -22,14 +22,19 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
   current: null
 }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 // Hold the remote capability/status round trip before bytes are sent.
-const hostCheck = vi.hoisted((): { wait: Promise<void> | null } => ({ wait: null }))
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
+const hostCheck = vi.hoisted((): { wait: Promise<void> | null; arrived?: () => void } => ({
+  wait: null
+}))
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => {
   const actual = await importOriginal<typeof MutationClient>()
   return {
     ...actual,
     writeRuntimeFile: async (...args: Parameters<typeof actual.writeRuntimeFile>) => {
+      hostCheck.arrived?.()
       await hostCheck.wait
       return actual.writeRuntimeFile(...args)
     }
@@ -98,6 +103,7 @@ describe("Don't Save against running and queued saves", () => {
 
   afterEach(() => {
     hostCheck.wait = null
+    hostCheck.arrived = undefined
     detach()
     vi.useRealTimers()
     __clearSelfWriteRegistryForTests()
@@ -157,6 +163,35 @@ describe("Don't Save against running and queued saves", () => {
     }
 
     expect(written()).toEqual(['a'])
+  })
+
+  it('never sends a stale Overwrite after discard and reopening the same file', async () => {
+    const waiting = gate()
+    const arrived = gate()
+    hostCheck.wait = waiting.wait
+    hostCheck.arrived = arrived.open
+    edit('discarded draft')
+    const saving = requestEditorFileSave({ fileId: PATH, overwrite: true })
+    await vi.advanceTimersByTimeAsync(0)
+    await arrived.wait
+    const discarding = discardEditorBuffer(PATH)
+    store.getState().closeFile(PATH)
+    store.getState().openFile({
+      filePath: PATH,
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    withLoadedBaselines(store, createFakeEditorDisk({ [PATH]: '' }))
+    edit('new draft')
+    hostCheck.wait = null
+    waiting.open()
+    const [, release] = await Promise.all([saving, discarding])
+    release()
+    expect(disk.files.get(PATH)).toBe('')
+    await requestEditorFileSave({ fileId: PATH })
+    expect(disk.files.get(PATH)).toBe('new draft')
   })
 
   it('a save asked for after the discard still writes', async () => {

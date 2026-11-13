@@ -1,7 +1,7 @@
 import {
   boundPayload,
   digestPayload
-} from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+} from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { AGENT_SESSION_ID_MAX_LENGTH } from '../../../../shared/agent-session/agent-session-wire'
 
 export const CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES = 256

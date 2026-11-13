@@ -7,7 +7,7 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/co
 import {
   readTextFileRemote,
   writeTextFileRemoteAtomic
-} from '../agent-hooks/installer-utils-remote'
+} from '../agent-hooks/installation/remote/hook-text-files-remote'
 import {
   AMP_PLUGIN_FILE,
   AMP_PLUGIN_MARKER,

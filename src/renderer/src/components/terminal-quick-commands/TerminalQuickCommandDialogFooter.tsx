@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalQuickCommandDialogFooterProps = {
   canSave: boolean
@@ -17,10 +17,11 @@ export function TerminalQuickCommandDialogFooter({
   onCancel,
   onSave
 }: TerminalQuickCommandDialogFooterProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DialogFooter className="border-t border-border px-6 py-4 sm:justify-end">
       <Button type="button" variant="outline" disabled={saving} onClick={onCancel}>
-        {translate(
+        {t(
           'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.28370f16b9',
           'Cancel'
         )}
@@ -29,13 +30,13 @@ export function TerminalQuickCommandDialogFooter({
         type="button"
         onClick={onSave}
         disabled={!canSave}
-        title={translate(
+        title={t(
           'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.8dff838dea',
           'Save ({{value0}})',
           { value0: submitShortcutLabel }
         )}
       >
-        {translate(
+        {t(
           'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.2e2b958dfc',
           'Save'
         )}

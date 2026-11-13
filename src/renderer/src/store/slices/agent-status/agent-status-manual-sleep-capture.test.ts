@@ -3,8 +3,8 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AppState } from '../../types'
-import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
 const NOW = 1_800_000_000_000
 

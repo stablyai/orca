@@ -3,7 +3,8 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -46,6 +47,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       captureHostId: ExecutionHostId
       /** Names the new pane, so a retry of one request reconciles the pane it may have started. */
       mutationId: string
+      /** The caller's complete recipe; without one, the conversation's own pane record supplies it. */
+      launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
     }
   ): Promise<AgentSessionResumeResult> {
@@ -91,7 +94,12 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
   private async resumeClaimedAgentSession(
     worktreeId: string,
     session: ResumedAgentSession,
-    request: { captureHostId: ExecutionHostId; mutationId: string; signal?: AbortSignal },
+    request: {
+      captureHostId: ExecutionHostId
+      mutationId: string
+      launchConfig?: SleepingAgentLaunchConfig
+      signal?: AbortSignal
+    },
     create: {
       identity: { tabId: string; leafId: string }
       onPtySpawnDispatched: () => void
@@ -145,7 +153,7 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     try {
       resume = this.resolveMobileSessionResumeCommand(workspace, {
         ...session,
-        launchConfig: record?.launchConfig
+        launchConfig: request.launchConfig ?? record?.launchConfig
       })
     } catch (error) {
       if (error instanceof WslHostWindowsOnlyAgentError) {

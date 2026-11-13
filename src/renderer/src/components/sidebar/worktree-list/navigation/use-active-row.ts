@@ -33,25 +33,25 @@ export function usePrimaryActiveWorktreeRow(args: {
     rowKey: string
   } | null>(null)
 
-  useLayoutEffect(() => {
-    if (activeWorktreeId === null) {
-      setPrimaryActiveWorktreeRow(null)
-      return
-    }
-    setPrimaryActiveWorktreeRow((current) => {
-      if (current === null || current.worktreeIdentity !== activeIdentity) {
-        return null
-      }
-      const rowStillVisible = rows.some(
+  // Revalidate during render so a hidden or switched-away occurrence cannot paint as primary or resurrect later.
+  const [validatedFor, setValidatedFor] = useState({ rows, activeIdentity })
+  if (validatedFor.rows !== rows || validatedFor.activeIdentity !== activeIdentity) {
+    setValidatedFor({ rows, activeIdentity })
+    const current = primaryActiveWorktreeRow
+    const stillPrimary =
+      current !== null &&
+      current.worktreeIdentity === activeIdentity &&
+      rows.some(
         (row) =>
           row.type === 'item' &&
           composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id) ===
             current.worktreeIdentity &&
           row.rowKey === current.rowKey
       )
-      return rowStillVisible ? current : null
-    })
-  }, [activeIdentity, activeWorktreeId, rows])
+    if (current !== null && !stillPrimary) {
+      setPrimaryActiveWorktreeRow(null)
+    }
+  }
 
   const getActiveSurfaceVariant = useCallback(
     (row: WorktreeItemRow): ActiveSurfaceVariant => {

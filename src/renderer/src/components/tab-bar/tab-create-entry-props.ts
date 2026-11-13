@@ -19,5 +19,7 @@ export type TabBarCreateEntryProps = {
   /** Runs after the menu closes, so the tab jumped to actually takes focus. */
   onQueueSwitchFocus?: (focus: () => void) => void
   onSelectMenuOption?: (option: TabCreateMenuOption) => void
+  /** The host is still connecting, so options that open a terminal wait. */
+  terminalPending?: boolean
   worktreeId: string
 }

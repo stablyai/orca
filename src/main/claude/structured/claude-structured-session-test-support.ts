@@ -13,7 +13,7 @@ import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
-import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   type claudeInitialization,

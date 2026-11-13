@@ -5,7 +5,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionLeaseIsReleased } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { nextAgentSessionFence } from '../../../shared/agent-session/lifecycle/agent-session-next-fence'
-import type { StructuredAgentSessionAcquisitionReceipt } from '../../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
+import type { StructuredAgentSessionAcquisitionReceipt } from '../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import { assertFence, withLease } from './ownership/agent-session-lease-transitions'
 
 /** An unpublished start's observed exit belongs to its reservation, never a later owner. */

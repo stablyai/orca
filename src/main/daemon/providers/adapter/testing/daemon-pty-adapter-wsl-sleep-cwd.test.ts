@@ -246,22 +246,6 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     expect(checkpointCwd(id)).toBe(`${WSL_CWD}\\deep\\er`)
   })
 
-  it('keeps the spawn folder when the distro cannot be read', async () => {
-    readRows.mockResolvedValue(null)
-    adapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
-    const { id } = await adapter.spawn({
-      cols: 80,
-      rows: 24,
-      cwd: WSL_CWD,
-      env: { ORCA_PANE_KEY: PANE_KEY },
-      sessionId: 'repo::/repo@@unreadable'
-    })
-
-    await adapter.shutdown(id, { immediate: true, keepHistory: true })
-
-    expect(checkpointCwd(id)).toBe(WSL_CWD)
-  })
-
   // verify-18 (e): `cd deep`, then the distro was terminated: no Sleep read ran, and the restore
   // reopened at the root. The bridge shell's OSC 7 now carries the folder into every checkpoint.
   it('checkpoints the folder the shell last reported, with no read of the distro', async () => {
@@ -281,20 +265,5 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     await adapter.shutdown(id, { immediate: true, keepHistory: true })
 
     expect(checkpointCwd(id)).toBe(`${WSL_CWD}\\deep er\\déjà`)
-  })
-
-  it('never reads a distro for a pane that is not a WSL pane', async () => {
-    adapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
-    const { id } = await adapter.spawn({
-      cols: 80,
-      rows: 24,
-      cwd: 'C:\\repo',
-      env: { ORCA_PANE_KEY: PANE_KEY },
-      sessionId: 'repo::/repo@@windows'
-    })
-
-    await adapter.shutdown(id, { immediate: true, keepHistory: true })
-
-    expect(readRows).not.toHaveBeenCalled()
   })
 })

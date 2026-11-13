@@ -2,8 +2,8 @@ import React from 'react'
 import { ChevronDown, Eye, EyeOff, ExternalLink, Trash2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { WorkspaceCleanupForgetLocallyButton } from './workspace-cleanup-forget-locally-button'
 import { getWorkspaceCleanupCandidateAccessibleName } from './workspace-cleanup-host-label'
@@ -45,13 +45,11 @@ export function CandidateRowTrailing({
   onToggleExpanded,
   onView
 }: CandidateRowTrailingProps): React.JSX.Element {
-  const accessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
+  const t = useTranslate()
+  const accessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate, t)
   const expandLabel = expanded
-    ? translate(
-        'auto.components.workspace.cleanup.candidateRow.collapseDetails',
-        'Collapse details'
-      )
-    : translate('auto.components.workspace.cleanup.candidateRow.expandDetails', 'Expand details')
+    ? t('auto.components.workspace.cleanup.candidateRow.collapseDetails', 'Collapse details')
+    : t('auto.components.workspace.cleanup.candidateRow.expandDetails', 'Expand details')
 
   return (
     <div className="flex h-6 shrink-0 items-center gap-3">
@@ -59,8 +57,8 @@ export function CandidateRowTrailing({
       <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 [[class~='group/row']:has(:focus-visible)_&]:opacity-100 [@media(hover:none)]:opacity-100">
         <RowIconAction
           icon={ExternalLink}
-          tooltip={translate('components.workspace.cleanup.browse.openWorkspace', 'Open workspace')}
-          ariaLabel={translate(
+          tooltip={t('components.workspace.cleanup.browse.openWorkspace', 'Open workspace')}
+          ariaLabel={t(
             'components.workspace.cleanup.browse.openWorkspaceNamed',
             'Open {{value0}}',
             { value0: accessibleName }
@@ -70,8 +68,8 @@ export function CandidateRowTrailing({
         {candidate.blockers.includes('dismissed') ? (
           <RowIconAction
             icon={Eye}
-            tooltip={translate('components.workspace.cleanup.browse.stopIgnoring', 'Stop ignoring')}
-            ariaLabel={translate(
+            tooltip={t('components.workspace.cleanup.browse.stopIgnoring', 'Stop ignoring')}
+            ariaLabel={t(
               'components.workspace.cleanup.browse.stopIgnoringNamed',
               'Stop ignoring {{value0}}',
               { value0: accessibleName }
@@ -81,11 +79,11 @@ export function CandidateRowTrailing({
         ) : (
           <RowIconAction
             icon={EyeOff}
-            tooltip={translate(
+            tooltip={t(
               'components.workspace.cleanup.browse.ignoreTooltip',
               'Ignore: skip in bulk delete'
             )}
-            ariaLabel={translate(
+            ariaLabel={t(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a9957007eb',
               'Ignore {{value0}}',
               { value0: accessibleName }
@@ -96,11 +94,11 @@ export function CandidateRowTrailing({
         {selectable ? (
           <RowIconAction
             icon={Trash2}
-            tooltip={translate(
+            tooltip={t(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9cc26c019d',
               'Remove'
             )}
-            ariaLabel={translate(
+            ariaLabel={t(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.3828408538',
               'Remove {{value0}}',
               { value0: accessibleName }
@@ -116,24 +114,17 @@ export function CandidateRowTrailing({
       </div>
       <div className="flex items-center gap-4 text-xs tabular-nums text-muted-foreground">
         <RowMetric
-          label={translate(
-            'components.workspace.cleanup.browse.lastActive',
-            'Last active {{value0}}',
-            { value0: lastActivityLabel }
-          )}
+          label={t('components.workspace.cleanup.browse.lastActive', 'Last active {{value0}}', {
+            value0: lastActivityLabel
+          })}
           value={lastActivityLabel}
         />
         {showSizeColumn ? (
           <RowMetric
-            label={translate(
-              'components.workspace.cleanup.browse.sizeOnDisk',
-              'Size on disk: {{value0}}',
-              {
-                value0:
-                  sizeLabel ??
-                  translate('components.workspace.cleanup.browse.notMeasured', 'Not measured')
-              }
-            )}
+            label={t('components.workspace.cleanup.browse.sizeOnDisk', 'Size on disk: {{value0}}', {
+              value0:
+                sizeLabel ?? t('components.workspace.cleanup.browse.notMeasured', 'Not measured')
+            })}
             value={sizeLabel ?? '—'}
           />
         ) : null}

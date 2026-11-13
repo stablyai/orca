@@ -1,5 +1,5 @@
 import { gitLabJobTraceToLogExcerpt } from './gitlab-job-log-excerpt'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../github/check-types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../github/checks/check-types'
 
 export type GitLabJobTraceCheckDetailsStrings = {
   /** Shown for a job with no log: never ran, waiting on a human, or log erased/expired. */
@@ -11,7 +11,11 @@ export function gitLabJobCanHaveTrace(check: PRCheckDetail): boolean {
   if (check.status === 'queued') {
     return false
   }
-  return check.conclusion !== 'neutral' && check.conclusion !== 'skipped'
+  return (
+    (check.conclusion !== 'neutral' ||
+      (check.gitlabAllowedFailure === true && check.status === 'completed')) &&
+    check.conclusion !== 'skipped'
+  )
 }
 
 /** Adapt GitLab’s flat trace into one job logTail in the existing provider-neutral check-details shape. */

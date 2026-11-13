@@ -1,9 +1,9 @@
-import type { DispatchContextRow, WorkerDispatchRow } from '../../types'
+import type { DispatchContextRow, WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import {
   releaseContextOnlyDispatch,
   type ContextOnlyDispatchReleaseResult
-} from '../../context-only-dispatch-release'
+} from '../../workers/lifecycle/context-only-dispatch-release'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user-keep'
 import type { OrchestrationDb } from '../orchestration-db'

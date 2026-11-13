@@ -1,5 +1,5 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant, rpcResultVariants } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant, rpcResultVariants } from '../transport/rpc/rpc-operation-result-reader'
 import {
   fileTabBinaryDiffSchema,
   fileTabImageSchema,

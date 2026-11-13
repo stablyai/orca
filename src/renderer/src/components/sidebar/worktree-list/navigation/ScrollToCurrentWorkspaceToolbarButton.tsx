@@ -2,10 +2,11 @@ import { Crosshair } from 'lucide-react'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { requestScrollToCurrentWorkspaceReveal } from '@/lib/scroll-to-current-workspace-status'
-import { translate } from '@/i18n/i18n'
+import { requestScrollToCurrentWorkspaceReveal } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -13,7 +14,7 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
           variant="ghost"
           size="icon-xs"
           type="button"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663',
             'Reveal active workspace'
           )}
@@ -24,7 +25,7 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate(
+        {t(
           'auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663',
           'Reveal active workspace'
         )}

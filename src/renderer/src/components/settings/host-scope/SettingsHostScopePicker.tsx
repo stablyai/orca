@@ -1,15 +1,13 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '../../sidebar/execution-host-label'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import {
+  SettingsSearchableSelect,
+  type SettingsSearchableSelectOption
+} from '../form-controls/SettingsSearchableSelect'
 import type { SettingsHostScope } from './settings-host-scope'
 
 const LOCAL_VALUE = 'local'
@@ -33,17 +31,54 @@ export function SettingsHostScopePicker({
   environments,
   onChoose
 }: SettingsHostScopePickerProps): React.JSX.Element {
+  const t = useTranslate()
   const scopeEnvironmentId = runtimeTargetEnvironmentId(scope.target)
   const value = scopeEnvironmentId
     ? `${ENVIRONMENT_VALUE_PREFIX}${scopeEnvironmentId}`
     : LOCAL_VALUE
+  const label = t('auto.components.settings.SettingsHostScopePicker.label', 'Host')
+  const selectedEnvironmentAvailable = environments.some(
+    (environment) => environment.id === scopeEnvironmentId
+  )
+  const options: SettingsSearchableSelectOption[] = [
+    {
+      value: LOCAL_VALUE,
+      label: translateLocalExecutionHostLabel(getLocalExecutionHostLabel())
+    },
+    ...environments
+      .filter((environment) => scope.available || environment.id !== scopeEnvironmentId)
+      .map((environment) => ({
+        value: `${ENVIRONMENT_VALUE_PREFIX}${environment.id}`,
+        label: environment.name,
+        keywords: [environment.id]
+      }))
+  ]
+  if (scopeEnvironmentId && (!scope.available || !selectedEnvironmentAvailable)) {
+    options.push({
+      value,
+      label: scope.available
+        ? t('auto.components.settings.SettingsHostScopePicker.loading', 'Loading hosts…')
+        : t(
+            'auto.components.settings.SettingsHostScopePicker.unavailable',
+            '{{value0}} (unavailable)',
+            { value0: scopeEnvironmentId }
+          ),
+      keywords: [scopeEnvironmentId],
+      disabled: true
+    })
+  }
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-8 py-2 text-xs">
-      <span className="font-medium text-foreground">
-        {translate('auto.components.settings.SettingsHostScopePicker.label', 'Host')}
-      </span>
-      <Select
+    <div className="flex min-w-0 items-center text-settings-detail">
+      <span className="sr-only">{label}</span>
+      <SettingsSearchableSelect
+        compact
+        ariaLabel={label}
         value={value}
+        groups={[{ key: 'settings-hosts', options }]}
+        searchPlaceholder={t(
+          'auto.components.settings.SettingsSearchableSelect.searchHosts',
+          'Search hosts…'
+        )}
         onValueChange={(next) =>
           onChoose(
             next.startsWith(ENVIRONMENT_VALUE_PREFIX)
@@ -54,48 +89,17 @@ export function SettingsHostScopePicker({
               : { kind: 'local' }
           )
         }
-      >
-        <SelectTrigger
-          size="sm"
-          aria-label={translate('auto.components.settings.SettingsHostScopePicker.label', 'Host')}
-          className="min-w-44"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={LOCAL_VALUE}>{getLocalExecutionHostLabel()}</SelectItem>
-          {environments.map((environment) => (
-            <SelectItem key={environment.id} value={`${ENVIRONMENT_VALUE_PREFIX}${environment.id}`}>
-              {environment.name}
-            </SelectItem>
-          ))}
-          {scopeEnvironmentId && !scope.available ? (
-            // Keep removed servers selected/unavailable instead of silently retargeting another host.
-            <SelectItem value={value} disabled>
-              {translate(
-                'auto.components.settings.SettingsHostScopePicker.unavailable',
-                '{{value0}} (unavailable)',
-                { value0: scopeEnvironmentId }
-              )}
-            </SelectItem>
-          ) : null}
-        </SelectContent>
-      </Select>
-      <span className="text-muted-foreground">
-        {translate(
-          'auto.components.settings.SettingsHostScopePicker.description',
-          'Accounts, detected agents and terminal options below are for this host.'
-        )}
-      </span>
+      />
     </div>
   )
 }
 
 /** Shown in place of a host-owned pane whose chosen server is no longer saved. */
 export function SettingsHostScopeUnavailableNotice(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <p className="text-sm text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.settings.SettingsHostScopePicker.unavailableNotice',
         'This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings.'
       )}

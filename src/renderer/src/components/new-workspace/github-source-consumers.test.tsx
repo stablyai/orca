@@ -2,12 +2,12 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
-import { createTestStore, resetRemoteRuntimeMocks } from '@/store/slices/github-slice-test-harness'
+import { createTestStore, resetRemoteRuntimeMocks } from '@/store/github/github-slice-test-harness'
 
 import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
 
 import type { AppState } from '@/store/types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../shared/repo-types'
 const holder = vi.hoisted((): { store: ReturnType<typeof createTestStore> | null } => ({
   store: null

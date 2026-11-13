@@ -1,5 +1,5 @@
 import { TriangleAlert } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
 
 /** Warn visibly about stored plaintext (#21827); current keyring capability cannot protect bytes saved before a keyring existed without resaving. */
@@ -12,6 +12,7 @@ export function UnsealedCredentialNotice({
   /** Named so the warning is unambiguous when a pane shows several credentials. */
   credentialName: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (protection !== 'plaintext') {
     return null
   }
@@ -22,7 +23,7 @@ export function UnsealedCredentialNotice({
     >
       <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
       <p className="min-w-0 text-xs leading-snug">
-        {translate(
+        {t(
           'auto.components.settings.UnsealedCredentialNotice.body',
           '{{credential}} is stored unencrypted — this system has no OS keyring Orca can use. Anyone who can read your disk or a backup of it can read the credential. Install and unlock gnome-keyring or kwallet, then save it again to seal it.',
           { credential: credentialName }

@@ -13,12 +13,12 @@ import type {
   SourceControlActionLaunchPreferences
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { TooltipProvider } from '../../ui/tooltip'
 
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async (_target, method) =>
     method === 'agentSession.modelCatalog'
       ? { origin: 'unknown' }

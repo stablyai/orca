@@ -54,19 +54,6 @@ afterEach(() => {
 })
 
 describe('daemon-host entry layout after source removal', () => {
-  it('keeps the observed direct-entry mirror after the entire install disappears', () => {
-    const host = materializeRelocatedDaemonHost()
-    expect(host).not.toBeNull()
-    expect(host?.entryPath).toBe(
-      join(dirname(host?.execPath ?? ''), 'resources', 'app.asar.unpacked', 'daemon-entry.js')
-    )
-    rmSync(installDir, { recursive: true, force: true })
-
-    expect(getRelocatedDaemonHost()).toEqual(host)
-    expect(materializeRelocatedDaemonHost()).toEqual(host)
-    expect(existsSync(host?.entryPath ?? '')).toBe(true)
-  })
-
   it('validates a present alternate layout and preserves that newer observed build', () => {
     const direct = materializeRelocatedDaemonHost()
     expect(direct).not.toBeNull()

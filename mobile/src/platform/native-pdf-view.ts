@@ -15,16 +15,16 @@ import {
   type BridgePdfOpenParams
 } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
-import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
-import { useHostClient } from '../transport/host-client-hooks'
+import { scopeRpcClientToExecutionHost } from '../worktree/execution-host-scoped-rpc-client'
+import { useHostClient } from '../transport/connection/host-client-hooks'
 import { discardUnreturnedMediaFile, freshCacheFolder } from './native-media-device'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 function pdfFileSink(file: FsFile): MobileMediaSink {
   file.create({ overwrite: true })
   const handle = file.open()
   return {
-    append: (bytes) => handle.writeBytes(bytes),
+    append: (bytes) => handle.writeBytesSync(bytes),
     finish: () => {
       handle.close()
       return Platform.OS === 'android' ? file.contentUri : file.uri

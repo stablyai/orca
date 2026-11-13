@@ -1,6 +1,8 @@
 /** The structured agent-session methods (and chat attachment uploads) a phone may call; spread into the execution-host routes. */
 export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.createSupport',
+  // The host's agents and what each can do: the phone's "Fork from this response" reads it.
+  'agentSession.agents',
   'agentSession.create',
   'agentSession.ensure',
   'agentSession.reveal',
@@ -35,8 +37,12 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.readVisual',
   // One item whole, for "Show full output" and "Show full message".
   'agentSession.item',
+  // Whether the host recorded a send, for one the phone lost track of; gated on agent-session.send-recorded.v1.
+  'agentSession.sendRecorded',
   // "Rewind to here"; phones offer it only where AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY says so.
   'agentSession.rewind',
+  // "Don't continue" on a usage-limit row the host will continue at its reset.
+  'agentSession.cancelUsageLimitContinue',
   // A file the phone attaches to a chat, stored on this host; the agent sees only the host path.
   'agentSessionAttachment.uploadStart',
   'agentSessionAttachment.uploadAppend',

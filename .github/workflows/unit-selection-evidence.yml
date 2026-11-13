@@ -17,6 +17,7 @@ jobs:
     if: ${{ !cancelled() }}
     continue-on-error: true
     runs-on: ${{ inputs.rebuild_plan && 'ubuntu-24.04' || 'ubuntu-slim' }}
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
         with:

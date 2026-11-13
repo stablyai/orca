@@ -1,5 +1,7 @@
 import type { ComponentProps, ReactElement } from 'react'
 import { FlatList, Platform } from 'react-native'
+import type { LegacyComposedGesture } from 'react-native-gesture-handler'
+import { MobileNativeChatPinchZoom } from './mobile-native-chat-pinch-zoom'
 import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
 import { MobileNativeChatPageList } from './MobileNativeChatPageList'
 import {
@@ -27,6 +29,7 @@ type Props = Pick<
   rowKeys: MobileNativeChatRowKeys
   /** With a header, the row below it anchors the native list's visible content. */
   hasHeader: boolean
+  pinchGesture: LegacyComposedGesture
 }
 
 export function MobileNativeChatRowList(props: Props): ReactElement {
@@ -35,35 +38,39 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
   if (Platform.OS === 'web') {
     const { roots, runs, layoutKey, onNearTop } = props
     return (
-      <MobileNativeChatPageList
-        {...tail.pageListProps}
-        {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
-        {...{ header, footer, emptyStateView, onScroll, onNearTop }}
-      />
+      <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+        <MobileNativeChatPageList
+          {...tail.pageListProps}
+          {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
+          {...{ header, footer, emptyStateView, onScroll, onNearTop }}
+        />
+      </MobileNativeChatPinchZoom>
     )
   }
   return (
-    <FlatList
-      {...tail.listProps}
-      data={rows}
-      keyExtractor={rowKeys.keyOf}
-      renderItem={renderItem}
-      contentContainerStyle={contentContainerStyle}
-      // Let link/file taps land while the composer keyboard is up
-      // instead of being swallowed by the dismiss gesture.
-      keyboardShouldPersistTaps="handled"
-      onScroll={onScroll}
-      onScrollBeginDrag={tail.beginUserScroll}
-      onScrollEndDrag={tail.endUserDrag}
-      onMomentumScrollBegin={tail.beginMomentum}
-      onMomentumScrollEnd={tail.endMomentum}
-      scrollEventThrottle={32}
-      onContentSizeChange={tail.pinToTailAfterContentResize}
-      onLayout={tail.pinToTail}
-      maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
-      ListHeaderComponent={header}
-      ListFooterComponent={footer}
-      ListEmptyComponent={emptyStateView}
-    />
+    <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+      <FlatList
+        {...tail.listProps}
+        data={rows}
+        keyExtractor={rowKeys.keyOf}
+        renderItem={renderItem}
+        contentContainerStyle={contentContainerStyle}
+        // Let link/file taps land while the composer keyboard is up
+        // instead of being swallowed by the dismiss gesture.
+        keyboardShouldPersistTaps="handled"
+        onScroll={onScroll}
+        onScrollBeginDrag={tail.beginUserScroll}
+        onScrollEndDrag={tail.endUserDrag}
+        onMomentumScrollBegin={tail.beginMomentum}
+        onMomentumScrollEnd={tail.endMomentum}
+        scrollEventThrottle={32}
+        onContentSizeChange={tail.pinToTailAfterContentResize}
+        onLayout={tail.pinToTail}
+        maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
+        ListHeaderComponent={header ?? undefined}
+        ListFooterComponent={footer ?? undefined}
+        ListEmptyComponent={emptyStateView ?? undefined}
+      />
+    </MobileNativeChatPinchZoom>
   )
 }

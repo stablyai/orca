@@ -10,7 +10,7 @@ import {
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveResult
-} from '@/store/slices/workspace-cleanup'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { startWorkspaceCleanupBackgroundRemoval } from './workspace-cleanup-background-removal'
 import type { WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'

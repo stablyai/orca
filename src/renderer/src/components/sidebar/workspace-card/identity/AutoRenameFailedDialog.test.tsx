@@ -8,14 +8,14 @@ import { NameGenerationFailedDialog, AutoRenameFailedDialog } from './AutoRename
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
-vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => 'unsupported'
 }))
-vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => null
 }))
 function ChatFailure({ failedAt }: { failedAt: number }) {

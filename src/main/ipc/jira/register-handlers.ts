@@ -1,4 +1,4 @@
-import { taskProviderFailure } from '../../../shared/task-provider-failure'
+import { taskProviderFailure } from '../../../shared/work-items/task-provider-failure'
 import { JiraIssueListFiltersParam } from '../../../shared/rpc-contract/jira-quick-filter-params'
 import { IssueSuggestions } from '../../../shared/rpc-contract/jira-params'
 import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira-favourite-filter-params'

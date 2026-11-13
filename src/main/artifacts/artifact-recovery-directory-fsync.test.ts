@@ -33,7 +33,10 @@ vi.mock('node:fs', async () => {
   }
 })
 
-import { bestEffortFsyncDirectorySync, writeDurableSecureJsonFile } from '../../shared/secure-file'
+import {
+  bestEffortFsyncDirectorySync,
+  writeDurableSecureJsonFile
+} from '../../shared/secure-storage/secure-file'
 import {
   clearArtifactCreateIntents,
   getOrCreateArtifactCreateIntent

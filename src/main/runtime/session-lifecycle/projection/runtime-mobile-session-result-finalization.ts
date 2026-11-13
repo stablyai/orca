@@ -1,5 +1,6 @@
+import { normalizeMobileSessionTabSelection } from '../../session-tabs/mobile-session-tab-selection'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
-import { dropRetirementProofsForLiveSurfaces } from '../../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+import { dropRetirementProofsForLiveSurfaces } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 import { orderMobileSessionTabsByGroups } from './mobile-session-tab-merge'
 import type {
   RuntimeMobileSessionProjectionHost,
@@ -8,16 +9,14 @@ import type {
 
 export function finalizeRuntimeMobileSessionTabsResult(
   { snapshot, tabs }: RuntimeMobileSessionProjectionInput,
-  host: RuntimeMobileSessionProjectionHost
+  host: Pick<
+    RuntimeMobileSessionProjectionHost,
+    'sanitizeGroups' | 'pruneGroupLayout' | 'collectTabIds'
+  >
 ): RuntimeMobileSessionTabsResult {
-  const active =
-    tabs.find((tab) => tab.isActive && tab.id === snapshot.activeTabId) ??
-    tabs.find((tab) => tab.isActive) ??
-    (snapshot.activeTabId ? (tabs[0] ?? null) : null)
-  const normalizedTabs =
-    active && !tabs.some((tab) => tab.isActive)
-      ? tabs.map((tab) => (tab.id === active.id ? { ...tab, isActive: true } : tab))
-      : tabs
+  const normalized = normalizeMobileSessionTabSelection({ ...snapshot, tabs })
+  const active = normalized.tabs.find((tab) => tab.isActive) ?? null
+  const normalizedTabs = normalized.tabs
   const tabGroups = host.sanitizeGroups(snapshot.tabGroups, normalizedTabs)
   const validGroupIds = new Set(tabGroups?.map((group) => group.id) ?? [])
   const tabGroupLayout =

@@ -1,5 +1,6 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'
 import {
@@ -10,32 +11,45 @@ import {
   MobileDictationChunkOrder,
   type MobileDictationChunk
 } from './mobile-dictation-chunk-order'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
+import { dictationTextSettingsFor } from '../../../shared/dictation-cleanup'
+import type { DictationTerm } from '../../../shared/dictation-dictionary'
+import { cleanUpDictatedText } from '../../speech/dictation-cleanup-service'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import {
+  DictationTranscript,
+  type DictationTranscriptSnapshot
+} from '../../../shared/dictation-transcript'
 
 type MobileDictationSession = {
   id: string
   owner: string
   clientId: string
+  /** The dictionary it was transcribed with, which cleanup spells by too. */
+  terms: DictationTerm[]
   state: 'starting' | 'active' | 'closing'
-  partialText: string
-  finalTexts: string[]
+  transcript: DictationTranscript
   errors: string[]
-  // Bumped by each transcript event; chunks arrive far more often, so replies carry text only after a bump or a second.
-  textVersion: number
-  reportedVersion: number
+  // Chunks arrive far more often than text changes, so replies carry text only after a new revision or a second.
+  reportedRevision: number
   reportedAt: number
   chunkOrder: MobileDictationChunkOrder
+  // Cloud audio past the upload cap is dropped, so the client should stop and insert what was kept.
+  audioLimitReached: boolean
   abandonTimer?: ReturnType<typeof setTimeout>
 }
 
 export class RuntimeMobileDictationController {
-  private session: MobileDictationSession | null = null
+  // One per phone (or web client); the speech service bounds how many run at once.
+  private readonly sessions = new Map<string, MobileDictationSession>()
 
   constructor(private readonly getStore: () => RuntimeStore | null) {}
 
   async start(params: {
     dictationId: string
     modelId?: string
+    worktreeId?: string
     clientId?: string
   }): Promise<{ dictationId: string; modelId: string; dedupesResentChunks: true }> {
     const store = this.requireStore()
@@ -53,53 +67,54 @@ export class RuntimeMobileDictationController {
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
     if (modelState.status !== 'ready') {
-      throw new Error(`voice_model_not_ready:${modelState.status}`)
+      throw new Error(speechModelNotReadyError(modelState))
     }
-    if (!params.clientId) {
+    const clientId = params.clientId
+    if (!clientId) {
       throw new Error('dictation_requires_mobile_client')
     }
-    if (this.session?.clientId === params.clientId && this.session.state === 'active') {
+    const previous = this.sessions.get(clientId)
+    if (previous && previous.state !== 'closing') {
       // A phone runs one dictation at a time, so its new start retires one it lost track of (app relaunch inside the grace).
-      await this.stopSession(this.session, { discard: true })
-    }
-    if (this.session) {
-      throw new Error('dictation_already_active')
+      await this.stopSession(previous, { discard: true })
     }
 
-    const owner = `mobile:${params.dictationId}`
-    this.session = {
+    const owner = `mobile:${clientId}:${params.dictationId}`
+    const terms = hostDictationTerms(store, params.worktreeId)
+    const session: MobileDictationSession = {
       id: params.dictationId,
       owner,
-      clientId: params.clientId,
+      clientId,
+      terms,
       state: 'starting',
-      partialText: '',
-      finalTexts: [],
+      transcript: new DictationTranscript(),
       errors: [],
-      textVersion: 0,
-      reportedVersion: 0,
+      reportedRevision: 0,
       reportedAt: 0,
-      chunkOrder: new MobileDictationChunkOrder()
+      chunkOrder: new MobileDictationChunkOrder(),
+      audioLimitReached: false
     }
+    this.sessions.set(clientId, session)
     try {
       await getSpeechSttService(store).startDictation(
         modelId,
-        (event) => this.acceptEvent(params.dictationId, event),
-        undefined,
-        owner
+        (event) => acceptEvent(session, event),
+        terms,
+        owner,
+        dictationTextSettingsFor({ ...store.getSettings(), voice })
       )
-      if (this.session?.id !== params.dictationId) {
+      if (this.sessions.get(clientId) !== session) {
         throw new Error('dictation_canceled')
       }
-      this.session.state = 'active'
-      const session = this.session
+      session.state = 'active'
       // Owned by the phone, not its socket; it streams continuously, so this long without a request means it is gone.
       session.abandonTimer = setTimeout(
         () => void this.stopSession(session, { discard: true }).catch(() => undefined),
         MOBILE_DICTATION_RECONNECT_GRACE_MS
       )
     } catch (error) {
-      if (this.session?.id === params.dictationId) {
-        this.session = null
+      if (this.sessions.get(clientId) === session) {
+        this.sessions.delete(clientId)
       }
       throw error
     }
@@ -113,7 +128,7 @@ export class RuntimeMobileDictationController {
     sampleRate: number
     seq?: number
     clientId?: string
-  }): { dictationId: string; text?: string } {
+  }): { dictationId: string; audioLimitReached?: true } & Partial<DictationTranscriptSnapshot> {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
@@ -127,20 +142,26 @@ export class RuntimeMobileDictationController {
     for (const chunk of ready) {
       this.feedChunk(session, chunk)
     }
+    // Repeated on every reply, so a reply lost to a drop cannot hide it.
+    const reply = session.audioLimitReached
+      ? { dictationId: params.dictationId, audioLimitReached: true as const }
+      : { dictationId: params.dictationId }
     // The text so far lets the phone keep it if the connection never comes back; resent each second in case a reply was lost.
     const now = Date.now()
-    if (session.reportedVersion === session.textVersion && now - session.reportedAt < 1000) {
-      return { dictationId: params.dictationId }
+    const { revision } = session.transcript
+    if (session.reportedRevision === revision && now - session.reportedAt < 1000) {
+      return reply
     }
-    session.reportedVersion = session.textVersion
+    session.reportedRevision = revision
     session.reportedAt = now
-    return { dictationId: params.dictationId, text: transcriptOf(session) }
+    return { ...reply, ...session.transcript.snapshot() }
   }
 
-  async finish(params: {
-    dictationId: string
-    clientId?: string
-  }): Promise<{ dictationId: string; text: string }> {
+  /** `agentEnv`: what AI cleanup runs the user's agent with, when it's on. */
+  async finish(
+    params: { dictationId: string; clientId?: string },
+    agentEnv?: CommitMessageAgentEnvironmentResolvers
+  ): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
     for (const chunk of session.chunkOrder.drain()) {
       this.feedChunk(session, chunk)
@@ -149,49 +170,42 @@ export class RuntimeMobileDictationController {
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
-    return { dictationId: params.dictationId, text: transcriptOf(session) }
+    const heard = session.transcript.snapshot().text
+    // The phone waits out cleanup inside its finish deadline; on any failure it gets the words as heard.
+    const store = this.requireStore()
+    const cleaned = await cleanUpDictatedText(
+      { text: heard, terms: session.terms },
+      { getSettings: () => store.getSettings(), getAgentEnvResolvers: () => agentEnv }
+    )
+    return {
+      dictationId: params.dictationId,
+      text: cleaned.status === 'cleaned' ? cleaned.text : heard
+    }
   }
 
   async cancel(params: {
     dictationId: string
     clientId?: string
   }): Promise<{ dictationId: string }> {
-    const session = this.session
-    if (session?.id === params.dictationId && session.clientId === params.clientId) {
+    const session = params.clientId ? this.sessions.get(params.clientId) : undefined
+    if (session?.id === params.dictationId) {
       await this.stopSession(session, { discard: true })
     }
     return { dictationId: params.dictationId }
   }
 
   private feedChunk(session: MobileDictationSession, chunk: MobileDictationChunk): void {
+    if (session.audioLimitReached) {
+      return
+    }
     const pcm = Buffer.from(chunk.audioBase64, 'base64')
     const samples = new Float32Array(Math.floor(pcm.length / 2))
     for (let i = 0; i < samples.length; i += 1) {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
-    getSpeechSttService(this.requireStore()).feedAudio(samples, chunk.sampleRate, session.owner)
-  }
-
-  private acceptEvent(
-    dictationId: string,
-    event: { type: string; text?: string; error?: string }
-  ): void {
-    const session = this.session
-    if (!session || session.id !== dictationId) {
-      return
-    }
-    if (event.type === 'partial') {
-      session.partialText = event.text ?? ''
-      session.textVersion += 1
-    } else if (event.type === 'final') {
-      const text = event.text?.trim()
-      if (text) {
-        session.finalTexts.push(text)
-        session.partialText = ''
-        session.textVersion += 1
-      }
-    } else if (event.type === 'error') {
-      session.errors.push(event.error ?? 'Speech worker error')
+    const speech = getSpeechSttService(this.requireStore())
+    if (speech.feedAudio(samples, chunk.sampleRate, session.owner)) {
+      session.audioLimitReached = true
     }
   }
 
@@ -199,12 +213,9 @@ export class RuntimeMobileDictationController {
     dictationId: string
     clientId?: string
   }): MobileDictationSession {
-    const session = this.session
+    const session = params.clientId ? this.sessions.get(params.clientId) : undefined
     if (!session || session.id !== params.dictationId) {
       throw new Error('dictation_stream_not_started')
-    }
-    if (session.clientId !== params.clientId) {
-      throw new Error('dictation_owner_mismatch')
     }
     if (session.state === 'active') {
       session.abandonTimer?.refresh()
@@ -222,8 +233,8 @@ export class RuntimeMobileDictationController {
     try {
       await getSpeechSttService(this.requireStore()).stopDictation(session.owner, options)
     } finally {
-      if (this.session?.id === session.id) {
-        this.session = null
+      if (this.sessions.get(session.clientId) === session) {
+        this.sessions.delete(session.clientId)
       }
     }
   }
@@ -237,6 +248,13 @@ export class RuntimeMobileDictationController {
   }
 }
 
-function transcriptOf(session: MobileDictationSession): string {
-  return [...session.finalTexts, session.partialText].join(' ').trim()
+function acceptEvent(
+  session: MobileDictationSession,
+  event: { type: string; text?: string; error?: string }
+): void {
+  if (event.type === 'error') {
+    session.errors.push(event.error ?? 'Speech worker error')
+  } else {
+    session.transcript.accept(event)
+  }
 }

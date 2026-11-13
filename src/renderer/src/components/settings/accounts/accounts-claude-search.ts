@@ -4,7 +4,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.accounts.search.75682e1b62', 'Claude Accounts'),
+    title: translate('auto.components.settings.accounts.search.be3a748ebb', 'Claude accounts'),
     description: translate(
       'auto.components.settings.accounts.search.dd75a73991',
       'Optional account switching for Claude while preserving shared chat context.'

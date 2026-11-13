@@ -28,10 +28,10 @@ vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
 }))
 
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
-const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScanCache } =
-  await import('./detected-worktree-scan-cache')
-const { getLocalWorktreeCatalogVersion, getLocalWorktreeScanGeneration } =
-  await import('../../../workspaces/catalog/local-worktree-scan-generation')
+const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
+const { setWorktreeCatalogRouteResolver } =
+  await import('../../../workspaces/catalog/repo-worktree-catalog-route')
+await import('../../../workspaces/catalog/local-worktree-scan-generation')
 
 const localRepo: Repo = {
   id: 'repo-local',
@@ -41,7 +41,7 @@ const localRepo: Repo = {
   addedAt: 0
 }
 
-function createStore(repo: Repo) {
+function createStore(repo: Repo, cursor?: { epoch: string; seq: number }) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only these store methods; the pruning that would need more is mocked above.
   return {
     getRepo: () => repo,
@@ -55,16 +55,13 @@ function createStore(repo: Repo) {
     getAllWorktreeLineage: () => ({}),
     getAllWorkspaceLineage: () => ({}),
     removeWorktreeLineage: vi.fn(),
-    captureNativeLocalWorktreeMetadataScanExpectation: () => undefined
+    captureNativeLocalWorktreeMetadataScanExpectation: () => undefined,
+    ...(cursor ? { getWorkspaceMetadataCursor: () => ({ ...cursor }) } : {})
   } as never
 }
 
 function worktreeAt(repo: Repo, path: string): GitWorktreeInfo {
   return { path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: path === repo.path }
-}
-
-function listLocal() {
-  return listDetectedWorktreesForCapturedRepo(createStore(localRepo), localRepo, () => true)
 }
 
 // Clients order listing rows by scan-start generation against applied create/remove replies.
@@ -74,36 +71,54 @@ describe('the catalog version a listing carries', () => {
     listRepoWorktreesMock.mockReset()
   })
 
-  it('is the generation the local scan began at, and a change bumps the current one past it', async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
-    const atScanStart = getLocalWorktreeScanGeneration(localRepo.id)
+  it('carries the metadata cursor it read with its metadata, not one advanced during the scan', async () => {
+    const cursor = { epoch: 'e1', seq: 4 }
+    // A title write lands while the scan is still running.
+    listRepoWorktreesMock.mockImplementation(async () => {
+      cursor.seq = 5
+      return [worktreeAt(localRepo, localRepo.path)]
+    })
+    const store = createStore(localRepo, cursor)
 
-    const listing = await listLocal()
+    const during = await listDetectedWorktreesForCapturedRepo(store, localRepo, () => true)
+    const after = await listDetectedWorktreesForCapturedRepo(store, localRepo, () => true)
 
-    expect(listing).toMatchObject({ authoritative: true })
-    expect(listing && 'catalogVersion' in listing ? listing.catalogVersion : undefined).toEqual(
-      getLocalWorktreeCatalogVersion(localRepo.id)
-    )
-    expect(listing && 'catalogVersion' in listing ? listing.catalogVersion?.sequence : -1).toBe(
-      atScanStart
-    )
-
-    invalidateDetectedWorktreeScanCache(localRepo.id)
-    const afterChange = getLocalWorktreeCatalogVersion(localRepo.id)
-    expect(afterChange.sequence).toBeGreaterThan(atScanStart)
-    expect(afterChange.epoch).toBe(
-      listing && 'catalogVersion' in listing ? listing.catalogVersion?.epoch : undefined
-    )
+    expect(during && 'workspaceMetadata' in during ? during.workspaceMetadata : null).toEqual({
+      epoch: 'e1',
+      seq: 4
+    })
+    expect(after && 'workspaceMetadata' in after ? after.workspaceMetadata : null).toEqual({
+      epoch: 'e1',
+      seq: 5
+    })
   })
 
-  it("is the cached scan's own generation when the cache answers", async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
-    const first = await listLocal()
-    const second = await listLocal()
-
-    expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1)
-    expect(second && 'catalogVersion' in second ? second.catalogVersion : undefined).toEqual(
-      first && 'catalogVersion' in first ? first.catalogVersion : undefined
+  it('answers nothing for rows whose owner route was retired before publication', async () => {
+    let live = true
+    setWorktreeCatalogRouteResolver(() =>
+      live ? { repoPath: localRepo.path, runtimeKey: 'local:default' } : null
     )
+    try {
+      listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
+      // The route changes after the scan settles, while the listing finishes its own awaits.
+      let calls = 0
+      const isCurrent = (): boolean => {
+        calls += 1
+        if (calls === 1) {
+          live = false
+        }
+        return true
+      }
+
+      const result = await listDetectedWorktreesForCapturedRepo(
+        createStore(localRepo),
+        localRepo,
+        isCurrent
+      )
+
+      expect(result).toBeNull()
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+    }
   })
 })

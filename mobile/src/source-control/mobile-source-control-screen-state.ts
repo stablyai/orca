@@ -34,16 +34,9 @@ export type ScreenState =
   | { kind: 'error'; message: string }
 
 export type LoadStatusOptions = {
-  preserveReadyOnFailure?: boolean
   clearActionErrorOnSuccess?: boolean
   force?: boolean
   rereadSettings?: boolean
-}
-
-export type StatusLoadInFlight = {
-  key: string
-  client: unknown
-  promise: Promise<boolean>
 }
 
 export type GitRequestError = Error & { code?: string }

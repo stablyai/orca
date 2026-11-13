@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import type { Automation } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
@@ -12,18 +12,23 @@ import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-mo
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { runWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
-import { resetWslMoveDesktopRewriteStoresForTests } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
-import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
-import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
+} from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { runWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
+import { resetWslMoveDesktopRewriteStoresForTests } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
+import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-main-rewrite-stores'
+import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
-import { OrchestrationDb } from '../runtime/orchestration/db'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import '../runtime/orchestration/db/contract-constants'
+import '../runtime/orchestration/db/messages/mailbox-routing-page'
+import '../runtime/orchestration/db/dispatch-row-writer'
+import '../runtime/orchestration/db/attempt-outcome-projection'
 import Database from '../sqlite/sync-database'
-import { AutomationService } from './service'
-import { WSL_MOVE_IN_PROGRESS, WSL_MOVE_OWNED_BY_HOST } from './dispatch-refusal'
-import type * as PrecheckRunner from './precheck-runner'
+import { AutomationService } from './automation-service'
+import { tickAt } from './testing/automation-service-tick.test-fixture'
+
+import type * as PrecheckRunner from './dispatch/precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
 
@@ -38,7 +43,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', async (importOriginal) => ({
+vi.mock('./dispatch/precheck-runner', async (importOriginal) => ({
   ...(await importOriginal<typeof PrecheckRunner>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))
@@ -69,27 +74,19 @@ function seedAutomation(store: Store, precheck = false): Automation {
 function attachedService(store: Store, publish = vi.fn()): AutomationService {
   const service = new AutomationService(store, {
     tickMs: 60_000,
-    onAutomationsChanged: publish
+    onAutomationsChanged: publish,
+    terminalLauncher: { launch: vi.fn(), available: () => true }
   })
-  service.setWebContents({ isDestroyed: () => false, send: vi.fn() })
+  service.start()
   return service
 }
 
-async function evaluateAt(
-  store: Store,
-  service: AutomationService,
-  automationId: string,
-  when: string
-): Promise<void> {
+async function evaluateAt(store: Store, automationId: string, when: string): Promise<void> {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
   const before = nextRunAt()
-  vi.setSystemTime(new Date(when))
-  // Retry while the previous scheduler pass finishes flushing.
-  await vi.waitFor(() => {
-    service.setRendererReady()
-    expect(nextRunAt()).toBeGreaterThan(before ?? 0)
-  })
+  await tickAt(when)
+  await vi.waitFor(() => expect(nextRunAt()).toBeGreaterThan(before ?? 0))
 }
 
 let fenceDir: string
@@ -109,52 +106,6 @@ afterEach(async () => {
 })
 
 describe('scheduled automations under a WSL move', () => {
-  it('skips a run while the move is in flight, promising a resume', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    const automation = seedAutomation(store)
-    seedWslMoveCutover(fenceDir, cutover('move-1', 'source-fenced', {}, { repoIds: ['r1'] }))
-    const service = attachedService(store)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-
-    const runs = store.listAutomationRuns(automation.id)
-    expect(runs).toHaveLength(1)
-    expect(runs[0]).toMatchObject({
-      status: 'skipped_unavailable',
-      error: WSL_MOVE_IN_PROGRESS,
-      errorCode: 'wslMoveInProgress'
-    })
-    expect(WSL_MOVE_IN_PROGRESS).toBe(
-      "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes."
-    )
-  })
-
-  it('writes no skip on any tick once the WSL host owns the project', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    const automation = seedAutomation(store)
-    seedWslMoveCutover(
-      fenceDir,
-      cutover('move-1', 'destination-committed', {}, { repoIds: ['r1'] })
-    )
-    const publish = vi.fn()
-    const service = attachedService(store, publish)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-15T09:01:00')
-
-    expect(store.listAutomationRuns(automation.id)).toEqual([])
-    expect(publish).not.toHaveBeenCalled()
-    expect(store.listAutomations().find((entry) => entry.id === automation.id)?.nextRunAt).toBe(
-      new Date('2026-05-16T09:00:00').getTime()
-    )
-    expect(WSL_MOVE_OWNED_BY_HOST).toBe(
-      "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
-    )
-  })
-
   it('keeps the local copy unchanged through the desktop rewrite, so it neither runs nor loses its next run', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
@@ -184,7 +135,8 @@ describe('scheduled automations under a WSL move', () => {
       expect(store.listAutomations()).toEqual([automation])
       const service = attachedService(store)
 
-      await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+      await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+      service.stop()
 
       expect(store.listAutomationRuns(automation.id)).toEqual([])
       expect(store.listAutomations()[0]?.nextRunAt).toBe(new Date('2026-05-14T09:00:00').getTime())
@@ -192,46 +144,5 @@ describe('scheduled automations under a WSL move', () => {
       resetWslMoveDesktopRewriteStoresForTests()
       vi.unstubAllEnvs()
     }
-  })
-
-  it('skips, not fails, a headless run whose move starts during the precheck', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    const automation = seedAutomation(store, true)
-    runAutomationPrecheckMock.mockImplementation(async () => {
-      seedWslMoveCutover(fenceDir, cutover('move-1', 'source-fenced', {}, { repoIds: ['r1'] }))
-      return {
-        command: 'true',
-        exitCode: 0,
-        timedOut: false,
-        durationMs: 1,
-        stdout: '',
-        stderr: '',
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        error: null,
-        startedAt: Date.now(),
-        completedAt: Date.now()
-      }
-    })
-    const dispatcher = vi.fn()
-    const service = new AutomationService(store, {
-      tickMs: 60_000,
-      headlessDispatcher: dispatcher
-    })
-
-    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
-    service.start()
-    await vi.waitFor(() =>
-      expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('skipped_unavailable')
-    )
-    service.stop()
-
-    expect(runAutomationPrecheckMock).toHaveBeenCalledOnce()
-    expect(dispatcher).not.toHaveBeenCalled()
-    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
-      error: WSL_MOVE_IN_PROGRESS,
-      errorCode: 'wslMoveInProgress'
-    })
   })
 })

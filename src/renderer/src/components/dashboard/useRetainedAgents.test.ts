@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildWorktreeAgentRows } from '../sidebar/workspace-card/activity/worktree-agent-rows'
 import { useAppStore } from '@/store'
-import { resetAgentPaneAuthorityAliasesForTests } from '@/store/slices/agent-pane-authority'
+import { resetAgentPaneAuthorityAliasesForTests } from '@/store/slices/agent-status/agent-pane-authority'
 import type {
   AgentStatusEntry,
   AgentStatusState
@@ -16,7 +16,7 @@ import {
   WT,
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from '@/runtime/web-session-tabs-sync-test-harness'
+} from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'

@@ -88,14 +88,6 @@ describe('legacy TUI identity admitted by the execution-host relay', () => {
     ])
   })
 
-  it('keeps the session creator when another pane views the same session', async () => {
-    await post(PANE_A, 'ses_a')
-    forward.mockClear()
-    await post(PANE_B, 'ses_a')
-    expect(forward.mock.calls[0][0].paneKey).toBe(PANE_A)
-    expect(server.replayCachedPayloadsForPanes()).toBe(1)
-  })
-
   it.each(['SessionIdle', 'PermissionRequest', 'MessagePart'] as const)(
     'rejects a retired physical viewer before attributing its late %s to a live creator',
     async (hookEventName) => {

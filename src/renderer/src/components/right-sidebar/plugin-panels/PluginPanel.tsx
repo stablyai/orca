@@ -14,9 +14,12 @@ import {
   reportPluginPanelFailure,
   useReportFramePanelDraw
 } from './health/use-plugin-panel-draw-report'
-import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
-import { translate } from '@/i18n/i18n'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import {
+  usePluginPanels,
+  usePluginPanelsStore
+} from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { useTranslate } from '@/i18n/use-translate'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 type PluginPanelProps = {
   tabKey: string
@@ -31,6 +34,7 @@ function PluginPanelMessage({ children }: { children: React.ReactNode }): React.
 }
 
 function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const panels = usePluginPanels()
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
   const panel = isPluginPanelTabKey(tabKey)
@@ -78,7 +82,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   if (!panel) {
     return (
       <PluginPanelMessage>
-        {translate(
+        {t(
           'auto.components.right.sidebar.PluginPanel.unavailable',
           'This plugin panel is no longer available.'
         )}
@@ -89,7 +93,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   if (entry.status === 'loading') {
     return (
       <PluginPanelMessage>
-        {translate('auto.components.right.sidebar.PluginPanel.loading', 'Loading plugin panel...')}
+        {t('auto.components.right.sidebar.PluginPanel.loading', 'Loading plugin panel...')}
       </PluginPanelMessage>
     )
   }
@@ -97,7 +101,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   if (entry.status === 'unresponsive') {
     return (
       <PluginPanelMessage>
-        {translate(
+        {t(
           'auto.components.right.sidebar.PluginPanel.unresponsive',
           'This plugin panel stopped responding and was suspended.'
         )}
@@ -108,7 +112,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   if (entry.status === 'error') {
     return (
       <PluginPanelMessage>
-        {translate(
+        {t(
           'auto.components.right.sidebar.PluginPanel.loadFailed',
           'The plugin panel could not be loaded.'
         )}
@@ -133,11 +137,11 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     ) : (
       <PluginPanelMessage>
         {isWebClientLocation()
-          ? translate(
+          ? t(
               'auto.components.right.sidebar.PluginPanel.needsDesktop',
               'This panel runs only in the Orca desktop app.'
             )
-          : translate(
+          : t(
               'auto.components.right.sidebar.PluginPanel.needsIsolatedFrames',
               'This panel is not available: it needs isolated plugin frames, which are turned off.'
             )}

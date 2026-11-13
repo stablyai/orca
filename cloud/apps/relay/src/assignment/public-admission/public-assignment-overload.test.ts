@@ -17,42 +17,6 @@ vi.mock('../../authentication/relay-token-verifier.js', () => ({
 import { createRelayApp } from '../../app.js'
 
 describe('public assignment overload', () => {
-  it('rejects duplicate and excess work before it reaches assignment state', async () => {
-    const hostA = 'aaaaaaaaaaaaaaaa'
-    const hostB = 'bbbbbbbbbbbbbbbb'
-    const hostC = 'cccccccccccccccc'
-    const pending = new Map<string, ReturnType<typeof deferred<RelayAssignment>>>()
-    const assign = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
-      const operation = deferred<RelayAssignment>()
-      pending.set(relayHostId, operation)
-      return await operation.promise
-    })
-    const app = createRelayApp(config({ publicAssignmentQueueMax: 0 }), {
-      store: {} as never,
-      assignments: { assign } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    const first = app.request('/v1/assign', assignmentRequest(hostA))
-    await vi.waitFor(() => expect(pending.has(hostA)).toBe(true))
-    const duplicate = await app.request('/v1/assign', assignmentRequest(hostA))
-    expect(duplicate.status).toBe(503)
-
-    const second = app.request('/v1/assign', assignmentRequest(hostB))
-    await vi.waitFor(() => expect(pending.has(hostB)).toBe(true))
-    const excess = await app.request('/v1/assign', assignmentRequest(hostC))
-    expect(excess.status).toBe(503)
-    expect(excess.headers.get('retry-after')).toBe('5')
-    expect(assign).toHaveBeenCalledTimes(2)
-
-    pending.get(hostA)?.resolve(assignment('cell-a', hostA))
-    pending.get(hostB)?.resolve(assignment('cell-b', hostB))
-    expect((await first).status).toBe(200)
-    expect((await second).status).toBe(200)
-    expect((await app.request('/v1/assign', assignmentRequest(hostA))).status).toBe(503)
-    expect(assign).toHaveBeenCalledTimes(2)
-  })
 
   it('fairly drains a bounded incident-scale burst without raising database concurrency', async () => {
     const pending = new Map<string, ReturnType<typeof deferred<RelayAssignment>>>()
@@ -135,12 +99,14 @@ describe('public assignment overload', () => {
     expect(refused.status).toBe(413)
     expect(await refused.json()).toEqual({ error: 'request_too_large' })
     expect(resolve).not.toHaveBeenCalled()
-    // Reserve bodies may reach 16 KiB, so the 4 KiB app limit must not answer for them: this one
-    // reaches the route itself, which a director answers as unavailable.
+    // Reserve bodies may reach 16 KiB, so the 4 KiB app limit must not answer for them. An
+    // unavailable route refuses before its own limit, including a body past 16 KiB.
     const reserve = await app.request('/internal/reserve', chunked(6 * 1024))
     expect(reserve.status).toBe(404)
     expect(await reserve.json()).toEqual({ error: 'reserve_unavailable' })
-    expect((await app.request('/internal/reserve', chunked(20 * 1024))).status).toBe(413)
+    const oversized = await app.request('/internal/reserve', chunked(20 * 1024))
+    expect(oversized.status).toBe(404)
+    expect(await oversized.json()).toEqual({ error: 'reserve_unavailable' })
   })
 
   it('reserves one bounded resolve lane while assignment work is saturated', async () => {

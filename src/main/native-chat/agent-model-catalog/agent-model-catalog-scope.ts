@@ -1,5 +1,5 @@
-import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
-import { homedir } from 'node:os'
+import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
+import { resolveHiddenProbeCwd } from '../../lib/hidden-probe-cwd'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
@@ -41,7 +41,8 @@ export async function resolveAgentModelCatalogScope(
     return { base, fingerprint: base, exact: false }
   }
   const probe = deps.probes?.[params.agent]
-  const savedOnly = () => params.savedOnly || !!(record && !deps.getRecord(record.sessionId))
+  // Fixed when its readers asked: no chat closing later turns a shared refresh passive.
+  const savedOnly = () => !!params.savedOnly
   if (params.legacy) {
     const fingerprint = agentModelCatalogScopeFingerprint(base, 'legacy-account')
     const resolved =
@@ -58,20 +59,33 @@ export async function resolveAgentModelCatalogScope(
       ...(resolved ? { resolved } : {})
     }
   }
+  // The list belongs to the account and the CLI a chat here would launch, not to this folder:
+  // resolve the executable where the chat runs, but list from an empty Orca-owned folder so the
+  // listing reads only account settings (a home folder can hold another account's settings as
+  // project settings) and every workspace sharing that invocation shares one listing. A command
+  // line that may name files in the chat's folder lists there instead (`catalogListingDirectory`).
+  let listIn: string
+  try {
+    listIn = resolveHiddenProbeCwd()
+  } catch {
+    return { base, fingerprint: base, exact: false }
+  }
+  // A workspace this host can't inspect lists as the account does (its default stays unknown),
+  // never from wherever Orca itself runs.
   const cwd =
     params.workspacePath === null
-      ? null
-      : (params.workspacePath ?? (record ? await sessionWorkspacePath(deps, record) : homedir()))
+      ? listIn
+      : (params.workspacePath ?? (record ? await sessionWorkspacePath(deps, record) : listIn))
   if (!current()) {
     return null
   }
   if (!cwd) {
-    return { base, fingerprint: base, exact: false }
+    return { base, fingerprint: base, exact: false, cwd: listIn }
   }
   const resolve = (lookup: AgentModelCatalogLookup) =>
-    probe?.resolve?.(home, cwd, lookup, operation).catch(() => null)
+    probe?.resolve?.(home, listIn, lookup, operation, cwd).catch(() => null)
   const scopeKey = (resolved: AgentModelCatalogResolvedProbe | null | undefined) =>
-    agentModelCatalogScopeFingerprint(base, cwd, resolved?.identity)
+    agentModelCatalogScopeFingerprint(base, listIn, resolved?.identity)
   let resolved = await resolve(savedOnly() ? 'saved' : 'snapshot')
   if (!current()) {
     return null
@@ -89,7 +103,7 @@ export async function resolveAgentModelCatalogScope(
     exact: true,
     // The account's own listing (prewarm names no folder or chat) seeds what unlisted folders show.
     accountListing: !record && params.workspacePath === undefined && !params.legacy,
-    cwd,
+    cwd: listIn,
     ...(resolved ? { resolved } : {})
   }
 }

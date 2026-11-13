@@ -1,7 +1,7 @@
-import { projectPRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import { projectPRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { getRegistryMergedTaskPageGitHubWorkItem } from './task-page-github-work-item-mutation-composition'
 import {
   getStickyHideEntry,

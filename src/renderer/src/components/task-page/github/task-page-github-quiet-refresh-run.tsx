@@ -25,10 +25,10 @@ import {
   MAX_LAG_TRAILS,
   LAG_BACKOFF_MS
 } from '@/components/task-page/github/task-page-github-work-item-quiet-adopt'
-import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { taskPageToGitHubApiPage } from '../../../../../shared/work-items'
+import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-item-pagination'
 import { useAppStore } from '@/store/index'
 export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshPreludeModel) {
   const {

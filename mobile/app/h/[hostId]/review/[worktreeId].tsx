@@ -4,7 +4,7 @@ import {
   workspaceRouteParams
 } from '../../../../src/navigation/workspace-execution-host'
 import { useLocalSearchParams } from 'expo-router'
-import { firstReviewParam } from '../../../../src/session/mobile-diff-review-screen-model'
+import { firstReviewParam } from '../../../../src/source-control/review/mobile-diff-review-screen-model'
 import {
   shellScreenRoute,
   shellScreenRouteKey

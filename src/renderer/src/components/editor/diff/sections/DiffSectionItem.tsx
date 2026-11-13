@@ -1,4 +1,4 @@
-import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DiffOnMount } from '@monaco-editor/react'
@@ -9,7 +9,7 @@ import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { applyDiffEditorLineNumberOptions } from '../monaco-view/diff-editor-line-number-options'
 import { DiffSectionHeader } from './DiffSectionHeader'
-import { isDiffComment } from '@/lib/diff-comment-compat'
+import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
@@ -38,6 +38,7 @@ export function DiffSectionItem({
   openSectionTitle,
   onOpenPreview,
   renderHeaderTrailingContent,
+  imageUploadAddress,
   onAddLineComment,
   addLineCommentLabel,
   addLineCommentPlaceholder,
@@ -121,6 +122,7 @@ export function DiffSectionItem({
   )
 
   useDiffCommentDecorator({
+    imageUploadAddress,
     captureCreateComment: !onAddLineComment,
     commentOwner,
     editor: hasLineCommentAction ? modifiedEditor : null,

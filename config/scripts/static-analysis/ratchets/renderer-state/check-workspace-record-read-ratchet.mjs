@@ -14,7 +14,7 @@ const RAW_READ =
 /** Files allowed to read the fields directly, with the reason. Keep each reason true. */
 export const SELECTOR_FILES = new Map([
   [
-    'src/renderer/src/store/workspace-record-selectors.ts',
+    'src/renderer/src/store/workspaces/catalog/workspace-record-fields.ts',
     'the selector module is the one read path by definition'
   ]
 ])
@@ -77,7 +77,7 @@ export function main(root = process.cwd(), arg = undefined) {
       unit: 'direct workspace record field read(s)',
       header: [
         '# Renderer reads of `worktreesByRepo` / `folderWorkspaces` / `detectedWorktreesByRepo`',
-        '# outside src/renderer/src/store/workspace-record-selectors.ts, as `<count> <file> # <why>`.',
+        '# outside src/renderer/src/store/workspaces/catalog/workspace-record-fields.ts, as `<count> <file> # <why>`.',
         '# This is a RATCHET: counts may only go DOWN. Read through the selectors instead.',
         '# `P5b-2 must clear` rows read store state through a loosely typed or optional field: once the',
         '# fields leave the store they read undefined and silently fall back, so P5b-2 must move them.',
@@ -85,8 +85,8 @@ export function main(root = process.cwd(), arg = undefined) {
       ],
       collect: collectWorkspaceRecordReads,
       fix: [
-        'Read workspace records through src/renderer/src/store/workspace-record-selectors.ts:',
-        '  selectWorkspaceByHostTarget(state, target)  the owner of a HostWorktreeTarget',
+        'Read workspace records through src/renderer/src/store/workspaces/catalog/workspace-record-fields.ts:',
+        '  selectWorkspaceByHostTarget in store/workspaces/selection/workspace-host-target.ts',
         '  selectWorktreesByRepo / selectFolderWorkspaces / selectDetectedWorktreesByRepo',
         '                                              compatibility views of the old fields'
       ]

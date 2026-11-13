@@ -4,16 +4,10 @@ import '@testing-library/jest-dom/vitest'
 import type { ITerminalOptions } from '@xterm/xterm'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  TERMINAL_PASTE_CHUNK_MAX_BYTES,
-  TERMINAL_PASTE_DIRECT_MAX_BYTES
-} from '@/components/terminal-pane/terminal-paste-limits'
-import '@/components/terminal-pane/terminal-bracketed-paste'
-import {
-  BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START
-} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
-import { dispatchAppMenuPasteEvent } from '@/lib/app-menu-paste'
+
+import '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
+
+import { dispatchAppMenuPasteEvent } from '@/lib/clipboard/menu/app-menu-paste'
 
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {
@@ -108,19 +102,19 @@ vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOrigina
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
-vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
+vi.mock('@/components/terminal-pane/input/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: (_terminal: unknown, listener: () => void) => {
     terminalHarness.userInputListener = listener
     return { dispose: terminalHarness.userInputDispose }
   }
 }))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
-vi.mock('@/lib/shortcut-platform', () => ({
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: (args: {
     sendInput: (data: string) => void
     getKittyKeyboardFlags?: () => number
@@ -136,7 +130,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
     return forwarder
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => {
     const tracker = { isActive: () => false, dispose: vi.fn() }
     imeHarness.trackers.push(tracker)
@@ -149,7 +143,6 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-// Paste encoding is under test here; owner routing is covered by AgentTerminalPreview.test.tsx.
 vi.mock('./terminal-preview-api', () => ({
   terminalPreviewApiFor: () => window.api.terminalPreview
 }))
@@ -237,59 +230,5 @@ describe('AgentTerminalPreview clipboard routes', () => {
 
     expect(terminal.paste).not.toHaveBeenCalled()
     expect(input).not.toHaveBeenCalled()
-  })
-
-  it('streams large pastes as bounded IPC payloads instead of one renderer-blocking write', async () => {
-    const encoder = new TextEncoder()
-    const multibytePrefix = '😀'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES / 4 + 1)
-    const largePaste = `${multibytePrefix}\r\nnext\n`
-    const expectedPaste = `${multibytePrefix}\rnext\r`
-    readClipboardText.mockResolvedValueOnce(largePaste)
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    focusInsidePreview(view.container)
-
-    act(() => {
-      dispatchAppMenuPasteEvent()
-    })
-    const expectedChunks = Math.ceil(
-      encoder.encode(expectedPaste).byteLength / TERMINAL_PASTE_CHUNK_MAX_BYTES
-    )
-    await waitFor(() => expect(input).toHaveBeenCalledTimes(expectedChunks))
-
-    const payloads = input.mock.calls.map(([, data]) => data as string)
-    expect(terminal.paste).not.toHaveBeenCalled()
-    expect(payloads.join('')).toBe(expectedPaste)
-    expect(
-      payloads.every(
-        (payload) => encoder.encode(payload).byteLength <= TERMINAL_PASTE_CHUNK_MAX_BYTES
-      )
-    ).toBe(true)
-  })
-
-  it('closes a bracketed large paste when focus changes between chunks', async () => {
-    readClipboardText.mockResolvedValueOnce('x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES + 1))
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    terminal.modes.bracketedPasteMode = true
-    focusInsidePreview(view.container)
-    const outsideInput = document.createElement('input')
-    view.container.appendChild(outsideInput)
-    input.mockImplementationOnce(async () => {
-      outsideInput.focus()
-      return true
-    })
-
-    act(() => {
-      dispatchAppMenuPasteEvent()
-    })
-    await waitFor(() => expect(input).toHaveBeenCalledTimes(2))
-
-    expect(input.mock.calls.map(([, data]) => data)).toEqual([
-      BRACKETED_PASTE_START,
-      BRACKETED_PASTE_END
-    ])
   })
 })

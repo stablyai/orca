@@ -6,7 +6,7 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { maxTimestamp } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
+import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { inferWorktreeIdFromPtyId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -69,6 +69,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         | 'wslDistro'
         | 'incarnationId'
         | 'agentSessionOwners'
+        | 'worktreeInferredFromCwd'
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
@@ -95,6 +96,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         ptyId,
         incarnationId: state.incarnationId ?? null,
         worktreeId,
+        ...(state.worktreeInferredFromCwd ? { worktreeInferredFromCwd: true } : {}),
         connectionId,
         runtimeSessionOwned: state.runtimeSessionOwned ?? false,
         isWsl: state.isWsl ?? null,
@@ -132,7 +134,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         managementTitle: null,
         managementTitleAt: null,
         controllerTitle: null,
-        title: state.title ?? null,
+        title: state.title || null,
         titleUpdatedAt: titleObservedAt,
         titleObservedAtEpochMs: titleObservedAt !== null ? Date.now() : null,
         lastOutputAt: state.lastOutputAt ?? null,
@@ -165,7 +167,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       return pty
     }
 
-    this.terminalIdentity.setPtyWorktreeId(pty, worktreeId)
+    this.terminalIdentity.setPtyWorktree(pty, worktreeId, state.worktreeInferredFromCwd === true)
     if (
       state.incarnationId !== undefined &&
       pty.incarnationId !== null &&

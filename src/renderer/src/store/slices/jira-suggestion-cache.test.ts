@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 const { jiraSearchIssues } = vi.hoisted(() => ({ jiraSearchIssues: vi.fn() }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-client', () => ({
   jiraListIssues: vi.fn(),
   jiraListIssuesForTarget: vi.fn(),
   jiraSearchIssues

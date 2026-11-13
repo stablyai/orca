@@ -4,8 +4,8 @@ import type { AgentSessionTurnActivity } from '../../../shared/agent-session/age
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire/structured-agent-session-transition'
+} from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>

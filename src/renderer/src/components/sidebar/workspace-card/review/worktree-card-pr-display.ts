@@ -1,6 +1,7 @@
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 
@@ -69,21 +70,22 @@ function getLinkedReviewNumber(
 function makeLinkedReviewFallback(
   provider: LinkedReviewMetadataProvider,
   number: number,
-  review: HostedReviewInfo | null | undefined
+  review: HostedReviewInfo | null | undefined,
+  t: Translate = translate
 ): WorktreeCardPrDisplay {
   const isMergeRequest = provider === 'gitlab'
   const unavailable = isMergeRequest
-    ? translate(
+    ? t(
         'auto.components.sidebar.worktreeCardPrDisplay.mrDetailsUnavailable',
         'MR details unavailable'
       )
-    : translate(
+    : t(
         'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
         'PR details unavailable'
       )
   const loading = isMergeRequest
-    ? translate('auto.components.sidebar.worktreeCardPrDisplay.loadingMr', 'Loading MR...')
-    : translate('auto.components.sidebar.worktreeCardPrDisplay.loadingPr', 'Loading PR...')
+    ? t('auto.components.sidebar.worktreeCardPrDisplay.loadingMr', 'Loading MR...')
+    : t('auto.components.sidebar.worktreeCardPrDisplay.loadingPr', 'Loading PR...')
   return {
     provider,
     number,
@@ -99,7 +101,8 @@ export function getWorktreeCardPrDisplay(
   linkedBitbucketPR: number | null = null,
   linkedAzureDevOpsPR: number | null = null,
   linkedGiteaPR: number | null = null,
-  options: WorktreeCardPrDisplayOptions = {}
+  options: WorktreeCardPrDisplayOptions = {},
+  t?: Translate
 ): WorktreeCardPrDisplay | null {
   const links = {
     linkedPR,
@@ -147,27 +150,27 @@ export function getWorktreeCardPrDisplay(
     if (review.number === linkedReviewNumber) {
       return review
     }
-    return makeLinkedReviewFallback(review.provider, linkedReviewNumber, undefined)
+    return makeLinkedReviewFallback(review.provider, linkedReviewNumber, undefined, t)
   }
 
   if (linkedPR !== null) {
-    return makeLinkedReviewFallback('github', linkedPR, review)
+    return makeLinkedReviewFallback('github', linkedPR, review, t)
   }
 
   if (linkedGitLabMR !== null) {
-    return makeLinkedReviewFallback('gitlab', linkedGitLabMR, review)
+    return makeLinkedReviewFallback('gitlab', linkedGitLabMR, review, t)
   }
 
   if (linkedBitbucketPR !== null) {
-    return makeLinkedReviewFallback('bitbucket', linkedBitbucketPR, review)
+    return makeLinkedReviewFallback('bitbucket', linkedBitbucketPR, review, t)
   }
 
   if (linkedAzureDevOpsPR !== null) {
-    return makeLinkedReviewFallback('azure-devops', linkedAzureDevOpsPR, review)
+    return makeLinkedReviewFallback('azure-devops', linkedAzureDevOpsPR, review, t)
   }
 
   if (linkedGiteaPR !== null) {
-    return makeLinkedReviewFallback('gitea', linkedGiteaPR, review)
+    return makeLinkedReviewFallback('gitea', linkedGiteaPR, review, t)
   }
 
   return null

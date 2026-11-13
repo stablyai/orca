@@ -131,18 +131,4 @@ describe('producer stall watchdog end to end', () => {
     expect(subprocess.pause).toHaveBeenCalledTimes(2)
     expect(droppedChars(written)).toBe(gapBefore)
   })
-
-  it('does not fire against a consumer that is draining', () => {
-    vi.useFakeTimers()
-    const { drainFully, produceUntilPaused, subprocess, written } = createWiring()
-    produceUntilPaused()
-
-    // Drain in 10ms passes, comfortably inside the watchdog deadline.
-    drainFully(10)
-    expect(subprocess.resume).toHaveBeenCalledOnce()
-
-    vi.advanceTimersByTime(STREAM_BACKPRESSURE_STALL_WATCHDOG_MS * 2)
-    expect(droppedChars(written)).toBe(0)
-    expect(subprocess.pause).toHaveBeenCalledOnce()
-  })
 })

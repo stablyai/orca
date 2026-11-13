@@ -1,225 +1,47 @@
-import { describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MARINE_CREATURES } from '../../../../shared/marine-creatures'
-import {
-  collectRetiredNamesFromLeafNames,
-  discoverRetiredWorktreeNames,
-  extractBucketLeafCandidates
-} from './worktree-retirement-discovery'
+import { encodeClaudeProjectPath } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { discoverRetiredWorktreeNames } from './worktree-retirement-discovery'
 
 const FIRST = MARINE_CREATURES[0].toLowerCase()
-const SECOND = MARINE_CREATURES[1].toLowerCase()
 
-describe('extractBucketLeafCandidates', () => {
-  it('takes everything past the encoded parent as the leaf', () => {
-    expect(extractBucketLeafCandidates(`-w-orca-${FIRST}`, ['-w-orca'])).toEqual([FIRST])
+describe('retirement discovery of Claude buckets', () => {
+  let home: string
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'orca-retire-claude-'))
   })
 
-  it('does not treat the parent directory as a leaf when the workspace name is numeric', () => {
-    expect(extractBucketLeafCandidates('-w-workspaces-orca-7474', ['-w-workspaces-orca'])).toEqual([
-      '7474'
-    ])
+  afterEach(async () => {
+    await rm(home, { force: true, recursive: true })
   })
 
-  it('offers the first segment too, so an agent run in a subdirectory still retires the leaf', () => {
-    expect(extractBucketLeafCandidates(`-w-orca-${FIRST}-packages-api`, ['-w-orca'])).toEqual([
-      `${FIRST}-packages-api`,
-      FIRST
-    ])
-  })
-
-  it('rejects a sibling directory that shares the parent prefix', () => {
-    expect(extractBucketLeafCandidates(`-w-orcadyne-${FIRST}`, ['-w-orca'])).toEqual([])
-    expect(extractBucketLeafCandidates(`-w-orca-secret-${FIRST}`, ['-w-orca-fix'])).toEqual([])
-  })
-
-  it('yields nothing for the parent bucket itself', () => {
-    expect(extractBucketLeafCandidates('-w-orca', ['-w-orca'])).toEqual([])
-  })
-})
-
-describe('collectRetiredNamesFromLeafNames', () => {
-  it('keeps pool names and drops everything else', () => {
-    expect(collectRetiredNamesFromLeafNames([FIRST, SECOND, 'fix-login'])).toEqual(
-      new Set([FIRST, SECOND])
+  // Claude Code cuts a long bucket name to `<first 200>-<hash>`; only the transcript cwd names the workspace.
+  async function addHashedBucket(cwd: string): Promise<void> {
+    const bucket = join(
+      home,
+      '.claude',
+      'projects',
+      `${encodeClaudeProjectPath(cwd).slice(0, 200)}-1x2y3z`
     )
-  })
-
-  it('is case-insensitive and skips non-string entries without throwing', () => {
-    const leaves = [undefined, null, '', MARINE_CREATURES[0].toUpperCase()] as unknown as string[]
-    expect(collectRetiredNamesFromLeafNames(leaves)).toEqual(new Set([FIRST]))
-  })
-})
-
-describe('discoverRetiredWorktreeNames', () => {
-  /** Use literal real-world bucket encodings so a mirrored encoder cannot hide a broken implementation. */
-  async function withFakeHome(
-    buckets: readonly string[],
-    run: (home: string) => Promise<void>
-  ): Promise<void> {
-    const home = await mkdtemp(join(tmpdir(), 'orca-retirement-home-'))
-    try {
-      for (const bucket of buckets) {
-        await mkdir(join(home, '.claude', 'projects', bucket), { recursive: true })
-      }
-      await run(home)
-    } finally {
-      await rm(home, { force: true, recursive: true })
-    }
+    await mkdir(bucket, { recursive: true })
+    await writeFile(join(bucket, 'session.jsonl'), `${JSON.stringify({ type: 'user', cwd })}\n`)
   }
 
-  it('calls a machine with no agent state a complete answer, not a hole to rescan forever', async () => {
-    const retired = await discoverRetiredWorktreeNames({
-      workspaceRoots: [join(tmpdir(), 'orca-retirement-absent-root')],
-      home: join(tmpdir(), 'orca-retirement-absent-home'),
-      env: {}
-    })
+  it.each([
+    ['the cut falls inside the workspace name', 195, false],
+    ['the workspace root alone is longer than the cut', 230, false],
+    // Case-insensitive volumes let the transcript spell the same root differently.
+    ['the transcript spells the root in another case', 230, true]
+  ])('keeps a long workspace path spent when %s', async (_case, rootLength, upperCaseCwd) => {
+    const root = `/synthetic/${'a'.repeat(rootLength - '/synthetic/'.length)}`
+    await addHashedBucket(`${upperCaseCwd ? root.toUpperCase() : root}/${FIRST}`)
 
-    expect(retired.names).toEqual(new Set())
-    expect(retired.complete).toBe(true)
-  })
+    const retired = await discoverRetiredWorktreeNames({ workspaceRoots: [root], home, env: {} })
 
-  it('matches a plain POSIX workspace root', async () => {
-    await withFakeHome([`-Users-ada-orca-workspaces-orca-${FIRST}`], async (home) => {
-      const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['/Users/ada/orca/workspaces/orca'],
-        home,
-        env: {}
-      })
-      expect(retired.names).toEqual(new Set([FIRST]))
-    })
-  })
-
-  it('matches an NFC bucket for an NFD workspace root', async () => {
-    const nfdRoot = '/Users/ada/cafe\u0301'
-    await withFakeHome([`-Users-ada-caf--${FIRST}`], async (home) => {
-      const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: [nfdRoot],
-        home,
-        env: {}
-      })
-      expect(retired.names).toEqual(new Set([FIRST]))
-    })
-  })
-
-  it('matches a dot-directory root, where the separator run encodes to two dashes', async () => {
-    await withFakeHome([`-Users-ada--orca-worktrees-${FIRST}`], async (home) => {
-      const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['/Users/ada/.orca/worktrees'],
-        home,
-        env: {}
-      })
-      expect(retired.names).toEqual(new Set([FIRST]))
-    })
-  })
-
-  it('matches a Windows drive root', async () => {
-    // Claude encodes drive punctuation separately; C:\ must produce C--.
-    await withFakeHome([`C--Users-ada-orca-workspaces-${FIRST}`], async (home) => {
-      const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['C:\\Users\\ada\\orca\\workspaces'],
-        home,
-        env: {}
-      })
-      expect(retired.names).toEqual(new Set([FIRST]))
-    })
-  })
-
-  it('matches a WSL UNC root', async () => {
-    await withFakeHome([`--wsl--Ubuntu-home-ada-orca-workspaces-${FIRST}`], async (home) => {
-      const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['\\\\wsl$\\Ubuntu\\home\\ada\\orca\\workspaces'],
-        home,
-        env: {},
-        // Stub distro-home resolution so Windows tests cannot boot the developer's distro.
-        resolveWslHome: async () => null
-      })
-      expect(retired.names).toEqual(new Set([FIRST]))
-    })
-  })
-
-  it('ignores buckets belonging to a sibling root with the same prefix', async () => {
-    await withFakeHome(
-      [`-Users-ada-orca-workspaces-orcadyne-${FIRST}`, `-Users-ada-orca-workspaces-orca-${SECOND}`],
-      async (home) => {
-        const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: ['/Users/ada/orca/workspaces/orca'],
-          home,
-          env: {}
-        })
-        expect(retired.names).toEqual(new Set([SECOND]))
-      }
-    )
-  })
-
-  it('reads buckets from CLAUDE_CONFIG_DIR when it is set', async () => {
-    const configDir = await mkdtemp(join(tmpdir(), 'orca-retirement-config-'))
-    await withFakeHome([`-Users-ada-w-${SECOND}`], async (home) => {
-      try {
-        await mkdir(join(configDir, 'projects', `-Users-ada-w-${FIRST}`), { recursive: true })
-        const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: ['/Users/ada/w'],
-          home,
-          env: { CLAUDE_CONFIG_DIR: configDir }
-        })
-        expect(retired.names).toEqual(new Set([FIRST]))
-      } finally {
-        await rm(configDir, { force: true, recursive: true })
-      }
-    })
-  })
-
-  it("matches a WSL workspace's bucket inside the distro, keyed by its Linux cwd", async () => {
-    const distroHome = await mkdtemp(join(tmpdir(), 'orca-retirement-distro-'))
-    await withFakeHome([], async (home) => {
-      try {
-        await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-orca-workspaces-${FIRST}`), {
-          recursive: true
-        })
-        const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca\\workspaces'],
-          home,
-          env: {},
-          resolveWslHome: async (distro) => (distro === 'Ubuntu' ? distroHome : null)
-        })
-        expect(retired.names).toEqual(new Set([FIRST]))
-      } finally {
-        await rm(distroHome, { force: true, recursive: true })
-      }
-    })
-  })
-
-  it('still reads the Windows-side home for a WSL root when the distro home cannot be resolved', async () => {
-    await withFakeHome(
-      [`--wsl-localhost-Ubuntu-home-ada-orca-workspaces-${FIRST}`],
-      async (home) => {
-        const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca\\workspaces'],
-          home,
-          env: {},
-          resolveWslHome: async () => null
-        })
-        expect(retired.names).toEqual(new Set([FIRST]))
-      }
-    )
-  })
-
-  it('retires live workspace directories alongside surviving buckets', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-retirement-roots-'))
-    await withFakeHome([], async (home) => {
-      try {
-        await mkdir(join(root, SECOND), { recursive: true })
-        const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: [root],
-          home,
-          env: {}
-        })
-        expect(retired.names).toEqual(new Set([SECOND]))
-      } finally {
-        await rm(root, { force: true, recursive: true })
-      }
-    })
+    expect(retired).toEqual({ names: new Set([FIRST]), complete: true })
   })
 })

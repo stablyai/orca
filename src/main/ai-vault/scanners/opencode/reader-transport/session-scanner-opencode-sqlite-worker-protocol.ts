@@ -1,7 +1,7 @@
 import type {
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal
-} from '../../../../native-chat/transcript-opencode-sqlite-query'
+} from '../../../../native-chat/transcript-history/opencode/transcript-opencode-sqlite-query'
 import type {
   AiVaultScanIssue,
   AiVaultSession
@@ -50,6 +50,14 @@ export type OpenCodeNativeChatReadRequest = {
   agent?: 'zcode'
 }
 
+export type OpenCodeForkCoverageRequest = {
+  id: number
+  kind: 'fork-coverage'
+  sourceSessionId: string
+  dbPath: string
+  sessionId: string
+}
+
 export type OpenCodeNativeChatReadValue = OpenCodeTranscriptPage | OpenCodeTranscriptSignal | null
 
 export type OpenCodeSqliteWorkerRequest = (
@@ -57,6 +65,7 @@ export type OpenCodeSqliteWorkerRequest = (
   | OpenCodeSqliteParseRequest
   | OpenCodeSqliteCaptureRequest
   | OpenCodeNativeChatReadRequest
+  | OpenCodeForkCoverageRequest
 ) & { timeoutMs?: number }
 
 export type OpenCodeSqliteListValue = {

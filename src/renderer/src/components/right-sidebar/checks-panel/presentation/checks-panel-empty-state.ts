@@ -1,5 +1,6 @@
 import type { HostedReviewCreationBlockedReason } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   autoRetrySchedule,
   capitalizeReviewLabel,
@@ -22,7 +23,8 @@ import { branchBlockerState, safetyBlockerState } from './checks-panel-blocker-c
 
 /** Decide copy/actions/composer together so uncertainty never reads as no review; see docs/design/pr-panel-refresh-guidance.md. */
 export function getChecksPanelReviewState(
-  input: ChecksPanelReviewStateInput
+  input: ChecksPanelReviewStateInput,
+  t: Translate = translate
 ): ChecksPanelReviewState {
   const { reviewLabel, reviewShortLabel, providerName } = input
 
@@ -30,12 +32,12 @@ export function getChecksPanelReviewState(
   if (input.operationLabel) {
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.empty.state.d77c513c1e',
         '{{value0}} in progress',
         { value0: input.operationLabel }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.empty.state.05e4aec17b',
         '{{value0}} checks will be available after the operation completes',
         { value0: reviewShortLabel }
@@ -69,12 +71,12 @@ export function getChecksPanelReviewState(
   if (reviewFetchInFlight && hasPendingReviewEvidence && pendingReviewLookupOwnsState) {
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.active.title',
         'Checking {{reviewLabel}} status',
         { reviewLabel }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.active.body',
         'Orca is checking {{provider}} for a {{reviewLabel}} on this branch.',
         { reviewLabel, provider: providerName }
@@ -87,19 +89,19 @@ export function getChecksPanelReviewState(
 
   // Safety blockers own their guidance; existing_review always blocks create.
   if (blockedReason && ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason)) {
-    return safetyBlockerState(input, blockedReason)
+    return safetyBlockerState(input, blockedReason, t)
   }
 
   // Known but unrenderable review evidence must block create actions.
   if (input.reviewLookup === 'positive_unresolved' && !isBranchBlocker(blockedReason)) {
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.positive.title',
         '{{reviewLabelCap}} details unavailable',
         { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.positive.body',
         'Orca has saved {{reviewLabel}} information for this branch but could not confirm its current status.',
         { reviewLabel }
@@ -114,32 +116,33 @@ export function getChecksPanelReviewState(
   if (isBranchBlocker(blockedReason)) {
     return branchBlockerState(
       input,
-      blockedReason as NonNullable<HostedReviewCreationBlockedReason>
+      blockedReason as NonNullable<HostedReviewCreationBlockedReason>,
+      t
     )
   }
   // Ready status without upstream means publish; undefined remains unknown.
   if (input.gitStatusPhase === 'ready' && input.hasUpstream === false && input.hasCurrentBranch) {
-    return branchBlockerState(input, 'no_upstream')
+    return branchBlockerState(input, 'no_upstream', t)
   }
 
   // Keep the composer hidden until hard refresh errors clear.
   if (isHardRefreshError(input.refresh)) {
-    return hardRefreshErrorState(input)
+    return hardRefreshErrorState(input, t)
   }
 
   if (input.reviewLookup === 'not_found') {
     const detail = isTransientRefreshFailure(input.refresh)
-      ? concurrentLookupDetail(input)
+      ? concurrentLookupDetail(input, t)
       : undefined
     const mode = confirmedComposerMode(input)
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.no_review.title',
         'No {{reviewLabel}} found',
         { reviewLabel }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.no_review.body',
         'Create a {{reviewLabel}} to start checks and review.',
         { reviewLabel }
@@ -154,19 +157,19 @@ export function getChecksPanelReviewState(
 
   if (isTransientRefreshFailure(input.refresh)) {
     const mode = confirmedComposerMode(input)
-    return transientRefreshState(input, mode, workflowActionForComposer(mode))
+    return transientRefreshState(input, mode, workflowActionForComposer(mode), t)
   }
 
   if (input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight') {
     const mode = confirmedComposerMode(input)
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.active.title',
         'Checking {{reviewLabel}} status',
         { reviewLabel }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.active.body',
         'Orca is checking {{provider}} for a {{reviewLabel}} on this branch.',
         { reviewLabel, provider: providerName }
@@ -180,11 +183,11 @@ export function getChecksPanelReviewState(
   if (input.gitStatusPhase === 'loading' && input.hasUpstream === undefined) {
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.git_loading.title',
         'Checking branch status'
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.git_loading.body',
         'Orca is checking this branch before showing create or publish actions.'
       ),
@@ -196,11 +199,11 @@ export function getChecksPanelReviewState(
   if (input.gitStatusPhase === 'error' && input.hasUpstream === undefined) {
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.git_error.title',
         'Could not check branch status'
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.git_error.body',
         "Orca could not confirm this branch's upstream from this environment. Retry before publishing or creating a {{reviewLabel}}.",
         { reviewLabel }
@@ -214,21 +217,21 @@ export function getChecksPanelReviewState(
   if (input.refresh?.status === 'skipped' && input.refresh.skippedReason) {
     if (input.refresh.skippedReason === 'rate-limit') {
       const mode = confirmedComposerMode(input)
-      return transientRefreshState(input, mode, workflowActionForComposer(mode))
+      return transientRefreshState(input, mode, workflowActionForComposer(mode), t)
     }
-    const skipped = skippedRefreshState(input, input.refresh.skippedReason)
+    const skipped = skippedRefreshState(input, input.refresh.skippedReason, t)
     if (skipped) {
       return skipped
     }
   }
   return {
     renderReview: false,
-    title: translate(
+    title: t(
       'auto.components.right.sidebar.checks.panel.review.unknown.title',
       '{{reviewLabelCap}} status unavailable',
       { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
     ),
-    description: translate(
+    description: t(
       'auto.components.right.sidebar.checks.panel.review.unknown.body',
       'Orca has not confirmed the {{reviewLabel}} status for this branch. Retry to check again.',
       { reviewLabel }
@@ -249,4 +252,23 @@ export function shouldShowChecksPanelPublishBranchAction(input: {
   }
   const blockedReason = input.hostedReviewBlockedReason
   return input.hasUpstream === false || blockedReason === 'no_upstream'
+}
+
+export function checksPanelOperationLabel(
+  operation: string,
+  t: Translate = translate
+): string | null {
+  switch (operation) {
+    case 'rebase':
+      return t('auto.components.right.sidebar.checks.panel.content.operation.rebase', 'Rebase')
+    case 'merge':
+      return t('auto.components.right.sidebar.checks.panel.content.operation.merge', 'Merge')
+    case 'cherry-pick':
+      return t(
+        'auto.components.right.sidebar.checks.panel.content.operation.cherryPick',
+        'Cherry-pick'
+      )
+    default:
+      return null
+  }
 }

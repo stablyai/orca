@@ -1,22 +1,28 @@
-import type { RefObject } from 'react'
-import { useMemo } from 'react'
+import { type RefObject, useMemo } from 'react'
+
 import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../../shared/repo-icon'
-import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
+import type {
+  SettingsNavIcon,
+  SettingsNavInstallStatus
+} from '@/components/settings/navigation/settings-navigation-types'
+import type { GitHubRepositoryIdentity } from '../../../../../shared/github/repositories/repository-identity'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'
 import { RepoForkIndicator } from '../../repo/repo-fork-indicator'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing'
-import { useSettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
-import type { SettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
-import { translate } from '@/i18n/i18n'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import {
+  useSettingsSetupGuideProgress,
+  type SettingsSetupGuideProgress
+} from '../setup-guide/settings-setup-guide-progress'
+
+import { useTranslate } from '@/i18n/use-translate'
+import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { useAppStore } from '@/store/index'
 
 type NavSection = {
@@ -56,6 +62,7 @@ function SettingsSearchField({
   searchInputRef,
   searchAutoFocus = false
 }: Pick<SettingsSidebarProps, 'searchInputRef' | 'searchAutoFocus'>): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchInputQuery)
   const onSearchChange = useAppStore((state) => state.setSettingsSearchQuery)
   const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
@@ -69,10 +76,7 @@ function SettingsSearchField({
           autoFocus={searchAutoFocus}
           value={searchQuery}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.SettingsSidebar.dbceaa8840',
-            'Search settings'
-          )}
+          placeholder={t('auto.components.settings.SettingsSidebar.dbceaa8840', 'Search settings')}
           className="bg-background/60 pl-9 pr-14 text-[13px]"
         />
         {searchQuery === '' ? (
@@ -115,11 +119,12 @@ function SettingsSetupGuideNavRow({
   setupActive,
   onSelect
 }: SettingsSetupGuideRowProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
       aria-current={setupActive ? 'page' : undefined}
-      aria-label={translate(
+      aria-label={t(
         'auto.components.settings.SettingsSidebar.82db1b7de4',
         'Onboarding checklist, {{value0}} of {{value1}} done. Show setup guide.',
         { value0: progress.doneCount, value1: progress.total }
@@ -136,11 +141,15 @@ function SettingsSetupGuideNavRow({
         done={progress.doneCount}
         total={progress.total}
         sizeClassName="size-4"
-        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
+        tooltipLabel={t(
+          'auto.components.settings.SettingsSidebar.progressComplete',
+          '{{value0}}/{{value1}} complete',
+          { value0: progress.doneCount, value1: progress.total }
+        )}
       />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[13px] font-medium leading-4">
-          {translate('auto.components.settings.SettingsSidebar.6503182299', 'Onboarding checklist')}
+          {t('auto.components.settings.SettingsSidebar.6503182299', 'Onboarding checklist')}
         </span>
       </span>
     </button>
@@ -158,6 +167,7 @@ export function SettingsSidebar({
   onBack,
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
+  const t = useTranslate()
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
   const setupActive = activeSectionId === 'setup-guide'
@@ -174,15 +184,12 @@ export function SettingsSidebar({
   const installStatusLabel = (status: VisibleInstallStatus): string => {
     switch (status) {
       case 'update-available':
-        return translate(
+        return t(
           'auto.components.skills.SkillFreshnessStatusPill.updateAvailable',
           'Update available'
         )
       case 'needs-attention':
-        return translate(
-          'auto.components.skills.SkillFreshnessStatusPill.needsAttention',
-          'Review skill'
-        )
+        return t('auto.components.skills.SkillFreshnessStatusPill.needsAttention', 'Review skill')
     }
   }
   const installStatusClassName =
@@ -201,7 +208,7 @@ export function SettingsSidebar({
           className="w-full justify-start gap-2 text-[13px] text-muted-foreground"
         >
           <ArrowLeft className="size-4" />
-          {translate('auto.components.settings.SettingsSidebar.60f8a673a7', 'Back to app')}
+          {t('auto.components.settings.SettingsSidebar.60f8a673a7', 'Back to app')}
         </Button>
       </div>
 
@@ -259,7 +266,7 @@ export function SettingsSidebar({
 
           <div className="space-y-2">
             <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {translate('auto.components.settings.SettingsSidebar.5c9669ff9c', 'Projects')}
+              {t('auto.components.settings.SettingsSidebar.5c9669ff9c', 'Projects')}
             </p>
 
             {repoSections.length > 0 ? (
@@ -286,7 +293,7 @@ export function SettingsSidebar({
                       {section.isRemote && (
                         <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
                           <Server className="size-3" />
-                          {translate('auto.components.settings.SettingsSidebar.e0900f83e7', 'SSH')}
+                          {t('auto.components.settings.SettingsSidebar.e0900f83e7', 'SSH')}
                         </span>
                       )}
                     </button>
@@ -296,11 +303,11 @@ export function SettingsSidebar({
             ) : (
               <p className="px-3 text-xs text-muted-foreground">
                 {hasRepos
-                  ? translate(
+                  ? t(
                       'auto.components.settings.SettingsSidebar.3e483e256b',
                       'No matching project settings.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.SettingsSidebar.df38d612b7',
                       'No projects added yet.'
                     )}

@@ -1,4 +1,5 @@
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import { selectMobileSessionTab } from '../../session-tabs/mobile-session-tab-selection'
 
 type SessionTabGroup = NonNullable<RuntimeMobileSessionTabsSnapshot['tabGroups']>[number]
 
@@ -34,29 +35,18 @@ export function applyBrowserSessionTabSelection(args: {
           ? group
           : { ...group, tabOrder: withoutTab }
       })
-    : focusesHost
-      ? groups.map((group) =>
-          group.tabOrder.includes(tabId) ? { ...group, activeTabId: tabId } : group
-        )
-      : groups
+    : groups
+  const placedSnapshot = {
+    ...snapshot,
+    snapshotVersion: snapshot.snapshotVersion + 1,
+    ...(snapshot.tabGroups !== undefined ? { tabGroups: nextGroups } : {})
+  }
+  const nextSnapshot = focusesHost
+    ? selectMobileSessionTab(placedSnapshot, snapshot.tabs.find((tab) => tab.id === tabId) ?? null)
+    : placedSnapshot
   return {
-    groups: nextGroups,
+    groups: nextSnapshot.tabGroups ?? [],
     placedInTargetGroup,
-    snapshot: {
-      ...snapshot,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      ...(placedInTargetGroup && focusesHost ? { activeGroupId: targetGroupId } : {}),
-      ...(focusesHost
-        ? {
-            activeTabId: tabId,
-            activeTabType: 'browser' as const,
-            tabs: snapshot.tabs.map((candidate) => ({
-              ...candidate,
-              isActive: candidate.id === tabId
-            }))
-          }
-        : {}),
-      tabGroups: nextGroups
-    }
+    snapshot: nextSnapshot
   }
 }

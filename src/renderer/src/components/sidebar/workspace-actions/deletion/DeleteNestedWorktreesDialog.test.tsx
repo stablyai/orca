@@ -30,9 +30,11 @@ vi.mock('@/store', () => {
     })
   }
 })
-vi.mock('@/store/selectors', () => ({
-  getWorktreeOnHostFromState: () => null,
-  getAllWorktreesFromState: () => []
+vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
+  getWorktreeOnHostFromState: () => null
+}))
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedAllWorktrees: () => []
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 

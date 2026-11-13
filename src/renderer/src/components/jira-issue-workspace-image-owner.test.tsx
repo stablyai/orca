@@ -4,7 +4,7 @@ import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '../store/types'
 import type {
@@ -57,7 +57,7 @@ vi.mock('@/store', () => {
   }
 })
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-jira-client', () => {
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => {
   function request<T>(
     queue: PendingRead<T>[],
     target: RuntimeClientTarget,
@@ -73,11 +73,13 @@ vi.mock('@/runtime/runtime-jira-client', () => {
     jiraListTransitionsForTarget: (target: RuntimeClientTarget, key: string) =>
       request(boundary.transitions, target, key),
     jiraListPrioritiesForTarget: async () => [],
-    jiraListAssignableUsersForTarget: async () => [],
     jiraUpdateIssueForTarget: async () => ({ ok: true }),
     jiraAddIssueCommentForTarget: async () => ({ ok: true, id: 'added' })
   }
 })
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
+}))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return {

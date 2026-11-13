@@ -2,7 +2,7 @@ import {
   TerminalIdentityRawInputs,
   TerminalIdentityReadContext
 } from './terminal-identity-read-context'
-import { OrcaRuntimeWithMailboxTerminalIdentity } from '../../orchestration/mailbox-terminal-identity'
+import { OrcaRuntimeWithMailboxTerminalIdentity } from '../../orchestration/mailbox/routing/mailbox-terminal-identity'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -19,7 +19,7 @@ import {
   makePaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
   ptyHoldsRecordedSurface,
   type PtySurfaceTopology
@@ -153,6 +153,18 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     return { pty }
   }
 
+  /** The PTY a runtime or window-pane handle names; a reloading graph is unknown, not gone, so it throws. */
+  getTerminalPtyIdForHandle(handle: string): string | null {
+    try {
+      return this.getTerminalPtyForHandle(handle).pty.ptyId
+    } catch (error) {
+      if (error instanceof Error && error.message === 'runtime_unavailable') {
+        throw error
+      }
+      return null
+    }
+  }
+
   /** A pane-issued handle outlives the graph (a reload) while its PTY keeps the incarnation it was issued for. */
   protected getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined {
     const pty = this.getPaneAliasPty(handle)
@@ -199,7 +211,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     if (!record) {
       const ptyId = context
         ? context.reversePtyIds(handle)[0]
-        : [...this.handleByPtyId.entries()].find(([, mappedHandle]) => mappedHandle === handle)?.[0]
+        : this.terminalIdentity.firstReversePtyId(handle)
       const pty = ptyId ? this.ptysById.get(ptyId) : null
       if (pty) {
         // Why: graph reload clears renderer handle records, but runtime-owned PTY handles remain the caller's control identity.

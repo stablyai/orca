@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CheckStatus, PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  PRInfo
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type {
   WorkspaceLineage,
@@ -77,6 +80,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     const display = getFolderWorkspaceCardPrDisplay({
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      crossStoreChildren: [],
       worktreeLineageById: {},
       worktreeMap: new Map([
         [parent.id, parent],
@@ -98,6 +102,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     const display = getFolderWorkspaceCardPrDisplay({
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      crossStoreChildren: [],
       worktreeLineageById: {
         [nested.id]: {
           ...makeWorktreeLineage(nested, parent),

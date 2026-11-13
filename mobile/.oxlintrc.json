@@ -4,7 +4,8 @@
   "ignorePatterns": [
     "src/components/mobile-markdown-mdast-nodes.d.ts",
     "src/terminal/terminal-webview-engine.generated.ts",
-    "src/components/pr-sidebar/mermaid-page-engine.generated.ts"
+    "src/components/pr-sidebar/mermaid-page-engine.generated.ts",
+    "src/components/katex-page-style.generated.ts"
   ],
   "rules": {
     "react-hooks/exhaustive-deps": "off",

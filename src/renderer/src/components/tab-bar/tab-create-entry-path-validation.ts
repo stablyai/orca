@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { normalizeAbsolutePath } from '../../../../shared/file-links/file-link-path-normalization'
 import { isAbsolutePathLike } from '../editor/view-mode/editor-panel-file-mode'
 
@@ -8,10 +9,10 @@ export function isTabEntryAbsolutePathLike(query: string): boolean {
   return isAbsolutePathLike(query.trim())
 }
 
-function assertTabEntryPathHasNoControlCharacters(trimmed: string): void {
+function assertTabEntryPathHasNoControlCharacters(trimmed: string, t: Translate = translate): void {
   if (Array.from(trimmed).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.filePathsCannotContainControlCharacters',
         'File paths cannot contain control characters.'
       )
@@ -21,21 +22,22 @@ function assertTabEntryPathHasNoControlCharacters(trimmed: string): void {
 
 export function validateNewTabEntryAbsolutePath(
   query: string,
-  localPlatform?: TabEntryLocalPlatform
+  localPlatform?: TabEntryLocalPlatform,
+  t: Translate = translate
 ): string {
   const trimmed = query.trim()
   if (!trimmed) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterAUrlOrFilePath',
         'Enter a URL or file path.'
       )
     )
   }
-  assertTabEntryPathHasNoControlCharacters(trimmed)
+  assertTabEntryPathHasNoControlCharacters(trimmed, t)
   if (trimmed === '~' || trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.homeRelativePathsAreNotSupported',
         'Home-relative paths are not supported here.'
       )
@@ -43,7 +45,7 @@ export function validateNewTabEntryAbsolutePath(
   }
   if (/[\\/]$/.test(trimmed)) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterAFilePathNotA',
         'Enter a file path, not a directory path.'
       )
@@ -51,7 +53,7 @@ export function validateNewTabEntryAbsolutePath(
   }
   if (!isAbsolutePathLike(trimmed)) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterAnAbsoluteFilePath',
         'Enter an absolute file path.'
       )
@@ -60,7 +62,7 @@ export function validateNewTabEntryAbsolutePath(
   const normalized = normalizeAbsolutePath(trimmed)
   if (!normalized) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterAnAbsoluteFilePath',
         'Enter an absolute file path.'
       )
@@ -73,7 +75,7 @@ export function validateNewTabEntryAbsolutePath(
       (normalized.rootKind === 'windows' || normalized.rootKind === 'unc'))
   if (!rootMatchesLocalPlatform) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterAnAbsolutePathForThis',
         'Enter an absolute path for this computer.'
       )
@@ -82,21 +84,21 @@ export function validateNewTabEntryAbsolutePath(
   return normalized.normalized
 }
 
-export function validateNewTabEntryRelativePath(query: string): string {
+export function validateNewTabEntryRelativePath(query: string, t: Translate = translate): string {
   // Keep new-file paths workspace-relative; absolute/home/traversal/UNC syntax follows separate routes.
   const trimmed = query.trim()
   if (!trimmed) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterAUrlOrFilePath',
         'Enter a URL or file path.'
       )
     )
   }
-  assertTabEntryPathHasNoControlCharacters(trimmed)
+  assertTabEntryPathHasNoControlCharacters(trimmed, t)
   if (trimmed.startsWith('/')) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterARelativeFilePath',
         'Enter a relative file path.'
       )
@@ -104,7 +106,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   }
   if (/^[A-Za-z]:/.test(trimmed)) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.windowsDrivePathsAreNotSupported',
         'Windows drive paths are not supported here.'
       )
@@ -112,7 +114,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   }
   if (/^[\\/]{2}/.test(trimmed)) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.uncPathsAreNotSupportedHere',
         'UNC paths are not supported here.'
       )
@@ -120,7 +122,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   }
   if (trimmed === '~' || trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.homeRelativePathsAreNotSupported',
         'Home-relative paths are not supported here.'
       )
@@ -128,7 +130,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   }
   if (/[\\/]$/.test(trimmed)) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.enterAFilePathNotA',
         'Enter a file path, not a directory path.'
       )
@@ -136,7 +138,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   }
   if (trimmed.split(/[\\/]/).some((segment) => segment.length === 0)) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.filePathsCannotContainEmptySegments',
         'File paths cannot contain empty segments.'
       )
@@ -147,7 +149,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   const segments = normalized.split('/')
   if (segments.some((segment) => segment === '.' || segment === '..')) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.filePathsCannotContainDotSegments',
         'File paths cannot contain . or .. segments.'
       )
@@ -155,7 +157,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   }
   if (segments.some((segment) => segment === '~')) {
     throw new Error(
-      translate(
+      t(
         'auto.components.tab.bar.tabCreateEntryPath.filePathsCannotContainTildeSegments',
         'File paths cannot contain ~ segments.'
       )

@@ -1,10 +1,10 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { keptOpenStopRefusal } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
-import { callFederatedWorkerShow } from './worker-observation'
+import { callFederatedWorkerShow } from './observation/worker-observation'
 import { resolveStructuredWorkerIdentityForSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
   OrchestrationWorkerKeepOpenParams,
@@ -12,8 +12,12 @@ import {
 } from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
 
 export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerAutoClose',
+    access: {
+      kind: 'reads',
+      targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
+    },
     permission: 'workspace',
     params: OrchestrationWorkerSubjectParams,
     handler: (params, { runtime }) => {
@@ -23,8 +27,12 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerKeepOpen',
+    access: {
+      kind: 'writes',
+      targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
+    },
     permission: 'workspace',
     params: OrchestrationWorkerKeepOpenParams,
     handler: (params, { runtime }) => {
@@ -43,15 +51,23 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
       return { autoClose: db.getWorkerAutoCloseState(paneKey) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerTerminalUserInput',
+    access: {
+      kind: 'writes',
+      targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
+    },
     permission: 'workspace',
     params: OrchestrationWorkerSubjectParams,
     // Older clients still report typing; only Keep open keeps a worker now, so this records nothing.
     handler: () => ({ changed: 0 })
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerChatTouch',
+    access: {
+      kind: 'writes',
+      targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
+    },
     permission: 'workspace',
     params: OrchestrationWorkerSubjectParams,
     // Older clients still report viewing; answered like typing, without `pending`, so they stop retrying.

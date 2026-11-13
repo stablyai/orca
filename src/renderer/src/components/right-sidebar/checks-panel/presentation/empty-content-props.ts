@@ -20,6 +20,8 @@ export type ChecksPanelEmptyContentModel = Pick<
 > &
   Pick<
     ChecksPanelControllerState,
+    | 'repo'
+    | 'activeWorktreePath'
     | 'activeWorktree'
     | 'activeWorktreeId'
     | 'branch'
@@ -65,6 +67,8 @@ export type ChecksPanelEmptyContentModel = Pick<
     | 'prBaseResults'
     | 'prBaseSearchError'
     | 'prBaseSearchPending'
+    | 'prImageUploadPending'
+    | 'onPrImageUploadPending'
     | 'prBody'
     | 'prDraft'
     | 'prGenerateDisabled'

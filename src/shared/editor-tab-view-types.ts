@@ -12,8 +12,8 @@ import type {
   GitStatusEntry
 } from './git/status/git-status-types'
 import type { GitLabProjectRef } from './gitlab-types'
-import type { PRCheckDetail, PRCheckRunDetails } from './github/check-types'
-import type { GitHubRepositoryIdentity } from './github/pull-request-types'
+import type { PRCheckDetail, PRCheckRunDetails } from './github/checks/check-types'
+import type { GitHubRepositoryIdentity } from './github/repositories/repository-identity'
 
 export type DiffSource =
   | 'unstaged'
@@ -86,7 +86,7 @@ export type OpenCheckRunDetailsState = {
 
 /** An editor tab's view, keyed by its mode, with exactly the open-file fields that mode uses today. The view is not saved. */
 export type EditorTabView =
-  | { mode: 'edit'; conflict: OpenConflictMetadata }
+  | { mode: 'edit'; conflict?: OpenConflictMetadata }
   | {
       mode: 'diff'
       diffSource?: DiffSource
@@ -106,4 +106,5 @@ export type EditorTabView =
       markdownPreviewAnchor?: string
     }
   | { mode: 'conflict-review'; conflictReview?: ConflictReviewState }
+  | { mode: 'git-graph' }
   | { mode: 'check-details'; checkRunDetails?: OpenCheckRunDetailsState }

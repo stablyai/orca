@@ -1,9 +1,12 @@
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
 import type { GitConflictOperation } from '../../../shared/git/status/git-status-types'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from './git-read-cache-invalidation'
 import { resolveGitDir } from './resolve-git-dir'
 
@@ -15,13 +18,15 @@ export async function detectConflictOperation(
   const gitDir = await resolveGitDir(worktreePath, options)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')
   const cherryPickHead = path.join(gitDir, 'CHERRY_PICK_HEAD')
+  const revertHead = path.join(gitDir, 'REVERT_HEAD')
   const rebaseMergeDir = path.join(gitDir, 'rebase-merge')
   const rebaseApplyDir = path.join(gitDir, 'rebase-apply')
 
   // Probe concurrently without blocking main: each WSL/UNC path can cost a 9p round trip.
-  const [hasMergeHead, hasCherryPickHead, hasRebaseMergeDir, hasRebaseApplyDir] = await Promise.all(
-    [mergeHead, cherryPickHead, rebaseMergeDir, rebaseApplyDir].map(pathExists)
-  )
+  const [hasMergeHead, hasCherryPickHead, hasRebaseMergeDir, hasRebaseApplyDir, hasRevertHead] =
+    await Promise.all(
+      [mergeHead, cherryPickHead, rebaseMergeDir, rebaseApplyDir, revertHead].map(pathExists)
+    )
   const hasRebaseDir = hasRebaseMergeDir || hasRebaseApplyDir
 
   if (hasMergeHead) {
@@ -32,6 +37,9 @@ export async function detectConflictOperation(
   }
   if (hasCherryPickHead) {
     return 'cherry-pick'
+  }
+  if (hasRevertHead) {
+    return 'revert'
   }
   return 'unknown'
 }

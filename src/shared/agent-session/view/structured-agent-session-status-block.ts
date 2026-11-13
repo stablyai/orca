@@ -39,6 +39,7 @@ export function structuredAgentSessionStatusBlock(
     ...(body.tone !== undefined ? { tone: body.tone } : modelFallback ? { tone: 'notice' } : {}),
     ...(body.providerFrame ? { providerFrame: body.providerFrame } : {}),
     ...(failure ? { failure } : {}),
+    ...(body.forkedFrom ? { forkedFrom: { sessionId: body.forkedFrom.sessionId } } : {}),
     ...(failure?.kind === 'usageLimitReached' && turnScope?.kind === 'turn'
       ? { usageLimitTurnItemId: turnScope.turnItemId }
       : {}),

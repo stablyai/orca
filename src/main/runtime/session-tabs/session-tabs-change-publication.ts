@@ -1,13 +1,16 @@
+import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
 import { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab } from './mobile-session-publication-preservation'
+import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
-  BrowserTabInfo,
   RuntimeMobileSessionClientTab,
-  RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionMarkdownTab
+} from '../../../shared/runtime-mobile-session-tab-contracts'
+import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-types'
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
+} from '../../../shared/runtime-session-contracts'
+import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-session-contracts'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getMobileSessionTabOrderIds } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
@@ -65,7 +68,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     return (
       result: RuntimeMobileSessionTabsResult,
       changeSequence: number,
-      clientNavigationId?: string
+      clientNavigationId?: string,
+      candidates?: readonly MobileSessionTabSubscription[],
+      delivery?: 'reconciliation'
     ): void => {
       const { agentSenderAssociations: _senders, ...tabsOnly } = result
       // A frame for one client is already its projection; projecting again stacks the epoch suffix and revision, so the client fences it.
@@ -73,32 +78,31 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         clientNavigationId === undefined ? this.projectMobileSessionTabsForClient(frame, id) : frame
       let desktopFrame: RuntimeMobileSessionTabsResult | undefined
       try {
-        for (const subscription of this.mobileSessionTabListeners) {
-          if (
-            clientNavigationId !== undefined &&
-            subscription.clientNavigationId !== clientNavigationId
-          ) {
+        for (const subscription of this.selectMobileSessionTabsListeners(
+          result.worktree,
+          clientNavigationId,
+          candidates
+        )) {
+          if (!this.mobileSessionTabListeners.has(subscription)) {
             continue
           }
           let frame: RuntimeMobileSessionTabsResult = tabsOnly
           if (subscription.clientKind !== 'mobile') {
             if (!desktopFrame) {
-              if (result.agentSenderAssociations) {
-                desktopFrame = result
-              } else {
+              desktopFrame = result
+              if (!result.agentSenderAssociations) {
                 senderScope ??= this.agentProjections.senders.buildForFramePass()
                 desktopFrame = { ...result, agentSenderAssociations: senderScope(result.worktree) }
               }
             }
             frame = desktopFrame
           }
-          subscription.listener(project(frame, subscription.clientNavigationId), changeSequence)
+          const supplied = project(frame, subscription.clientNavigationId)
+          this.deliverMobileSessionTabsFrame(subscription, supplied, changeSequence, delivery)
         }
-        if (clientNavigationId === undefined && desktopFrame?.agentSenderAssociations) {
-          this.agentProjections.senders.acknowledgeFrame(
-            result.worktree,
-            desktopFrame.agentSenderAssociations
-          )
+        const senders = desktopFrame?.agentSenderAssociations
+        if (clientNavigationId === undefined && senders) {
+          this.agentProjections.senders.acknowledgeFrame(result.worktree, senders)
         }
       } finally {
         if (senderScope) {
@@ -305,14 +309,11 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         if (tabOrder.length === 0) {
           return null
         }
-        const activeTabId =
-          group.activeTabId && tabOrder.includes(group.activeTabId)
-            ? group.activeTabId
-            : (tabOrder[0] ?? null)
         const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
         return {
           id: group.id,
-          activeTabId,
+          activeTabId:
+            group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
           tabOrder,
           ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
         }

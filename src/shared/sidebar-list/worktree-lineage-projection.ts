@@ -1,36 +1,24 @@
 import {
-  getCyclicLineageChildKeys,
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
 } from '../resolved-worktree-lineage'
 import type { ExecutionHostId } from '../execution-host'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../worktree/host-qualified-identity'
+import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../worktree/lineage-types'
+import type { FolderLineageRecordOf } from '../worktree/folder-lineage-parents'
+import type { CrossStoreLineageView } from '../worktree/cross-store-lineage-resolution'
 import {
-  resolveCrossStoreLineageParents,
-  type CrossStoreLineageView
-} from '../worktree/cross-store-lineage-resolution'
+  getProjectedWorktreeLineage,
+  getSameStoreLineageParent,
+  resolveWorkspaceLineageParents,
+  type WorktreeWithInlineLineage
+} from '../worktree/workspace-lineage-graph'
 import type { Worktree } from '../worktree/types'
 
 export type LineageRenderInfo =
   | { state: 'none' }
   | { state: 'valid'; lineage: WorktreeLineage; parent: Worktree }
   | { state: 'missing'; lineage: WorktreeLineage }
-
-type WorktreeWithResolvedLineage = Worktree & { lineage?: WorktreeLineage | null }
-
-export function getProjectedWorktreeLineage(
-  worktree: Worktree,
-  lineageById: Readonly<Record<string, WorktreeLineage>>
-): WorktreeLineage | null | undefined {
-  if (Object.hasOwn(lineageById, worktree.id)) {
-    return lineageById[worktree.id]
-  }
-  return (worktree as WorktreeWithResolvedLineage).lineage
-}
 
 type LineageProjection = {
   cyclicLineageIds?: Set<string>
@@ -148,7 +136,7 @@ export function getHostScopedWorktreeLineageInputs(
     worktreeMap.set(worktree.id, worktree)
     const projected = lineageById[worktree.id]
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolved rows may carry an inline lineage the Worktree type omits; it is only read, never trusted over a matching projection.
-    const inline = (worktree as WorktreeWithResolvedLineage).lineage
+    const inline = (worktree as WorktreeWithInlineLineage).lineage
     const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
     if (lineage) {
       hostLineageById[worktree.id] = lineage
@@ -178,66 +166,26 @@ export function getWorktreeLineageAncestors(
   return ancestors
 }
 
-/** Nest on the worktree’s own host; legacy rows without host IDs nest only under equally unqualified parents. */
-export function getSidebarLineageParent(
-  worktree: Worktree,
-  lineageById: Readonly<Record<string, WorktreeLineage>>,
-  rowsByHostIdentity: ReadonlyMap<string, Worktree>
-): Worktree | undefined {
-  const projected = getProjectedWorktreeLineage(worktree, lineageById)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolved rows may carry an inline lineage the Worktree type omits; it is only read, never trusted over a matching projection.
-  const inline = (worktree as WorktreeWithResolvedLineage).lineage
-  const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
-  if (!lineage) {
-    return undefined
-  }
-  const parent = rowsByHostIdentity.get(
-    composeWorktreeHostIdentity(worktree.hostId, lineage.parentWorktreeId)
-  )
-  return parent && isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)
-    ? parent
-    : undefined
-}
-
 /** Child host identity → parent host identity, resolved once over every visible store's complete rows. */
 export type SidebarLineageParentIdentities = ReadonlyMap<string, string>
-
-function resolveParentsByIdentity(
-  lineageById: Readonly<Record<string, WorktreeLineage>>,
-  rowsByHostIdentity: ReadonlyMap<string, Worktree>,
-  crossStoreLineage?: CrossStoreLineageView
-): Map<string, Worktree> {
-  const parentByIdentity = crossStoreLineage
-    ? resolveCrossStoreLineageParents(rowsByHostIdentity, crossStoreLineage)
-    : new Map<string, Worktree>()
-  for (const [identity, row] of rowsByHostIdentity) {
-    const parent = getSidebarLineageParent(row, lineageById, rowsByHostIdentity)
-    if (parent) {
-      parentByIdentity.set(identity, parent)
-    }
-  }
-  const cyclic = getCyclicLineageChildKeys(
-    new Map(
-      [...parentByIdentity].map(([identity, parent]) => [identity, getWorktreeHostIdentity(parent)])
-    )
-  )
-  for (const identity of cyclic) {
-    parentByIdentity.delete(identity)
-  }
-  return parentByIdentity
-}
 
 /** Same-store edges merged with cross-store records (a valid same-store edge wins), cycles dropped.
  * Pass every visible store's unfiltered rows: a filtered-out twin must still make a parent ambiguous. */
 export function resolveSidebarLineageParentIdentities(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   completeRowsByHostIdentity: ReadonlyMap<string, Worktree>,
-  crossStoreLineage: CrossStoreLineageView
+  crossStoreLineage: CrossStoreLineageView | undefined,
+  folderRecordOf?: FolderLineageRecordOf
 ): SidebarLineageParentIdentities {
   return new Map(
-    [...resolveParentsByIdentity(lineageById, completeRowsByHostIdentity, crossStoreLineage)].map(
-      ([identity, parent]) => [identity, getWorktreeHostIdentity(parent)]
-    )
+    [
+      ...resolveWorkspaceLineageParents(
+        lineageById,
+        completeRowsByHostIdentity,
+        crossStoreLineage,
+        folderRecordOf
+      )
+    ].map(([identity, parent]) => [identity, getWorktreeHostIdentity(parent)])
   )
 }
 
@@ -256,7 +204,7 @@ export function getSidebarLineageParentsByIdentity(
     return cached
   }
   if (!parentIdentities) {
-    const parentByIdentity = resolveParentsByIdentity(lineageById, rowsByHostIdentity)
+    const parentByIdentity = resolveWorkspaceLineageParents(lineageById, rowsByHostIdentity)
     projection.sidebarParentByIdentity = parentByIdentity
     return parentByIdentity
   }
@@ -284,7 +232,7 @@ export function getSidebarLineageAncestors(
   const seen = new Set([getWorktreeHostIdentity(worktree)])
   let current = worktree
   while (!cyclicLineageIds.has(current.id)) {
-    const parent = getSidebarLineageParent(current, lineageById, rowsByHostIdentity)
+    const parent = getSameStoreLineageParent(current, lineageById, rowsByHostIdentity)
     if (!parent || seen.has(getWorktreeHostIdentity(parent))) {
       break
     }

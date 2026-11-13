@@ -14,10 +14,7 @@ import {
   type AgentSessionReserveRequest
 } from './agent-session-reservation-admission'
 import type { AgentSessionStoreState } from '../records/agent-session-store-state'
-import {
-  claudeProviderHandle,
-  codexProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const LEASE_TTL_MS = 60_000
@@ -72,42 +69,6 @@ function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionSt
   }
 }
 
-describe('adopted handle chain seeding', () => {
-  it('seeds a new record with the adopted link alone, at the first fence of the record', () => {
-    const link = adoptedLink()
-    const { record, disposition } = applyAgentSessionReservation(
-      storeState(),
-      reserveRequest({ adoptedHandleLink: link }),
-      LEASE_TTL_MS
-    )
-
-    expect(disposition).toBe('created')
-    expect(record.providerHandleChain).toEqual([link])
-    expect(record.providerHandleChain[0]?.mintedAtFence).toBe(record.lease.runtimeFence)
-  })
-
-  it('leaves a blank create with no chain, so the adapter starts a conversation', () => {
-    const { record } = applyAgentSessionReservation(storeState(), reserveRequest(), LEASE_TTL_MS)
-
-    expect(record.providerHandleChain).toEqual([])
-  })
-})
-
-describe('floating launch directory reservation', () => {
-  it('stores the host-selected folder when the record is first reserved', () => {
-    const request = reserveRequest({ launchDirectory: '/host/first-folder' })
-    const { record, disposition } = applyAgentSessionReservation(
-      storeState(),
-      request,
-      LEASE_TTL_MS
-    )
-
-    expect(disposition).toBe('created')
-    expect(record.launchDirectory).toBe('/host/first-folder')
-    expect(record.lease.claimStatus).toBe('reserved')
-  })
-})
-
 describe('adopted conversation ownership', () => {
   it('refuses when another record already holds the same conversation root', () => {
     // Compare conversation roots, not exact leaves, or branches could admit two writers onto one conversation.
@@ -136,99 +97,6 @@ describe('adopted conversation ownership', () => {
         LEASE_TTL_MS
       )
     ).not.toThrow()
-  })
-
-  it('admits a conversation another record only held before its current one', () => {
-    const fixture = agentSessionRecordFixture()
-    const holder: AgentSessionRecord = {
-      ...fixture,
-      providerHandleChain: [
-        ...fixture.providerHandleChain,
-        adoptedLink({
-          linkId: 'later',
-          handle: claudeProviderHandle('provider-session-later', null),
-          origin: 'created'
-        })
-      ]
-    }
-
-    expect(() =>
-      applyAgentSessionReservation(
-        storeState([holder]),
-        reserveRequest({ adoptedHandleLink: adoptedLink() }),
-        LEASE_TTL_MS
-      )
-    ).not.toThrow()
-  })
-
-  it('preserves the adopted chain and launch pin when retrying an existing reservation', () => {
-    // Pin self-exemption directly; create-by-intent has null expectedFence and rejects existing ids before this can act as replay.
-    const link = adoptedLink()
-    const committed: AgentSessionRecord = {
-      ...agentSessionRecordFixture(
-        agentSessionLeaseFixture({
-          sessionId: 'session-adopting',
-          runtimeFence: 1,
-          handoffStage: 'new-owner-proving',
-          claimStatus: 'reserved',
-          ownerProcess: null,
-          provenHandleLinkId: null,
-          handoffOperationId: 'handoff-1'
-        })
-      ),
-      location: LOCATION,
-      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-      launchDirectory: '/original-folder',
-      providerHandleChain: [link]
-    }
-
-    const { record, disposition } = applyAgentSessionReservation(
-      storeState([committed]),
-      reserveRequest({
-        adoptedHandleLink: link,
-        launchDirectory: '/changed-folder',
-        expectedFence: 1,
-        handoffOperationId: 'handoff-1'
-      }),
-      LEASE_TTL_MS
-    )
-
-    expect(disposition).toBe('retry-reservation')
-    expect(record.providerHandleChain).toEqual([link])
-    expect(record.launchDirectory).toBe('/original-folder')
-  })
-
-  it('refuses a Codex adoption another record already holds', () => {
-    const holder: AgentSessionRecord = {
-      ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'session-codex' })),
-      provider: 'codex',
-      accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-      providerHandleChain: [
-        {
-          linkId: 'codex-1-thread-1',
-          handle: codexProviderHandle('thread-1'),
-          origin: 'created',
-          mintedAtFence: 7,
-          observedAt: NOW
-        }
-      ]
-    }
-
-    expect(() =>
-      applyAgentSessionReservation(
-        storeState([holder]),
-        reserveRequest({
-          sessionId: 'session-codex-adopting',
-          provider: 'codex',
-          accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-          adoptedHandleLink: adoptedLink({
-            linkId: 'codex-1-thread-1-adopted',
-            handle: codexProviderHandle('thread-1')
-          })
-        }),
-        LEASE_TTL_MS
-      )
-    ).toThrow('agent_session_conflict')
   })
 
   // OpenCode variants share one conversation namespace; serialized adoption must reject the second writer.

@@ -1,21 +1,19 @@
-import { normalizeBrowserUrl } from '../browser/browser-url'
+import { normalizeBrowserUrl } from '../browser/pane-view/browser-url'
 import { translate } from '../i18n/mobile-i18n'
 import { captureMobileFileMutationOwnership } from '../files/mobile-file-mutation-ownership'
 import {
   browserGoBack,
   browserGoForward,
   browserReload
-} from '../browser/mobile-browser-command-operations'
+} from '../browser/page-interaction/mobile-browser-command-operations'
 import { sourceFileOpenRun } from '../source-control/mobile-source-file-open-operations'
-import {
-  sessionBrowserTabCreate,
-  sessionMarkdownNoteCreate
-} from './mobile-session-launch-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import type { MobileBrowserNavigationMethod } from './MobileBrowserTabActionSheet'
-import { isFileExistsErrorMessage } from './mobile-session-route-helpers'
-import type { MobileSessionTab } from './mobile-session-route-types'
-import type { MobileSessionTerminalCreateActionsModel } from './use-mobile-session-terminal-create-actions'
+import { sessionBrowserTabCreate } from '../browser/tab-navigation/mobile-session-browser-operations'
+import { sessionMarkdownNoteCreate } from '../files/session-documents/mobile-markdown-tab-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
+import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'
+import { isFileExistsErrorMessage } from '../files/file-exists-error'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
+import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/use-mobile-session-terminal-create-actions'
 
 const BROWSER_NAVIGATION_COMMANDS = {
   'browser.back': browserGoBack,

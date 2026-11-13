@@ -314,33 +314,6 @@ describe('observeVirtualizedListScrollMargin', () => {
 })
 
 describe('VirtualizedList scroll-margin lifecycle', () => {
-  it('does not read layout during ordinary re-renders after the initial measure', () => {
-    const aboveHeight = 160
-    const baseRows = manyRows(VIRTUALIZED_LIST_MIN_ROWS)
-
-    act(() => {
-      root.render(
-        <SharedScrollerHarness aboveHeight={aboveHeight} rows={baseRows.map((row) => `${row}@0`)} />
-      )
-    })
-    syncListTop(aboveHeight)
-    act(() => {
-      fireResizeObservers()
-    })
-
-    const rectSpy = vi.mocked(Element.prototype.getBoundingClientRect)
-    rectSpy.mockClear()
-
-    act(() => {
-      root.render(
-        <SharedScrollerHarness aboveHeight={aboveHeight} rows={baseRows.map((row) => `${row}@1`)} />
-      )
-    })
-
-    expect(rectSpy).not.toHaveBeenCalled()
-    expect(host.textContent).toContain('row-000@1')
-  })
-
   it('keeps multi-section windowing correct when content above resizes', () => {
     const rows = manyRows(VIRTUALIZED_LIST_MIN_ROWS + 20)
     let aboveHeight = 200

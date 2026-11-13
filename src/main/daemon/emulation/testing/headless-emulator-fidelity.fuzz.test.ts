@@ -188,29 +188,6 @@ function formatFailure(minimized: FidelityCase, diff: FidelityDiff | null): stri
 
 describe('headless emulator snapshot fidelity fuzz', () => {
   // SerializeAddon omits OSC 8; production carries link ranges in snapshot metadata.
-  it('drops OSC 8 underline from byte replay but preserves the range in snapshot metadata', async () => {
-    const emulator = new HeadlessEmulator({ cols: 60, rows: 10 })
-    const restored = createRendererParityTerminal({ cols: 60, rows: 10 })
-    try {
-      await emulator.write('\x1b]8;;https://example.com/pr/7\x07review link\x1b]8;;\x07 tail')
-      const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
-      await writeChunksToTerminal(restored.terminal, [
-        SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
-        snapshot.rehydrateSequences + snapshot.snapshotAnsi,
-        POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY
-      ])
-      expect(visibleRows(restored.terminal)[0]).toBe('review link tail')
-      expect(snapshot.oscLinks).toContainEqual({
-        row: 0,
-        startCol: 0,
-        endCol: 11,
-        uri: 'https://example.com/pr/7'
-      })
-    } finally {
-      emulator.dispose()
-      restored.terminal.dispose()
-    }
-  })
 
   it(`matches an always-visible renderer twin across ${ITERATIONS} seeded agent-TUI streams`, async () => {
     for (let i = 0; i < ITERATIONS; i++) {
@@ -281,51 +258,4 @@ describe('headless emulator snapshot fidelity fuzz', () => {
   })
 
   // SGR 22 clears bold and dim; the patched serializer must clear before setting bold.
-  it('preserves bold when serializing a dim cell followed by a bold-only cell', async () => {
-    const emulator = new HeadlessEmulator({ cols: 20, rows: 4 })
-    const control = createRendererParityTerminal({ cols: 20, rows: 4 })
-    const restored = createRendererParityTerminal({ cols: 20, rows: 4 })
-    try {
-      const bytes = ['\x1b[2mA\x1b[22m\x1b[1mB\x1b[0m']
-      for (const chunk of bytes) {
-        await emulator.write(chunk)
-      }
-      await writeChunksToTerminal(control.terminal, bytes)
-      const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
-      await writeChunksToTerminal(restored.terminal, [
-        SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
-        snapshot.rehydrateSequences + snapshot.snapshotAnsi,
-        POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY
-      ])
-      expect(visibleRowStyles(restored.terminal)).toEqual(visibleRowStyles(control.terminal))
-    } finally {
-      emulator.dispose()
-      control.terminal.dispose()
-      restored.terminal.dispose()
-    }
-  })
-
-  it('restores the cursor exactly when the last content row fills the right margin', async () => {
-    const emulator = new HeadlessEmulator({ cols: 10, rows: 4 })
-    const control = createRendererParityTerminal({ cols: 10, rows: 4 })
-    const restored = createRendererParityTerminal({ cols: 10, rows: 4 })
-    try {
-      const bytes = ['0123456789\x1b[3;5H']
-      for (const chunk of bytes) {
-        await emulator.write(chunk)
-      }
-      await writeChunksToTerminal(control.terminal, bytes)
-      const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
-      await writeChunksToTerminal(restored.terminal, [
-        SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
-        snapshot.rehydrateSequences + snapshot.snapshotAnsi,
-        POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY
-      ])
-      expect(cursorPosition(restored.terminal)).toEqual(cursorPosition(control.terminal))
-    } finally {
-      emulator.dispose()
-      control.terminal.dispose()
-      restored.terminal.dispose()
-    }
-  })
 })

@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { placeAbsoluteTab } from './absolute-tab-placement'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
   TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES
-} from '../../../../shared/runtime-file-contracts'
+} from '../../../../shared/terminal/runtime-terminal-file-path'
 
 const mocks = vi.hoisted(() => ({
   findWorkspaceFileRoute: vi.fn(),
   supportsCapability: vi.fn(),
   grantRestoredHostFile: vi.fn()
 }))
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 vi.mock('./restored-host-file-grant', () => ({

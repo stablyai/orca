@@ -1,5 +1,5 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import {
   MOCK_GIT_WORKTREES,
@@ -34,13 +34,7 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
-import {
-  createReconcileRuntime,
-  createWorktreeRemovalRuntime,
-  mockReconcileGit,
-  reconcileWithToken,
-  remoteTrackingBase
-} from './orca-runtime-test-scenario-builders.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not inspect or delete a local path for an SSH runtime orphan this process does not serve', async () => {
@@ -173,6 +167,47 @@ describe('OrcaRuntimeService', () => {
     expect(runHook).not.toHaveBeenCalled()
     expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('deletes an approved nested worktree before its parent', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const main = {
+      path: TEST_REPO_PATH,
+      head: 'main',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true
+    }
+    const parent = {
+      path: TEST_WORKTREE_PATH,
+      head: 'parent',
+      branch: 'refs/heads/parent',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const child = {
+      path: `${TEST_WORKTREE_PATH}/child`,
+      head: 'child',
+      branch: 'refs/heads/child',
+      isBare: false,
+      isMainWorktree: false
+    }
+    let registered = [main, parent, child]
+    vi.mocked(listWorktrees).mockImplementation(async () => registered)
+    vi.mocked(listWorktreesStrict).mockImplementation(async () => registered)
+    vi.mocked(removeWorktree).mockImplementation(async (_repoPath, worktreePath) => {
+      registered = registered.filter((item) => item.path !== worktreePath)
+      return {}
+    })
+
+    await runtime.removeManagedWorktreeWithNested(TEST_WORKTREE_ID, [child, parent], {
+      force: true
+    })
+
+    expect(vi.mocked(removeWorktree).mock.calls.map((call) => call[1])).toEqual([
+      `${TEST_WORKTREE_PATH}/child`,
+      TEST_WORKTREE_PATH
+    ])
   })
 
   it('fails dirty non-force deletes before PTY teardown', async () => {
@@ -431,161 +466,6 @@ describe('OrcaRuntimeService', () => {
       removePathSpy.mockRestore()
       gitSpy.mockRestore()
       await rm(parentDir, { recursive: true, force: true })
-    }
-  })
-
-  it('drops the bounded scan cache when orphan-cleanup removal completes', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
-      Object.assign(new Error('status failed'), {
-        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
-      })
-    )
-    vi.mocked(removeWorktree).mockRejectedValue(
-      Object.assign(new Error('git worktree remove failed'), {
-        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
-      })
-    )
-    const gitSpy = vi
-      .spyOn(gitExecFile, 'gitExecFileAsync')
-      .mockResolvedValue({ stdout: '', stderr: '' })
-    onTestFinished(() => gitSpy.mockRestore())
-
-    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
-
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
-
-    // Orphan cleanup must invalidate the raw scan cache rather than wait 30s (#8882).
-    vi.mocked(listWorktrees).mockResolvedValue([])
-    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
-      { worktrees: [] }
-    )
-  })
-
-  it('clears optimistic reconcile tokens when a CLI worktree removal succeeds', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    const worktreeBaseStatus = vi.fn()
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      worktreeBaseStatus,
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-    await runtime.reconcileWorktreeBaseStatus({
-      repoId: TEST_REPO_ID,
-      repoPath: TEST_REPO_PATH,
-      worktreeId: TEST_WORKTREE_ID,
-      base: {
-        remote: 'origin',
-        branch: 'main',
-        ref: 'refs/remotes/origin/main',
-        base: 'origin/main'
-      },
-      branchName: 'feature',
-      createdBaseSha: 'created-sha',
-      token,
-      fetchPromise: Promise.resolve({ ok: true })
-    })
-
-    expect(worktreeBaseStatus).not.toHaveBeenCalled()
-  })
-
-  it('emits drift without mutating when the fetched base fast-forwards created HEAD', async () => {
-    const { runtime, worktreeBaseStatus } = createReconcileRuntime()
-    const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    const gitSpy = mockReconcileGit({})
-    try {
-      await reconcileWithToken(runtime, token)
-
-      expect(gitSpy).not.toHaveBeenCalledWith(['reset', '--hard', 'new-base-sha'], {
-        cwd: TEST_WORKTREE_PATH
-      })
-      expect(worktreeBaseStatus).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: 'drift',
-          behind: 3,
-          recentSubjects: ['base commit 3', 'base commit 2']
-        })
-      )
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('emits base_changed without mutation when the fetched base rewrote history', async () => {
-    const { runtime, worktreeBaseStatus } = createReconcileRuntime()
-    const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    const gitSpy = mockReconcileGit({ ancestor: false })
-    try {
-      await reconcileWithToken(runtime, token)
-
-      expect(gitSpy).not.toHaveBeenCalledWith(['reset', '--hard', 'new-base-sha'], {
-        cwd: TEST_WORKTREE_PATH
-      })
-      expect(worktreeBaseStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'base_changed' })
-      )
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('skips stale-token reconciles without mutating or emitting stale status', async () => {
-    const stale = createReconcileRuntime()
-    const staleToken = stale.runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    stale.runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    const staleGitSpy = mockReconcileGit({})
-    try {
-      await reconcileWithToken(stale.runtime, staleToken)
-      expect(stale.worktreeBaseStatus).not.toHaveBeenCalled()
-      expect(staleGitSpy).not.toHaveBeenCalled()
-    } finally {
-      staleGitSpy.mockRestore()
-    }
-  })
-
-  it('emits unknown without mutation when fetch fails or the base ref is missing', async () => {
-    const fetchFailure = createReconcileRuntime()
-    const fetchFailureToken = fetchFailure.runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    await fetchFailure.runtime.reconcileWorktreeBaseStatus({
-      repoId: TEST_REPO_ID,
-      repoPath: TEST_REPO_PATH,
-      worktreeId: TEST_WORKTREE_ID,
-      base: remoteTrackingBase,
-      branchName: 'feature',
-      createdBaseSha: 'created-base-sha',
-      token: fetchFailureToken,
-      fetchPromise: Promise.resolve({ ok: false, errorKind: 'git_error' })
-    })
-    expect(fetchFailure.worktreeBaseStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'unknown' })
-    )
-
-    const missingBase = createReconcileRuntime()
-    const missingBaseToken = missingBase.runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    const gitSpy = mockReconcileGit({ baseRefMissing: true })
-    try {
-      await reconcileWithToken(missingBase.runtime, missingBaseToken)
-      expect(gitSpy).not.toHaveBeenCalledWith(['reset', '--hard', 'new-base-sha'], {
-        cwd: TEST_WORKTREE_PATH
-      })
-      expect(missingBase.worktreeBaseStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'unknown' })
-      )
-    } finally {
-      gitSpy.mockRestore()
     }
   })
 

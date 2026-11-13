@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-import type * as PluginSyntaxPacks from '@/store/plugin-syntax-packs'
-import type * as PluginIconThemes from '@/store/plugin-icon-themes'
-import type * as PluginThemes from '@/store/plugin-themes'
-import type * as PluginLanguagePacks from '@/store/plugin-language-packs'
+import type * as PluginSyntaxPacks from '@/store/plugins/syntax/plugin-syntax-packs'
+import type * as PluginIconThemes from '@/store/plugins/appearance/plugin-icon-themes'
+import type * as PluginThemes from '@/store/plugins/appearance/plugin-themes'
+import type * as PluginLanguagePacks from '@/store/plugins/localization/plugin-language-packs'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,19 +22,19 @@ vi.mock('../state/use-plugin-in-use', () => ({ usePluginInUse: () => null }))
 vi.mock('../state/use-plugin-art-palettes', () => ({ usePluginArtPalettes: () => [] }))
 
 // Unrelated content stores must not replace the fixture's single discovery callback.
-vi.mock('@/store/plugin-language-packs', async (importOriginal) => ({
+vi.mock('@/store/plugins/localization/plugin-language-packs', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginLanguagePacks>()),
   ensurePluginLanguagePacksLoaded: () => {}
 }))
-vi.mock('@/store/plugin-syntax-packs', async (importOriginal) => ({
+vi.mock('@/store/plugins/syntax/plugin-syntax-packs', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginSyntaxPacks>()),
   usePluginSyntaxes: () => []
 }))
-vi.mock('@/store/plugin-icon-themes', async (importOriginal) => ({
+vi.mock('@/store/plugins/appearance/plugin-icon-themes', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginIconThemes>()),
   usePluginIconThemes: () => []
 }))
-vi.mock('@/store/plugin-themes', async (importOriginal) => ({
+vi.mock('@/store/plugins/appearance/plugin-themes', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginThemes>()),
   usePluginThemes: () => [],
   usePluginTerminalThemes: () => []

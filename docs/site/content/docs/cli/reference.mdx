@@ -67,15 +67,24 @@ The result includes this machine, its registered [SSH targets](/docs/ssh), and p
 
 `--host` also takes the bare name shown in the `name` column, on either axis — `--host trader-local` reaches the same machine as `--host ssh:ssh-1783599077486-fyasux`. Names resolve only when they are unique: a name held by two SSH targets, by two paired servers, or by one of each is refused, and the error hands back the id form for each candidate — `--host ssh:<target-id>` for an SSH target and `--host runtime:<environment-id>` for a paired server. Use those to settle it, since `--environment <server-name>` cannot separate two servers sharing a name.
 
+Remove a saved SSH target with the id `orca host list` prints:
+
+```bash
+orca host rm --host ssh:<target-id> --json
+```
+
+It removes the target the same way Settings does, so the passive `~/.ssh/config` import does not add the alias back on the next launch. It takes only the `ssh:<target-id>` form, not the bare name, because it deletes data. It refuses `--host local`, paired servers (use `orca environment rm`), and an id this Orca host does not have.
+
 ## Runtime commands
 
 ```bash
 orca open --json
 orca status --json
-orca serve --port 6768 --pairing-address 100.64.1.20 --json
+orca serve --port 6768 --bind 100.64.1.20 --pairing-address 100.64.1.20 --json
 ```
 
-`orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`.
+`orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`. It accepts clients from localhost, LAN and Tailscale addresses; add `--allow-public` to accept public internet addresses too.
+Use `--bind <literal-ip>` to choose the listening interface; `--pairing-address` changes the address advertised to clients.
 
 ## Repos
 
@@ -86,9 +95,13 @@ orca repo add --path /abs/path/to/folder --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
+orca repo hide --repo id:<repoId> --json
+orca repo unhide --repo id:<repoId> --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+`repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Hiding applies to one host's copy of a project; add `--host <host>` to pick which copy when it is set up on several. On a paired Orca server the setting lives on that server, so hiding a project there hides it for everyone connected to it. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
 
 `repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
@@ -214,6 +227,15 @@ close returns a failing `unverifiable` result rather than claiming the processes
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
+
+## Chats
+
+```bash
+orca chat rename --session <sessionId> --name "Release notes" --json
+orca chat rename --name "Migrate auth"
+```
+
+Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
 
 ## Files
 
@@ -380,9 +402,21 @@ orca account add --agent codex
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
 
+Switch which saved account new agents launch with, for any provider with saved accounts (Claude, Codex, OpenCode, Devin, Antigravity):
+
+```bash
+orca account list                                               # ids, emails/labels, and the active one
+orca account select --agent claude --account you@example.com    # id, email or label
+orca worktree create --name task --agent claude --prompt "..."
+orca account select --agent claude --account system             # back to your own sign-in
+orca account rm --agent codex --account old@example.com         # forget a saved account
+```
+
+A selection applies to every agent of that provider launched on the host after it — the same switch as the status-bar account menu — not to a single workspace. An email shared by several accounts (one sign-in in two organizations) is refused; pass the id instead. Antigravity has no `system` default, and `account rm` never removes system credentials.
+
 ## Artifacts
 
-Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
+Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. Publishing follows **Settings → Artifacts → Allow publishing public artifact links** on the device: on by default for new profiles, while profiles created before this default keep their previous setting. Only a human can change it; there is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
 
 ```bash
 orca artifacts share ./report.html --json

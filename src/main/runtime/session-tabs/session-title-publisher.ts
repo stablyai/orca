@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithStopTerminalsForProject } from '../terminal/stop/project-terminal-stop'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 
 export type SessionTitlePublisher = {
   windowId: number

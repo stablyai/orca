@@ -1,4 +1,11 @@
-import { CalendarClock, Gauge, LayoutList, Settings, type LucideIcon } from 'lucide-react-native'
+import {
+  Bot,
+  CalendarClock,
+  Gauge,
+  LayoutList,
+  Settings,
+  type LucideIcon
+} from 'lucide-react-native'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
@@ -16,6 +23,7 @@ import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 
 const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
   feed: LayoutList,
+  agents: Bot,
   usage: Gauge,
   automations: CalendarClock,
   settings: Settings
@@ -27,14 +35,15 @@ export function MobileHomeTabBar(props: {
   tabs: readonly HomeTabId[]
   active: HomeTabId
   bottomInset: number
-  /** Agents that need you; shown on Feed. */
-  feedBadge: number
+  /** Agents that need you; shown on Agents. */
+  agentsBadge: number
   onSelect: (tab: HomeTabId) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const labels: Record<HomeTabId, string> = {
     feed: t('home.tabs.feed', 'Feed'),
+    agents: t('home.tabs.agents', 'Agents'),
     usage: t('home.tabs.usage', 'Usage'),
     automations: t('home.tabs.automations', 'Automations'),
     settings: t('common.settings', 'Settings')
@@ -51,7 +60,7 @@ export function MobileHomeTabBar(props: {
           icon={TAB_ICONS[tab]}
           label={labels[tab]}
           selected={tab === props.active}
-          badge={tab === 'feed' ? props.feedBadge : 0}
+          badge={tab === 'agents' ? props.agentsBadge : 0}
           onPress={() => props.onSelect(tab)}
         />
       ))}

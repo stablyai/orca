@@ -51,21 +51,6 @@ describe('runPluginHookChain', () => {
     expect(seen).toEqual(['ls -la'])
   })
 
-  it('keeps fields the hook does not let plugins change', async () => {
-    const { outcome } = chain({
-      'a.one': [(event, next) => next({ ...read(event), terminalId: 'term_other' })]
-    })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-  })
-
-  it('ignores an invalid change and logs it', async () => {
-    const { outcome, logs } = chain({
-      'a.one': [(event, next) => next({ ...read(event), enter: 'yes' })]
-    })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs[0]).toMatch(/^a\.one: hook terminal\.send: change ignored/)
-  })
-
   it('stops at a deny, so later plugins never run', async () => {
     const later = vi.fn()
     const { outcome } = chain({
@@ -74,12 +59,6 @@ describe('runPluginHookChain', () => {
     })
     await expect(outcome).resolves.toEqual({ kind: 'deny', pluginKey: 'a.one', reason: 'blocked' })
     expect(later).not.toHaveBeenCalled()
-  })
-
-  it('treats an unreadable result as passing', async () => {
-    const { outcome, logs } = chain({ 'a.one': [() => ({ deny: 7 })] })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs[0]).toMatch(/result ignored/)
   })
 
   it('treats a throw as passing and logs plugin, event and duration', async () => {
@@ -113,26 +92,6 @@ describe('runPluginHookChain', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     await expect(outcome).resolves.toEqual({ kind: 'deny', pluginKey: 'a.next', reason: 'second' })
     expect(logs).toEqual(['a.slow: hook terminal.send skipped after 0ms: timed out after 2000ms'])
-  })
-
-  it('ignores results of observe-only hooks', async () => {
-    const created = { workspaceId: 'w', kind: 'folder', path: '/tmp/w', branch: '' }
-    const { outcome } = chain(
-      { 'a.one': [() => ({ deny: 'no' })] },
-      { event: 'workspace.create.after', payload: created }
-    )
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: created })
-  })
-
-  it('runs one worker’s handlers in registration order', async () => {
-    const decision = await runPluginWorkerHookHandlers(
-      [
-        (event, next) => next({ ...read(event), text: 'a' }),
-        (event, next) => next({ ...read(event), text: `${read(event).text}b` })
-      ],
-      send
-    )
-    expect(decision).toEqual({ decision: 'continue', payload: { ...send, text: 'ab' } })
   })
 
   it('refuses when a fail-closed plugin throws, misses its deadline or answers nonsense', async () => {

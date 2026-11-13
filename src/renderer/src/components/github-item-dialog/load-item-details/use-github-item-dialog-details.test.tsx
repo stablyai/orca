@@ -3,11 +3,11 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import React, { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import { requestPRReviewers } from '../land-pull-request/pr-reviewers-request-actions'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 import {
@@ -19,7 +19,7 @@ import {
 
 const lookup = vi.hoisted(() => vi.fn())
 const setViewed = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: lookup
 }))
 vi.mock('@/components/github/github-work-item-comment-mutations', async (importOriginal) => ({

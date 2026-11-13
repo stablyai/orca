@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   createCodexHistoryTranslator,
   createCodexJournalTranslator

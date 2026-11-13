@@ -1,11 +1,14 @@
 import { useAppStore } from '@/store'
-import type { CustomWorktreeVisibilitySource, Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+import type {
+  CustomWorktreeVisibilitySource,
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repo-types'
 import {
   normalizeCustomWorktreeVisibilitySources,
   resolveCustomWorktreeVisibilitySources
 } from '../../../../../../shared/worktree/visibility-sources'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
 
 export function getLatestRepoForVisibilityScope(scope: string): Repo | null {
   return useAppStore.getState().repos.find((repo) => getRepoHostIdentity(repo) === scope) ?? null

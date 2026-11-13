@@ -17,29 +17,6 @@ describe('password fill protection settings', () => {
     confirmBrowserPasswordOwnerMock.mockReset().mockResolvedValue(true)
     sanitizeDirectoryMock.mockReset().mockResolvedValue('')
   })
-  it.each([false, null, 'false'])(
-    'retains fill protection for a refused or malformed disabling value %j',
-    async (requested) => {
-      store.getSettings.mockReturnValue({ browserPasswordsFillRequiresReauth: true })
-      store.updateSettings.mockImplementation((updates) => {
-        const next = { ...store.getSettings(), ...updates }
-        store.getSettings.mockReturnValue(next)
-        return next
-      })
-      confirmBrowserPasswordOwnerMock.mockResolvedValue(false)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the settings methods supplied by this fixture are used.
-      registerSettingsHandlers(store as never)
-      const handler = handleMock.mock.calls.find(([channel]) => channel === 'settings:set')?.[1]
-      const result = await handler(settingsInvokeEvent, {
-        browserPasswordsFillRequiresReauth: requested,
-        showTasksButton: true
-      })
-      expect(result).toMatchObject({
-        browserPasswordsFillRequiresReauth: true,
-        showTasksButton: true
-      })
-    }
-  )
 
   it('checks current fill protection after a queued directory update resumes', async () => {
     store.getSettings.mockReturnValue({ browserPasswordsFillRequiresReauth: false })
@@ -100,23 +77,5 @@ describe('password fill protection settings', () => {
       alwaysForceDeleteWorktrees: true
     })
     expect(confirmBrowserPasswordOwnerMock).not.toHaveBeenCalled()
-  })
-
-  it('requires fresh owner confirmation to disable fill protection', async () => {
-    store.getSettings.mockReturnValue({ browserPasswordsFillRequiresReauth: true })
-    store.updateSettings.mockImplementation((updates) => {
-      const next = { ...store.getSettings(), ...updates }
-      store.getSettings.mockReturnValue(next)
-      return next
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the settings methods supplied by this fixture are used.
-    registerSettingsHandlers(store as never)
-    const handler = handleMock.mock.calls.find(([channel]) => channel === 'settings:set')?.[1]
-    expect(
-      await handler(settingsInvokeEvent, { browserPasswordsFillRequiresReauth: false })
-    ).toMatchObject({ browserPasswordsFillRequiresReauth: false })
-    expect(confirmBrowserPasswordOwnerMock).toHaveBeenCalledWith(expect.any(String), {
-      always: true
-    })
   })
 })

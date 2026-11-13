@@ -7,13 +7,13 @@ import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionIdentityResolver } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
-import '../../../native-chat/agent-session-journal/journal-row-builders'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionIdentityResolver } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
-} from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+} from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
 import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'

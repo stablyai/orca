@@ -5,8 +5,8 @@ import type {
   GitHubProjectSort,
   GitHubProjectTable,
   GitHubProjectView
-} from '../../../../shared/github/project-types'
-import { sortRows, groupRows } from '../../../../shared/github/project-group-sort'
+} from '../../../../shared/github/projects/project-types'
+import { sortRows, groupRows } from '../../../../shared/github/projects/project-group-sort'
 
 const singleSelectField: GitHubProjectField = {
   kind: 'single-select',
@@ -36,7 +36,8 @@ const numberField: GitHubProjectField = {
 function makeRow(
   id: string,
   position: number,
-  values: GitHubProjectRow['fieldValuesByFieldId']
+  values: GitHubProjectRow['fieldValuesByFieldId'],
+  parentIssue: GitHubProjectRow['content']['parentIssue'] = null
 ): GitHubProjectRow {
   return {
     id,
@@ -52,7 +53,7 @@ function makeRow(
       repository: 'acme/repo',
       assignees: [],
       labels: [],
-      parentIssue: null,
+      parentIssue,
       issueType: null
     },
     fieldValuesByFieldId: values,
@@ -182,6 +183,37 @@ describe('groupRows', () => {
 
     expect(groups.map((group) => group.label)).toEqual(['-10', '-2', '1', '2', '8', '10'])
   })
+
+  it('groups by Parent issue from row content, since GitHub returns no field value for it', () => {
+    const parentField: GitHubProjectField = {
+      kind: 'field',
+      id: 'F_parent',
+      name: 'Parent issue',
+      dataType: 'PARENT_ISSUE'
+    }
+    const view = { ...makeView(parentField), groupByFields: [parentField] }
+    const parent = (repo: string, number: number) => ({
+      number,
+      title: `Parent ${number}`,
+      url: `https://github.com/${repo}/issues/${number}`
+    })
+    const rows = [
+      makeRow('a1', 0, {}, parent('acme/repo', 101)),
+      makeRow('b', 1, {}, parent('acme/repo', 9)),
+      makeRow('orphan', 2, {}),
+      makeRow('a2', 3, {}, parent('acme/repo', 101)),
+      makeRow('other-repo', 4, {}, parent('acme/other', 101))
+    ]
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => [group.label, group.rows.map((r) => r.id)])).toEqual([
+      ['#9', ['b']],
+      ['#101', ['a1', 'a2']],
+      ['#101', ['other-repo']],
+      ['No Parent issue', ['orphan']]
+    ])
+  })
 })
 
 it('uses the first iteration ordering and metadata when legacy field IDs repeat', () => {
@@ -218,4 +250,99 @@ it('uses the first iteration ordering and metadata when legacy field IDs repeat'
     duration: 7,
     completed: true
   })
+})
+
+it('sorts content-backed parents with absent values last and secondary sorts before positions', () => {
+  const field: GitHubProjectField = {
+    kind: 'field',
+    id: 'parent',
+    name: 'Parent issue',
+    dataType: 'PARENT_ISSUE'
+  }
+  const parent = (repo: string, number: number) => ({
+    number,
+    title: 'Parent',
+    url: `https://github.com/${repo}/issues/${number}`
+  })
+  const rows = [
+    makeRow('high', 0, {}, parent('acme/repo', 101)),
+    makeRow('low', 1, {}, parent('acme/repo', 9)),
+    makeRow('absent', 2, { parent: { kind: 'number', fieldId: 'parent', number: 1 } }),
+    makeRow(
+      'same',
+      3,
+      { F_points: { kind: 'number', fieldId: 'F_points', number: 1 } },
+      parent('acme/other', 101)
+    )
+  ]
+  rows[0].fieldValuesByFieldId.F_points = { kind: 'number', fieldId: 'F_points', number: 9 }
+  for (const [direction, expected] of [
+    ['ASC', ['low', 'same', 'high', 'absent']],
+    ['DESC', ['same', 'high', 'low', 'absent']]
+  ] as const) {
+    const view = {
+      ...makeView(field),
+      sortByFields: [
+        { field, direction },
+        { field: numberField, direction: 'ASC' as const }
+      ]
+    }
+    expect(sortRows(makeTable(view, rows), rows).map((row) => row.id)).toEqual(expected)
+  }
+})
+
+it('groups repositories from content and orders synthetic progress groups numerically', () => {
+  const field: GitHubProjectField = {
+    kind: 'field',
+    id: 'repo',
+    name: 'Repository',
+    dataType: 'REPOSITORY'
+  }
+  const rows = [makeRow('z', 0, {}), makeRow('a', 1, {}), makeRow('empty', 2, {})]
+  rows[0].content.repository = 'acme/z'
+  rows[1].content.repository = 'acme/a'
+  rows[2].content.repository = null
+  const table = makeTable(
+    { ...makeView(field, { field, direction: 'DESC' }), groupByFields: [field] },
+    rows
+  )
+  expect(
+    groupRows(table, rows).map((group) => [group.label, group.rows.map((row) => row.id)])
+  ).toEqual([
+    ['acme/a', ['a']],
+    ['acme/z', ['z']],
+    ['No Repository', ['empty']]
+  ])
+  expect(sortRows(table, rows).map((row) => row.id)).toEqual(['z', 'a', 'empty'])
+  const progress: GitHubProjectField = {
+    kind: 'field',
+    id: 'progress',
+    name: 'Sub-issues progress',
+    dataType: 'SUB_ISSUES_PROGRESS'
+  }
+  const progressRows = [90, 100, 20, 0].map((percent, index) => {
+    const row = makeRow(`p${percent}`, index, {})
+    row.content.subIssuesProgress = {
+      completed: percent / 10,
+      total: percent === 0 ? 0 : 10,
+      percentCompleted: percent
+    }
+    return row
+  })
+  const progressTable = makeTable(
+    { ...makeView(progress, { field: progress, direction: 'DESC' }), groupByFields: [progress] },
+    progressRows
+  )
+  expect(groupRows(progressTable, progressRows).map((group) => group.label)).toEqual([
+    '2/10 (20%)',
+    '9/10 (90%)',
+    '10/10 (100%)',
+    'No Sub-issues progress'
+  ])
+  expect(sortRows(progressTable, progressRows).map((row) => row.id)).toEqual([
+    'p100',
+    'p90',
+    'p20',
+    'p0'
+  ])
 })

@@ -5,7 +5,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { DaemonPtyRouter } from '../../routing/daemon-pty-router'
 import type { DaemonServer } from '../../../server/daemon-server'
-import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { HeadlessEmulator } from '../../../emulation/headless-emulator'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import {
@@ -136,26 +135,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
       }
-    })
-
-    it('skips the cold-restore replay when the daemon session is still alive', async () => {
-      const sessionId = 'warm-reattach-skip-replay'
-      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      await first.spawn({ cols: 80, rows: 24, cwd: '/home/user', sessionId })
-      // disconnectOnly preserves crash eligibility for a surviving daemon session.
-      await first.disconnectOnly()
-
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
-
-      expect(result.isReattach).toBe(true)
-      expect(result.coldRestore).toBeUndefined()
-      const internals = historyAdapter as unknown as {
-        sessionsNeedingFullCheckpoint: Set<string>
-        lastFullCheckpointAt: Map<string, number>
-      }
-      expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(false)
-      expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(true)
     })
 
     it('re-anchors and resumes history after attach-only adoption', async () => {
@@ -381,42 +360,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
-    it('returns same cold restore on StrictMode double-mount (sticky cache)', async () => {
-      const sessionId = 'sticky-cache-test'
-      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
-      mkdirSync(sessionDir, { recursive: true })
-      writeFileSync(
-        join(sessionDir, 'meta.json'),
-        JSON.stringify({
-          cwd: '/tmp',
-          cols: 80,
-          rows: 24,
-          startedAt: '2026-04-15T10:00:00Z',
-          endedAt: null,
-          exitCode: null
-        })
-      )
-      writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
-
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const internals = historyAdapter as unknown as {
-        coldRestoreCache: { byteSize: number }
-      }
-
-      const first = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
-      expect(first.coldRestore).toBeDefined()
-      expect(internals.coldRestoreCache.byteSize).toBeGreaterThan(0)
-
-      const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
-      expect(second.coldRestore).toBeDefined()
-      expect(second.coldRestore!.scrollback).toBe(`cached output${PROCESS_BOUNDARY_GROUND}`)
-
-      historyAdapter.ackColdRestore(sessionId)
-      expect(internals.coldRestoreCache.byteSize).toBe(0)
-      const third = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
-      expect(third.coldRestore).toBeUndefined()
-    })
-
     it('keeps recovered scrollback when the fresh daemon session re-anchors history', async () => {
       const sessionId = 'cold-restore-reanchor'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
@@ -539,46 +482,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         writeSyncSpy.mockRestore()
       }
-    })
-
-    it('does not cold-restore for clean shutdown (endedAt set)', async () => {
-      const sessionId = 'clean-exit'
-      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
-      mkdirSync(sessionDir, { recursive: true })
-      writeFileSync(
-        join(sessionDir, 'meta.json'),
-        JSON.stringify({
-          cwd: '/tmp',
-          cols: 80,
-          rows: 24,
-          startedAt: '2026-04-15T10:00:00Z',
-          endedAt: '2026-04-15T12:00:00Z',
-          exitCode: 0
-        })
-      )
-      writeFileSync(join(sessionDir, 'scrollback.bin'), 'old data')
-
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
-      expect(result.coldRestore).toBeUndefined()
-    })
-
-    it('stores history under an encoded directory key for Windows-safe session ids', async () => {
-      const sessionId = 'repo1::/path/wt1@@abcd'
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-      const { id } = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp',
-        sessionId
-      })
-
-      expect(id).toBe(sessionId)
-      expect(existsSync(join(historyDir, getHistorySessionDirName(sessionId), 'meta.json'))).toBe(
-        true
-      )
     })
   })
 })

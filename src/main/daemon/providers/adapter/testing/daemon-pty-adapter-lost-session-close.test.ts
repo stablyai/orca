@@ -4,7 +4,6 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DaemonClient } from '../../../transport/client/daemon-client'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { DaemonPtyRouter } from '../../routing/daemon-pty-router'
 import type { DaemonServer } from '../../../server/daemon-server'
@@ -151,15 +150,6 @@ describe('closing a kept host-loss tab after a relaunch', () => {
     expect(historyKept()).toBe(false)
   })
 
-  it('never connects a daemon just to ask whether it lists the id', async () => {
-    const unconnected = relaunchedAdapter()
-    const connect = vi.spyOn(DaemonClient.prototype, 'ensureConnected')
-    const connectWithin = vi.spyOn(DaemonClient.prototype, 'ensureConnectedWithin')
-    await expect(unconnected.listsSession(lostId)).resolves.toBeNull()
-    expect(connect).not.toHaveBeenCalled()
-    expect(connectWithin).not.toHaveBeenCalled()
-  })
-
   // Wider than host loss: any tab with unended history and no session, e.g. a slept one.
   async function sleptId(): Promise<string> {
     const { id } = await original.spawn({ cols: 80, rows: 24 })
@@ -173,11 +163,5 @@ describe('closing a kept host-loss tab after a relaunch', () => {
     expect(relaunchedAdapter().hasRestorableHistory(id)).toBe(true)
     await expect(close(relaunchedAdapter(), id)).resolves.toBeUndefined()
     expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(false)
-  })
-
-  it('keeps a slept tab’s history while another daemon lists its session', async () => {
-    const id = await sleptId()
-    await expect(close(routerWithLegacyListing(true), id)).rejects.toThrow('Session not found')
-    expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
   })
 })

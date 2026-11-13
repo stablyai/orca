@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getWorkspaceDocPageGuest, installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
-import { buildDocPreviewUrl } from '../../../shared/doc-preview-scheme'
+import {
+  getWorkspaceDocPageGuest,
+  installDocPreviewGuestPolicy,
+  readDocPreviewGuestDocumentUrl
+} from './doc-preview-guest-policy'
+import { buildDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 import { mintDocPreviewGrant, revokeAllDocPreviewGrants } from './doc-preview-grant-registry'
 
-type GuestHandlers = Record<string, (...args: never[]) => void>
+type GuestHandlers = Record<string, (...args: unknown[]) => void>
 
 const HOST_RENDERER_ID = 42
 
@@ -11,7 +15,7 @@ function installOnFakeGuest(
   hostId: number = HOST_RENDERER_ID,
   initialUrl = ''
 ): {
-  contents: object
+  contents: Electron.WebContents
   handlers: GuestHandlers
   hostId: number
   isFocused: ReturnType<typeof vi.fn>
@@ -20,32 +24,36 @@ function installOnFakeGuest(
   windowOpenHandler: (details: { url: string }) => { action: string }
   /** Model contents teardown before its destroyed event reaches main. */
   markContentsDestroyed: () => void
+  /** Model a pushState: getURL() changes without a did-navigate commit. */
+  setLiveUrl: (url: string) => void
 } {
   const handlers: GuestHandlers = {}
   let contentsDestroyed = false
+  let liveUrl = initialUrl
   const send = vi.fn()
   const isFocused = vi.fn(() => true)
   const setWebRTCIPHandlingPolicy = vi.fn()
   let windowOpenHandler: (details: { url: string }) => { action: string } = () => ({
     action: 'deny'
   })
-  const register = (event: string, handler: (...args: never[]) => void): void => {
+  const register = (event: string, handler: (...args: unknown[]) => void): void => {
     handlers[event] = handler
   }
-  const guest = {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only these WebContents members.
+  const contents = {
     isFocused,
     isDestroyed: () => contentsDestroyed,
-    getURL: () => initialUrl,
+    getURL: () => liveUrl,
     on: vi.fn(register),
     once: vi.fn(register),
     setWindowOpenHandler: vi.fn((handler: (details: { url: string }) => { action: string }) => {
       windowOpenHandler = handler
     }),
     setWebRTCIPHandlingPolicy
-  }
-  installDocPreviewGuestPolicy(guest as never, { id: hostId, send })
+  } as unknown as Electron.WebContents
+  installDocPreviewGuestPolicy(contents, { id: hostId, send })
   return {
-    contents: guest,
+    contents,
     handlers,
     hostId,
     isFocused,
@@ -54,6 +62,9 @@ function installOnFakeGuest(
     windowOpenHandler: (details) => windowOpenHandler(details),
     markContentsDestroyed: () => {
       contentsDestroyed = true
+    },
+    setLiveUrl: (url) => {
+      liveUrl = url
     }
   }
 }
@@ -61,7 +72,11 @@ function installOnFakeGuest(
 type FakeGuest = ReturnType<typeof installOnFakeGuest>
 
 function startMainFrameNavigation(guest: FakeGuest, url: string): void {
-  guest.handlers['did-start-navigation']?.({ url, isMainFrame: true } as never)
+  guest.handlers['did-start-navigation']?.({ url, isMainFrame: true })
+}
+
+function commitNavigation(guest: FakeGuest, url: string): void {
+  guest.handlers['did-navigate']?.({}, url)
 }
 
 function boundGuest(): { grant: ReturnType<typeof mintGrant>; guest: FakeGuest } {
@@ -96,10 +111,7 @@ describe('doc preview guest policy', () => {
       const other = mintGrant()
 
       startMainFrameNavigation(guest, buildDocPreviewUrl(other.id, 'index.html'))
-      guest.handlers['did-navigate']?.(
-        {} as never,
-        buildDocPreviewUrl(other.id, 'index.html') as never
-      )
+      commitNavigation(guest, buildDocPreviewUrl(other.id, 'index.html'))
 
       expect(getWorkspaceDocPageGuest(other.browserPageId, HOST_RENDERER_ID)).toBeNull()
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBe(guest.contents)
@@ -131,5 +143,18 @@ describe('doc preview guest policy', () => {
         incoming.contents
       )
     })
+  })
+
+  it('names the committed document, not a URL the page set with pushState', () => {
+    const grant = mintGrant()
+    const entryUrl = buildDocPreviewUrl(grant.id, 'index.html')
+    const guest = installOnFakeGuest(HOST_RENDERER_ID, entryUrl)
+    expect(readDocPreviewGuestDocumentUrl(guest.contents)).toBe(entryUrl)
+
+    const reportUrl = buildDocPreviewUrl(grant.id, 'report.html')
+    commitNavigation(guest, reportUrl)
+    guest.setLiveUrl(buildDocPreviewUrl(grant.id, 'settings'))
+
+    expect(readDocPreviewGuestDocumentUrl(guest.contents)).toBe(reportUrl)
   })
 })

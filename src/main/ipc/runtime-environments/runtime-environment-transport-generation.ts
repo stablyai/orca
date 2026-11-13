@@ -2,6 +2,16 @@ const generationByEnvironment = new Map<string, number>()
 const MAX_TRACKED_ENVIRONMENTS = 512
 let generationSequence = 0
 let evictedGeneration = 0
+const retirementListeners = new Set<(environmentId: string) => void>()
+
+/** Streams opened under an earlier generation can no longer deliver (their frames are discarded),
+ *  so whoever owns them must close them when the generation moves on. */
+export function onRuntimeEnvironmentTransportGenerationRetired(
+  listener: (environmentId: string) => void
+): () => void {
+  retirementListeners.add(listener)
+  return () => retirementListeners.delete(listener)
+}
 
 export function getRuntimeEnvironmentTransportGeneration(environmentId: string): number {
   return generationByEnvironment.get(environmentId) ?? evictedGeneration
@@ -17,6 +27,9 @@ export function advanceRuntimeEnvironmentTransportGeneration(environmentId: stri
     }
     evictedGeneration = Math.max(evictedGeneration, generationByEnvironment.get(oldest.value) ?? 0)
     generationByEnvironment.delete(oldest.value)
+  }
+  for (const listener of retirementListeners) {
+    listener(environmentId)
   }
 }
 

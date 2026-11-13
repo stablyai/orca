@@ -1,7 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { callRuntimeResult } from './web-runtime-calls'
 import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
 

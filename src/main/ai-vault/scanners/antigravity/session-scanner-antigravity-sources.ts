@@ -1,4 +1,5 @@
 import { completeAntigravityTranscriptPairs } from './antigravity-transcript-candidates'
+import { recordAntigravityArtifactPath } from './antigravity-session-artifacts'
 import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -7,9 +8,9 @@ import {
   isAntigravityTranscriptPath,
   shouldDescendAntigravityBrainDirectory
 } from './session-scanner-antigravity-paths'
-import { discoverFiles } from '../../session-scanner-discovery'
+import { discoverFiles } from '../../discovery/session-scanner-discovery'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../session-scope-cwd'
+import { scopeWalksAgentFiles } from '../../scope/session-scope-cwd'
 
 export function antigravityDiscoveries(
   options: AiVaultScanOptions,
@@ -38,8 +39,9 @@ export function antigravityDiscoveries(
       origins.map((origin) => join(homeDir, '.gemini', origin, 'brain'))
     )
   ]
-  return rootDirs.map((rootDir) =>
-    discoverFiles({
+  return rootDirs.map((rootDir) => {
+    const antigravityArtifactPaths = new Map<string, string>()
+    return discoverFiles({
       rootDir,
       limit,
       agent: 'antigravity',
@@ -47,8 +49,12 @@ export function antigravityDiscoveries(
       extensions: ['.jsonl'],
       filePredicate: isAntigravityTranscriptPath,
       directoryPredicate: shouldDescendAntigravityBrainDirectory,
+      onDirectoryEntries: (dirPath, entries) =>
+        recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries),
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
       signal: options.signal
-    }).then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
-  )
+    })
+      .then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
+      .then((discovery) => ({ ...discovery, antigravityArtifactPaths }))
+  })
 }

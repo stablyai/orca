@@ -3,9 +3,11 @@ import {
   formatResetCountdown,
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
 import {
   getProviderDisplayName,
   getUsageWindowSections,
@@ -19,6 +21,7 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { recomputeOn } from '@/lib/recompute-on'
 import { barColor, ProviderExtraUsageSection } from './provider-extra-usage-section'
 
 export {
@@ -32,19 +35,19 @@ export { clampUsedPercent }
 
 export { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 
-export function formatTimeAgo(ts: number): string {
+export function formatTimeAgo(ts: number, t: Translate = translate): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
+    return t('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
+    return t('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
       minutes: mins
     })
   }
   const hours = Math.floor(mins / 60)
-  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
+  return t('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
 // Preserve tooltip imports while sharing countdown formatting with mobile.
@@ -52,7 +55,8 @@ export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
-  count: number
+  count: number,
+  t: Translate = translate
 ): string | null {
   if (!expiresAt) {
     return null
@@ -60,14 +64,14 @@ export function formatResetCreditExpiry(
   const duration = formatResetDuration(expiresAt - Date.now())
   if (duration === 'now') {
     return count > 1
-      ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
-      : translate('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
+      ? t('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
+      : t('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
   }
   return count > 1
-    ? translate('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
+    ? t('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
         value0: duration
       })
-    : translate('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
+    : t('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
         value0: duration
       })
 }
@@ -97,6 +101,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'zcode') {
     return <AgentIcon agent="zcode" size={13} />
   }
+  if (provider === 'muse') {
+    return <AgentIcon agent="muse" size={13} />
+  }
   if (provider === 'cursor') {
     return <AgentIcon agent="cursor" size={13} />
   }
@@ -115,13 +122,11 @@ function ErrorMessage({
   stale?: boolean
   inverted?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const labelClass = inverted ? 'text-background/80' : 'text-foreground/85'
   const detailClass = inverted ? 'text-background/55' : 'text-muted-foreground'
-  const genericRefreshLabel = translate(
-    'auto.components.status.bar.tooltip.e740f92596',
-    'Refresh failed'
-  )
-  const staleRefreshLabel = translate(
+  const genericRefreshLabel = t('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
+  const staleRefreshLabel = t(
     'auto.components.status.bar.tooltip.a9a318b7a3',
     'Refresh failed — showing cached data'
   )
@@ -139,30 +144,31 @@ function ErrorMessage({
 }
 
 export function getWindowSections(
-  p: ProviderRateLimits
+  p: ProviderRateLimits,
+  t?: Translate
 ): { label: string; window: RateLimitWindow | null }[] {
   return getUsageWindowSections(p).map((section) => ({
-    label: getWindowSectionLabel(section),
+    label: getWindowSectionLabel(section, t),
     window: section.window
   }))
 }
 
-function getWindowSectionLabel(section: UsageWindowSection): string {
+function getWindowSectionLabel(section: UsageWindowSection, t: Translate = translate): string {
   switch (section.kind) {
     case 'bucket':
       return section.name
     case 'session':
-      return translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
+      return t('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
     case 'weekly':
-      return translate('auto.components.status.bar.tooltip.252c096536', 'Weekly')
+      return t('auto.components.status.bar.tooltip.252c096536', 'Weekly')
     case 'fableWeekly':
-      return translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable')
+      return t('auto.components.status.bar.tooltip.a79c64f87e', 'Fable')
     case 'monthly':
-      return translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly')
+      return t('auto.components.status.bar.tooltip.7f7f208060', 'Monthly')
     case 'plan':
-      return translate('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
+      return t('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
     case 'mcp':
-      return translate('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
+      return t('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
   }
 }
 
@@ -185,6 +191,7 @@ function ProviderRateLimitWindowSection({
   usagePercentageDisplay: UsagePercentageDisplay
   now: number
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!window) {
     return null
   }
@@ -203,7 +210,7 @@ function ProviderRateLimitWindowSection({
         />
       </div>
       <div className={`flex justify-between ${mutedClass}`}>
-        <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
+        <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay, t)}</span>
         {resetLabel && <span>{resetLabel}</span>}
       </div>
     </div>
@@ -226,7 +233,8 @@ export function ProviderPanel({
   /** Inside an account card that already names the provider; tracks must contrast with the card. */
   embedded?: boolean
 }): React.JSX.Element {
-  const windowSections = p ? getWindowSections(p) : []
+  const t = useTranslate()
+  const windowSections = p ? getWindowSections(p, t) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -237,7 +245,7 @@ export function ProviderPanel({
   if (!p) {
     return (
       <span className={`text-xs ${mutedClass}`}>
-        {translate('auto.components.status.bar.tooltip.6d6df77f41', 'No data available')}
+        {t('auto.components.status.bar.tooltip.6d6df77f41', 'No data available')}
       </span>
     )
   }
@@ -254,7 +262,7 @@ export function ProviderPanel({
           </div>
         )}
         <div className={mutedClass}>
-          {p.error ?? translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
+          {p.error ?? t('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
         </div>
       </div>
     )
@@ -271,8 +279,8 @@ export function ProviderPanel({
         )}
         <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
-            label={getProviderUsageStatusLabel(p)}
-            message={getProviderUsageErrorMessage(p)}
+            label={getProviderUsageStatusLabel(p, t)}
+            message={getProviderUsageErrorMessage(p, t)}
             inverted={inverted}
           />
         </div>
@@ -280,18 +288,22 @@ export function ProviderPanel({
     )
   }
 
-  const updatedAgo = p.updatedAt
-    ? translate('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
-        time: formatTimeAgo(p.updatedAt)
+  const updatedAt = p.updatedAt
+  // Why: both labels read Date.now(); recomputeOn ties React Compiler's cache to the clock tick.
+  const updatedAgo = updatedAt
+    ? t('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
+        time: recomputeOn([now], () => formatTimeAgo(updatedAt, t))
       })
-    : translate('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')
+    : t('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')
   const resetCreditCount =
     showResetCredits && p.provider === 'codex'
       ? (p.rateLimitResetCredits?.availableCount ?? null)
       : null
   const resetCreditExpiry =
     resetCreditCount != null
-      ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
+      ? recomputeOn([now], () =>
+          formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount, t)
+        )
       : null
 
   return (
@@ -305,7 +317,7 @@ export function ProviderPanel({
           <div className={faintClass}>{updatedAgo}</div>
           {resetCreditCount !== null && resetCreditCount !== undefined ? (
             <div className={mutedClass}>
-              {translate(
+              {t(
                 'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
                 '{{count}} rate-limit resets available',
                 {

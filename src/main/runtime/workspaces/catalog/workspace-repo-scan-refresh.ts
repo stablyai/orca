@@ -1,29 +1,38 @@
 import { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import type {
-  RuntimeWorktreeScanCache,
-  RuntimeWorktreeScanRefresh
-} from './runtime-worktree-scan-state'
-import { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
+import {
+  resolveWorktreeScanCacheTtlMs,
+  resolveWorktreeScanRuntime
+} from './runtime-worktree-scan-cache'
 import {
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
 import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
-import { dropRepeatedWorktreeRows } from './repeated-worktree-rows'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../../shared/execution-host'
 import {
   blockedWslDistroForPath,
   wslDistroForPath
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import {
+  invalidateWorktreeCatalogForRepo,
+  peekWorktreeCatalog,
+  readWorktreeCatalog
+} from '../../../workspaces/catalog/repo-worktree-catalog-owner'
+import { runtimeResultForObservation } from './runtime-worktree-catalog-read'
+import {
+  needsWorktreeCatalogHygieneClaim,
+  worktreeCatalogHygienePlan
+} from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
+import type { Store } from '../../../persistence/loading-store/store'
+import { SUPERSEDED_SCAN_RESCANS } from '../../../ipc/worktrees/listing/overtaken-scan-rerun'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
@@ -45,103 +54,81 @@ function warnFingerprintUnknownOnce(repoId: string, reason: string): void {
 }
 
 export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCatalog {
-  /** Reuse cached scans when a Git-admin fingerprint proves no change. */
-  protected async refreshRepoWorktreeScan(
+  /** Runtime readers accept the owner's observation for the scan TTL, then its admin-fingerprint verifier. */
+  protected async readRepoWorktreeCatalog(
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-    cached: RuntimeWorktreeScanCache | null
-  ): Promise<RuntimeWorktreeScanRefresh> {
-    const scannedAt = Date.now()
+    runtimeKey: string,
+    claimsHygiene: boolean
+  ): Promise<RuntimeWorktreeScanResult> {
+    const gitOptions = getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
     // E9: the admin reads below and the Git scan both boot a stopped distro; keep known rows until it runs.
-    const wslDistro = getRepoSshConnectionId(repo)
-      ? undefined
-      : getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
     if (
-      !getRepoSshConnectionId(repo) &&
-      wslDistroForPath(repo.path, wslDistro) &&
-      (await blockedWslDistroForPath(repo.path, wslDistro))
+      wslDistroForPath(repo.path, gitOptions.wslDistro) &&
+      (await blockedWslDistroForPath(repo.path, gitOptions.wslDistro))
     ) {
-      return cached
-        ? {
-            result: cached.result,
-            adminFingerprint: cached.adminFingerprint,
-            adminFingerprintProbe: null,
-            scannedAt: cached.scannedAt
-          }
-        : {
-            result: { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) },
-            adminFingerprint: null,
-            adminFingerprintProbe: null,
-            scannedAt
-          }
+      // Known rows only while nothing has invalidated them; otherwise last stored rows, as non-authoritative.
+      const known = peekWorktreeCatalog(repo, runtimeKey)
+      return known?.current
+        ? runtimeResultForObservation(known.observation)
+        : { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
-    // Fingerprint only on-host Git: executionHostId-only SSH and WSL paths cannot be described by local admin reads.
-    const fingerprintCapable =
-      !getRepoSshConnectionId(repo) &&
-      // Skip fingerprints when scan TTL already reaches reconciliation; they could never be reused.
-      resolveWorktreeScanCacheTtlMs(repo) < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS &&
-      !getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
-    // Probe before scanning so concurrent changes cannot be stamped as already observed.
-    const probe = fingerprintCapable ? this.startRepoWorktreeAdminFingerprintProbe(repo) : null
-    const reusable =
-      cached?.result.ok === true &&
-      scannedAt - cached.scannedAt < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
-        ? cached
-        : null
-    // Unknown probes reuse the cache without resetting scannedAt; rescanning on slow-mount timeouts amplifies load (#19312).
-    const reuseCached = (): RuntimeWorktreeScanRefresh | null =>
-      reusable
-        ? {
-            result: reusable.result,
-            adminFingerprint: reusable.adminFingerprint,
-            adminFingerprintProbe: null,
-            scannedAt: reusable.scannedAt
-          }
-        : null
-    if (probe === 'in-flight') {
-      const reused = reuseCached()
-      if (reused) {
-        warnFingerprintUnknownOnce(repo.id, 'previous probe still pending')
-        return reused
-      }
-    } else if (probe && reusable) {
-      // Await only for a reusable cache; scan-bound callers cannot use the probe.
-      const probed = await withTimeoutResult(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
-      if (!probed.ok) {
-        warnFingerprintUnknownOnce(repo.id, 'probe expired')
-        return (
-          reuseCached() ??
-          (await this.scanRepoWorktreesForRefresh(repo, projectRuntime, null, scannedAt))
-        )
-      }
-      // Only a known matching fingerprint proves no change.
-      if (probed.value !== null && probed.value === reusable.adminFingerprint) {
-        return {
-          result: reusable.result,
-          adminFingerprint: probed.value,
-          adminFingerprintProbe: null,
-          scannedAt: reusable.scannedAt
-        }
-      }
+    // Admission and the owner route must agree: a route replaced while the distro check ran is not read.
+    const live = this.store
+      ? resolveWorktreeScanRuntime(this.requireStore(), repo)
+      : { runtimeKey, projectRuntime }
+    if (
+      live.runtimeKey !== runtimeKey ||
+      getLocalProjectWorktreeGitOptionsForRuntime(repo, live.projectRuntime).wslDistro !==
+        gitOptions.wslDistro
+    ) {
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
-    return await this.scanRepoWorktreesForRefresh(
+    const ttlMs = resolveWorktreeScanCacheTtlMs(repo)
+    // WSL execution cannot be described by local admin reads; a TTL at the ceiling could never reuse a probe.
+    const verifier =
+      ttlMs < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS && !gitOptions.wslDistro
+        ? {
+            ceilingMs: WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
+            timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
+            probe: () => this.startRepoWorktreeAdminFingerprintProbe(repo),
+            onUnknown: (reason: string) => warnFingerprintUnknownOnce(repo.id, reason)
+          }
+        : undefined
+    const store = this.store
+    const { observation, superseded } = await readWorktreeCatalog(
       repo,
-      projectRuntime,
-      probe === 'in-flight' ? null : probe,
-      scannedAt
+      runtimeKey,
+      {
+        kind: 'runtime',
+        maxAgeMs: ttlMs,
+        reusesFailure: true,
+        // Readers that joined an overtaken scan follow current truth, within the detected listing's bound.
+        overtakenFlights: SUPERSEDED_SCAN_RESCANS + 1,
+        ...(verifier ? { verifier } : {}),
+        ...(claimsHygiene ? { needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo) } : {})
+      },
+      {
+        scan: async () => {
+          const scan = await scanLocalRepoWorktreesForResolution(repo.path, gitOptions)
+          if (scan.ok) {
+            return { kind: 'rows', worktrees: scan.worktrees }
+          }
+          return scan.trueEmpty
+            ? { kind: 'true-empty' }
+            : { kind: 'failed', error: new Error(`worktree list failed for ${repo.path}`) }
+        },
+        ...(store
+          ? worktreeCatalogHygienePlan(store as unknown as Store, repo, gitOptions, claimsHygiene)
+          : {})
+      }
     )
-  }
-
-  private async scanRepoWorktreesForRefresh(
-    repo: Repo,
-    projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-    probe: Promise<string | null> | null,
-    scannedAt: number
-  ): Promise<RuntimeWorktreeScanRefresh> {
-    const result = dropRepeatedWorktreeRows(
-      await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
-    )
-    return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
+    if (!observation) {
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
+    }
+    const result = runtimeResultForObservation(observation)
+    // Mutations kept overtaking scans: publish the rows as non-authoritative, never as current truth.
+    return superseded && result.ok ? { ok: false, worktrees: result.worktrees } : result
   }
 
   /** Allow one outstanding filesystem probe per repo: timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */
@@ -159,25 +146,6 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
       })
   }
 
-  protected async listRepoWorktreesForResolutionUncached(
-    repo: Repo,
-    projectRuntime: ProjectExecutionRuntimeResolution | undefined
-  ): Promise<RuntimeWorktreeScanResult> {
-    // Resolve executionHostId-only SSH rows too; client scans of remote paths would lose all worktrees.
-    const sshConnectionId = getRepoSshConnectionId(repo)
-    if (!sshConnectionId) {
-      return await scanLocalRepoWorktreesForResolution(
-        repo.path,
-        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
-      )
-    }
-    // Why: this process serves no SSH git, so an SSH repo answers from its stored rows.
-    return {
-      ok: false,
-      worktrees: this.listStoredWorktreesForResolution(repo)
-    }
-  }
-
   protected listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
     return this.store ? listStoredWorktreeRowsForRepo(this.requireStore(), repo) : []
   }
@@ -191,36 +159,8 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
   }
 
   invalidateWorktreeScanCacheForRepo(repoId: string): void {
-    const prefix = `${repoId}\0`
-    const scopeKeys = new Set(
-      this.store
-        ?.getRepos()
-        .filter((repo) => repo.id === repoId)
-        .map((repo) => `${repoId}\0${getRepoExecutionHostId(repo)}`) ?? []
-    )
-    for (const keys of [
-      this.worktreeScanGenerations.keys(),
-      this.worktreeScanCache.keys(),
-      this.worktreeScanInFlight.keys()
-    ]) {
-      for (const key of keys) {
-        if (key.startsWith(prefix)) {
-          scopeKeys.add(key)
-        }
-      }
-    }
-    const registered = new Set(
-      (this.store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
-    )
-    for (const key of scopeKeys) {
-      if (registered.has(key)) {
-        this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      } else {
-        this.worktreeScanGenerations.delete(key)
-        this.worktreeScanCache.delete(key)
-      }
-      this.worktreeScanInFlight.delete(key)
-    }
+    invalidateWorktreeCatalogForRepo(repoId)
+    this.pruneUnregisteredWorktreeScans()
   }
 
   invalidateWorktreeCatalog(repoId: string): void {
@@ -229,16 +169,9 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
   }
 
   protected invalidateSshWorktreeScanCacheInternal(targetId: string): void {
+    // SSH repos answer from stored rows and own no Git observation here; only projections go stale.
     const repos = this.store?.getRepos() ?? []
-    const affectedRepos = repos.filter((repo) => getRepoSshConnectionId(repo) === targetId)
-    const affectedScopeKeys = new Set(
-      affectedRepos.map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
-    )
-    for (const key of affectedScopeKeys) {
-      this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanInFlight.delete(key)
-    }
-    if (affectedScopeKeys.size > 0) {
+    if (repos.some((repo) => getRepoSshConnectionId(repo) === targetId)) {
       this.resolvedWorktrees.invalidateResolved()
     }
   }

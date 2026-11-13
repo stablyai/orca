@@ -1,6 +1,6 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard-image'
-import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/mobile-clipboard-image-upload-chunk'
+import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../files/attachments/mobile-clipboard-image-upload-chunk'
 
 // Picked media exceeds frame/reply ceilings, especially after base64; stage behind a handle and read chunks before release.
 // Keep grant segments lowercase: media.readChunk would fail manifest grammar and reject the whole bundle.

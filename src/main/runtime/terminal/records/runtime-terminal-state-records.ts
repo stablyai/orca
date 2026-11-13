@@ -18,6 +18,7 @@ import type { RetainedTailRedrawCursor } from '../output/tail/terminal-tail-redr
 import type { TerminalTailWaitState } from '../wait/terminal-wait-tail-state'
 import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
+import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
 
@@ -68,6 +69,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null
   readonly worktreeId: string
+  /** Set only when no binding named the workspace; worktree-scoped stops never act on a cwd guess (#36716). */
+  readonly worktreeInferredFromCwd?: true
   readonly connectionId: string | null
   runtimeSessionOwned: boolean
   readonly isWsl: boolean | null
@@ -90,6 +93,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
+  /** Whether the process still runs an Orca launch; missing when main can't tell. */
+  launchEvidence?: LaunchEvidence
   /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */
   launchCommandAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
@@ -98,6 +103,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   disconnectedAt: number | null
   lastExitCode: number | null
   lastExitCause: TerminalExitCause | null
+  /** What the last command printed before the incarnation's PTY exited. */
+  lastExitOutput?: { incarnationId: PtyIncarnationId | null; text: string }
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
   /** First-party OSC 9999 report, distinct from title-inferred lastAgentStatus; absent until one arrives. */
@@ -108,6 +115,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     sessionBoundary?: boolean
     /** OSC 7501 done proves the program awaits input; hook done may occur mid-turn. */
     programAtRest?: boolean
+    /** When OSC 7501 first reported blocked on sign-in: input would go to the login menu. */
+    programSignInRequiredSince?: number
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null

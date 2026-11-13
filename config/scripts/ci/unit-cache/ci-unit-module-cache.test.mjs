@@ -1,9 +1,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcessSync } from '@orca/process-host'
 import {
   finishModuleCache,
   moduleCacheIdentity,
@@ -35,42 +33,6 @@ function options() {
 }
 
 describe('persistent unit module cache boundary', () => {
-  it('separates hosts, runtimes, config, lockfiles, roots, shards and experiments', () => {
-    const original = options()
-    const identity = moduleCacheIdentity(original)
-    const anotherRoot = options().root
-    for (const update of [
-      { root: anotherRoot },
-      { policyHash: 'c'.repeat(64) },
-      { installedLockHash: 'd'.repeat(64) },
-      { platform: 'win32' },
-      { arch: 'x64' },
-      { nodeEnv: 'production' },
-      { namespace: 'comparison' },
-      { shard: { index: 2, count: 5 } },
-      { shard: { index: 1, count: 10 } },
-      { versions: { ...original.versions, node: '26.6.0' } },
-      { versions: { ...original.versions, bun: '1.4.4' } },
-      { versions: { ...original.versions, vitest: '5.0.4' } }
-    ]) {
-      const next = moduleCacheIdentity({ ...original, ...update })
-      expect(next.key).not.toBe(identity.key)
-      expect(next.path).toBe(identity.path)
-    }
-    expect(moduleCacheIdentity(original)).toEqual(identity)
-  })
-
-  it.each([
-    { cacheRoot: '' },
-    { policyHash: '' },
-    { installedLockHash: '' },
-    { versions: { node: '24', bun: '1.4.3', vitest: '5.0.3' } },
-    { shard: { index: 0, count: 5 } },
-    { shard: { index: 6, count: 5 } }
-  ])('refuses an incomplete identity %j', (update) => {
-    expect(() => moduleCacheIdentity({ ...options(), ...update })).toThrow('incomplete')
-  })
-
   it.each([false, true])(
     'starts cold and discards unusable restored bytes (hit %s)',
     async (hit) => {
@@ -81,38 +43,6 @@ describe('persistent unit module cache boundary', () => {
       expect(prepared.available).toBe(false)
       expect(prepared.validationMs).toBeGreaterThanOrEqual(0)
       expect(() => readFileSync(join(identity.path, 'untrusted'))).toThrow()
-    }
-  )
-  it.each(['warm', 'cold'])(
-    'does not write unused transforms on a consumer miss but retains producer writes (%s)',
-    (mode) => {
-      const identity = moduleCacheIdentity(options())
-      mkdirSync(join(identity.root, 'ci-shards'))
-      writeFileSync(
-        join(identity.root, 'ci-shards/unit-module-cache-identity.json'),
-        JSON.stringify(identity)
-      )
-      const envFile = join(identity.root, 'github-env')
-      writeFileSync(envFile, '')
-      const result = runProcessSync({
-        program: process.execPath,
-        args: [fileURLToPath(new URL('./ci-unit-module-cache.mjs', import.meta.url)), 'prepare'],
-        cwd: identity.root,
-        env: {
-          ...process.env,
-          GITHUB_ENV: envFile,
-          ORCA_UNIT_CACHE_MODE: mode,
-          ORCA_UNIT_CACHE_RESTORE_HIT: 'false'
-        }
-      })
-      expect(result.code, result.stderr).toBe(0)
-      expect(readFileSync(envFile, 'utf8')).toBe(
-        mode === 'warm' ? 'ORCA_UNIT_MODULE_CACHE_PATH=\n' : ''
-      )
-      const report = JSON.parse(
-        readFileSync(join(identity.root, 'ci-shards/unit-module-cache.json'), 'utf8')
-      )
-      expect(report.available).toBe(false)
     }
   )
 

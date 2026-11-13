@@ -1,14 +1,19 @@
 import { AutomationDraftReview } from './AutomationDraftReview'
-import { AutomationEditorHeader, AutomationEditorNavigation } from './AutomationEditorNavigation'
+import {
+  AutomationEditorHeader,
+  AutomationEditorNavigation,
+  useAutomationLeaveGuard,
+  type AutomationLeaveSlot
+} from './AutomationEditorNavigation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useRef, useState } from 'react'
 import { useAutomationTargetDrafts } from './use-automation-target-drafts'
 import { Text, View } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileAutomation } from './automation-reply-schema'
-import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
-import type { MobileNewTabAgentOption } from '../session/mobile-new-tab-agent-options'
+import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
+import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
 import { AutomationAdvancedFields } from './AutomationAdvancedFields'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
 import { AutomationScheduleFields } from './AutomationScheduleFields'
@@ -24,6 +29,7 @@ import {
   validateAutomationDraft,
   type AutomationDraft
 } from './automation-draft'
+import { useAutomationEditorDraft } from './use-automation-editor-draft'
 import { automationErrorMessage } from './automation-error'
 import { automationStyles as styles } from './automation-styles'
 
@@ -31,17 +37,21 @@ export function AutomationEditor(props: {
   client: RpcClient
   current?: MobileAutomation
   initialDraft?: AutomationDraft
+  /** Where unsaved edits are kept; they come back when this editor opens again, even after a kill. */
+  draftKey: string
   onDraftChange: (draft: AutomationDraft) => void
   busy: boolean
   connected: boolean
   capabilities: readonly string[]
   onCancel: () => void
+  leaveGuard?: AutomationLeaveSlot
   onSave: (draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const [draft, setDraft] = useState(() => props.initialDraft ?? newAutomationDraft(props.current))
-  const original = useRef(newAutomationDraft(props.current))
+  const form = useAutomationEditorDraft(props.draftKey, props.current, props.initialDraft)
+  const { draft, setDraft, original } = form
+  const leave = useAutomationLeaveGuard(draft, original, props.leaveGuard, form.discard)
   const selectTargetDraft = useAutomationTargetDrafts()
   const initialized = useRef(false)
   const [targets, setTargets] = useState<AutomationTargets | null>(null)
@@ -89,7 +99,7 @@ export function AutomationEditor(props: {
             initial.workspaceMode = 'existing'
           }
           original.current = { ...initial }
-          setDraft(props.initialDraft ?? initial)
+          setDraft(props.initialDraft ?? form.withSavedEdits(initial))
         }
       })
       .catch((failure: unknown) => {
@@ -124,9 +134,10 @@ export function AutomationEditor(props: {
           return
         }
         setAgents(options)
-        setDraft((current) =>
-          current.agentId ? current : { ...current, agentId: options[0]?.agent ?? null }
-        )
+        const agentId = options[0]?.agent ?? null
+        // The default agent is part of the untouched form, not an edit to ask about.
+        original.current.agentId ??= agentId
+        setDraft((current) => (current.agentId ? current : { ...current, agentId }))
       })
       .catch((failure: unknown) => {
         if (active && generation === props.client.getGeneration?.()) {
@@ -203,7 +214,7 @@ export function AutomationEditor(props: {
         step={step}
         editing={!!props.current}
         busy={props.busy}
-        onCancel={props.onCancel}
+        onCancel={() => leave.guard(props.onCancel)}
       />
       {error || agentError ? (
         <View style={styles.stack}>
@@ -388,6 +399,7 @@ export function AutomationEditor(props: {
         onBack={() => setStep(step - 1)}
         onNext={next}
       />
+      {leave.confirm}
     </View>
   )
 }

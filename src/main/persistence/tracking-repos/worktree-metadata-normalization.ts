@@ -8,7 +8,7 @@ import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   areTaskSourceContextsEqual,
   normalizeStoredTaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import {
   areWorkspaceLinkedItemsEqual,
   normalizeWorkspaceLinkedItem
@@ -18,11 +18,11 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   pruneUnreferencedWorktreeIdentityMeta,
   removeWorktreeMetadataForHost
-} from '../loading-store/worktree-identity-metadata'
+} from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
-import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/local-only-worktree-meta-rehoming'
+import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/worktree-metadata/local-only-worktree-meta-rehoming'
 
 // Reclaim externally deleted local checkouts after idle grace; local stat cannot judge remote/WSL paths.
 export const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000

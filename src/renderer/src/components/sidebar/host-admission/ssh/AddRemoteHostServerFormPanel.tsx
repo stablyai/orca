@@ -1,6 +1,6 @@
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ParseHostAccessLinkResult } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { RemoteServerFields } from './AddRemoteHostFields'
 
@@ -29,17 +29,15 @@ export function AddRemoteHostServerFormPanel({
   onSubmit: () => void
   onCancel: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
-            'auto.components.sidebar.AddRemoteHostDialog.serverTitle',
-            'Add remote server'
-          )}
+          {t('auto.components.sidebar.AddRemoteHostDialog.serverTitle', 'Add remote server')}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.sidebar.AddRemoteHostDialog.serverDescription',
             'Pair with Orca running on another computer.'
           )}
@@ -59,7 +57,7 @@ export function AddRemoteHostServerFormPanel({
       />
 
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.sidebar.AddRemoteHostDialog.serverRunsAsYou',
           'This device will be able to run commands as you on this server.'
         )}
@@ -69,12 +67,12 @@ export function AddRemoteHostServerFormPanel({
         <span />
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>
-            {translate('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
+            {t('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
           </Button>
           <Button type="button" onClick={onSubmit} disabled={disabled || !canSubmit}>
             {disabled
-              ? translate('auto.components.sidebar.AddRemoteHostDialog.saving', 'Saving...')
-              : translate('auto.components.sidebar.AddRemoteHostDialog.save', 'Save')}
+              ? t('auto.components.sidebar.AddRemoteHostDialog.saving', 'Saving...')
+              : t('auto.components.sidebar.AddRemoteHostDialog.save', 'Save')}
           </Button>
         </div>
       </DialogFooter>
