@@ -11,8 +11,11 @@ on:
 permissions:
   contents: read
 
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 concurrency:
-  group: windows-browser-focus-e2e-${{ github.ref }}
+  group: windows-browser-focus-e2e-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
