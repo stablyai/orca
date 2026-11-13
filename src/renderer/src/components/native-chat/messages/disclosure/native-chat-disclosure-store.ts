@@ -62,7 +62,9 @@ export type NativeChatDisclosure = {
 
 export function useNativeChatDisclosure(
   key: string | undefined,
-  initialOpen: boolean
+  initialOpen: boolean,
+  /** Read-only, in order, when `key` holds no choice: a replaced row's keys. */
+  inheritedKeys?: readonly string[]
 ): NativeChatDisclosure {
   const store = useContext(NativeChatDisclosureContext)
   const [local, setLocal] = useState({ key, initialOpen, open: initialOpen })
@@ -70,7 +72,11 @@ export function useNativeChatDisclosure(
   const isStored = key !== undefined && store !== null
   const localOpen =
     local.key === key && local.initialOpen === initialOpen ? local.open : initialOpen
-  const open = isStored ? (store.read(key) ?? localOpen) : localOpen
+  const open = isStored
+    ? (store.read(key) ??
+      inheritedKeys?.map(store.read).find((choice) => choice !== undefined) ??
+      localOpen)
+    : localOpen
   const setOpen = useCallback(
     (next: boolean) => {
       setLocal({ key, initialOpen, open: next })
