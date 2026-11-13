@@ -317,8 +317,6 @@
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 8 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts
 1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 1 src/main/node-runtime/appimage-bundled-node-runtime.ts
