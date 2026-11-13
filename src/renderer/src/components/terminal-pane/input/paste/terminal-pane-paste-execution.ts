@@ -21,10 +21,8 @@ import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboar
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
-import {
-  createClipboardImagePasteEnterHold,
-  type ClipboardImagePasteEnterHold
-} from './clipboard-image-paste-enter-hold'
+import type { ClipboardImagePasteEnterHold } from './clipboard-image-paste-enter-hold'
+import type { ClipboardImageUploadToken } from './clipboard-image-paste-enter-hold'
 
 export type TerminalPanePasteExecution = ReturnType<typeof createTerminalPanePasteExecution>
 
@@ -35,7 +33,8 @@ export function formatClipboardImagePasteError(error: unknown): string {
 
 export function createTerminalPanePasteExecution(
   controller: TerminalPaneCloseController,
-  shortcutPlatform: NodeJS.Platform
+  shortcutPlatform: NodeJS.Platform,
+  clipboardImageEnterHold: ClipboardImagePasteEnterHold
 ) {
   const {
     cwd,
@@ -60,13 +59,14 @@ export function createTerminalPanePasteExecution(
       ptyId
     })
 
+  /** Returns false when the paste was rejected, so clipboard paths can report their skipped reason. */
   const executePanePasteText = async (
     pane: ManagedPane,
     source: TerminalPasteSource,
     activeElementAtDispatch: Element | null,
     text: string,
     options?: TerminalPasteTextOptions
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const transport = paneTransportsRef.current.get(pane.id)
     const ptyId = transport?.getPtyId() ?? null
     const keyboardOwnedPaste =
@@ -99,7 +99,7 @@ export function createTerminalPanePasteExecution(
     })
     if (execution.status !== 'pasted') {
       setTerminalError(formatTerminalPasteExecutionError(execution.reason))
-      return
+      return false
     }
     if (text) {
       recordTerminalUserInputForLeaf(tabId, pane.leafId)
@@ -107,6 +107,7 @@ export function createTerminalPanePasteExecution(
     if (options?.recoverImagePasteWebglAtlas) {
       scheduleImagePasteWebglAtlasRecovery()
     }
+    return true
   }
 
   // Resolve per pane/PTY host: Windows Codex needs input-record newlines even beside other protocols.
@@ -144,10 +145,6 @@ export function createTerminalPanePasteExecution(
     })
 
   // Holds a plain Enter typed while a pane's clipboard image upload is in flight (#41502).
-  const clipboardImageEnterHold: ClipboardImagePasteEnterHold = createClipboardImagePasteEnterHold({
-    getPanes: () => managerRef.current?.getPanes()
-  })
-
   const pasteFromClipboard = (
     pane: ManagedPane,
     source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
@@ -161,6 +158,8 @@ export function createTerminalPanePasteExecution(
       paneTransportsRef.current.get(pane.id)
     )
     const activeElementAtDispatch = document.activeElement
+    // Only the operation that started an image upload may settle it; text pastes leave the hold alone.
+    let uploadToken: ClipboardImageUploadToken | null = null
     void pasteTerminalClipboard({
       readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -173,16 +172,22 @@ export function createTerminalPanePasteExecution(
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
       onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error)),
-      onImagePasteUploadStart: () => clipboardImageEnterHold.noteImageUploadStart(pane.id)
+      onImagePasteUploadStart: () => {
+        uploadToken = clipboardImageEnterHold.noteImageUploadStart(pane.id)
+      }
     })
-      .then((result) =>
-        clipboardImageEnterHold.settleImageUpload(
-          pane.id,
-          result.status === 'pasted' && result.kind === 'image-path'
-        )
-      )
+      .then((result) => {
+        if (uploadToken) {
+          clipboardImageEnterHold.settleImageUpload(
+            uploadToken,
+            result.status === 'pasted' && result.kind === 'image-path'
+          )
+        }
+      })
       .catch(() => {
-        clipboardImageEnterHold.settleImageUpload(pane.id, false)
+        if (uploadToken) {
+          clipboardImageEnterHold.settleImageUpload(uploadToken, false)
+        }
         setTerminalError('Paste failed.')
       })
   }

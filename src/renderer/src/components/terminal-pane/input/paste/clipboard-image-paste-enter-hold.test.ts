@@ -12,12 +12,13 @@ function fakeTextarea(paneId: number): HTMLElement {
   return textarea as unknown as HTMLElement
 }
 
-function enterEvent(
+function keyEvent(
+  key: string,
   target: EventTarget | null,
   overrides: Partial<KeyboardEvent> = {}
 ): KeyboardEvent {
   return {
-    key: 'Enter',
+    key,
     repeat: false,
     shiftKey: false,
     ctrlKey: false,
@@ -30,18 +31,11 @@ function enterEvent(
   } as unknown as KeyboardEvent
 }
 
-function escapeEvent(target: EventTarget | null): KeyboardEvent {
-  return {
-    key: 'Escape',
-    repeat: false,
-    shiftKey: false,
-    ctrlKey: false,
-    metaKey: false,
-    altKey: false,
-    target,
-    preventDefault: vi.fn(),
-    stopImmediatePropagation: vi.fn()
-  } as unknown as KeyboardEvent
+function enterEvent(
+  target: EventTarget | null,
+  overrides: Partial<KeyboardEvent> = {}
+): KeyboardEvent {
+  return keyEvent('Enter', target, overrides)
 }
 
 describe('clipboard image paste Enter hold', () => {
@@ -56,43 +50,121 @@ describe('clipboard image paste Enter hold', () => {
   function setup() {
     const input = vi.fn()
     const hold = createClipboardImagePasteEnterHold({
-      getPanes: () => [{ id: 7, terminal: { input } }]
+      getPanes: () => [
+        { id: 7, terminal: { input } },
+        { id: 9, terminal: { input } }
+      ]
     })
     return { hold, input }
   }
 
   it('holds Enter typed during the upload and presses it after the path lands', () => {
     const { hold, input } = setup()
-    hold.noteImageUploadStart(7)
+    const token = hold.noteImageUploadStart(7)
 
     const event = enterEvent(fakeTextarea(7))
     hold.handleKeyDown(event)
     expect(event.preventDefault).toHaveBeenCalled()
     expect(input).not.toHaveBeenCalled()
 
-    hold.settleImageUpload(7, true)
+    hold.settleImageUpload(token, true)
     expect(input).not.toHaveBeenCalled()
     vi.advanceTimersByTime(50)
     expect(input).toHaveBeenCalledWith('\r')
   })
 
-  it('drops the held Enter when the upload fails', () => {
+  it('suppresses auto-repeated Enter while the upload is active', () => {
     const { hold, input } = setup()
     hold.noteImageUploadStart(7)
+
+    const repeat = enterEvent(fakeTextarea(7), { repeat: true })
+    hold.handleKeyDown(repeat)
+    expect(repeat.preventDefault).toHaveBeenCalled()
+
+    vi.advanceTimersByTime(50)
+    expect(input).not.toHaveBeenCalled()
+  })
+
+  it('drops the held Enter when the upload fails', () => {
+    const { hold, input } = setup()
+    const token = hold.noteImageUploadStart(7)
     hold.handleKeyDown(enterEvent(fakeTextarea(7)))
 
-    hold.settleImageUpload(7, false)
+    hold.settleImageUpload(token, false)
     vi.advanceTimersByTime(50)
     expect(input).not.toHaveBeenCalled()
   })
 
   it('Esc cancels the held Enter', () => {
     const { hold, input } = setup()
-    hold.noteImageUploadStart(7)
+    const token = hold.noteImageUploadStart(7)
     hold.handleKeyDown(enterEvent(fakeTextarea(7)))
-    hold.handleKeyDown(escapeEvent(fakeTextarea(7)))
+    hold.handleKeyDown(keyEvent('Escape', fakeTextarea(7)))
 
-    hold.settleImageUpload(7, true)
+    hold.settleImageUpload(token, true)
+    vi.advanceTimersByTime(50)
+    expect(input).not.toHaveBeenCalled()
+  })
+
+  it('ignores a settlement from a paste that never started an image upload', () => {
+    const { hold, input } = setup()
+    const token = hold.noteImageUploadStart(7)
+    hold.handleKeyDown(enterEvent(fakeTextarea(7)))
+
+    // A text paste in the same pane completes first; its stale settlement must not release anything.
+    hold.settleImageUpload({ paneId: 7, run: token.run + 100 }, false)
+    hold.settleImageUpload(token, true)
+    vi.advanceTimersByTime(50)
+    expect(input).toHaveBeenCalledWith('\r')
+  })
+
+  it('tracks overlapping uploads and held Enters per pane', () => {
+    const { hold, input } = setup()
+    const tokenA = hold.noteImageUploadStart(7)
+    const tokenB = hold.noteImageUploadStart(9)
+
+    const enterA = enterEvent(fakeTextarea(7))
+    hold.handleKeyDown(enterA)
+    const enterB = enterEvent(fakeTextarea(9))
+    hold.handleKeyDown(enterB)
+    expect(enterA.preventDefault).toHaveBeenCalled()
+    expect(enterB.preventDefault).toHaveBeenCalled()
+
+    hold.settleImageUpload(tokenA, true)
+    vi.advanceTimersByTime(50)
+    expect(input).toHaveBeenCalledWith('\r')
+
+    hold.settleImageUpload(tokenB, true)
+    vi.advanceTimersByTime(50)
+    expect(input).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the hold while another upload in the same pane is still running', () => {
+    const { hold, input } = setup()
+    const first = hold.noteImageUploadStart(7)
+    const second = hold.noteImageUploadStart(7)
+    hold.handleKeyDown(enterEvent(fakeTextarea(7)))
+
+    hold.settleImageUpload(first, true)
+    vi.advanceTimersByTime(50)
+    expect(input).not.toHaveBeenCalled()
+
+    const late = enterEvent(fakeTextarea(7))
+    hold.handleKeyDown(late)
+    expect(late.preventDefault).toHaveBeenCalled()
+
+    hold.settleImageUpload(second, true)
+    vi.advanceTimersByTime(50)
+    expect(input).toHaveBeenCalledWith('\r')
+  })
+
+  it('dispose clears pending state so a stale timer cannot reach a remounted pane', () => {
+    const { hold, input } = setup()
+    const token = hold.noteImageUploadStart(7)
+    hold.handleKeyDown(enterEvent(fakeTextarea(7)))
+    hold.settleImageUpload(token, true)
+
+    hold.dispose()
     vi.advanceTimersByTime(50)
     expect(input).not.toHaveBeenCalled()
   })

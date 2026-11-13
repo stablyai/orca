@@ -12,6 +12,7 @@ import { NativeChatPaneCover } from '../../terminal-pane/chat/NativeChatPaneCove
 import { registerTerminalPanePasteListeners } from '../../terminal-pane/input/paste/terminal-pane-paste-listeners'
 import type { TerminalPaneCloseController } from '../../terminal-pane/layout/close/use-terminal-pane-close-actions'
 import type { TerminalPanePasteExecution } from '../../terminal-pane/input/paste/terminal-pane-paste-execution'
+import { createClipboardImagePasteEnterHold } from '../../terminal-pane/input/paste/clipboard-image-paste-enter-hold'
 import {
   pasteTerminalPaneMenuClipboard,
   type TerminalPaneMenuPasteContext
@@ -150,7 +151,8 @@ function fixture(options: { platform?: NodeJS.Platform } = {}) {
   const execution = {
     pasteFromClipboard,
     executePanePasteText,
-    resolvePaneProtectedMultilinePasteOptions: () => undefined
+    resolvePaneProtectedMultilinePasteOptions: () => undefined,
+    clipboardImageEnterHold: createClipboardImagePasteEnterHold({ getPanes: () => undefined })
   } as unknown as TerminalPanePasteExecution
   dispose = registerTerminalPanePasteListeners({
     container,
@@ -202,7 +204,8 @@ function menuContext(): TerminalPaneMenuPasteContext {
     tabId: 'tab',
     worktreeId: 'workspace',
     forceBracketedMultilineTextPaste: false,
-    onPasteError: vi.fn()
+    onPasteError: vi.fn(),
+    clipboardImageEnterHold: createClipboardImagePasteEnterHold({ getPanes: () => undefined })
   }
 }
 
