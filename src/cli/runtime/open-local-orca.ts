@@ -14,10 +14,11 @@ export async function openLocalOrca(
   if (initial?.result.app.desktopWindowStatus === 'blocked') {
     throwDesktopActivationBlocked()
   }
-  launchOrcaApp()
+  // Relaunching a running Orca only hands it the foreground.
   if (initial?.result.app.desktopWindowStatus === 'available') {
     return initial
   }
+  launchOrcaApp()
 
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {

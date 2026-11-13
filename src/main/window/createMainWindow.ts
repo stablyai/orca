@@ -209,6 +209,7 @@ export function createMainWindow(
   const state = installMainWindowStateLifecycle({
     mainWindow,
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
+    revealInBackground: opts?.revealInBackground === true,
     savedMaximized,
     savedFullScreen,
     store
