@@ -52,7 +52,7 @@ it('admits CI-line watches on desktop only after the first-window fence settles'
   const { fence, runtime } = desktopStartup(state)
   const admitted: unknown[] = []
   const previous = state.runtime
-  // SAFETY: the serving milestone only calls this one runtime method; the rest of the runtime is unused here.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the serving milestone only calls startPullRequestWatches; the rest of the runtime is unused here.
   state.runtime = {
     startPullRequestWatches: (options?: unknown) => admitted.push(options)
   } as unknown as typeof state.runtime
