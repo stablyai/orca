@@ -5,11 +5,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   OrcaTeamMfaGrace,
-  OrcaTeamMfaPendingMember
+  OrcaTeamMfaPendingMember,
+  OrcaTeamMfaPolicy
 } from '../../../../shared/orca-team-mfa-policy'
-import { EnterpriseUpsell, type EnterpriseContact } from '../settings/enterprise/EnterpriseUpsell'
+import {
+  EnterpriseUpsell,
+  EnterpriseUpsellLine,
+  type EnterpriseContact
+} from '../settings/enterprise/EnterpriseUpsell'
 import { SettingsGroup } from '../settings/section-layout/SettingsGroup'
-import { RequireMfaRow, type RequireMfaRowNotice } from './RequireMfaRow'
+import { RequireMfaRow, type RequireMfaRowNotice, type RequireMfaRowProps } from './RequireMfaRow'
 import { useTeamMfaPolicy } from './use-team-mfa-policy'
 
 type ChangeStatus =
@@ -50,11 +55,13 @@ export function mfaChangeError(status: ChangeStatus, t: Translate): string {
 export function EnterpriseMfaPolicy({
   orgId,
   contact,
-  onContactSales
+  onContactSales,
+  underBanner = false
 }: {
   orgId: string
   contact: EnterpriseContact
   onContactSales: (url: string) => void
+  underBanner?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { policy, refresh } = useTeamMfaPolicy(orgId)
@@ -146,29 +153,70 @@ export function EnterpriseMfaPolicy({
   }
 
   return (
+    <EnterpriseMfaGroup
+      policy={policy}
+      manage={policy.manage}
+      pending={pending}
+      now={now}
+      busy={busy}
+      notice={notice}
+      contact={contact}
+      onRequire={(grace) => void change(grace)}
+      onTurnOff={() => void change('off')}
+      onRemind={(userId) => void remind(userId)}
+      onSetUpOwn={() => void window.api.shell.openUrl(policy.setupUrl)}
+      onContactSales={onContactSales}
+      underBanner={underBanner}
+    />
+  )
+}
+
+export type EnterpriseMfaGroupProps = Omit<RequireMfaRowProps, 'policy'> & {
+  policy: OrcaTeamMfaPolicy
+  manage: NonNullable<OrcaTeamMfaPolicy['manage']>
+  contact: EnterpriseContact
+  onContactSales: (url: string) => void
+  /** The page banner already carries Contact sales: the locked state is a plain line, no button. */
+  underBanner?: boolean
+}
+
+/**
+ * The "Two-factor authentication" group as shown: the Require two-factor row when the plan
+ * includes it, the shared upsell when it does not, and the single sign-on note when the team's
+ * identity provider handles members who sign in that way.
+ */
+export function EnterpriseMfaGroup({
+  policy,
+  manage,
+  contact,
+  onContactSales,
+  underBanner = false,
+  ...row
+}: EnterpriseMfaGroupProps): React.JSX.Element {
+  const t = useTranslate()
+  const upsellBody = t(
+    'auto.components.teamMfa.upsellBody',
+    'Set a date after which members need two-factor authentication to use your team’s workspaces.'
+  )
+  return (
     <SettingsGroup
       title={t('auto.components.teamMfa.groupTitle', 'Two-factor authentication')}
       description={
-        policy.manage.ssoHandled
+        manage.ssoHandled
           ? t(
-              'auto.components.teamMfa.groupSsoHandled',
-              'Handled by your identity provider for members who sign in with single sign-on. This applies only to members who sign in another way.'
+              'auto.components.teamMfa.groupSsoNote',
+              'Members who sign in with single sign-on use your identity provider’s two-factor settings. This requirement applies only to members who sign in another way.'
             )
           : undefined
       }
     >
-      {policy.manage.available ? (
-        <RequireMfaRow
-          policy={policy}
-          pending={pending}
-          now={now}
-          busy={busy}
-          notice={notice}
-          onRequire={(grace) => void change(grace)}
-          onTurnOff={() => void change('off')}
-          onRemind={(userId) => void remind(userId)}
-          onSetUpOwn={() => void window.api.shell.openUrl(policy.setupUrl)}
-        />
+      {manage.available ? (
+        // Padded like every other row in a settings card, so it does not sit on the card's edge.
+        <div data-settings-row="" className="py-4">
+          <RequireMfaRow policy={policy} {...row} />
+        </div>
+      ) : underBanner ? (
+        <EnterpriseUpsellLine>{upsellBody}</EnterpriseUpsellLine>
       ) : (
         <EnterpriseUpsell
           title={t(
@@ -176,10 +224,7 @@ export function EnterpriseMfaPolicy({
             'Requiring two-factor authentication is part of {{value0}}',
             { value0: contact.planName }
           )}
-          body={t(
-            'auto.components.teamMfa.upsellBody',
-            'Set a date after which members need two-factor authentication to use your team’s workspaces.'
-          )}
+          body={upsellBody}
           contact={contact}
           onContactSales={onContactSales}
         />

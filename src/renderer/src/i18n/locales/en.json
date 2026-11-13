@@ -1702,7 +1702,6 @@
       "keywordScim": "scim",
       "keywordCompliance": "compliance",
       "description": "Single sign-on, sign-in policies and the audit log for your team.",
-      "bannerTitle": "Single sign-on and the audit log are part of {{plan}}",
       "bannerBody": "Talk to us about moving your team to {{plan}}.",
       "contactUs": "Contact us",
       "scim": {
@@ -1728,7 +1727,8 @@
         "keyNote": "The setup page shows the SCIM address and key to enter in your identity provider. Orca never shows or stores the key.",
         "lastChange": "Last change received",
         "lastChangeSummary": "{{what}} · {{when}}"
-      }
+      },
+      "bannerTitleAll": "Single sign-on, two-factor requirements and the audit log are part of {{plan}}"
     },
     "teamWorkspaces": {
       "search": "Search workspaces",
@@ -21983,7 +21983,6 @@
         "remindedNoEmail": "Reminder recorded, but email delivery is off on this server, so nothing was sent.",
         "requiredInline": "Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces.",
         "groupTitle": "Two-factor authentication",
-        "groupSsoHandled": "Handled by your identity provider for members who sign in with single sign-on. This applies only to members who sign in another way.",
         "upsellTitle": "Requiring two-factor authentication is part of {{value0}}",
         "upsellBody": "Set a date after which members need two-factor authentication to use your team’s workspaces.",
         "errorActorNeedsMfa": "Set up two-factor authentication on your own account first.",
@@ -21991,7 +21990,9 @@
         "errorSsoNotice": "Your team uses single sign-on, so pick a date at least 7 days out. Members need time to sign in again.",
         "errorRateLimited": "Too many changes at once. Wait a minute and try again.",
         "errorForbidden": "Only owners and admins can change this.",
-        "errorOther": "Couldn’t save the change. Try again."
+        "errorOther": "Couldn’t save the change. Try again.",
+        "memberNotSignedIn": "Hasn’t signed in yet",
+        "groupSsoNote": "Members who sign in with single sign-on use your identity provider’s two-factor settings. This requirement applies only to members who sign in another way."
       }
     },
     "i18n": {

@@ -53,8 +53,8 @@ export function EnterpriseSettingsView({
         <SettingsGroup>
           <EnterpriseUpsell
             title={t(
-              'settings.enterprise.bannerTitle',
-              'Single sign-on and the audit log are part of {{plan}}',
+              'settings.enterprise.bannerTitleAll',
+              'Single sign-on, two-factor requirements and the audit log are part of {{plan}}',
               { plan: contact.planName }
             )}
             body={t(

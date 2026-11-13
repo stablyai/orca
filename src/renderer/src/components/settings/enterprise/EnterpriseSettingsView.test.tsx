@@ -248,7 +248,11 @@ describe('without the Enterprise plan', () => {
         audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [], onContactSales })}
       />
     )
-    expect(screen.getByText('Single sign-on and the audit log are part of Enterprise')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Single sign-on, two-factor requirements and the audit log are part of Enterprise'
+      )
+    ).toBeTruthy()
     // The blocks keep their titles and say what they are, without a second button.
     expect(screen.getByText('Single sign-on and provisioning')).toBeTruthy()
     expect(screen.getByText('Audit log')).toBeTruthy()
@@ -273,7 +277,11 @@ describe('without the Enterprise plan', () => {
         audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [], onContactSales })}
       />
     )
-    expect(screen.queryByText('Single sign-on and the audit log are part of Enterprise')).toBeNull()
+    expect(
+      screen.queryByText(
+        'Single sign-on, two-factor requirements and the audit log are part of Enterprise'
+      )
+    ).toBeNull()
     expect(screen.getByText('Audit log is part of Enterprise')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Contact sales' }))
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
@@ -290,7 +298,11 @@ describe('without the Enterprise plan', () => {
         })}
       />
     )
-    expect(screen.getByText('Single sign-on and the audit log are part of Scale')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Single sign-on, two-factor requirements and the audit log are part of Scale'
+      )
+    ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Contact sales' }))
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/scale')
   })
