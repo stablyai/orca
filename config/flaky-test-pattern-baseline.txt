@@ -223,8 +223,8 @@
 2 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-auth-refusal.test.ts
 2 test-no-real-time-wait:src/shared/startup-command-staging.node-pty.test.ts
 4 test-no-real-time-wait:src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts
-1 test-no-real-time-wait:src/wsl-guest/agent-hook-canonical-status.test.ts
-5 test-no-real-time-wait:src/wsl-guest/agent-hook-server.test.ts
+1 test-no-real-time-wait:src/wsl-guest/agent-hooks/status/agent-hook-canonical-status.test.ts
+5 test-no-real-time-wait:src/wsl-guest/agent-hooks/server/agent-hook-server.test.ts
 1 test-no-real-time-wait:tests/e2e/accumulated-workspace-status-fixture.ts
 1 test-no-real-time-wait:tests/e2e/agent-session-live-force-exit-resume.spec.ts
 3 test-no-real-time-wait:tests/e2e/agent-session-log-tail-stability.spec.ts
@@ -542,10 +542,10 @@
 2 test-no-wall-clock:src/shared/startup-command-staging.node-pty.test.ts
 1 test-no-wall-clock:src/shared/startup-command-staging.test.ts
 2 test-no-wall-clock:src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts
-10 test-no-wall-clock:src/wsl-guest/agent-hook-integration.test.ts
-1 test-no-wall-clock:src/wsl-guest/agent-hook-opencode-tui-identity.test.ts
-1 test-no-wall-clock:src/wsl-guest/agent-hook-server.test.ts
-1 test-no-wall-clock:src/wsl-guest/relay-idle-process-owner.test.ts
+10 test-no-wall-clock:src/wsl-guest/agent-hooks/publication/agent-hook-integration.test.ts
+1 test-no-wall-clock:src/wsl-guest/agent-hooks/server/agent-hook-opencode-tui-identity.test.ts
+1 test-no-wall-clock:src/wsl-guest/agent-hooks/server/agent-hook-server.test.ts
+1 test-no-wall-clock:src/wsl-guest/agent-hooks/presence/relay-idle-process-owner.test.ts
 1 test-no-wall-clock:tests/e2e/cross-version-wire/cross-version-web-device-key.unit.test.ts
 2 test-no-wall-clock:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
