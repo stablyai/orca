@@ -168,10 +168,16 @@ describe('PAIRED-HELD-ACTIVE: the held placeholder is in front after a GitHub-on
     beginWebRuntimeInitialTerminalBootstrap('env-paired', 'wt-1')
     await create()
     await vi.waitFor(() => expect(tabIds()).toContain(HELD()))
-    mirrorTab('web-terminal-seeded-shell', false)
-    useAppStore.setState({ activeTabId: 'web-terminal-mine' })
-    endWebRuntimeInitialTerminalBootstrap('env-paired', 'wt-1')
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    // Fake time from here: the settle's recheck after the seeder's shell runs on a timer.
+    vi.useFakeTimers()
+    try {
+      mirrorTab('web-terminal-seeded-shell', false)
+      useAppStore.setState({ activeTabId: 'web-terminal-mine' })
+      endWebRuntimeInitialTerminalBootstrap('env-paired', 'wt-1')
+      await vi.advanceTimersByTimeAsync(600)
+    } finally {
+      vi.useRealTimers()
+    }
     expect(useAppStore.getState().activeTabId).toBe('web-terminal-mine')
     releaseCloudAgentHold(cloudTabHoldKey(HELD()), 'cancel')
   })
@@ -181,8 +187,14 @@ describe('PAIRED-HELD-ACTIVE: the held placeholder is in front after a GitHub-on
     await create()
     await vi.waitFor(() => expect(tabIds()).toEqual([HELD()]))
     useAppStore.setState({ activeWorktreeId: 'wt-2', activeTabId: 'web-terminal-elsewhere' })
-    seederShellLands()
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    // Fake time from here: the settle's recheck after the seeder's shell runs on a timer.
+    vi.useFakeTimers()
+    try {
+      seederShellLands()
+      await vi.advanceTimersByTimeAsync(600)
+    } finally {
+      vi.useRealTimers()
+    }
     expect(useAppStore.getState()).toMatchObject({
       activeWorktreeId: 'wt-2',
       activeTabId: 'web-terminal-elsewhere'
