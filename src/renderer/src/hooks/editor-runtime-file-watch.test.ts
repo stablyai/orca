@@ -57,15 +57,40 @@ beforeEach(() => {
   runtime.subscribe.mockReset()
 })
 
+// The explorer's view of the host directory: whatever the last catch-up re-read saw.
+function hostDirectory(): {
+  host: Set<string>
+  shown: Set<string>
+  onCatchUp: () => void
+} {
+  const host = new Set<string>()
+  const shown = new Set<string>()
+  return {
+    host,
+    shown,
+    onCatchUp: () => {
+      shown.clear()
+      host.forEach((name) => shown.add(name))
+    }
+  }
+}
+function streamCallback(call: number, index: 2 | 3): (error?: Error) => void {
+  const callback: unknown = runtime.subscribe.mock.calls[call]?.[index]
+  if (typeof callback !== 'function') {
+    throw new Error(`stream ${call} registered no ${index === 2 ? 'error' : 'ready'} callback`)
+  }
+  return (error) => callback(error)
+}
+
 describe('editor runtime file watch recovery', () => {
   it('disposes late old stream handles without replacing the current handle', async () => {
     const old = pendingSubscription()
     const fresh = pendingSubscription()
     const stopOld = vi.fn()
     const stopFresh = vi.fn()
-    const onPayload = vi.fn()
+    const onCatchUp = vi.fn()
     runtime.subscribe.mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)
-    const stop = subscribeEditorRuntimeFileWatch(target, onPayload, vi.fn())
+    const stop = subscribeEditorRuntimeFileWatch(target, vi.fn(), vi.fn(), onCatchUp)
     runtime.contact.get('host-a')?.()
     fresh.resolve(stopFresh)
     await settle()
@@ -73,38 +98,41 @@ describe('editor runtime file watch recovery', () => {
     await settle()
     expect(stopOld).toHaveBeenCalledOnce()
     expect(stopFresh).not.toHaveBeenCalled()
-    // An accepted subscription is not an installed host watcher; resyncing earlier loses writes in between.
-    expect(onPayload).not.toHaveBeenCalled()
-    const freshReady: unknown = runtime.subscribe.mock.calls[1]?.[3]
-    if (typeof freshReady !== 'function') {
-      throw new Error('fresh stream registered no ready callback')
-    }
-    freshReady()
-    expect(onPayload).toHaveBeenCalledOnce()
-    expect(onPayload).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      events: [{ kind: 'overflow', absolutePath: '/repo' }],
-      resync: true
-    })
+    expect(onCatchUp).toHaveBeenCalledOnce()
     stop()
     expect(stopFresh).toHaveBeenCalledOnce()
   })
 
-  it('still re-reads once when the recovered host watcher fails to install', async () => {
-    const onPayload = vi.fn()
+  it('shows files written before the host watcher was installed', async () => {
+    const dir = hostDirectory()
+    runtime.subscribe.mockResolvedValue(vi.fn())
+    subscribeEditorRuntimeFileWatch(target, vi.fn(), vi.fn(), dir.onCatchUp)
+    await settle()
+    dir.host.add('BEFORE_FIRST_READY.txt')
+    streamCallback(0, 3)()
+    expect([...dir.shown]).toEqual(['BEFORE_FIRST_READY.txt'])
+
+    runtime.contact.get('host-a')?.()
+    dir.host.add('DURING_OUTAGE.txt')
+    await settle()
+    // Install can stay pending on the restarted host, so outage changes must not wait for it.
+    expect(dir.shown.has('DURING_OUTAGE.txt')).toBe(true)
+    dir.host.add('BEFORE_RECOVERED_READY.txt')
+    streamCallback(1, 3)()
+    expect(dir.shown.has('BEFORE_RECOVERED_READY.txt')).toBe(true)
+  })
+
+  it('re-reads once more when the recovered host watcher fails to install', async () => {
+    const dir = hostDirectory()
     const onError = vi.fn()
     runtime.subscribe.mockResolvedValue(vi.fn())
-    subscribeEditorRuntimeFileWatch(target, onPayload, onError)
+    subscribeEditorRuntimeFileWatch(target, vi.fn(), onError, dir.onCatchUp)
     runtime.contact.get('host-a')?.()
     await settle()
-    const freshError: unknown = runtime.subscribe.mock.calls[1]?.[2]
-    if (typeof freshError !== 'function') {
-      throw new Error('fresh stream registered no error callback')
-    }
-    freshError(new Error('watcher capacity'))
-    freshError(new Error('watcher capacity'))
-    expect(onPayload).toHaveBeenCalledOnce()
-    expect(onPayload).toHaveBeenCalledWith(expect.objectContaining({ resync: true }))
-    expect(onError).toHaveBeenCalledTimes(2)
+    dir.host.add('BEFORE_INSTALL_FAILED.txt')
+    const failure = new Error('watcher capacity')
+    streamCallback(1, 2)(failure)
+    expect([...dir.shown]).toEqual(['BEFORE_INSTALL_FAILED.txt'])
+    expect(onError).toHaveBeenCalledWith(failure)
   })
 })

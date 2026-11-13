@@ -78,12 +78,17 @@ for (const workspace of ['worktree', 'folder'] as const) {
       const before = serverPids()
       expect(before).toMatch(/^\d+$/)
       execute('kill -TERM $(cat /root/.orca-remote/orcad-*/.orcad-pid)')
-      // The recovered stream resyncs once the restarted host's watcher is installed; writing earlier is unobservable.
-      const resynced = page.waitForEvent('console', {
-        predicate: (message) =>
+      // Recovery resyncs on acceptance, then again once the restarted host's watcher is installed;
+      // a probe written before that second resync is unobservable.
+      let recoveryResyncs = 0
+      page.on('console', (message) => {
+        if (
           message.text().startsWith('[file-change-event]') &&
-          message.text().includes('"resync":true'),
-        timeout: 180_000
+          message.text().includes('"resync":true') &&
+          message.text().includes(`"worktreePath":${JSON.stringify(rootPath)}`)
+        ) {
+          recoveryResyncs += 1
+        }
       })
       await expect.poll(serverPids, { timeout: 30_000 }).toBe('')
       execute(`printf 'changed during outage\n' > '${rootPath}/DURING_OUTAGE.txt'`)
@@ -108,7 +113,7 @@ for (const workspace of ['worktree', 'folder'] as const) {
         '[managed-server-restart]',
         JSON.stringify({ before, after: serverPids(), workspace, worktreeId })
       )
-      await resynced
+      await expect.poll(() => recoveryResyncs, { timeout: 180_000 }).toBeGreaterThanOrEqual(2)
       const resumed = page.waitForEvent('console', {
         predicate: (message) =>
           message.text().startsWith('[file-change-event]') &&
