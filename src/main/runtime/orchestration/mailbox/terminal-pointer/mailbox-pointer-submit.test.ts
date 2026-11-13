@@ -137,7 +137,12 @@ describe('orchestration mailbox pointer submit', () => {
     const flight = state.beginFlight(ptyId)
     state.setWatermark(mailboxHandle, 1, ptyId)
     const writePty = vi.fn(settledWriteStub())
-    const markMailboxPointerEnterAttempted = vi.fn(() => true)
+    const db = new OrchestrationDb(':memory:')
+    vi.spyOn(db, 'areUnreadMessages').mockReturnValue(true)
+    const markMailboxPointerEnterAttempted = vi
+      .spyOn(db, 'markMailboxPointerEnterAttempted')
+      .mockReturnValue(true)
+    vi.spyOn(db, 'settleMailboxPointerEnter').mockReturnValue(undefined)
     const mailboxOwner = new OrchestrationMailboxOwner({
       getDb: () => null,
       getTerminal: () => null,
@@ -158,12 +163,7 @@ describe('orchestration mailbox pointer submit', () => {
       {
         mailboxOwner,
         state,
-        getDb: () =>
-          ({
-            areUnreadMessages: () => true,
-            markMailboxPointerEnterAttempted,
-            settleMailboxPointerEnter: vi.fn()
-          }) as never,
+        getDb: () => db,
         resolveSubmitTarget: () => target,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
@@ -218,10 +218,18 @@ describe('orchestration mailbox pointer submit', () => {
     const writePty = vi.fn(settledWriteStub())
     const redrive = vi.fn()
     const settle = vi.fn(() => state.settleFlight(ptyId, flight))
+    const mailboxOwner = new OrchestrationMailboxOwner({
+      getDb: () => db,
+      getTerminal: () => null,
+      getTerminalProcessIncarnation: () => null,
+      onRoutedMessageTypes: () => {},
+      onForeignMailboxRouted: () => {}
+    })
+    vi.spyOn(mailboxOwner, 'resolve').mockReturnValue(mailboxHandle)
 
     submitOrchestrationMailboxPointer(
       {
-        mailboxOwner: { resolve: () => mailboxHandle } as never,
+        mailboxOwner,
         state,
         getDb: () => db,
         resolveSubmitTarget: () => target,
