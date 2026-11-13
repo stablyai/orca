@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
+import { environmentManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
@@ -47,8 +47,12 @@ describe('the phone PR screen’s timer with host revalidation receipts', () => 
   let renderer: { unmount: () => void } | null = null
   let queryClient: QueryClient
   let calls: PendingCall[]
+  let serverEnvironment: boolean
 
   beforeEach(() => {
+    serverEnvironment = environmentManager.isServer()
+    // The phone schedules client timers; this test otherwise runs as a Node server.
+    environmentManager.setIsServer(() => false)
     vi.useFakeTimers()
     calls = []
     queryClient = createOrcaQueryClient()
@@ -59,6 +63,7 @@ describe('the phone PR screen’s timer with host revalidation receipts', () => 
     await queryClient.cancelQueries()
     queryClient.clear()
     vi.useRealTimers()
+    environmentManager.setIsServer(() => serverEnvironment)
   })
 
   // Only the PR read is answered by the test; every other host read fails, as an unreachable one would.
