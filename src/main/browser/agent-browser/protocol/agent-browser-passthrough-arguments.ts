@@ -56,9 +56,7 @@ export function splitAgentBrowserCommandLine(input: string): string[] {
       value += char
     }
   }
-  if (escaped) {
-    value += '\\'
-  }
+  // Like agent-browser, drop a trailing lone backslash: `close\` runs `close`.
   if (quote) {
     throw new BrowserError('invalid_argument', 'Browser command has an unclosed quote.')
   }
@@ -143,10 +141,14 @@ const TAB_HINT = 'Use the typed tab commands (tab list, tab create, tab switch, 
 const VIEWPORT_HINT = 'Use the typed viewport or set device command.'
 const NOT_THE_PAGE = 'It acts outside the selected Orca page.'
 
-// Commands that leave Orca's page: connect/tab/window/close retarget or create targets
-// behind Orca's tab model, and the rest act on the machine or agent-browser itself.
+// Commands that leave Orca's page: connect/tab/window/close retarget or create targets behind
+// Orca's tab model; inspect opens the system browser; stream serves an unguarded command relay;
+// auth types agent-browser's saved logins into any URL; the rest act on the machine.
 const REFUSED_COMMANDS = new Map<string, string>([
   ['connect', NOT_THE_PAGE],
+  ['inspect', NOT_THE_PAGE],
+  ['stream', NOT_THE_PAGE],
+  ['auth', NOT_THE_PAGE],
   ['tab', TAB_HINT],
   ['window', TAB_HINT],
   ['close', TAB_HINT],
@@ -174,7 +176,7 @@ export function assertAgentBrowserPassthroughStaysOnPage(args: readonly string[]
   for (const arg of args) {
     const option = arg.split('=')[0]
     if (GLOBAL_OPTIONS.has(option)) {
-      refuse(`agent-browser's global option ${option}`, 'Orca sets the browser and session.')
+      refuse(`agent-browser's global option ${option}`, 'Orca sets global options itself.')
     }
   }
   const [command, subcommand] = args

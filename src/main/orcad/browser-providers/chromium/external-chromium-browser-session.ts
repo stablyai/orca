@@ -73,6 +73,9 @@ function classifyAgentBrowserError(message: string): string {
   return 'browser_error'
 }
 
+// Both pick the socket directory, so dropping either loses a running helper and its live tabs.
+const SOCKET_LOCATION_KEYS = new Set(['AGENT_BROWSER_SOCKET_DIR', 'AGENT_BROWSER_NAMESPACE'])
+
 // No idle timeout: this daemon owns the user’s remote Chromium and all its live tabs.
 // agent-browser 0.33+ reads an unset timeout as one hour, so only "0" keeps it unbounded.
 export function externalChromiumAgentBrowserEnvironment(options: {
@@ -88,7 +91,7 @@ export function externalChromiumAgentBrowserEnvironment(options: {
   const env = Object.fromEntries(
     Object.entries(options.inheritedEnv).filter(([key]) => {
       const upper = key.toUpperCase()
-      return !upper.startsWith('AGENT_BROWSER_') || upper === 'AGENT_BROWSER_SOCKET_DIR'
+      return !upper.startsWith('AGENT_BROWSER_') || SOCKET_LOCATION_KEYS.has(upper)
     })
   )
   return {

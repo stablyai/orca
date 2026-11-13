@@ -18,6 +18,10 @@ describe('assertAgentBrowserPassthroughStaysOnPage', () => {
     [['batch', 'get title', 'connect 9222']],
     [['batch', '--bail', 'tab new']],
     [['batch', 'c\\onnect 9222']],
+    [['batch', 'close\\']],
+    [['inspect']],
+    [['stream', 'enable', '--port', '9999']],
+    [['auth', 'login', 'github', '--url', 'https://example.com/login']],
     [['batch', 'batch "tab new"']],
     [['batch', 'get url --cdp 9222']]
   ])('refuses %j', (args) => {
