@@ -7,6 +7,12 @@ import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery
 import { clearPendingSendCacheForTests } from './native-chat-pending'
 import * as pendingOwner from './native-chat-pending'
 import { useNativeChatAssembledMessages } from '../assembly/use-native-chat-assembled-messages'
+import { useAppStore } from '@/store/index'
+
+vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
+  observeAgentHookCompletionForNotification: vi.fn(),
+  syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+}))
 
 const boundary: NativeChatMessage = {
   id: 'boundary',
@@ -30,7 +36,9 @@ function render() {
 beforeEach(() => {
   vi.useFakeTimers()
   clearPendingSendCacheForTests()
+  useAppStore.setState({ agentStatusByPaneKey: {} })
 })
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -251,24 +259,24 @@ it('retains spent receipts and the source frontier across hook remounts and an e
   const survivor = first.result.current.pending[0].id
   first.unmount()
   const remounted = mount([])
-  act(() => {
-    remounted.result.current.record('repeat', undefined, false, 'opencode')
-  })
   remounted.rerender({ messages: [source('receipt', 1), completed('answer', 2)] })
-  expect(remounted.result.current.pending).toHaveLength(2)
-  remounted.rerender({ messages: [source('next', 3), completed('next-answer', 4)] })
-  expect(remounted.result.current.pending).toHaveLength(1)
-  expect(remounted.result.current.pending[0].id).not.toBe(survivor)
-  act(() => {
-    remounted.result.current.cancel(remounted.result.current.pending[0].id, true)
-  })
-  remounted.rerender({ messages: [] })
+  expect(remounted.result.current.pending.map((entry) => entry.id)).toEqual([survivor])
+  const progressed = [
+    source('receipt', 1),
+    completed('answer', 2),
+    source('next', 3),
+    completed('next-answer', 4)
+  ]
+  remounted.rerender({ messages: progressed })
+  expect(remounted.result.current.pending).toEqual([])
   act(() => {
     remounted.result.current.record('repeat', undefined, false, 'opencode')
   })
-  remounted.rerender({ messages: [source('next', 3), completed('next-answer', 4)] })
+  expect(remounted.result.current.pending[0].sourceBoundary?.id).toBe('next-answer')
+  remounted.rerender({ messages: [] })
+  remounted.rerender({ messages: progressed })
   expect(remounted.result.current.pending).toHaveLength(1)
-  remounted.rerender({ messages: [source('last', 5), completed('last-answer', 6)] })
+  remounted.rerender({ messages: [...progressed, source('last', 5), completed('last-answer', 6)] })
   expect(remounted.result.current.pending).toEqual([])
 })
 
@@ -574,6 +582,39 @@ it('keeps the raw original when a source row precedes a definite refusal and can
   ).toEqual([[id, 'repeat ', 'rejected']])
 })
 
+it.each([false, true])(
+  'does not charge a definitely refused predecessor to its successor, fallback=%s',
+  async (fallback) => {
+    const mounted = mountOwned()
+    const completion = Promise.withResolvers<'not-submitted'>()
+    let rejected = '',
+      successor = ''
+    act(() => {
+      rejected = mounted.result.current.record(
+        'a  b',
+        undefined,
+        false,
+        'opencode',
+        completion.promise
+      )
+      successor = mounted.result.current.record('a b', undefined, false, 'opencode')
+    })
+    await act(async () => {
+      completion.resolve('not-submitted')
+      await completion.promise
+    })
+    if (fallback) {
+      act(() => mounted.result.current.setSourceEvidence(successor, false))
+    }
+    mounted.rerender({
+      messages: [boundary, sourceRow('a b', 'delivered'), { ...boundary, id: 'reply' }]
+    })
+    expect(
+      mounted.result.current.pending.map((entry) => [entry.id, entry.text, entry.delivery])
+    ).toEqual([[rejected, 'a  b', 'rejected']])
+  }
+)
+
 it('keeps a spent normalized row unavailable through source selection and actual-socket legacy fallback', async () => {
   const mounted = mountOwned()
   const completion = Promise.withResolvers<'submitted'>()
@@ -675,15 +716,24 @@ it('starts actual uncertainty after the original composer callback and preserves
 it('settles an empty uncached not-ready owner without publishing observation work', () => {
   const write = vi.spyOn(pendingOwner, 'writePendingSendCache')
   const messages: NativeChatMessage[] = []
-  const mounted = renderHook(() =>
-    useNativeChatPendingDelivery({
+  let renders = 0
+  const mounted = renderHook(() => {
+    renders++
+    return useNativeChatPendingDelivery({
       paneKey: 'uncached',
       agent: 'opencode',
       session: { messages, readPhase: 'loading', sessionId: null }
     })
-  )
+  })
+  expect(renders).toBe(1)
   mounted.rerender()
   act(() => vi.advanceTimersByTime(20001))
+  expect(renders).toBe(2)
   expect(mounted.result.current.pending).toEqual([])
   expect(write).not.toHaveBeenCalled()
+  act(() => mounted.result.current.record('later input'))
+  expect(mounted.result.current.pending.map((entry) => entry.text)).toEqual(['later input'])
+  const settled = renders
+  act(() => vi.advanceTimersByTime(20001))
+  expect(renders).toBe(settled)
 })

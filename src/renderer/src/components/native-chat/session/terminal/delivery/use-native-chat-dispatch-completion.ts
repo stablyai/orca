@@ -6,7 +6,9 @@ import {
   type NativeChatPendingSend
 } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { finishPendingSendDispatch, type NativeChatPendingSendScope } from './native-chat-pending'
+import type { NativeChatSourceContext } from '../../../../../../../shared/native-chat/input/native-chat-prompt-observation'
+import { finishPendingSendDispatch } from './native-chat-optimistic-send-outcome'
+import type { NativeChatPendingSendScope } from './native-chat-pending'
 
 /** A remounted view observes the existing operation without retaining an old transcript snapshot. */
 export function useNativeChatDispatchCompletion({
@@ -14,13 +16,15 @@ export function useNativeChatDispatchCompletion({
   pending,
   save,
   messages,
-  sessionId
+  sessionId,
+  sourceContext
 }: {
   scope: NativeChatPendingSendScope
   pending: NativeChatPendingSend[]
   save: (update: (entries: NativeChatPendingSend[]) => NativeChatPendingSend[]) => void
   messages: NativeChatMessage[]
   sessionId: string | null
+  sourceContext?: NativeChatSourceContext
 }) {
   const finishDispatch = useCallback(
     (
@@ -59,14 +63,15 @@ export function useNativeChatDispatchCompletion({
             sessionId
           ),
           messages,
-          sessionId ?? ''
+          sessionId ?? '',
+          sourceContext
         )
       )
     }
     return () => {
       observer.reconcile = null
     }
-  }, [scope, save, messages, sessionId])
+  }, [scope, save, messages, sessionId, sourceContext])
   useEffect(() => {
     const observer = dispatchObservers.current
     if (!observer || observer.scope !== scope) {

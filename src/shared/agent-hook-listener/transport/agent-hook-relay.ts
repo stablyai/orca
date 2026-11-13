@@ -71,6 +71,7 @@ export type AgentHookRelayEnvelope = {
   hasExplicitPrompt?: boolean
   /** In-memory turn dedupe key; excluded from telemetry. */
   promptInteractionKey?: string
+  promptSubmissionDigest?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
   /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */

@@ -100,6 +100,40 @@ it('does not confirm a send whose host response has no write settlement', async 
   await expect(send('body').outcome).resolves.toBe('uncertain')
 })
 
+it('publishes the actual response binding before completing its original dispatch', async () => {
+  const binding = { runtimeId: 'host', ptyId: 'pty', generation: 1, processIncarnation: 'original' }
+  mocks.call.mockImplementation(async (_target, method) =>
+    method === 'terminal.resolvePane'
+      ? { terminal: { ptyId: 'pty', handle: 'terminal', incarnationId: 'process' } }
+      : {
+          send: {
+            handle: 'actual-terminal',
+            accepted: true,
+            chatPromptBinding: binding,
+            writeSettlement: { outcome: 'accepted' }
+          }
+        }
+  )
+  const received: unknown[] = []
+  const sent = sendNativeChatHostPrompt({
+    ptyId: 'pty',
+    paneKey: 'pane',
+    prompt: { agent: 'claude', text: 'body' },
+    onLegacy: vi.fn(),
+    onEvidenceMode: () => {},
+    onBinding: (value) => received.push(value)
+  })
+  await sent.outcome
+  expect(received).toEqual([
+    {
+      ...binding,
+      terminalHandle: 'actual-terminal',
+      targetPtyId: 'pty',
+      runtimeEnvironmentId: null
+    }
+  ])
+})
+
 it('orders host Chat, a legacy composer command and another host Chat in one PTY', async () => {
   const response = Promise.withResolvers<unknown>()
   const started = Promise.withResolvers<void>()

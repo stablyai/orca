@@ -1,14 +1,14 @@
+import type { NativeChatPromptBinding } from '../../../../shared/native-chat/input/native-chat-prompt-observation'
 import { readRuntimeElapsedClock } from '../../hosts/runtime-elapsed-clock'
 import {
   terminalChatPromptSchedule,
   type TerminalChatPromptSchedule
 } from '../../../../shared/terminal/input/terminal-chat-prompt-budget'
-import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import { OrcaRuntimeWithTerminalChatReceiver } from './terminal-chat-receiver'
 import {
   assertLegacyAiVaultResumeCommandAllowed,
   hasLegacyAiVaultResumeCommand
 } from '../../../ai-vault/structured-sessions/structured-session-ownership'
-import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import type { TerminalChatInput } from './terminal-chat-input-ownership'
 import type { AgentPromptExpectedBinding } from './agent-prompt-write-options'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
@@ -35,36 +35,7 @@ import {
   type WriteSettlement
 } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithWriteTerminalAgentPrompt {
-  private async chatReceiverIsShell(binding: AgentPromptExpectedBinding): Promise<boolean> {
-    const controller = this.ptyController
-    if (!controller) {
-      return false
-    }
-    try {
-      if (await controller.confirmShellForeground?.(binding.ptyId)) {
-        return true
-      }
-      if (!controller.supportsForegroundObservation?.(binding.ptyId)) {
-        return false
-      }
-      const inspected = await controller.inspectProcess?.(binding.ptyId, {
-        foregroundOnly: true,
-        expectedIncarnationId: binding.processIncarnation
-      })
-      const observation = inspected?.foregroundObservation
-      return (
-        isTerminalForegroundObservation(observation) &&
-        observation.ptyId === binding.ptyId &&
-        observation.ptyIncarnationId === binding.processIncarnation &&
-        observation.verdict === 'observed' &&
-        observation.foregroundKind === 'shell'
-      )
-    } catch {
-      return false
-    }
-  }
-
+export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithTerminalChatReceiver {
   sendTerminalChatPrompt(
     handle: string,
     prompt: TerminalChatPrompt,
@@ -155,10 +126,12 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
     let bytesWritten = 0
     let effectPossible = false
     let weak = false
+    let chatPromptBinding: NativeChatPromptBinding | undefined
     const result = (accepted: boolean, writeSettlement?: WriteSettlement): RuntimeTerminalSend => ({
       handle,
       accepted,
       bytesWritten,
+      ...(chatPromptBinding ? { chatPromptBinding } : {}),
       writeSettlement: writeSettlement ?? writeRefused('provider_refused_write')
     })
     const assertWritable = (): void => {
@@ -260,6 +233,8 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
               throw refusal
             }
           }
+          assertWritable()
+          chatPromptBinding = this.captureChatPromptBinding(handle, binding)
           await write(frames[1])
           const joined = agentPromptSubmitJoinsPasteFrame(agent)
           const gate = joined

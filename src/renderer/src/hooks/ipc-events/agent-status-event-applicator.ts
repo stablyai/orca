@@ -213,7 +213,11 @@ export function createAgentStatusEventApplicator(args: {
       ? { ...statusPayloadWithProvenance, observation: data.observation }
       : statusPayloadWithProvenance
     // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
-    const statusPayloadWithProgramStatus = { ...statusPayloadWithObservation, programStatus }
+    const statusPayloadWithProgramStatus = {
+      ...statusPayloadWithObservation,
+      programStatus,
+      promptSubmissions: data.promptSubmissions
+    }
     if (
       existingStatus &&
       isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {

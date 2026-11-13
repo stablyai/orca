@@ -1,4 +1,5 @@
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { readNativeChatPromptDigest } from '../../../shared/native-chat/input/native-chat-prompt-observation'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
@@ -22,6 +23,7 @@ export type RemoteAgentStatusEnvelope = {
   hostTurnRevision?: unknown
   hasExplicitPrompt?: boolean
   promptInteractionKey?: string
+  promptSubmissionDigest?: unknown
   agentPresence?: unknown
   hookEventName?: string
   source?: unknown
@@ -49,6 +51,7 @@ export type RemoteAgentStatusEnvelope = {
 }
 
 export type RemoteEnvelopeFields = {
+  promptSubmissionDigest?: string
   hookEventName?: string
   source?: AgentHookSource
   providerPromptId?: string
@@ -65,6 +68,7 @@ export type RemoteEnvelopeFields = {
 }
 
 export function normalizeRemoteEnvelopeFields(envelope: {
+  promptSubmissionDigest?: unknown
   hookEventName?: string
   source?: unknown
   providerPromptId?: unknown
@@ -82,6 +86,10 @@ export function normalizeRemoteEnvelopeFields(envelope: {
 }): RemoteEnvelopeFields {
   const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
   return {
+    promptSubmissionDigest:
+      envelope.isReplay === true || (source !== 'claude' && source !== 'codex')
+        ? undefined
+        : readNativeChatPromptDigest(envelope.promptSubmissionDigest),
     hookEventName:
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()

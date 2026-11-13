@@ -63,6 +63,39 @@ describe('host-owned Chat input', () => {
     vi.useRealTimers()
   })
 
+  it.each([false, true])(
+    'returns the pre-effect binding after later writes (uncertain=%s)',
+    async (uncertain) => {
+      let incarnation = 'original-process'
+      const fixture = await createRuntime(() => {
+        incarnation = 'replacement-process'
+        return uncertain
+          ? {
+              outcome: 'unverifiable',
+              reason: 'transport_settlement_lost',
+              bytesHandedToTransport: true
+            }
+          : { outcome: 'accepted' }
+      })
+      vi.spyOn(fixture.runtime, 'getTerminalProcessIncarnation').mockImplementation(
+        () => incarnation
+      )
+      const response = await send(fixture.runtime, fixture.handle, 'body')
+      expect(response).toMatchObject({
+        ok: true,
+        result: {
+          send: {
+            chatPromptBinding: {
+              ptyId: 'pty-prompt',
+              processIncarnation: 'original-process'
+            }
+          }
+        }
+      })
+      expect(fixture.writes.length).toBeGreaterThan(0)
+    }
+  )
+
   it('blocks an owned resume only at a proven shell and preserves the identical agent prompt', async () => {
     installOwnership()
     const text = `codex resume ${PROVIDER_SESSION}`

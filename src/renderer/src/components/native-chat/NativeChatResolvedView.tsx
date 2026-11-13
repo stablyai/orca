@@ -33,7 +33,7 @@ import { useNativeChatInteractiveSend } from './session/terminal/send/use-native
 import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
-import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
+import { shouldPruneLaunchPrompt } from './drafts/native-chat-launch-prompt'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend
@@ -87,6 +87,7 @@ export function NativeChatResolvedView({
   const keybindings = useAppStore((s) => s.keybindings)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(terminalTabId)
   const session = useNativeChatRetainedSession({
+    targetPtyId,
     paneKey,
     agent,
     sessionId,
@@ -215,7 +216,8 @@ export function NativeChatResolvedView({
     pending,
     sessionAfterCommandBoundaries.messages,
     sendWorkingEpoch,
-    session.sessionId
+    session.sessionId,
+    session.sourceObservation?.context
   )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({

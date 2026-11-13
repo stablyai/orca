@@ -1,4 +1,5 @@
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatSourceContext } from '../../../../../../../shared/native-chat/input/native-chat-prompt-observation'
 import type {
   NativeChatMessage,
   NativeChatSession,
@@ -24,6 +25,7 @@ export type NativeChatLiveSession = NativeChatSession & {
   sourceObservation?: {
     messages: readonly NativeChatMessage[]
     generation: IncrementalChatAssembler['generation']
+    context?: NativeChatSourceContext
   }
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
@@ -51,6 +53,7 @@ export type NativeChatLiveSession = NativeChatSession & {
 }
 
 export type UseNativeChatLiveSessionArgs = {
+  targetPtyId?: string | null
   /** Composite `${tabId}:${leafId}` hook-entry key. */
   paneKey: string
   agent: AgentType

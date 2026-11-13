@@ -1,6 +1,7 @@
 import type { TerminalChatExpiry } from './terminal/input/terminal-chat-prompt-budget'
 import type { WriteSettlement } from './terminal/pty/lifecycle/pty-write-settlement'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import type { NativeChatPromptBinding } from './native-chat/input/native-chat-prompt-observation'
 
 export type TerminalChatPrompt = { agent: TuiAgent; text: string; expiry?: TerminalChatExpiry }
 
@@ -9,6 +10,7 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   chatPromptNotDispatched?: 'unsupported'
+  chatPromptBinding?: NativeChatPromptBinding
   refusedReason?: 'no-agent' | 'permission'
   prompt?: RuntimeTerminalPromptDelivery
   writeSettlement?: WriteSettlement

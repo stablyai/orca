@@ -7,6 +7,7 @@ import type { AgentStateHistoryEntry } from '../lifecycle/agent-state-history'
 import { isAgentTurnOutcome } from '../lifecycle/agent-turn-outcome'
 import type { OrchestrationFleetAttention } from '../../orchestration/fleet/orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
+import type { NativeChatPromptSubmission } from '../../native-chat/input/native-chat-prompt-observation'
 import type { AgentChildWorkView } from '../child-work/agent-status-child-work-view'
 import type { TerminalAgent } from '../identity/terminal-agent'
 import {
@@ -50,6 +51,7 @@ export type AgentStatusOrchestrationContext = {
 }
 
 export type AgentStatusEntry = {
+  promptSubmissions?: readonly NativeChatPromptSubmission[]
   /** Renderer-local status-feed confirmation for children; absent on hook rows. */
   subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState

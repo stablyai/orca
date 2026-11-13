@@ -24,6 +24,7 @@ import {
   mapTerminalChatExpiry,
   terminalChatPromptSchedule
 } from '../../../../../../../shared/terminal/input/terminal-chat-prompt-budget'
+import type { NativeChatPromptDispatch } from '../../../../../../../shared/native-chat/input/native-chat-prompt-observation'
 
 const clockUpper = (): number => Math.ceil(performance.now()) + 1
 const clockLower = (): number => Math.max(0, Math.floor(performance.now()) - 1)
@@ -35,7 +36,8 @@ export function sendNativeChatHostPrompt({
   worktreeId,
   prompt: initialPrompt,
   onLegacy,
-  onEvidenceMode
+  onEvidenceMode,
+  onBinding
 }: {
   ptyId: string
   paneKey: string
@@ -43,6 +45,7 @@ export function sendNativeChatHostPrompt({
   prompt: TerminalChatPrompt
   onLegacy: (scope: NativeChatPtyDispatchScope) => NativeChatSendHandle
   onEvidenceMode: (source: boolean) => void
+  onBinding?: (binding: NativeChatPromptDispatch) => void
 }): NativeChatSendHandle {
   const startedAt = clockLower()
   const bytes = getTerminalInputByteLength(initialPrompt.text)
@@ -63,7 +66,8 @@ export function sendNativeChatHostPrompt({
     prompt: TerminalChatPrompt
     onLegacy: typeof onLegacy
     onEvidenceMode: typeof onEvidenceMode
-  } | null = { prompt: initialPrompt, onLegacy, onEvidenceMode }
+    onBinding: typeof onBinding
+  } | null = { prompt: initialPrompt, onLegacy, onEvidenceMode, onBinding }
   let legacy: NativeChatSendHandle | null = null
   let dispatched = false
   let detached = false
@@ -178,6 +182,14 @@ export function sendNativeChatHostPrompt({
           : response.send.writeSettlement?.outcome !== 'refused'
             ? 'uncertain'
             : 'not-submitted'
+      if (!physicallyDone && response.send.chatPromptBinding) {
+        input?.onBinding?.({
+          ...response.send.chatPromptBinding,
+          terminalHandle: response.send.handle,
+          targetPtyId: ptyId,
+          runtimeEnvironmentId: owner?.target.environmentId ?? null
+        })
+      }
       finishDispatch(outcome)
     } catch (error) {
       const refusedBeforeWrite =

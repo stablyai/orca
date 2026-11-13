@@ -68,6 +68,7 @@ export type AgentLaunchConfigRegistryEntry = {
 }
 
 export type AgentStatusPayload = ParsedAgentStatusPayload & {
+  promptSubmissions?: AgentStatusEntry['promptSubmissions']
   subagentObservation?: AgentStatusEntry['subagentObservation']
   /** The host's child views for a structured session; see `AgentStatusEntry.children`. */
   children?: AgentStatusEntry['children']

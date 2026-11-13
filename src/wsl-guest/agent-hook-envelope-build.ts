@@ -37,6 +37,9 @@ export function buildRelayHookEnvelope(
     connectionId: null,
     hasExplicitPrompt: event.hasExplicitPrompt,
     promptInteractionKey: event.promptInteractionKey,
+    ...(options.isReplay !== true && event.promptSubmissionDigest
+      ? { promptSubmissionDigest: event.promptSubmissionDigest }
+      : {}),
     hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,
     grokPromptBoundary: event.grokPromptBoundary,

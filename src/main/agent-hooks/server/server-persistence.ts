@@ -66,6 +66,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         hostTurnRevision: _hostTurnRevision,
         // Full replies serve this runtime's run records only.
         acceptedReply: _acceptedReply,
+        promptSubmissionDigest: _promptSubmissionDigest,
+        promptSubmissions: _promptSubmissions,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

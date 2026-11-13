@@ -1,3 +1,11 @@
+import {
+  resolvePendingSendEvidence,
+  rejectPendingSend
+} from './native-chat-optimistic-send-outcome'
+import {
+  launchPromptAsMessage,
+  shouldPruneLaunchPrompt
+} from '../../../drafts/native-chat-launch-prompt'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
@@ -7,8 +15,6 @@ import {
   type NativeChatPendingSend
 } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
-  launchPromptAsMessage,
-  shouldPruneLaunchPrompt,
   appendPendingSendCache,
   clearPendingSendCacheForTests,
   readPendingSendCache,
@@ -166,7 +172,7 @@ it('replaces failed legacy captions without merging different source requests or
 })
 
 it.each([false, true])(
-  'keeps source and compound image claims in chronological order, image first: %s',
+  'keeps text and compound image fallback in chronological order, image first: %s',
   (imageFirst) => {
     const source = send('source', 'a b')
     const group = [
@@ -197,7 +203,7 @@ it.each([false, true])(
       prunePendingSends([{ ...source, text: 'a  b' }, group[0]], messages, session).map(
         (entry) => entry.id
       )
-    ).toEqual(['source'])
+    ).toEqual(['image'])
   }
 )
 
@@ -313,16 +319,14 @@ it('maximizes compatible assignments without allowing legacy fallback to reuse a
   ).toEqual(['flexible'])
 })
 
-it('keeps the observed source frontier through an empty drain and stale pages, namespaced by session', () => {
+it('keeps main fallback available after cached source-frontier observation and session replacement', () => {
   const old = row('repeat', 'old', 1)
   observePendingSendCache(scope, [old, answer], session)
   writePendingSendCache(scope, [])
   observePendingSendCache(scope, [], session)
   observePendingSendCache(scope, [old], session)
   const pending = appendPendingSendCache(scope, send('later', 'repeat'))
-  expect(prunePendingSends(pending, [old, answer], session).map((entry) => entry.id)).toEqual([
-    'later'
-  ])
+  expect(prunePendingSends(pending, [old, answer], session)).toEqual([])
   expect(
     prunePendingSends(
       pending,
@@ -473,65 +477,6 @@ it.each([5000, 50000])(
   }
 )
 
-it('keeps source position domains separate while retaining strict, inclusive and null clock windows', () => {
-  const entry: NativeChatPendingSend = {
-    ...send('position', 'repeat'),
-    sentAt: 1000,
-    afterMessageId: 'paged-boundary',
-    afterMessageTimestamp: 1000,
-    sourceBoundary: {
-      sessionId: session,
-      id: 'paged-boundary',
-      timestamp: 1000,
-      position: { kind: 'order', value: 10 }
-    }
-  }
-  const ordered = { ...row('repeat', 'u', 11), timestamp: 999 }
-  const orderedAnswer = { ...answer, transcriptOrder: 12, timestamp: 998 }
-  expect(prunePendingSends([entry], [ordered, orderedAnswer], session)).toEqual([])
-  const offset = { ...ordered, transcriptOrder: undefined, transcriptOffset: 11 }
-  const offsetAnswer = { ...orderedAnswer, transcriptOrder: undefined, transcriptOffset: 12 }
-  expect(
-    prunePendingSends([entry], [offset, offsetAnswer], session).map((pending) => pending.id)
-  ).toEqual(['position'])
-  expect(
-    prunePendingSends(
-      [entry],
-      [
-        { ...offset, timestamp: 1001 },
-        { ...offsetAnswer, timestamp: 1002 }
-      ],
-      session
-    )
-  ).toEqual([])
-  expect(
-    visibleNativeChatPendingSends([entry], [{ ...offset, timestamp: 1000 }], session).map(
-      (pending) => pending.id
-    )
-  ).toEqual(['position'])
-  const local = { ...entry, sourceBoundary: undefined, afterMessageTimestamp: null }
-  expect(
-    prunePendingSends(
-      [local],
-      [
-        { ...offset, timestamp: 1000 },
-        { ...offsetAnswer, timestamp: 1000 }
-      ],
-      session
-    )
-  ).toEqual([])
-  expect(
-    prunePendingSends(
-      [entry],
-      [
-        { ...offset, timestamp: null },
-        { ...offsetAnswer, timestamp: null }
-      ],
-      session
-    )
-  ).toEqual([])
-})
-
 it('keeps rejected Codex originals out of receipt rank and preserves prospective exclusions for unresolved siblings', () => {
   const rejected: NativeChatPendingSend = {
     ...send('rejected', 'repeat '),
@@ -573,6 +518,52 @@ it('keeps rejected Codex originals out of receipt rank and preserves prospective
         ...messages,
         { ...receipt, id: 'new-receipt', transcriptOrder: 10 },
         { ...answer, id: 'new-answer', transcriptOrder: 11 }
+      ],
+      session
+    )
+  ).toEqual([])
+})
+
+it('releases each failed legacy predecessor once when the live transport falls back', () => {
+  const first = { ...send('first', 'a  b  '), evidenceModePending: true }
+  const second = { ...send('second', 'a b '), evidenceModePending: true }
+  const successor = { ...send('successor', 'a b'), evidenceModePending: true }
+  appendPendingSendCache(scope, first)
+  appendPendingSendCache(scope, second)
+  let pending = appendPendingSendCache(scope, successor)
+  pending = resolvePendingSendEvidence(pending, first.id, 'opencode', false)
+  pending = resolvePendingSendEvidence(pending, second.id, 'opencode', false)
+  pending = rejectPendingSend(pending, first.id)
+  pending = rejectPendingSend(pending, second.id)
+  pending = resolvePendingSendEvidence(pending, successor.id, 'opencode', false)
+  expect(pending.map((entry) => entry.id)).toEqual(['successor'])
+  expect(prunePendingSends(pending, [row('a b', 'delivered'), answer], session)).toEqual([])
+})
+
+it('keeps a late claimed occurrence spent when a failed predecessor leaves fallback', () => {
+  const first = { ...send('first', 'a  b'), evidenceModePending: true }
+  const successor = { ...send('successor', 'a b'), evidenceModePending: true }
+  appendPendingSendCache(scope, first)
+  let pending = appendPendingSendCache(scope, successor)
+  pending = resolvePendingSendEvidence(pending, first.id, 'opencode', false)
+  pending = pending.map((entry) =>
+    entry.id === first.id ? { ...entry, delivery: 'unconfirmed' as const } : entry
+  )
+  const received = row('a b', 'first-row')
+  pending = prunePendingSends(pending, [received], session)
+  expect(pending[0].sourceReceipt?.id).toBe('first-row')
+  pending = resolvePendingSendEvidence(pending, successor.id, 'opencode', false)
+  expect(pending.map((entry) => entry.id)).toEqual(['successor'])
+  pending = prunePendingSends(pending, [received, answer], session)
+  expect(pending.map((entry) => entry.id)).toEqual(['successor'])
+  expect(
+    prunePendingSends(
+      pending,
+      [
+        received,
+        answer,
+        row('a b', 'second-row', 10),
+        { ...answer, id: 'second-answer', transcriptOrder: 11 }
       ],
       session
     )

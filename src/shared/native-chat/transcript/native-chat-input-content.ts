@@ -7,6 +7,8 @@ export type NativeChatInputContent = {
   provider: 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
   textDigest: string
   images: string[]
+  /** The owning decoder read a provider-retained input, rather than a display projection. */
+  retained?: true
 }
 
 export type NativeChatSourcePending = {

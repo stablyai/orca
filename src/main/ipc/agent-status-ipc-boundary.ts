@@ -1,4 +1,5 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { NativeChatPromptRootObservation } from '../../shared/native-chat/input/native-chat-prompt-observation'
 import {
   mintFleetAgentStatusEvidence,
   type FleetAgentStatusEvidence,
@@ -25,6 +26,7 @@ export type ObservedAgentStatusPaneIdentity =
       processIncarnation: string
       /** The orchestration dispatch that owned the pane then, not whichever owns it now. */
       dispatchId: string | null
+      rootBaseline?: NativeChatPromptRootObservation
     }
   /** Hydrated replay rows stay restoredUnconfirmed and cannot project live. */
   | { kind: 'unobserved' }

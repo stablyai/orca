@@ -1,4 +1,5 @@
 import { readHookAgentProcess } from '../../agent-status/process/agent-process-presence'
+import { nativeChatInputTextDigest } from '../../native-chat/transcript/native-chat-input-content'
 import { isInheritedHookStatus } from '../presence/agent-hook-presence-transition'
 import { readHookProcessAdmission } from '../presence/agent-hook-owner-presence'
 import { normalizeAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
@@ -6,6 +7,7 @@ import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-age
 import type { AgentHookSource } from '../transport/agent-hook-relay'
 import {
   canAcceptClaudeCompactCompletion,
+  readLocalClaudeCompactTrigger,
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from '../providers/claude-compact-completion'
@@ -124,20 +126,11 @@ export function normalizeHookPayload(
       : source === 'grok'
         ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
         : undefined
-  const compactTrigger =
-    source === 'claude' &&
-    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
-    (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
-      ? hookPayloadRecord.trigger
-      : undefined
-  // Reject malformed Claude compacts without suppressing other providers' normalizers.
-  if (
-    source === 'claude' &&
-    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
-    compactTrigger === undefined
-  ) {
+  const compact = readLocalClaudeCompactTrigger(source, eventName, hookPayloadRecord)
+  if (!compact) {
     return null
   }
+  const compactTrigger = compact.trigger
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
   const agentProcess = readHookAgentProcess(source, record.agentProcess)
   const admissionStatus =
@@ -286,6 +279,11 @@ export function normalizeHookPayload(
             dispatched.hasTranscriptPromptEvidence
           ),
     promptInteractionKey: dispatched.promptInteractionKey,
+    ...((source === 'claude' || source === 'codex') &&
+    eventName === 'UserPromptSubmit' &&
+    typeof hookPayloadRecord.prompt === 'string'
+      ? { promptSubmissionDigest: nativeChatInputTextDigest(hookPayloadRecord.prompt) }
+      : {}),
     hookEventName: typeof dispatched.eventName === 'string' ? dispatched.eventName : undefined,
     providerPromptId:
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,

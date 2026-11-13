@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { pendingSendsAsMessages } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
+import type { NativeChatSourceContext } from '../../../../../../../shared/native-chat/input/native-chat-prompt-observation'
 import type { NativeChatLaunchPrompt } from '../../../drafts/native-chat-launch-prompt'
 import type { useNativeChatRetainedSession } from '../read/use-native-chat-retained-session'
-import { launchPromptAsMessage } from './native-chat-pending'
+import { launchPromptAsMessage } from '../../../drafts/native-chat-launch-prompt'
 import {
   applyCommandMarkerBoundaries,
   type NativeChatCommandMarker
@@ -37,11 +38,13 @@ export function useNativeChatPendingProjection(
   pending: Parameters<typeof pendingSendsAsMessages>[0],
   messages: NonNullable<Parameters<typeof pendingSendsAsMessages>[1]>,
   sendWorkingEpoch: Parameters<typeof pendingSendsAsMessages>[2],
-  sessionId: ReturnType<typeof useNativeChatRetainedSession>['sessionId']
+  sessionId: ReturnType<typeof useNativeChatRetainedSession>['sessionId'],
+  sourceContext?: NativeChatSourceContext
 ) {
   const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, messages, sendWorkingEpoch, sessionId ?? ''),
-    [pending, messages, sendWorkingEpoch, sessionId]
+    () =>
+      pendingSendsAsMessages(pending, messages, sendWorkingEpoch, sessionId ?? '', sourceContext),
+    [pending, messages, sendWorkingEpoch, sessionId, sourceContext]
   )
   const messagesWithPending = useMemo(
     () => (pendingMessages.length === 0 ? messages : [...messages, ...pendingMessages]),

@@ -33,7 +33,11 @@ vi.mock('../../drafts/native-chat-launch-draft-send', () => ({
 }))
 vi.mock('../../telemetry/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
 vi.mock('@/store/index', () => ({
-  useAppStore: { getState: () => ({ tabsByWorktree: {}, clearNativeChatLaunchDraft: vi.fn() }) }
+  useAppStore: Object.assign(
+    (selector: (state: { agentStatusByPaneKey: object }) => unknown) =>
+      selector({ agentStatusByPaneKey: {} }),
+    { getState: () => ({ tabsByWorktree: {}, clearNativeChatLaunchDraft: vi.fn() }) }
+  )
 }))
 
 beforeEach(() => {
