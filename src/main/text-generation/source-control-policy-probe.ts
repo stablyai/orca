@@ -1,3 +1,4 @@
+import { providerSpawnAbsenceKnown } from '../provider-process/provider-child'
 import { abortSignalReason } from '../../shared/abort-signal-reason'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
@@ -88,7 +89,7 @@ export function runSourceControlPolicyProbe(input: {
   child.stdout?.on('data', stdout)
   child.stderr?.on('data', stderr)
   child.on('error', () => {
-    if (!child.pid) {
+    if (providerSpawnAbsenceKnown(child)) {
       terminal = true
     }
     fail(new Error('Text task configuration could not be read'))

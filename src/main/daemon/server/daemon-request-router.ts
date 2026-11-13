@@ -1,3 +1,5 @@
+import { canRetireDaemon, routeProviderRequest } from './daemon-provider-requests'
+import type { DaemonProviderProcesses } from './daemon-provider-processes'
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
@@ -19,6 +21,7 @@ import { SessionNotFoundError } from '../protocol/daemon-errors'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
 
 type DaemonRequestRouterOptions = {
+  providerProcesses?: DaemonProviderProcesses
   host: TerminalHost
   connections: DaemonClientConnections
   lifecycle: DaemonServerLifecycle
@@ -42,6 +45,10 @@ export class DaemonRequestRouter {
   async route(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.options.connections.get(clientId)
     switch (request.type) {
+      case 'spawnProvider':
+      case 'signalProvider':
+      case 'queryProvider':
+        return routeProviderRequest(request, client, this.options)
       case 'startHistorySeedTransfer': {
         if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
           throw new Error('Daemon client connection is incomplete; reconnect')
@@ -226,13 +233,7 @@ export class DaemonRequestRouter {
 
   private shutdownIfIdle(clientId: string, requestId: string): { retiring: boolean } {
     const client = this.options.connections.get(clientId)
-    const retiring =
-      client !== undefined &&
-      client.streamSocket !== null &&
-      this.options.connections.size === 1 &&
-      this.options.admission.inFlight === 0 &&
-      this.options.host.listSessions().length === 0 &&
-      this.options.connections.hasOnlyTransportsFor(client)
+    const retiring = canRetireDaemon(this.options, client)
     if (retiring) {
       this.options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)
     }

@@ -238,7 +238,7 @@ function getCopy(kind: DaemonActionKind, t: Translate = translate): DaemonAction
         <>
           {t(
             'auto.components.shared.useDaemonActions.01d6b7c64e',
-            'Open terminals and agents will restart. Terminals on remote hosts are not affected.'
+            'Terminals and agents using this service will close. Remote hosts are not affected.'
           )}
         </>
       ),

@@ -1,4 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
+import type { EventEmitter } from 'node:events'
+import type { ProviderChild } from '../../../provider-process/provider-child'
+import { spawnProviderProcess } from '../../../provider-process/provider-process-spawn'
+import { spawnCodexAppServerProcess } from '../../app-server/codex-app-server-process-tree-kill'
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { buildWslCodexAppServerArgs } from '../../../codex-cli/wsl-codex-command'
@@ -17,8 +21,15 @@ const BACKFILL_RECOVERY_KILL_SITE = 'codex-state-db-backfill-recovery'
 // Keep owner-death and explicit shutdown on the same stdin-drain policy.
 const BACKFILL_RECOVERY_CLOSE_REQUEST: ProviderCloseRequest = 'stdin-end'
 
+export type CodexBackfillChild = Pick<
+  ChildProcess,
+  'pid' | 'kill' | 'stdin' | 'exitCode' | 'signalCode'
+> &
+  EventEmitter &
+  Pick<ProviderChild, 'ready' | 'signalRoot' | 'spawnAbsenceKnown' | 'rootAbsent'>
+
 export type CodexBackfillRecoveryProcess = {
-  child: ChildProcess
+  child: CodexBackfillChild
   supervised: boolean
 }
 
@@ -56,13 +67,22 @@ export function spawnCodexBackfillRecoveryProcess(
     process.platform,
     { lifetime: 'session', closeRequest: BACKFILL_RECOVERY_CLOSE_REQUEST }
   )
-  const child = spawnProcess(spawnSpec.program, spawnSpec.args, {
-    cwd: codexHomePath,
-    stdio: ['pipe', 'ignore', 'ignore', ...spawnSpec.groupReportStdio],
-    windowsHide: true,
-    env: spawnSpec.env,
-    ...(spawnSpec.supervised ? { detached: true } : {})
-  })
+  const child =
+    spawnProcess === spawnCodexAppServerProcess
+      ? spawnProviderProcess(spawnSpec)
+      : spawnProcess(spawnSpec.program, spawnSpec.args, {
+          cwd: codexHomePath,
+          stdio: ['pipe', 'ignore', 'ignore', ...spawnSpec.groupReportStdio],
+          windowsHide: true,
+          env: spawnSpec.env,
+          ...(spawnSpec.supervised ? { detached: true } : {})
+        })
+  if ('stdout' in child) {
+    child.stdout?.resume()
+  }
+  if ('stderr' in child) {
+    child.stderr?.resume()
+  }
   guardSupervisedProviderGroup(child, {
     site: BACKFILL_RECOVERY_KILL_SITE,
     supervised: spawnSpec.supervised
@@ -71,7 +91,7 @@ export function spawnCodexBackfillRecoveryProcess(
 }
 
 export async function stopCodexBackfillRecoveryProcess(
-  child: ChildProcess,
+  child: CodexBackfillChild,
   supervised: boolean
 ): Promise<void> {
   if (supervised) {

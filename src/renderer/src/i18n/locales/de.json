@@ -7395,7 +7395,7 @@
         "useDaemonActions": {
           "01af244097": "Abbrechen",
           "1bbea41a77": "Alle Terminalsitzungen beenden?",
-          "01d6b7c64e": "Offene Terminals und Agenten werden neu gestartet. Terminals auf Remote-Hosts sind nicht betroffen.",
+          "01d6b7c64e": "Offene Terminals werden neu gestartet; laufende Agenten werden beendet. Remote-Hosts sind nicht betroffen.",
           "922548bc66": "Terminaldienst neu starten?",
           "d762b41f41": "Neustart fehlgeschlagen.",
           "b5954e12d3": "Neustart fehlgeschlagen — Protokolle prüfen.",
@@ -7419,7 +7419,7 @@
           "stepAllow": "Orca unter „Files and Folders“ zulassen",
           "openSystemSettings": "System Settings öffnen",
           "stepRestart": "Orcas Terminaldienst neu starten",
-          "restartConsequence": "Offene Terminals und Agenten werden neu gestartet.",
+          "restartConsequence": "Offene Terminals werden neu gestartet; laufende Agenten werden beendet.",
           "restarting": "Wird neu gestartet…",
           "restart": "Neu starten",
           "restartFailed": "Neustart fehlgeschlagen. Unter Einstellungen → Terminal → Sitzungen verwalten erneut versuchen.",

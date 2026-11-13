@@ -1,3 +1,5 @@
+import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
+import { getProviderProcessHostClient } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { app } from 'electron'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isLocalExecutionHost } from '../../../shared/execution-host'
@@ -226,6 +228,12 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
 export function bindTerminalRuntimeStartupServices(
   services: Promise<WindowsDesktopStartupServices>
 ): void {
+  if (process.platform === 'darwin' && !state.isServeMode) {
+    installProviderProcessHost(async () => {
+      await state.localPtyProviderStartupReady
+      return getProviderProcessHostClient()
+    })
+  }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
   state.localPtyStartupReady = services.then((value) => value.localPtyReady)
   state.localPtyProviderStartupReady = services.then((value) => value.localPtyProviderReady)

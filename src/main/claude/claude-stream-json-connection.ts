@@ -1,3 +1,5 @@
+import type { ClaudeChildExitVerdict } from './child-process/claude-child-exit-proof-ladder'
+export type { ClaudeChildExitVerdict } from './child-process/claude-child-exit-proof-ladder'
 import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { claudeStartupAnswerObservation } from './child-process/claude-startup-answer-observation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
@@ -13,7 +15,6 @@ import {
 } from './sdk-transport/claude-agent-sdk-control-requests'
 import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
 import { createClaudeCodeProcessSpawn } from './child-process/claude-agent-sdk-process-spawn'
 import {
@@ -72,14 +73,6 @@ export type ClaudeStreamJsonConnectionHandlers = {
   onFault?: (error: Error) => void
   /** Report observed root exit once; expected stays true even after an unproven close attempt. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
-}
-
-/** Root proof comes from our child handle or processless settlement; tree proof is independently verified. */
-export type ClaudeChildExitVerdict = {
-  root: DescendantTreeVerdict
-  tree: DescendantTreeVerdict
-  processless?: boolean
-  killDelivered?: true
 }
 
 export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
@@ -304,6 +297,10 @@ export async function openClaudeStreamJsonConnection(
     return closePromise
   }
 
+  await child.ready?.catch(async (error: unknown) => {
+    await close()
+    throw error
+  })
   const controls = createClaudeControlSurface(session)
   return {
     ...controls,

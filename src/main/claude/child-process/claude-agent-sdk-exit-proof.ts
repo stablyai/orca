@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process'
+import { signalProviderRoot, type ProviderChild } from '../../provider-process/provider-child'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
@@ -23,7 +23,7 @@ const TREE_VERDICT_TRUST: Record<DescendantTreeVerdict, number> = {
   exited: 2
 }
 
-type ReapableChild = Pick<ChildProcess, 'pid' | 'kill'>
+type ReapableChild = Pick<ProviderChild, 'pid' | 'kill' | 'signalRoot' | 'ready'>
 
 // A missing or exited root may have reparented descendants; its walk cannot prove an empty tree.
 function admissibleTree(
@@ -210,7 +210,7 @@ export function createClaudeChildTreeReaper(
     const terminated = await terminateTree(rootPid).catch(() => false)
     killDelivered ||= terminated
     try {
-      terminateClaudeRoot({ child, exited })
+      await terminateClaudeRoot({ child, exited })
     } catch {
       // Exact-root cleanup cannot retract successful tree termination.
     }
@@ -220,17 +220,17 @@ export function createClaudeChildTreeReaper(
 
   async function judgeTree(): Promise<DescendantTreeVerdict> {
     let writerSnapshot: DescendantSnapshot | null = null
-    const killRoot = (): void => {
+    const killRoot = async (): Promise<void> => {
       if (!exited()) {
         killDelivered = killProviderWriter(child, writerSnapshot, deps) || killDelivered
         if (deps.supervised) {
-          terminateClaudeRoot({ child, exited })
+          await terminateClaudeRoot({ child, exited })
         }
       }
     }
     const rootPid = child.pid
     if (!rootPid) {
-      return 'exited'
+      return exited() ? 'exited' : 'unverifiable'
     }
     if (!exited()) {
       forcedReapAttempted = true
@@ -240,16 +240,19 @@ export function createClaudeChildTreeReaper(
     }
     await captureOnce()
     if (deps.supervised && !exited()) {
-      child.kill('SIGSTOP')
+      const stopped = await signalProviderRoot(child, 'SIGSTOP')
+      if (child.signalRoot && !stopped) {
+        return 'unverifiable'
+      }
       writerSnapshot = await capture(rootPid).catch(() => null)
     }
     if (!snapshot) {
-      killRoot()
+      await killRoot()
       return 'unverifiable'
     }
     if (snapshot.descendants.length === 0) {
       // The live-root snapshot had no descendants to reverify.
-      killRoot()
+      await killRoot()
       return 'exited'
     }
     // Stopping the root leaves killed children as zombies on macOS; kill it so init can reap them.
@@ -261,7 +264,7 @@ export function createClaudeChildTreeReaper(
       : terminateDescendantSnapshotWithVerdict(snapshot, {
           requireIdentityBeforeSignal: true
         })
-    killRoot()
+    await killRoot()
     return verdictPromise
   }
 

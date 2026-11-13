@@ -38,7 +38,7 @@ export type PiRpcConnection = Pick<
   | 'spawnAbsence'
   | 'lastCloseResult'
   | 'onExit'
->
+> & { readonly spawned?: Promise<void> }
 export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
   openConnection?: (
     launch: ProviderProcessLaunch,

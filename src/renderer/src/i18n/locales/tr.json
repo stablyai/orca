@@ -7372,7 +7372,7 @@
         "useDaemonActions": {
           "01af244097": "İptal",
           "1bbea41a77": "Tüm terminal oturumları sonlandırılsın mı?",
-          "01d6b7c64e": "Açık terminaller ve ajanlar yeniden başlatılacak. Uzak ana makinelerdeki terminaller etkilenmez.",
+          "01d6b7c64e": "Açık terminaller yeniden başlar; çalışan ajanlar durur. Uzak ana makineler etkilenmez.",
           "922548bc66": "Terminal hizmeti yeniden başlatılsın mı?",
           "d762b41f41": "Yeniden başlatma başarısız oldu.",
           "b5954e12d3": "Yeniden başlatma başarısız oldu, günlükleri kontrol edin.",
@@ -7396,7 +7396,7 @@
           "stepAllow": "Dosyalar ve Klasörler bölümünde Orca'ya izin verin",
           "openSystemSettings": "Sistem Ayarlarını Aç",
           "stepRestart": "Orca'nın terminal hizmetini yeniden başlatın",
-          "restartConsequence": "Açık terminaller ve ajanlar yeniden başlatılacak.",
+          "restartConsequence": "Açık terminaller yeniden başlar; çalışan ajanlar durur.",
           "restarting": "Yeniden başlatılıyor…",
           "restart": "Yeniden Başlat",
           "restartFailed": "Yeniden başlatma başarısız. Ayarlar → Terminal → Oturumları Yönet bölümünden tekrar deneyin.",

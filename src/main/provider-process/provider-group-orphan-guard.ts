@@ -34,7 +34,7 @@ let warnedMissingChannel = false
 type GuardedChild = {
   readonly pid?: number
   readonly connected: boolean
-  once(event: 'exit' | 'disconnect', listener: () => void): unknown
+  once(event: 'spawn' | 'exit' | 'disconnect' | 'providerAbsent', listener: () => void): unknown
   once(event: 'message', listener: (message: unknown) => void): unknown
 }
 
@@ -83,8 +83,12 @@ export function guardSupervisedProviderGroup(
   deps: ProviderGroupGuardDeps
 ): boolean {
   const supervisorPid = child.pid
-  if (!supervisorPid || !deps.supervised) {
+  if (!deps.supervised) {
     return false
+  }
+  if (!supervisorPid) {
+    child.once('spawn', () => guardSupervisedProviderGroup(child, deps))
+    return true
   }
   if (!hasReportChannel(child)) {
     // Warn once when an adapter drops the report channel instead of silently losing the guard.
@@ -121,14 +125,21 @@ export function guardSupervisedProviderGroup(
             resolve()
           }
         })
-  child.once('exit', () => {
+  let swept = false
+  const sweep = (): void => {
+    if (swept) {
+      return
+    }
+    swept = true
     proof.abort()
     // Exit can be observed before the report is delivered.
     void untilChannelClosed()
       .then(() => identity)
       .then((proven) => (proven ? sweepOrphanedProviderGroup(proven, deps) : ('unproven' as const)))
       .then(deps.onSwept, () => deps.onSwept?.('refused'))
-  })
+  }
+  child.once('exit', sweep)
+  child.once('providerAbsent', sweep)
   return true
 }
 

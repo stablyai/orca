@@ -1,3 +1,5 @@
+import type { PiRpcConnection } from './rpc-session'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
@@ -62,5 +64,14 @@ export async function openPiStart(
       error,
       session?.connection.rootVerdict === 'exited' && !session.requestedClose
     )
+  }
+}
+
+export async function waitForPiSpawn(
+  connection: PiRpcConnection,
+  signal: AbortSignal
+): Promise<void> {
+  if (connection.spawned) {
+    await waitForPromiseWithSignal(connection.spawned, signal)
   }
 }

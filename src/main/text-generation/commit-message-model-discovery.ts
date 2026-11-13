@@ -1,3 +1,4 @@
+import { providerSpawnAbsenceKnown } from '../provider-process/provider-child'
 import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
@@ -197,7 +198,7 @@ async function discoverModelsOnce(
           : onData(chunk, (text) => (stdout += text))
       const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
       const onError = (error: Error): void => {
-        if (!child.pid) {
+        if (providerSpawnAbsenceKnown(child)) {
           markProcessClosed()
         }
         finish({

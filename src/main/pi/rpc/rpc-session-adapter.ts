@@ -18,7 +18,7 @@ import type { PiRpcResolvedLaunch } from './launch/rpc-launch-resolution'
 import { PiRpcSession, type PiRpcSessionDeps, type PiRpcConnection } from './rpc-session'
 import { dispatchPiRpcMessage } from './rpc-message-dispatch'
 import { piAcquireFailure } from './rpc-startup-outcome'
-import { openPiStart, watchPiStartExit } from './rpc-startup-open'
+import { openPiStart, watchPiStartExit, waitForPiSpawn } from './rpc-startup-open'
 import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { applyPiRpcSessionOption } from './options/rpc-options'
 import { supportsSupervisedProviderChildLocation } from '../../provider-process/supervised-provider-child-location'
@@ -86,6 +86,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       this.sessions.set(id, session)
       watchPiStartExit(session, input, this.endings)
       this.starts.track(attempt, session.connection)
+      await waitForPiSpawn(session.connection, attempt.signal)
       const spawned = providerSpawnedProcessIdentity(
         input,
         'Pi RPC',

@@ -1,3 +1,4 @@
+import type { DescendantTreeVerdict } from '../../pty/process-retirement/pty-descendant-exit-verification'
 import type { ManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import type {
@@ -38,4 +39,12 @@ export async function proveClaudeChildExitWithReaper(
   createTree: () => ClaudeChildTreeReaper
 ): Promise<boolean> {
   return claudeChildCloseProven(await input.managed.close(input.tree ?? createTree()))
+}
+
+/** Root proof comes from our child handle or processless settlement; tree proof is independently verified. */
+export type ClaudeChildExitVerdict = {
+  root: DescendantTreeVerdict
+  tree: DescendantTreeVerdict
+  processless?: boolean
+  killDelivered?: true
 }

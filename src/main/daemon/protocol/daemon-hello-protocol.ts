@@ -16,6 +16,7 @@ export type DaemonEndpointIdentity = {
   entryPath?: string
   appVersion?: string
   spawnerExecPath?: string
+  providerSpawn?: true
 }
 
 export type HelloResponse = {

@@ -60,7 +60,11 @@ function buildMacDaemonLaunchJob(
   bundle: MacDaemonBundle,
   label: string
 ): Record<string, unknown> {
-  const env: NodeJS.ProcessEnv = { ...process.env, ORCA_USER_DATA_PATH: options.userDataPath }
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ORCA_USER_DATA_PATH: options.userDataPath,
+    ORCA_PROVIDER_HOST: '1'
+  }
   // Plain Node does not use Electron’s Node-mode switch or inherited IPC descriptors.
   delete env.ELECTRON_RUN_AS_NODE
   delete env.NODE_CHANNEL_FD

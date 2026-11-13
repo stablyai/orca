@@ -1,4 +1,5 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { ProviderChild } from './provider-child'
+import { spawnProviderProcess } from './provider-process-spawn'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
@@ -41,6 +42,7 @@ type ManagedProviderProcessOptions = {
   /** Defaults to the root-only policy; only a provider with its own reaper overrides it. */
   policy?: (supervised: boolean) => ProviderProcessClosePolicy
   spawnImpl?: PipedProcessSpawner
+  allowHost?: boolean
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to accepting root exit or delivered writer termination without descendant proof. */
@@ -55,7 +57,7 @@ type ManagedProviderProcessOptions = {
 }
 
 export type ManagedProviderProcess = {
-  child: ChildProcessWithoutNullStreams
+  child: ProviderChild
   supervised: boolean
   /** The spawn failed before a process existed: absence is proven, but no exit was observed. */
   readonly processless: boolean
@@ -112,17 +114,11 @@ export function spawnManagedProviderProcess(
       `Supervised provider graceful exit must wait at least ${PROVIDER_SUPERVISOR_MAX_STOP_MS} ms; received ${policy.gracefulExitMs} ms`
     )
   }
-  const child = (options.spawnImpl ?? spawnProcess)({
-    program: spec.program,
-    args: spec.args,
-    cwd: spec.cwd,
-    env: spec.env,
-    detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
-  })
+  const child = spawnProviderProcess(spec, options.spawnImpl ?? spawnProcess, options.allowHost)
   guardSupervisedProviderGroup(child, { site: options.site, supervised: spec.supervised })
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
+  let realExitObserved = false
   let spawnFailed = false
   let spawnError: unknown = null
   let lastCloseResult: ProviderProcessCloseResult | null = null
@@ -170,9 +166,13 @@ export function spawnManagedProviderProcess(
     }
     listeners.clear()
   }
-  child.on('exit', (code, signal) => observeExit({ code, signal, processless: false }))
+  child.on('exit', (code, signal) => {
+    realExitObserved = true
+    observeExit({ code, signal, processless: false })
+  })
+  child.on('providerAbsent', () => observeExit({ code: null, signal: null, processless: false }))
   child.on('error', (error) => {
-    spawnFailed ||= child.pid === undefined
+    spawnFailed ||= child.spawnAbsenceKnown ?? child.pid === undefined
     spawnError ??= error
   })
   child.on('close', (code, signal) => {
@@ -264,7 +264,7 @@ export function spawnManagedProviderProcess(
       return rootVerdict()
     },
     get rootExitObserved() {
-      return observed !== null && !observed.processless
+      return realExitObserved
     },
     get executableMissing() {
       return spawnAbsence() === 'executable'

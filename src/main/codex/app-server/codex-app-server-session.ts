@@ -30,6 +30,7 @@ export type CodexAppServerInvocation = {
   experimentalApi?: boolean
   /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
   treeKillOnFinish?: boolean
+  allowHost?: boolean
 }
 
 /** Missing app-server subcommand or RPC method; only this class marks capability caches unsupported. */
@@ -101,6 +102,7 @@ export async function runCodexAppServerSession<T>(
     {
       site: CODEX_APP_SERVER_KILL_SITE,
       inheritedEnv: pairedEnv,
+      allowHost: invocation.allowHost ?? spawnImpl === spawnCodexAppServerProcess,
       spawnImpl: (spec) =>
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the managed spec's first three stdio slots are 'pipe', so stdin, stdout and stderr exist.
         spawnImpl(spec.program, [...(spec.args ?? [])], {

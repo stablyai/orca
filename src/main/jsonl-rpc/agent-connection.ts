@@ -1,3 +1,4 @@
+import { awaitProviderChildSpawn } from '../provider-process/provider-child'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -149,6 +150,10 @@ export class JsonlRpcAgentConnection {
         )
       }
     })
+  }
+
+  get spawned(): Promise<void> {
+    return awaitProviderChildSpawn(this.managed.child)
   }
 
   get pid(): number | undefined {

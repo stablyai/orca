@@ -8059,7 +8059,7 @@
         "useDaemonActions": {
           "01af244097": "Cancel",
           "1bbea41a77": "Kill all terminal sessions?",
-          "01d6b7c64e": "Open terminals and agents will restart. Terminals on remote hosts are not affected.",
+          "01d6b7c64e": "Open terminals restart; running agents stop. Remote hosts are not affected.",
           "922548bc66": "Restart the terminal service?",
           "d762b41f41": "Restart failed.",
           "b5954e12d3": "Restart failed — check logs.",
@@ -8083,7 +8083,7 @@
           "stepAllow": "Allow Orca under Files and Folders",
           "openSystemSettings": "Open System Settings",
           "stepRestart": "Restart Orca’s terminal service",
-          "restartConsequence": "Open terminals and agents will restart.",
+          "restartConsequence": "Open terminals restart; running agents stop.",
           "restarting": "Restarting…",
           "restart": "Restart",
           "restartFailed": "Restart failed. Try again from Settings → Terminal → Manage Sessions.",

@@ -12,16 +12,24 @@ import {
 } from '../framing/daemon-stream-ingest-turn-bound'
 import type { DaemonEvent } from '../../protocol/daemon-stream-events'
 import type { RpcResponse } from '../../protocol/daemon-rpc-contract'
+import type { HostedProviderExitEvent } from '../../protocol/daemon-provider-process-protocol'
 
 export function attachControlResponseReader(
   socket: Socket,
   onResponse: (response: RpcResponse) => void,
-  remainder: Buffer = Buffer.alloc(0)
+  remainder: Buffer = Buffer.alloc(0),
+  onProviderEvent?: (event: HostedProviderExitEvent) => void
 ): () => void {
   // Preserve multibyte UTF-8 sequences split across socket chunks.
   const decoder = new StringDecoder('utf8')
   const parser = createNdjsonParser(
-    (msg) => onResponse(msg as RpcResponse),
+    (msg) => {
+      if (msg && typeof msg === 'object' && 'type' in msg && msg.type === 'providerExit') {
+        onProviderEvent?.(msg as HostedProviderExitEvent)
+      } else {
+        onResponse(msg as RpcResponse)
+      }
+    },
     () => {}
   )
 

@@ -22,6 +22,12 @@ type DaemonServerLifecycleOptions = {
   onShutdownRequested: () => void
 }
 
+export const daemonLifecycleClock: DaemonServerLifecycleOptions['clock'] = {
+  setTimeout: (callback, delayMs) => setTimeout(callback, delayMs).unref(),
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  now: () => Date.now()
+}
+
 export class DaemonServerLifecycle {
   private static readonly SHUTDOWN_REPLY_FLUSH_TIMEOUT_MS = 1_000
   private server: Server | null = null

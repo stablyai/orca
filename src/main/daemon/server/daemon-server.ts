@@ -1,3 +1,4 @@
+import { DaemonProviderProcesses } from './daemon-provider-processes'
 import { randomUUID } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { setImmediate as waitForImmediate } from 'node:timers/promises'
@@ -11,11 +12,11 @@ import { DaemonEndpointLifecycle } from '../endpoint/publication/daemon-endpoint
 import { createNoopDaemonFileLog, type DaemonFileLog } from '../observability/daemon-file-log'
 import { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import { DaemonRequestRouter } from './daemon-request-router'
-import { DaemonServerLifecycle } from './daemon-server-lifecycle'
+import { DaemonServerLifecycle, daemonLifecycleClock } from './daemon-server-lifecycle'
 import type { DaemonServerOptions } from './daemon-server-options'
 import { DaemonSessionAttachments } from './daemon-session-attachments'
 import { DaemonSessionBackgroundRouting } from './daemon-session-background-routing'
-import { startDaemonStreamBacklogProbe } from '../transport/stream/daemon-stream-backlog-probe'
+import { startDaemonClientBacklogProbe } from '../transport/stream/daemon-stream-backlog-probe'
 import { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { checkPtySpawnHealth } from '../pty-subprocess/pty-subprocess'
@@ -47,6 +48,7 @@ export class DaemonServer {
   private readonly endpoint: DaemonEndpointLifecycle
   private readonly lifecycle: DaemonServerLifecycle
   private readonly admission: DaemonTerminalAdmission
+  private readonly providerProcesses: DaemonProviderProcesses
   private readonly requestRouter: DaemonRequestRouter
   private stopStreamBacklogProbe: () => void = () => {}
   private readonly terminalPolicy: HostTerminalPolicy
@@ -116,12 +118,16 @@ export class DaemonServer {
     this.terminalPolicyNonce = launchNonce ?? randomUUID()
     const token = randomUUID()
 
+    this.providerProcesses = new DaemonProviderProcesses(options.providerSpawn === true, () =>
+      this.lifecycle.reevaluateIdleShutdown()
+    )
     this.connections = new DaemonClientConnections({
       token,
       protocolVersion,
       identity: {
         launchNonce,
         startedAtMs,
+        ...(this.providerProcesses.enabled ? { providerSpawn: true } : {}),
         entryPath: options.entryPath ?? null,
         appVersion: options.appVersion ?? null,
         spawnerExecPath: options.spawnerExecPath ?? null
@@ -173,16 +179,11 @@ export class DaemonServer {
       isServing: () => this.lifecycle.isAcceptingWork(),
       onOwnershipLost: () => this.lifecycle.onEndpointOwnershipLost()
     })
-    const lifecycleClock = options.initialAdoptionTestConfig?.clock ?? {
-      setTimeout: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs).unref(),
-      clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-      now: () => Date.now()
-    }
     this.lifecycle = new DaemonServerLifecycle({
       protocolVersion,
       initialAdoptionTimeoutMs:
         options.initialAdoptionTestConfig?.timeoutMs ?? DaemonServer.INITIAL_ADOPTION_TIMEOUT_MS,
-      clock: lifecycleClock,
+      clock: options.initialAdoptionTestConfig?.clock ?? daemonLifecycleClock,
       endpoint: this.endpoint,
       log: this.log,
       isIdle: () => this.isIdle(),
@@ -206,6 +207,7 @@ export class DaemonServer {
       reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown()
     })
     this.requestRouter = new DaemonRequestRouter({
+      providerProcesses: this.providerProcesses,
       host: this.host,
       connections: this.connections,
       lifecycle: this.lifecycle,
@@ -223,14 +225,11 @@ export class DaemonServer {
       ptySpawnHealthCheck: options.ptySpawnHealthCheck ?? checkPtySpawnHealth,
       log: this.log
     })
-    this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
-      clients: Array.from(this.connections.values(), (client) => ({
-        clientId: client.clientId,
-        socketBufferedBytes: client.streamSocket?.writableLength ?? 0,
-        batcherQueuedChars: this.streamDataBatcher.queuedCharsForClient(client.clientId)
-      })),
-      backgroundedSessionIdSuffixes: this.transientFactRelay.backgroundedSessionIdSuffixes()
-    }))
+    this.stopStreamBacklogProbe = startDaemonClientBacklogProbe(
+      this.connections,
+      this.streamDataBatcher,
+      this.transientFactRelay
+    )
   }
 
   async start(): Promise<void> {
@@ -253,7 +252,11 @@ export class DaemonServer {
   }
 
   private isIdle(): boolean {
-    if (this.admission.inFlight > 0 || this.host.hasLiveSessions()) {
+    if (
+      this.providerProcesses.hasLive ||
+      this.admission.inFlight > 0 ||
+      this.host.hasLiveSessions()
+    ) {
       return false
     }
     if (this.endpoint.lost) {
@@ -268,13 +271,14 @@ export class DaemonServer {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
-    try {
-      await this.host.dispose()
-    } catch (error) {
-      this.log.log('shutdown-dispose-failed', {
-        error: error instanceof Error ? error.message : String(error)
+    await Promise.all([
+      this.providerProcesses.dispose(),
+      this.host.dispose().catch((error: unknown) => {
+        this.log.log('shutdown-dispose-failed', {
+          error: error instanceof Error ? error.message : String(error)
+        })
       })
-    }
+    ])
     this.streamDataBatcher.clear()
     this.historySeedTransfers.dispose()
     // Clearing earlier could make a crash during PTY teardown look like orderly shutdown.

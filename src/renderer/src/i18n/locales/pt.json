@@ -19285,7 +19285,7 @@
         "useDaemonActions": {
           "01af244097": "Cancelar",
           "1bbea41a77": "Encerrar todas as sessões de terminal?",
-          "01d6b7c64e": "Encerra todos os painéis de terminal em execução e reinicia o processo do daemon. Os painéis mostram \"Processo encerrado\" e podem ser reabertos imediatamente. Sessões de protocolo legado de uma versão anterior do app são preservadas. Isso não pode ser desfeito.",
+          "01d6b7c64e": "Os terminais abertos reiniciam; os agentes em execução param. Os hosts remotos não são afetados.",
           "922548bc66": "Reiniciar o daemon do terminal?",
           "d762b41f41": "Falha ao reiniciar.",
           "b5954e12d3": "Falha ao reiniciar — verifique os logs.",
@@ -19309,7 +19309,7 @@
           "stepAllow": "Permita o Orca em Arquivos e Pastas",
           "openSystemSettings": "Abrir Ajustes do Sistema",
           "stepRestart": "Reinicie o serviço de terminal do Orca",
-          "restartConsequence": "Os terminais e agentes abertos serão reiniciados.",
+          "restartConsequence": "Os terminais abertos reiniciam; os agentes em execução param.",
           "restarting": "Reiniciando…",
           "restart": "Reiniciar",
           "restartFailed": "Falha ao reiniciar. Tente novamente em Configurações → Terminal → Gerenciar sessões.",
