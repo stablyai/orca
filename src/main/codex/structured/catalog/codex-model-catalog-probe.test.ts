@@ -340,6 +340,7 @@ it.each([
   }
 )
 
+// A real child must complete startup and supervised shutdown within this wall-clock budget.
 it('settles a failed inventory and pending sign-in classification when the real transport closes', async () => {
   const server = String.raw`
     const readline = require('node:readline')
