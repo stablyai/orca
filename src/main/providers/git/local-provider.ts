@@ -2,7 +2,7 @@ import { createBranch } from '../../git/worktrees/checkout/create-branch'
 import { applyCommit, recoverSequencer } from '../../git/worktrees/checkout/commit-actions'
 import { gitSyncForkDefaultBranch } from '../../git/remotes/fork-sync'
 import type { GitRuntimeOptions } from '../../git/command-runner/git-runtime-options'
-import { checkIgnoredPaths } from '../../git/source-control/check-ignored-paths'
+import { checkIgnoredPaths } from '../../git/source-control/ignores/check-ignored-paths'
 import { checkoutBranch, listLocalBranches } from '../../git/worktrees/checkout/checkout'
 import { getHistory, getHistoryRefs } from '../../git/source-control/history'
 import { gitFastForward, gitFetch, gitPull, gitPush } from '../../git/remotes/remote'
@@ -15,8 +15,11 @@ import {
   abortMerge,
   abortRebase,
   detectConflictOperation
-} from '../../git/source-control/git-conflict-operation'
-import { bulkDiscardChanges, discardChanges } from '../../git/source-control/discard-changes'
+} from '../../git/source-control/mutations/git-conflict-operation'
+import {
+  bulkDiscardChanges,
+  discardChanges
+} from '../../git/source-control/mutations/discard-changes'
 import {
   bulkStageFiles,
   bulkUnstageFiles,
@@ -24,16 +27,16 @@ import {
   stageFile,
   stageWorktreeChanges,
   unstageFile
-} from '../../git/source-control/staging'
-import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
-import { getBranchCompare } from '../../git/source-control/branch-compare'
-import { getCommitCompare } from '../../git/source-control/commit-compare'
-import { getCommitDiff } from '../../git/source-control/commit-diff'
-import { getDiff } from '../../git/source-control/file-diff'
-import { getStagedCommitContext } from '../../git/source-control/staged-commit-context'
-import { getStatus } from '../../git/source-control/status-read'
-import { getSubmoduleStatus } from '../../git/source-control/submodule-status'
-import { getUpstreamStatus } from '../../git/source-control/upstream'
+} from '../../git/source-control/mutations/staging'
+import { commitChanges, completeMerge } from '../../git/source-control/mutations/commit-changes'
+import { getBranchCompare } from '../../git/source-control/comparisons/branch-compare'
+import { getCommitCompare } from '../../git/source-control/comparisons/commit-compare'
+import { getCommitDiff } from '../../git/source-control/comparisons/commit-diff'
+import { getDiff } from '../../git/source-control/diffs/file-diff'
+import { getStagedCommitContext } from '../../git/source-control/mutations/staged-commit-context'
+import { getStatus } from '../../git/source-control/status/status-read'
+import { getSubmoduleStatus } from '../../git/source-control/submodules/submodule-status'
+import { getUpstreamStatus } from '../../git/source-control/upstream/upstream'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import type { IGitProvider } from './provider-contract'
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type JSX, type ReactNode } from 'react'
 import { ArrowUp, ChevronDown, ChevronRight, Eye, Hand, Plus, Square, X } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'

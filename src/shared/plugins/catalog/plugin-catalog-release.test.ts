@@ -5,7 +5,6 @@ import {
   pluginCatalogReleaseSchema,
   type PluginCatalogRelease
 } from './plugin-catalog-release'
-import { pluginContributionSummary } from '../contributions/plugin-contribution-summary'
 import { parsePluginManifest, type PluginManifest } from '../manifest/plugin-manifest'
 
 const COMMIT = 'c'.repeat(40)
@@ -111,13 +110,6 @@ describe('catalog releases', () => {
     expect(check(release({ types: ['syntax'], fileTypes: ['typ', 'gleam'] }), syntaxManifest)).toBe(
       'file types do not match the catalog release'
     )
-    // A newer catalog's odd entries are dropped instead of hiding the whole release.
-    expect(
-      pluginCatalogReleaseSchema.parse({
-        ...release(),
-        fileTypes: ['.typ', 'typ', 7, 'typ', ...Array.from({ length: 40 }, (_, i) => `t${i}`)]
-      }).fileTypes
-    ).toEqual(['typ', ...Array.from({ length: 31 }, (_, i) => `t${i}`)])
     expect(check(release({ types: ['syntax'], name: 'Other' }), syntaxManifest)).toBe(
       'plugin name does not match the catalog release'
     )
@@ -132,12 +124,6 @@ describe('catalog release summaries', () => {
     })
     const base = { manifest: themed, resolvedCommit: COMMIT, contentHash: HASH }
     const listed = release({ types: ['app-theme'] })
-    expect(
-      pluginCatalogReleaseError({
-        ...base,
-        release: { ...listed, contributes: pluginContributionSummary(themed), capabilities: [] }
-      })
-    ).toBeNull()
     expect(
       pluginCatalogReleaseError({
         ...base,

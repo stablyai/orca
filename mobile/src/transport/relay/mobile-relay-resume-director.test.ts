@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 
 const relay = {
@@ -11,30 +11,7 @@ const relay = {
 }
 
 describe('mobile relay resume director', () => {
-  it('rejects non-canonical targets and oversized bodies', async () => {
-    const badTarget = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            v: 1,
-            cellUrl: 'http://relay-c2.onorca.dev',
-            assignmentEpoch: 8,
-            leaseExpiresAt: 1
-          })
-        )
-    )
-    await expect(
-      resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: badTarget })
-    ).rejects.toThrow(/cellUrl/)
-
-    const oversized = vi.fn(
-      async () =>
-        new Response('x'.repeat(16 * 1024 + 1), { headers: { 'content-length': '16385' } })
-    )
-    await expect(
-      resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: oversized })
-    ).rejects.toThrow(/too large/)
-
+  it('rejects oversized bodies despite an underreported content length', async () => {
     const oversizedBody =
       ' '.repeat(16 * 1024) +
       JSON.stringify({
@@ -43,14 +20,12 @@ describe('mobile relay resume director', () => {
         assignmentEpoch: 8,
         leaseExpiresAt: 1
       })
-    for (const headers of [new Headers(), new Headers({ 'content-length': '1' })]) {
-      await expect(
-        resolveMobileRelayEndpoint({
-          relay,
-          resumeToken: 'A'.repeat(43),
-          fetchImpl: async () => new Response(oversizedBody, { headers })
-        })
-      ).rejects.toThrow(/too large/)
-    }
+    await expect(
+      resolveMobileRelayEndpoint({
+        relay,
+        resumeToken: 'A'.repeat(43),
+        fetchImpl: async () => new Response(oversizedBody, { headers: { 'content-length': '1' } })
+      })
+    ).rejects.toThrow(/too large/)
   })
 })

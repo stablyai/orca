@@ -13,8 +13,6 @@ const windowsVet = readWorkflow('dev-channel-win-build').jobs['build-win'].steps
 const adhoc = readWorkflow('adhoc-mac-build')
 const resolveSteps = adhoc.jobs['resolve-ref'].steps
 const earlyVet = resolveSteps.find((step) => step.id === 'resolve')
-const macSteps = adhoc.jobs['build-adhoc-mac-arch'].steps
-const macVet = macSteps.find((step) => step.id === 'vetted')
 const directory = mkdtempSync(join(tmpdir(), 'workflow-ref-reachability-'))
 const repository = join(directory, 'remote.git')
 const identity = {
@@ -85,41 +83,37 @@ describe('release ref trust with case-twin names', () => {
       const result = await vet(windowsVet, sha)
       expect(result.code, result.stderr).toBe(0)
     }
-    for (const step of [earlyVet, macVet]) {
-      for (const [ref, sha] of [
-        ['Fix', upper],
-        ['fix', lower],
-        ['Release', lower],
-        ['release', lower],
-        ['refs/heads/Fix', upper],
-        ['refs/tags/Release', upper],
-        ['plain', upper],
-        ['refs/tags/release', lower],
-        [upper, upper],
-        [upper.toUpperCase(), upper],
-        [ancestor, ancestor]
-      ]) {
-        const result = await vet(step, ref)
-        expect(result.code, result.stderr).toBe(0)
-        expect(result.output).toBe(`sha=${sha}\n`)
-      }
+    for (const [ref, sha] of [
+      ['Fix', upper],
+      ['fix', lower],
+      ['Release', lower],
+      ['release', lower],
+      ['refs/heads/Fix', upper],
+      ['refs/tags/Release', upper],
+      ['plain', upper],
+      ['refs/tags/release', lower],
+      [upper, upper],
+      [upper.toUpperCase(), upper],
+      [ancestor, ancestor]
+    ]) {
+      const result = await vet(earlyVet, ref)
+      expect(result.code, result.stderr).toBe(0)
+      expect(result.output).toBe(`sha=${sha}\n`)
     }
   })
 
   it('rejects PR-only commits even when the server has their objects', async () => {
-    for (const step of [windowsVet, earlyVet, macVet]) {
+    for (const step of [windowsVet, earlyVet]) {
       const result = await vet(step, untrusted)
       expect(result.code).not.toBe(0)
       expect(result.stdout).toContain('not reachable from any branch or tag')
       expect(result.output).toBe('')
     }
-    for (const step of [earlyVet, macVet]) {
-      for (const ref of ['refs/pull/1/head', 'pull/1/head']) {
-        const result = await vet(step, ref)
-        expect(result.code).not.toBe(0)
-        expect(result.stdout).toContain('Refusing to build PR ref')
-        expect(result.output).toBe('')
-      }
+    for (const ref of ['refs/pull/1/head', 'pull/1/head']) {
+      const result = await vet(earlyVet, ref)
+      expect(result.code).not.toBe(0)
+      expect(result.stdout).toContain('Refusing to build PR ref')
+      expect(result.output).toBe('')
     }
   })
 })

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { launchAgentWithPrompt, promptedLaunchNotice } from './pr-ai-triage-launch'
 import type { LaunchedAgentOpens } from '../../session/agent-launch/launched-agent-opener'

@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'

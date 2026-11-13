@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
+import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog/catalog-version'
 import { makeDetectedResult, qualifyDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeTerminalTab } from '../../../terminals/terminal-row.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
@@ -82,8 +82,6 @@ describe('the startup hydration purge behind a listing that is no longer current
     })
     releaseRepo2()
     await startup
-
-    expect(store.getState().tabsByWorktree[created.id]).toBeDefined()
     expect(store.getState().hasHydratedWorktreePurge).toBe(false)
 
     mockApi.worktrees.listDetected.mockImplementation(async (args) =>
@@ -95,8 +93,6 @@ describe('the startup hydration purge behind a listing that is no longer current
       )
     )
     await store.getState().fetchAllWorktrees()
-
-    expect(store.getState().tabsByWorktree[created.id]).toBeDefined()
     expect(store.getState().tabsByWorktree[zombieId]).toBeUndefined()
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })

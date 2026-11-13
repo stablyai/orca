@@ -1,4 +1,4 @@
-import type { AgentGenerationFailureOutput } from '../../text-generation/agent-failure-output'
+import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 
 // Usage-limit failures spawned hundreds of sessions on repeated working events (#9705); back off until recovery.
 export const FIRST_WORK_GENERATION_RETRY_DELAYS_MS: readonly number[] = [30_000, 120_000, 1_800_000]
