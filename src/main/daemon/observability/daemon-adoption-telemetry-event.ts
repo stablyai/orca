@@ -26,6 +26,11 @@ import {
   clearDaemonFolderAccessMismatch,
   recordDaemonFolderAccessMismatch
 } from '../permissions/daemon-folder-access-mismatch'
+import {
+  noteHelperFolderReadable,
+  prepareTccDenialCapture,
+  runTccDenialCapture
+} from '../permissions/tcc-denial-capture'
 
 export type DaemonAdoptionOrigin = Pick<
   EventProps<'daemon_pty_cwd_denied'>,
@@ -122,22 +127,32 @@ export async function reportDaemonPtyCwdVerdict(args: {
     if (!cwd) {
       return
     }
+    const deniedAtMs = Date.now()
+    const cwdClass = classifyDaemonPtyCwd(cwd, homedir())
+    const tccFolderClass =
+      process.platform === 'darwin' && isMacTccFolderClass(cwdClass) ? cwdClass : null
     if (args.cwdReadableByDaemon === true) {
       clearDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
       // TCC-gated folders only: elsewhere a readable cwd says nothing about the theory.
-      if (
-        process.platform === 'darwin' &&
-        isMacTccFolderClass(classifyDaemonPtyCwd(cwd, homedir()))
-      ) {
+      if (tccFolderClass) {
+        noteHelperFolderReadable(args.daemonIdentity, tccFolderClass)
         await trackDaemonPtyCwdVerdict('daemon_pty_cwd_readable', cwd, args.pidPath)
       }
       return
     }
+    // The app-side opendir below can materialize a cloud folder, so read its state first.
+    const capture =
+      tccFolderClass && args.cwdReadableByDaemon === false
+        ? await prepareTccDenialCapture(args.daemonIdentity, tccFolderClass, deniedAtMs)
+        : null
     if (!(await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon))) {
       return
     }
     // Show the notice before waiting for the codesign probe.
     recordDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
+    if (capture) {
+      void runTccDenialCapture(capture)
+    }
     await trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', cwd, args.pidPath)
   } catch {
     // Best-effort evidence; a spawn must not fail because the notice could not be recorded.
