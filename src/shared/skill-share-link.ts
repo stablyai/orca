@@ -1,7 +1,14 @@
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 const PRODUCTION_HOSTS = new Set(['app.orca.dev', 'share.orca.dev', 'share.onorca.dev'])
 
-export function parseSkillShareId(value: string): string | null {
+/**
+ * `configuredOrigins` are the artifacts API origins this build is set up for (for example a staging
+ * build's share host). They are compared as exact origins, so production behaviour is unchanged.
+ */
+export function parseSkillShareId(
+  value: string,
+  configuredOrigins: readonly string[] = []
+): string | null {
   const trimmed = value.trim()
   if (SHARE_ID_PATTERN.test(trimmed)) {
     return trimmed
@@ -20,7 +27,11 @@ export function parseSkillShareId(value: string): string | null {
   if (url.protocol !== 'https:' && !(developmentHost && url.protocol === 'http:')) {
     return null
   }
-  if (!PRODUCTION_HOSTS.has(url.hostname) && !developmentHost) {
+  if (
+    !PRODUCTION_HOSTS.has(url.hostname) &&
+    !developmentHost &&
+    !configuredOrigins.includes(url.origin)
+  ) {
     return null
   }
   const match = url.pathname.match(/^\/skills\/share\/([A-Za-z0-9_-]{1,128})\/?$/)

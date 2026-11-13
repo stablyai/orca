@@ -104,6 +104,17 @@ describe('skill cloud IPC', () => {
     expect(installSkillCloudGrantMock).not.toHaveBeenCalled()
   })
 
+  it('reports the configured artifacts origin for share links, and none when it is invalid', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the origins handler never accesses the runtime.
+    registerSkillCloudIpcHandlers({} as never, vi.fn())
+    const origins = handlers.get('skills:shareLinkOrigins')!
+    vi.stubEnv('ORCA_ARTIFACTS_API_URL', 'https://share-staging.onorca.dev')
+    expect(origins({ sender: mainRenderer })).toEqual(['https://share-staging.onorca.dev'])
+    vi.stubEnv('ORCA_ARTIFACTS_API_URL', 'https://share.example.com')
+    expect(origins({ sender: mainRenderer })).toEqual([])
+    vi.unstubAllEnvs()
+  })
+
   const preparationId = 'cf38dbdc-bff0-4e87-a7ea-ef81b7edaa1a'
 
   it('rejects share publication from an unrelated renderer before starting it', () => {

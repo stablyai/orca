@@ -163,6 +163,7 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     publishShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
     cancelShare: () => Promise.resolve(),
     releaseShare: () => Promise.resolve(),
+    shareLinkOrigins: () => Promise.resolve([]),
     resolveShare: () => Promise.reject(new Error('Skill share links require the desktop app.')),
     installShare: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
     installBundleShare: () =>

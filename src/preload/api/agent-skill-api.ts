@@ -56,6 +56,8 @@ export type SkillsApi = {
   publishShare: (input: SkillSharePublishInput) => Promise<SkillSharePublishOperation>
   cancelShare: (preparationId: string) => Promise<void>
   releaseShare: (preparationId: string) => Promise<void>
+  /** Artifacts origins this build publishes share links on, beyond the production hosts. */
+  shareLinkOrigins: () => Promise<string[]>
   resolveShare: (shareId: string) => Promise<SkillShareResolvedOperation>
   installShare: (input: SkillShareInstallInput) => Promise<SkillShareInstallOperation>
   installBundleShare: (

@@ -33,6 +33,15 @@ export function resolveArtifactCloudApiUrl(
   return url.origin
 }
 
+/** The artifacts origin this build resolves, or none when its configuration is invalid. */
+export function configuredArtifactOrigins(): string[] {
+  try {
+    return [resolveArtifactCloudApiUrl()]
+  } catch {
+    return []
+  }
+}
+
 export function allowsArtifactCloudAuthOverride(
   env: NodeJS.ProcessEnv = process.env,
   packaged = isPackaged()

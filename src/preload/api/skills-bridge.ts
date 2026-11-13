@@ -63,6 +63,7 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:cancelShare', preparationId),
   releaseShare: (preparationId: string): Promise<void> =>
     ipcRenderer.invoke('skills:releaseShare', preparationId),
+  shareLinkOrigins: (): Promise<string[]> => ipcRenderer.invoke('skills:shareLinkOrigins'),
   resolveShare: (shareId: string): Promise<SkillShareResolvedOperation> =>
     ipcRenderer.invoke('skills:resolveShare', shareId),
   installShare: (input: SkillShareInstallInput): Promise<SkillShareInstallOperation> =>
