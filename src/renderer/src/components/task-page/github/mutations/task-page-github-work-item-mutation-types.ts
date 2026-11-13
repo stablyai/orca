@@ -32,3 +32,26 @@ export type BeginTaskPageGitHubWorkItemMutationResult = {
   families: string[]
   key: TaskPageGitHubMutationKey
 }
+
+export type TaskPageGitHubWorkItemMutationRunner = {
+  run: (input: {
+    item: GitHubWorkItem
+    intent: TaskPageGitHubMutationIntent
+    sourceContext?: TaskSourceContext | null
+    mutate: () => Promise<{
+      ok?: boolean
+      error?:
+        | string
+        | {
+            message?: string
+          }
+    } | void>
+    successToast?: string
+    errorToast: string
+  }) => Promise<'confirmed' | 'rolled_back' | 'stale'>
+  isIntentPending: (input: {
+    item: GitHubWorkItem
+    intent: TaskPageGitHubMutationIntent
+    sourceContext?: TaskSourceContext | null
+  }) => boolean
+}

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import type { TaskPageJiraCreationMetadataModel } from '../../jira/use-task-page-jira-creation-metadata'
+import type { TaskPageJiraCreationMetadataModel } from '../../jira/creation/use-task-page-jira-creation-metadata'
 
 // Why the list projection's input model: the landing run's later-stage model carries these same fields.
 type LandingRequestInput = Pick<

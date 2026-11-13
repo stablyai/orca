@@ -16,7 +16,7 @@ import { githubProjectHost } from '../../../../../../shared/github/projects/proj
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
 import { LoaderCircle, ChevronDown, Check } from 'lucide-react'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../linear/task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../mutations/task-page-github-work-item-mutation-types'
 import { GitHubAssigneeAvatar } from './Avatars'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'

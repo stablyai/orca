@@ -25,7 +25,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { LoaderCircle, GitMerge, ChevronDown, ExternalLink } from 'lucide-react'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../linear/task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../mutations/task-page-github-work-item-mutation-types'
 import { resolveTaskPullRequestRepo } from './task-page-github-review-model'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function PRMergeCell({
