@@ -159,6 +159,7 @@ import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
+import { createTeamMembershipCheck, type TeamMembershipCheck } from './team-membership'
 import { audit, auditSession } from './api/audit'
 import { ALL_EVENT_FAMILIES, AUTH_EVENT_FAMILIES, AuditIngestError, AuditIngestSchema, BILLING_EVENT_FAMILIES, ingestAuditEvents } from './api/audit-ingest'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSlept, type SandboxRow } from './store'
@@ -268,6 +269,8 @@ export type Deps = {
   onDeviceSessionRevoked?: (deviceSessionId: string) => Promise<void>
   /** Share-gateway fetch to the VM's share proxy (tests). */
   shareFetch?: typeof fetch
+  /** Is this person in this team now? Default: auth's live answer (team-membership.ts). Tests inject it. */
+  teamMembership?: TeamMembershipCheck
   /** Billing setup-session notices (tests collect them). */
   setupNotifier?: SetupNotifier
   /** Billing trial abuse-key notices after a bind (tests collect them). */
@@ -2289,8 +2292,25 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       const current = (await getSandbox(env.SANDBOX_DB, row.id)) ?? row
       let patched: Awaited<ReturnType<typeof patchWorkspace>> =
         Object.keys(rest).length > 0
-          ? await patchWorkspace(db, caller, current, rest, now)
+          ? await patchWorkspace(db, caller, current, rest, now, deps.teamMembership ?? createTeamMembershipCheck(env))
           : { row: current, revoke: 'none' }
+      const transferred = patched.row.user_id !== current.user_id
+      if (transferred) {
+        // OWNER-TRANSFER. The owner and the transferred mark are already written together. Now
+        // stop the VM, so nothing the previous owner left running carries on (a stop keeps the
+        // disk only: the next wake is a new session with a freshly built, shared-mode env), and
+        // end everything that acted for them: its share links and its in-VM API token.
+        if (patched.row.status === 'running') {
+          const stopped = await suspendSandbox(life, patched.row).catch((error: unknown) => {
+            // Already marked transferred, so nothing personal can attach; reconcile stops it.
+            console.log(JSON.stringify({ event: 'owner_transfer_suspend_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
+            return null
+          })
+          patched = { ...patched, row: stopped ?? (await getSandbox(env.SANDBOX_DB, row.id)) ?? patched.row }
+        }
+        await revokeSandboxShares(env.SANDBOX_DB, row.id, now)
+        await revokeWorkspaceTokens(env.SANDBOX_DB, row.id, now)
+      }
       // Who can open a workspace decides who its agents act as and whose secrets it gets, so both
       // directions of a share, and a change of owner, go in the team's audit log.
       if (patched.row.visibility !== current.visibility) {
@@ -2306,7 +2326,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
           now
         )
       }
-      if (patched.row.user_id !== current.user_id) {
+      if (transferred) {
         await auditSession(
           db,
           caller,
@@ -2324,11 +2344,9 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       }
       const revoked =
         patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
-      if (
-        patched.row.status === 'running' &&
-        (patched.row.user_id !== current.user_id || patched.row.visibility !== current.visibility)
-      ) {
-        // A new owner or a share changes which account (if any) the agents use (D10/D13): rebuild the env now.
+      if (patched.row.status === 'running' && !transferred && patched.row.visibility !== current.visibility) {
+        // A share changes which account (if any) the agents use (D10/D13): rebuild the env now.
+        // Never for a new owner: a transferred workspace is stopped, and its env is not rebuilt for them.
         const work = refreshSandboxEnv(life, patched.row).catch(() => false)
         if (deps.waitUntil) {
           deps.waitUntil(work)

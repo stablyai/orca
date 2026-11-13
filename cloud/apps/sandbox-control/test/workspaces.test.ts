@@ -314,11 +314,17 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     const t = await team()
     expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { ownerUserId: 'bob' })).status).toBe(404)
     const moved = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { ownerUserId: 'bob' })
-    expect(moved.body.workspace).toMatchObject({ ownerUserId: 'bob', createdBy: 'alice' })
-    expect(moved.body.revoked).toEqual({ revoked: 1, queued: 0 })
-    const box = [...t.h.vercel.boxes.values()][0]!
-    expect(box.devices).toEqual([])
-    expect((await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)).status).toBe(404)
+    expect(moved.body.workspace).toMatchObject({ ownerUserId: 'bob', createdBy: 'alice', status: 'suspended' })
+    expect(moved.body.workspace.ownershipTransferredAt).toEqual(expect.any(Number))
+    // OWNER-TRANSFER: the hand-off stops the VM, so the previous owner's devices are revoked
+    // at its next boot (queued), before orcad starts, instead of inside a VM that kept running.
+    expect(moved.body.revoked).toEqual({ revoked: 0, queued: 1 })
+    expect((await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/resume`)).status).toBe(404)
+    t.h.vercel.commands.length = 0
+    expect((await t.req(t.bob, 'POST', `/v1/sandboxes/${t.id}/resume`)).status).toBe(200)
+    const order = t.h.vercel.commands.map((c) => c.command)
+    expect(order.indexOf(REVOKE_COMMAND)).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf(REVOKE_COMMAND)).toBeLessThan(order.lastIndexOf('/opt/orca/bin/orca-sandbox-start'))
     expect((await t.req(t.bob, 'POST', `/v1/sandboxes/${t.id}/suspend`)).status).toBe(200)
   })
 

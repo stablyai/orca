@@ -454,8 +454,13 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       const environmentBuildId = body.environment ? await resolveEnvironmentBuild(ctx.db, caller.accountId, body.environment) : undefined
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, now)
       const { origin, originRef } = originFor(caller)
+      // OWNER-TRANSFER, belt and braces (a transferred workspace gets no in-VM token at all): a
+      // workspace made from inside a transferred one is transferred too, never a private one that
+      // would carry its owner's personal credentials.
+      const parent = caller.via === 'workspace' && caller.sandboxId ? await getWorkspace(ctx.db, caller.accountId, caller.sandboxId) : null
       const started = performance.now()
       const row = await createWorkspace(life, caller, {
+        ...(parent?.ownership_transferred_at != null ? { ownershipTransferredAt: parent.ownership_transferred_at } : {}),
         name: body.name,
         project,
         repo: body.repo,
