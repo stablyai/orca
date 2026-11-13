@@ -58,7 +58,8 @@ it('removes the run directory and leaves an unmarked one with the same name alon
 })
 
 it('keeps child cwd and inherited temporary paths consistent through a directory alias', () => {
-  const root = mkdtempSync(join(tmpdir(), 'rt-'))
+  const base = process.platform === 'win32' ? tmpdir() : realpathSync('/tmp')
+  const root = mkdtempSync(join(base, 'rt-'))
   bases.push(root)
   const target = join(root, 'r')
   const alias = join(root, 'a')
