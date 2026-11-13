@@ -119,7 +119,7 @@ export async function reconfirmSkippedSetup(
         hostId,
         'automation'
       )
-    : await ensureHooksApproved(useAppStore.getState(), repoId, 'setup', hostId)
+    : await approveAutomationSetup(repoId, hostId, automation.baseBranch)
   return approval.decision === 'run' && approval.approvedContentHash !== automation.setupTrustHash
     ? approval.approvedContentHash
     : undefined

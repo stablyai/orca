@@ -57,7 +57,8 @@ export async function readCreateSourceSetupHooks(args: {
     return undefined
   }
   const deadline = Date.now() + CREATE_SOURCE_READ_DEADLINE_MS
-  // No git process starts after the deadline; one already running finishes under its own timeout.
+  // Git admission refuses past the deadline, even for a step the race already abandoned.
+  const gated = { ...args.gitOptions, canStart: () => Date.now() < deadline }
   const step = async <T>(work: () => Promise<T>): Promise<T> => {
     const remaining = deadline - Date.now()
     if (remaining <= 0) {
@@ -76,8 +77,8 @@ export async function readCreateSourceSetupHooks(args: {
     }
   }
   try {
-    const ref = await step(() => resolveCreateSourceRef(args, step))
-    return ref ? await step(() => readOrcaYamlAtRef(args.repo, ref, args.gitOptions)) : undefined
+    const ref = await step(() => resolveCreateSourceRef(args, gated, step))
+    return ref ? await step(() => readOrcaYamlAtRef(args.repo, ref, gated)) : undefined
   } catch {
     return undefined
   }
@@ -85,9 +86,10 @@ export async function readCreateSourceSetupHooks(args: {
 
 async function resolveCreateSourceRef(
   args: Parameters<typeof readCreateSourceSetupHooks>[0],
+  gitOptions: LocalGitExecOptions,
   step: <T>(work: () => Promise<T>) => Promise<T>
 ): Promise<string | null> {
-  const { repo, source, runtime, gitOptions } = args
+  const { repo, source, runtime } = args
   // Explicit reuse checks out exactly the local branch when it exists, otherwise creates it from the base.
   if (source.kind === 'branch') {
     const localRef = `refs/heads/${source.ref}`
@@ -124,9 +126,9 @@ async function resolveCreateSourceRef(
       ])
     )
     if (hasRemoteRef || !hasLocalRef) {
-      // Never rejects or aborts: past the deadline create joins this same fetch.
+      // Ungated and never aborted: past the deadline create joins this same fetch.
       await step(() =>
-        runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteBase, gitOptions)
+        runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteBase, args.gitOptions)
       )
     }
   }
@@ -144,16 +146,17 @@ async function readOrcaYamlAtRef(
   repo: Repo,
   ref: string,
   gitOptions: LocalGitExecOptions
-): Promise<{ hooks: OrcaHooks | null }> {
-  const { stdout: listing } = await gitExecFileAsync(
-    ['ls-tree', '--name-only', ref, '--', 'orca.yaml'],
-    {
-      cwd: repo.path,
-      ...gitOptions
-    }
-  )
-  if (!listing.trim()) {
+): Promise<{ hooks: OrcaHooks | null } | undefined> {
+  const { stdout: entry } = await gitExecFileAsync(['ls-tree', ref, '--', 'orca.yaml'], {
+    cwd: repo.path,
+    ...gitOptions
+  })
+  if (!entry.trim()) {
     return { hooks: null }
+  }
+  // A symlink's blob is its target path; the checkout follows it, so read the checkout instead.
+  if (!entry.startsWith('100')) {
+    return undefined
   }
   const { stdout } = await gitExecFileAsync(['show', `${ref}:orca.yaml`], {
     cwd: repo.path,
