@@ -3,6 +3,7 @@
 import { app, ipcMain } from 'electron'
 import { z } from 'zod'
 import {
+  CLOUD_SECRET_ACTIVITY_VIEWS,
   CLOUD_SECRET_SCOPES,
   MAX_CLOUD_SECRET_BATCH,
   type CloudSecretsResult,
@@ -56,6 +57,10 @@ const BatchRequest = z
       MAX_CLOUD_SECRET_BATCH
   )
 const EffectiveRequest = z.object({ repo: Repo.optional() })
+const ActivityRequest = z.object({
+  view: z.enum(CLOUD_SECRET_ACTIVITY_VIEWS),
+  cursor: z.string().max(256).optional()
+})
 const RefreshRequest = z.object({ runtimeEnvironmentId: z.string().min(1).max(256) })
 const SaveDesktopKeyRequest = z.object({
   agent: z.string().refine(isTuiAgent),
@@ -69,6 +74,7 @@ const CHANNELS = [
   'cloudSecrets:remove',
   'cloudSecrets:batch',
   'cloudSecrets:effective',
+  'cloudSecrets:activity',
   'cloudSecrets:refreshEnv',
   'cloudSecrets:saveDesktopKey',
   'cloudSecrets:workspaceSharing'
@@ -145,6 +151,12 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
   ipcMain.handle('cloudSecrets:effective', (_event, raw: unknown) => {
     const request = EffectiveRequest.safeParse(raw ?? {})
     return request.success ? attempt(client, (c) => c.effective(request.data.repo)) : invalid
+  })
+  ipcMain.handle('cloudSecrets:activity', (_event, raw: unknown) => {
+    const request = ActivityRequest.safeParse(raw)
+    return request.success
+      ? attempt(client, (c) => c.activity(request.data.view, request.data.cursor))
+      : invalid
   })
   // One desktop-sealed key, unsealed here and sent once to the user's personal Cloud secrets; the
   // renderer names it (agent + variable) and never sees the value. Each call is one explicit click.

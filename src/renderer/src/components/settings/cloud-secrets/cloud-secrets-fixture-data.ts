@@ -1,5 +1,6 @@
 // Fixture-only fake of the cloud secrets bridge: canned names and hints, never values.
 import type {
+  CloudSecretEvent,
   CloudSecretScope,
   CloudSecretView,
   CloudSecretsCaller,
@@ -113,6 +114,44 @@ export const FIXTURE_EFFECTIVE_SECRETS: CloudSecretsEffective['secrets'] = [
   }
 ]
 
+function event(
+  id: number,
+  action: CloudSecretEvent['action'],
+  scope: CloudSecretScope,
+  name: string,
+  ageHours: number,
+  userId = 'u_me',
+  repo?: string
+): CloudSecretEvent {
+  return {
+    id: `sev_${id}`,
+    action,
+    scope,
+    name,
+    ...(repo ? { repo } : {}),
+    actor: { userId, name: null },
+    orgId: 'org_acme',
+    at: NOW - ageHours * HOUR
+  }
+}
+
+export const FIXTURE_TEAM_ACTIVITY: CloudSecretEvent[] = [
+  event(1, 'updated', 'org', 'AI_GATEWAY_API_KEY', 0.3, 'u_dana'),
+  event(2, 'created', 'repo', 'DATABASE_URL', 5, 'u_ravi', 'github.com/acme/web'),
+  event(3, 'deleted', 'org', 'OPENAI_API_KEY', 26),
+  event(4, 'created', 'repo', 'STRIPE_SECRET_KEY', 26, 'u_me', 'github.com/acme/web'),
+  event(5, 'created', 'org', 'ANTHROPIC_MODEL', 30, 'u_dana'),
+  event(6, 'created', 'org', 'AI_GATEWAY_API_KEY', 30, 'u_dana'),
+  // A member who has since left the team: no roster name, so it reads "A teammate".
+  event(7, 'created', 'org', 'NPM_TOKEN', 170, 'u_gone')
+]
+
+export const FIXTURE_PERSONAL_ACTIVITY: CloudSecretEvent[] = [
+  event(11, 'created', 'personal', 'OPENROUTER_API_KEY', 8),
+  event(12, 'updated', 'personal', 'AWS_SECRET_ACCESS_KEY', 6),
+  event(13, 'created', 'personal', 'ANTHROPIC_API_KEY', 2)
+]
+
 export const FIXTURE_NAMES: Record<string, string> = { u_dana: 'Dana Reyes', u_ravi: 'Ravi Shah' }
 
 const never = <T>(): Promise<T> => new Promise<T>(() => {})
@@ -127,6 +166,7 @@ export function fixtureCloudSecretsApi(options: {
   pending?: boolean
   /** Writes never answer (saving state). */
   pendingWrites?: boolean
+  activity?: { team: CloudSecretEvent[]; personal: CloudSecretEvent[]; pageSize?: number }
 }): CloudSecretsApi {
   const caller = options.caller ?? FIXTURE_ADMIN
   const secrets = options.secrets ?? FIXTURE_SECRETS
@@ -164,6 +204,22 @@ export function fixtureCloudSecretsApi(options: {
             },
             secrets: options.effective ?? FIXTURE_EFFECTIVE_SECRETS
           }),
+    activity: ({ view, cursor }) => {
+      if (options.pending) {
+        return never()
+      }
+      if (options.listError) {
+        return Promise.resolve({ ok: false as const, error: options.listError })
+      }
+      const all =
+        (options.activity ?? { team: FIXTURE_TEAM_ACTIVITY, personal: FIXTURE_PERSONAL_ACTIVITY })[
+          view
+        ]
+      const size = options.activity?.pageSize ?? 50
+      const start = cursor ? Number(cursor) : 0
+      const end = start + size
+      return ok({ events: all.slice(start, end), nextCursor: end < all.length ? String(end) : null })
+    },
     refreshEnv: () => ok(true),
     saveDesktopKey: ({ envName }) =>
       ok({

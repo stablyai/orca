@@ -67,6 +67,28 @@ export type CloudSecretsEffective = z.infer<typeof CloudSecretsEffectiveResponse
 export type CloudSecretsCaller = CloudSecretsEffective['caller']
 export type CloudEffectiveSecret = CloudSecretsEffective['secrets'][number]
 
+/** GET /v1/secrets/activity (SEC-4): names, scopes, who and when; never a value or hint. */
+export const CLOUD_SECRET_ACTIVITY_VIEWS = ['team', 'personal'] as const
+export type CloudSecretActivityView = (typeof CLOUD_SECRET_ACTIVITY_VIEWS)[number]
+
+export const CloudSecretEventSchema = z.object({
+  id: z.string().max(128),
+  action: z.enum(['created', 'updated', 'deleted']),
+  scope: Scope,
+  name: Name,
+  repo: z.string().max(256).optional(),
+  actor: z.object({ userId: z.string().max(256), name: z.string().max(256).nullable() }),
+  orgId: z.string().max(256).nullable(),
+  at: z.number().finite()
+})
+export type CloudSecretEvent = z.infer<typeof CloudSecretEventSchema>
+
+export const CloudSecretActivityResponseSchema = z.object({
+  events: z.array(CloudSecretEventSchema).max(200),
+  nextCursor: z.string().max(256).nullable()
+})
+export type CloudSecretActivityPage = z.infer<typeof CloudSecretActivityResponseSchema>
+
 export const CloudEnvRefreshResponseSchema = z.object({ applied: z.boolean() })
 
 export const MAX_CLOUD_SECRET_BATCH = 100

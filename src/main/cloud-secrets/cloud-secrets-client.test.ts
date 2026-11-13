@@ -34,6 +34,31 @@ const VIEW = {
 }
 
 describe('createCloudSecretsClient', () => {
+  it('reads secret activity by view and cursor, and sends no body', async () => {
+    const page = {
+      events: [
+        {
+          id: 'sev_1',
+          action: 'updated',
+          scope: 'org',
+          name: 'NPM_TOKEN',
+          actor: { userId: 'u1', name: 'Ada' },
+          orgId: 'acme',
+          at: 5
+        }
+      ],
+      nextCursor: '5.sev_1'
+    }
+    const { client, seen } = fakeControlPlane(() => Response.json(page))
+    expect(await client.activity('team')).toEqual(page)
+    await client.activity('personal', '5.sev_1')
+    expect(seen.map((request) => request.url)).toEqual([
+      'https://control.test/v1/secrets/activity?view=team',
+      'https://control.test/v1/secrets/activity?view=personal&cursor=5.sev_1'
+    ])
+    expect(seen.every((request) => request.method === 'GET' && request.body === null)).toBe(true)
+  })
+
   it('reads who owns a sandbox and whether it is shared, failing closed on an unknown owner', async () => {
     const answers = [
       { owner: { userId: 'u2', displayName: 'Ada', isCaller: false }, sharedWorkspace: true },

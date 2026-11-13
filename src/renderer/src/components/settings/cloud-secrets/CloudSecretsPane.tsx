@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { cloudSecretScopeLabel } from './cloud-secrets-copy'
 import { CloudSecretList, type CloudSecretPeople } from './CloudSecretList'
+import { CloudSecretsActivity } from './CloudSecretsActivity'
 import { CloudSecretsEffectiveView } from './CloudSecretsEffectiveView'
 import {
   useCloudSecretList,
@@ -22,7 +23,7 @@ export type CloudSecretRepoChoice = {
   label: string
 }
 
-type Tab = CloudSecretScope | 'effective'
+type Tab = CloudSecretScope | 'effective' | 'activity'
 const NO_REPO = '__none__'
 
 function RepoPicker({
@@ -169,7 +170,13 @@ export function CloudSecretsPane({
       <Tabs
         value={tab}
         onValueChange={(next) => {
-          if (next === 'personal' || next === 'org' || next === 'repo' || next === 'effective') {
+          if (
+            next === 'personal' ||
+            next === 'org' ||
+            next === 'repo' ||
+            next === 'effective' ||
+            next === 'activity'
+          ) {
             setTab(next)
           }
         }}
@@ -181,6 +188,7 @@ export function CloudSecretsPane({
           <TabsTrigger value="effective">
             {t('cloudSecrets.tab.effective', 'What workspaces get')}
           </TabsTrigger>
+          <TabsTrigger value="activity">{t('cloudSecrets.tab.activity', 'Activity')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal">
@@ -320,6 +328,19 @@ export function CloudSecretsPane({
               <RepoPicker repos={repos} value={repo} onChange={setRepo} allowNone />
             ) : null}
             <EffectiveTab api={api} repo={repo} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <div className="pt-2">
+            {/* Mounted only while open, so it reads the log fresh each visit. */}
+            {tab === 'activity' && callerView.status !== 'loading' ? (
+              <CloudSecretsActivity
+                api={api}
+                people={withViewer}
+                canSeeTeam={caller?.orgRole === 'owner' || caller?.orgRole === 'admin'}
+              />
+            ) : null}
           </div>
         </TabsContent>
       </Tabs>

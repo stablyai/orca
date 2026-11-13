@@ -2,6 +2,7 @@
 // response or error does, and nothing here logs a request body.
 import {
   CloudAgentSourcesResponseSchema,
+  CloudSecretActivityResponseSchema,
   CloudEnvRefreshResponseSchema,
   CloudSecretBatchResponseSchema,
   CloudSecretDeleteResponseSchema,
@@ -9,6 +10,8 @@ import {
   CloudSecretPutResponseSchema,
   CloudSecretsEffectiveResponseSchema,
   cloudSecretsErrorCode,
+  type CloudSecretActivityPage,
+  type CloudSecretActivityView,
   type CloudSecretBatchResult,
   type CloudSecretsErrorCode,
   type CloudSecretTarget,
@@ -31,6 +34,8 @@ export type CloudSecretsClient = {
     change: { set?: Record<string, string>; delete?: string[] }
   ): Promise<CloudSecretBatchResult>
   effective(repo?: string, signal?: AbortSignal): Promise<CloudSecretsEffective>
+  /** Who changed which secret, newest first, last 90 days (names only). */
+  activity(view: CloudSecretActivityView, cursor?: string): Promise<CloudSecretActivityPage>
   refreshEnv(sandboxId: string): Promise<boolean>
   /** Who owns a sandbox and whether teammates share it (GET /v1/agent-sources?workspaceId=). */
   workspaceSharing(sandboxId: string): Promise<CloudWorkspaceSharing>
@@ -90,6 +95,13 @@ export function createCloudSecretsClient(
         kind: 'control',
         signal
       }),
+    activity: (view, cursor) =>
+      call(
+        'GET',
+        `v1/secrets/activity?${new URLSearchParams({ view, ...(cursor ? { cursor } : {}) })}`,
+        CloudSecretActivityResponseSchema,
+        { kind: 'control' }
+      ),
     refreshEnv: async (sandboxId) =>
       (
         await call(
