@@ -8,7 +8,11 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
+import {
+  relaunchApp,
+  runBeforeRelaunchCleanup,
+  type AppRelaunchReason
+} from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/presentation/window-material-suppression'
 import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
@@ -51,6 +55,17 @@ type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
   onBeforeRelaunchExit?: () => void | Promise<void>
+}
+
+let onBeforeRelaunch: RegisterAppHandlersOptions['onBeforeRelaunch']
+
+/** Restart through normal quit so daemon terminals survive for reattachment; main-owned prompts share it with app:restart. */
+export async function restartApp(reason: AppRelaunchReason): Promise<void> {
+  await runBeforeRelaunchCleanup(onBeforeRelaunch)
+  setTimeout(() => {
+    relaunchApp(reason)
+    quitProcess()
+  }, 150)
 }
 
 async function pickFloatingMarkdownDocument(
@@ -125,6 +140,7 @@ function resolveDevFeatureWallAssetDir(): string {
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
+  onBeforeRelaunch = options.onBeforeRelaunch
   registerRendererShutdownCheckpointHandler(
     store,
     options.quitResumeRecordsFor,
@@ -217,14 +233,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }, 150)
   })
 
-  ipcMain.handle('app:restart', async () => {
-    // Normal quit flushes daemon checkpoints and telemetry.
-    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-    setTimeout(() => {
-      relaunchApp('admin-restart')
-      quitProcess()
-    }, 150)
-  })
+  ipcMain.handle('app:restart', () => restartApp('admin-restart'))
 
   ipcMain.handle('app:restartAsAdministrator', async () => {
     const relaunchOptions = prepareWindowsAdministratorRestart()

@@ -134,7 +134,9 @@ let quitAndStopAllSessionsConfirming = false
 // The renderer that consumed the request; only it may then ask main to quit.
 let stoppingAllSessionsWebContentsId: number | null = null
 
-function showMessageBoxOnMainWindow(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
+export function showMessageBoxOnMainWindow(
+  options: MessageBoxOptions
+): Promise<MessageBoxReturnValue> {
   const window = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
   return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
 }
