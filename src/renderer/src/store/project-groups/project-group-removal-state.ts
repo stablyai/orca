@@ -1,3 +1,5 @@
+import { projectGroupHookTrustKey } from '../../../../shared/workspace-hook-owner'
+import type { AppState } from '../types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -8,10 +10,12 @@ import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/f
 
 // Why: a group id can exist on several hosts; only the deleted owner's rows may be cascaded away.
 export function applyProjectGroupDeleteCascade(
-  state: Pick<RepoSlice, 'projectGroups' | 'folderWorkspaces' | 'repos'>,
+  state: Pick<RepoSlice, 'projectGroups' | 'folderWorkspaces' | 'repos'> &
+    Partial<Pick<AppState, 'trustedOrcaHooks'>>,
   groupId: string,
   ownerHostId: ExecutionHostId | null
-): Pick<RepoSlice, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'folderWorkspacePathStatuses'> {
+): Pick<RepoSlice, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'folderWorkspacePathStatuses'> &
+  Partial<Pick<AppState, 'trustedOrcaHooks'>> {
   const ownsRowHost = (rowHostId: string): boolean =>
     ownerHostId ? catalogOwnsHost(ownerHostId, rowHostId) : true
   const ownerGroups = state.projectGroups.filter((group) =>
@@ -20,7 +24,17 @@ export function applyProjectGroupDeleteCascade(
   const deletedGroupIds = getProjectGroupSubtreeIds(ownerGroups, groupId)
   const isDeletedGroup = (group: ProjectGroup): boolean =>
     deletedGroupIds.has(group.id) && ownsRowHost(getRepoExecutionHostId(group))
+  const removedTrustKeys = new Set(
+    state.projectGroups.filter(isDeletedGroup).map(projectGroupHookTrustKey)
+  )
   return {
+    ...(state.trustedOrcaHooks
+      ? {
+          trustedOrcaHooks: Object.fromEntries(
+            Object.entries(state.trustedOrcaHooks).filter(([key]) => !removedTrustKeys.has(key))
+          )
+        }
+      : {}),
     projectGroups: state.projectGroups.filter((group) => !isDeletedGroup(group)),
     folderWorkspaces: state.folderWorkspaces.filter(
       (workspace) =>
