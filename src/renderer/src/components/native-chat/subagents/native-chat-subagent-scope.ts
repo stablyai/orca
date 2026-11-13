@@ -66,6 +66,22 @@ function spawnerOf(
   return parent !== undefined && parent !== agentId && subagentRows.has(parent) ? parent : null
 }
 
+/** The spawn chain down to a subagent, outermost first; a loop stops at the first repeat. */
+export function nativeChatSubagentChain(
+  agentId: string,
+  subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
+): readonly string[] {
+  const chain = [agentId]
+  for (
+    let spawner = spawnerOf(agentId, subagentRows);
+    spawner !== null && !chain.includes(spawner);
+    spawner = spawnerOf(spawner, subagentRows)
+  ) {
+    chain.unshift(spawner)
+  }
+  return chain
+}
+
 /** Subagents the scope's agent (null: the session's) spawned that no roster row in `scopeRows` names. */
 export function nativeChatSubagentHeads(
   scopeRows: readonly NativeChatMessage[],

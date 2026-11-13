@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentSessionLatestTurn } from '../../../../../shared/agent-session/agent-session-wire'
 import type {
@@ -19,10 +20,16 @@ import {
 import type { NativeChatSubagentView } from './native-chat-open-subagent'
 import { nativeChatSubagentHistoryStep } from './native-chat-subagent-history'
 import {
+  nativeChatSubagentChain,
   nativeChatSubagentEntries,
   nativeChatSubagentHeads,
   nativeChatSubagentRowsInOrder
 } from './native-chat-subagent-scope'
+import {
+  nativeChatSubagentEnding,
+  nativeChatSubagentEndingMessage,
+  type NativeChatSubagentAside
+} from './native-chat-subagent-ending'
 import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
@@ -31,33 +38,21 @@ const NO_MESSAGES: readonly NativeChatMessage[] = []
 const NO_SUBAGENT_ROWS: readonly NativeChatSubagentRow[] = []
 const NO_TURN_KEYS: readonly (string | undefined)[] = []
 const NO_ENTRIES: ReadonlyMap<string, NativeChatSubagentEntry> = new Map()
+const NO_CHAIN: readonly string[] = []
 
-function words(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
-}
-
-/** Codex's last own message is its reply; a clipped copy of it counts as the same. */
-function nativeChatRowsEndWith(rows: readonly NativeChatMessage[], reply: string): boolean {
-  const last = rows.findLast((row) => row.role === 'assistant')
-  const said = words(
-    last?.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n') ?? ''
-  )
-  const replied = words(reply)
-  return said.length > 0 && (said.startsWith(replied) || replied.startsWith(said))
-}
-
-/** A settled subagent's reply, drawn as its last message. */
-function subagentReplyMessage(
-  agentId: string,
-  reply: string,
-  settledAt: number | undefined
-): NativeChatMessage {
-  return {
-    id: `subagent-reply:${agentId}`,
-    role: 'assistant',
-    blocks: [{ type: 'text', text: reply }],
-    timestamp: settledAt ?? null,
-    source: 'transcript'
+function asideText(aside: NativeChatSubagentAside, t: Translate): string {
+  switch (aside) {
+    case 'no-steps':
+      return t('components.native-chat.subagents.noSteps', 'No steps yet')
+    case 'cleared':
+      return t(
+        'components.native-chat.subagents.beforeClear',
+        'This subagent ran before the chat was cleared'
+      )
+    case 'stopped':
+      return t('components.native-chat.subagents.stoppedBeforeReply', 'Stopped before replying')
+    case 'no-reply':
+      return t('components.native-chat.subagents.noReply', 'Ended without a reply')
   }
 }
 
@@ -90,8 +85,17 @@ export function useNativeChatSubagentScope({
         : nativeChatSubagentEntries(conversation, subagentRows, roster),
     [agentId, conversation, roster, subagentRows]
   )
+  const t = useTranslate()
   const entry = agentId === null ? undefined : entries.get(agentId)
-  const settled = entry !== undefined && normalizeSubagentState(entry.state) !== 'working'
+  const chain = useMemo(
+    () => (agentId === null ? NO_CHAIN : nativeChatSubagentChain(agentId, subagentRows)),
+    [agentId, subagentRows]
+  )
+  const parentId = chain.at(-2) ?? null
+  const noteParent = view?.noteParent
+  useEffect(() => {
+    noteParent?.(parentId)
+  }, [noteParent, parentId])
   const handoff = useMemo(
     () =>
       agentId === null
@@ -99,16 +103,38 @@ export function useNativeChatSubagentScope({
         : nativeChatSubagentHandoff({ agentId, journalItems, conversation, subagentRows }),
     [agentId, conversation, journalItems, subagentRows]
   )
-  const reply = settled ? (handoff?.reply ?? entry.lastMessage ?? null) : null
+  // A subagent's view pages history only while older history still holds its spawn.
+  const history = useMemo(
+    () =>
+      agentId === null
+        ? 'page'
+        : nativeChatSubagentHistoryStep({
+            agentId,
+            conversation,
+            subagentRows,
+            roster,
+            historyFloor: () => latestAgentSessionContextClearSequence(journalItems ?? [])
+          }),
+    [agentId, conversation, journalItems, roster, subagentRows]
+  )
   const messages = useMemo(() => {
     if (agentId === null) {
       return conversation
     }
     const own = (subagentRows.get(agentId) ?? NO_SUBAGENT_ROWS).map(({ message }) => message)
-    return reply === null || nativeChatRowsEndWith(own, reply)
+    const ending = nativeChatSubagentEnding({ entry, handoff, rows: own, history })
+    return ending === null
       ? own
-      : [...own, subagentReplyMessage(agentId, reply, entry?.settledAt)]
-  }, [agentId, conversation, entry?.settledAt, reply, subagentRows])
+      : [
+          ...own,
+          nativeChatSubagentEndingMessage(
+            agentId,
+            ending,
+            ending.kind === 'aside' ? asideText(ending.aside, t) : '',
+            entry?.settledAt
+          )
+        ]
+  }, [agentId, conversation, entry, handoff, history, subagentRows, t])
   const heads = useMemo(
     () => nativeChatSubagentHeads(messages, subagentRows, entries, agentId),
     [agentId, entries, messages, subagentRows]
@@ -131,19 +157,6 @@ export function useNativeChatSubagentScope({
         : { messages, turnKeys: NO_TURN_KEYS, liveTurnKey: undefined },
     [agentId, conversationTurns, messages]
   )
-  // A subagent's view pages history only while older history still holds its spawn.
-  const pagesHistory = useMemo(
-    () =>
-      agentId === null ||
-      nativeChatSubagentHistoryStep({
-        agentId,
-        conversation,
-        subagentRows,
-        roster,
-        historyFloor: () => latestAgentSessionContextClearSequence(journalItems ?? [])
-      }) === 'page',
-    [agentId, conversation, journalItems, roster, subagentRows]
-  )
   const open = view?.open
   return {
     agentId,
@@ -157,9 +170,9 @@ export function useNativeChatSubagentScope({
     bar:
       agentId !== null && open ? (
         <NativeChatSubagentViewBar
-          agentId={agentId}
+          chain={chain}
           entries={entries}
-          agentsWithRows={subagentRows}
+          subagentRows={subagentRows}
           onOpen={open}
         />
       ) : null,
@@ -169,7 +182,12 @@ export function useNativeChatSubagentScope({
     turnRows,
     /** The conversation's turns; null in a subagent's view. */
     conversationTurns: agentId === null ? turnRows : null,
-    pagesHistory,
+    pagesHistory: history === 'page',
+    /** Names the transcript region: the conversation, or the subagent it shows. */
+    regionLabel:
+      agentId === null
+        ? t('components.native-chat.transcriptLabel', 'Conversation')
+        : (entry?.label ?? t('components.native-chat.subagents.unnamed', 'Subagent')),
     // A subagent's rows sit in the conversation's turns, so its view runs on the agent's own state.
     working:
       agentId === null

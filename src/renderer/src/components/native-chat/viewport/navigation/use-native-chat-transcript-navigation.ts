@@ -114,7 +114,7 @@ export function useNativeChatNavigation({
       if (step === 'page') {
         holdHistory()
       }
-      return step
+      return step === 'cleared' ? 'stop' : step
     },
     sessionKey,
     isVisible,

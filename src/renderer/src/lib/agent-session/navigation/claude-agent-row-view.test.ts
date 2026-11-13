@@ -25,6 +25,6 @@ describe('viewClaudeAgentFromRow', () => {
   it("opens a chat pane's subagent row in that chat's subagent view, for any agent", async () => {
     const { result } = renderHook(() => useNativeChatOpenSubagent('tab-1:chat'))
     await act(() => viewClaudeAgentFromRow(childRow('codex')))
-    expect(result.current).toBe('thread-child')
+    expect(result.current?.agentId).toBe('thread-child')
   })
 })

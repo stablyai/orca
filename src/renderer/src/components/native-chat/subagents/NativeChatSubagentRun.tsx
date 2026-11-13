@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -23,17 +23,12 @@ import type {
 } from '../../../../../shared/native-chat/native-chat-types'
 import { formatNativeChatDuration } from '../../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
-import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
+import {
+  sayNativeChatSubagentGroupTranslated as say,
+  sayNativeChatSubagentStateHeading
+} from './native-chat-subagent-group-words-text'
+import { NativeChatSubagentStatusIcon } from './NativeChatSubagentStatusIcon'
 import { sayNativeChatSessionOptionTranslated as sayOption } from '../session/options/controls/native-chat-session-option-labels-text'
-
-const STATE_DOT_CLASS: Record<NativeChatSubagentState, string> = {
-  working: 'bg-foreground/70',
-  idle: 'bg-muted-foreground/40',
-  completed: 'bg-muted-foreground/60',
-  failed: 'bg-destructive',
-  stopped: 'bg-muted-foreground',
-  unverifiable: 'bg-muted-foreground'
-}
 
 /** Keep the identity glyph fixed as state changes; convey status through the dot and text. */
 function SubagentGlyph(): React.JSX.Element {
@@ -41,26 +36,6 @@ function SubagentGlyph(): React.JSX.Element {
     <span className="flex size-4 shrink-0 items-center justify-center text-chat-foreground-faint">
       <Bot aria-hidden="true" className="size-3.5" />
     </span>
-  )
-}
-
-/** Keep failure color independent of pulsing so a failed sibling cannot hide ongoing work. */
-export function StatusDot({
-  state,
-  pulsing = false
-}: {
-  state: NativeChatSubagentState
-  pulsing?: boolean
-}): React.JSX.Element {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        'size-1.5 shrink-0 rounded-full',
-        STATE_DOT_CLASS[state],
-        pulsing && 'animate-pulse motion-reduce:animate-none'
-      )}
-    />
   )
 }
 
@@ -90,16 +65,18 @@ export function NativeChatSubagentEntries({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const listId = useId()
   return (
     <ul className={cn('space-y-0.5', className)}>
-      {agents.map((agent) => {
+      {agents.map((agent, index) => {
         const state = normalizeSubagentState(agent.state)
+        const describedBy = `${listId}-${index}`
         const detail = subagentEntryDetail(agent)
         const runsOn = subagentEntryRunsOn(agent, sayOption)
         const entry = (
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex min-w-0 items-center gap-1.5">
-              <StatusDot state={state} pulsing={state === 'working'} />
+              <NativeChatSubagentStatusIcon state={state} />
               <span
                 className={cn(
                   'min-w-0 truncate font-sans text-sm',
@@ -113,15 +90,21 @@ export function NativeChatSubagentEntries({
                   {runsOn}
                 </span>
               ) : null}
-              <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
+              <span
+                id={`${describedBy}-state`}
+                className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint"
+              >
                 {subagentStateLabel(state, 1, 1, say)}
                 {typeof agent.tokens === 'number'
-                  ? ` · ${formatSubagentTokens(agent.tokens)}`
+                  ? ` · ${say('tokens', { value0: formatSubagentTokens(agent.tokens) })}`
                   : null}
               </span>
             </span>
             {detail ? (
-              <span className="truncate pl-3 font-sans text-xs text-chat-foreground-faint">
+              <span
+                id={`${describedBy}-detail`}
+                className="truncate pl-3 font-sans text-xs text-chat-foreground-faint"
+              >
                 {detail}
               </span>
             ) : null}
@@ -129,22 +112,35 @@ export function NativeChatSubagentEntries({
         )
         return (
           <li key={agent.id} data-native-chat-subagent-entry={agent.id}>
-            <SubagentEntryPreview agent={agent} state={state} detail={detail} runsOn={runsOn}>
+            <SubagentEntryPreview
+              agent={agent}
+              state={state}
+              detail={detail}
+              runsOn={runsOn}
+              opens={onOpen !== undefined}
+            >
               {onOpen === undefined ? (
                 <div className="flex items-start gap-1.5 py-0.5">{entry}</div>
               ) : (
                 <button
                   type="button"
                   onClick={() => onOpen(agent.id)}
-                  className="group/subagent-entry flex w-full items-start gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  aria-label={t(
+                    'components.native-chat.backgroundTasks.openAgent',
+                    'Open {{value0}}',
+                    {
+                      value0: agent.label
+                    }
+                  )}
+                  aria-describedby={
+                    detail ? `${describedBy}-state ${describedBy}-detail` : `${describedBy}-state`
+                  }
+                  className="flex w-full items-start gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   {entry}
-                  <span className="sr-only">
-                    {t('components.native-chat.subagents.open', 'Open subagent')}
-                  </span>
                   <ChevronRight
                     aria-hidden
-                    className="mt-1 size-3.5 shrink-0 text-chat-foreground-faint opacity-0 transition-opacity group-hover/subagent-entry:opacity-100 motion-reduce:transition-none"
+                    className="mt-1 size-3.5 shrink-0 text-chat-foreground-faint"
                   />
                 </button>
               )}
@@ -162,14 +158,18 @@ function SubagentEntryPreview({
   state,
   detail,
   runsOn,
+  opens,
   children
 }: {
   agent: NativeChatSubagentEntry
   state: NativeChatSubagentState
   detail: string | null
   runsOn: string | null
+  /** The row opens the subagent's view, which the preview says. */
+  opens: boolean
   children: React.ReactElement
 }): React.JSX.Element {
+  const t = useTranslate()
   const role = [subagentRoleLabel(agent.agentType), runsOn].filter(Boolean).join(' · ')
   const text =
     state === 'working' && agent.operation
@@ -194,7 +194,7 @@ function SubagentEntryPreview({
           <div className="truncate text-sm font-medium text-foreground">{agent.label}</div>
           {role ? <div className="truncate text-muted-foreground">{role}</div> : null}
           <div className="tabular-nums text-muted-foreground">
-            {subagentStateLabel(state, 1, 1, say)}
+            {sayNativeChatSubagentStateHeading(state)}
             {agent.startedAt !== undefined ? (
               <>
                 {' · '}
@@ -205,12 +205,19 @@ function SubagentEntryPreview({
                 />
               </>
             ) : null}
-            {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
+            {typeof agent.tokens === 'number'
+              ? ` · ${say('tokens', { value0: formatSubagentTokens(agent.tokens) })}`
+              : null}
           </div>
           {text ? (
             <p className="line-clamp-6 whitespace-pre-wrap break-words pt-1 text-foreground">
               {text}
             </p>
+          ) : null}
+          {opens ? (
+            <div className="pt-1 text-muted-foreground">
+              {t('components.native-chat.subagents.clickToOpen', 'Click to open')}
+            </div>
           ) : null}
         </div>
       </HoverCardContent>
@@ -252,7 +259,7 @@ export function NativeChatSubagentRun({
         aria-live="polite"
       >
         <SubagentGlyph />
-        <StatusDot state={alertState ?? verdictState} pulsing={working} />
+        <NativeChatSubagentStatusIcon state={alertState ?? verdictState} />
         <span className={cn('min-w-0 truncate', working && 'text-chat-foreground')}>
           {headline}
         </span>

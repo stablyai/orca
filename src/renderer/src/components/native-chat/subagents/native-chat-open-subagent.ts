@@ -7,9 +7,14 @@ import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 export type NativeChatSubagentView = {
   agentId: string | null
   open: (agentId: string | null) => void
+  /** The open view names the subagent that spawned it, which Back and Esc return to. */
+  noteParent?: (parentId: string | null) => void
 }
 
-const openByPane = new Map<string, string>()
+/** The open subagent and, once its view has read its spawn chain, its parent (null: the main agent). */
+export type NativeChatOpenSubagent = { agentId: string; parentId: string | null }
+
+const openByPane = new Map<string, NativeChatOpenSubagent>()
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void): () => void {
@@ -17,27 +22,48 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** `paneKey` is the chat's status pane key; null returns the pane to its main agent. */
-export function openNativeChatSubagent(paneKey: string, agentId: string | null): void {
-  if ((openByPane.get(paneKey) ?? null) === agentId) {
-    return
-  }
-  if (agentId === null) {
-    openByPane.delete(paneKey)
-  } else {
-    openByPane.set(paneKey, agentId)
-  }
+function publish(): void {
   for (const listener of listeners) {
     listener()
   }
 }
 
-export function useNativeChatOpenSubagent(paneKey: string): string | null {
+/** `paneKey` is the chat's status pane key; null returns the pane to its main agent. */
+export function openNativeChatSubagent(paneKey: string, agentId: string | null): void {
+  if ((openByPane.get(paneKey)?.agentId ?? null) === agentId) {
+    return
+  }
+  if (agentId === null) {
+    openByPane.delete(paneKey)
+  } else {
+    openByPane.set(paneKey, { agentId, parentId: null })
+  }
+  publish()
+}
+
+export function noteNativeChatSubagentParent(
+  paneKey: string,
+  agentId: string,
+  parentId: string | null
+): void {
+  const open = openByPane.get(paneKey)
+  if (open?.agentId === agentId && open.parentId !== parentId) {
+    openByPane.set(paneKey, { agentId, parentId })
+    publish()
+  }
+}
+
+/** Back from a subagent: to the subagent that spawned it, else to the main agent. */
+export function backFromNativeChatSubagent(paneKey: string): void {
+  openNativeChatSubagent(paneKey, openByPane.get(paneKey)?.parentId ?? null)
+}
+
+export function useNativeChatOpenSubagent(paneKey: string): NativeChatOpenSubagent | null {
   const read = useCallback(() => openByPane.get(paneKey) ?? null, [paneKey])
   return useSyncExternalStore(subscribe, read, read)
 }
 
-/** Esc outside inputs and menus takes the pane back to its main agent. */
+/** Esc outside inputs and menus goes back a level. */
 export function closeNativeChatSubagentOnEscape(event: React.KeyboardEvent, paneKey: string): void {
   const target = event.target
   if (
@@ -53,5 +79,5 @@ export function closeNativeChatSubagentOnEscape(event: React.KeyboardEvent, pane
     return
   }
   event.preventDefault()
-  openNativeChatSubagent(paneKey, null)
+  backFromNativeChatSubagent(paneKey)
 }

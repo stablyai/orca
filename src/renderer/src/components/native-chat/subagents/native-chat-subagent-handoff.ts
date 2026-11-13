@@ -14,9 +14,11 @@ export type NativeChatSubagentHandoff = {
   prompt: string | null
   /** The spawn call's result: Claude's `Agent` call returns the subagent's whole final reply. */
   reply: string | null
+  /** The spawn call's result when it reports a failure instead. */
+  error: string | null
 }
 
-const NO_HANDOFF: NativeChatSubagentHandoff = { prompt: null, reply: null }
+const NO_HANDOFF: NativeChatSubagentHandoff = { prompt: null, reply: null, error: null }
 
 /** Claude names the spawning `Agent` call as the run of the subagent's newest revision. */
 function spawnRunOf(
@@ -82,13 +84,15 @@ export function nativeChatSubagentHandoff({
         }
         if (run !== undefined && block.callId === run) {
           const result = pairNativeChatToolResults(message.blocks).resultByCall.get(block)
+          const text = (result && handBackReport(result.output)) || null
           return {
             prompt: promptOf(block.input),
-            reply: (result && !result.isError && handBackReport(result.output)) || null
+            reply: result?.isError ? null : text,
+            error: result?.isError ? text : null
           }
         }
         if (block.name === 'spawn_agent' && codexCollabRowAgentIds(block.input).includes(agentId)) {
-          return { prompt: promptOf(block.input), reply: null }
+          return { prompt: promptOf(block.input), reply: null, error: null }
         }
       }
     }

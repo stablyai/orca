@@ -13,6 +13,8 @@ export function NativeChatStructuredSessionStatus(props: {
   /** The session's background work. */
   backgroundTasks: StructuredSessionBackgroundTasksView
   stop: StructuredSessionTaskStop
+  /** The agent whose view the pane shows, marked current in the strip. */
+  currentAgentId?: string | null
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const childRowContext = useStructuredSessionChildRowContext(props.paneKey)
@@ -37,6 +39,7 @@ export function NativeChatStructuredSessionStatus(props: {
           expanded={expanded?.sessionId === props.sessionId && expanded.expanded}
           onExpandedChange={(value) => setExpanded({ sessionId: props.sessionId, expanded: value })}
           onStop={stop.onStop}
+          currentAgentId={props.currentAgentId ?? null}
           onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
         />
       ) : null}

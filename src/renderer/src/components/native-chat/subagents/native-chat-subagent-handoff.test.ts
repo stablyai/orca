@@ -52,7 +52,7 @@ describe('nativeChatSubagentHandoff', () => {
         conversation,
         subagentRows: new Map()
       })
-    ).toEqual({ prompt: 'List src/', reply: 'src holds:\n\n- `math.ts`' })
+    ).toEqual({ prompt: 'List src/', reply: 'src holds:\n\n- `math.ts`', error: null })
   })
 
   it("reads a Codex subagent's prompt from the spawn call naming it, leaving its reply to its own rows", () => {
@@ -74,6 +74,6 @@ describe('nativeChatSubagentHandoff', () => {
         conversation,
         subagentRows: new Map()
       })
-    ).toEqual({ prompt: 'Map token refresh', reply: null })
+    ).toEqual({ prompt: 'Map token refresh', reply: null, error: null })
   })
 })

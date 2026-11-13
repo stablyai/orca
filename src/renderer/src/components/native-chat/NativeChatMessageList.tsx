@@ -9,7 +9,6 @@ import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-
 import { withoutPullRequestEventRows } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   nativeChatShowsCiResultLines,
@@ -135,7 +134,6 @@ export function NativeChatMessageList({
   stopping?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
-  const t = useTranslate()
   const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -372,7 +370,7 @@ export function NativeChatMessageList({
               {...readerInput.scrollerProps}
               // Measurement finds this named scroll root independently of utility classes.
               data-native-chat-scroll
-              aria-label={t('components.native-chat.transcriptLabel', 'Conversation')}
+              aria-label={scope.regionLabel}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
               className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
             >

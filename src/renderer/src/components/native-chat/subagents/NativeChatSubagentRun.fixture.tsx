@@ -61,7 +61,7 @@ export const hovered = defineFixture({
   render: () => <Roster />,
   interact: async (frame) => {
     frame
-      .querySelector('[data-native-chat-subagent-entry="a1"] > div')
+      .querySelector('[data-native-chat-subagent-entry="a1"] > button')
       ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
