@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ProfileStateSplitSnapshots } from './profile-state-split-snapshots'
+import { capturePreparedProfileStateWrite } from './profile-state-prepared-write'
 import {
   applyProfileStateDomainPatch,
   prepareProfileStateDomainPatches
@@ -115,4 +116,47 @@ describe('profile state split capture', () => {
       ]
     })
   })
+
+  it.each([false, true])(
+    'preserves fallback hook timing and the exact committed snapshot (complete=%s)',
+    (complete) => {
+      const snapshots = new ProfileStateSplitSnapshots()
+      snapshots.seed({ workspaceSession: {}, worktreeMeta: { a: { label: 'original' } } })
+      const keys: string[] = []
+      const stateToSave = {
+        workspaceSession: {
+          toJSON(key: string) {
+            keys.push(key)
+            stateToSave.worktreeMeta = { a: { label: 'later' } }
+            return { activeTabId: 'hook' }
+          }
+        },
+        worktreeMeta: { a: { label: 'original' } }
+      }
+      const captured = capturePreparedProfileStateWrite({
+        snapshots,
+        stateToSave,
+        complete,
+        secretSubs: [],
+        protectedSecretUpdates: []
+      })
+      expect(keys).toEqual(['workspaceSession'])
+      expect(captured.write?.replacements).toEqual([
+        { domain: 'workspaceSession', payload: '{"activeTabId":"hook"}' }
+      ])
+      expect(captured.write?.patches).toEqual([
+        {
+          domain: 'worktreeMeta',
+          operations: complete ? [] : [{ kind: 'set', path: ['a'], payload: '{"label":"later"}' }]
+        }
+      ])
+      captured.acknowledge()
+      expect(
+        snapshots.capture('workspaceSession', { activeTabId: 'hook' })!.patch.operations
+      ).toEqual([])
+      expect(
+        snapshots.capture('worktreeMeta', { a: { label: 'later' } })!.patch.operations
+      ).toEqual(complete ? [{ kind: 'set', path: ['a'], payload: '{"label":"later"}' }] : [])
+    }
+  )
 })
