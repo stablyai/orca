@@ -114,12 +114,10 @@ function prepare(userDataPath: string): Ready {
         userDataPath,
         async (session) =>
           call(
-            // The team this device shows, read now: never auth's shared "active team" (EP-9).
-            await mintBillingToken(
-              endpoints,
-              session.accessToken,
-              ensureActiveOrcaProfile(userDataPath).profile.cloud?.activeOrgId ?? null
-            ),
+            // The team this device shows, from the same profile whose session this is (a local
+            // profile switch mid-call must not pair one profile's session with another's team);
+            // never auth's shared "active team" (EP-9).
+            await mintBillingToken(endpoints, session.accessToken, active.profile.cloud?.activeOrgId ?? null),
             endpoints
           )
       )
