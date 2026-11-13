@@ -20430,7 +20430,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Abrir com (quando o foco não estiver em um campo editável)"
+            "openWith": "Abrir com (exceto ao digitar em um campo de texto do Orca)"
           }
         },
         "pluginInstallCount": {

@@ -19012,7 +19012,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Öffnen mit (wenn der Fokus nicht in einem bearbeitbaren Feld liegt)"
+            "openWith": "Öffnen mit (außer beim Tippen in einem Orca-Textfeld)"
           }
         },
         "pluginInstallCount": {
