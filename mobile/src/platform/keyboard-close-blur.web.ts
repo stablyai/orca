@@ -5,6 +5,8 @@ import { subscribeSoftKeyboard } from './keyboard-occlusion.web'
 // Chromium hides the IME itself to show a tapped autocorrected word's menu; Back comes with no touch.
 const FIELD_TAP_HIDE_WINDOW_MS = 1000
 const KEYBOARD_REOPEN_DELAY_MS = 50
+// A keyboard's mic switches to a voice IME, which closes the keyboard and opens again ~250 ms later; Back opens none.
+const IME_SWITCH_WINDOW_MS = 1000
 
 // Android raises the IME only for a new focus session, as for the terminal live input.
 function reopenKeyboard(field: HTMLElement): void {
@@ -14,12 +16,13 @@ function reopenKeyboard(field: HTMLElement): void {
   }
 }
 
-// Android Back hides the IME without blurring; blur now so the next terminal touch cannot reopen it.
+// Android Back hides the IME without blurring; blur once it stays closed so the next terminal touch cannot reopen it.
 export function startBlurringOnKeyboardClose(): void {
   if (hostOs() !== 'android') {
     return
   }
   let lastTouch: { target: Node; at: number } | null = null
+  let pendingBlur: ReturnType<typeof setTimeout> | undefined
   document.addEventListener(
     'pointerdown',
     (event) => {
@@ -29,7 +32,7 @@ export function startBlurringOnKeyboardClose(): void {
     { capture: true }
   )
   subscribeSoftKeyboard(
-    () => {},
+    () => clearTimeout(pendingBlur),
     () => {
       const field = document.activeElement
       const touch = lastTouch
@@ -42,7 +45,12 @@ export function startBlurringOnKeyboardClose(): void {
       ) {
         setTimeout(() => reopenKeyboard(field), KEYBOARD_REOPEN_DELAY_MS)
       } else {
-        Keyboard.dismiss()
+        // Leave alone a field focus moved to meanwhile.
+        pendingBlur = setTimeout(() => {
+          if (document.activeElement === field) {
+            Keyboard.dismiss()
+          }
+        }, IME_SWITCH_WINDOW_MS)
       }
     }
   )

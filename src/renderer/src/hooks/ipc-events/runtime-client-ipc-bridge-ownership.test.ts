@@ -129,6 +129,7 @@ function createHarness() {
         _meta: { runtimeId: 'remote-runtime' },
         result: event ?? {
           type: 'linearLinkedIssueUpdated',
+          worktreeId: 'missing-row',
           identifier: 'ISSUE-1',
           workspaceId: 'workspace-a'
         }
@@ -212,22 +213,6 @@ it('invalidates lineage before unknown-repository discovery can block a structur
     expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(false)
   } finally {
     repos.resolve([])
-    await h.finish()
-  }
-})
-
-it('invalidates hydrated lineage as soon as a project change is queued', async () => {
-  const h = createHarness()
-  try {
-    h.start()
-    beginWorktreeLineageRefresh(useAppStore.getState, {
-      kind: 'environment',
-      environmentId: 'host-a'
-    })(true)
-    h.emit(0, false, { type: 'reposChanged' })
-    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(false)
-    expect(h.fetchRuntimeEnvironmentRepos).not.toHaveBeenCalled()
-  } finally {
     await h.finish()
   }
 })

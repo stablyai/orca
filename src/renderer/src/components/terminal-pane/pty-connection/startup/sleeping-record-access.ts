@@ -5,7 +5,7 @@ import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-recor
 import type { PtyConnectResult } from '../../pty-transport/pty-transport-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../../shared/sleeping-record-legacy-pane-key'
-import { neutralTerminalTitle } from '../../../../../../shared/workspace-layout/terminal-pane-title-reset'
+import { neutralTerminalTitle } from '../../../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-title-reset'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord

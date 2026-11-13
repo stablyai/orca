@@ -10,7 +10,7 @@ vi.mock('./web-runtime-session', () => ({
 
 beforeEach(() => localStorage.clear())
 
-it('reports publishing off until the host grant has been mirrored', () => {
+it('keeps publishing off in the web fallback until a stored web setting grants it', () => {
   expect(getStoredSettings().artifactSharingEnabled).toBe(false)
 
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ artifactSharingEnabled: true }))

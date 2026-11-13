@@ -15,63 +15,20 @@ import {
   runOrcaCli,
   stopOrcaRuntime
 } from './helpers/computer-driver'
+import {
+  editableRolePattern,
+  focusNotepadDocument,
+  waitForNotepadText
+} from './helpers/notepad-document'
+import {
+  closeWindowFixture,
+  countMagentaPixelRatio,
+  launchHungWindowFixture,
+  launchWindowFixture
+} from './helpers/windows-form-fixture'
 
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
-const editableRolePattern = /^\s*(\d+)\s+(document|edit|text|pane)(?:\s|$)/im
-const pasteMutationTimeoutMs = 5_000
-
-// Poll after clipboard paste because Notepad’s accessibility snapshot can lag the visible change.
-async function waitForNotepadText(app: string, marker: string): Promise<ComputerSnapshotResult> {
-  const deadline = Date.now() + pasteMutationTimeoutMs
-  let lastSnapshot: ComputerSnapshotResult | null = null
-  while (Date.now() < deadline) {
-    const snapshot = parseJsonOutput<{ result: ComputerSnapshotResult }>(
-      (await runOrcaCli(['computer', 'get-app-state', '--app', app, '--no-screenshot', '--json']))
-        .stdout
-    ).result
-    if (snapshot.snapshot.treeText.includes(marker)) {
-      return snapshot
-    }
-    lastSnapshot = snapshot
-    await new Promise((resolve) => setTimeout(resolve, 150))
-  }
-  throw new Error(
-    `Timed out waiting for Notepad text: ${marker}. ` +
-      `Last treeText length: ${(lastSnapshot?.snapshot.treeText ?? '').length}`
-  )
-}
-
-async function focusNotepadDocument(app: string): Promise<void> {
-  const snapshot = parseJsonOutput<{ result: ComputerSnapshotResult }>(
-    (
-      await runOrcaCli([
-        'computer',
-        'get-app-state',
-        '--app',
-        app,
-        '--restore-window',
-        '--no-screenshot',
-        '--json'
-      ])
-    ).stdout
-  )
-  const documentIndex = findRoleIndex(snapshot.result.snapshot.treeText, editableRolePattern)
-  expect(documentIndex).toBeGreaterThanOrEqual(0)
-
-  await runOrcaCli([
-    'computer',
-    'click',
-    '--app',
-    app,
-    '--element-index',
-    String(documentIndex),
-    '--restore-window',
-    '--no-screenshot',
-    '--json'
-  ])
-}
-
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', () => {
   beforeAll(async () => {
     await ensureOrcaRuntimeLaunched()
@@ -274,5 +231,73 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     )
     expect(typed.result.action?.path).toBe('synthetic')
     expect(typed.result.snapshot.treeText).toContain(marker.trim())
+  })
+
+  test('a covered window screenshot shows the window, not what covers it', async () => {
+    const app = getNotepadAppSelector()
+    const notepadWindow = parseJsonOutput<{ result: ComputerListWindowsResult }>(
+      (await runOrcaCli(['computer', 'list-windows', '--app', app, '--json'])).stdout
+    ).result.windows[0]
+    const bounds = {
+      x: notepadWindow.x ?? 0,
+      y: notepadWindow.y ?? 0,
+      width: notepadWindow.width,
+      height: notepadWindow.height
+    }
+    const cover = await launchWindowFixture(
+      [
+        "$form.Text = 'orca-e2e-cover'",
+        "$form.FormBorderStyle = 'None'",
+        "$form.StartPosition = 'Manual'",
+        '$form.TopMost = $true',
+        '$form.ShowInTaskbar = $false',
+        '$form.BackColor = [System.Drawing.Color]::FromArgb(255, 0, 255)',
+        `$form.Bounds = New-Object System.Drawing.Rectangle(${bounds.x}, ${bounds.y}, ${bounds.width}, ${bounds.height})`
+      ].join('\n')
+    )
+    try {
+      // Prove the cover really hides Notepad, so the screenshot check below can fail.
+      expect(await countMagentaPixelRatio(bounds)).toBeGreaterThan(0.9)
+      const state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+        (await runOrcaCli(['computer', 'get-app-state', '--app', app, '--json'])).stdout
+      )
+      const screenshotPath = state.result.screenshot?.path
+      if (!screenshotPath) {
+        throw new Error(`no screenshot: ${JSON.stringify(state.result.screenshotStatus)}`)
+      }
+      // A screen copy of the covered bounds would be almost entirely the magenta cover.
+      expect(await countMagentaPixelRatio(screenshotPath)).toBeLessThan(0.01)
+    } finally {
+      await closeWindowFixture(cover)
+    }
+  })
+
+  test('a hung window fails fast with a timeout error and does not stall later calls', async () => {
+    const hung = await launchHungWindowFixture()
+    try {
+      const started = Date.now()
+      const failure = await runOrcaCli([
+        'computer',
+        'get-app-state',
+        '--app',
+        `pid:${hung.pid}`,
+        '--no-screenshot',
+        '--json'
+      ]).then(
+        () => 'get-app-state unexpectedly succeeded',
+        (error: unknown) => (error instanceof Error ? error.message : String(error))
+      )
+      expect(failure).toMatch(/window_not_responding/)
+      expect(failure).toMatch(/"code":\s*"action_timeout"/)
+      // The provider request timeout is 30 s; the hang probe answers within its 5 s bound.
+      expect(Date.now() - started).toBeLessThan(15_000)
+
+      const apps = parseJsonOutput<{ result: ComputerListAppsResult }>(
+        (await runOrcaCli(['computer', 'list-apps', '--json'])).stdout
+      )
+      expect(apps.result.apps.some((entry) => entry.pid === hung.pid)).toBe(true)
+    } finally {
+      await closeWindowFixture(hung)
+    }
   })
 })

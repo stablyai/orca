@@ -3,13 +3,13 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult
-} from '../../../shared/github/pull-request-refresh-types'
+} from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import {
   notePRRefreshValidationDenial,
   type PRRefreshValidationDenialReason
-} from '../../github/pr-refresh-validation-backoff'
+} from '../../github/pull-requests/refresh/pr-refresh-validation-backoff'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   getLocalProjectGhExecOptions,

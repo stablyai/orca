@@ -5,7 +5,7 @@ import { runtimeTargetForRepoOwner } from '../ownership/repo-runtime-owner'
 import {
   githubRepoIdentityKey,
   repoUpstreamIdentityKey
-} from '../../../../../shared/github/repository-identity-key'
+} from '../../../../../shared/github/repositories/repository-identity-key'
 
 /** Lowercased `owner/repo` → Repo[]. */
 export type SlugIndex = Map<string, Repo[]>

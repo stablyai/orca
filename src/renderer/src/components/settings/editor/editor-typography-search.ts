@@ -2,7 +2,8 @@ import { GENERAL_SETTING_ANCHORS, generalSetting } from '../general/general-sett
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { supportsCodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
+
+import { isMacUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import type { SettingsSearchEntry } from '../search/settings-search'
 
 function editorTypographyKeywords(): string[] {
@@ -104,9 +105,7 @@ export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
 /** Font smoothing only exists on macOS, so search must not reveal a row that never renders. */
 export function getVisibleEditorTypographySearchEntries(): SettingsSearchEntry[] {
   const { fontSmoothing, ...entries } = getEditorTypographySearchEntries()
-  return supportsCodeFontSmoothing()
-    ? [...Object.values(entries), fontSmoothing]
-    : Object.values(entries)
+  return isMacUserAgent() ? [...Object.values(entries), fontSmoothing] : Object.values(entries)
 }
 
 export const getVisibleEditorTypographySearchDescriptors = createLocalizedCatalog(() => {
@@ -116,7 +115,7 @@ export const getVisibleEditorTypographySearchDescriptors = createLocalizedCatalo
     generalSetting(GENERAL_SETTING_ANCHORS.fontWeight, entries.fontWeight),
     generalSetting(GENERAL_SETTING_ANCHORS.lineHeight, entries.lineHeight),
     generalSetting(GENERAL_SETTING_ANCHORS.ligatures, entries.ligatures),
-    ...(supportsCodeFontSmoothing()
+    ...(isMacUserAgent()
       ? [generalSetting(GENERAL_SETTING_ANCHORS.fontSmoothing, entries.fontSmoothing)]
       : [])
   ]

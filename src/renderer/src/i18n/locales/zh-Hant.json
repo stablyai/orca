@@ -377,7 +377,8 @@
       "remove": "移除…",
       "empty": "此設定檔未啟用任何擴充功能",
       "visitWebStore": "前往 Chrome Web Store",
-      "manage": "管理擴充功能"
+      "manage": "管理擴充功能",
+      "openWebStoreFailed": "無法開啟 Chrome Web Store。"
     },
     "history": {
       "clear": "清除瀏覽記錄",
@@ -809,8 +810,6 @@
       "rowPermissionsLabel": "{{agent}} 權限",
       "customPermissions": "自訂參數",
       "replaceWithPermissionMode": "替換為 {{mode}}",
-      "expandAgentSettings": "展開代理程式設定",
-      "collapseAgentSettings": "收合代理程式設定",
       "permissionArgsTerminalOnly": "這些參數可能會控制 {{agent}} 的終端機權限，因此 Orca 不會加入旗標。聊天則使用上方的「權限」設定。",
       "localSaveFailed": "無法儲存代理程式設定。請再試一次。",
       "localSaveFailedAgent": "無法儲存 {{agent}} 的設定。請再試一次。",
@@ -3159,7 +3158,6 @@
       "Terminal": {
         "73768427cf": "關閉",
         "f82e9f02df": "取消",
-        "7958465754": "部分終端機中仍有執行中的行程。仍要關閉視窗嗎？",
         "b7c1f0a934": "無法連線至遠端主機，因此 Orca 無法判斷該主機上的工作是否仍在執行。仍要關閉視窗嗎？",
         "2fa9c69ff3": "關閉視窗？",
         "cd51e28d8b": "儲存",
@@ -3791,7 +3789,6 @@
             "runningTerminalBlocker": "正在執行的終端機行程",
             "terminalLivenessUnknownBlocker": "無法確認終端機是否仍在執行",
             "dirtyEditorBufferBlocker": "未儲存的編輯器緩衝區",
-            "volatileLocalContextBlocker": "易變本機上下文",
             "recentVisibleContextBlocker": "最近存取的分頁",
             "liveAgentBlocker": "執行中的代理程式",
             "sshDisconnectedBlocker": "遠端不可用",
@@ -3953,6 +3950,8 @@
             "15dd899676": "新增至 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "終端機問題",
+            "errorTitle": "終端機錯誤",
             "e4aa243f8c": "重新啟動守護行程",
             "retry": "重試",
             "retrying": "正在重試...",
@@ -7484,14 +7483,11 @@
           "remoteDetectionFailed": "無法偵測已安裝的代理程式。請檢查主機連線後重試。",
           "retryDetection": "重試",
           "02e0143be5": "已安裝",
-          "92033495ff": "自動",
           "f9f127d664": "覆寫執行檔路徑或名稱，並編輯此代理程式的預設啟動參數或環境。",
           "f95b5c79b8": "安裝",
           "fe4d630c94": "文件",
-          "8dc0192e48": "已停用",
           "5200dac9da": "重設",
           "2e45ca29b6": "命令",
-          "d4d2a45d63": "啟用",
           "1c9a9679ec": "{{value0}} 可用性",
           "0d9e293a02": "重新整理",
           "c9b33eb5c0": "重新整理中…",
@@ -7506,10 +7502,8 @@
           "codexSessionSource": "要匯入的 Codex 主目錄",
           "codexSessionSourceInfo": "關於匯入 Codex 歷史記錄",
           "codexSessionSourceTooltip": "Orca 在隔離的主目錄中執行 Codex。將此項指向您現有的 Codex 主目錄以匯入工作階段歷史記錄。留空則使用 ~/.codex。",
-          "storedDefaultUndetected": "已儲存為預設值，但目前未偵測到",
           "noAgentsDetected": "未偵測到代理程式。若已安裝代理程式，可能是偵測作業逾時。",
-          "9f30095d49": "代理程式權限",
-          "3bddd54c9e": "預設代理程式"
+          "9f30095d49": "代理程式權限"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一個圖示",
@@ -7887,10 +7881,6 @@
             "modeAriaLabel": "代理程式儀表板開啟模式",
             "modeInWindow": "視窗內",
             "modePopout": "彈出視窗"
-          },
-          "browserExtensions": {
-            "copy": "為本機瀏覽器設定檔新增「設定 › 瀏覽器 › 擴充功能」。",
-            "toggleLabel": "切換瀏覽器擴充功能"
           }
         },
         "FloatingWorkspacePane": {
@@ -8461,16 +8451,12 @@
           "5426ecbdcb": "本機指令碼將不會執行",
           "95a0411b3e": "範本",
           "175daba180": "例子",
-          "b20c5df6ca": "新增 `orca.yaml` 檔案以啟用此存放庫的共用設定、封存或議題自動化預設值。範例範本：",
-          "56f9a4a1d0": "正在使用 `orca.yaml`",
           "623e0c9f31": "無法解析 `orca.yaml`",
-          "5a67e4793d": "未偵測到 `orca.yaml`",
           "07ba35bc68": "檢查 `scripts:` 下的縮排。掛鉤鍵應使用兩個空格，命令列應使用四個空格。",
           "787ca433ef": "僅定義支援的鍵：`scripts`、`setup`、`archive` 和 `issueCommand`。",
           "ecc73d9125": "將你的檔案與下面可用的範本進行比較，並在需要時複製該結構。",
           "0cc712b823": "核心設定檔存在於存放庫根目錄中，但 Orca 尚無法解析支援的掛鉤定義。",
           "aba825233f": "該檔案包含此版本的 Orca 無法辨識的設定鍵。您可能需要更新 Orca，或檢查檔案是否有拼字錯誤。",
-          "ca424ff135": "共用掛鉤和議題自動化預設值在存放庫中定義，可供所有使用它的人使用。",
           "8bfe65fc60": "使用本機命令",
           "8d6c56bff8": "執行兩者",
           "0fa21e19ec": "工作區的名稱，通常基於分支名稱。",
@@ -10056,13 +10042,6 @@
               "inWindow": "視窗內",
               "worktrees": "工作樹",
               "eaf17a7214": "代理程式儀表板"
-            },
-            "browserExtensions": {
-              "title": "瀏覽器擴充功能",
-              "description": "在 Orca 瀏覽器分頁中執行 Chrome 擴充功能，例如密碼管理工具。",
-              "extension": "擴充功能",
-              "chrome": "chrome",
-              "password": "密碼管理工具"
             }
           }
         },
@@ -12326,7 +12305,7 @@
               "tokenHint": "存放庫、專案與工作區的存取權杖須在對應的 Bitbucket 設定頁面建立，並具備 PR 讀取權限。",
               "basicHint": "為您的帳戶建立 Atlassian API 權杖，再搭配該帳戶的電子郵件地址使用。",
               "scopesTitle": "請選擇下列 Bitbucket API 權杖範圍：",
-              "scopeUser": "驗證您的帳戶",
+              "scopeUser": "顯示您的帳戶名稱",
               "scopeRepository": "讀取建置狀態",
               "scopeReadPullRequest": "讀取 PR",
               "scopeWritePullRequest": "建立 PR",
@@ -16995,6 +16974,14 @@
                     "logins": {
                       "title": "保持登入狀態",
                       "body": "將現有的登入資訊匯入 Orca，即可直接保持登入狀態。"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 擴充功能",
+                        "body": "從 Chrome Web Store 安裝擴充功能，並將其釘選在網址列旁。",
+                        "action": "開啟 Chrome Web Store",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {
@@ -17354,17 +17341,17 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "顯示較少",
-          "showMore": "顯示更多"
+          "showMore": "顯示更多",
+          "copied": "已複製",
+          "copyFailed": "複製失敗",
+          "copyPrompt": "複製提示詞"
         },
         "AutomationDetail": {
           "host": "主機",
-          "a1d52c2189": "用量資料涵蓋率",
-          "449fc83bf7": "token",
           "401f40ae79": "預估花費",
           "a7c312430d": "最後一次執行",
           "2df8970cd5": "代理程式",
           "e353ab9516": "預檢查",
-          "620b22145e": "寬限期",
           "15ea446b93": "工作階段",
           "5405a09b1f": "執行位置",
           "2f8baf5360": "建立自",
@@ -17374,7 +17361,6 @@
           "1f6026358e": "刪除自動化",
           "d79452fb30": "恢復自動化",
           "91a4155e95": "暫停自動化",
-          "4b1ea02d2e": "編輯自動化",
           "2fb1605beb": "立即執行",
           "221916d93c": "建立自動化來開始安排代理程式工作。",
           "b09b2384fd": "已暫停",
@@ -17384,7 +17370,6 @@
           "noGrace": "無寬限期",
           "graceMinutes_other": "{{count}} 分鐘",
           "graceHours_other": "{{count}} 小時",
-          "usageCoverageRuns_other": "{{known}}/{{count}} 次執行",
           "usageUnavailable": "無法使用",
           "noRuns": "無執行紀錄",
           "projectDefault": "專案預設值",
@@ -17394,7 +17379,12 @@
           "precheckNone": "無",
           "migrate": "遷移",
           "migrateNotice": "{{host}} 已升級為新的遠端主機。請遷移此自動化以繼續執行。",
-          "needsMigration": "需要遷移"
+          "needsMigration": "需要遷移",
+          "repeats": "重複",
+          "missedRunGrace": "錯過執行寬限期",
+          "execution": "執行",
+          "notRunYet": "尚未執行",
+          "usageDetail_other": "{{tokens}} token · 已回報 {{known}}/{{count}} 次執行"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -18970,7 +18960,6 @@
           "browsePlugins": "瀏覽外掛程式",
           "browseThemePlugins": "瀏覽主題外掛程式",
           "colorMode": "色彩模式",
-          "colorModeCaption": "淺色、深色或跟隨系統。",
           "darkLook": "深色外觀",
           "darkLooks": "深色外觀",
           "lightLook": "淺色外觀",
@@ -18986,10 +18975,8 @@
           "slotLabel": "要編輯的外觀",
           "sourceBuiltIn": "內建",
           "sourceCommunity": "終端機調色盤",
-          "themes": "主題",
-          "themesCaption": "選用。使用 App 主題和終端機調色盤進一步自訂。"
-        },
-        "subtitle": "選擇淺色或深色，也可以再選一個主題。兩者都能隨時在設定中變更。"
+          "themes": "主題"
+        }
       },
       "integrations": {
         "capabilities": {
@@ -20471,6 +20458,7 @@
           "about": {
             "parakeetV3": "速度快。支援 {{languages}} 種歐洲語言。",
             "parakeetV2": "速度快。僅支援英語，英語最準確。",
+            "parakeetUnifiedEn": "僅限英語。說話時即時顯示文字。",
             "whisperTiny": "下載最小。適合試用聽寫。",
             "whisperTurbo": "語言最多，約 100 種。沒有 GPU 時較慢。",
             "senseVoice": "速度快。適用於中文、日語和韓語。",
@@ -20516,11 +20504,11 @@
           "label": "靜音後停止",
           "short": "你停止說話時結束聽寫。"
         },
-        "pageDescription": "在任何面板中用說話取代打字。",
+        "pageDescription": "在任何窗格中用說話取代打字。",
         "dictation": {
           "label": "聽寫",
-          "ready": "在任何面板中按 {{shortcut}}。",
-          "off": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
+          "ready": "在任何窗格中按 {{shortcut}}。",
+          "off": "開啟後，可在任何窗格中按 {{shortcut}} 聽寫。",
           "noModel": "在下方下載一個語音模型即可開始。它在這台電腦上執行，音訊不會離開這裡。",
           "downloading": "{{model}} 下載完成後即可使用。",
           "needsUpdate": "在下方更新 {{model}} 以繼續聽寫。"
@@ -21577,7 +21565,6 @@
       "description": "在 WSL 中的 Orca 更新之前，那裡的代理程式將使用該發行版預設的 Claude 和 Codex 帳戶。"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 聊天",
       "chatSignIn": "登入",
       "chatChangeAccount": "變更帳戶",
       "chatRetry": "重試登入",
@@ -21595,23 +21582,13 @@
       "chatFailed": "登入失敗。請再試一次。",
       "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
-      "signIn": "在此主機上啟動 agy 並完成其瀏覽器登入，然後儲存目前的帳戶。要新增其他帳戶，請在 agy 中使用 /logout 並再次登入。",
-      "docs": "登入說明",
       "retry": "重試",
-      "identityUnknown": "無法取得登入身分",
-      "signedOut": "目前未登入任何 agy 原生帳戶。",
       "changed": "原生帳戶已變更。請在啟動 agy 前重新選擇已儲存的帳戶。",
-      "save": "儲存目前的帳戶",
       "refresh": "重新整理帳戶",
       "usage": "重新整理用量",
-      "working": "正在更新帳戶",
       "usageReading": "工作階段：{{session}} · 每週：{{weekly}}",
       "saved": "已儲存的 Google 帳戶",
-      "nativeActive": "原生帳戶",
-      "selected": "已選擇",
-      "select": "選擇",
       "remove": "移除",
-      "sessions": "選擇適用於該主機上的新 agy 工作階段。現有工作階段可能會保留其以前的帳戶。",
       "searchDescription": "在執行主機上儲存並選擇 agy 的原生 Google 帳戶。",
       "title": "Antigravity",
       "keyword": {
@@ -21623,7 +21600,6 @@
       "authMethod": "登入方式",
       "personal": "Google 帳戶",
       "gcpProject": "Google Cloud 專案",
-      "gcpLocation": "Google Cloud 位置",
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",
@@ -23330,11 +23306,10 @@
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
     "noModels": "沒有符合搜尋條件的模型。",
-    "legacyModels": "舊版模型",
     "toggleArguments": "切換引數顯示",
     "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
     "searchAgentModels": "搜尋 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 個模型",
+    "moreModelsWithCount": "更多模型 ({{total}})",
     "search": "搜尋，例如 Opus 5.5…",
     "configure": "設定 {{agent}}",
     "arguments": "引數",
@@ -23445,14 +23420,14 @@
     "update": "更新",
     "cancel": "取消",
     "pill": {
-      "updateNotice": "更快的語音輸入已可安裝",
-      "retiredNotice": "語音輸入已改用更快的語音模型",
+      "updateNotice": "更快的聽寫功能已可安裝",
+      "retiredNotice": "聽寫已改用更快的語音模型",
       "install": "安裝",
       "installTooltip": "一次性下載 · {{size}} MB",
-      "downloading": "正在設定語音輸入",
+      "downloading": "正在設定聽寫",
       "downloadingTooltip": "{{done}} / {{size}} MB",
-      "ready": "語音輸入已就緒。按下 <kbd></kbd>",
-      "readyNoShortcut": "語音輸入已就緒。",
+      "ready": "聽寫已就緒。按下 <kbd></kbd>",
+      "readyNoShortcut": "聽寫已就緒。",
       "failed": "下載已中斷。請檢查網路連線。",
       "tryAgain": "重試",
       "deleteOld": "刪除舊模型",

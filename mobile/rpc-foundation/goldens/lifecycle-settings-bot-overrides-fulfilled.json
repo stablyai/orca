@@ -263,58 +263,6 @@
           "state": "4f53cda18c2b",
           "effects": []
         }
-      },
-      {
-        "id": "settings-bot-overrides-fulfilled.blur-before-1:lifecycle-boundary",
-        "observation": {
-          "sender": ["e3973bb12da1"],
-          "payloads": ["c8c77ac17e0a"],
-          "settlements": {
-            "mount": "eb79a9b3682a",
-            "lifecycle-blur": "eb79a9b3682a"
-          },
-          "state": "4f53cda18c2b",
-          "effects": []
-        }
-      },
-      {
-        "id": "settings-bot-overrides-fulfilled.blur-before-1:settled",
-        "observation": {
-          "sender": ["b0e514c7c334"],
-          "payloads": ["c8c77ac17e0a"],
-          "settlements": {
-            "mount": "eb79a9b3682a",
-            "lifecycle-blur": "eb79a9b3682a"
-          },
-          "state": "d52c8e96e222",
-          "effects": []
-        }
-      },
-      {
-        "id": "settings-bot-overrides-fulfilled.blur-after-1:lifecycle-boundary",
-        "observation": {
-          "sender": ["b0e514c7c334"],
-          "payloads": ["c8c77ac17e0a"],
-          "settlements": {
-            "mount": "eb79a9b3682a",
-            "lifecycle-blur": "eb79a9b3682a"
-          },
-          "state": "d52c8e96e222",
-          "effects": []
-        }
-      },
-      {
-        "id": "settings-bot-overrides-fulfilled.blur-after-1:settled",
-        "observation": {
-          "sender": ["b0e514c7c334"],
-          "payloads": ["c8c77ac17e0a"],
-          "settlements": {
-            "mount": "eb79a9b3682a",
-            "lifecycle-blur": "eb79a9b3682a"
-          },
-          "state": "d52c8e96e222",
-          "effects": []
-        }
       }
     ]
   }

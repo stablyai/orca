@@ -142,6 +142,15 @@ describe('BrowserCertificateTrustController', () => {
     controller.installSessionRequestGuard(browserSession)
   })
 
+  it('keeps challenge ownership and expiry when reading a specific guest', () => {
+    certificateEvent({ controller, guest })
+    expect(controller.hasFailureForGuest(guest.id)).toBe(true)
+    expect(controller.hasFailureForGuest(otherGuest.id)).toBe(false)
+    now += 300_000
+    expect(controller.hasFailureForGuest(guest.id)).toBe(false)
+    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: false, reason: 'missing' })
+  })
+
   it('blocks a session-cached certificate for sibling requests until that guest approves it', () => {
     certificateEvent({ controller, guest })
     expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })

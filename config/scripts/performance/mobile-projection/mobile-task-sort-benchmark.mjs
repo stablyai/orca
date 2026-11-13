@@ -14,7 +14,12 @@ if (!baseline) {
 }
 async function load(file, contents) {
   const result = await build({
-    stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },
+    stdin: {
+      contents,
+      sourcefile: resolve(file),
+      loader: 'ts',
+      resolveDir: dirname(resolve(file))
+    },
     bundle: true,
     platform: 'node',
     format: 'esm',
@@ -28,6 +33,19 @@ async function load(file, contents) {
           bundler.onResolve({ filter: /mobile-tasks-dependencies$/ }, () => ({
             path: resolve('mobile/src/theme/mobile-theme.ts')
           }))
+          const relocatedImports = new Map([
+            [
+              resolve('mobile/src/tasks/mobile-tasks-item-mapping'),
+              resolve('mobile/src/tasks/item-detail/mobile-tasks-item-mapping.ts')
+            ]
+          ])
+          bundler.onResolve({ filter: /^\./ }, (args) => {
+            if (args.importer !== resolve(originalFile)) {
+              return
+            }
+            const target = relocatedImports.get(resolve(args.resolveDir, args.path))
+            return target ? { path: target } : undefined
+          })
         }
       }
     ]
@@ -36,10 +54,11 @@ async function load(file, contents) {
     `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
   )
 }
-const file = 'mobile/src/tasks/mobile-tasks-repository-presentation.ts'
+const originalFile = 'mobile/src/tasks/mobile-tasks-repository-presentation.ts'
+const file = 'mobile/src/tasks/repositories/mobile-tasks-repository-presentation.ts'
 const before = await load(
-  file,
-  execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })
+  originalFile,
+  execFileSync('git', ['show', `${baseline}:${originalFile}`], { encoding: 'utf8' })
 )
 const after = await load(file, readFileSync(file, 'utf8'))
 const repos = new Map()

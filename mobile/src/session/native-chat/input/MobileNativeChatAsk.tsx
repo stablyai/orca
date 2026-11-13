@@ -261,7 +261,11 @@ export function MobileNativeChatAsk({
         keyboardShouldPersistTaps="always"
       >
         <View style={styles.questionRow}>
-          <MobileNativeChatQuestionText title content={q.question} style={styles.questionText} />
+          <MobileNativeChatQuestionText
+            tone="medium"
+            content={q.question}
+            style={styles.questionText}
+          />
           <MobileNativeChatCardHeaderAction
             onCollapse={
               onCollapse &&

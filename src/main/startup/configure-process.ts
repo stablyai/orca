@@ -1,22 +1,22 @@
 import { app } from 'electron'
-import { guardExternalOpensInE2E } from './e2e-external-open-guard'
-import { quitProcess } from './process-quit-request'
+import { guardExternalOpensInE2E } from './testing/e2e-external-open-guard'
+import { quitProcess } from './quit/process-quit-request'
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import { getMainE2EConfig } from './testing/e2e-config'
-import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
-import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
-import { checkServeUserDataPath } from './serve-user-data-path-guard'
+import { DISABLED_CHROMIUM_FEATURES } from './chromium-policy/disabled-chromium-features'
+import { readHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
+import { checkServeUserDataPath } from './serve-launch/serve-user-data-path-guard'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
   readPersistedHttp1CompatibilityMode
-} from './http1-compatibility-profile-state'
+} from './network-compatibility/http1-compatibility-profile-state'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -121,12 +121,26 @@ export function resetDevParentShutdownRequestForTests(): void {
   devParentShutdownRequested = false
 }
 
+function resolvePackagedHome(): string {
+  try {
+    return homedir()
+  } catch (error) {
+    // Unmapped uids with no HOME make homedir() throw; keep seeding system dirs.
+    console.warn('[startup] Could not resolve the home directory:', error)
+    return ''
+  }
+}
+
 export function patchPackagedProcessPath(): void {
   if (!app.isPackaged) {
     return
   }
 
-  const home = process.env.HOME ?? ''
+  const home = resolvePackagedHome()
+  // #23214: desktop-launched AppImages can lack HOME, so spawned CLIs like gh miss their config.
+  if (process.platform !== 'win32' && !process.env.HOME && home) {
+    process.env.HOME = home
+  }
   // #18234: append generic user bins; prepending ~/.local/bin made a gh/mise wrapper recursively shadow system gh. Shell hydration owns user ordering.
   const isGenericUserBinDir = (path: string): boolean =>
     process.platform !== 'win32' &&
@@ -144,7 +158,8 @@ export function patchPackagedProcessPath(): void {
       appendPaths.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
     }
 
-    appendPaths.push('/nix/var/nix/profiles/default/bin')
+    // A launch with no inherited PATH otherwise cannot reach package-manager CLIs (#23214).
+    appendPaths.push('/nix/var/nix/profiles/default/bin', '/usr/bin', '/bin')
 
     if (home) {
       appendPaths.push(
@@ -165,7 +180,8 @@ export function patchPackagedProcessPath(): void {
   }
 
   // env-node shebangs require runtime shims; exclude generic user bins so arbitrary wrappers cannot shadow system tools.
-  for (const path of getVersionManagerBinPaths()) {
+  // An empty home would seed cwd-relative entries like `.volta/bin`.
+  for (const path of home ? getVersionManagerBinPaths({ homePath: home }) : []) {
     if (isWindowsFnmDefaultAliasDir(path)) {
       appendPaths.push(path)
     } else if (!isGenericUserBinDir(path)) {

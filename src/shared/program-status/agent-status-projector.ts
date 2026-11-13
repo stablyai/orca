@@ -27,7 +27,8 @@ import { ProgramStatusRecordSet, type ProgramStatusRecord } from './records'
 /** OSC 7501 `app` ids whose Orca agent id differs. Other apps pass through verbatim. */
 const APP_TO_AGENT_TYPE: Readonly<Record<string, string>> = {
   'claude-code': 'claude',
-  'grok-build': 'grok'
+  'grok-build': 'grok',
+  'kiro-cli': 'kiro'
 }
 
 function agentTypeForProgramStatusApp(app: string | undefined): string | undefined {

@@ -29,11 +29,11 @@ export function useNativeChatInteractiveSendReveal(
         return sendAnswer(prompt, selections, onDeliverySettled)
       },
       sendRaw,
-      sendRawVerified: (raw) => {
+      sendRawVerified: (raw, requireStartupDialog) => {
         if (targetPtyId) {
           revealLatest()
         }
-        return sendRawVerified(raw)
+        return sendRawVerified(raw, requireStartupDialog)
       },
       cancelPending,
       cancelAsk,

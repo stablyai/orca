@@ -5,7 +5,7 @@ import {
   taskPageGitHubResumeCache,
   TASK_PAGE_GITHUB_RESUME_FRESH_MS
 } from '@/components/task-page/github/task-page-github-resume-cache'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { sortWorkItemsByNumber } from '../../../../../shared/work-items/work-item-order'
 import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-item-pagination'

@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { AddRepoStepIndicator } from './AddRepoStepIndicator'
 
 export function AddRepoDialogChrome({
   children,
+  hideBack = false,
   isAdding,
   isCloning,
   isOpen,
@@ -15,6 +16,7 @@ export function AddRepoDialogChrome({
   step
 }: {
   children: ReactNode
+  hideBack?: boolean
   isAdding: boolean
   isCloning: boolean
   isOpen: boolean
@@ -46,7 +48,7 @@ export function AddRepoDialogChrome({
           step === 'nested' ? 'max-h-[calc(100vh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)]' : ''
         }`}
       >
-        <AddRepoStepIndicator step={step} isAdding={isAdding} onBack={onBack} />
+        <AddRepoStepIndicator step={step} isAdding={isAdding} hideBack={hideBack} onBack={onBack} />
         {children}
       </DialogContent>
     </Dialog>

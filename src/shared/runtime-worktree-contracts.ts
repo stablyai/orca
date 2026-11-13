@@ -8,7 +8,7 @@ import type {
 import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentListVerdict } from './agent-status/presentation/agent-list-status'
-import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-requests/pull-request-types'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
@@ -137,6 +137,8 @@ export type RuntimeWorktreePsSummary = {
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
+  /** The owning host committed removal intent before publishing this row. */
+  removalRecorded?: true
   /** See `GitWorktreeInfo.removalError`. */
   removalError?: string
   /** Host-derived workspace kinds. Missing defaultBranch retains reader guesses; other missing flags show the row.

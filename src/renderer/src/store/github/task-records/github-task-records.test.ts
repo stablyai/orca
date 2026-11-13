@@ -1,7 +1,7 @@
 import { answered } from '../requests/answered-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from '../github-slice-test-harness'
 import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 import { resetTaskPageGitHubMutationRegistryForTests } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'

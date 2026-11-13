@@ -367,8 +367,6 @@
       "otherAgentsPermissionsLabel": "다른 에이전트에 대한 권한",
       "editRowPermissions": "{{agent}} 권한: {{mode}}",
       "customArgsTooltip": "자체 실행 인수를 사용합니다.",
-      "expandAgentSettings": "에이전트 설정 펼치기",
-      "collapseAgentSettings": "에이전트 설정 접기",
       "replaceWithPermissionMode": "{{mode}}로 교체",
       "permissionsTitle": "권한",
       "permissionsChoiceExplanation": "모든 에이전트가 확인 없이 할 수 있는 작업입니다. 아래에서 에이전트별로 다르게 설정할 수 있습니다.",
@@ -2667,7 +2665,6 @@
       "Terminal": {
         "73768427cf": "닫기",
         "f82e9f02df": "취소",
-        "7958465754": "실행 중인 프로세스가 있는 terminals이 있습니다. 그래도 창을 닫으시겠습니까?",
         "2fa9c69ff3": "창을 닫으시겠습니까?",
         "cd51e28d8b": "저장",
         "0037b21794": "저장하지 않음",
@@ -3299,7 +3296,6 @@
             "runningTerminalBlocker": "실행 중인 터미널 프로세스",
             "terminalLivenessUnknownBlocker": "터미널 상태 알 수 없음",
             "dirtyEditorBufferBlocker": "저장되지 않은 편집기 버퍼",
-            "volatileLocalContextBlocker": "휘발성 로컬 문맥",
             "recentVisibleContextBlocker": "최근 방문한 탭",
             "liveAgentBlocker": "활성 에이전트",
             "sshDisconnectedBlocker": "원격을 사용할 수 없음",
@@ -3461,6 +3457,8 @@
             "15dd899676": "{{value0}}에 추가…"
           },
           "TerminalErrorToast": {
+            "title": "터미널 문제",
+            "errorTitle": "터미널 오류",
             "e4aa243f8c": "데몬 재시작",
             "a7e2fd2699": "이슈 등록",
             "5c8ce20be6": "문제가 계속되면",
@@ -6981,14 +6979,11 @@
           "e8da2af684": "설치 가능",
           "ed3e110e61": "감지됨",
           "02e0143be5": "설치됨",
-          "92033495ff": "자동",
           "f9f127d664": "이 agent의 바이너리 경로나 이름을 재정의하고 기본 실행 인수 또는 환경을 편집합니다.",
           "f95b5c79b8": "설치",
           "fe4d630c94": "문서",
-          "8dc0192e48": "비활성",
           "5200dac9da": "재설정",
           "2e45ca29b6": "명령",
-          "d4d2a45d63": "활성화됨",
           "1c9a9679ec": "{{value0}} 사용 가능 여부",
           "0d9e293a02": "새로고침",
           "c9b33eb5c0": "새로고침 중…",
@@ -7007,10 +7002,8 @@
           "25a41a9aad": "이 서버에 설치된 에이전트 다시 감지",
           "remoteDetectionFailed": "설치된 에이전트를 감지하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.",
           "retryDetection": "다시 시도",
-          "storedDefaultUndetected": "기본값으로 저장되었지만 지금은 감지되지 않습니다.",
           "noAgentsDetected": "감지된 에이전트가 없습니다. 에이전트가 설치되어 있다면 감지 시간이 초과되었을 수 있습니다.",
-          "9f30095d49": "에이전트 권한",
-          "3bddd54c9e": "기본 에이전트"
+          "9f30095d49": "에이전트 권한"
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -7388,10 +7381,6 @@
             "modeAriaLabel": "에이전트 대시보드 열기 모드",
             "modeInWindow": "윈도우 내",
             "modePopout": "팝업"
-          },
-          "browserExtensions": {
-            "copy": "로컬 브라우저 프로필에 설정 › 브라우저 › 확장 프로그램을 추가합니다.",
-            "toggleLabel": "브라우저 확장 프로그램 켜기/끄기"
           }
         },
         "FloatingWorkspacePane": {
@@ -7919,16 +7908,12 @@
           "5426ecbdcb": "로컬 스크립트가 실행되지 않습니다.",
           "95a0411b3e": "템플릿",
           "175daba180": "예",
-          "b20c5df6ca": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:",
-          "56f9a4a1d0": "`orca.yaml` 사용 중",
           "623e0c9f31": "`orca.yaml`을 구문 분석할 수 없습니다",
-          "5a67e4793d": "`orca.yaml`을 찾을 수 없습니다",
           "07ba35bc68": "`scripts:` 아래의 들여쓰기를 확인하세요. 후크 키는 두 칸, 명령 줄은 네 칸을 사용해야 합니다.",
           "787ca433ef": "지원되는 키만 정의하세요: `scripts`, `setup`, `archive`, `issueCommand`.",
           "ecc73d9125": "아래의 작동하는 템플릿과 비교하고 필요한 경우 그 형식을 복사하세요.",
           "0cc712b823": "핵심 구성 파일이 repo 루트에 있지만 Orca가 아직 지원되는 후크 정의를 구문 분석할 수 없습니다.",
           "aba825233f": "파일에는 이 버전의 Orca가 인식하지 못하는 구성 키가 포함되어 있습니다. Orca를 업데이트하거나 파일에 오타가 있는지 확인해야 할 수도 있습니다.",
-          "ca424ff135": "공유 후크 및 이슈 자동화 기본값은 repo에 정의되어 있으며 이를 사용하는 모든 사람이 사용할 수 있습니다.",
           "8bfe65fc60": "로컬 명령 사용",
           "8d6c56bff8": "둘 다 실행",
           "0fa21e19ec": "일반적으로 브랜치 이름을 기반으로 하는 워크스페이스의 이름입니다.",
@@ -9510,13 +9495,6 @@
               "inWindow": "창 내부",
               "worktrees": "작업 트리",
               "eaf17a7214": "에이전트 대시보드"
-            },
-            "browserExtensions": {
-              "title": "브라우저 확장 프로그램",
-              "description": "비밀번호 관리자 같은 Chrome 확장 프로그램을 Orca 브라우저 탭에서 실행합니다.",
-              "extension": "확장 프로그램",
-              "chrome": "크롬",
-              "password": "비밀번호 관리자"
             }
           }
         },
@@ -10507,7 +10485,7 @@
             "agent": "에이전트",
             "process": "프로세스",
             "prompt": "프롬프트",
-            "stop": "멈추다",
+            "stop": "중지",
             "minimumContrast": {
               "description": "텍스트 가독성을 높이거나 터미널 프로그램에서 선택한 색상을 유지합니다.",
               "contrast": "대비",
@@ -11902,7 +11880,7 @@
               "tokenHint": "리포지토리, 프로젝트 및 워크스페이스 액세스 토큰은 일치하는 Bitbucket 설정 페이지에서 생성되며 PR에 대한 읽기 액세스 권한이 필요합니다.",
               "basicHint": "귀하의 계정에 대한 Atlassian API 토큰을 생성한 다음 이를 소유한 이메일 주소와 페어링하세요.",
               "scopesTitle": "다음 Bitbucket API 토큰 범위를 선택하세요:",
-              "scopeUser": "계정 확인",
+              "scopeUser": "계정 이름 표시",
               "scopeRepository": "빌드 상태 읽기",
               "scopeReadPullRequest": "PR 읽기",
               "scopeWritePullRequest": "PR 생성",
@@ -16521,6 +16499,14 @@
                     "logins": {
                       "title": "로그인 상태 유지",
                       "body": "기존 로그인 정보를 Orca로 가져와 바로 로그인 상태를 유지하세요."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 확장 프로그램",
+                        "body": "Chrome 웹 스토어에서 설치하고 주소 표시줄 옆에 고정하세요.",
+                        "action": "웹 스토어 열기",
+                        "secondaryAction": "확인"
+                      }
                     }
                   },
                   "tasks": {
@@ -16908,17 +16894,17 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "접기",
-          "showMore": "더 보기"
+          "showMore": "더 보기",
+          "copied": "복사됨",
+          "copyFailed": "복사하지 못함",
+          "copyPrompt": "프롬프트 복사"
         },
         "AutomationDetail": {
           "host": "호스트",
-          "a1d52c2189": "사용 범위",
-          "449fc83bf7": "토큰",
           "401f40ae79": "예상 경비",
           "a7c312430d": "마지막 실행",
           "2df8970cd5": "에이전트",
           "e353ab9516": "사전 확인",
-          "620b22145e": "유예 시간",
           "15ea446b93": "세션",
           "5405a09b1f": "실행 위치",
           "2f8baf5360": "다음에서 생성",
@@ -16928,7 +16914,6 @@
           "1f6026358e": "자동화 삭제",
           "d79452fb30": "자동화 재개",
           "91a4155e95": "자동화 일시 중지",
-          "4b1ea02d2e": "자동화 편집",
           "2fb1605beb": "지금 실행",
           "221916d93c": "agent 작업 예약을 시작하려면 자동화를 만드세요.",
           "b09b2384fd": "일시중지됨",
@@ -16938,7 +16923,6 @@
           "noGrace": "유예 없음",
           "graceMinutes_other": "{{count}}분",
           "graceHours_other": "{{count}}시간",
-          "usageCoverageRuns_other": "실행 {{known}}/{{count}}회",
           "usageUnavailable": "사용할 수 없음",
           "noRuns": "실행 없음",
           "projectDefault": "프로젝트 기본값",
@@ -16948,7 +16932,12 @@
           "precheckNone": "없음",
           "migrate": "마이그레이션",
           "migrateNotice": "{{host}}이(가) 새 원격 호스트로 업그레이드되었습니다. 계속 실행하려면 이 자동화를 마이그레이션하세요.",
-          "needsMigration": "마이그레이션 필요"
+          "needsMigration": "마이그레이션 필요",
+          "repeats": "반복",
+          "missedRunGrace": "누락된 실행 유예 시간",
+          "execution": "실행",
+          "notRunYet": "아직 실행되지 않음",
+          "usageDetail_other": "토큰 {{tokens}} · 실행 {{known}}/{{count}}회 보고됨"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "취소",
@@ -17507,7 +17496,7 @@
           "unreadCount_other": "읽지 않음 {{count}}개"
         },
         "clearCompleted": {
-          "undo": "끄르다",
+          "undo": "실행 취소",
           "cleared_other": "완료된 에이전트 {{count}}개를 지웠습니다"
         },
         "standaloneWorktree": {
@@ -18549,7 +18538,6 @@
           "browsePlugins": "플러그인 둘러보기",
           "browseThemePlugins": "테마 플러그인 둘러보기",
           "colorMode": "색상 모드",
-          "colorModeCaption": "라이트, 다크 또는 OS 설정 따르기.",
           "darkLook": "다크 룩",
           "darkLooks": "다크 룩",
           "lightLook": "라이트 룩",
@@ -18565,10 +18553,8 @@
           "slotLabel": "편집할 룩",
           "sourceBuiltIn": "기본 제공",
           "sourceCommunity": "터미널 팔레트",
-          "themes": "테마",
-          "themesCaption": "선택 사항. 앱 테마와 터미널 팔레트로 더 꾸며 보세요."
-        },
-        "subtitle": "라이트 또는 다크를 고르고, 원하면 테마도 선택하세요. 둘 다 설정에서 언제든 바꿀 수 있습니다."
+          "themes": "테마"
+        }
       },
       "integrations": {
         "capabilities": {
@@ -19139,7 +19125,7 @@
       },
       "backgroundTasks": {
         "monitoring": "백그라운드 작업 모니터링",
-        "stop": "멈추다",
+        "stop": "중지",
         "stopTask": "{{value0}} 중지",
         "stopAll": "백그라운드 작업 중지",
         "agent": "백그라운드 에이전트",
@@ -20082,6 +20068,7 @@
           "about": {
             "parakeetV3": "빠름. 유럽 {{languages}}개 언어.",
             "parakeetV2": "빠름. 영어 전용이며 영어에서 가장 정확합니다.",
+            "parakeetUnifiedEn": "영어 전용. 말하는 동안 단어가 표시됩니다.",
             "whisperTiny": "가장 작은 다운로드. 받아쓰기를 체험해 보기에 좋습니다.",
             "whisperTurbo": "가장 많은 약 100개 언어. GPU가 없으면 느립니다.",
             "senseVoice": "빠름. 중국어, 일본어, 한국어용.",
@@ -20596,7 +20583,8 @@
       "remove": "제거…",
       "empty": "이 프로필에 켜진 확장 프로그램이 없습니다",
       "visitWebStore": "Chrome 웹 스토어 방문",
-      "manage": "확장 프로그램 관리"
+      "manage": "확장 프로그램 관리",
+      "openWebStoreFailed": "Chrome 웹 스토어를 열 수 없습니다."
     },
     "viewport": {
       "mobile-s": "소형 모바일 — 320 × 568",
@@ -21274,7 +21262,7 @@
   "rendererRecovery": {
     "reload": "새로고침",
     "copyCommands": "복사 명령",
-    "quit": "그만두다",
+    "quit": "종료",
     "stalledDetail": "Orca는 충돌 후 창을 다시 로드했지만 로드가 완료되지 않았습니다.",
     "crashLoopDetail": "Orca는 {{recoveryCount}}회 연속 복구를 시도했지만 성공하지 못했습니다.",
     "driverFallback": "그래도 도움이 되지 않으면 일반적으로 원인은 그래픽 드라이버입니다.",
@@ -21500,7 +21488,6 @@
       "cancel": "취소"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 채팅",
       "chatSignIn": "로그인",
       "chatChangeAccount": "계정 변경",
       "chatRetry": "로그인 다시 시도",
@@ -21518,23 +21505,13 @@
       "chatFailed": "로그인하지 못했습니다. 다시 시도하세요.",
       "chatOtherClient": "다른 클라이언트에서 로그인이 진행 중입니다.",
       "chatReadFailed": "{{host}}의 로그인을 확인할 수 없습니다.",
-      "signIn": "이 호스트에서 agy를 실행하고 브라우저 로그인을 완료한 후 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서 /logout 명령을 실행하고 다시 로그인하세요.",
-      "docs": "로그인 안내",
       "retry": "다시 시도",
-      "identityUnknown": "로그인한 ID를 사용할 수 없음",
-      "signedOut": "로그인된 agy 자체 계정이 없습니다.",
       "changed": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요.",
-      "save": "현재 계정 저장",
       "refresh": "계정 새로고침",
       "usage": "사용량 새로 고침",
-      "working": "계정 업데이트",
       "usageReading": "세션: {{session}} · 주간: {{weekly}}",
       "saved": "저장된 Google 계정",
-      "nativeActive": "기본 계정",
-      "selected": "선택됨",
-      "select": "선택",
       "remove": "제거",
-      "sessions": "선택한 계정은 이 호스트의 새 agy 세션에 적용됩니다. 기존 세션은 이전 계정을 계속 사용할 수 있습니다.",
       "searchDescription": "실행 호스트에서 기본 agy Google 계정을 저장하고 선택합니다.",
       "title": "Antigravity",
       "keyword": {
@@ -21546,7 +21523,6 @@
       "authMethod": "로그인 방법",
       "personal": "Google 계정",
       "gcpProject": "Google Cloud 프로젝트",
-      "gcpLocation": "Google Cloud 위치",
       "settingsIncomplete": "Antigravity 계정 유형을 선택하고 Google Cloud 프로젝트와 위치를 입력하세요.",
       "settingsLoadFailed": "Orca에서 Antigravity 로그인 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "settingsSaveFailed": "Orca에서 Antigravity 로그인 설정을 저장하지 못했습니다. 다시 시도하세요.",
@@ -22869,11 +22845,10 @@
     "setByArguments": "인수로 설정됨",
     "searchModels": "모델 검색",
     "noModels": "검색과 일치하는 모델이 없습니다.",
-    "legacyModels": "이전 모델",
     "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
-    "legacyModelCount": "모델 {{total}}개",
+    "moreModelsWithCount": "모델 더 보기 ({{total}})",
     "use": "사용",
     "select": "에이전트 선택",
     "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",

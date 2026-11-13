@@ -120,10 +120,7 @@ export const gitRunnerModuleMock = (): {
   gitExecFileSync: vi.fn()
 })
 
-export const gitRepoModuleMock = () => ({
-  getBaseRefDefault: getBaseRefDefaultMock,
-  resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
-  getDefaultRemote: getDefaultRemoteMock,
+export const gitBranchConflictModuleMock = () => ({
   getBranchConflictKind: async (
     repoPath: string,
     branch: string,
