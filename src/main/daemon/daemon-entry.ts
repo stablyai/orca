@@ -61,7 +61,6 @@ async function main(): Promise<void> {
   const processCeiling = initializeTerminalScopes(daemonScope, log)
   startDaemonScopeDeathWatch({ daemonScope, log })
   void warmPwshAvailabilityCache()
-  warmWindowsPwshSearch()
 
   // Detached stderr is unavailable; retain TCC preflight failures in diagnostic logs.
   const runMacosLoginPreflight = async (): Promise<void> => {
@@ -237,6 +236,8 @@ async function main(): Promise<void> {
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()
+  // After ready, so the search's disk probes never compete with the daemon coming up.
+  warmWindowsPwshSearch()
   // Log native-addon availability without stderr and pay dlopen cost before the first teardown.
   if (process.platform === 'win32') {
     daemonLog.log('windows-process-table', { native: isWindowsProcessTableAvailable() })

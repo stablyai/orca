@@ -2,6 +2,7 @@ import { readdir, readlink, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
 import { expandWindowsEnvironmentVariables } from '../../../../shared/windows-environment-expansion'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import {
   loadWindowsNativeRegistry,
   WINDOWS_REG_EXPAND_SZ,
@@ -20,6 +21,8 @@ const VERSION_DIRECTORY = /^(\d+)(-preview)?$/i
 const STORE_PACKAGE_DIRECTORY = /^Microsoft\.PowerShell(Preview)?_/i
 // Local probes finish in milliseconds; this bounds only unreachable network PATH entries.
 const PROBE_DEADLINE_MS = 1_000
+// Leaves most of libuv's 4-thread pool to the daemon's own I/O, health checks included.
+const PROBE_CONCURRENCY = 2
 
 /** Store alias reparse stubs may launch through execFile PATH lookup but fail ConPTY absolute CreateProcessW (5). */
 export function isWindowsAppExecutionAliasPath(candidate: string): boolean {
@@ -237,13 +240,18 @@ export async function discoverWindowsPwshInstalls(
   })
   // A PATH entry on an unresponsive share can stall stat; stop waiting rather than hold the tab.
   let timer: ReturnType<typeof setTimeout> | undefined
+  let expired = false
   const timedOut = Symbol('timed-out')
   const deadline = new Promise<typeof timedOut>((resolve) => {
-    timer = setTimeout(() => resolve(timedOut), PROBE_DEADLINE_MS)
+    timer = setTimeout(() => {
+      expired = true
+      resolve(timedOut)
+    }, PROBE_DEADLINE_MS)
     timer.unref?.()
   })
-  const resolved = await Promise.all(
-    candidates.map((candidate) => Promise.race([probeCandidate(candidate), deadline]))
+  // Best candidates are probed first; past the deadline no new probe starts.
+  const resolved = await mapWithConcurrency(candidates, PROBE_CONCURRENCY, (candidate) =>
+    expired ? Promise.resolve(timedOut) : Promise.race([probeCandidate(candidate), deadline])
   ).finally(() => clearTimeout(timer))
   const installs: WindowsPwshInstall[] = []
   const seenInstalls = new Set<string>()
