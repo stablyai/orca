@@ -16,7 +16,34 @@ export type RepoSlugMatches = { origin: Repo[]; upstream: Repo[] }
 /** Cache by runtime scope/repo ID, briefly retaining null failures to avoid per-cell retries while recovering after external GHES login. */
 export const slugByRepoId = new Map<string, string | null>()
 const slugFailureExpiresAtByRepoId = new Map<string, number>()
+const slugCacheListeners = new Set<() => void>()
+let slugCacheVersion = 0
+let slugCacheNotificationPending = false
 export const REPO_SLUG_FAILURE_TTL_MS = 60_000
+
+export function subscribeRepoSlugCache(listener: () => void): () => void {
+  slugCacheListeners.add(listener)
+  return () => slugCacheListeners.delete(listener)
+}
+
+export function getRepoSlugCacheVersion(): number {
+  return slugCacheVersion
+}
+
+function notifyRepoSlugCacheChanged(): void {
+  slugCacheVersion += 1
+  if (slugCacheNotificationPending || slugCacheListeners.size === 0) {
+    return
+  }
+  slugCacheNotificationPending = true
+  // A catalog's concurrent resolutions should invalidate routes once per batch.
+  queueMicrotask(() => {
+    slugCacheNotificationPending = false
+    for (const listener of slugCacheListeners) {
+      listener()
+    }
+  })
+}
 
 export function readRepoSlugCache(
   cacheKey: string,
@@ -36,22 +63,34 @@ export function readRepoSlugCache(
 }
 
 export function rememberRepoSlug(cacheKey: string, value: string | null, now = Date.now()): void {
+  const previous = slugByRepoId.get(cacheKey) ?? null
   slugByRepoId.set(cacheKey, value)
   if (value === null) {
     slugFailureExpiresAtByRepoId.set(cacheKey, now + REPO_SLUG_FAILURE_TTL_MS)
   } else {
     slugFailureExpiresAtByRepoId.delete(cacheKey)
   }
+  if (previous !== value) {
+    notifyRepoSlugCacheChanged()
+  }
 }
 
 export function deleteRepoSlugCacheKey(cacheKey: string): void {
+  const previous = slugByRepoId.get(cacheKey)
   slugByRepoId.delete(cacheKey)
   slugFailureExpiresAtByRepoId.delete(cacheKey)
+  if (previous) {
+    notifyRepoSlugCacheChanged()
+  }
 }
 
 export function clearRepoSlugCacheValues(): void {
+  const hadSlugs = [...slugByRepoId.values()].some(Boolean)
   slugByRepoId.clear()
   slugFailureExpiresAtByRepoId.clear()
+  if (hadSlugs) {
+    notifyRepoSlugCacheChanged()
+  }
 }
 
 export function nextRepoSlugFailureRetryDelay(

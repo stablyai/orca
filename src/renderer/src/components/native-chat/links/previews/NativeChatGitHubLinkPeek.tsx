@@ -1,5 +1,10 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
+import { recomputeOn } from '@/lib/recompute-on'
+import {
+  getRepoSlugCacheVersion,
+  subscribeRepoSlugCache
+} from '@/lib/workspace/catalog/repo-slug-cache'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -79,15 +84,15 @@ export type GitHubPeekSource =
   | { kind: 'repo'; repo: Repo }
   | { kind: 'routed'; authorityKey: HostAuthorityKey }
 
-function peekLookup(source: GitHubPeekSource, link: GitHubIssueOrPRLink) {
+function peekLookup(source: GitHubPeekSource, link: GitHubIssueOrPRLink, key: string) {
   return source.kind === 'repo'
     ? {
-        key: githubLinkPreviewKey(source.repo, link),
+        key,
         read: () => readCachedGitHubLinkPreview(source.repo, link),
         load: () => loadGitHubLinkPreview(source.repo, link)
       }
     : {
-        key: routedGitHubLinkPreviewKey(source.authorityKey, link),
+        key,
         read: () => readCachedRoutedGitHubLinkPreview(source.authorityKey, link),
         load: () => loadRoutedGitHubLinkPreview(source.authorityKey, link)
       }
@@ -107,17 +112,22 @@ export function NativeChatGitHubPeekBody({
 }): ReactNode {
   // Select the catalog itself so unrelated store updates don't rescan it for a route.
   const routeRepos = useAppStore((state) => (source.kind === 'routed' ? state.repos : null))
+  const slugCacheVersion = useSyncExternalStore(subscribeRepoSlugCache, () =>
+    source.kind === 'routed' ? getRepoSlugCacheVersion() : 0
+  )
   const key = useMemo(
     () =>
-      source.kind === 'repo'
-        ? githubLinkPreviewKey(source.repo, link)
-        : routedGitHubLinkPreviewKey(source.authorityKey, link, routeRepos ?? []),
-    [source, link, routeRepos]
+      recomputeOn([slugCacheVersion], () =>
+        source.kind === 'repo'
+          ? githubLinkPreviewKey(source.repo, link)
+          : routedGitHubLinkPreviewKey(source.authorityKey, link, routeRepos ?? [])
+      ),
+    [source, link, routeRepos, slugCacheVersion]
   )
   return (
     <GitHubPeekContent
       key={key}
-      lookup={peekLookup(source, link)}
+      lookup={peekLookup(source, link, key)}
       link={link}
       otherRepoFallback={otherRepoFallback}
     />
