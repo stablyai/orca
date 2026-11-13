@@ -257,7 +257,7 @@ describe('cross-version structured agent sessions', () => {
           type: 'batch',
           sessionId: SESSION,
           batch: { cursor: held, items: [], removedItemIds: [], submissions: [] },
-          fence: resumedFence,
+          fence: store.getConversation(SESSION)?.currentFence,
           backgroundTasks: null,
           commands: null,
           hostNow: expect.any(Number)
