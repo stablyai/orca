@@ -3,6 +3,7 @@
 // rows whose host is no longer in the cohort and asks the edge to drain them; the desktop then
 // re-asks /v1/assign, and that ask exports its data and places it on a cell (app.ts). Each pass also
 // retries fences that did not land after a host left (edge-relay-fence.ts).
+import { RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayDatabase, SqlRow } from './database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, mayBeOnEdge, type EdgeRelayConfig } from './edge-relay.js'
@@ -123,11 +124,13 @@ export class EdgeEvacuation {
       for (const row of rows) {
         const identity = { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') }
         pass.cursor = identity
-        // Region scope is the assign path's call alone: it decides with the region the desktop
-        // asks for, which the stored preference can miss or lag. Judging it here too drained
-        // hosts that the next ask put straight back (a drain every few minutes). A host that asks
-        // for a region outside the scope leaves on that ask.
-        if (inEdgeCohort(this.config, identity.relayHostId, 'any', identity.userId)) { continue }
+        // Region scope is the assign path's call: it decides with the region the desktop asks for.
+        // The sweep judges a region only for a host whose edge ask recorded it (moveToEdge) and
+        // only when that region has its own rollout (regionRolloutPermille), so a regional abort
+        // drains just that region. Otherwise 'any': judging a lagging cell-path preference here
+        // drained hosts that the next ask put straight back. Country exclusion needs the ask's
+        // address, so an excluded host leaves on its next ask.
+        if (inEdgeCohort(this.config, identity.relayHostId, this.judgedRegion(row), identity.userId)) { continue }
         if (!mayBeOnEdge(this.config, identity.relayHostId, identity.userId)) {
           // leaveCeilingPermille is set below a rollout this host was moved under: its asks skip
           // the leave read, so it would be re-placed without its devices. Raise the ceiling.
@@ -153,12 +156,22 @@ export class EdgeEvacuation {
     return leaving
   }
 
-  // Keys after the cursor; once wrapped, only up to the pass's origin.
+  private judgedRegion(row: SqlRow): RelayRegion | 'any' {
+    const recorded = RelayRegionSchema.safeParse(row.preferred_region)
+    if (!recorded.success) { return 'any' }
+    const regional = this.config.control?.().regionRolloutPermille?.[recorded.data]
+    return regional === undefined ? 'any' : recorded.data
+  }
+
+  // Keys after the cursor; once wrapped, only up to the pass's origin. With the region the host's
+  // last ask recorded (primary key join; none: NULL).
   private async readPage(pass: Pass) {
     const { cursor, origin, wrapped } = pass
     return await this.database.query(
-      `SELECT a.user_id, a.relay_host_id
+      `SELECT a.user_id, a.relay_host_id, p.preferred_region
        FROM relay_assignments a
+       LEFT JOIN relay_assignment_region_preferences p
+         ON p.user_id = a.user_id AND p.relay_host_id = a.relay_host_id
        WHERE a.cell_id = ? AND (a.user_id > ? OR (a.user_id = ? AND a.relay_host_id > ?))
          ${wrapped ? 'AND (a.user_id < ? OR (a.user_id = ? AND a.relay_host_id <= ?))' : ''}
        ORDER BY a.user_id, a.relay_host_id

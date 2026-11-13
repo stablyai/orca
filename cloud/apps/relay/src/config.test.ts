@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   loadRelayConfig,
@@ -380,6 +383,21 @@ describe('relay edge configuration', () => {
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com/path' })).toThrow()
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://c1.relay.example.com' })).toThrow()
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://relay.example.com' })).toThrow()
+  })
+
+  it('loads the IP country table at boot, and fails the boot when it cannot', () => {
+    const env = {
+      ...directorEnvironment(),
+      ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com',
+      ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: 'edge-admin-key-with-at-least-32-bytes!!'
+    }
+    expect(loadRelayConfig(env).edge).not.toHaveProperty('ipCountry')
+    expect(loadRelayConfig({ ...env, ORCA_RELAY_IP_COUNTRY_DB: '' }).edge).not.toHaveProperty('ipCountry')
+    const directory = mkdtempSync(join(tmpdir(), 'relay-ip-country-'))
+    writeFileSync(join(directory, 'table.csv'), '192.0.2.0,192.0.2.255,HK\n')
+    const edge = loadRelayConfig({ ...env, ORCA_RELAY_IP_COUNTRY_DB: join(directory, 'table.csv') }).edge
+    expect(edge?.ipCountry?.country('192.0.2.9')).toBe('HK')
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_IP_COUNTRY_DB: join(directory, 'missing.csv') })).toThrow()
   })
 
   it('parses the export skip threshold, leaving the default when unset or empty', () => {

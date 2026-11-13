@@ -3,6 +3,7 @@ import type { RelayConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import type { EdgeControlFlags } from './edge-relay-control.js'
 import { EdgeAssignments, edgeCohortBucketPermille, type EdgeRelayConfig } from './edge-relay.js'
+import { parseIpCountryTable, type IpCountryLookup } from './ip-country.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
@@ -54,7 +55,9 @@ function config(): RelayConfig {
   }
 }
 
-async function harness(options: { seeded?: boolean; control?: () => EdgeControlFlags } = {}) {
+async function harness(
+  options: { seeded?: boolean; control?: () => EdgeControlFlags; ipCountry?: IpCountryLookup } = {}
+) {
   const database = await openInMemoryRelayDatabase()
   databases.push(database)
   const edgeConfig: EdgeRelayConfig = {
@@ -63,7 +66,8 @@ async function harness(options: { seeded?: boolean; control?: () => EdgeControlF
     allowHosts: new Set([COHORT_HOST]),
     denyHosts: new Set(),
     regions: new Set(['us-central1']),
-    ...(options.control ? { control: options.control } : {})
+    ...(options.control ? { control: options.control } : {}),
+    ...(options.ipCountry ? { ipCountry: options.ipCountry } : {})
   }
   const edge = new EdgeAssignments(database, edgeConfig)
   if (options.seeded !== false) await edge.ensureEdgeCell()
@@ -91,10 +95,14 @@ async function harness(options: { seeded?: boolean; control?: () => EdgeControlF
     drain: vi.fn(),
     ready: vi.fn(async () => true)
   })
-  const assign = async (relayHostId: string, extra: Record<string, unknown> = {}) =>
+  const assign = async (relayHostId: string, extra: Record<string, unknown> = {}, forwardedFor?: string) =>
     await app.request('/v1/assign', {
       method: 'POST',
-      headers: { authorization: `Bearer ${relayHostId}`, 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${relayHostId}`,
+        'content-type': 'application/json',
+        ...(forwardedFor ? { 'x-forwarded-for': forwardedFor } : {})
+      },
       body: JSON.stringify({ v: 1, relayHostId, preferredRegion: 'us-central1', ...extra })
     })
   const resolve = async (relayHostId: string) =>
@@ -197,5 +205,32 @@ describe('director routes with the relay edge', () => {
     await h.resolve(third)
     expect(leave).toHaveBeenCalledTimes(2)
     expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps an excluded country off a region by the last forwarded hop, and tallies region × country', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const flags: EdgeControlFlags = {
+      mode: 'on',
+      regionRolloutPermille: { 'asia-east2': 1000 },
+      regionExcludeCountries: { 'asia-east2': ['CN'] }
+    }
+    const ipCountry = parseIpCountryTable('192.0.2.0,192.0.2.127,CN\n192.0.2.128,192.0.2.255,HK\n')
+    const h = await harness({ control: () => flags, ipCountry })
+    const asia = { preferredRegion: 'asia-east2' }
+    // A forged leading entry does not count: the last hop is the client.
+    const fromChina = await h.assign(OTHER_HOST, asia, '192.0.2.200, 192.0.2.1')
+    expect(await fromChina.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
+    const fromHongKong = await h.assign(OTHER_HOST, asia, '192.0.2.200')
+    expect(await fromHongKong.json()).toMatchObject({ cellUrl: EDGE_URL })
+    // Unknown country: not excluded by default.
+    expect(await (await h.assign('unknowncountry01', asia)).json()).toMatchObject({ cellUrl: EDGE_URL })
+    h.edge.regionCountries.flush()
+    const tallies = warn.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .filter((event) => event.event === 'orca_relay_edge_region_country')
+    expect(tallies).toEqual([
+      { event: 'orca_relay_edge_region_country', windowMs: 60_000, counts: { 'asia-east2': { CN: 1, HK: 1, unknown: 1 } } }
+    ])
+    warn.mockRestore()
   })
 })

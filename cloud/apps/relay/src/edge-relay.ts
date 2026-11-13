@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
+import { recordRegionPreference } from './assignment/region-preference.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database.js'
 import { fenceEdge } from './edge-relay-fence.js'
@@ -15,7 +16,16 @@ import {
   type EdgeAssignResult,
   type EdgeDeviceRow
 } from './edge-admin-client.js'
-import { EDGE_CONTROL_DEFAULTS, edgeRolloutPermille, type EdgeControlFlags } from './edge-relay-control.js'
+import {
+  EDGE_CONTROL_DEFAULTS,
+  edgeAnyRegionRolloutPermille,
+  edgeCountryExcluded,
+  edgeRegionRolloutPermille,
+  edgeRolloutPermille,
+  type EdgeControlFlags
+} from './edge-relay-control.js'
+import { EdgeRegionCountryTally } from './edge-region-country-log.js'
+import type { IpCountryLookup } from './ip-country.js'
 
 // Hosts the director has moved to the relay edge carry this cell id on their assignment row. The
 // relay_cells row exists only so cells resolve the row (a phone of a moved host gets WRONG_CELL,
@@ -38,6 +48,8 @@ export type EdgeRelayConfig = {
   denyHosts: ReadonlySet<string>
   // Regions whose hosts may join the cohort, by the region the host asked for.
   regions: ReadonlySet<RelayRegion>
+  // Offline IP → country (ORCA_RELAY_IP_COUNTRY_DB); absent: every ask's country is unknown.
+  ipCountry?: IpCountryLookup
   // How long the edge's export must keep failing (unavailable) before a leaving host is placed
   // without it; default EDGE_EXPORT_SKIP_AFTER_MS, 0 skips on the first failure.
   exportSkipAfterMs?: number
@@ -65,21 +77,34 @@ export function edgeCohortBucketPermille(relayHostId: string): number {
   return (hash % 100) * 10 + (Math.floor(hash / 100) % 10)
 }
 
-// Mode off or down empties the cohort. Otherwise deny wins, then host allow, then region scope;
-// within the region, account allow or the rollout share.
+// Mode off or down empties the cohort. Otherwise deny wins, then host allow, then region scope
+// and the region's country exclusion; within the region, account allow or the region's rollout.
+// `country`: the ask's (null when unknown); undefined when the caller has no ask (the evacuation
+// sweep), which skips the exclusion. Region 'any' (the sweep, for a host with no recorded region)
+// has no scope or exclusion and uses the highest in-scope rollout.
 export function inEdgeCohort(
   config: EdgeRelayConfig,
   relayHostId: string,
   region: RelayRegion | undefined | 'any',
-  userId?: string
+  userId?: string,
+  country?: string | null
 ): boolean {
   const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
   if (flags.mode !== 'on') return false
   if (config.denyHosts.has(relayHostId)) return false
   if (config.allowHosts.has(relayHostId)) return true
-  if (region !== 'any' && !config.regions.has(region ?? RELAY_DEFAULT_REGION)) return false
+  let rollout: number
+  if (region === 'any') {
+    rollout = edgeAnyRegionRolloutPermille(config, flags)
+  } else {
+    const asked = region ?? RELAY_DEFAULT_REGION
+    const regional = edgeRegionRolloutPermille(config, flags, asked)
+    if (regional === undefined) return false
+    if (country !== undefined && edgeCountryExcluded(flags, asked, country)) return false
+    rollout = regional
+  }
   if (userId !== undefined && config.allowUsers?.has(userId)) return true
-  return edgeCohortBucketPermille(relayHostId) < edgeRolloutPermille(config.rolloutPercent, flags)
+  return edgeCohortBucketPermille(relayHostId) < rollout
 }
 
 // Whether the host's assignment row may be on the edge, so an ask that is not moving it there must
@@ -95,6 +120,7 @@ export function mayBeOnEdge(config: EdgeRelayConfig, relayHostId: string, userId
   const ceiling = Math.max(
     flags.leaveCeilingPermille,
     edgeRolloutPermille(config.rolloutPercent, flags),
+    ...Object.values(flags.regionRolloutPermille ?? {}),
     config.rolloutPercent * 10
   )
   return edgeCohortBucketPermille(relayHostId) < ceiling
@@ -188,6 +214,8 @@ export class EdgeAssignments {
   private exportLastFailureAt: number | undefined
   // Edge admin calls in flight under an assignment row lock (pushes), capped at EDGE_LOCKED_CALLS_MAX.
   private lockedCalls = 0
+  // Asks by requested region × country (observe only; relay-server starts it with an IP table).
+  readonly regionCountries = new EdgeRegionCountryTally()
 
   // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
   // host's devices before the answer, and every move off exports them back first.
@@ -259,9 +287,14 @@ export class EdgeAssignments {
 
   // The host's own ask: moves its row to the edge, minting a strictly newer epoch only when the cell
   // changes (phones accept a move only with a newer epoch; re-asks must not flap the epoch).
+  // Every committed answer also records the region the cohort was judged for, so the evacuation
+  // sweep can drain a region's hosts (relay_assignment_region_preferences). Written last, under the
+  // assignment row lock (the cell path's order), so its row lock is held only to the commit.
   async moveToEdge(identity: Identity, mapFloor: number, region?: RelayRegion): Promise<RelayAssignment> {
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+    const recordRegion = (transaction: RelayDatabase) =>
+      recordRegionPreference(transaction, identity, region ?? RELAY_DEFAULT_REGION, now)
     return await this.database.transaction(async (transaction) => {
       let rows: SqlRow[]
       try {
@@ -291,6 +324,7 @@ export class EdgeAssignments {
         )
         if (inserted.length === 1) {
           const pushed = await this.pushOnto(transaction, identity, epoch, region)
+          await recordRegion(transaction)
           return this.answer(identity, pushed, leaseExpiresAt)
         }
         const winner = (
@@ -309,6 +343,7 @@ export class EdgeAssignments {
            WHERE user_id = ? AND relay_host_id = ?`,
           [leaseExpiresAt, now, identity.userId, identity.relayHostId]
         )
+        await recordRegion(transaction)
         return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt)
       }
       if (requestUnits(row) > 0) throw new EdgeMoveDeferredError('units_held')
@@ -321,6 +356,7 @@ export class EdgeAssignments {
       )
       // Still under the row lock: the row commits only once the edge holds the host's data.
       const pushed = await this.pushOnto(transaction, identity, epoch, region)
+      await recordRegion(transaction)
       console.warn(
         JSON.stringify({
           event: 'orca_relay_edge_moved',
