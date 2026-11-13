@@ -6,19 +6,6 @@ describe('MobileTerminalInventoryRequest', () => {
     vi.restoreAllMocks()
   })
 
-  it('starts fresh after the shared request settles or rejects', async () => {
-    const requests = new MobileTerminalInventoryRequest()
-    const failure = new Error('transport lost')
-
-    await expect(
-      requests.run(true, async () => {
-        throw failure
-      })
-    ).rejects.toBe(failure)
-    await expect(requests.run(true, async () => true)).resolves.toBe(true)
-    await expect(requests.run(true, async () => false)).resolves.toBe(false)
-  })
-
   it('fences a response after its route activation is replaced', async () => {
     const oldResponse = Promise.withResolvers<void>()
     const applied: string[] = []

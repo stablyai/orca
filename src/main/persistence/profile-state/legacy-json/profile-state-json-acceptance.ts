@@ -1,14 +1,14 @@
-import { withProfileStateWriteTransaction } from '../profile-state-write-transaction'
+import { withProfileStateWriteTransaction } from '../database/profile-state-write-transaction'
 import type Database from '../../../sqlite/sync-database'
-import { PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE } from '../profile-state-database-schema'
+import { PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE } from '../database/profile-state-database-schema'
 import {
   hashProfileStatePayload,
   isRecord,
   parseProfileStateRoot,
   ProfileStateDocumentCorruptionError,
   ProfileStateRevisionConflictError
-} from '../profile-state-document-validation'
-import { readProfileStateRevision } from '../profile-state-revision'
+} from '../documents/profile-state-document-validation'
+import { readProfileStateRevision } from '../database/profile-state-revision'
 
 type ProfileStateJsonAcceptanceVersion = {
   jsonHash: string

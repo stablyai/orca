@@ -35,7 +35,10 @@ import { registeredRepoTextModelHostKeys } from './source-control-text-action-mo
 
 import { useTextActionModelDiscovery } from './use-text-action-model-discovery'
 import { textActionPickerEntryView } from './source-control-text-action-picker-entries'
-import { AI_TEXT_ACTION_IDS } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import {
+  AI_TEXT_ACTION_IDS,
+  isGlobalAiTextAction
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   agentPickerDraft,
@@ -43,7 +46,7 @@ import {
   type AgentPickerEntry,
   type AgentPickerDraft
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { SourceControlActionAgentPicker } from '../SourceControlActionAgentPicker'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { getAgentCatalogForAction } from '../source-control-action-recipe-options'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 
@@ -124,7 +127,7 @@ const TextActionPicker = memo(
       }
       const inheritedSource = { ...source, modelOverridesByOperation: inheritedChoices }
       const repoChoices = { ...repoAi?.modelOverridesByOperation }
-      if (operation !== 'conversationName') {
+      if (!isGlobalAiTextAction(operation)) {
         delete repoChoices[operation]
       }
       const inheritedRepo = { ...repoAi, modelOverridesByOperation: repoChoices }
@@ -165,18 +168,17 @@ const TextActionPicker = memo(
             [operation]: { ...source.actions?.[operation], agentId: agent.id }
           }
         }
-        const forcedRepo =
-          operation !== 'conversationName'
-            ? {
-                sourceControlAi: {
-                  ...(ownRepo ?? repoAi),
-                  actionOverrides: {
-                    ...repoAi?.actionOverrides,
-                    [operation]: { ...repoAi?.actionOverrides?.[operation], agentId: agent.id }
-                  }
+        const forcedRepo = !isGlobalAiTextAction(operation)
+          ? {
+              sourceControlAi: {
+                ...(ownRepo ?? repoAi),
+                actionOverrides: {
+                  ...repoAi?.actionOverrides,
+                  [operation]: { ...repoAi?.actionOverrides?.[operation], agentId: agent.id }
                 }
               }
-            : null
+            }
+          : null
         const inherited = resolveSourceControlAiActionModelDefault(
           {
             settings: {
@@ -308,8 +310,8 @@ const TextActionPicker = memo(
               .filter(Boolean)
               .join(' · ')
     return (
-      <SourceControlActionAgentPicker
-        text={{
+      <AgentLaunchPicker
+        {...{
           draftScope: props.draftScope,
           agent: activeAgent,
           disabled: props.disabled || !settings || Boolean(props.repoId && (!repo || !host)),

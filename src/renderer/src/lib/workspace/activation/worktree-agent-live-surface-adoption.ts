@@ -1,19 +1,20 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
+import { isLocalCounterPtyId } from '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { useAppStore } from '@/store/index'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   layoutFramesHoldTerminalPane,
   layoutFrameTerminalTab
 } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { resolveTerminalTabPtyOwnership } from '../../terminal-tab-for-pty-id'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
+import { resolveTerminalTabPtyOwnership } from '../tabs/terminal-tab-for-pty-id'
 import type {
   LiveTerminalSurfaceOwner,
   LiveTerminalSurfaceOwnerIndex
-} from '../../worktree-live-terminal-surface-owners'
+} from '../ownership/worktree-live-terminal-surface-owners'
 
 export type LiveSurfaceAdoptionStore = WorktreeOperationRouteState &
   Pick<
@@ -241,15 +242,18 @@ export async function adoptLiveWorkspacePtySurfaces(
       }
       continue
     }
-    surfaced = true
-    if (
-      owner.recorded &&
-      bindToRecordedSurface(getState, worktreeId, owner.recorded, materializedTabIds)
-    ) {
+    const bound =
+      (owner.recorded &&
+        bindToRecordedSurface(getState, worktreeId, owner.recorded, materializedTabIds)) ||
+      // A recorded tab createTab had to mint under another id already holds this PTY.
+      resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none'
+    // Why: only its recorded pane reattaches a local counter id; a fresh pane starts a new shell, and every visit mints another.
+    if (!bound && isLocalCounterPtyId(ptyId)) {
+      declinedPtyIds.push(ptyId)
       continue
     }
-    // A recorded tab createTab had to mint under another id already holds this PTY.
-    if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
+    surfaced = true
+    if (bound) {
       continue
     }
     getState().createTab(worktreeId, undefined, undefined, {

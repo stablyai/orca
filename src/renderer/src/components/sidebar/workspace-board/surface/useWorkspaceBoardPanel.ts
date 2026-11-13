@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { useAppStore } from '@/store'
 import { isXtermHelperTextarea } from '../../../terminal-pane/input/focus/regular-terminal-focus-ownership'
 

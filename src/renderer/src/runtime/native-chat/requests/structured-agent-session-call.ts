@@ -18,6 +18,7 @@ export async function callStructuredAgentSession<TResult>(
   options: {
     skipCompatibilityCheck?: true
     beforeSend?: () => void
+    expectedEnvironmentRuntimeId?: string
     expectedEnvironmentPairingRevision?: number
   } = {}
 ): Promise<TResult> {

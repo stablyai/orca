@@ -13,9 +13,9 @@ import {
 import type {
   NativeScrollEvent,
   NativeSyntheticEvent,
-  ScrollView,
   StyleProp,
-  ViewStyle
+  ViewStyle,
+  ScrollViewInstance
 } from 'react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
@@ -27,14 +27,14 @@ import {
   mobileNativeChatRowBoxProps,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
+} from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
-import { scrollWritesStopMomentum } from '../../mobile-native-chat-scroll-motion'
+import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
 import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
-} from '../../mobile-native-chat-growth-hold'
+} from './mobile-native-chat-growth-hold'
 
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
@@ -52,6 +52,16 @@ type Listen = (type: string, listener: () => void, options: AddEventListenerOpti
 type Scroller = MobileNativeChatScrollNode & {
   addEventListener: Listen
   removeEventListener: Listen
+}
+// RN 0.88 types these handles as native tags; on web they are the DOM nodes this list observes.
+function isScroller(node: unknown): node is Scroller {
+  return typeof node === 'object' && node !== null && 'addEventListener' in node
+}
+function isDomNode(node: unknown): node is Element {
+  return typeof node === 'object' && node !== null
+}
+function domElementOf(node: unknown): Element | null {
+  return isDomNode(node) ? node : null
 }
 type Held = {
   rows: readonly NativeChatMessage[]
@@ -100,10 +110,10 @@ export function MobileNativeChatPageList({
   onScroll,
   onNearTop
 }: Props): ReactElement {
-  const scroll = useRef<ScrollView>(null)
+  const scroll = useRef<ScrollViewInstance>(null)
   const scroller = useCallback((): Scroller | null => {
-    const node: Scroller | null | undefined = scroll.current?.getScrollableNode()
-    return node ?? null
+    const node: unknown = scroll.current?.getScrollableNode()
+    return isScroller(node) ? node : null
   }, [])
 
   // Hold below-reader growth during a fling: correcting scroll mid-fling stops iOS momentum. Keep the hold in a ref to avoid a render until release.
@@ -312,8 +322,8 @@ export function MobileNativeChatPageList({
   // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
   useEffect(() => {
     const s = scroller()
-    const viewport: Element | null | undefined = scroll.current?.getScrollableNode()
-    const content: Element | null | undefined = scroll.current?.getInnerViewNode()
+    const viewport = domElementOf(scroll.current?.getScrollableNode())
+    const content = domElementOf(scroll.current?.getInnerViewNode())
     if (!s || !viewport || !content || typeof ResizeObserver === 'undefined') {
       return
     }

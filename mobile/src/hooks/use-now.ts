@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
+import { currentAppStateStatus } from '../platform/app-state-status'
 
 const appStateListeners = new Set<() => void>()
 // Read on first subscribe, so importing this module never touches AppState.
@@ -9,7 +10,7 @@ let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = 
 function subscribeToAppState(listener: () => void): () => void {
   appStateListeners.add(listener)
   if (!appStateSubscription) {
-    currentAppState = AppState.currentState
+    currentAppState = currentAppStateStatus()
     appStateSubscription = AppState.addEventListener('change', (nextState) => {
       currentAppState = nextState
       appStateListeners.forEach((notify) => notify())
@@ -95,6 +96,12 @@ function stopTimer(clock: SharedClock): void {
  * (one timer, one timestamp). It runs only in the foreground and catches up on return.
  */
 export function useSharedNow(intervalMs = 30_000): number {
+  return useSharedNowSnapshot(intervalMs, readNow)
+}
+
+const readNow = (now: number): number => now
+
+export function useSharedNowSnapshot<T>(intervalMs: number, select: (now: number) => T): T {
   const clock = sharedClock(intervalMs)
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -128,6 +135,6 @@ export function useSharedNow(intervalMs = 30_000): number {
     },
     [clock, intervalMs]
   )
-  const read = useCallback(() => clock.now, [clock])
+  const read = useCallback(() => select(clock.now), [clock, select])
   return useSyncExternalStore(subscribe, read, read)
 }

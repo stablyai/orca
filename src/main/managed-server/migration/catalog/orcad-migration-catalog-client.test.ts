@@ -1,23 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
+import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted(() => ({ capabilities: ['orcad.migration-catalog.v1'] }))
 // Run status preflight, then adapt to the existing single-call assertions.
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequestWithStatusPreflight: async (
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: async (
     pairing: unknown,
     method: string,
     params: unknown,
     timeoutMs: number,
-    validate: (response: unknown) => void,
     envelope: unknown,
-    capabilities: unknown,
-    signal: unknown
+    validate: (response: unknown) => void,
+    signal: unknown,
+    capabilities: unknown
   ) => {
     validate({
       ok: true,

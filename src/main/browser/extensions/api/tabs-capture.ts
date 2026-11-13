@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { consumeBrowserExtensionCaptureQuota } from '../api-runtime/browser-extension-capture-quota'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { isChromeWebStoreUrl } from '../../../../shared/browser/extensions/browser-extension-webstore'

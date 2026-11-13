@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import { buildMobileDiffReviewQueue } from './mobile-diff-review-queue'
-import {
-  applyMobileDiffReviewGitHubViewed,
-  buildMobileDiffReviewGitHub,
-  canCommentOnGitHub
-} from './mobile-diff-review-github'
+import { buildMobileDiffReviewGitHub, canCommentOnGitHub } from './mobile-diff-review-github'
 
 function comment(overrides: Partial<PRComment>): PRComment {
   return {
@@ -77,35 +73,6 @@ describe('the diff screen’s GitHub pull request', () => {
     const threads = github.threadsByPath.get('src/a.ts')
     expect([...(threads?.keys() ?? [])]).toEqual([12])
     expect(threads?.get(12)?.[0]?.replies.map((reply) => reply.id)).toEqual([2])
-  })
-
-  it('takes viewed state for the PR’s files from GitHub', () => {
-    const github = buildMobileDiffReviewGitHub({
-      prNumber: 1,
-      prRepo: null,
-      localHeadOid: 'head',
-      details: details({})
-    })
-    expect(applyMobileDiffReviewGitHubViewed(branchItem, github)[0]).toMatchObject({
-      isReviewed: false,
-      changedSinceReview: true
-    })
-  })
-
-  it('leaves viewed state on the phone when GitHub sent none for the file', () => {
-    const github = buildMobileDiffReviewGitHub({
-      prNumber: 1,
-      prRepo: null,
-      localHeadOid: 'head',
-      details: details({
-        pullRequestId: undefined,
-        files: [
-          { path: 'src/a.ts', status: 'modified', additions: 2, deletions: 1, isBinary: false }
-        ]
-      })
-    })
-    const viewedLocally = branchItem.map((item) => ({ ...item, isReviewed: true }))
-    expect(applyMobileDiffReviewGitHubViewed(viewedLocally, github)[0]?.isReviewed).toBe(true)
   })
 
   it('offers Comment on GitHub only on commentable lines while the branch is at the PR head', () => {

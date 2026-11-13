@@ -1,6 +1,6 @@
-import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
+import { comparePaletteRankedItems } from '@/lib/workspace/search/palette/cmd-j-section-leadership'
 import type { BrowserPaletteSearchResult } from '@/lib/browser/palette/browser-palette-search'
-import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search-types'
+import type { SimulatorPaletteSearchResult } from '@/lib/simulator/search/simulator-palette-search-types'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import type {
   BrowserPaletteItem,

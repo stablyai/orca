@@ -12,12 +12,14 @@ function terminalLinkActionHintPrefix(showActions: boolean): string {
   return showActions ? 'Click for actions, ' : ''
 }
 
+/** Describe the platform-specific floating link shortcut. */
 function terminalFloatingLinkHint(): string {
   return isMacPlatform()
     ? '⌘⌥+click for Floating Workspace, '
     : 'Ctrl+Alt+click for Floating Workspace, '
 }
 
+/** Describe local file actions and their platform-specific shortcuts. */
 export function getTerminalFileOpenHint(showActions = true): string {
   const prefix = terminalLinkActionHintPrefix(showActions) + terminalFloatingLinkHint()
   return isMacPlatform()
@@ -25,6 +27,7 @@ export function getTerminalFileOpenHint(showActions = true): string {
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default app`
 }
 
+/** Describe host-owned file actions without advertising a local default-app open. */
 export function getTerminalOrcaFileOpenHint(showActions = true): string {
   const prefix = terminalLinkActionHintPrefix(showActions) + terminalFloatingLinkHint()
   return isMacPlatform()
@@ -73,6 +76,7 @@ export function terminalUrlOpenHintOptionsFor(
 }
 
 // With inversion, Shift means the other destination; name the resolved one instead of always promising the system browser.
+/** Describe HTTP actions using the current browser destination and modifier policy. */
 export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {}): string {
   const invertsToOrca = options.modifierInverts === true && options.openLinksInApp !== true
   const prefix =

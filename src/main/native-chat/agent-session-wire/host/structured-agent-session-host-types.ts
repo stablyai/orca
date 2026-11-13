@@ -26,6 +26,7 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-hold'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
@@ -63,6 +64,10 @@ import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/
 export type StructuredAgentSessionCaller = {
   callerKey: string
   clientKind?: 'mobile' | 'runtime'
+  /** Proven by the caller's transport, never inferred from an unnamed/runtime client. */
+  userClient?: 'desktop' | 'mobile'
+  /** Consent-owning paired desktop, including the authenticated parent of a delegated phone. */
+  telemetryOwnerKey?: string
   readsOptionsWithoutModel?: boolean
 }
 
@@ -185,6 +190,13 @@ export type StructuredAgentSessionHostDeps = {
     isEnabled: () => boolean
     subscribe: (changed: () => void) => () => void
     isWorkspaceAsleep: (workspaceId: string) => boolean
+    /** The hold scope of a launch at `home` and its polled usage; undefined when it can't hold. */
+    accountUsage?: (
+      provider: AgentSessionRecord['provider'],
+      home: AgentSessionAccountHome
+    ) => Promise<UsageLimitAccountScope | undefined>
+    /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
+    accountWitness?: (provider: AgentSessionRecord['provider']) => string
   }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
@@ -241,6 +253,10 @@ export type SetUserConversationName = StructuredAgentSessionConversationNaming['
 export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
 
 export type StructuredAgentSessionConversationNaming = {
+  captureTitleSourceUnavailable?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => (() => void) | undefined
   publishName: (workspaceId: string, sessionId: string) => void
   activeSessionIds: () => string[]
   failure: (sessionId: string) => StructuredChatNamingFailure | undefined

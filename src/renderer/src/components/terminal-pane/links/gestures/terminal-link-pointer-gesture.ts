@@ -19,6 +19,7 @@ type PendingGesture = {
   floating: boolean
 }
 
+/** Track selection and pointer travel so link clicks cannot claim selection or drag gestures. */
 export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalLinkPointerGesture {
   const terminalElement = terminal.element
   const ownerDocument = terminalElement?.ownerDocument

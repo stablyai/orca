@@ -15,8 +15,12 @@ import {
 
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
+import type { RuledScreen } from '../wait/screen-input-veto'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
 export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged {
+  protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
   protected abstract serializePreferredRestoredTerminalBuffer(
     ptyId: string,
     opts?: { scrollbackRows?: number }
@@ -246,7 +250,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
 
   /** A surviving process main never saw live still has its agent's last own report, which the hook
    *  server restores across restarts. Nothing can type into the terminal while main is down, so the
-   *  report is current as long as an agent, not a shell, still holds the process. */
+   *  report is current as long as an agent, not a shell, still holds the process. Without a report,
+   *  a screen-ruled agent's own strong ready screen speaks for it: such agents may write no title at rest. */
   restoreReattachedAgentStatus(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty?.connected || pty.lastAgentStatusObservedLive) {
@@ -254,29 +259,42 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     }
     const { incarnationId } = pty
     const generation = this.getPtyLifecycleGeneration(ptyId)
+    // A respawn, an exit or a live report since the reattach decides instead.
+    const isCurrent = (): boolean =>
+      this.ptysById.get(ptyId) === pty &&
+      pty.incarnationId === incarnationId &&
+      this.getPtyLifecycleGeneration(ptyId) === generation &&
+      pty.connected &&
+      !pty.lastAgentStatusObservedLive
     const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
     void Promise.all([
       this.ptyForegroundAgent.identifyForeground(ptyId),
+      // Why: the ready-screen read needs the seeded snapshot applied.
+      this.headlessTerminals.get(ptyId)?.writeChain,
       ...paneKeys.map((paneKey) => agentHookServer.readRestoredAgentStatus(paneKey))
-    ]).then(([agent, ...reports]) => {
+    ]).then(([agent, , ...reports]) => {
       const report = reports.find((candidate) => candidate !== null)
       const turn = agent && report ? hookLeadTurnState(report) : null
-      // A respawn, an exit or a live report since the reattach decides instead.
-      if (
-        !turn ||
-        this.ptysById.get(ptyId) !== pty ||
-        pty.incarnationId !== incarnationId ||
-        this.getPtyLifecycleGeneration(ptyId) !== generation ||
-        !pty.connected ||
-        pty.lastAgentStatusObservedLive
-      ) {
+      if (!isCurrent()) {
         return
       }
-      this.applyTrackedPtyTitle(ptyId, pty.lastOscTitle ?? '', pty.lastOscTitle ?? '', undefined, {
-        statusOnly: true,
-        status: turn === 'done' ? 'idle' : turn
-      })
+      if (turn) {
+        this.applyReattachedAgentStatus(ptyId, turn === 'done' ? 'idle' : turn)
+      } else if (agent) {
+        restoreFromReattachedReadyScreen({
+          agent,
+          readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+          readOutputClockAt: () => this.readOutputClockAt(ptyId),
+          isCurrent,
+          applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
+        })
+      }
     })
+  }
+
+  private applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
+    const title = this.ptysById.get(ptyId)?.lastOscTitle ?? ''
+    this.applyTrackedPtyTitle(ptyId, title, title, undefined, { statusOnly: true, status })
   }
 
   protected readOutputClockAt(ptyId: string | null | undefined): number | null {

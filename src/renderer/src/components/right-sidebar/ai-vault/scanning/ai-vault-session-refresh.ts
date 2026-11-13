@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 
 import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
 import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
-import { useAppStore } from '@/store/index'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import { EMPTY_AI_VAULT_SESSIONS } from '../session-list/ai-vault-session-identity'
@@ -16,19 +15,16 @@ import {
   refreshAiVaultSessionList,
   type AiVaultConditionalSnapshot,
   cacheAiVaultSessionList,
-  readCachedAiVaultSessionList
+  readCachedAiVaultSessionList,
+  readLastAiVaultSessionList
 } from './ai-vault-session-list-request'
-import {
-  getAgentSessionIdsKey,
-  resetAgentSessionIdsRefreshKeys
-} from './ai-vault-agent-session-refresh-key'
+import { resetAgentSessionIdsRefreshKeys } from './ai-vault-agent-session-refresh-key'
+import { useAiVaultNewSessionRescan } from './ai-vault-new-session-rescan'
+import { saveAiVaultSessionList } from './ai-vault-saved-session-lists'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-
-// Share the forced-rescan budget across remounts so session creation cannot amplify full scans.
 import {
   claimAiVaultForcedRescan,
-  aiVaultForcedRescanDelay,
   resetAiVaultForcedRescanBudgetForTest
 } from './ai-vault-forced-rescan-budget'
 import {
@@ -121,24 +117,43 @@ export function useAiVaultSessionRefresh(
         executionHostScope: hostScope,
         sessionLimit: selectedLimit
       }
-      const baseKey = aiVaultSessionResultCacheKey(hostScope, request.scopePaths, request.scopeOnly)
-      const cachedResult =
-        args.reuseLoadedDepth === true ? readCachedAiVaultSessionList(request) : null
-      if (cachedResult) {
-        const scanKey = `${baseKey}\n${selectedLimit}`
-        setFailure(null)
-        setTerminalScopeKey(null)
-        publicationGateRef.current.publish(cachedResult, (published) => {
-          if (!mountedRef.current || scanKey !== currentScanScopeKey() || !associationCurrent()) {
-            return
-          }
-          applyScan(published, selectedLimit, scanKey, request.scopeOnly, (applied) => {
+      const { scopeOnly } = request
+      const baseKey = aiVaultSessionResultCacheKey(hostScope, request.scopePaths, scopeOnly)
+      const scanKey = `${baseKey}\n${selectedLimit}`
+      const applyListed = (published: AiVaultListResult, scanned = false) =>
+        applyScan(
+          { result: published, limit: selectedLimit, scopeKey: scanKey, scopeOnly },
+          (applied) => {
             conditionalSnapshotRef.current = published.fingerprint
               ? { scopeKey: scanKey, fingerprint: published.fingerprint, result: applied }
               : null
-          })
+            // The applied rows keep their identity when a rescan changed nothing, so the save skips.
+            if (scanned) {
+              void saveAiVaultSessionList(baseKey, selectedLimit, applied)
+            }
+          }
+        )
+      const cachedResult =
+        args.reuseLoadedDepth === true ? readCachedAiVaultSessionList(request) : null
+      if (cachedResult) {
+        setFailure(null)
+        setTerminalScopeKey(null)
+        publicationGateRef.current.publish(cachedResult, (published) => {
+          if (mountedRef.current && scanKey === currentScanScopeKey() && associationCurrent()) {
+            applyListed(published)
+          }
         })
         setLoading(false)
+      } else if (args.reuseLoadedDepth === true) {
+        publicationGateRef.current.showUntilPublished(
+          readLastAiVaultSessionList(request),
+          // Chat links only change which rows are linked; the stale list is replaced by the rescan anyway.
+          ({ result, limit }) => {
+            if (mountedRef.current && scanKey === currentScanScopeKey()) {
+              applyScan({ result, limit, scopeKey: scanKey, scopeOnly, stale: true })
+            }
+          }
+        )
       }
       // Queue scope changes during an in-flight scan so the new view still refreshes.
       if (refreshInFlightRef.current) {
@@ -165,7 +180,6 @@ export function useAiVaultSessionRefresh(
         setLoading(true)
       }
       setTerminalScopeKey(null)
-      const scanKey = `${baseKey}\n${selectedLimit}`
       const requestCurrent = () =>
         mountedRef.current &&
         refreshIdRef.current === refreshId &&
@@ -190,11 +204,7 @@ export function useAiVaultSessionRefresh(
         cacheAiVaultSessionList(request, result, { replaceHostEntries: args.force === true })
         publicationGateRef.current.publish(result, (published) => {
           if (requestCurrent()) {
-            applyScan(published, selectedLimit, scanKey, request.scopeOnly, (applied) => {
-              conditionalSnapshotRef.current = published.fingerprint
-                ? { scopeKey: scanKey, fingerprint: published.fingerprint, result: applied }
-                : null
-            })
+            applyListed(published, true)
           }
         })
       } catch (err) {
@@ -228,23 +238,6 @@ export function useAiVaultSessionRefresh(
     [applyScan, currentScanScopeKey]
   )
 
-  // Defer throttled new-session rescans until budget frees so sessions cannot remain invisible indefinitely.
-  const forcedRescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const requestForcedRescan = useCallback(() => {
-    if (claimAiVaultForcedRescan()) {
-      void refresh({ background: true, force: true })
-      return
-    }
-    const waitMs = aiVaultForcedRescanDelay()
-    if (forcedRescanTimerRef.current !== null) {
-      return
-    }
-    forcedRescanTimerRef.current = setTimeout(() => {
-      forcedRescanTimerRef.current = null
-      requestForcedRescan()
-    }, waitMs)
-  }, [refresh])
-
   useEffect(() => {
     mountedRef.current = true
     const requestToken = requestTokenRef.current
@@ -260,14 +253,10 @@ export function useAiVaultSessionRefresh(
       void window.api.aiVault.cancelListSessions({
         requestToken
       })
-      if (forcedRescanTimerRef.current !== null) {
-        clearTimeout(forcedRescanTimerRef.current)
-        forcedRescanTimerRef.current = null
-      }
     }
   }, [])
 
-  // Panel entry reuses the renderer result first, then the host scan cache.
+  // Panel entry reuses the renderer result, else paints the last list while the host answers.
   useEffect(() => {
     publicationGateRef.current.cancel()
     pendingRefreshRef.current = false
@@ -294,28 +283,11 @@ export function useAiVaultSessionRefresh(
   // Retry prior relay-readiness errors on host events; otherwise startup/reconnect failures can persist indefinitely.
   useAiVaultSessionHostRefreshEvents(error, refresh)
 
-  // In-app launches never blur; rescan on new provider session IDs, avoiding frequent state transitions.
-  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
-  const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
-  useEffect(() => {
-    const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')
-    // The mount refresh already covers sessions live at mount time.
-    if (seenAgentSessionIdsRef.current === null) {
-      seenAgentSessionIdsRef.current = new Set(ids)
-      return
-    }
-    const seen = seenAgentSessionIdsRef.current
-    const freshIds = ids.filter((id) => !seen.has(id))
-    if (freshIds.length === 0) {
-      return
-    }
-    for (const id of freshIds) {
-      seen.add(id)
-    }
-    requestForcedRescan()
-  }, [agentSessionIdsKey, requestForcedRescan])
+  useAiVaultNewSessionRescan(refresh)
 
-  const scopePending = scan?.scopeKey !== scanScopeKey && terminalScopeKey !== scanScopeKey
+  // A stale list keeps the scope pending, so it shows as refreshing until the rescan answers.
+  const scopePending =
+    (scan?.scopeKey !== scanScopeKey || scan?.stale === true) && terminalScopeKey !== scanScopeKey
   return {
     error,
     loading: loading || scopePending,

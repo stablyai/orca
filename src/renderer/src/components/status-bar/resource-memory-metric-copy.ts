@@ -46,7 +46,7 @@ export function getResourceMemoryMetricCopy(
   }
 }
 
-/** No column of its own yet, so no `columnLabel`: the commit figure is a summary + tooltip. */
+/** Private bytes appear only in the summary. */
 export function getResourceCommitMetricCopy(
   t: Translate = translate
 ): Omit<ResourceMemoryMetricCopy, 'columnLabel'> {

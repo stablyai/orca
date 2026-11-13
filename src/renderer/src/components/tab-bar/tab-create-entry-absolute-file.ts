@@ -1,4 +1,4 @@
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import {
   getTabEntryCannotOpenDirectoryMessage,
   getTabEntryFileNotFoundMessage
@@ -10,7 +10,10 @@ import {
   validateNewTabEntryAbsolutePath,
   type TabEntryLocalPlatform
 } from './tab-create-entry-path-validation'
-import type { statUserOpenedPath, UserOpenedPathStat } from '@/lib/user-opened-local-path'
+import type {
+  statUserOpenedPath,
+  UserOpenedPathStat
+} from '@/lib/files/access/user-opened-local-path'
 
 type AbsoluteFileOperations = {
   assertAbsolutePathAllowed: () => void

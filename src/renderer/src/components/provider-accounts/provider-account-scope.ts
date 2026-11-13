@@ -1,8 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '../sidebar/execution-host-label'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 /** Which host a provider card or budget belongs to, and how to change it. */
@@ -22,7 +23,7 @@ function remoteServerScopeLabel(name: string, t: Translate = translate): string 
 function providerHostScopeLabel(target: RuntimeClientTarget, t?: Translate): string {
   return target.kind === 'environment'
     ? remoteServerScopeLabel(target.environmentId, t)
-    : getLocalExecutionHostLabel()
+    : translateLocalExecutionHostLabel(getLocalExecutionHostLabel())
 }
 
 /** Accounts-pane scope while a remote server owns the roster (#8186). */

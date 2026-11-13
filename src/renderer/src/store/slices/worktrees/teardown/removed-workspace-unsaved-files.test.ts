@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPendingEditorFlush } from '@/components/editor/save/flush/editor-pending-flush'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { createHostTwinFixture } from '../../../workspaces/host-isolation/host-twin.test-fixture'

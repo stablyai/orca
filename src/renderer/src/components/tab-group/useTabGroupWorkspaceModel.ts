@@ -17,6 +17,7 @@ const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
   ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
 > = {}
 
+/** Resolve the tabs drawn in a group independently of their backing records’ workspace ownership. */
 export function useTabGroupWorkspaceModel({
   groupId,
   worktreeId

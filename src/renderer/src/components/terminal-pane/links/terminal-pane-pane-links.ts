@@ -24,7 +24,10 @@ import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
 import { readTerminalClipboardSelection } from '../clipboard/terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from '../clipboard/terminal-native-copy-gutter'
 import { installMouseHideWhileTyping } from '../input/pointer/mouse-hide-while-typing'
-import { isPrimarySelectionEnabled, setPrimarySelectionText } from '@/lib/primary-selection'
+import {
+  isPrimarySelectionEnabled,
+  setPrimarySelectionText
+} from '@/lib/clipboard/primary-selection/primary-selection'
 import { formatTerminalUrlTooltip } from './terminal-url-tooltip'
 import { terminalSelectionExceedsPrimaryLimit } from '../input/selection/terminal-primary-selection-limit'
 import { seedStartupSessionRestoredBanner } from '../session-restore/session-restored-banner-pane-state'
@@ -58,6 +61,7 @@ type PaneLinkContext = {
   ptyStartup: Parameters<typeof seedStartupSessionRestoredBanner>[0]
 }
 
+/** Install native, OSC8, and fallback link paths with one shared pointer and PTY claim policy. */
 export function installTerminalPaneLinkHandling(context: PaneLinkContext): void {
   const {
     pane,

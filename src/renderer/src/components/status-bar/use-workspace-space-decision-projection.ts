@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { groupWorkspaceSpaceDecisionInputs } from './workspace-space-decision-inputs'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
+import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import {
   getWorkspaceDecisionDetails,
   type WorkspaceDecisionDetails

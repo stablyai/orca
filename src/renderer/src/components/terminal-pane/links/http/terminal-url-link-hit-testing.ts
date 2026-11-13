@@ -14,7 +14,7 @@ import { findTerminalHttpLinkAtBufferPosition } from '../../../../../../shared/t
 import {
   isTerminalLinkifierHoverActive,
   isTerminalLinkifierHoverAtMouseEvent
-} from '@/lib/pane-manager/terminal-linkifier-hover-reset'
+} from '@/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset'
 import {
   buildHttpLinkActions,
   httpLinkDirectClickDestination,
@@ -56,6 +56,7 @@ export type HttpLinkClickFallbackBinding = IDisposable & {
   ptyMouseSuppression: TerminalLinkPtyMouseSuppression
 }
 
+/** Allow desktop fallback only for gestures eligible for an Orca HTTP link action. */
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || (event.button !== 0 && event.button !== 1)) {
     return false
@@ -64,6 +65,7 @@ function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   return isTerminalOwnedLinkGesture(event)
 }
 
+/** Route a validated HTTP link through its source owner, claiming the floating chord once. */
 export function handleTerminalHttpLink(
   url: string,
   event: MouseEvent | undefined,
@@ -133,6 +135,7 @@ export function findHttpLinkAtTerminalMouseEvent(
     : null
 }
 
+/** Resolve HTTP targets under eligible clicks when the native linkifier has not activated them. */
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps

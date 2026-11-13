@@ -1,7 +1,5 @@
-import type {
-  RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { WebSessionTabsSyncState, MirroredBrowserTab } from './state'
@@ -14,6 +12,7 @@ import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
 import { isBrowserPageOfAnotherHost } from './mirror-row-ownership'
 
+/** Locate a remote page’s client view across workspace placements without changing source ownership. */
 export function findBrowserWorkspaceForRemotePage(
   state: WebSessionTabsSyncState,
   worktreeId: string,
@@ -116,14 +115,15 @@ export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserT
 export function resolveMirroredBrowserPageContent(
   tab: RuntimeMobileSessionBrowserTab,
   existingPage: BrowserPage | undefined
-): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward'> {
+): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl'> {
   if (clientHostsMirroredBrowserPage(tab) && existingPage) {
     return {
       url: existingPage.url,
       title: existingPage.title,
       loading: existingPage.loading,
       canGoBack: existingPage.canGoBack,
-      canGoForward: existingPage.canGoForward
+      canGoForward: existingPage.canGoForward,
+      faviconUrl: existingPage.faviconUrl
     }
   }
   return {
@@ -131,10 +131,13 @@ export function resolveMirroredBrowserPageContent(
     title: resolveMirroredBrowserTitle(tab, existingPage),
     loading: tab.loading,
     canGoBack: tab.canGoBack,
-    canGoForward: tab.canGoForward
+    canGoForward: tab.canGoForward,
+    // Old hosts omit the field; keep what this client already has.
+    faviconUrl: tab.faviconUrl === undefined ? (existingPage?.faviconUrl ?? null) : tab.faviconUrl
   }
 }
 
+/** Mirror host browser records while retaining existing client view placement and ownership. */
 export function buildMirroredBrowserTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -187,7 +190,6 @@ export function buildMirroredBrowserTabs(
       workspaceId,
       worktreeId: snapshot.worktree,
       ...content,
-      faviconUrl: existing?.page.faviconUrl ?? null,
       // Guest owns client-hosted loadError; host omission must not clear it.
       loadError:
         (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,

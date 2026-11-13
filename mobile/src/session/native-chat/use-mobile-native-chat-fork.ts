@@ -13,16 +13,17 @@ import {
   type AgentSessionRegisteredAgent
 } from '../../../../src/shared/agent-session/agent-session-registered-agents'
 import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
-import { AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
-import { latestAgentSessionContextClearSequence } from '../../../../src/shared/agent-session/agent-session-context-clear'
 import {
-  isAgentSessionHandleProvider,
-  type AgentSessionHandleProvider
-} from '../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+  AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+} from '../../../../src/shared/agent-session/agent-session-create-capabilities'
+import { latestAgentSessionContextClearSequence } from '../../../../src/shared/agent-session/agent-session-context-clear'
+import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../src/shared/agent-session/structured-agent-session-host-capability'
 import {
-  nativeChatForkableItemIds,
+  nativeChatForkInventory,
   nativeChatForkSupport,
   nativeChatRowOffersFork
 } from '../../../../src/shared/native-chat/native-chat-fork-offer'
@@ -155,6 +156,7 @@ function useRegisteredAgent(
 export function useMobileNativeChatFork(input: {
   client: RpcClient | null
   hostCapabilities: readonly string[] | undefined
+  hostStatusPending: boolean
   agent: string | null
   sessionId: string | null
   messages: readonly NativeChatMessage[]
@@ -162,20 +164,23 @@ export function useMobileNativeChatFork(input: {
   agentWorking: boolean
   /** The chat's options read on its installed agent; the host's own discovery owns it. */
   sessionForkSupport: AgentSessionOptionsResult['forkSupport']
-  createFork: (
-    agent: AgentSessionHandleProvider,
-    forkFrom: StructuredAgentSessionForkSource
-  ) => Promise<void>
+  createFork: (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => Promise<void>
 }): MobileNativeChatFork {
   const host: StructuredAgentSessionHostCapabilityState = !input.hostCapabilities
     ? 'unknown'
     : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY)
       ? 'supported'
       : 'unsupported'
+  const inheritedOriginal: StructuredAgentSessionHostCapabilityState =
+    !input.hostCapabilities || input.hostStatusPending
+      ? 'unknown'
+      : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
+        ? 'supported'
+        : 'unsupported'
   const registered = useRegisteredAgent(input.client, host, input.agent)
   const support = useMemo(
-    () => nativeChatForkSupport(host, registered, input.sessionForkSupport),
-    [host, registered, input.sessionForkSupport]
+    () => nativeChatForkSupport(host, registered, input.sessionForkSupport, inheritedOriginal),
+    [host, registered, input.sessionForkSupport, inheritedOriginal]
   )
   const { messages, turnJournal, agentWorking, sessionId, agent, createFork } = input
   const turns = useMemo(() => {
@@ -191,8 +196,8 @@ export function useMobileNativeChatFork(input: {
   }, [messages, turnJournal])
   const contextFloorSequence = latestAgentSessionContextClearSequence(turnJournal?.items ?? [])
   // The sheet's row is a display projection; only one naming the agent's own message forks.
-  const forkableItemIds = useMemo(
-    () => nativeChatForkableItemIds(turnJournal?.items ?? []),
+  const { forkableItemIds, inheritedThroughSequence } = useMemo(
+    () => nativeChatForkInventory(turnJournal?.items ?? []),
     [turnJournal]
   )
   // Reserved at the press, before any await, so a second press never starts a second fork.
@@ -206,7 +211,7 @@ export function useMobileNativeChatFork(input: {
       const turnKey = turns.keyById.get(message.id)
       const offered =
         !!sessionId &&
-        isAgentSessionHandleProvider(agent ?? '') &&
+        isTuiAgent(agent ?? '') &&
         nativeChatRowOffersFork(
           {
             message,
@@ -214,7 +219,7 @@ export function useMobileNativeChatFork(input: {
             turnWorking: agentWorking && (turnKey === undefined || turnKey === turns.liveTurnKey),
             inLatestTurn: turnKey !== undefined && turnKey === turns.latestTurnKey
           },
-          { support, contextFloorSequence, forkableItemIds }
+          { support, contextFloorSequence, forkableItemIds, inheritedThroughSequence }
         )
       return !offered
         ? 'reserved'
@@ -222,7 +227,17 @@ export function useMobileNativeChatFork(input: {
           ? 'disabled'
           : 'available'
     },
-    [agent, agentWorking, contextFloorSequence, forkableItemIds, pending, sessionId, support, turns]
+    [
+      agent,
+      agentWorking,
+      contextFloorSequence,
+      forkableItemIds,
+      inheritedThroughSequence,
+      pending,
+      sessionId,
+      support,
+      turns
+    ]
   )
   const fork = useCallback(
     (message: NativeChatMessage) => {
@@ -231,7 +246,7 @@ export function useMobileNativeChatFork(input: {
         offerFor(message) !== 'available' ||
         !sessionId ||
         !agent ||
-        !isAgentSessionHandleProvider(agent)
+        !isTuiAgent(agent)
       ) {
         return
       }

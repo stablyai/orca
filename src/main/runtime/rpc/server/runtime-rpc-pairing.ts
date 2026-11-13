@@ -1,13 +1,13 @@
-import type { RuntimeDeviceGrant } from '../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import type { TokenDeviceEntry } from './pairing/device-entry'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
-import type { MobileSocketWiring } from '../mobile-socket-wiring'
+import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type {
   RelayDeviceBinding,
   RelayRevokeOutbox
-} from '../../mobile-cloud-relay/relay-revoke-outbox'
+} from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -30,6 +30,10 @@ import {
   type MobileRelayPairingProvider,
   type PairingOfferUnavailable
 } from './runtime-rpc-pairing-types'
+import {
+  pendingVmCheckouts,
+  publishPendingVmCheckoutRepoChanges
+} from '../../../ephemeral-vm/pending-vm-checkouts'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   getDeviceRegistry(): DeviceRegistry | null {
@@ -124,9 +128,32 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           serverRows: pairedServerRows ?? new OnDemandServerWorktreeRows(hosts),
           hostLabelOverrides: () =>
             getHostDisplayLabelOverrides(this.runtime.requireStore().getSettings()),
-          getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId)
+          getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId),
+          recipeEnvironmentsFor: (hostId) =>
+            this.runtime.describeRecipeWorkspaceEnvironments(hostId),
+          pendingVmCheckouts: () => pendingVmCheckouts.current()
         })
       : null
+    this.detachRelayHostsChanges?.()
+    const detachListChanges =
+      this.mobileRelayHostCatalog?.publishListChanges({
+        onClientEvent: (listener) =>
+          this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
+        changed: () => this.runtime.notifyRelayHostsChanged()
+      }) ?? null
+    // Phones filter pending VM checkouts when they read; a change makes them read again.
+    const detachPendingVmChanges = this.mobileRelayHostCatalog
+      ? publishPendingVmCheckoutRepoChanges(pendingVmCheckouts, (repoId) =>
+          this.runtime.notifyWorktreesChangedForRemoteClients(repoId)
+        )
+      : null
+    this.detachRelayHostsChanges =
+      detachListChanges || detachPendingVmChanges
+        ? () => {
+            detachListChanges?.()
+            detachPendingVmChanges?.()
+          }
+        : null
     this.runtime.setPairedWorkspaceContextSource(this.mobileRelayHostCatalog)
   }
 

@@ -8,7 +8,7 @@ import {
   pushMobileHostedReviewBranch
 } from './mobile-hosted-review-git-preparation'
 import { readBranchCompareOutcome } from './mobile-branch-compare-outcome'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 type RemotePrerequisiteInput = {
   status: MobileGitStatusResult | null
@@ -17,7 +17,7 @@ type RemotePrerequisiteInput = {
 
 // Desktop publishes only a branch with commits beyond its base; read them only when that decides it.
 async function readBranchCommitsAhead(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<number | undefined> {
   const compare = await readBranchCompareOutcome(client, worktreeId)
@@ -27,7 +27,7 @@ async function readBranchCommitsAhead(
 }
 
 export async function applyMobileHostedReviewRemotePrerequisite(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   prefill: MobilePrPrefill,
   input: RemotePrerequisiteInput

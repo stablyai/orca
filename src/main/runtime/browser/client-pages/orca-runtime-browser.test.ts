@@ -68,7 +68,7 @@ vi.mock('../../../browser/guest-lifecycle/browser-main-window-readiness', () => 
   whenBrowserMainWindowReady: whenBrowserMainWindowReadyMock
 }))
 
-vi.mock('../../../browser/sessions/browser-session-registry', () => ({
+vi.mock('../../../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
 

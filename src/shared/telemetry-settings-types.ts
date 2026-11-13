@@ -1,4 +1,5 @@
 import type { AgentDashboardSurface } from './telemetry-agent-dashboard-event-schemas'
+import type { MilestoneInstallCohort } from './telemetry-protected-milestone-schemas'
 
 export type ChatUiLaunchTipTargeting =
   | { mode: 'all' }
@@ -30,4 +31,10 @@ export type TelemetrySettings = {
   chatUiLaunchTipTargeting?: ChatUiLaunchTipTargeting
   /** Local UTC-day cursors cap dashboard observations across restarts; at most two writes a day. */
   agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>
+  /** UTC-day cursors written only after the SDK accepted the milestone capture; at most two writes a day. */
+  protectedMilestones?: {
+    installCohort?: MilestoneInstallCohort
+    firstAgentInteractionDay?: number
+    meaningfulActivityDay?: number
+  }
 }

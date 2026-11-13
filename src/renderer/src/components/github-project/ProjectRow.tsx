@@ -3,7 +3,7 @@ import React from 'react'
 import { ExternalLink, Play } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import { resolveWidth } from './column-widths'
 import ProjectCell from './ProjectCell'
@@ -12,7 +12,7 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =

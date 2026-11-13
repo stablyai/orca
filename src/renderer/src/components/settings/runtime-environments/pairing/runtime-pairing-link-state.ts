@@ -9,12 +9,6 @@ export function runtimePairingReachForIntent(intent: RuntimePairingIntent): Runt
   return intent === 'local' ? 'this-computer' : 'network'
 }
 
-export type RuntimePairingUrlGeneratorProps = {
-  framed?: boolean
-  showHeader?: boolean
-  showGeneratorForm?: boolean
-}
-
 // Main retains pairing tokens; cache navigation state without persisting credential material.
 export const runtimePairingLinkCache: {
   selectedAddress: string

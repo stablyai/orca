@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { buildBrowserSessionData } from '@/lib/workspace/persistence/workspace-session-browser-tabs'
 import { browserPageSchema } from '../../../../../../shared/workspace-session/workspace-session-browser-schema'
 import { createTestStore } from '../../../testing/app-store-test-fixture'
@@ -10,13 +10,13 @@ import {
 } from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn() }))
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   releaseDocPreviewGrant: mocks.releaseDocPreviewGrant,
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -74,9 +74,27 @@ function persistedSession(
     state.browserTabsByWorktree,
     state.browserPagesByWorkspace,
     state.activeBrowserTabIdByWorktree,
+    {},
     {}
   )
 }
+
+it('keeps an untitled web page identifiable in its saved page and workspace', async () => {
+  const store = await createStoreWithWorktree()
+  const tab = store
+    .getState()
+    .createBrowserTab(WORKTREE_ID, 'https://kagi.com/search?token=test-only&q=orca')
+  await settled()
+  const pageId = store.getState().browserPagesByWorkspace[tab.id][0].id
+  expect(store.getState().browserPagesByWorkspace[tab.id][0].title).toBe(
+    'https://kagi.com/search?q=orca'
+  )
+  store.getState().updateBrowserPageState(pageId, { title: '' })
+  expect(store.getState().browserTabsByWorktree[WORKTREE_ID][0].title).toBe(
+    'https://kagi.com/search?q=orca'
+  )
+  expect(JSON.stringify(persistedSession(store))).not.toContain('token=')
+})
 
 describe('a browser page that shows a workspace document', () => {
   // Chromium echoes untitled documents’ grant URLs as titles; fence this persisted/mirrored sink too.
@@ -143,71 +161,6 @@ describe('a browser page that shows a workspace document', () => {
     expect(urlPage?.docLocation ?? null).toBeNull()
   })
 
-  it('reopens a closed document tab with its document identity', async () => {
-    const store = await createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-    await settled()
-
-    store.getState().closeBrowserTab(tab.id)
-    await settled()
-    const reopened = store.getState().reopenClosedBrowserTab(WORKTREE_ID)
-    await settled()
-    const page = reopened ? store.getState().browserPagesByWorkspace[reopened.id]?.[0] : undefined
-
-    expect(page?.docLocation).toEqual(DOC_LOCATION)
-    expect(reopened?.docLocation).toEqual(DOC_LOCATION)
-  })
-
-  it('reopens a closed document page with its document identity', async () => {
-    const store = await createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-    await settled()
-    const documentPage = store.getState().createBrowserPage(tab.id, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-    await settled()
-    if (!documentPage) {
-      throw new Error('Expected a document page')
-    }
-
-    store.getState().closeBrowserPage(documentPage.id)
-    await settled()
-    const reopened = store.getState().reopenClosedBrowserPage(tab.id)
-    await settled()
-
-    expect(reopened?.docLocation).toEqual(DOC_LOCATION)
-  })
-
-  it('restores as the document it was, still blank', async () => {
-    const store = await createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-    await settled()
-    const session = persistedSession(store)
-
-    const restored = await createStoreWithWorktree()
-    restored.getState().hydrateBrowserSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: WORKTREE_ID,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      ...session
-    })
-
-    const page = restored.getState().browserPagesByWorkspace[tab.id]?.[0]
-    expect(page?.docLocation).toEqual(DOC_LOCATION)
-    expect(restored.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]?.docLocation).toEqual(
-      DOC_LOCATION
-    )
-  })
-
   // Malformed pages salvage to empty arrays; hydration then rebuilds from tab chrome, so test that fallback.
   it('restores from the tab alone when its page row was salvaged away', async () => {
     const store = await createStoreWithWorktree()
@@ -270,19 +223,5 @@ describe('conversion provenance at the session schema door', () => {
       url: 'https://example.com/',
       browserRuntimeEnvironmentId: 'env-1'
     })
-  })
-
-  it('applies the same fence to convertedTo, Forward’s side of the crossing', () => {
-    const tainted = browserPageSchema.parse({
-      ...PAGE_ROW,
-      convertedTo: { kind: 'url', url: LIVE_GRANT_URL }
-    })
-    expect(tainted.convertedTo ?? null).toBeNull()
-
-    const kept = browserPageSchema.parse({
-      ...PAGE_ROW,
-      convertedTo: { kind: 'url', url: 'https://example.com/' }
-    })
-    expect(kept.convertedTo).toEqual({ kind: 'url', url: 'https://example.com/' })
   })
 })

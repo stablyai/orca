@@ -50,6 +50,7 @@ function reuseExpandedPanesIfEqual(
   return nextKeys.every((key) => previous[key] === next[key]) ? previous : next
 }
 
+/** Select floating surfaces, including browser views whose records remain owned by their source workspace. */
 export function createFloatingTerminalPanelInputsSelector(
   dependencies: SelectorDependencies = {}
 ): (state: FloatingTerminalPanelState) => FloatingTerminalPanelInputs {

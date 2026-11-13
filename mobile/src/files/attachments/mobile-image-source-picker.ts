@@ -1,6 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker'
 import { File as FsFile } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
+import { Platform } from 'react-native'
 import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   assertClipboardImageBase64LengthWithinLimit,
@@ -14,9 +15,20 @@ import type { MobileImageSource, PickedMobileImage } from '../../platform/media-
 
 const MOBILE_IMAGE_READ_CHUNK_BYTES = 256 * 1024
 
+/** Library picks that agents and the page's canvas can read: HEIC arrives as JPEG on both platforms. */
+export function agentReadableLibraryImageOptions(): ImagePicker.ImagePickerOptions {
+  return {
+    // Android hands back HEIC as-is at quality 1, which its WebView can't decode; below 1 it re-encodes to JPEG.
+    quality: Platform.OS === 'android' ? 0.99 : 1,
+    // iOS otherwise hands back HEIC as-is, which agents can't read; Compatible gives JPEG.
+    preferredAssetRepresentationMode:
+      ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
+  }
+}
+
 type MobileImageFileHandle = {
   readonly size: number | null
-  readBytes(length: number): Uint8Array
+  readBytesSync(length: number): Uint8Array
   close(): void
 }
 
@@ -55,7 +67,7 @@ export async function readUriAsBase64(
         MOBILE_IMAGE_READ_CHUNK_BYTES,
         CLIPBOARD_IMAGE_MAX_SOURCE_BYTES - bytesRead + 1
       )
-      const bytes = handle.readBytes(requested)
+      const bytes = handle.readBytesSync(requested)
       if (bytes.byteLength === 0) {
         break
       }
@@ -87,10 +99,7 @@ async function* pickFromLibrary(
     base64: false,
     allowsMultipleSelection: multiple,
     ...(multiple ? { selectionLimit: 0, orderedSelection: true } : {}),
-    quality: 1,
-    // iOS otherwise hands back HEIC as-is, which agents can't read; Compatible gives JPEG.
-    preferredAssetRepresentationMode:
-      ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
+    ...agentReadableLibraryImageOptions()
   })
   if (result.canceled) {
     return

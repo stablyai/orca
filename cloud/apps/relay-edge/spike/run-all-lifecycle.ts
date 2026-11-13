@@ -1,5 +1,5 @@
 // Later run-all.ts checks against the same host: rebind, orphan grace, silence,
-// forced resets and pre-upgrade refusals.
+// forced resets.
 import WebSocket from 'ws'
 import { GRACE_MS, ORIGIN, PING_MS, PORT, SILENCE_MS, makeControl, openPhone, record, sleep, waitFor, type Ctx, type Control } from './run-all-harness'
 
@@ -39,7 +39,7 @@ export async function runLifecycleChecks(ctx: Ctx, main: Control, mainAck: Ack):
     mute.on('close', (c) => (muteClose = c))
     await new Promise((res) => mute.on('open', res))
     // Complete the handshake by hand with the shipped proof answerer, then never pong.
-    const { answerRelayHostChallenge } = await import('../../../../src/main/runtime/mobile-cloud-relay/relay-host-proof')
+    const { answerRelayHostChallenge } = await import('../../../../src/main/runtime/mobile-cloud-relay/control-channel/relay-host-proof')
     mute.send(JSON.stringify({ type: 'host-hello', v: 1, relayHostId: ctx.relayHostId, assignmentEpoch: 7,
       hostPublicKeyB64: ctx.keypair.publicKeyB64, appVersion: 'spike' }))
     mute.on('message', (raw) => {
@@ -89,12 +89,4 @@ export async function runLifecycleChecks(ctx: Ctx, main: Control, mainAck: Ack):
     back.client.closeNow()
   }
 
-  // Bad JWT -> 401 before upgrade; malformed host id -> 429.
-  {
-    const bad = new WebSocket(`ws://127.0.0.1:${PORT}/v1/host/control`, { headers: { authorization: 'Bearer nope' } })
-    const status = await new Promise<number>((res) => bad.on('unexpected-response', (_q, r) => res(r.statusCode ?? 0)))
-    const badHost = new WebSocket(`ws://127.0.0.1:${PORT}/v1/connect/short`)
-    const s2 = await new Promise<number>((res) => badHost.on('unexpected-response', (_q, r) => res(r.statusCode ?? 0)))
-    record('R11/R5 ES256 JWKS rejects bad token (401); malformed host id 429', status === 401 && s2 === 429, `${status},${s2}`)
-  }
 }

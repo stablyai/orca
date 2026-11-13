@@ -5,24 +5,26 @@ import type {
   RemoteBrowserPageHandle
 } from '../browser-slice-contract'
 import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
+import { workspaceBrowserTabs } from '../tabs/workspace-browser-tabs'
 import { findWorkspace } from '../pages/browser-page-records'
 import { pickNeighbor } from '../../tabs/tab-selection-history'
 import { getRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
 import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
 import { getFallbackTabTypeForWorktree, isLocalBrowserPageOwner } from '../hosts/browser-host-state'
 import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
-import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
+import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
 import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { landOnEmptiedWorktree } from '../../tabs/tabs-empty-workspace'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
+import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import {
   closeBrowserTabThroughLayoutOwner,
   withDrawnBrowserPages,
   type DrawnBrowserTab
 } from '../tabs/browser-tab-close-through-layout-owner'
 
+/** Close browser resources on their owning host and select surviving views in their placement workspace. */
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -92,7 +94,11 @@ export function createBrowserCloseActions(
             delete nextRemoteBrowserPageHandlesByPageId[page.id]
           }
 
-          const remainingBrowserTabs = nextBrowserTabsByWorktree[owningWorktreeId] ?? []
+          const remainingBrowserTabs = workspaceBrowserTabs(
+            nextBrowserTabsByWorktree,
+            owningWorktreeId,
+            s.unifiedTabsByWorktree[owningWorktreeId]?.filter((tab) => tab.entityId !== tabId)
+          )
           const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
           if (nextActiveBrowserTabIdByWorktree[owningWorktreeId] === tabId) {
             const neighborId = pickNeighbor(s.tabBarOrderByWorktree[owningWorktreeId] ?? [], tabId)

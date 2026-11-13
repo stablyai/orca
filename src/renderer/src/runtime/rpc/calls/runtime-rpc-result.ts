@@ -5,6 +5,14 @@ import type {
 
 // Why: the CLI reads the same flattened tokens, so the matcher lives in shared and both clients use one copy.
 
+/** A local identity guard rejected the request before dispatch, not a lost reply. */
+export class RuntimeConnectionChangedBeforeSendError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RuntimeConnectionChangedBeforeSendError'
+  }
+}
+
 export class RuntimeRpcCallError extends Error {
   readonly code: string
   readonly response: RuntimeRpcFailure

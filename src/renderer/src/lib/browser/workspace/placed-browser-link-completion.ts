@@ -1,6 +1,6 @@
 import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { focusHttpLinkPage } from '../navigation/http-link-browser-placement'
-import { revealFloatingWorkspacePanel } from '../../floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
 import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-open'
@@ -8,7 +8,8 @@ import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-ope
 /** Wait for the placed tab, report its client view, and reveal it only while the link still owns foreground intent. */
 export async function completePlacedBrowserLink(
   request: OpenWorkspaceBrowserTabRequest,
-  pageId: string
+  pageId: string,
+  environmentId: string | null | undefined = request.expectedRuntimeEnvironmentId
 ): Promise<void> {
   if (!request.placementWorkspaceId) {
     return
@@ -20,10 +21,10 @@ export async function completePlacedBrowserLink(
       (page) =>
         page.id === pageId ||
         (state.remoteBrowserPageHandlesByPageId[page.id]?.remotePageId === pageId &&
-          state.remoteBrowserPageHandlesByPageId[page.id]?.environmentId ===
-            request.expectedRuntimeEnvironmentId)
+          state.remoteBrowserPageHandlesByPageId[page.id]?.environmentId === environmentId)
     )
   if (!page) {
+    request.onLinkOutcome?.({ status: 'failed' })
     return
   }
   await new Promise<void>((resolve) =>

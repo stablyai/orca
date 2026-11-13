@@ -9,7 +9,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { SshTargetSelect } from '../../../host-picker/SshTargetSelect'
+import { HostCombobox } from '../../../host-picker/HostCombobox'
 
 const DEFAULT_REMOTE_PORT = '6768'
 
@@ -161,9 +161,9 @@ export function RuntimeSshAccessControl({
         <Label htmlFor={targetFieldId}>
           {t('auto.components.settings.managedServers.deploy.host', 'SSH host')}
         </Label>
-        <SshTargetSelect
+        <HostCombobox
           id={targetFieldId}
-          targets={targets}
+          options={targets}
           value={targetId}
           onChange={setTargetId}
           placeholder={t(

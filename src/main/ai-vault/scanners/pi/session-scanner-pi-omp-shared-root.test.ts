@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots, writeJsonlFile } from '../../session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  writeJsonlFile
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 const OMP_STEM = '2026-05-01T10-00-00-000Z_0199a000-0000-7000-8000-000000000002'
 const runtime = { version: '18.12.2' }
@@ -122,6 +125,7 @@ async function writeSharedRootTranscripts(sessionsDir: string): Promise<void> {
 
 describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {
   const parentFolder = (sessionsDir: string): string => join(sessionsDir, '..')
+  const sameFolder = (sessionsDir: string): string => sessionsDir
   it.each([
     // PI_CODING_AGENT_DIR=<dir>: Pi walks <dir>, OMP walks <dir>/sessions.
     { layout: 'a parent folder', piRoot: parentFolder, scope: {} },

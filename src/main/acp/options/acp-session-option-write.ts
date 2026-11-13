@@ -9,18 +9,22 @@ export type AcpOptionWriteBound = {
   onUncertain?: (error: Error) => void
 }
 
+/** A native setter carries its own call deadline, so an unanswered one fails only its send. */
 export function writeAcpSessionOption(
   connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  bound: AcpOptionWriteBound & { key: string; value: string }
+  { onUncertain: _retire, ...bound }: AcpOptionWriteBound & { key: string; value: string }
 ): Promise<void> {
+  const { timeoutMs } = bound
   return boundAcpOptionWrite(options, bound, () =>
     write.method === 'config'
       ? connection
-          .setConfigOption(write.configId, write.value)
+          .setConfigOption(write.configId, write.value, undefined, undefined, timeoutMs)
           .then((result) => () => options.adoptConfigOptions(result.configOptions))
-      : connection.setModel(write.modelId).then(() => () => options.adoptModel(write.modelId))
+      : connection
+          .setModel(write.modelId, undefined, timeoutMs)
+          .then(() => () => options.adoptModel(write.modelId))
   )
 }
 
@@ -38,26 +42,51 @@ export function boundAcpOptionWrite(
   const revision = ++options.writeRevision
   options.invalidateInput(bound.key)
   options.writing += 1
+  let failed = false
+  let native: Promise<() => string | void> | null = null
   let completed = false
-  const applied = send().then((apply) => {
-    completed = true
-    if (options.writeRevision !== revision) {
-      throw new Error(`${agent} option write was superseded`)
-    }
-    const resolved = apply()
-    options.adoptOwnWrite(bound.key, bound.value, resolved ?? undefined)
-  })
+  // A withdrawn control may still land, so this one is sent only after it settles.
+  const applied = options
+    .whenControlsSettle()
+    .then(() => {
+      if (failed) {
+        throw new Error(`${agent} option write was withdrawn before it was sent`)
+      }
+      native = send()
+      // Orca's own write stays in flight until the agent answers, so its echo is not drift.
+      const released = (): void => {
+        options.writing -= 1
+      }
+      native.then(released, released)
+      return native
+    })
+    .then((apply) => {
+      completed = true
+      if (options.writeRevision !== revision) {
+        throw new Error(`${agent} option write was superseded`)
+      }
+      const resolved = apply()
+      options.adoptOwnWrite(bound.key, bound.value, resolved ?? undefined)
+    })
   void applied.catch(() => {
     completed = true
   })
   return new Promise<void>((resolve, reject) => {
+    let settled = false
     const fail = (error: Error): void => {
+      if (settled) {
+        return
+      }
       if (options.writeRevision === revision) {
         options.writeRevision += 1
       }
+      failed = true
       settle()
-      // A local deadline/abort cannot cancel an already-sent native control.
-      if (!completed) {
+      if (native === null) {
+        options.writing -= 1
+      } else if (!completed) {
+        // A local deadline/abort cannot cancel an already-sent native control.
+        options.holdUntilSettled(native, bound.key)
         bound.onUncertain?.(error)
       }
       reject(error)
@@ -71,7 +100,6 @@ export function boundAcpOptionWrite(
       () => fail(new Error(`${agent} did not answer an option write within ${timeoutMs}ms`)),
       timeoutMs
     )
-    let settled = false
     const settle = (): void => {
       if (settled) {
         return
@@ -79,7 +107,6 @@ export function boundAcpOptionWrite(
       settled = true
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
-      options.writing -= 1
     }
     signal?.addEventListener('abort', onAbort, { once: true })
     applied.then(() => {
@@ -87,4 +114,25 @@ export function boundAcpOptionWrite(
       resolve()
     }, fail)
   })
+}
+
+/** A prompt waits for withdrawn controls, each bounded by its call deadline, or for its own abort. */
+export async function acpControlsSettled(
+  session: { options: AcpStructuredOptions },
+  signal?: AbortSignal
+): Promise<void> {
+  if (!signal) {
+    return session.options.whenControlsSettle()
+  }
+  signal.throwIfAborted()
+  let onAbort = (): void => {}
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(abortSignalReason(signal))
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  try {
+    await Promise.race([session.options.whenControlsSettle(), aborted])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
 }

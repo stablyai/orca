@@ -135,6 +135,31 @@ it('does not revive old results or cursors before debounce when returning from a
   unmount()
 })
 
+it('keeps loaded rows while a continuation is pending and appends its captured page', async () => {
+  searchSessions.mockResolvedValueOnce({
+    ...searchResults(),
+    hits: [{ ...searchHit(), sessionId: 'first' }],
+    page: { cursor: 'next', hasMore: true }
+  })
+  const request = { query: 'needle' }
+  const { result, unmount } = renderHook(() => useAiVaultSearch(request, 'local', ''))
+  await debounce()
+  let resolve!: (response: AiVaultSearchResponse) => void
+  searchSessions.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done
+      })
+  )
+  act(() => result.current.loadMore())
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first'])
+  await act(async () =>
+    resolve({ ...searchResults(), hits: [{ ...searchHit(), sessionId: 'second' }] })
+  )
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first', 'second'])
+  unmount()
+})
+
 it('keeps the last hits on screen until a newer query answers, ignoring the older reply', async () => {
   const hit = (sessionId: string) => ({ ...searchHit(), sessionId })
   let answerOld = (_response: AiVaultSearchResponse): void => {}

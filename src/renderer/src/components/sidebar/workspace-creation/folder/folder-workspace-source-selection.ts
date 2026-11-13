@@ -1,4 +1,4 @@
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,

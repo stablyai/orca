@@ -33,6 +33,7 @@ type TerminalWebLinkClickDeps = Pick<
   actionDestinations?: TerminalHttpLinkActionDestinations
 }
 
+/** Apply desktop gesture policy before routing a detected web link with its activation context. */
 export function handleTerminalWebLinkClick(
   url: string,
   event: MouseEvent | undefined,

@@ -55,6 +55,7 @@ export function isTerminalMiddleClickActivation(
   )
 }
 
+/** Identify gestures eligible for Orca link handling; hit testing still decides whether to claim them. */
 export function isTerminalOwnedLinkGesture(event: TerminalLinkMouseEvent | undefined): boolean {
   return (
     isTerminalLinkFloatingActivation(event) ||

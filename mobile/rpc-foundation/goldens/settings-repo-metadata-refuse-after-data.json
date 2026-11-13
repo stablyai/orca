@@ -35,17 +35,6 @@
       "ordinal": 9,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
     },
-    "18c2b8e092d7": {
-      "name": "streams-registered-at-teardown",
-      "ordinal": 26,
-      "value": [
-        {
-          "cancelled": true,
-          "method": "runtime.clientEvents.subscribe",
-          "payload": "runtime.clientEvents.subscribe#1"
-        }
-      ]
-    },
     "20200b8feac4": {
       "name": "host.platform#1",
       "ordinal": 6,
@@ -106,6 +95,17 @@
         "startedAt": 0
       }
     },
+    "44eb39507b75": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 23,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#1"
+        }
+      ]
+    },
     "564f54c8d902": {
       "name": "host.platform#1",
       "ordinal": 6,
@@ -136,11 +136,6 @@
       "name": "hostLabelById",
       "ordinal": 13,
       "value": [["ssh:ssh-1", "SSH"]]
-    },
-    "59ab92fbdbc0": {
-      "name": "hostPlatform",
-      "ordinal": 25,
-      "value": "linux"
     },
     "6770aa1912e4": {
       "name": "repo.list#2",
@@ -411,11 +406,6 @@
       "status": "pending",
       "startedAt": 0
     },
-    "9c290301a4bc": {
-      "name": "hostHealthById",
-      "ordinal": 23,
-      "value": []
-    },
     "b2746491ac07": {
       "name": "repo.list#1",
       "ordinal": 2,
@@ -642,11 +632,6 @@
       "name": "hostPlatform",
       "ordinal": 14,
       "value": "linux"
-    },
-    "fb797b9761e1": {
-      "name": "hostLabelById",
-      "ordinal": 24,
-      "value": [["ssh:ssh-1", "SSH"]]
     }
   },
   "recording": {
@@ -795,10 +780,7 @@
             "8cfdd18c5fe6",
             "84c1dde54c62",
             "56ab81cb67dc",
-            "f9193cae5824",
-            "9c290301a4bc",
-            "fb797b9761e1",
-            "59ab92fbdbc0"
+            "f9193cae5824"
           ]
         }
       },
@@ -838,10 +820,7 @@
             "84c1dde54c62",
             "56ab81cb67dc",
             "f9193cae5824",
-            "9c290301a4bc",
-            "fb797b9761e1",
-            "59ab92fbdbc0",
-            "18c2b8e092d7"
+            "44eb39507b75"
           ]
         }
       }

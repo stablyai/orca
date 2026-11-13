@@ -253,9 +253,7 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     const user = userEvent.setup()
     act(() => trigger.focus())
     await user.keyboard('co')
-    const search = document.querySelector<HTMLInputElement>(
-      'input[placeholder="Search agents and setups…"]'
-    )!
+    const search = getByRole<HTMLInputElement>(getByRole(document.body, 'menu'), 'textbox')
     expect(document.activeElement).toBe(search)
     expect(search.value).toBe('co')
     expect(search.selectionStart).toBe(2)

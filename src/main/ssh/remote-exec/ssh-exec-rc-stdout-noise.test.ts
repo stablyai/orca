@@ -9,24 +9,9 @@ import { runProcess } from '@orca/process-host'
 import { wrapRemoteCommandForPosixShell } from './ssh-posix-command-wrapper'
 import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { execCommand, isSshCommandExitError } from './remote-exec-command'
-import { readRemoteHomeCommand } from './ssh-remote-commands'
+
 import type { SshConnection } from '../connection/ssh-connection'
 import { tryResolveViaLoginShell } from '../remote-host/node-toolchain/ssh-remote-node-resolution'
-import {
-  normalizeRemoteHome,
-  validateRemoteHome,
-  type RemoteHostPlatform
-} from '../remote-host/ssh-remote-platform'
-
-const LINUX_HOST: RemoteHostPlatform = {
-  os: 'linux',
-  arch: 'x64',
-  relayPlatform: 'linux-x64',
-  pathFlavor: 'posix',
-  commandDialect: 'posix',
-  pathSeparator: '/',
-  pathDelimiter: ':'
-}
 
 const HOME = '/home/fishu'
 
@@ -64,16 +49,6 @@ const STARTUP_NOISE: [string, string][] = [
 ]
 
 describe.skipIf(process.platform === 'win32')('SSH exec under noisy startup files', () => {
-  it.each(STARTUP_NOISE)('reads a valid remote home despite %s', async (_name, startup) => {
-    const conn = hostWithStartupOutput(startup)
-    const home = normalizeRemoteHome(
-      await execCommand(conn, readRemoteHomeCommand(LINUX_HOST)),
-      LINUX_HOST
-    )
-    expect(home).toBe(HOME)
-    expect(validateRemoteHome(home, LINUX_HOST)).toBe(true)
-  })
-
   it('keeps token probes exact and the exit code intact', async () => {
     const conn = hostWithStartupOutput('echo OK')
     await expect(execCommand(conn, 'echo MISSING')).resolves.toBe('MISSING\n')

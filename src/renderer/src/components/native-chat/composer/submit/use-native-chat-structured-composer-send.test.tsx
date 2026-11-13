@@ -40,6 +40,9 @@ import { useNativeChatDraft } from '../../drafts/use-native-chat-draft'
 import { NativeChatPromptEditor } from '../editor/NativeChatPromptEditor'
 import { promptEditor } from '../editor/native-chat-prompt-editor.test-support'
 import { promptSkillRefs } from '../editor/native-chat-prompt-document'
+import { structuredConversationCommandRunner } from '../../session/structured/writes/structured-conversation-command-send'
+import type { AgentSessionConversationCommandResult } from '../../../../../../shared/agent-session/agent-session-conversation-command'
+import type { StructuredAgentSessionWriteOutcome } from '../../session/structured/writes/use-structured-agent-session-mutate'
 
 describe('complete handback acceptance', () => {
   const scope = 'agent-session:rich-return'
@@ -222,5 +225,112 @@ describe('complete handback acceptance', () => {
     expect(fixture.transport.send).toHaveBeenNthCalledWith(2, left.text, [], {
       skills: [{ name: 'review', path: '/latest/SKILL.md' }]
     })
+  })
+})
+
+describe('a conversation command leaves the composer once it is sent', () => {
+  const scope = 'agent-session:compact-draft'
+  beforeEach(async () => {
+    localStorage.clear()
+    clearNativeChatComposerDraftsForTests()
+    setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
+    await hydrateNativeChatComposerDrafts()
+  })
+  afterEach(() => {
+    cleanup()
+    clearNativeChatComposerDraftsForTests()
+  })
+
+  async function sendCompactWhileHostAnswers() {
+    const host =
+      Promise.withResolvers<
+        StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>
+      >()
+    const { runConversationCommand } = structuredConversationCommandRunner({
+      agentName: 'Codex',
+      pending: { current: false },
+      commandsWait: false,
+      chat: {
+        turnId: null,
+        isWorking: false,
+        queueSendsNext: false,
+        backgroundTasks: { isMonitoring: false, show: false },
+        submissions: []
+      },
+      prompts: [],
+      rewindInFlight: { current: false },
+      sends: [],
+      items: () => [],
+      send: () => host.promise
+    })
+    const transport: NativeChatStructuredComposerTransport = {
+      capturePresentation: () => () => true,
+      send: vi.fn(() => true),
+      dispatchCommand: (text, onSent) =>
+        dispatchStructuredAgentSessionComposerCommand(
+          text,
+          {
+            agent: 'codex',
+            snapshot: [],
+            invokeAction: async () => true,
+            setOption: async () => true,
+            conversationCommands: ['compact'],
+            runConversationCommand
+          },
+          onSent
+        ),
+      optionsSurface: {
+        getSnapshot: () => [],
+        setOption: vi.fn(),
+        invokeAction: vi.fn(),
+        subscribe: () => () => {}
+      },
+      optionSnapshot: [],
+      onError: vi.fn(),
+      runtime: 'local',
+      sessionId: 'compact-draft',
+      runtimeEnvironmentId: null
+    }
+    const hook = renderHook(() => {
+      const draft = useNativeChatDraft(scope, () => false)
+      const send = useNativeChatStructuredComposerSend({
+        agent: 'codex',
+        draftScopeKey: scope,
+        imageAttachments: [],
+        structuredTransport: transport,
+        isComposing: () => false,
+        clearSkillOrigin: () => {},
+        setDraft: draft.setDraft,
+        setCaret: () => {}
+      })
+      return { ...draft, send }
+    })
+    act(() => hook.result.current.setDraft('/compact'))
+    let sending: Promise<boolean> | undefined
+    act(() => {
+      sending = hook.result.current.send('/compact', [])
+    })
+    await act(async () => {})
+    return { host, hook, settled: () => act(async () => sending) }
+  }
+
+  it('clears /compact while the host is still answering', async () => {
+    const { host, hook, settled } = await sendCompactWhileHostAnswers()
+    expect(hook.result.current.draft).toBe('')
+    host.resolve({ kind: 'done', value: { command: 'compact', state: 'completed' } })
+    await settled()
+    expect(hook.result.current.draft).toBe('')
+  })
+
+  it('keeps a command typed while a refused /compact was answering', async () => {
+    const { host, hook, settled } = await sendCompactWhileHostAnswers()
+    act(() => hook.result.current.setDraft('/clear'))
+    host.resolve({
+      kind: 'not-done',
+      notice: 'Codex could not compact.',
+      failure: { kind: 'failed' }
+    })
+    await settled()
+    expect(readNativeChatComposerDraft(scope).text).toBe('/clear')
   })
 })

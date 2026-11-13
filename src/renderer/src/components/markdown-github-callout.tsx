@@ -8,8 +8,8 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import type { GitHubCalloutKind } from '../../../shared/github/github-callouts'
+import { cn } from '@/lib/class-names'
+import type { GitHubCalloutKind } from '../../../shared/github/markdown/github-callouts'
 
 const CALLOUT_PRESENTATIONS: Record<
   GitHubCalloutKind,

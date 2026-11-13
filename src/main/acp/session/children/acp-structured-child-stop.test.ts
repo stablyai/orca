@@ -4,7 +4,6 @@ import {
   closeProviderTimelineRigs,
   SESSION
 } from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { grokSubagentStop } from '../../acp-dialects/grok-subagent-stop'
 import { openAcpAdapterRig, sendHello } from '../testing/acp-structured-adapter.test-support'
 
 const cleanup: (() => Promise<unknown>)[] = []
@@ -17,39 +16,6 @@ afterEach(async () => {
 })
 
 describe('Grok targeted child control contract', () => {
-  it.each([
-    [{ cancelled: true, outcome: { kind: 'cancelled' } }, { cancelled: true }],
-    [{ cancelled: true }, { cancelled: true }],
-    [{ cancelled: false }, { cancelled: false }],
-    [
-      { cancelled: false, outcome: { kind: 'already_finished', status: 'failed' } },
-      { cancelled: false, state: 'failed' }
-    ],
-    [
-      { cancelled: false, outcome: { kind: 'already_finished', status: 'cancelled' } },
-      { cancelled: false, state: 'stopped' }
-    ],
-    [{ cancelled: false, outcome: { kind: 'not_found' } }, { cancelled: false }],
-    [{ cancelled: false, outcome: { kind: 'future_kind' } }, { cancelled: false }]
-  ])('reads typed and legacy replies truthfully: %j', (payload, expected) => {
-    expect(
-      grokSubagentStop.response({ result: { subagentId: 'child', ...payload } }, 'child')
-    ).toEqual(expected)
-  })
-
-  it.each([
-    { result: null, error: 'refused' },
-    { result: { subagentId: 'other', cancelled: true } },
-    { result: { subagentId: 'child' } },
-    { result: { subagentId: 'child', cancelled: true }, error: 'refused' },
-    { result: { subagentId: 'child', cancelled: false, outcome: { kind: 'already_finished' } } },
-    { cancelled: true }
-  ])('rejects malformed, refused and mismatched replies: %j', (reply) => {
-    expect(() => grokSubagentStop.response(reply, 'child')).toThrow(
-      'invalid child cancellation response'
-    )
-  })
-
   it('bounds an unanswered route check without ending the parent connection', async () => {
     const rig = await openAcpAdapterRig({
       script: (agent) => {

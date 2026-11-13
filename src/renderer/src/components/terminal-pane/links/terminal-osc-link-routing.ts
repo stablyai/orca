@@ -30,6 +30,7 @@ type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
     >
   >
 
+/** Accept desktop link actions while leaving unrelated OSC8 gestures to xterm. */
 function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
   if (!event) {
     return false
@@ -45,6 +46,7 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
   )
 }
 
+/** Validate an OSC8 target and route file or HTTP actions with the terminal’s source ownership. */
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,

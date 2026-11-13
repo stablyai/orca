@@ -8,6 +8,7 @@ type BrowserMaterializationState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
+/** Check whether the host page has a client browser view, including views placed outside the source workspace. */
 export function hasMaterializedWebRuntimeBrowserPage(
   state: BrowserMaterializationState,
   environmentId: string,

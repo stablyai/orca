@@ -1,20 +1,18 @@
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import '../../../store/testing/app-store-test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../../shared/constants'
 import '../../../../../shared/session-tabs-runtime-capabilities'
 import '../../../../../shared/protocol-version'
-import { canOfferHttpLinkGroupAction } from '../../../lib/browser/navigation/http-link-in-group-availability'
+import '../../../lib/browser/navigation/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { useAppStore } from '../../../store/index'
-import { openWorkspaceBrowserTabForLink } from '../../../lib/browser/workspace/workspace-browser-tab-open'
 import * as workspaceBrowserTabOpen from '../../../lib/browser/workspace/workspace-browser-tab-open'
+import { openWorkspaceBrowserTabForLink } from '../../../lib/browser/workspace/workspace-browser-tab-open'
 import { openHttpLink } from '../../../lib/browser/navigation/http-link-routing'
-import { captureLinkOpenIntent } from '../../../lib/link-open-intent'
-import { beginLinkOpenRequest } from '../../../lib/link-open-request'
+import { captureLinkOpenIntent } from '../../../lib/links/placement/link-open-intent'
+import { beginLinkOpenRequest } from '../../../lib/links/link-open-request'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
 import { resetWebSessionBrowserPlacementsForTests } from '../placement/web-session-browser-placement'
@@ -37,6 +35,7 @@ import {
 } from './testing/web-runtime-browser-creation-placement-test-rig'
 import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { peekWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
+import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
@@ -95,6 +94,22 @@ function open(explicit = false) {
 }
 
 describe('runtime link opens through staging and materialization', () => {
+  it('completes a placed page with a host-assigned ID and an inferred runtime', async () => {
+    const opening = openWorkspaceBrowserTabForLink({
+      workspaceId: WT,
+      placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: 'https://example.com/link',
+      intent: { kind: 'url' },
+      placementPreference: 'server',
+      linkContext: { linkIntent: null, isCurrentRequest: beginLinkOpenRequest() }
+    })
+    pendingCreates[0].resolve('host-assigned-page')
+    await expect(opening).resolves.toMatchObject({
+      status: 'opened',
+      result: { worktreeId: 'global-floating-terminal', executionHostId: 'local' }
+    })
+  })
+
   it('opens remote loopback in floating without activating a tab in its source workspace', async () => {
     useAppStore.setState({
       settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
@@ -181,76 +196,6 @@ describe('runtime link opens through staging and materialization', () => {
     expect(requestBrowserFocus).not.toHaveBeenCalled()
   })
 
-  it('stages in the visible browser group and returns the reconciled host page identity', async () => {
-    const creating = open()
-    expect(pendingCreates).toHaveLength(1)
-    const provisional = pendingCreates[0]!.params.page
-    expect(pendingCreates[0]!.params.targetGroupId).toBe(G2)
-    expect(wrapperForRemotePage(provisional!)?.groupId).toBe(G2)
-    pendingCreates[0]!.resolve('actual-host-page')
-    const outcome = await creating
-    expect(outcome).toMatchObject({
-      status: 'opened',
-      result: { groupId: G2, executionHostId: HOST, worktreeId: WT }
-    })
-    if (outcome.status !== 'opened') {
-      throw new Error('Expected open')
-    }
-    expect(outcome.result.unifiedTabId).toBe(wrapperForRemotePage('actual-host-page')?.id)
-    expect(
-      useAppStore.getState().remoteBrowserPageHandlesByPageId[outcome.result.browserPageId]
-    ).toMatchObject({ remotePageId: 'actual-host-page', environmentId: ENV })
-  })
-
-  it('offers explicit runtime reuse only when a matching pinned page proves the route and session', async () => {
-    const state = useAppStore.getState()
-    const profile: BrowserSessionProfile = {
-      id: 'default',
-      scope: 'default',
-      partition: 'persist:remote-default',
-      label: 'Default',
-      source: null
-    }
-    useAppStore.setState({
-      browserSessionProfilesByHostId: { [HOST]: [profile] },
-      remoteBrowserPageHandlesByPageId: {
-        ...state.remoteBrowserPageHandlesByPageId,
-        [SOURCE.pageId]: {
-          environmentId: ENV,
-          remotePageId: SOURCE.pageId,
-          browserProfileId: 'default'
-        }
-      },
-      browserTabsByWorktree: {
-        [WT]: state.browserTabsByWorktree[WT]!.map((workspace) => ({
-          ...workspace,
-          sessionProfileId: null,
-          sessionPartition: 'persist:remote-default'
-        }))
-      },
-      browserPagesByWorkspace: {
-        ...state.browserPagesByWorkspace,
-        [SOURCE.workspaceId]: state.browserPagesByWorkspace[SOURCE.workspaceId]!.map((page) => ({
-          ...page,
-          url: 'https://example.com/link'
-        }))
-      }
-    })
-    expect(
-      canOfferHttpLinkGroupAction(useAppStore.getState(), {
-        workspaceId: WT,
-        sourceTabId: SOURCE.unifiedTabId,
-        url: 'https://example.com/link',
-        sourceOwner: { kind: 'runtime', runtimeEnvironmentId: ENV }
-      })
-    ).toBe(true)
-    expect(await open(true)).toMatchObject({
-      status: 'opened',
-      result: { browserWorkspaceId: SOURCE.workspaceId, browserPageId: SOURCE.pageId, groupId: G1 }
-    })
-    expect(pendingCreates).toHaveLength(0)
-  })
-
   it('a delivery callback failure cannot unwind a page that already materialized', async () => {
     const call = installRuntimeTransport()
     const creating = createWebRuntimeSessionBrowserTab({
@@ -279,14 +224,5 @@ describe('runtime link opens through staging and materialization', () => {
     pendingCreates[0]!.resolve('superseded-host-page')
     expect(await creating).toEqual({ status: 'superseded' })
     expect(wrapperForRemotePage('superseded-host-page')).toBeDefined()
-  })
-
-  it('reports the current group after the user moves the staged tab', async () => {
-    const creating = open()
-    const provisional = pendingCreates[0]!.params.page!
-    const staged = wrapperForRemotePage(provisional)!
-    useAppStore.getState().moveUnifiedTabToGroup(staged.id, G1)
-    pendingCreates[0]!.resolve()
-    expect(await creating).toMatchObject({ status: 'opened', result: { groupId: G1 } })
   })
 })

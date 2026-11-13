@@ -5,7 +5,6 @@ import './terminal-link-handlers'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
-  createDeferred,
   flushAsyncWork,
   flushDoubleRaf,
   installTerminalLinkTestEnvironment,
@@ -14,8 +13,7 @@ import {
 
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, deps, openFileMock, openFilePathMock, setPendingEditorRevealMock, statMock } =
-  doubles
+const { storeState, deps, openFileMock, openFilePathMock, setPendingEditorRevealMock } = doubles
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -23,26 +21,35 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/language-detect', () => ({
-  detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
-}))
-
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: findWorkspaceFileRouteMock
 }))
 
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
+  it('reports an unsupported floating directory instead of silently consuming the click', async () => {
+    doubles.statMock.mockResolvedValueOnce({ isDirectory: true })
+    const onOpenFailure = vi.fn()
+    openDetectedFilePath('/tmp/folder', null, null, {
+      ...deps,
+      floatingWorkspace: true,
+      onOpenFailure
+    })
+    await flushAsyncWork()
+    expect(onOpenFailure).toHaveBeenCalledWith({ verdict: 'unavailable', error: expect.any(Error) })
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
   it('places a file in floating while retaining its source owner and line target', async () => {
     setPlatform('Linux')
     openDetectedFilePath('/tmp/src/report.md', 12, 3, { ...deps, floatingWorkspace: true })
@@ -137,44 +144,6 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'folder-notes', filePath: '/tmp/report.md' }),
       expect.objectContaining({ placementWorkspaceId: 'global-floating-terminal' })
-    )
-  })
-
-  it('ignores stale async completion so latest local click wins for Orca open and reveal', async () => {
-    setPlatform('Macintosh')
-    const firstStat = createDeferred<{ isDirectory: boolean }>()
-    const secondStat = createDeferred<{ isDirectory: boolean }>()
-    statMock
-      .mockImplementationOnce(() => firstStat.promise)
-      .mockImplementationOnce(() => secondStat.promise)
-
-    openDetectedFilePath('/tmp/src/first.ts', 10, 2, deps)
-    openDetectedFilePath('/tmp/src/second.ts', 20, 3, deps)
-
-    secondStat.resolve({ isDirectory: false })
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    firstStat.resolve({ isDirectory: false })
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(openFilePathMock).not.toHaveBeenCalled()
-    expect(openFileMock).toHaveBeenCalledTimes(1)
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/second.ts' }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        filePath: '/tmp/src/second.ts',
-        fileId: '/tmp/src/second.ts',
-        line: 20,
-        column: 3,
-        matchLength: 0
-      })
     )
   })
 })

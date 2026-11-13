@@ -1,4 +1,7 @@
-import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageLinearIssueCreationModel } from '../linear/use-task-page-linear-issue-creation'
 import { useCallback } from 'react'
 import {
@@ -9,7 +12,7 @@ import { jiraCreateIssue } from '@/runtime/jira/runtime-jira-user-fields-client'
 import { jiraGetIssue } from '@/runtime/jira/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationModel) {
   const {

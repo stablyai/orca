@@ -1,6 +1,6 @@
 import { ScrollView, Text, View } from 'react-native'
 import type { PRCommentGroup } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
-import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
+import { threadDiffLines } from '../../../../src/shared/github/comments/pr-comment-diff-hunk'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -114,6 +114,7 @@ export function PrThreadScreen({
               placeholder={t('pullRequest.screens.replyPlaceholder', 'Reply…')}
               submitLabel={t('pullRequest.commentCard.reply', 'Reply')}
               submitting={actions.isReplyBusy(root.id)}
+              draftKey={actions.draftKey(root.id)}
               onSubmit={(body) => actions.reply(root, body)}
               autoFocus={focusReply}
               inline

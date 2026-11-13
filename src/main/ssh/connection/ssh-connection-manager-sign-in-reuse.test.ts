@@ -8,10 +8,7 @@ import {
 import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnectionManager } from './ssh-connection-manager'
-import {
-  recordSshCredentialDeclined,
-  resetSshCredentialDeclinesForTests
-} from '../authentication/ssh-credential-decline'
+import { recordSshCredentialDeclined } from '../authentication/ssh-credential-decline'
 
 vi.mock('../authentication/ssh2-module-load', async () =>
   (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
@@ -66,7 +63,6 @@ describe('SshConnectionManager on a password host', () => {
 
   beforeEach(async () => {
     resetSshConnectionMocks()
-    resetSshCredentialDeclinesForTests()
     vi.stubEnv('SSH_AUTH_SOCK', '')
     onCredentialRequest.mockClear()
     manager = new SshConnectionManager(createCallbacks({ onCredentialRequest }))

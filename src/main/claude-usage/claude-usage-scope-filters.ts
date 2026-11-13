@@ -1,6 +1,9 @@
 import type { ClaudeUsageRange, ClaudeUsageScope } from '../../shared/claude-usage-types'
 import type { ClaudeUsagePersistedState } from './types'
-import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import {
+  getLocalUsageDay,
+  getUsageRangeCutoff
+} from '../usage/reporting/range-query/usage-calendar-range'
 
 export function getFilteredDaily(
   state: ClaudeUsagePersistedState,

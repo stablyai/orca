@@ -9,7 +9,7 @@ import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,
   isUnifiedTabOwnedByWorktree
-} from '../../unified-tab-host-ownership'
+} from '../../workspace/ownership/unified-tab-host-ownership'
 
 type BrowserWorkspaceTabTarget = {
   worktreeId: string
@@ -54,6 +54,7 @@ export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTar
   return unifiedTab
 }
 
+/** Activate the visible browser view in its placement workspace without changing page ownership. */
 export function activateBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): boolean {
   const unifiedTab = getActivatableBrowserWorkspaceTab(params)
   if (!unifiedTab) {
@@ -62,7 +63,7 @@ export function activateBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): 
   const state = useAppStore.getState()
   state.focusGroup(params.worktreeId, unifiedTab.groupId)
   state.activateTab(unifiedTab.id, { worktreeId: params.worktreeId })
-  state.setActiveBrowserTab(params.workspaceId)
+  state.setActiveBrowserTab(params.workspaceId, params.worktreeId)
   if (params.pageId) {
     state.setActiveBrowserPage(params.workspaceId, params.pageId)
   }

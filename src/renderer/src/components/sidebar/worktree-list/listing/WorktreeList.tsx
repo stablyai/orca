@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { selectCrossStoreFolderChildrenById } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -37,7 +37,7 @@ import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
 import { useWindowSidebarListModel } from './use-window-list-model'
 import { useMainSidebarListModel } from './use-main-list-model'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
@@ -366,6 +366,9 @@ const WorktreeList = React.memo(function WorktreeList({
         folderWorkspaces={folderWorkspaces}
         selectedWorktreeIds={selection.selectedWorktreeIds}
         selectedWorktrees={selection.selectedWorktrees}
+        focusedWorktree={selection.focusedWorktree}
+        focusedWorkspaceExecutionHostId={selection.focusedWorkspaceExecutionHostId}
+        onKeyboardSelect={selection.selectWorktree}
         onSelectionGesture={selection.updateSelectionForGesture}
         onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
         onContextMenuSelect={selection.selectForContextMenu}

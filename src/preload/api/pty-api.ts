@@ -17,7 +17,7 @@ import type { TerminalInputKind } from '../../shared/terminal/input/terminal-inp
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/workspace-layout/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type {
   PtyListedSession,
@@ -34,7 +34,7 @@ import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetr
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -79,8 +79,6 @@ export type PtyApi = {
     spawnIntent?: SpawnIntent
     // A restore no user act asked for; main holds it for a stopped WSL distro. Older mains ignore it.
     wslPassiveRestore?: true
-    // The user's "let agents ask" answer for this launch; older mains ignore it.
-    skipAgentWorkspaceTrust?: true
     agentLaunch?: AgentPaneLaunchRequest
     // Main emits agent_started only after a successful spawn.
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
@@ -115,12 +113,14 @@ export type PtyApi = {
     shellReadyArmed?: boolean
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  /** Genuine xterm input admitted by a local or remote transport; carries no terminal bytes. */
+  noteUserInput?: () => void
   /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
   writeAccepted: (
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void

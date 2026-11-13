@@ -30,7 +30,7 @@ import {
 import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import { handleTerminalFileLink } from './terminal-file-link-actions'
-import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
+import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -74,6 +74,7 @@ function preferLongestNonOverlappingLinks(links: ProvidedFileLink[]): ProvidedFi
   })
 }
 
+/** Provide verified file links and retain their source host and pointer activation context. */
 export function createFilePathLinkProvider(
   paneId: number,
   deps: LinkHandlerDeps,
@@ -228,6 +229,7 @@ export function verifiedFileLinkAtMouseEvent(
     : null
 }
 
+/** Activate verified file links when xterm has not handled the click, preserving drag and selection gestures. */
 export function installFilePathLinkClickFallback(
   paneId: number,
   terminal: Terminal,

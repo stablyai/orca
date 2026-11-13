@@ -1,19 +1,18 @@
-import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
+import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
-import '@/lib/language-detect'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import '@/store/slices/editor/tabs/editor-open-target-group'
-import { isLiveLinkOpenGroup as isLiveEditorOpenGroup } from '@/lib/link-open-intent'
+import { isLiveLinkOpenGroup as isLiveEditorOpenGroup } from '@/lib/links/placement/link-open-intent'
+import { flashRevealedEditorView } from '@/components/tab-group/editor-reveal-flash'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   EditorOpenLinkIntent,
   EditorOpenResult
 } from '@/store/slices/editor/types/editor-open-link-intent'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { flashRevealedEditorView } from '@/components/tab-group/editor-reveal-flash'
 
 /** An explicit group request may only end in an editor in the scope it was captured from. */
 export function isExplicitEditorScopeKept(

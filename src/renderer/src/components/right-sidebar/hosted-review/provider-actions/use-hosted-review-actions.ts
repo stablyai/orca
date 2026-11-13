@@ -8,7 +8,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type {
   GitHubPRMergeMethod,
   PRInfo
-} from '../../../../../../shared/github/pull-request-types'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   mergeGitHubHostedReview,
@@ -19,7 +19,7 @@ import { translate } from '@/i18n/i18n'
 import { getHostedReviewStateChangeCopy } from './hosted-review-state-change-copy'
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 import { useReadyHostedReviewAction } from './use-ready-hosted-review-action'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,

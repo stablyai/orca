@@ -1,24 +1,15 @@
-import type {
-  LinearIssueData,
-  LinearIssueView
-} from '@/store/slices/linear/linear-issue-publication'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { getSelectedWorkspaceId } from '@/store/slices/linear/linear-cache'
-import { defaultScopeSource } from '@/lib/default-creation-host'
-import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import React, { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
-import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
+import { useAppStore } from '@/store/index'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
-import type {
-  NormalizedWorkItemSourceSearchProps,
-  RepoBackedSearchTarget
-} from './smart-workspace-name-field-model'
 import { useJiraSourceConnection } from './use-jira-source-connection'
 import { useJiraUrlSource } from './use-jira-url-source'
 import { useLinearSourceConnection } from './use-linear-source-connection'
@@ -26,6 +17,14 @@ import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-
 import { useWorkItemSourceState } from './use-work-item-source-state'
 import { useJiraComposerProject } from './use-jira-composer-project'
 import { useComposerSourceScope } from './use-composer-source-scope'
+import type { LinearIssueData } from '@/store/slices/linear/linear-issue-read'
+import type { LinearIssueView } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import { localPreflightContextKey } from '../../runtime/hosts/preflight/local-preflight-context-key'
+import type {
+  NormalizedWorkItemSourceSearchProps,
+  RepoBackedSearchTarget
+} from './smart-workspace-name-field-model'
 
 export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearchProps) {
   const {

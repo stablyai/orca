@@ -64,12 +64,6 @@ function makePage(overrides: Partial<BrowserPage> = {}): BrowserPage {
   }
 }
 
-const worktreeA = makeWorktree()
-const worktreeB = makeWorktree({
-  id: 'wt-2',
-  repoId: 'repo-2',
-  displayName: 'Other Worktree'
-})
 const repoMap = new Map([
   ['repo-1', { displayName: 'repo/one' }],
   ['repo-2', { displayName: 'repo/two' }]
@@ -79,57 +73,44 @@ const worktreeOrder = new Map([
   ['wt-2', 1]
 ])
 
-function buildFixture(
-  overrides: Partial<Parameters<typeof buildSearchableBrowserPages>[0]> = {}
-): ReturnType<typeof buildSearchableBrowserPages> {
-  return buildSearchableBrowserPages({
-    worktrees: [worktreeA, worktreeB],
-    repoMap,
-    worktreeOrder,
-    browserTabsByWorktree: {
-      'wt-1': [
-        makeWorkspace({
-          id: 'ws-1',
-          activePageId: 'page-1',
-          pageIds: ['page-1', 'page-2']
-        }),
-        makeWorkspace({
-          id: 'ws-2',
-          activePageId: 'page-3',
-          pageIds: ['page-3']
-        })
-      ],
-      'wt-2': [
-        makeWorkspace({
-          id: 'ws-3',
-          worktreeId: 'wt-2',
-          activePageId: 'page-4'
-        })
-      ]
-    },
-    browserPagesByWorkspace: {
-      'ws-1': [
-        makePage({ id: 'page-1', title: 'Docs' }),
-        makePage({ id: 'page-2', title: 'Changelog' })
-      ],
-      'ws-2': [makePage({ id: 'page-3', workspaceId: 'ws-2', title: 'Issues' })],
-      'ws-3': [
-        makePage({
-          id: 'page-4',
-          workspaceId: 'ws-3',
-          worktreeId: 'wt-2',
-          title: 'Other Docs'
-        })
-      ]
-    },
-    activeBrowserTabId: 'ws-1',
-    activeWorktreeId: 'wt-1',
-    activeTabType: 'browser',
-    ...overrides
-  })
-}
-
 describe('buildSearchableBrowserPages', () => {
+  it('lists a remote source-owned page at its local floating placement', () => {
+    const entries = buildSearchableBrowserPages({
+      worktrees: [makeWorktree({ hostId: 'runtime:paired' })],
+      repoMap,
+      worktreeOrder,
+      browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+      browserPagesByWorkspace: { 'ws-1': [makePage({ browserRuntimeEnvironmentId: 'paired' })] },
+      unifiedTabsByWorktree: {
+        'global-floating-terminal': [
+          {
+            id: 'floating-view',
+            entityId: 'ws-1',
+            worktreeId: 'global-floating-terminal',
+            executionHostId: 'local',
+            groupId: 'floating-group',
+            contentType: 'browser',
+            label: 'Docs',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabId: null,
+      activeWorktreeId: 'wt-1',
+      activeTabType: 'terminal'
+    })
+    expect(entries).toMatchObject([
+      {
+        worktree: { id: 'global-floating-terminal' },
+        executionHostId: 'local',
+        page: { worktreeId: 'wt-1', browserRuntimeEnvironmentId: 'paired' }
+      }
+    ])
+  })
+
   it('keeps same-id browser tabs isolated by execution host', () => {
     const sharedId = 'repo-shared::/workspace'
     const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
@@ -245,50 +226,6 @@ describe('buildSearchableBrowserPages', () => {
       })
     ).toEqual([])
   })
-
-  it('omits a browser row whose backing tab id is duplicated', () => {
-    const browserTab = browserUnifiedTab('shared-tab', 'ws-1', 'wt-1')
-    expect(
-      buildSearchableBrowserPages({
-        worktrees: [worktreeA],
-        repoMap,
-        worktreeOrder,
-        browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
-        browserPagesByWorkspace: { 'ws-1': [makePage()] },
-        unifiedTabsByWorktree: {
-          'wt-1': [browserTab, { ...browserTab, contentType: 'terminal' }]
-        },
-        activeBrowserTabId: null,
-        activeWorktreeId: null,
-        activeTabType: 'terminal'
-      })
-    ).toEqual([])
-  })
-
-  // The index keeps the first tab per workspace ID; prevent duplicates from hiding a later owned tab.
-  it('omits a workspace claimed by more than one unified browser tab', () => {
-    const entries = buildFixture({
-      unifiedTabsByWorktree: {
-        'wt-1': [
-          browserUnifiedTab('tab-foreign', 'ws-1', 'wt-2'),
-          browserUnifiedTab('tab-owned', 'ws-1', 'wt-1')
-        ]
-      }
-    })
-
-    expect(entries.some((entry) => entry.workspace.id === 'ws-1')).toBe(false)
-    expect(entries.map((entry) => entry.workspace.id)).toEqual(['ws-2', 'ws-3'])
-  })
-
-  // Why: a workspace whose only unified tab belongs to another worktree must stay hidden here.
-  it('omits a workspace whose single unified browser tab is not owned by this worktree', () => {
-    const entries = buildFixture({
-      unifiedTabsByWorktree: { 'wt-1': [browserUnifiedTab('tab-foreign', 'ws-1', 'wt-2')] }
-    })
-
-    expect(entries.some((entry) => entry.workspace.id === 'ws-1')).toBe(false)
-    expect(entries.some((entry) => entry.workspace.id === 'ws-2')).toBe(true)
-  })
 })
 
 function browserUnifiedTab(
@@ -311,41 +248,3 @@ function browserUnifiedTab(
     createdAt: 0
   }
 }
-
-it('indexes workspace tabs when building a large browser palette', () => {
-  let reads = 0
-  const workspaces = Array.from({ length: 1000 }, (_, i) =>
-    makeWorkspace({ id: `workspace-${i}`, activePageId: `page-${i}` })
-  )
-  const tabs: Tab[] = workspaces.map((workspace, i) => ({
-    id: `tab-${i}`,
-    get entityId() {
-      reads++
-      return workspace.id
-    },
-    groupId: 'group-1',
-    worktreeId: 'wt-1',
-    contentType: 'browser',
-    label: 'Example',
-    customLabel: null,
-    color: null,
-    sortOrder: i,
-    createdAt: 0
-  }))
-  const pages = Object.fromEntries(
-    workspaces.map((workspace, i) => [
-      workspace.id,
-      [makePage({ id: `page-${i}`, workspaceId: workspace.id })]
-    ])
-  )
-  const entries = buildFixture({
-    worktrees: [worktreeA],
-    browserTabsByWorktree: { 'wt-1': workspaces },
-    browserPagesByWorkspace: pages,
-    unifiedTabsByWorktree: { 'wt-1': tabs }
-  })
-  expect(reads).toBeLessThan(6000)
-  expect(entries.map((entry) => entry.workspace.id)).toEqual(
-    workspaces.map((workspace) => workspace.id)
-  )
-})

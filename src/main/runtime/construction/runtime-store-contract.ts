@@ -21,6 +21,7 @@ export type RuntimeStore = {
   getProjectGroups?: Store['getProjectGroups']
   createProjectGroup?: Store['createProjectGroup']
   updateProjectGroup?: Store['updateProjectGroup']
+  updateProjectGroups?: Store['updateProjectGroups']
   deleteProjectGroup?: Store['deleteProjectGroup']
   moveProjectToGroup?: Store['moveProjectToGroup']
   getFolderWorkspace?: Store['getFolderWorkspace']
@@ -31,6 +32,7 @@ export type RuntimeStore = {
   removeProjectForHost?: Store['removeProjectForHost']
   reorderRepos?: Store['reorderRepos']
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
+  getWorkspaceMetadataCursor?: Store['getWorkspaceMetadataCursor']
   getAllWorktreeMetaForHost?: Store['getAllWorktreeMetaForHost']
   captureNativeLocalWorktreeMetadataScanExpectation?: Store['captureNativeLocalWorktreeMetadataScanExpectation']
   pruneSessionlessMissingLocalWorktreeMetadataForRepo?: Store['pruneSessionlessMissingLocalWorktreeMetadataForRepo']
@@ -122,6 +124,7 @@ export type RuntimeStore = {
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
+    orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']
@@ -187,6 +190,7 @@ export type RuntimeStore = {
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
+    workspaceCleanupPolicy?: GlobalSettings['workspaceCleanupPolicy']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     activeRuntimeEnvironmentId?: GlobalSettings['activeRuntimeEnvironmentId']
     showPinnedWorktreesInGroups?: GlobalSettings['showPinnedWorktreesInGroups']

@@ -35,9 +35,9 @@ export type NativeChatNoticeLook =
   | { kind: 'aside' }
   | {
       kind: 'settled-permission'
-      decision: 'safety-review' | 'denied'
+      decision: 'approved' | 'safety-review' | 'denied'
       agent: 'Codex' | 'Claude'
-      tone: 'warning' | 'error'
+      tone: NativeChatNoticeTone
     }
   /** A boxed line with its icon when it has a tone; plain text when it has none. */
   | { kind: 'line'; tone: NativeChatNoticeTone | null }
@@ -97,11 +97,13 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   if (presentation === undefined && !block.failure && !block.orcaStop) {
     const frame = block.providerFrame
     if (frame?.provider === 'codex' && frame.kind === 'notification:guardianWarning') {
+      // Codex also reports approvals here; its own TUI hides them by this prefix.
+      const approved = block.text.startsWith('Automatic approval review approved (')
       return {
         kind: 'settled-permission',
-        decision: 'safety-review',
+        decision: approved ? 'approved' : 'safety-review',
         agent: 'Codex',
-        tone: 'warning'
+        tone: approved ? 'notice' : 'warning'
       }
     }
     if (frame?.provider === 'claude' && frame.kind === 'message:system:permission_denied') {

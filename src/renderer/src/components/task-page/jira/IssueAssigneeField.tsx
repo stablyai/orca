@@ -6,7 +6,7 @@ import { hasJiraAssigneeCreateField } from '@/components/task-page/jira/task-pag
 import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { jiraListAssignableUsersForProject } from '@/runtime/jira/runtime-jira-user-fields-client'
 import { useTranslate } from '@/i18n/use-translate'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export function TaskPageJiraIssueAssigneeField({
   model

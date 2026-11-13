@@ -19,6 +19,7 @@ import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
+import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
   private statusStore: LastStatusStore | null = null
@@ -53,6 +54,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // Facets are stitched at publication; discard any copy that reached the map.
         programStatus: _programStatus,
         programStatusOnly: _programStatusOnly,
+        agentIdentity: _agentIdentity,
         // Hydration restamps restoredUnconfirmed.
         restoredUnconfirmed: _restoredUnconfirmed,
         // Observation sequences belong to this runtime.
@@ -164,10 +166,10 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       store.write(this.buildStatusFile(), busyTimeoutMs)
     } catch (err) {
       this.reportStatusPersistFailure(err)
-      this.statusPersistRetryDelayMs = Math.min(
-        STATUS_PERSIST_RETRY_MAX_MS,
-        Math.max(STATUS_PERSIST_RETRY_MIN_MS, this.statusPersistRetryDelayMs * 2)
-      )
+      this.statusPersistRetryDelayMs = nextRetryDelayMs(this.statusPersistRetryDelayMs, {
+        minMs: STATUS_PERSIST_RETRY_MIN_MS,
+        maxMs: STATUS_PERSIST_RETRY_MAX_MS
+      })
       this.statusPersistRetryAt = Date.now() + this.statusPersistRetryDelayMs
       // Retry even if no later mutation arrives.
       this.scheduleStatusPersist()

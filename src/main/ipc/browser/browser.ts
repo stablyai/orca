@@ -1,5 +1,9 @@
+import { readBrowserGuestMetadata } from '../../browser/guest-lifecycle/navigation/browser-guest-metadata'
 import { ipcMain, webContents } from 'electron'
-import { browserCertificateTrustController, browserManager } from '../../browser/browser-manager'
+import {
+  browserCertificateTrustController,
+  browserManager
+} from '../../browser/guest-lifecycle/manager/browser-manager'
 import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import { isWorkspaceDocPageId } from '../../browser/document-preview/doc-preview-guest-policy'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
@@ -8,6 +12,7 @@ import {
   resolveTabRegistrationWaiters
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
+import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import {
   disposeGrabModeStateForPage,
   registerBrowserGrabHandlers,
@@ -23,7 +28,7 @@ import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser-web
 import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../../shared/browser-page-prompt'
+} from '../../../shared/browser/prompts/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
 import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-lifecycle'
@@ -52,6 +57,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
+  ipcMain.removeHandler('browser:getGuestMetadata')
   ipcMain.removeHandler('browser:repairGuestRegistration')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:activeTabChanged')
@@ -107,6 +113,30 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
 
   ipcMain.handle('browser:registerGuest', (event, args: BrowserGuestArgs) =>
     registerGuest(event, args, false)
+  )
+
+  ipcMain.handle(
+    'browser:getGuestMetadata',
+    (event, args: { browserPageId: string; webContentsId: number }) => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.webContentsId !== 'number' ||
+        typeof args.browserPageId !== 'string'
+      ) {
+        return undefined
+      }
+      const guest = webContents.fromId(args.webContentsId)
+      if (!guest || guest.isDestroyed()) {
+        return null
+      }
+      if (
+        guest.hostWebContents?.id !== event.sender.id ||
+        browserManager.getGuestWebContentsId(args.browserPageId) !== guest.id
+      ) {
+        return undefined
+      }
+      return readBrowserGuestMetadata(guest)
+    }
   )
 
   // Block SSH webview mounting until its proxy-verified partition is ready.
@@ -247,6 +277,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   })
 
   registerBrowserGuestViewHandlers()
+  registerBrowserDictationHandlers()
 
   registerBrowserGrabHandlers()
 

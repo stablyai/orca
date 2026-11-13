@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => mocks.guests.get(id) }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getGuestWebContentsId: (pageId: string) =>
       [...mocks.pageByGuest].find(([, page]) => page === pageId)?.[0] ?? null,

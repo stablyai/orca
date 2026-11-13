@@ -9,6 +9,10 @@ import {
   isQuestionAnsweredSubmitInput,
   type AgentQuestionAnsweredInferenceRequest
 } from '../../../../../../shared/agent-status/lifecycle/agent-question-answered-intent'
+import {
+  CODEX_ASYNC_QUESTION_TOOL,
+  isCodexSkipQuestionInput
+} from '../../../../../../shared/codex-async-question-input'
 
 export type AgentQuestionAnsweredInference = {
   observeSentTerminalInput(data: string): void
@@ -25,14 +29,17 @@ type AgentQuestionAnsweredInferenceDeps = {
 
 function inferQuestionAnsweredFromEntry(
   deps: AgentQuestionAnsweredInferenceDeps,
-  entry: AgentStatusEntry | undefined
+  entry: AgentStatusEntry | undefined,
+  /** Codex async questions resolve only by skip; their answers arrive as hooks. */
+  codexSkip = false
 ): boolean {
   const now = deps.now ?? Date.now
   if (
     !entry ||
     entry.state !== 'waiting' ||
-    entry.agentType !== 'claude' ||
-    !isAskUserQuestionTool(entry.toolName) ||
+    !(codexSkip
+      ? entry.agentType === 'codex' && entry.toolName === CODEX_ASYNC_QUESTION_TOOL
+      : entry.agentType === 'claude' && isAskUserQuestionTool(entry.toolName)) ||
     !isExplicitAgentStatusFresh(entry, now(), AGENT_STATUS_STALE_AFTER_MS)
   ) {
     return false
@@ -42,7 +49,8 @@ function inferQuestionAnsweredFromEntry(
     baselineUpdatedAt: entry.updatedAt,
     baselineStateStartedAt: entry.stateStartedAt,
     baselinePrompt: entry.prompt,
-    baselineAgentType: entry.agentType
+    baselineAgentType: entry.agentType,
+    ...(codexSkip ? { codexSkip: true as const } : {})
   })
   return true
 }
@@ -61,8 +69,14 @@ export function createAgentQuestionAnsweredInference({
   inferQuestionAnswered,
   now = () => Date.now()
 }: AgentQuestionAnsweredInferenceDeps): AgentQuestionAnsweredInference {
+  const deps = { paneKey, getStatusEntry, inferQuestionAnswered, now }
   return {
     observeSentTerminalInput(data) {
+      // Codex's skip removes an async question in the TUI only; no hook or transcript line reports it.
+      if (isCodexSkipQuestionInput(data)) {
+        inferQuestionAnsweredFromEntry(deps, getStatusEntry(), true)
+        return
+      }
       // Reject ordinary hot-path terminal input before store reads or prompt JSON parsing.
       if (!isPotentialQuestionAnsweredSubmitInput(data)) {
         return
@@ -71,7 +85,7 @@ export function createAgentQuestionAnsweredInference({
       if (!entry || !isQuestionAnsweredSubmitInput(data, entry.interactivePrompt)) {
         return
       }
-      inferQuestionAnsweredFromEntry({ paneKey, getStatusEntry, inferQuestionAnswered, now }, entry)
+      inferQuestionAnsweredFromEntry(deps, entry)
     }
   }
 }

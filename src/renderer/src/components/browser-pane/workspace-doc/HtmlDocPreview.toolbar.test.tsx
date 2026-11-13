@@ -36,7 +36,7 @@ const grants = vi.hoisted(() => {
   return { mintedLocation, requestLocation: mintedLocation, shareControlCalls }
 })
 
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   buildDocPreviewGrantRequest: () => grants.requestLocation,
   // The real cache keeps the first mint's handle for the tab, whatever a later request says.
   ensureDocPreviewGrant: () =>
@@ -66,7 +66,7 @@ vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOr
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 
-vi.mock('@/lib/execution-host-display-label', () => ({
+vi.mock('@/runtime/hosts/display/execution-host-display-label', () => ({
   selectWorktreeHostDisplayLabel: () => 'Studio Mac mini'
 }))
 
@@ -78,13 +78,13 @@ const store = vi.hoisted(() => ({
 }))
 
 // The document lives only on its workspace’s SSH host.
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => 'ssh-1',
   getConnectionIdForFile: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))
 
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))

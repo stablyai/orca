@@ -3,10 +3,10 @@ import { ChevronDown, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NetworkInterfacePicker } from '../../../mobile/NetworkInterfacePicker'
-import type { MobileNetworkInterface } from './mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../../../shared/pairing-address-auto-selection'
 import type { MobilePairingConnectionMode } from '../../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 
 type MobilePairingSetupSectionProps = {
@@ -16,7 +16,7 @@ type MobilePairingSetupSectionProps = {
   /** Reveals the Relay address disclosure when a settings search matches it. */
   addressDisclosureForcedOpen?: boolean
   connectionPathControl: ReactNode
-  networkInterfaces: MobileNetworkInterface[]
+  networkInterfaces: PairingNetworkInterface[]
   customAddresses: readonly string[]
   selectedAddress: string | undefined
   selectedAddressIsCustom: boolean

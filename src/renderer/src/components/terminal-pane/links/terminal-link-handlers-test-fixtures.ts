@@ -12,10 +12,12 @@ export type TerminalLinkStoreSettings = {
 
 export type TerminalLinkStoreState = {
   settings: TerminalLinkStoreSettings | undefined
+  activeWorktreeId: string | null
   setActiveWorktree: Mock
   createBrowserTab: Mock
   openFile: Mock
   openFileForLink: Mock
+  revealInExplorer: Mock
   setPendingEditorReveal: Mock
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
@@ -45,6 +47,7 @@ export type TerminalLinkTestDoubles = {
   openFilePathMock: Mock
   openFileMock: Mock
   openFileForLinkMock: Mock
+  revealInExplorerMock: Mock
   statMock: Mock
   fsPathExistsMock: Mock
   runtimeEnvironmentCallMock: Mock
@@ -71,6 +74,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const createBrowserTabMock = vi.fn()
   const setPendingEditorRevealMock = vi.fn()
   const setMarkdownViewModeMock = vi.fn()
+  const revealInExplorerMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
   // Adapt legacy openFile assertions while recording the opened view for guarded reveal.
@@ -103,10 +107,12 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   )
   const storeState: TerminalLinkStoreState = {
     settings: undefined as TerminalLinkStoreSettings | undefined,
+    activeWorktreeId: null,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,
     openFile: openFileMock,
     openFileForLink: openFileForLinkMock,
+    revealInExplorer: revealInExplorerMock,
     setPendingEditorReveal: setPendingEditorRevealMock,
     setMarkdownViewMode: setMarkdownViewModeMock,
     activeFileIdByWorktree: {} as Record<string, string | null>,
@@ -123,6 +129,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     openFilePathMock,
     openFileMock,
     openFileForLinkMock,
+    revealInExplorerMock,
     statMock,
     fsPathExistsMock,
     runtimeEnvironmentCallMock,

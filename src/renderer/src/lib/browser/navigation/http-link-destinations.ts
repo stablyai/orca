@@ -1,15 +1,15 @@
-import type { BrowserLinkOpenContext } from './browser-link-destination'
-import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
 import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
-import { beginLinkOpenRequest } from '../../link-open-request'
+import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
 import {
   openHttpLink,
   captureHttpLinkIntent,
-  canHttpLinkOpenInSourceGroup,
-  type HttpLinkSourceOwner
+  canHttpLinkOpenInSourceGroup
 } from '@/lib/browser/navigation/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { BrowserLinkOpenContext } from './browser-link-destination'
+import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
+import type { Translate } from '@/i18n/use-translate'
 
 export type OpenHttpLinkOptions = {
   /** Place explicitly in-app opens in floating while retaining the source host for routing. */
@@ -176,6 +176,7 @@ export type RoutedHttpLinkOptions = {
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
 }
 
+/** Open an HTTP destination through existing browser routing while preserving source and placement ownership. */
 export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): void {
   const isCurrentRequest = beginLinkOpenRequest()
   const linkIntent = captureHttpLinkIntent(

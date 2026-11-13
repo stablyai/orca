@@ -1,3 +1,6 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { floatingWorkspaceToWorktree } from '../../../../../shared/floating-workspace-worktree'
+import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -16,10 +19,8 @@ import {
   findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
-} from '../../unified-tab-host-ownership'
+} from '../../workspace/ownership/unified-tab-host-ownership'
 import { maxValidPaletteActivityTimestamp } from '../../../../../shared/palette-match/palette-ranking'
-
-type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]
@@ -34,9 +35,10 @@ export type BuildSearchableBrowserPagesOptions = {
   activeBrowserTabId: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  activeTabType: BrowserPaletteActiveTabType
+  activeTabType: WorkspaceVisibleTabType
 }
 
+/** Index browser pages by their visible workspace placement while retaining source-owned records. */
 export function buildSearchableBrowserPages({
   worktrees,
   ownershipWorktrees,
@@ -63,7 +65,13 @@ export function buildSearchableBrowserPages({
   const duplicateStoredWorkspaceIds = findDuplicateIds(
     Object.values(browserTabsByWorktree).flatMap((workspaces) => workspaces ?? [])
   )
-  for (const worktree of worktrees) {
+  const floatingTabs = unifiedTabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+  const placementWorktrees =
+    floatingTabs.some((tab) => tab.contentType === 'browser') &&
+    !worktrees.some((worktree) => worktree.id === FLOATING_TERMINAL_WORKTREE_ID)
+      ? [...worktrees, floatingWorkspaceToWorktree('')]
+      : worktrees
+  for (const worktree of placementWorktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
     const worktreeSortIndex =
@@ -85,7 +93,7 @@ export function buildSearchableBrowserPages({
         focusedAtByWorkspaceId.set(tab.entityId, tab.lastFocusedAt)
       }
     }
-    for (const workspace of browserTabsByWorktree[worktree.id] ?? []) {
+    for (const workspace of workspaceBrowserTabs(browserTabsByWorktree, worktree.id, unifiedTabs)) {
       if (
         duplicateWorkspaceIds.has(workspace.id) ||
         duplicateStoredWorkspaceIds.has(workspace.id)
@@ -93,6 +101,17 @@ export function buildSearchableBrowserPages({
         continue
       }
       const candidate = unifiedBrowserTabsByWorkspaceId.get(workspace.id)
+      if (
+        !candidate &&
+        allUnifiedTabs.some(
+          (tab) =>
+            tab.contentType === 'browser' &&
+            tab.entityId === workspace.id &&
+            tab.worktreeId !== worktree.id
+        )
+      ) {
+        continue
+      }
       const unifiedTab =
         candidate && isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
           ? candidate
@@ -110,7 +129,7 @@ export function buildSearchableBrowserPages({
         if (
           duplicatePageIds.has(page.id) ||
           page.workspaceId !== workspace.id ||
-          page.worktreeId !== worktree.id
+          page.worktreeId !== workspace.worktreeId
         ) {
           continue
         }

@@ -7,7 +7,7 @@ import { EPHEMERAL_VM_CLEANUP_STOPPED_ERROR } from '../../../../../../shared/eph
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmCleanupErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { EphemeralVmCleanupStopDialog } from './EphemeralVmCleanupStopDialog'
@@ -59,6 +59,9 @@ export function getEphemeralVmRuntimeStatusLabel(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupRunning',
       'Cleanup running'
     )
+  }
+  if (runtime.status === 'provisioning') {
+    return t('auto.components.settings.EphemeralVmRuntimesSection.provisioning', 'Provisioning')
   }
   if (runtime.cleanupStatus === 'disabled') {
     return t(
@@ -118,9 +121,11 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
     void refresh()
   }, [refresh])
 
-  const hasRunningCleanup = runtimes.some(isCleanupRunning) || cleaningId !== null
+  const hasRunningLifecycle =
+    runtimes.some((runtime) => isCleanupRunning(runtime) || runtime.status === 'provisioning') ||
+    cleaningId !== null
   useEffect(() => {
-    if (!hasRunningCleanup) {
+    if (!hasRunningLifecycle) {
       return
     }
     let cancelled = false
@@ -138,7 +143,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
         clearTimeout(timer)
       }
     }
-  }, [hasRunningCleanup, refresh])
+  }, [hasRunningLifecycle, refresh])
 
   const cleanupRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setCleaningId(runtime.id)
@@ -224,6 +229,24 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
     }
   }
 
+  const forgetRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
+    try {
+      await window.api.ephemeralVm.forgetRuntime({ runtimeId: runtime.id })
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t(
+                'auto.components.settings.EphemeralVmRuntimesSection.removeFromListFailed',
+                'Couldn’t remove Cloud VM runtime from the list.'
+              )
+        )
+      }
+    }
+    await refresh(false)
+  }
+
   const stopCleanup = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setStoppingId(runtime.id)
     try {
@@ -281,8 +304,8 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
                 {t(
-                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefreshLabel',
-                  'Refresh Cloud VMs'
+                  'auto.components.settings.EphemeralVmRuntimesSection.cca21fb369',
+                  'Refresh cloud VMs'
                 )}
               </TooltipContent>
             </Tooltip>
@@ -307,6 +330,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
               onCleanup={() => void cleanupRuntime(runtime)}
               onStopCleanup={() => setPendingStop(runtime)}
               onCopyCleanupCommand={() => void copyCleanupCommand(runtime)}
+              onForget={() => void forgetRuntime(runtime)}
             />
           ))}
         </div>

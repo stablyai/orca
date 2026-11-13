@@ -1,7 +1,7 @@
 import type {
   GhAccountBindingInventory,
   GhAccountBindingValidationResult
-} from '../../shared/github/auth-types'
+} from '../../shared/github/accounts/auth-types'
 
 export type GithubAccountApi = {
   listBindableAccounts: (args: {

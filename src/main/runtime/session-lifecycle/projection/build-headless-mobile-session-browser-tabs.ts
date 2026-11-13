@@ -22,7 +22,7 @@ import {
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/workspace-layout/terminal-surface-close-target'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -67,6 +67,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         loading: false,
         canGoBack: false,
         canGoForward: false,
+        faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),

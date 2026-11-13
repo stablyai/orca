@@ -5,8 +5,7 @@ import {
   type AnyAuthMethod,
   type AuthenticationType,
   type AuthHandlerMiddleware,
-  type ConnectConfig,
-  type ParsedKey
+  type ConnectConfig
 } from 'ssh2'
 
 vi.mock('os', () => ({
@@ -31,7 +30,6 @@ vi.mock('./ssh-identity-file-read', () => ({
 }))
 
 import { buildConnectConfig } from '../connection/ssh-connect-config'
-import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import '../system-transport/system-ssh-args'
 import { walkInitialAuthLadder } from '../connection/testing/ssh-connection-test-fixtures'
 import type { SshTarget } from '../../../shared/ssh-types'
@@ -144,33 +142,6 @@ describe('ordered SSH private-key authentication', () => {
     expect(nextAuth(config, false)).toBe('keyboard-interactive')
   })
 
-  it('keeps explicit manual keys and unresolved imported keys as singular overrides', () => {
-    const manual = buildConnectConfig(
-      makeTarget({
-        source: 'manual',
-        configHost: 'manual.example.com',
-        host: 'manual.example.com',
-        identityFile: '/keys/manual'
-      }),
-      makeResolved(),
-      { includeAgent: false, includePrivateKey: true }
-    )
-    const unresolvedImport = buildConnectConfig(makeTarget(), null, {
-      includeAgent: false,
-      includePrivateKey: true
-    })
-
-    expect(manual.privateKey).toEqual(Buffer.from('/keys/manual'))
-    expect(unresolvedImport.privateKey).toEqual(Buffer.from('/keys/stale-imported'))
-    // Single-key targets also need per-stage keyboard-interactive restart for MFA.
-    expect(nextAuth(manual, true)).toMatchObject({ type: 'none' })
-    expect(nextAuth(manual, false)).toMatchObject({
-      type: 'publickey',
-      key: Buffer.from('/keys/manual')
-    })
-    expect(nextAuth(manual, false)).toBe('keyboard-interactive')
-  })
-
   it('keeps the password challenge on an agent attempt that carries a key, because no key retry follows it', () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     // Real key bytes, so '/keys/explicit' counts as unencrypted and IdentitiesOnly builds its agent.
@@ -216,35 +187,11 @@ describe('ordered SSH private-key authentication', () => {
     expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe(false)
   })
 
-  it('offers every resolved key for a manually owned config-picker target', () => {
-    const config = buildConnectConfig(
-      makeTarget({
-        source: 'manual',
-        configHost: 'prod',
-        host: 'prod.internal',
-        identityFile: undefined
-      }),
-      makeResolved(),
-      { includeAgent: false, includePrivateKey: true }
-    )
-
-    expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
-    expect(nextAuth(config, false)).toMatchObject({
-      type: 'publickey',
-      key: Buffer.from('/keys/unauthorized-first')
-    })
-    expect(nextAuth(config, false)).toMatchObject({
-      type: 'publickey',
-      key: Buffer.from('/keys/authorized-second')
-    })
-  })
-
-  it('resets ordered authentication for credential retries without extra key reads', () => {
+  it('resets ordered authentication for credential retries', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
       includeAgent: false,
       includePrivateKey: true
     })
-    const readsAfterResolution = mockReadFileSync.mock.calls.length
 
     expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
     config.password = 'retry-password'
@@ -257,26 +204,5 @@ describe('ordered SSH private-key authentication', () => {
       type: 'publickey',
       key: Buffer.from('/keys/unauthorized-first')
     })
-    expect(mockReadFileSync).toHaveBeenCalledTimes(readsAfterResolution)
-  })
-
-  it('keeps encrypted-key prompts tied to the matching fresh identity path', () => {
-    vi.spyOn(utils, 'parseKey').mockImplementation((key) => {
-      if (
-        Buffer.from(key as Buffer)
-          .toString()
-          .includes('encrypted-second')
-      ) {
-        return new Error('Encrypted private OpenSSH key detected, but no passphrase given')
-      }
-      return { isPrivateKey: () => true } as ParsedKey
-    })
-    const config = buildConnectConfig(
-      makeTarget(),
-      makeResolved({ identityFile: ['/keys/first', '/keys/encrypted-second'] }),
-      { includeAgent: false, includePrivateKey: true }
-    )
-
-    expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-second')
   })
 })

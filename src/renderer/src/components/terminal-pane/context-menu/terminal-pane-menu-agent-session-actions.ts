@@ -1,4 +1,5 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { TerminalPaneAgentIdCopy } from './terminal-pane-context-menu-types'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
 import { copyAgentSessionContextFromPane } from '../clipboard/terminal-agent-session-context-copy'
 import {
@@ -6,7 +7,7 @@ import {
   type PreparedAgentSessionFork
 } from '../session-fork/terminal-agent-session-fork'
 import { prepareAgentSessionContinuationFromPane } from '../session-continuation/terminal-agent-session-continuation'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
 
 export type TerminalPaneMenuAgentSessionContext = {
   paneCwdRef: React.RefObject<PaneCwdMap>
@@ -80,4 +81,24 @@ export function createTerminalPaneMenuAgentSessionActions({
   const onCopyAgentSessionContext = async (): Promise<void> =>
     copyAgentSessionContextFromMenuPane(resolveMenuPane())
   return { onForkAgentSession, onContinueAgentSessionInNewSession, onCopyAgentSessionContext }
+}
+
+/** Copy Session ID shows whenever the pane names a provider session; Copy Agent ID only where
+ *  the pane's host can answer (see `canPaneOfferAgentId`). */
+export function terminalPaneMenuAgentIdProps(
+  contextMenu: {
+    onCopyAgentSessionId: () => Promise<void>
+    agentIdCopy: TerminalPaneAgentIdCopy
+  },
+  menuAgentIds: { sessionId: string | null; agentIdAvailable: boolean }
+): {
+  canCopyAgentSessionId: boolean
+  onCopyAgentSessionId: () => void
+  agentIdCopy?: TerminalPaneAgentIdCopy
+} {
+  return {
+    canCopyAgentSessionId: menuAgentIds.sessionId !== null,
+    onCopyAgentSessionId: () => void contextMenu.onCopyAgentSessionId(),
+    ...(menuAgentIds.agentIdAvailable ? { agentIdCopy: contextMenu.agentIdCopy } : {})
+  }
 }

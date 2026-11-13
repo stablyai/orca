@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
 import {
   BROWSER_PAGE_PROMPT_TIMEOUT_MS,
   cancelBrowserPagePrompts,

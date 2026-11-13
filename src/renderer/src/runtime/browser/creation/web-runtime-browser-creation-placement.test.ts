@@ -1,3 +1,4 @@
+import { applyWebSessionTabsSnapshot } from '../../web-session-tabs-sync/snapshot-api'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
@@ -5,6 +6,8 @@ import { useAppStore } from '../../../store/index'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { resetWebSessionBrowserPlacementsForTests } from '../placement/web-session-browser-placement'
 import {
+  makeSnapshot,
+  NOW,
   resetWebSessionTabsSyncTestState,
   ENV,
   WT
@@ -13,7 +16,6 @@ import {
   AFTER,
   G1,
   G2,
-  HOST,
   OTHER,
   SOURCE,
   flushMicrotasks,
@@ -27,7 +29,6 @@ import {
   seedPairedWorktree,
   wrapperForRemotePage
 } from './testing/web-runtime-browser-creation-placement-test-rig'
-import { stubRuntimeEnvironmentBridge } from '../../rpc/testing/runtime-environment-bridge-fixture'
 
 vi.mock(
   '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot',
@@ -57,18 +58,47 @@ function g1Group() {
 }
 
 describe('paired browser creation placement', () => {
-  let runtimeCall: ReturnType<typeof installRuntimeTransport>
-
   beforeEach(() => {
     resetWebSessionTabsSyncTestState()
     resetWebSessionBrowserPlacementsForTests()
     resetHostPages()
     seedPairedWorktree()
-    runtimeCall = installRuntimeTransport()
+    installRuntimeTransport()
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('never selects a floating page as the source workspace browser fallback', async () => {
+    const opening = openLinkFromSource({ placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID })
+    const pageId = pendingCreates[0].params.page!
+    pendingCreates[0].resolve()
+    await opening
+    const snapshot = makeSnapshot(
+      [
+        {
+          id: 'host-floating',
+          type: 'browser',
+          title: 'Floating page',
+          browserPageId: pageId,
+          url: 'https://example.com/',
+          isActive: true
+        }
+      ],
+      { snapshotVersion: 100, activeTabType: 'browser', activeTabId: 'host-floating' }
+    )
+    useAppStore.setState({ activeBrowserTabIdByWorktree: { [WT]: null } })
+    useAppStore.setState((state) => applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW + 100))
+    expect(useAppStore.getState().activeBrowserTabIdByWorktree[WT]).toBeNull()
+    const floatingView =
+      useAppStore.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
+    expect(floatingView).toMatchObject({ worktreeId: 'global-floating-terminal' })
+    expect(
+      (useAppStore.getState().unifiedTabsByWorktree[WT] ?? []).some(
+        (tab) => tab.id === floatingView?.id
+      )
+    ).toBe(false)
   })
 
   it('places a remote page in floating while snapshots retain its original host and workspace', async () => {
@@ -157,68 +187,6 @@ describe('paired browser creation placement', () => {
     expect(g1Group()?.recentTabIds).toEqual([SOURCE.unifiedTabId])
   })
 
-  it('stages the store Group New Browser Tab command before its first await', async () => {
-    useAppStore.setState({
-      browserDefaultUrl: 'about:blank',
-      repos: [
-        {
-          id: 'repo',
-          path: '/repo',
-          displayName: 'Repo',
-          badgeColor: '#000000',
-          addedAt: 1,
-          connectionId: null,
-          executionHostId: HOST
-        }
-      ],
-      worktreesByRepo: {
-        repo: [
-          {
-            id: WT,
-            repoId: 'repo',
-            path: '/worktree',
-            head: 'abc',
-            branch: 'main',
-            isBare: false,
-            isMainWorktree: false,
-            displayName: 'Worktree',
-            comment: '',
-            linkedIssue: null,
-            linkedPR: null,
-            linkedLinearIssue: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 1
-          }
-        ]
-      }
-    })
-    const open = useAppStore.getState().openNewBrowserTabInActiveWorkspace(G1)
-    const order = groupOrder(G1)
-    expect(order.slice(0, 2)).toEqual([SOURCE.unifiedTabId, AFTER.unifiedTabId])
-    expect(order).toHaveLength(3)
-    const created = order[2]
-    await flushMicrotasks()
-    expect(pendingCreates[0].params).toMatchObject({ targetGroupId: G1 })
-    expect(wrapperForRemotePage(pendingCreates[0].params.page!)?.id).toBe(created)
-    pendingCreates[0].resolve()
-    await open
-    expect(groupOrder(G1)).toEqual([SOURCE.unifiedTabId, AFTER.unifiedTabId, created])
-  })
-
-  it('keeps a staged row the user dragged elsewhere through adoption', async () => {
-    const create = openLinkFromSource()
-    const pageId = pendingCreates[0].params.page!
-    const staged = wrapperForRemotePage(pageId)!.id
-    useAppStore.getState().moveUnifiedTabToGroup(staged, G2)
-    pendingCreates[0].resolve()
-    await expect(create).resolves.toBe(true)
-    expect(groupOrder(G2)).toContain(staged)
-    expect(groupOrder(G1)).toEqual([SOURCE.unifiedTabId, AFTER.unifiedTabId])
-  })
-
   it('does not reclaim focus after the user selects another tab mid-create', async () => {
     const create = openLinkFromSource({ focusOnCreate: true })
     const staged = wrapperForRemotePage(pendingCreates[0].params.page!)!.id
@@ -230,41 +198,6 @@ describe('paired browser creation placement', () => {
     publishHostSnapshot()
     expect(g1Group()?.activeTabId).toBe(SOURCE.unifiedTabId)
     expect(useAppStore.getState().activeWorktreeId).toBe(WT)
-  })
-
-  it('stages before a deferred hosting preparation resolves', async () => {
-    let answerPreparation!: (placement: { kind: 'server' }) => void
-    const prepare = vi.fn(
-      () =>
-        new Promise<{ kind: 'server' }>((resolve) => {
-          answerPreparation = resolve
-        })
-    )
-    stubRuntimeEnvironmentBridge({ call: runtimeCall, prepareBrowserClientHostPlacement: prepare })
-    const create = openLinkFromSource({ placementPreference: 'auto' })
-    const stagedRows = groupOrder(G1)
-    expect(stagedRows).toHaveLength(3)
-    useAppStore.getState().focusGroup(WT, G2)
-    await flushMicrotasks()
-    answerPreparation({ kind: 'server' })
-    await flushMicrotasks()
-    pendingCreates[0].resolve()
-    await expect(create).resolves.toBe(true)
-    expect(groupOrder(G1)).toEqual(stagedRows)
-    expect(useAppStore.getState().activeGroupIdByWorktree[WT]).toBe(G2)
-  })
-
-  it('rehomes a staged row in place when an older host answers with its own id first', async () => {
-    useAppStore.setState({
-      runtimeStatusByEnvironmentId: runtimeStatusesFor(['browser.screencast.v1'])
-    })
-    const create = openLinkFromSource()
-    const staged = groupOrder(G1)[1]
-    expect(pendingCreates[0].params.page).toBeUndefined()
-    pendingCreates[0].resolve('host-minted-page')
-    await expect(create).resolves.toBe(true)
-    expect(groupOrder(G1)).toEqual([SOURCE.unifiedTabId, staged, AFTER.unifiedTabId])
-    expect(wrapperForRemotePage('host-minted-page')?.id).toBe(staged)
   })
 
   it('keeps the mirrored row and discards the stage when an older host mirrors first', async () => {
@@ -288,30 +221,5 @@ describe('paired browser creation placement', () => {
     // Compatibility limit: exact adjacency is not replayed onto the mirrored row.
     publishHostSnapshot()
     expect(useAppStore.getState().unifiedTabsByWorktree[WT]).toHaveLength(4)
-  })
-
-  it('falls back to ordinary adoption without adjacency when staging fails', async () => {
-    const createBrowserTab = useAppStore.getState().createBrowserTab
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    useAppStore.setState({
-      createBrowserTab: () => {
-        throw new Error('staging refused')
-      }
-    })
-    try {
-      const create = openLinkFromSource()
-      expect(groupOrder(G1)).toEqual([SOURCE.unifiedTabId, AFTER.unifiedTabId])
-      useAppStore.setState({ createBrowserTab })
-      pendingCreates[0].resolve()
-      await expect(create).resolves.toBe(true)
-      const adopted = wrapperForRemotePage(pendingCreates[0].params.page!)
-      expect(adopted).toBeDefined()
-      expect(
-        useAppStore.getState().unifiedTabsByWorktree[WT]!.filter((tab) => tab.id === adopted!.id)
-      ).toHaveLength(1)
-      expect(groupOrder(G1).indexOf(adopted!.id)).not.toBe(1)
-    } finally {
-      warn.mockRestore()
-    }
   })
 })

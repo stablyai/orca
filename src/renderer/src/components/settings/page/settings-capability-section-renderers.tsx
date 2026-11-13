@@ -9,7 +9,7 @@ import { VoicePane } from '../voice/VoicePane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 import { LOCAL_SETTINGS_HOST_SCOPE } from '../host-scope/settings-host-scope'
-import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
+import { wslHostDistroForTarget } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -22,7 +22,6 @@ export function renderAgentsSettingsSection(
   return (
     <SettingsSection
       id="agents"
-      grouped
       title={t('auto.components.settings.Settings.8afa676615', 'Agents')}
       description={t(
         'auto.components.settings.Settings.ec1ba547f7',
@@ -62,13 +61,11 @@ export function renderAccountsSettingsSection(
   return (
     <SettingsSection
       id="accounts"
-      grouped
-      title={t('auto.components.settings.Settings.ad6c529693', 'AI Provider Accounts')}
+      title={t('auto.components.settings.Settings.4198aae333', 'AI provider accounts')}
       description={t(
         'auto.components.settings.Settings.21f09426ea',
         'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
       )}
-      badge={t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')}
       searchEntries={navigation.getSectionSearchEntries('accounts')}
     >
       {!view.isSectionMounted('accounts') ? null : !model.settingsHostScope.available ? (
@@ -117,7 +114,6 @@ export function renderOrchestrationSettingsSection(
   return (
     <SettingsSection
       id="orchestration"
-      grouped
       title={t('auto.components.settings.Settings.00c3a7950d', 'Orchestration')}
       description={t(
         'auto.components.settings.Settings.475980f53d',
@@ -140,7 +136,6 @@ export function renderLinearSettingsSection(
   return model.linearConnected ? (
     <SettingsSection
       id="linear"
-      grouped
       title={t('auto.components.settings.Settings.linearTitle', 'Linear')}
       description={t(
         'auto.components.settings.Settings.linearDescription',
@@ -162,8 +157,7 @@ export function renderDesktopCapabilitySettingsSections(
     <>
       <SettingsSection
         id="computer-use"
-        grouped
-        title={t('auto.components.settings.Settings.c9841721cb', 'Computer Use')}
+        title={t('auto.components.settings.Settings.3f3e11cb5d', 'Computer use')}
         description={t(
           'auto.components.settings.Settings.7118953f14',
           'Enable agents to control any app on your computer.'
@@ -177,13 +171,17 @@ export function renderDesktopCapabilitySettingsSections(
         id="voice"
         title={t('auto.components.settings.Settings.5063bb47a5', 'Voice')}
         description={t(
-          'auto.components.settings.Settings.eb1176a14e',
-          'Local speech-to-text dictation with on-device models.'
+          'components.settings.voice.pageDescription',
+          'Talk instead of typing in any pane.'
         )}
         searchEntries={navigation.getSectionSearchEntries('voice')}
       >
         {view.isSectionMounted('voice') ? (
-          <VoicePane settings={model.settings} updateSettings={model.updateSettings} />
+          <VoicePane
+            settings={model.settings}
+            updateSettings={model.updateSettings}
+            writeSourceControlAiSettings={context.interactions.writeSourceControlAiSettingsOrThrow}
+          />
         ) : null}
       </SettingsSection>
     </>

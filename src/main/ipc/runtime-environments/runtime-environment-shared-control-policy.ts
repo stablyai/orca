@@ -3,17 +3,23 @@ import { isRuntimeEnvironmentCapabilityPaused } from './runtime-environment-capa
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { handleSharedControlRefusal } from './runtime-environment-pairing-refusal-registry'
 import { traceSharedControlSocketClose } from './runtime-environment-control-socket-close-trace'
+import { isRecipeVmServerAsleep } from '../../ephemeral-vm/recipe-vm-asleep'
 
 /** When a shared control socket may reconnect, who answers a refused token, and where closes go. */
 export function sharedControlEnvironmentPolicy(
   environmentId: string
 ): Pick<
   RemoteRuntimeSharedControlConnectionOptions,
-  'isManuallyDisconnected' | 'isCapabilityPaused' | 'onAuthenticationRejected' | 'onSocketClosed'
+  | 'isManuallyDisconnected'
+  | 'isCapabilityPaused'
+  | 'isAsleep'
+  | 'onAuthenticationRejected'
+  | 'onSocketClosed'
 > {
   return {
     isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
     isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId),
+    isAsleep: () => isRecipeVmServerAsleep(environmentId),
     onAuthenticationRejected: () => handleSharedControlRefusal(environmentId),
     onSocketClosed: (record) => traceSharedControlSocketClose(environmentId, record)
   }

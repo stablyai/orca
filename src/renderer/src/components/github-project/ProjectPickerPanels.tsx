@@ -2,11 +2,14 @@ import React from 'react'
 import { AlertTriangle, Loader, Pin } from 'lucide-react'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
 import { projectViewErrorMessage } from './project-view-error-copy'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
-import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import {
+  isRenderableProjectViewLayout,
+  type GitHubProjectViewSummary
+} from '../../../../shared/github/projects/project-types'
+
+import type { GitHubProjectViewError } from '../../../../shared/github/projects/project-result-types'
 
 export function ProjectPickerSection({
   label,

@@ -8,25 +8,14 @@ import time
 import types
 import unittest
 from pathlib import Path
-from unittest import mock
-
-
-class FakeKeySynthType:
-    PRESSRELEASE = "pressrelease"
-    SYM = "sym"
-    STRING = "string"
-
-
-KEYSYMS = {"Return": 0xFF0D, "Tab": 0xFF09, "Escape": 0xFF1B, "Left": 0xFF51, "Down": 0xFF54}
 
 
 def load_runtime():
     gi = types.ModuleType("gi")
     repository = types.ModuleType("gi.repository")
     gi.require_version = lambda *_: None
-    repository.Atspi = types.SimpleNamespace(KeySynthType=FakeKeySynthType, generate_keyboard_event=None,
-                                            set_timeout=lambda *_: None)
-    repository.Gdk = types.SimpleNamespace(keyval_from_name=KEYSYMS.__getitem__)
+    repository.Atspi = types.SimpleNamespace(set_timeout=lambda *_: None)
+    repository.Gdk = types.SimpleNamespace()
     repository.GdkPixbuf = types.SimpleNamespace()
     gi.repository = repository
     sys.modules["gi"] = gi
@@ -44,26 +33,8 @@ runtime = load_runtime()
 
 
 class RuntimeKeyboardTest(unittest.TestCase):
-    def setUp(self):
-        self.events = []
-        patcher = mock.patch.object(
-            runtime.Atspi, "generate_keyboard_event", lambda *args: self.events.append(args)
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
 
 
-    def test_missing_xdotool_preserves_ascii_and_refuses_unicode(self):
-        with mock.patch.object(runtime.shutil, "which", return_value=None), mock.patch.dict(
-            runtime.os.environ, {"XDG_SESSION_TYPE": "x11"}
-        ):
-            runtime.type_text("Hello")
-            runtime.press_key("a")
-            self.assertEqual(self.events, [(0, "Hello", FakeKeySynthType.STRING), (0, "a", FakeKeySynthType.STRING)])
-            self.events.clear()
-            with self.assertRaisesRegex(RuntimeError, "unsupported capability"):
-                runtime.type_text("café Ω")
-            self.assertEqual(self.events, [])
 
     @unittest.skipIf(sys.platform == "win32", "the Linux bridge uses POSIX termination")
     def test_termination_stops_the_typing_child(self):
@@ -112,16 +83,7 @@ class RuntimeKeyboardTest(unittest.TestCase):
                     except ProcessLookupError:
                         pass
 
-    def run_hotkey(self, raw):
-        with mock.patch.object(runtime.shutil, "which", return_value="/usr/bin/xdotool"), mock.patch.object(
-            runtime.subprocess, "run"
-        ) as run:
-            runtime.hotkey(raw)
-        return run.call_args.args[0]
 
-    def test_hotkey_lowercases_letters_so_xdotool_does_not_add_shift(self):
-        self.assertEqual(self.run_hotkey("CmdOrCtrl+A"), ["/usr/bin/xdotool", "key", "ctrl+a"])
-        self.assertEqual(self.run_hotkey("ctrl+shift+T"), ["/usr/bin/xdotool", "key", "ctrl+shift+t"])
 
 
 

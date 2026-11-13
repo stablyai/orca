@@ -5,7 +5,7 @@ import {
   wslMoveClaimRefusal,
   releaseWslMoveRun,
   type RunningWslMove
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 
 const ends: (() => void)[] = []

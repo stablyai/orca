@@ -8,7 +8,7 @@ import {
   type BrowserClientHostCommandEvent
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
-import type { BrowserClientPageRenderer } from './browser-client-page-cleanup'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import { BrowserClientPageCommandError } from '../execution/browser-client-page-command-failure'
 import type { BrowserRouteGuestLifecycleClaim } from '../../routing/guest-authority/browser-route-page-authority'
 

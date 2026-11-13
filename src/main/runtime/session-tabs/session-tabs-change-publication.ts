@@ -1,5 +1,6 @@
+import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
 import { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab } from './mobile-session-publication-preservation'
-import type { BrowserTabInfo } from '../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionMarkdownTab
@@ -67,7 +68,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     return (
       result: RuntimeMobileSessionTabsResult,
       changeSequence: number,
-      clientNavigationId?: string
+      clientNavigationId?: string,
+      candidates?: readonly MobileSessionTabSubscription[],
+      delivery?: 'reconciliation'
     ): void => {
       const { agentSenderAssociations: _senders, ...tabsOnly } = result
       // A frame for one client is already its projection; projecting again stacks the epoch suffix and revision, so the client fences it.
@@ -75,32 +78,31 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         clientNavigationId === undefined ? this.projectMobileSessionTabsForClient(frame, id) : frame
       let desktopFrame: RuntimeMobileSessionTabsResult | undefined
       try {
-        for (const subscription of this.mobileSessionTabListeners) {
-          if (
-            clientNavigationId !== undefined &&
-            subscription.clientNavigationId !== clientNavigationId
-          ) {
+        for (const subscription of this.selectMobileSessionTabsListeners(
+          result.worktree,
+          clientNavigationId,
+          candidates
+        )) {
+          if (!this.mobileSessionTabListeners.has(subscription)) {
             continue
           }
           let frame: RuntimeMobileSessionTabsResult = tabsOnly
           if (subscription.clientKind !== 'mobile') {
             if (!desktopFrame) {
-              if (result.agentSenderAssociations) {
-                desktopFrame = result
-              } else {
+              desktopFrame = result
+              if (!result.agentSenderAssociations) {
                 senderScope ??= this.agentProjections.senders.buildForFramePass()
                 desktopFrame = { ...result, agentSenderAssociations: senderScope(result.worktree) }
               }
             }
             frame = desktopFrame
           }
-          subscription.listener(project(frame, subscription.clientNavigationId), changeSequence)
+          const supplied = project(frame, subscription.clientNavigationId)
+          this.deliverMobileSessionTabsFrame(subscription, supplied, changeSequence, delivery)
         }
-        if (clientNavigationId === undefined && desktopFrame?.agentSenderAssociations) {
-          this.agentProjections.senders.acknowledgeFrame(
-            result.worktree,
-            desktopFrame.agentSenderAssociations
-          )
+        const senders = desktopFrame?.agentSenderAssociations
+        if (clientNavigationId === undefined && senders) {
+          this.agentProjections.senders.acknowledgeFrame(result.worktree, senders)
         }
       } finally {
         if (senderScope) {

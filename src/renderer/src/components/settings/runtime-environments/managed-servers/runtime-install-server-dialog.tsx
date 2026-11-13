@@ -18,7 +18,7 @@ import {
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import { managedServerOutcomeLabel } from './managed-server-copy'
-import { SshTargetSelect } from '../../../host-picker/SshTargetSelect'
+import { HostCombobox } from '../../../host-picker/HostCombobox'
 
 type RuntimeInstallServerDialogProps = {
   open: boolean
@@ -145,9 +145,9 @@ export function RuntimeInstallServerDialog({
             <Label htmlFor={hostFieldId}>
               {t('auto.components.settings.managedServers.deploy.host', 'SSH host')}
             </Label>
-            <SshTargetSelect
+            <HostCombobox
               id={hostFieldId}
-              targets={emptyTargets}
+              options={emptyTargets}
               value={targetId}
               onChange={setTargetId}
               placeholder={t(

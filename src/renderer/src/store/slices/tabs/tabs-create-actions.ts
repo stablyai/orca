@@ -2,23 +2,24 @@ import { releaseUnreferencedEditorContent } from '../editor/tabs/editor-tab-reti
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
+import { getActiveExecutionHostIdForWorktree } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { ensureGroup, findGroupForTab, updateGroup } from './tab-group-state'
+import { ensureWorktreeGroup, findGroupForTab, updateGroup } from './tab-group-state'
 import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import {
   applyTabOrderSortValues,
   canReplacePreviewContentType,
   dedupeTabOrder,
   insertTabIdIntoOrder
-} from '../../../../../shared/workspace-layout/tab-order'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
-import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
+import { emptySplitGroup, insertSplitGroup, splitGroupEntries } from './tabs-group-actions'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -32,38 +33,39 @@ export function createTabsCreateActions(
       let created!: Tab
       set((current) => {
         init?.validatePlacement?.(current)
-        const state =
+        // Every write below lands on this worktree's entries, so each record is built once at the end.
+        const split =
           init?.split && splitGroupId
-            ? {
-                ...current,
-                ...insertSplitGroup(
-                  current,
-                  worktreeId,
-                  init.split,
-                  emptySplitGroup(worktreeId, splitGroupId)
-                )
-              }
-            : current
-        const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+            ? splitGroupEntries(
+                current,
+                worktreeId,
+                init.split,
+                emptySplitGroup(worktreeId, splitGroupId)
+              )
+            : null
+        const worktreeGroups = split ? split.groups : current.groupsByWorktree[worktreeId]
+        const worktreeActiveGroupId =
+          split?.activeGroupId ?? current.activeGroupIdByWorktree[worktreeId]
+        const existingTabs = current.unifiedTabsByWorktree[worktreeId] ?? []
         const placement = resolveUnifiedTabCreatePlacement({
-          groups: state.groupsByWorktree[worktreeId] ?? [],
+          groups: worktreeGroups ?? [],
           tabs: existingTabs,
-          activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+          activeGroupId: worktreeActiveGroupId,
           targetGroupId: splitGroupId ?? init?.targetGroupId,
           afterTabId: init?.afterTabId,
           executionHostId: init?.executionHostId,
           lookupWorktrees: () =>
             [
-              ...(state.allWorktrees?.() ?? []),
-              ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
+              ...(current.allWorktrees?.() ?? []),
+              ...(selectFolderWorkspaces(current) ?? []).map(folderWorkspaceToWorktree)
             ].filter((worktree) => worktree.id === worktreeId)
         })
-        const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
-          state.groupsByWorktree,
-          state.activeGroupIdByWorktree,
+        const { group, created: groupCreated } = ensureWorktreeGroup(
+          worktreeGroups,
           worktreeId,
           placement.groupId
         )
+        const nextActiveGroupId = groupCreated ? group.id : split?.activeGroupId
 
         let nextTabs = existingTabs
         let nextOrder = dedupeTabOrder(group.tabOrder)
@@ -87,7 +89,7 @@ export function createTabsCreateActions(
         const recordsFocus = shouldActivate && init?.recordFocus !== false
         const createdAt = Date.now()
         const executionHostId =
-          init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
+          init?.executionHostId ?? getActiveExecutionHostIdForWorktree(current, worktreeId)
         // Why: preview replacement may have removed the anchor; the order then appends in-partition.
         nextOrder =
           contentType === 'agent-session' &&
@@ -136,25 +138,42 @@ export function createTabsCreateActions(
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
+        // The split insert and ensureGroup touch only this workspace.
         return {
-          unifiedTabsByWorktree: {
-            ...state.unifiedTabsByWorktree,
-            [worktreeId]: [...nextTabs, created]
-          },
-          groupsByWorktree: {
-            ...groupsByWorktree,
-            [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
-              ...group,
-              activeTabId: nextActiveTabId,
-              tabOrder: nextOrder,
-              recentTabIds: nextRecent
-            })
-          },
-          activeGroupIdByWorktree,
-          layoutByWorktree: {
-            ...state.layoutByWorktree,
-            [worktreeId]: state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-          }
+          unifiedTabsByWorktree: replaceTabBuckets(current.unifiedTabsByWorktree, [
+            [worktreeId, [...nextTabs, created]]
+          ]),
+          groupsByWorktree: replaceRecordEntries(current.groupsByWorktree, [
+            [
+              worktreeId,
+              updateGroup(groupCreated ? [group] : (worktreeGroups ?? []), {
+                ...group,
+                activeTabId: nextActiveTabId,
+                tabOrder: nextOrder,
+                recentTabIds: nextRecent
+              })
+            ]
+          ]),
+          activeGroupIdByWorktree: nextActiveGroupId
+            ? replaceRecordEntries(current.activeGroupIdByWorktree, [
+                [worktreeId, nextActiveGroupId]
+              ])
+            : current.activeGroupIdByWorktree,
+          layoutByWorktree: replaceRecordEntries(current.layoutByWorktree, [
+            [
+              worktreeId,
+              split
+                ? split.layout
+                : // A created group is the workspace's only group, so any layout left over (its
+                  // groups closed under another owner, e.g. a remote host's mirrored tabs) points
+                  // at groups that no longer exist. Keeping it hides the new tab: an empty strip
+                  // and a 0-size pane until a workspace switch rebuilds the layout.
+                  ((groupCreated ? undefined : current.layoutByWorktree[worktreeId]) ?? {
+                    type: 'leaf',
+                    groupId: group.id
+                  })
+            ]
+          ])
         }
       })
       if (replacedEditorId) {
@@ -220,10 +239,9 @@ export function createTabsCreateActions(
           recentTabIds: shouldActivate ? [id] : []
         }
         created = createdTab
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: [...existingTabs, createdTab]
-        }
+        const nextUnifiedTabsByWorktree = replaceTabBuckets(state.unifiedTabsByWorktree, [
+          [worktreeId, [...existingTabs, createdTab]]
+        ])
         const {
           groupsByWorktree: nextGroupsByWorktree,
           layoutByWorktree: nextLayoutByWorktree,

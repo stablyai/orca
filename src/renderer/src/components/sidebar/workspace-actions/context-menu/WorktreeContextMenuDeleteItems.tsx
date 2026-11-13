@@ -1,12 +1,13 @@
+import { useId } from 'react'
 import { Trash2 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
 export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
+  const primaryDeleteDescriptionId = useId()
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
   const {
     batchDeleteWorktrees,
@@ -38,26 +39,28 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
     <>
       {/* Git cannot remove primary checkouts; keep disabled Delete beside the enabled Remove Project action. */}
       {!isMultiContext && removesProject ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div>
-              <DropdownMenuItem variant="destructive" disabled>
-                <Trash2 className="size-3.5" />
-                {t('auto.components.sidebar.WorktreeContextMenu.deleteWorktree', 'Delete Worktree')}
-              </DropdownMenuItem>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
+        <>
+          <DropdownMenuItem variant="destructive" disabled>
+            <Trash2 className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeContextMenu.deleteWorktree', 'Delete Worktree')}
+          </DropdownMenuItem>
+          <p
+            id={primaryDeleteDescriptionId}
+            className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground"
+          >
             {t(
               'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
               "Primary worktree — can't be deleted. Remove the project instead."
             )}
-          </TooltipContent>
-        </Tooltip>
+          </p>
+        </>
       ) : null}
       {/* Use Radix’s direct title prop for project-removal copy; wrapper elements break flat roving-keyboard navigation. */}
       <DropdownMenuItem
         variant="destructive"
+        aria-describedby={
+          !isMultiContext && removesProject ? primaryDeleteDescriptionId : undefined
+        }
         onSelect={handleDelete}
         disabled={
           contextDeletePending ||
@@ -75,7 +78,10 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
       >
         <Trash2 className="size-3.5" />
         {label}
-        {!isMultiContext && !removesProject && deleteShortcut ? (
+        {!removesProject &&
+        !projectMissing &&
+        (!isMultiContext || batchDeleteWorktrees.length > 0) &&
+        deleteShortcut ? (
           <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
         ) : null}
       </DropdownMenuItem>

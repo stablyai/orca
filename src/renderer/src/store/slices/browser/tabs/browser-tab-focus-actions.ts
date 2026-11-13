@@ -13,6 +13,7 @@ import {
   hasPendingEntityTab
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
+/** Focus the browser’s visible placement while retaining its source-owned page records. */
 export function createBrowserTabFocusActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet

@@ -7,9 +7,9 @@ import {
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
@@ -240,7 +240,7 @@ export function AgentKanbanBoard({
 
   return (
     // Pop-outs have no app provider; supply the card tooltip provider in either host.
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <div
         className={cn('relative flex flex-col bg-background text-foreground', containerClassName)}
       >

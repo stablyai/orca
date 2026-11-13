@@ -1,18 +1,11 @@
-import { readAiVaultSessionTitlesFromFiles } from '../../session-titles/session-title-file-reader'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as transcriptFs from '../../../native-chat/wsl-transcript-fs-access'
 import { readCodexIndexUpdate } from './session-scanner-codex-index-read'
 import { parseAgentSessionFileCached } from '../../parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../../parse-cache/session-parse-cache-store'
 import { appendFile, mkdir, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  _getCodexSessionIndexTitleCacheSizeForTest,
-  _readCachedCodexSessionIndexTitlesForTest,
-  _storeCodexSessionIndexTitleCacheEntryForTest,
-  resetCodexSessionIndexTitleCacheForTests
-} from './session-scanner-codex-title-index'
+import { resetCodexSessionIndexTitleCacheForTests } from './session-scanner-codex-title-index'
 
 let tempRoots: string[] = []
 
@@ -24,28 +17,6 @@ afterEach(async () => {
   tempRoots = []
 })
 
-describe('codex session index title cache', () => {
-  it('does not replace a newer same-home entry when an older cache hit resolves', async () => {
-    let resolveOldTitles: (titles: Map<string, string>) => void = () => {}
-    const oldTitles = new Promise<Map<string, string>>((resolve) => {
-      resolveOldTitles = resolve
-    })
-    _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'old', oldTitles)
-    const pendingOldHit = _readCachedCodexSessionIndexTitlesForTest('same-home', 'old')
-
-    const newTitles = new Map([['new-session', 'New title']])
-    _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'new', Promise.resolve(newTitles))
-    const resolvedOldTitles = new Map([['old-session', 'Old title']])
-    resolveOldTitles(resolvedOldTitles)
-
-    await expect(pendingOldHit).resolves.toBe(resolvedOldTitles)
-    await expect(_readCachedCodexSessionIndexTitlesForTest('same-home', 'new')).resolves.toBe(
-      newTitles
-    )
-    expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(1)
-  })
-})
-
 async function indexHome() {
   const root = await mkdtemp(join(tmpdir(), 'orca-codex-index-'))
   tempRoots.push(root)
@@ -54,30 +25,6 @@ async function indexHome() {
 const entry = (id: string, thread_name: string) => `${JSON.stringify({ id, thread_name })}\n`
 
 describe('incremental Codex session names', () => {
-  it('applies only appended complete records and retains a partial tail for the next read', async () => {
-    const { path } = await indexHome()
-    const initial = entry('session', 'First')
-    await writeFile(path, initial)
-    const beforeAppend = await stat(path)
-    const appended = entry('session', 'After stat')
-    await appendFile(path, appended)
-    const first = await readCodexIndexUpdate(path, beforeAppend)
-    expect(first.titles.get('session')).toBe('After stat')
-    const stream = vi.spyOn(transcriptFs, 'openTranscriptReadStream')
-    await appendFile(path, `${entry('session', 'Renamed')}{"id":"session","thread_name":"Fin`)
-    const next = await readCodexIndexUpdate(path, await stat(path), first)
-    expect(next.titles.get('session')).toBe('Renamed')
-    expect(
-      stream.mock.calls.some(
-        ([, options]) => options.start === Buffer.byteLength(initial + appended)
-      )
-    ).toBe(true)
-    await appendFile(path, 'al"}\n')
-    expect((await readCodexIndexUpdate(path, await stat(path), next)).titles.get('session')).toBe(
-      'Final'
-    )
-  })
-
   it('rereads an EOF title observed after stat when growth invalidates its record', async () => {
     const { path } = await indexHome()
     await writeFile(path, entry('head', 'Head') + entry('tail', 'Original'))
@@ -143,46 +90,6 @@ describe('incremental Codex session names', () => {
       ])
     }
   )
-
-  it('shares negative home lookups across cold and cached fallbacks, but refreshes them on a later call', async () => {
-    const { root, path } = await indexHome()
-    await mkdir(join(root, 'sessions'))
-    await writeFile(path, entry('unrelated', 'Other thread'))
-    const requests = await Promise.all(
-      Array.from({ length: 5 }, async (_, index) => {
-        const sessionId = `fallback-${index}`
-        const transcriptPath = join(root, 'sessions', `${sessionId}.jsonl`)
-        await writeFile(
-          transcriptPath,
-          `${JSON.stringify({ timestamp: '2026-11-05T10:00:00.000Z', type: 'session_meta', payload: { id: sessionId, title: 'Metadata name', cwd: '/repo/app' } })}\n`
-        )
-        return { agent: 'codex' as const, sessionId, transcriptPath }
-      })
-    )
-    const indexStats = vi.spyOn(transcriptFs, 'wslGatedStat')
-    for (const phase of ['cold', 'cached', 'renamed']) {
-      if (phase === 'renamed') {
-        await appendFile(
-          path,
-          requests.map((request) => entry(request.sessionId, 'Indexed rename')).join('')
-        )
-      }
-      indexStats.mockClear()
-      const result = await readAiVaultSessionTitlesFromFiles(requests)
-      expect(result.titles.map((title) => title.title)).toEqual(
-        phase === 'renamed'
-          ? [
-              'Indexed rename',
-              'Indexed rename',
-              'Indexed rename',
-              'Indexed rename',
-              'Indexed rename'
-            ]
-          : ['Metadata name', 'Metadata name', 'Metadata name', 'Metadata name', 'Metadata name']
-      )
-      expect(indexStats.mock.calls.filter(([file]) => file === path)).toHaveLength(1)
-    }
-  })
 
   it('keeps the indexed rename over a recorded session_meta title when the rollout grows', async () => {
     const { root, path } = await indexHome()

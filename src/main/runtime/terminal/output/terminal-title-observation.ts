@@ -6,6 +6,8 @@ import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/titl
 import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
+import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'
 
 export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
@@ -52,8 +54,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
    *  reports one, else what the title glyph says. */
   protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
+    const agent = this.getPaneTerminalAgent(ptyId)
     return (
       this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
+      hermesNativeTitleStatus(rawTitle, agent) ??
+      jcodePaneTitleStatus(rawTitle, agent) ??
       detectAgentStatusFromTitle(rawTitle)
     )
   }

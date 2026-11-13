@@ -1,6 +1,6 @@
 /// <reference types="chrome" />
 import { webContents } from 'electron'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession

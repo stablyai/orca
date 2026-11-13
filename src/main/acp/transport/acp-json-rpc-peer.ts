@@ -10,7 +10,7 @@ import {
   createIncrementalNdjsonFramer,
   encodeNdjson
 } from '../../../shared/main-process-ndjson-framer'
-import { AcpConnectionClosedError, AcpRequestTimeoutError } from './acp-errors'
+import { AcpConnectionClosedError, startAcpRequestDeadline } from './acp-errors'
 import { AcpIncomingRequests } from './acp-incoming-requests'
 import { requestTimeout, resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 
@@ -105,7 +105,7 @@ export class AcpJsonRpcPeer {
   request(
     method: string,
     params: unknown,
-    options?: { timeoutMs?: number | null }
+    options?: Pick<AcpRequestOptions, 'timeoutMs' | 'onTimeout'>
   ): Promise<unknown>
   request(
     method: string,
@@ -136,15 +136,16 @@ export class AcpJsonRpcPeer {
           reject(error)
         }
       }
-      const timer =
-        timeoutMs === null
-          ? undefined
-          : setTimeout(() => {
-              this.pending.delete(id)
-              const error = new AcpRequestTimeoutError(method, timeoutMs)
-              controller.abort(error)
-              reject(error)
-            }, timeoutMs)
+      const timer = startAcpRequestDeadline(method, timeoutMs, (error) => {
+        this.pending.delete(id)
+        if (options.onTimeout === 'cancel') {
+          // Cutting a line mid-write ends the stream, so the cancel follows the call instead.
+          void this.notify('$/cancel_request', { requestId: id }).catch(() => {})
+        } else {
+          controller.abort(error)
+        }
+        reject(error)
+      })
       this.pending.set(id, {
         method,
         resolve: (value) => settle({ value }),
