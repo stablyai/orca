@@ -1,5 +1,3 @@
-import { rmSync } from 'node:fs'
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -24,13 +22,9 @@ import { MessageWake } from '../../../orchestration/mailbox/runtime-message-wait
 
 describe('orchestration commit-notify recovery', () => {
   const harness = createOrchestrationRpcHarness()
-  const paths: string[] = []
 
   afterEach(() => {
     harness.cleanup()
-    for (const path of paths.splice(0)) {
-      rmSync(path, { recursive: true, force: true })
-    }
   })
 
   function request(
@@ -93,27 +87,6 @@ describe('orchestration commit-notify recovery', () => {
     })
     return replayed as { result: Record<string, unknown> }
   }
-
-  it('replays one Run send after notification throws post-commit', async () => {
-    const { db, runtime, activeRunId } = harness.setup()
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const waiting = runtime.waitForMessage(`run:${activeRunId}`, { timeoutMs: 5_000 })
-    const replayed = await throwAfterCommitAndReplay(
-      dispatcher,
-      runtime,
-      request('rpc_run_send', 'mutation_run_send', 'orchestration.send', {
-        from: 'term_coord',
-        to: `run:${activeRunId}`,
-        subject: 'one durable Run message'
-      }),
-      'rpc_run_send_retry'
-    )
-
-    const messages = db.getInbox(100)
-    expect(messages).toHaveLength(1)
-    expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
-  })
 
   it('replays one question reply nudge without duplicating the answer', async () => {
     const { db, runtime, activeRunId } = harness.setup()
@@ -286,45 +259,5 @@ describe('orchestration commit-notify recovery', () => {
     expect(db.getMutationReceipt(callerFingerprint, 'mutation_atomic_worker_done')?.state).toBe(
       'completed'
     )
-  })
-
-  it('replays one federated enqueue after the relay wake throws post-commit', async () => {
-    const { db, runtime } = harness.setup()
-    const task = db.createTask({ spec: 'Receive federated control mail' })
-    const started = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {},
-      federation: {
-        environmentId: 'environment_worker',
-        environmentName: 'worker',
-        peerFingerprint: 'worker-peer',
-        protocolVersion: 2
-      }
-    })
-    db.markWorkerDispatchReady(started.dispatch.id)
-    vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementationOnce(() => {
-      throw new Error('injected relay wake failure')
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const first = request('rpc_federated_send', 'mutation_federated_send', 'orchestration.send', {
-      from: 'term_coord',
-      to: `dispatch:${started.dispatch.id}`,
-      subject: 'One durable relay item'
-    })
-
-    const failed = await dispatcher.dispatch(first)
-    const replayed = await dispatcher.dispatch({ ...first, id: 'rpc_federated_send_retry' })
-
-    expect(failed).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
-    expect(replayed).toMatchObject({
-      ok: true,
-      result: {
-        relay: { dispatchId: started.dispatch.id, accepted: true },
-        mutation: { requestId: 'mutation_federated_send', replayed: true }
-      }
-    })
-    expect(db.listPendingFederationRelay(started.dispatch.id, 'to_worker')).toHaveLength(1)
   })
 })

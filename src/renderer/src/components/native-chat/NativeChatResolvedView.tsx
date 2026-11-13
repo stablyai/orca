@@ -205,7 +205,8 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady
+    composerReady,
+    surfaceReady: shownPromptCard !== null
   })
 
   const pendingMessages = useMemo(

@@ -1,8 +1,8 @@
 import type * as WslPathOwner from '../../../shared/wsl-paths'
 import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
-import type * as ForegroundProcess from '../agent-foreground-process'
+import type * as MacosTccLoginShell from '../shell-launch/macos/tcc-login-shell'
+import type * as ForegroundProcess from '../foreground/agent-process'
 
 const {
   fullTable,
@@ -69,7 +69,7 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
-vi.mock('../macos-tcc-login-shell', async (importOriginal) => ({
+vi.mock('../shell-launch/macos/tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
@@ -82,7 +82,7 @@ vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
-vi.mock('../windows-powershell-executable', () => ({
+vi.mock('../shell-launch/windows/powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
   resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
@@ -92,13 +92,13 @@ vi.mock('../windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../agent-foreground-process', async (importOriginal) => ({
+vi.mock('../foreground/agent-process', async (importOriginal) => ({
   ...(await importOriginal<typeof ForegroundProcess>()),
   resolveAgentForegroundProcessWithAvailability: (...args: unknown[]) =>
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('../windows-pty-job-membership', () => ({
+vi.mock('../foreground/windows/pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
   isWindowsPtyJobReadable: () => true
 }))
@@ -109,7 +109,7 @@ vi.mock('../../windows/windows-process-table', () => ({
   readWindowsProcessIdentityTable: identityTable,
   readWindowsProcessIdentityTableFresh: identityTable
 }))
-vi.mock('../windows-console-attached-processes', () => ({
+vi.mock('../foreground/windows/console-attached-processes', () => ({
   readWindowsConsoleAttachedProcessIds: consoleMembers
 }))
 

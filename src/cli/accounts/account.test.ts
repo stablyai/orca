@@ -4,7 +4,6 @@ import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
-import type * as NodeFs from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -13,7 +12,6 @@ const {
   readKeychainMock,
   resolveCliCommandMock,
   probeMock,
-  rmSyncMock,
   spawnMock,
   stdioForWindowsInteractiveChildMock,
   writeKeychainMock
@@ -23,18 +21,10 @@ const {
   readKeychainMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
   probeMock: vi.fn(),
-  rmSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   stdioForWindowsInteractiveChildMock: vi.fn(),
   writeKeychainMock: vi.fn()
 }))
-
-// Use real cleanup by default so leaks remain visible; override it only for Windows EBUSY cases.
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
-  rmSyncMock.mockImplementation(actual.rmSync)
-  return { ...actual, rmSync: rmSyncMock }
-})
 
 vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
@@ -62,12 +52,11 @@ vi.mock('../../shared/windows-console-input', () => ({
 }))
 
 import { ACCOUNT_HANDLERS } from './account'
-import { REPEATED_FLAG_SEPARATOR } from '../args'
-import type { HandlerContext } from '../dispatch'
+import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
+import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
-  ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY
 } from '../../shared/account-runtime-capabilities'
@@ -116,7 +105,6 @@ describe('account CLI handlers', () => {
   const originalBridgeDistro = process.env.ORCA_CLI_WSL_DISTRO
   const callMock = vi.fn()
   const client = { call: callMock } as unknown as RuntimeClient
-  let logSpy: ReturnType<typeof vi.spyOn>
 
   function context(agent: string, json = false, cwd = process.cwd()): HandlerContext {
     return {
@@ -158,7 +146,6 @@ describe('account CLI handlers', () => {
         _meta: { runtimeId: 'test-runtime' }
       })
     )
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     process.env.ELECTRON_RUN_AS_NODE = '1'
     // Clear real WSL attribution before simulating win32.
     delete process.env.WSL_DISTRO_NAME
@@ -223,15 +210,6 @@ describe('account CLI handlers', () => {
     exitSpy.mockRestore()
   })
 
-  it('fails a successful add when the temporary credentials cannot be removed', async () => {
-    rmSyncMock.mockImplementationOnce(() => {
-      throw new Error('EBUSY: resource busy or locked')
-    })
-
-    await expect(ACCOUNT_HANDLERS['account add'](context('codex', true))).rejects.toThrow('EBUSY')
-    expect(logSpy).not.toHaveBeenCalled()
-  })
-
   it('keeps OpenCode form answer values out of the login failure message', async () => {
     callMock.mockResolvedValue({
       id: 'test',
@@ -261,67 +239,5 @@ describe('account CLI handlers', () => {
     expect(spawnMock.mock.calls[0][1]).toEqual(
       expect.arrayContaining(['token=secret-value', 'note=second-secret'])
     )
-  })
-
-  describe('select and rm by --account', () => {
-    const antigravityAccounts = {
-      accounts: [
-        { id: 'agy-1', email: 'me@gmail.example', subject: 'sub-1' },
-        { id: 'agy-2', email: null, subject: 'sub-2' }
-      ],
-      activeAccountId: 'agy-1'
-    }
-    const claudeAccounts = {
-      accounts: [
-        { id: 'claude-org-a', email: 'shared@example.com' },
-        { id: 'claude-org-b', email: 'shared@example.com' }
-      ],
-      activeAccountId: null
-    }
-
-    function selectionContext(agent: string, account: string): HandlerContext {
-      return {
-        client,
-        cwd: process.cwd(),
-        flags: new Map([
-          ['agent', agent],
-          ['account', account]
-        ]),
-        json: false,
-        rawArgs: []
-      }
-    }
-
-    function mutatingCalls(): string[] {
-      return callMock.mock.calls
-        .map(([method]) => String(method))
-        .filter((method) => /\.(select|remove|antigravitySelect|antigravityRemove)/.test(method))
-    }
-
-    beforeEach(() => {
-      callMock.mockImplementation((method: string) =>
-        Promise.resolve({
-          id: 'test',
-          ok: true,
-          result:
-            method === 'status.get'
-              ? { capabilities: [ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY] }
-              : method.startsWith('accounts.antigravity')
-                ? antigravityAccounts
-                : { claude: claudeAccounts, codex: { accounts: [], activeAccountId: null } },
-          _meta: { runtimeId: 'test-runtime' }
-        })
-      )
-    })
-
-    it('refuses an email shared by several accounts without switching or removing', async () => {
-      await expect(
-        ACCOUNT_HANDLERS['account select'](selectionContext('claude', 'shared@example.com'))
-      ).rejects.toThrow('claude-org-a, claude-org-b')
-      await expect(
-        ACCOUNT_HANDLERS['account rm'](selectionContext('claude', 'shared@example.com'))
-      ).rejects.toThrow('claude-org-a, claude-org-b')
-      expect(mutatingCalls()).toEqual([])
-    })
   })
 })

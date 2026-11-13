@@ -1,5 +1,5 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'

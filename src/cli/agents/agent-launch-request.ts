@@ -27,7 +27,7 @@ import {
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty,
   rejectValuelessFlag
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'

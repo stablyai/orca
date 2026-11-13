@@ -1,4 +1,5 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import { savedWorkspaceCatalog } from '../persistence/profile-save-domains'
 import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/events/plugin-events'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/plugin-host-api'
@@ -6,6 +7,7 @@ import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-servi
 import type { PluginService } from './plugin-service'
 import { installPluginHookRunner } from './hooks/plugin-hook-participants'
 import { installPluginOpenedTerminalPruning } from './workers/host-api/plugin-opened-terminals'
+import { installPluginAutomationOwnershipEnd } from './plugin-automation-ownership'
 import { installPluginResidentWorkerWarmer } from './workers/worker-admission/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
@@ -26,7 +28,46 @@ type PluginEvents = {
   wantsEvent(event: PluginEventName): boolean
 }
 
-type RuntimeDelegateSource = Omit<PluginRuntimeDelegate, 'listAgentStatuses' | 'callRuntime'>
+type RuntimeDelegateSource = Omit<
+  PluginRuntimeDelegate,
+  'listAgentStatuses' | 'listAgentTaskTitles' | 'callRuntime'
+> & {
+  listAgentTasksByPaneKey(): Readonly<Record<string, PluginAgentTask>>
+}
+
+type PluginAgentTask = Pick<AgentStatusOrchestrationContext, 'taskTitle' | 'dispatchStatus'>
+
+const TASK_TITLES_TTL_MS = 1000
+// A dispatch that ended leaves its pane, which then runs no task.
+const ENDED_DISPATCH: ReadonlySet<PluginAgentTask['dispatchStatus']> = new Set([
+  'completed',
+  'failed',
+  'circuit_broken'
+])
+
+/**
+ * Each pane's active dispatched task title, by pane key: only that it runs one and its title,
+ * never the dispatch's records. Kept for a second, since building it reads the orchestration
+ * database and plugins may poll `agents.list`.
+ */
+function pluginAgentTaskTitles(
+  read: () => Readonly<Record<string, PluginAgentTask>>
+): () => ReadonlyMap<string, string> {
+  let last: { at: number; titles: ReadonlyMap<string, string> } | null = null
+  return () => {
+    const now = Date.now()
+    if (last && now - last.at < TASK_TITLES_TTL_MS) {
+      return last.titles
+    }
+    const titles = new Map(
+      Object.entries(read()).flatMap(([paneKey, task]) =>
+        ENDED_DISPATCH.has(task.dispatchStatus) ? [] : [[paneKey, task.taskTitle ?? ''] as const]
+      )
+    )
+    last = { at: now, titles }
+    return titles
+  }
+}
 
 const WORKSPACE_CHANGE_DEBOUNCE_MS = 150
 
@@ -42,7 +83,8 @@ export function pluginRuntimeDelegate(
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),
     dispatchPluginNotification: (input) => runtime.dispatchPluginNotification(input),
-    listAgentStatuses: agentStatuses
+    listAgentStatuses: agentStatuses,
+    listAgentTaskTitles: pluginAgentTaskTitles(() => runtime.listAgentTasksByPaneKey())
   }
 }
 
@@ -58,6 +100,7 @@ export function bindPluginRuntime(
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginOpenedTerminalPruning(service)
+  installPluginAutomationOwnershipEnd(service, runtime)
   installPluginResidentWorkerWarmer(service)
   return delegate
 }

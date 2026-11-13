@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import type {
   GitHubPRMergeMethod,
   GitHubPRStack
-} from '../../../../../../shared/github/pull-request-types'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
 import { getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export function buildGitHubPRStackMergeConfirmation({

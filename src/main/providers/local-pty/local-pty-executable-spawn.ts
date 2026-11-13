@@ -9,8 +9,8 @@ import { TERMINAL_SPAWN_ISSUE_REQUEST } from '../../../shared/terminal/pty/lifec
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
-} from '../macos-tcc-login-shell'
-import { formatLocalPtyEnvironmentDiag } from '../working-directory-validation'
+} from '../shell-launch/macos/tcc-login-shell'
+import { formatLocalPtyEnvironmentDiag } from '../working-directory/validation'
 
 let didEnsureSpawnHelperExecutable = false
 

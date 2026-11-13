@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  createPluginAgentStatusForwarder,
-  pluginRuntimeDelegate,
-  readPluginWorkspaceChange
-} from './plugin-runtime-binding'
+import { createPluginAgentStatusForwarder, pluginRuntimeDelegate } from './plugin-runtime-binding'
 
 import { PluginPanelBridge } from './panels/plugin-panel-bridge'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -26,7 +23,23 @@ function runtime(terminals: { handle: string; title: string | null; paneTitle?: 
       }))
     })),
     sendTerminal: vi.fn(),
-    dispatchPluginNotification: vi.fn()
+    dispatchPluginNotification: vi.fn(),
+    listAgentTasksByPaneKey: vi.fn((): Record<string, AgentStatusOrchestrationContext> => ({
+      'tab0:worker': {
+        taskId: 't-1',
+        dispatchId: 'd-1',
+        dispatchStatus: 'dispatched',
+        taskTitle: 'Write the tests',
+        coordinatorHandle: 'h'
+      },
+      'tab0:untitled': { taskId: 't-2', dispatchId: 'd-2' },
+      'tab0:finished': {
+        taskId: 't-3',
+        dispatchId: 'd-3',
+        dispatchStatus: 'completed',
+        taskTitle: 'Done'
+      }
+    }))
   }
 }
 
@@ -81,22 +94,5 @@ describe('agent.status.changed for plugins', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(source.listTerminals).toHaveBeenCalledTimes(3)
     expect(panels[1]).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('workspace.changed for plugins', () => {
-  it('carries the same workspace id workspace.readContext answers', async () => {
-    const source = {
-      ...runtime([]),
-      resolveActiveWorktreeContext: async () => ({
-        worktreeId: 'repo::/w',
-        identityKey: 'wt2:local:i1',
-        path: '/w',
-        branch: 'refs/heads/main',
-        displayName: 'w'
-      })
-    }
-    const { change } = await readPluginWorkspaceChange(pluginRuntimeDelegate(source, () => []))
-    expect(change.context).toMatchObject({ workspaceId: 'identity:wt2:local:i1', branch: 'main' })
   })
 })

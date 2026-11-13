@@ -17,6 +17,11 @@ const ACP_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'full-access']
 }
 
+// Kimi's own modes: Ask When Needed approves routine work and still asks before risky commands.
+const KIMI_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+  modes: ['ask', 'auto', 'full-access']
+}
+
 // No Auto: the server has no reviewer that answers approvals for the person.
 const ANTIGRAVITY_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'accept-edits', 'full-access']
@@ -30,6 +35,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermission
   ['opencode2', ACP_CHAT_PERMISSION_MODES],
   ['omp', ACP_CHAT_PERMISSION_MODES],
   ['copilot', ACP_CHAT_PERMISSION_MODES],
+  ['kimi', KIMI_CHAT_PERMISSION_MODES],
   ['antigravity', ANTIGRAVITY_CHAT_PERMISSION_MODES]
 ])
 

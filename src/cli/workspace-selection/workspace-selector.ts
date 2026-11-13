@@ -5,7 +5,7 @@ import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
 import { isLaunchedByAnotherRuntime } from '../runtime/runtime-source-fence'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { readEnclosingWorkspaceCatalog } from './enclosing-workspace-catalog'
 import {
   getCallerExecutionHostId,

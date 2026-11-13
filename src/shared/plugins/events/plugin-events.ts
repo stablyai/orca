@@ -9,6 +9,7 @@ import {
 } from '../workers/plugin-host-api'
 import { pluginEditorTypographySchema } from '../workers/plugin-host-api-editor-typography'
 import { pluginWorkspaceIdSchema } from '../workers/plugin-host-api-workspace-methods'
+import { pluginAgentSessionIdSchema } from '../workers/plugin-host-api-panel-methods'
 
 /**
  * Payload contracts for the v0 plugin event set (workspace lifecycle + agent
@@ -75,7 +76,10 @@ export const agentStatusChangedPayloadSchema = z.object({
       /** Stamped by the host the agent runs on (an SSH host's own clock), unlike `receivedAt`. */
       stateStartedAt: z.number().finite()
     })
-    .optional()
+    .optional(),
+  /** The agent's own session id, which `agent.resume` takes; absent when Orca has none, and
+   *  before host API 1.8. */
+  sessionId: pluginAgentSessionIdSchema.optional()
 })
 
 export const workspaceChangedPayloadSchema = z.object({
@@ -98,7 +102,7 @@ export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
   'workspace.removed':
     'A worktree workspace was removed; `workspaceListId` (host API 1.7) is the id `workspace.list` gave it.',
   'agent.status.changed':
-    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, and `terminalId` names its terminal when Orca lists it.',
+    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, `terminalId` names its terminal when Orca lists it, and `sessionId` (host API 1.8) is what `agent.resume` takes.',
   'workspace.changed':
     'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context.',
   'editor.typography.changed':

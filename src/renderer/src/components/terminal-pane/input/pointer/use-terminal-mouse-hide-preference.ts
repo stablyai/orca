@@ -1,15 +1,15 @@
 import { useEffect } from 'react'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
-import type { UseTerminalPaneLifecycleDeps } from '../../mounting/terminal-pane-lifecycle-types'
+import type { MountedTerminalPaneLifecycleDeps } from '../../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../../mounting/use-terminal-pane-lifecycle-refs'
 
 export function useTerminalMouseHidePreference(
-  deps: Pick<UseTerminalPaneLifecycleDeps, 'managerRef' | 'settings'>,
+  deps: Pick<MountedTerminalPaneLifecycleDeps, 'mountedManager' | 'managerRef' | 'settings'>,
   refs: Pick<TerminalPaneLifecycleRefs, 'mouseHideDisposablesRef'>
 ): void {
   useEffect(() => {
     const manager = deps.managerRef.current
-    if (!manager) {
+    if (!deps.mountedManager || manager !== deps.mountedManager) {
       return
     }
     const hide = deps.settings?.terminalMouseHideWhileTyping ?? false
@@ -25,5 +25,10 @@ export function useTerminalMouseHidePreference(
         refs.mouseHideDisposablesRef.current.delete(pane.id)
       }
     }
-  }, [deps.settings?.terminalMouseHideWhileTyping, deps.managerRef, refs.mouseHideDisposablesRef])
+  }, [
+    deps.mountedManager,
+    deps.settings?.terminalMouseHideWhileTyping,
+    deps.managerRef,
+    refs.mouseHideDisposablesRef
+  ])
 }

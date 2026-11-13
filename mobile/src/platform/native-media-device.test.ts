@@ -14,6 +14,7 @@ const expo = vi.hoisted(() => ({
 
 vi.mock('expo-clipboard', () => ({ getImageAsync: expo.getImageAsync }))
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: expo.getDocumentAsync }))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
   launchImageLibraryAsync: expo.launchImageLibraryAsync,

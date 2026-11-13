@@ -1,4 +1,5 @@
 import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear/links'
+import { branchRefLabel } from '../git/refs/branch-ref-label'
 import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../worktree/types'
 import type { JiraIssue } from '../jira/jira-types'
 import type { LinearIssue } from '../linear/issue-types'
@@ -191,7 +192,7 @@ export function buildWorkspaceSourceSelection(args: {
 }): WorkspaceSourceSelection | null {
   const { linkedWorkItem, baseBranch } = args
   if (!linkedWorkItem) {
-    return baseBranch ? { kind: 'branch', label: baseBranch } : null
+    return baseBranch ? { kind: 'branch', label: branchRefLabel(baseBranch) } : null
   }
   const provider = getWorkspaceSourceProvider(linkedWorkItem)
   const kind: WorkspaceSourceSelectionKind =

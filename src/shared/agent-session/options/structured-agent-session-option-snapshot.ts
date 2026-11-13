@@ -46,9 +46,8 @@ const AGENT_CHOSEN_MODEL: SessionOptionDescriptor = {
   id: 'model',
   label: 'Model',
   category: 'model',
-  kind: { type: 'select', choices: [] },
+  kind: { type: 'select', choices: [], placeholder: 'Auto' },
   valueSource: 'unknown',
-  reportedModel: 'auto',
   transport: 'agent-session',
   settable: false
 }
@@ -258,11 +257,7 @@ export function structuredAgentSessionOptionSnapshot(
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
   const options = modelOptionSnapshot(state).map((option) =>
-    state.fastModeRestricted && option.id === 'fastMode'
-      ? { ...option, settable: false }
-      : option.id === 'model' && state.reportedModel
-        ? { ...option, reportedModel: state.reportedModel }
-        : option
+    state.fastModeRestricted && option.id === 'fastMode' ? { ...option, settable: false } : option
   )
   const interaction = structuredAgentSessionInteractionDescriptor(state)
   return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]

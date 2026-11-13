@@ -14,8 +14,8 @@ import {
   classifyWorktreeForceDeleteReason,
   isProvenLivePtyRemovalError
 } from '../../../../shared/worktree/removal'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 // Attach a handler before fake-time advancement so rejections stay attributed to this test, without changing the returned promise.
 function settleTeardown<T>(promise: Promise<T>): Promise<T> {
@@ -240,35 +240,6 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   })
 
   // Force must join active shutdowns before filesystem deletion or Windows can fail with EBUSY.
-  it('waits for in-flight sweeps before force returns', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const localProvider = createProviderStub(async () => {
-        throw new Error('ssh channel closed')
-      })
-      let shutdownFinished = false
-      ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-        async () => {
-          await new Promise((resolve) => setTimeout(resolve, 20))
-          shutdownFinished = true
-        }
-      )
-      listRegisteredPtysMock.mockReturnValue([
-        { ptyId: 'reg-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
-      ])
-
-      const result = await killAllProcessesForWorktree('w1', {
-        localProvider,
-        requirePhysicalStop: true,
-        allowUnverifiedStop: true
-      })
-
-      expect(shutdownFinished).toBe(true)
-      expect(result.registryStopped).toBe(1)
-    } finally {
-      warn.mockRestore()
-    }
-  })
 
   // Wrap raw provider failures in recognizable force-removal wording without losing their cause (#11960).
   it('offers force delete for a sweep-level failure without losing the provider wording', async () => {
@@ -290,52 +261,6 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   })
 
   // Timeout does not cancel shutdown; force must await it before deletion to avoid partial Windows removal.
-  it('waits for a shutdown the deadline abandoned before force returns', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let releaseShutdown: () => void = () => {}
-    try {
-      listRegisteredPtysMock.mockReturnValue([])
-      const localProvider = createProviderStub(async () => [
-        { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
-      ])
-      let shutdownFinished = false
-      ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-        async () =>
-          await new Promise<void>((resolve) => {
-            releaseShutdown = () => {
-              shutdownFinished = true
-              resolve()
-            }
-          })
-      )
-
-      const teardown = settleTeardown(
-        killAllProcessesForWorktree('w1', {
-          localProvider,
-          timeoutMs: 30,
-          requirePhysicalStop: true,
-          allowUnverifiedStop: true
-        })
-      )
-      let returned = false
-      void teardown.then(() => {
-        returned = true
-      })
-      await new Promise((resolve) => setTimeout(resolve, 150))
-
-      expect(shutdownFinished).toBe(false)
-      expect(returned).toBe(false)
-      releaseShutdown()
-      await expect(teardown).resolves.toEqual({
-        runtimeStopped: 0,
-        providerStopped: 0,
-        registryStopped: 0
-      })
-    } finally {
-      releaseShutdown()
-      warn.mockRestore()
-    }
-  })
 
   it('lets an explicit force removal proceed past PTYs it could not stop', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

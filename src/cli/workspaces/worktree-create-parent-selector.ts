@@ -1,5 +1,5 @@
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import { getOptionalStringFlag } from '../flags'
+import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalParentSelector } from '../workspace-selection/caller-folder-workspace'

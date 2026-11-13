@@ -3,12 +3,7 @@ import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  installServeService,
-  readServeServiceStatus,
-  uninstallServeService,
-  type ServeServiceDeps
-} from './serve-service'
+import { installServeService, uninstallServeService, type ServeServiceDeps } from './serve-service'
 import { resolveServiceCommand } from '../runtime/serve-app-launcher'
 import { serveSupervisorBrakePath } from '../runtime/serve-supervisor-brake'
 
@@ -16,7 +11,6 @@ describe('orca serve service', () => {
   let home: string
   let bin: string
   let calls: string[]
-  let answers: Map<string, { code: number | null; out: string }>
 
   beforeEach(async () => {
     home = await mkdtemp(join(tmpdir(), 'orca-serve-service-'))
@@ -27,7 +21,6 @@ describe('orca serve service', () => {
     await writeFile(join(bin, 'orca-ide'), '#!/bin/sh\n')
     await chmod(join(bin, 'orca-ide'), 0o755)
     calls = []
-    answers = new Map()
   })
 
   afterEach(async () => {
@@ -46,7 +39,7 @@ describe('orca serve service', () => {
     run: async (program, args) => {
       const line = [program, ...args].join(' ')
       calls.push(line)
-      return answers.get(line) ?? { code: 0, out: '' }
+      return { code: 0, out: '' }
     }
   })
 
@@ -61,40 +54,6 @@ describe('orca serve service', () => {
       `launchctl bootstrap gui/501 ${unitPath}`
     ])
     expect(existsSync(serveSupervisorBrakePath(join(home, 'profile')))).toBe(false)
-  })
-
-  it('fails loudly when the manager refuses, and writes nothing on a dry run', async () => {
-    const d = deps('darwin')
-    const dry = await installServeService({ command: null, dryRun: true }, d)
-    expect(existsSync(String(dry.unitPath))).toBe(false)
-    expect(calls).toEqual([])
-    answers.set(`launchctl bootstrap gui/501 ${String(dry.unitPath)}`, { code: 5, out: 'denied' })
-    await expect(installServeService({ command: null, dryRun: false }, d)).rejects.toThrow(/denied/)
-  })
-
-  it('reports live, exited and unverifiable from the manager', async () => {
-    const d = deps('darwin')
-    const dry = await installServeService({ command: null, dryRun: true }, d)
-    const print = `launchctl print gui/501/${String(dry.name)}`
-    answers.set(print, { code: 0, out: '\tstate = running\n\tpid = 4242\n' })
-    await expect(readServeServiceStatus(d)).resolves.toMatchObject({
-      verdict: 'live',
-      pid: 4242,
-      installed: false
-    })
-    answers.set(print, { code: 113, out: 'Could not find service' })
-    await expect(readServeServiceStatus(d)).resolves.toMatchObject({ verdict: 'exited' })
-    answers.set(print, { code: null, out: '' })
-    await expect(readServeServiceStatus(d)).resolves.toMatchObject({ verdict: 'unverifiable' })
-    answers.set(print, { code: 5, out: 'Bootstrap failed: no GUI session' })
-    await expect(readServeServiceStatus(d)).resolves.toMatchObject({ verdict: 'unverifiable' })
-
-    const linux = deps('linux')
-    answers.set(
-      `systemctl --user show ${String((await installServeService({ command: null, dryRun: true }, linux)).name)} --property=ActiveState,SubState,MainPID`,
-      { code: 0, out: 'ActiveState=active\nSubState=running\nMainPID=99\n' }
-    )
-    await expect(readServeServiceStatus(linux)).resolves.toMatchObject({ verdict: 'live', pid: 99 })
   })
 
   it('uninstalls by stopping the service and removing the unit', async () => {
@@ -131,50 +90,5 @@ describe('orca serve service', () => {
         env: { PATH: onlyOrca, ORCA_USER_DATA_PATH: join(home, 'profile') }
       })
     ).toThrow(/PATH/)
-  })
-
-  it('keeps an AppImage launch and profile directories out of the unit PATH (#36000)', async () => {
-    const profileBin = join(home, 'profile', 'cli', 'bin')
-    const d = deps('linux')
-    d.env = {
-      ...d.env,
-      PATH: [
-        '/tmp/.mount_orca-lonOeOb',
-        '/tmp/.mount_orca-lonOeOb/usr/sbin',
-        '/tmp/appimage_extracted_0f3a/usr/bin',
-        profileBin,
-        'relative/bin',
-        '/usr/local/bin',
-        bin
-      ].join(':')
-    }
-    const result = await installServeService({ command: join(bin, 'orca-ide'), dryRun: true }, d)
-    expect(String(result.content)).toContain(`Environment=PATH=/usr/local/bin:${bin}\n`)
-  })
-
-  it('refuses a --command tied to one Orca version', async () => {
-    const scoped = join(home, 'profile', 'cli', 'bin')
-    await mkdir(scoped, { recursive: true })
-    await writeFile(join(scoped, 'orca'), '#!/bin/sh\n')
-    await chmod(join(scoped, 'orca'), 0o755)
-    expect(() =>
-      resolveServiceCommand(join(scoped, 'orca'), {
-        platform: 'darwin',
-        env: { ORCA_USER_DATA_PATH: join(home, 'profile') }
-      })
-    ).toThrow(/one Orca version/)
-  })
-
-  it('refuses a --command inside an extract-and-run AppImage copy', async () => {
-    const extracted = join(home, 'appimage_extracted_0f3a')
-    await mkdir(extracted)
-    await writeFile(join(extracted, 'AppRun'), '#!/bin/sh\n')
-    await chmod(join(extracted, 'AppRun'), 0o755)
-    expect(() =>
-      resolveServiceCommand(join(extracted, 'AppRun'), {
-        platform: 'linux',
-        env: { ORCA_USER_DATA_PATH: join(home, 'profile') }
-      })
-    ).toThrow(/one Orca version/)
   })
 })

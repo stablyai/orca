@@ -9,8 +9,8 @@ import {
   startDaemonAdapterHarness,
   waitFor
 } from '../../../daemon/providers/adapter/testing/daemon-pty-adapter-test-harness'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { PtyWriteUnavailableError } from '../../../providers/pty-write-unavailable-error'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import { PtyWriteUnavailableError } from '../../../providers/pty/write-unavailable-error'
 
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')

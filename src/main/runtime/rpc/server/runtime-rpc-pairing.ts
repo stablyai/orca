@@ -7,7 +7,7 @@ import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type {
   RelayDeviceBinding,
   RelayRevokeOutbox
-} from '../../mobile-cloud-relay/relay-revoke-outbox'
+} from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'

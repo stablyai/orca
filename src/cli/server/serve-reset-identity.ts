@@ -1,7 +1,7 @@
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
-import { pluginDevWatchConfirmFor } from '../plugin-dev-watch/plugin-dev-watch-approval'
+import { pluginDevWatchConfirmFor } from '../plugins/dev-watch/plugin-dev-watch-approval'
 
 const RESET_WARNING =
   "This gives this machine's Orca server a new pairing key and installation id and removes every " +
@@ -10,7 +10,7 @@ const RESET_WARNING =
 export async function resetServeHostIdentity(userDataPath: string): Promise<void> {
   // Lazy: only this command needs orcad's lock code.
   const { resetHostIdentityUnderLock } =
-    await import('../../main/orcad/orcad-host-identity-reset.js')
+    await import('../../main/orcad/profile-state/orcad-host-identity-reset.js')
   const result = resetHostIdentityUnderLock(userDataPath)
   if (result.status === 'missing') {
     throw new RuntimeClientError('not_found', `No Orca data at ${userDataPath}; nothing to reset.`)

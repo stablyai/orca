@@ -3,13 +3,15 @@ import { RpcDispatcher, type DispatcherOptions } from '../runtime/rpc/dispatcher
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-runtime-call'
 
-/** An error the runtime answered, with its code (`selector_not_found`, ...). */
+/** An error the runtime answered, with its code (`selector_not_found`, ...); `cause` is what the
+ *  handler threw, for callers that tell refusals apart by class. */
 export class PluginRuntimeRpcError extends Error {
   constructor(
     readonly code: string,
-    message: string
+    message: string,
+    options?: ErrorOptions
   ) {
-    super(message)
+    super(message, options)
   }
 }
 
@@ -26,11 +28,15 @@ export function pluginRuntimeRpc(
     dispatcher ??= new RpcDispatcher({ runtime, methods })
     // The dispatcher maps a throw to an error answer; keep the original so its code reaches the plugin.
     let refusal: unknown = null
+    let thrown: unknown
     const response = await dispatcher.dispatch(
       { id: randomUUID(), authToken: 'plugin-host', method, params },
       {
         // Why the CLI's identity: a mod's action is automation, as an agent's `orca` call is.
         caller: { kind: 'local-cli' },
+        ...(options.plugin
+          ? { plugin: { ...options.plugin, assertActive: () => options.beforeEffect?.() } }
+          : {}),
         ...(options.signal ? { signal: options.signal } : {}),
         beforeInvoke: () => {
           try {
@@ -40,6 +46,9 @@ export function pluginRuntimeRpc(
             refusal = error
             throw error
           }
+        },
+        onHandlerError: (error) => {
+          thrown = error
         }
       }
     )
@@ -47,7 +56,11 @@ export function pluginRuntimeRpc(
       throw refusal
     }
     if (!response.ok) {
-      throw new PluginRuntimeRpcError(response.error.code, response.error.message)
+      throw new PluginRuntimeRpcError(
+        response.error.code,
+        response.error.message,
+        thrown === undefined ? undefined : { cause: thrown }
+      )
     }
     return response.result
   }

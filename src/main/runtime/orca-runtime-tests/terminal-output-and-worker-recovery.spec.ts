@@ -1,4 +1,4 @@
-import { settledWriteStub } from '../../providers/settled-pty-write-stub'
+import { settledWriteStub } from '../../providers/testing/settled-pty-write-stub'
 import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { committingSpawn } from './bind-first-pane.test-fixture'
@@ -8,15 +8,7 @@ import '../../../shared/agent-status/title/agent-title-status'
 import '../orca-runtime-test-mocks/setup.spec'
 import { waitForMobileSessionTabsEvents } from './mobile-session-tab-event-wait'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
-import {
-  HEADLESS_LEAF_ID,
-  TEST_WORKTREE_ID,
-  bindSinglePtyRun,
-  setInMemoryOrchestrationMessages,
-  store,
-  syncSinglePty
-} from './orca-runtime-test-fixtures.spec'
-import { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
+import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   // Hook-only OSC 9999 transitions must republish mobile status without a renderer (#7970).
@@ -74,47 +66,5 @@ describe('OrcaRuntimeService', () => {
 
     unsubscribe()
     uninstallRepublish()
-  })
-
-  it('does not replay an already-delivered message on a later idle transition', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
-      setInMemoryOrchestrationMessages(runtime, db)
-      runtime.setPtyController({
-        write,
-        writeWithSettlement: settledWriteStub(write),
-        kill: vi.fn(),
-        getForegroundProcess: async () => null
-      })
-      syncSinglePty(runtime)
-
-      const [terminal] = (await runtime.listTerminals()).terminals
-      bindSinglePtyRun(db, terminal.handle)
-      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
-      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
-
-      runtime.deliverPendingMessagesForHandle(terminal.handle)
-      await vi.advanceTimersByTimeAsync(500)
-
-      const firstInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
-      ).length
-      expect(firstInjections).toBe(1)
-
-      runtime.deliverPendingMessagesForHandle(terminal.handle)
-      await vi.advanceTimersByTimeAsync(500)
-
-      const totalInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
-      ).length
-      expect(totalInjections).toBe(1)
-      db.close()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

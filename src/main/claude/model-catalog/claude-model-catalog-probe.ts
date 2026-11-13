@@ -3,7 +3,7 @@ import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
-} from '../../native-chat/structured-agent-command-resolution'
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN

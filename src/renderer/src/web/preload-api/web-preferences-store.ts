@@ -77,7 +77,6 @@ export function getStoredSettings(): GlobalSettings {
   const settings = mergeSettings(
     {
       ...defaults,
-      rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: null
     },
     migratedStored

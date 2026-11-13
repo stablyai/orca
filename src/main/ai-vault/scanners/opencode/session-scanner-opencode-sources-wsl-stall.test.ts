@@ -23,7 +23,7 @@ import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
-} from '../../../native-chat/wsl-transcript-fs-gate'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-gate'
 
 let releaseStall: (() => void) | undefined
 

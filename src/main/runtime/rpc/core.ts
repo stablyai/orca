@@ -3,7 +3,7 @@ import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
-import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
+import type { StructuredAgentCliSourceEvidence } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -128,6 +128,8 @@ export type RpcContext = {
   pairedDeviceParentId?: string
   // Host-assigned transport identity; absent means the caller could not be established.
   caller?: RpcCallerIdentity
+  // Set only by the in-process plugin host: the plugin a call acts for, kept as provenance.
+  plugin?: { key: string; name: string; assertActive?: () => void }
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
   // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.

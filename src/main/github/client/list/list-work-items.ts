@@ -1,10 +1,14 @@
-import { withGitHubRepoExecution } from '../../github-repository-identity'
-import type { ListWorkItemsResult } from '../../../../shared/github/work-item-types'
+import {
+  withGitHubRepoExecution,
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
+import type { ListWorkItemsResult } from '../../../../shared/github/work-items/work-item-types'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items-query-bounds'
+import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items/work-items-query-bounds'
 import { parseTaskQuery } from '../../../../shared/work-items/task-query'
-import { acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveIssueGitHubApiRepositorySource } from '../../github-api-repository'
+import { acquire, release } from '../../execution/github-operation-slots'
+
+import { resolveIssueGitHubApiRepositorySource } from '../../repositories/github-api-repository'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import { normalizeWorkItemPage, resolvePrWorkItemSource } from './work-item-list-request'
 import { listRecentWorkItems, listQueriedWorkItems } from './work-item-pages'

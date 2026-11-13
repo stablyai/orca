@@ -3,7 +3,7 @@ import {
   getOptionalNullableNumberFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import {
   buildLinearCurrentContext,
   getDueDateFlag,

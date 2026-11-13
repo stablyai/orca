@@ -12,7 +12,7 @@ import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic
-} from '../../../startup/startup-diagnostics'
+} from '../../../startup/diagnostics/startup-diagnostics'
 
 // Windows OS creation precedes Node self-report; allow bootstrap delays from antivirus or disk pressure.
 const WIN32_START_TIME_TOLERANCE_MS = 10_000

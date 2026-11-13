@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
+import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
 import { summarizeTranscriptContextUsage } from '../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 
