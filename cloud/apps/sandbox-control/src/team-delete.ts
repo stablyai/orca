@@ -56,7 +56,9 @@ export async function purgeTeamSecrets(
       )
       .bind(accountId, prefix),
     // The team's secret activity (names, who, when) goes with the team.
-    db.prepare('DELETE FROM secret_events WHERE account_id = ?').bind(accountId)
+    db.prepare('DELETE FROM secret_events WHERE account_id = ?').bind(accountId),
+    // So do its owner-change notices (workspace names, who): nobody can sign in to the team to read them.
+    db.prepare('DELETE FROM owner_transfer_notices WHERE account_id = ?').bind(accountId)
   ])
   return { ok: true, purged: Number(result?.meta?.changes ?? 0) }
 }

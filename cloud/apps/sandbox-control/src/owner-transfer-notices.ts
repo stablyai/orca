@@ -21,6 +21,11 @@ import { derivedAuthKey, type TeamMembershipCheck } from './team-membership'
 
 export const NOTIFY_KEY_PURPOSE = 'orca-cloud:control-plane-to-auth:notify-workspace-transferred:v1'
 const TIMEOUT_MS = 6_000
+/**
+ * A notice is kept this long, read or not, then gone. Removing a member does not remove theirs
+ * (it is how they learn to rotate if they come back); deleting the team does (team-delete.ts).
+ */
+export const NOTICE_RETENTION_MS = 90 * 24 * 60 * 60_000
 
 export type TransferEmail = { emailed: boolean; mode: string | null; reason: string | null }
 export type TransferEmailRequest = {
@@ -112,6 +117,12 @@ export async function notifyPreviousOwner(
 ): Promise<TransferOutcome> {
   const { before, after, actorUserId, now } = input
   const noticeId = randomId('otn')
+  // Expired notices of this team go when a new one is written: no separate sweep to forget.
+  await db
+    .prepare('DELETE FROM owner_transfer_notices WHERE account_id = ? AND created_at < ?')
+    .bind(before.account_id, now - NOTICE_RETENTION_MS)
+    .run()
+    .catch(() => undefined)
   await db
     .prepare(
       `INSERT INTO owner_transfer_notices (id, account_id, user_id, sandbox_id, workspace_name, workspace_number, actor_user_id, new_owner_user_id, created_at)
@@ -142,14 +153,15 @@ export async function notifyPreviousOwner(
   return { noticeId, inApp: stillMember, email, reached: stillMember || email.emailed }
 }
 
-/** The caller's own notices in the team they are signed in to, newest first. */
-export async function listNotices(db: D1Database, caller: SandboxCaller) {
+/** The caller's own notices in the team they are signed in to, newest first. Never one past its 90 days. */
+export async function listNotices(db: D1Database, caller: SandboxCaller, now: number) {
   const { results } = await db
     .prepare(
       `SELECT id, account_id, user_id, sandbox_id, workspace_name, workspace_number, actor_user_id, new_owner_user_id, created_at
-         FROM owner_transfer_notices WHERE account_id = ? AND user_id = ? AND dismissed_at IS NULL ORDER BY created_at DESC LIMIT 50`
+         FROM owner_transfer_notices WHERE account_id = ? AND user_id = ? AND dismissed_at IS NULL AND created_at >= ?
+        ORDER BY created_at DESC LIMIT 50`
     )
-    .bind(caller.accountId, caller.userId)
+    .bind(caller.accountId, caller.userId, now - NOTICE_RETENTION_MS)
     .all<NoticeRow>()
   const names = await memberNamesFor(db, caller.accountId, results.flatMap((row) => [row.actor_user_id, row.new_owner_user_id]))
   return {
