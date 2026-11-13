@@ -583,7 +583,23 @@ it.each([10, 100])(
         newest.mock.results.filter((result) => result.value !== undefined).length
       ).toBeLessThanOrEqual(3)
       expect(newest).toHaveBeenCalled()
-      session = { ...session, sleepingAgentSessionsByPaneKey: {} }
+      session = {
+        ...session,
+        sleepingAgentSessionsByPaneKey: Object.fromEntries(
+          Object.keys(records).map((key) => [
+            key,
+            new Proxy(
+              { ...record, paneKey: key },
+              {
+                get(target, property, receiver) {
+                  visits++
+                  return Reflect.get(target, property, receiver)
+                }
+              }
+            )
+          ])
+        )
+      }
       sessionWritten('local')
       await settled()
       visits = 0
