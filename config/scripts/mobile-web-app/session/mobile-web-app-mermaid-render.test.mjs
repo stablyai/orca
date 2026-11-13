@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -74,9 +75,7 @@ beforeAll(async () => {
   if (!bundles) {
     return
   }
-  // Keep entry under mobile/ so upward bare-import resolution finds component dependencies.
-  await mkdir(join(mobileDir, '.tmp'), { recursive: true })
-  scratch = await mkdtemp(join(mobileDir, '.tmp', 'mermaid-render-'))
+  scratch = await mkdtemp(join(tmpdir(), 'orca-mermaid-render-'))
   const outDir = join(scratch, 'bundle')
   await mkdir(outDir, { recursive: true })
   await esbuild.build({
@@ -119,7 +118,6 @@ beforeAll(async () => {
 afterAll(async () => {
   server?.close()
   if (scratch) {
-    // Remove this run’s scratch only; other suites share mobile/.tmp.
     await rm(scratch, { recursive: true, force: true })
   }
 })

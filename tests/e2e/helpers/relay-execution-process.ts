@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { spawnProcess } from '@orca/process-host'
@@ -18,8 +19,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
 `
 
 export async function createRelayExecutionProcess() {
-  await mkdir(path.join(process.cwd(), '.tmp'), { recursive: true })
-  const folder = await mkdtemp(path.join(process.cwd(), '.tmp', 'relay-execution-'))
+  const folder = await mkdtemp(path.join(tmpdir(), 'orca-relay-execution-'))
   const executionCwd = await realpath(folder)
   const marker = randomUUID()
   const pending = new Map<

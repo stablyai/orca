@@ -1,8 +1,18 @@
-import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
+import { copyScriptWithLocalModules } from '../../test-fixtures/script-copy-closure/script-module-dependencies.mjs'
 
 const processesToCleanUp = new Set<number>()
 
@@ -229,7 +239,16 @@ describe('run-electron-vite-dev', () => {
     'rebuilds the copied Electron app when Chromium resources are missing',
     async () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
-      const wrapperPath = resolve('config/scripts/development/launch/run-electron-vite-dev.mjs')
+      const wrapperRelative = 'config/scripts/development/launch/run-electron-vite-dev.mjs'
+      const wrapperPath = join(tempDir, wrapperRelative)
+      copyScriptWithLocalModules(resolve(wrapperRelative), dirname(wrapperPath))
+      copyFileSync(resolve('package.json'), join(tempDir, 'package.json'))
+      symlinkSync(resolve('node_modules'), join(tempDir, 'node_modules'), 'dir')
+      for (const name of ['keyboard-layout-macos', 'process-footprint-macos']) {
+        const target = join(tempDir, 'native', name)
+        mkdirSync(target, { recursive: true })
+        copyFileSync(resolve('native', name, 'main.swift'), join(target, 'main.swift'))
+      }
       const fakeCliPath = resolve(
         'config/scripts/development/launch/fixtures/fake-electron-vite-dev-cli.mjs'
       )
@@ -268,11 +287,9 @@ describe('run-electron-vite-dev', () => {
         return { electronExecPath: envSnapshot.electronExecPath! }
       }
 
-      let distDir: string | null = null
       try {
         const firstRun = await runWrapper('first')
         const appPath = dirname(dirname(dirname(firstRun.electronExecPath)))
-        distDir = dirname(appPath)
         const icuDataPath = join(
           appPath,
           'Contents',
@@ -290,9 +307,7 @@ describe('run-electron-vite-dev', () => {
         expect(secondRun.electronExecPath).toBe(firstRun.electronExecPath)
         expect(existsSync(icuDataPath)).toBe(true)
       } finally {
-        if (distDir) {
-          rmSync(distDir, { recursive: true, force: true })
-        }
+        rmSync(tempDir, { recursive: true, force: true })
       }
     },
     // Two full prepares, each budgeted at PREPARE_TIMEOUT_MS.

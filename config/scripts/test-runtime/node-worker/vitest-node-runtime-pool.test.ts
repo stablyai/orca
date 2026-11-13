@@ -23,7 +23,10 @@ it('reports a test file that fails to load as a failed file instead of crashing 
       reporters: [],
       env: { ORCA_TEST_NODE_EXECUTABLE: process.execPath }
     },
-    {},
+    {
+      cacheDir: join(dir, 'vite-cache'),
+      test: { fsModuleCachePath: join(dir, 'module-cache') }
+    },
     { stdout: new PassThrough(), stderr: new PassThrough() }
   )
   try {

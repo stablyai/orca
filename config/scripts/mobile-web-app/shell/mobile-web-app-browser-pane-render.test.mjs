@@ -2,6 +2,7 @@
 // Bundle a scratch single-route tree without registering production route (C6 ruling 4).
 // JPEG noise resists compression, making over-cap frames realistic rather than artificially inflated.
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -43,10 +44,10 @@ const FRAME = { width: 390, height: 698 }
 // Chromium 1217 measurement (2026-09-20) exposed ~41% targeting; viewport-meta control has scale one.
 const NO_VIEWPORT_META_PAGE_SCALE = SOURCE.deviceWidth / 980
 
-// Scratch pane-only route uses fixed-depth relative imports for reproducibility; substitute desktop screencastSupported answer, leaving capability probe to C7.
+// Scratch route imports the real pane; desktop screencast capability is supplied by the fixture.
 const ROUTE_SOURCE = `
-import { useHostClient } from '../../../src/transport/connection/host-client-hooks'
-import { MobileBrowserPane } from '../../../src/browser/MobileBrowserPane'
+import { useHostClient } from ${JSON.stringify(join(mobileDir, 'src/transport/connection/host-client-hooks'))}
+import { MobileBrowserPane } from ${JSON.stringify(join(mobileDir, 'src/browser/MobileBrowserPane'))}
 
 const TAB = {
   type: 'browser',
@@ -97,9 +98,7 @@ beforeAll(async () => {
   bridgeVersion = await readBridgeProtocolVersion()
   faultGrant = await readBridgeFaultGrant()
   windowCaps = await readBridgeWindowCaps()
-  // Keep scratch inside mobile/ so esbuild’s upward bare-import resolution finds react-native and pane deps.
-  await mkdir(join(mobileDir, '.tmp'), { recursive: true })
-  scratch = await mkdtemp(join(mobileDir, '.tmp', 'browser-pane-render-'))
+  scratch = await mkdtemp(join(tmpdir(), 'orca-browser-pane-render-'))
   const routeDir = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
   await mkdir(routeDir, { recursive: true })
   await writeFile(join(routeDir, 'index.tsx'), ROUTE_SOURCE)
@@ -122,7 +121,6 @@ afterAll(async () => {
   await browser?.close()
   server?.close()
   if (scratch) {
-    // Remove this run’s scratch only; sibling suites share mobile/.tmp.
     await rm(scratch, { recursive: true, force: true })
   }
 })
