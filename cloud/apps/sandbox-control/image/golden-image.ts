@@ -27,7 +27,8 @@ export const VM_SCRIPTS = [
   'orca-git-as',
   'orca-git-identity',
   'orcad-boot',
-  'git'
+  'git',
+  'docker'
 ] as const
 
 const Sha256 = z.string().regex(/^[a-f0-9]{64}$/)

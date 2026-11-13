@@ -153,6 +153,8 @@ export type LifecycleDeps = {
     egressAllowlist?: readonly string[]
     /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
     extraEgressHosts?: readonly string[]
+    /** PARITY-DOCKER: false (SANDBOX_DOCKER=off) makes the VM's `docker` refuse instead of installing or starting Docker. */
+    dockerEnabled?: boolean
     /** Workspace sandbox egress (SANDBOX_EGRESS_PRESET); default DEFAULT_EGRESS_PRESET ("open"). */
     egressPreset?: EgressPreset
     /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
@@ -444,6 +446,7 @@ async function boot(
         githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
         gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
         secretEnv: prep.secrets.env,
+        docker: deps.config.dockerEnabled !== false,
         shareProxyKey: deps.config.shareLinkSecret
           ? await shareProxyKey(deps.config.shareLinkSecret, row.id, state.session.id)
           : undefined,

@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# docker for Orca Cloud workspaces (first on orcad's PATH; PARITY-DOCKER). The golden image does not
+# ship Docker (it made every create ~5 s slower): the first docker command in a workspace installs
+# Ubuntu's pinned packages, then starts dockerd as root inside this workspace's own VM, then everything
+# is plain docker. Running containers stop when the workspace sleeps; images and the install stay.
+# The control plane can turn Docker off (SANDBOX_DOCKER=off): orca-sandbox-start then leaves
+# ~/.orca-sandbox/docker.off and this refuses with a plain message instead.
+# The Worker installs this script into every workspace on start, so changing the pins below is a
+# Worker deploy, not a golden rotation.
+real="${ORCA_REAL_DOCKER:-/usr/bin/docker}"
+state="${HOME:-/nonexistent}/.orca-sandbox"
+log="${ORCA_DOCKERD_LOG:-/tmp/orca-dockerd.log}"
+sudo_cmd="${ORCA_DOCKER_SUDO-sudo -n}"
+packages="${ORCA_DOCKER_PACKAGES:-docker.io=29.1.3-0ubuntu4.1 docker-compose-v2=2.40.3+ds1-0ubuntu1 docker-buildx=0.30.1-0ubuntu1}"
+
+# fd 3 is the caller's stderr even while apt's output goes to the log.
+exec 3>&2
+say() { printf '%s\n' "$@" >&3; }
+
+if [ -f "$state/docker.off" ]; then
+  say "orca: Docker is turned off for Orca Cloud workspaces right now."
+  exit 1
+fi
+
+# Only commands that need the daemon start it; `docker --version`, `docker help` and the like don't.
+needs_daemon=1
+case "${1:-}" in '' | -v | --version | help | -h | --help) needs_daemon=0 ;; esac
+# A DOCKER_HOST pointing elsewhere is the user's choice: never start a local daemon for it.
+[ -n "${DOCKER_HOST:-}" ] && needs_daemon=0
+
+daemon_up() { "$real" info >/dev/null 2>&1; }
+
+if [ -x "$real" ] && { [ "$needs_daemon" = 0 ] || daemon_up; }; then
+  exec "$real" "$@"
+fi
+
+# First use (install) or a stopped daemon (start): two first commands at once must not run apt twice
+# or start two daemons.
+exec 8>"${ORCA_DOCKER_LOCK:-/tmp/orca-dockerd.lock}"
+flock -w 600 8 || true
+
+if [ ! -x "$real" ]; then
+  say "orca: Setting up Docker in this workspace (first use, about 10 seconds)..."
+  apt="${ORCA_DOCKER_APT:-apt-get}"
+  if ! $sudo_cmd env DEBIAN_FRONTEND=noninteractive "$apt" update -qq >>"$log" 2>&1; then
+    say "orca: Couldn't set up Docker in this workspace because the Ubuntu package archive couldn't be reached. Run docker again to retry. Details: $log"
+    exit 1
+  fi
+  say "orca: Downloading and installing Docker (about 110 MB)..."
+  # shellcheck disable=SC2086 # $packages is one word per package
+  if ! $sudo_cmd env DEBIAN_FRONTEND=noninteractive "$apt" install -y -qq --no-install-recommends $packages >>"$log" 2>&1 ||
+    [ ! -x "$real" ]; then
+    say "orca: Couldn't set up Docker in this workspace. Run docker again to retry. Details: $log"
+    exit 1
+  fi
+  # overlay2; capped local logs; the mirror first (Docker Hub's anonymous limit is per IP, and
+  # sandboxes share egress IPs). Left alone if the user already has a config.
+  config="${ORCA_DOCKER_CONFIG:-/etc/docker/daemon.json}"
+  if [ ! -e "$config" ]; then
+    $sudo_cmd mkdir -p "$(dirname "$config")" &&
+      printf '%s\n' '{"storage-driver":"overlay2","log-driver":"local","log-opts":{"max-size":"10m","max-file":"3"},"registry-mirrors":["https://mirror.gcr.io"]}' |
+      $sudo_cmd tee "$config" >/dev/null
+  fi
+  say "orca: Docker is set up."
+fi
+
+if [ "$needs_daemon" = 1 ] && ! daemon_up; then
+  # The socket belongs to this user's group, so docker works in this shell without a new login.
+  $sudo_cmd "${ORCA_DOCKERD:-/usr/bin/dockerd}" --group "$(id -gn)" >>"$log" 2>&1 3>&- 8>&- </dev/null &
+  disown 2>/dev/null || true
+  ticks=0
+  until daemon_up; do
+    if [ "$ticks" -ge "${ORCA_DOCKER_WAIT_TICKS:-150}" ]; then
+      say "orca: Docker couldn't start in this workspace. Run docker again to retry. Details: $log"
+      exit 1
+    fi
+    sleep 0.1
+    ticks=$((ticks + 1))
+  done
+  # Said where agents and people see it: what differs from a laptop. Containers stopping on sleep is
+  # said on every start; the proxy certificate only on the workspace's first.
+  say "orca: Docker started in this workspace. Running containers stop when the workspace sleeps (images stay)."
+  if [ ! -e "$state/docker.ca-noticed" ]; then
+    say "orca: Containers that call github.com or an agent's API need to trust this workspace's proxy certificate. Mount it:" \
+      "  -v /etc/pki/ca-trust/source/anchors/vercel-proxy-ca.pem:/usr/local/share/ca-certificates/orca-proxy.crt:ro" \
+      "then run update-ca-certificates in the container, or point NODE_EXTRA_CA_CERTS or SSL_CERT_FILE at it."
+    mkdir -p "$state" 2>/dev/null && : >"$state/docker.ca-noticed"
+  fi
+fi
+exec 8>&-
+exec "$real" "$@"

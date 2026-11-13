@@ -950,6 +950,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       shareLinkSecret: shareSecret(env),
       egressAllowlist: egressAllowlistFor(env.ORCA_PLATFORM_HOST_SUFFIXES),
       extraEgressHosts: extraEgressHostsFor(env),
+      dockerEnabled: env.SANDBOX_DOCKER?.trim().toLowerCase() !== 'off',
       egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:

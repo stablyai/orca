@@ -56,6 +56,11 @@ export type StartInputs = {
    */
   hostname?: string
   /**
+   * PARITY-DOCKER: whether the VM's `docker` shim may start dockerd (SANDBOX_DOCKER). Absent (a
+   * retried or repair start) leaves the VM's last answer.
+   */
+  docker?: boolean
+  /**
    * A create that installs member git identities after it answers (CREATE-GIT-ASYNC): the start script
    * marks git setup pending, and the VM's `git` holds commits and pushes until it is ready.
    */
@@ -135,6 +140,9 @@ export async function startOrcad(
   }
   if (inputs.gitSetupPending) {
     env.ORCA_GIT_SETUP = 'pending'
+  }
+  if (inputs.docker !== undefined) {
+    env.ORCA_DOCKER = inputs.docker ? 'on' : 'off'
   }
   const hostnameStep = inputs.hostname ? `${HOSTNAME_STEP}; ` : ''
   // The prelude rides in an env var (the start script's `env -i` keeps it out of orcad) so one

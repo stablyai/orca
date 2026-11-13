@@ -195,6 +195,8 @@ export type Env = {
   PUBLIC_API_URL?: string
   /** Comma list of extra egress hosts every VM may reach (dev: this Worker's workers.dev host). */
   EGRESS_EXTRA_HOSTS?: string
+  /** PARITY-DOCKER: 'off' turns Docker off in every workspace (the `docker` shim refuses). Default on. */
+  SANDBOX_DOCKER?: string
   /** Comma list of Orca platform egress hosts every VM may reach (default `*.onorca.dev`). */
   ORCA_PLATFORM_HOST_SUFFIXES?: string
   /** Workspace sandbox egress preset: `open` (default, any host) or `limited` (fail-closed allowlist). */
