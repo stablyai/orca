@@ -2,6 +2,7 @@
 // category and by person, with CSV export. Owners and admins only. A team whose plan does not
 // include it sees the upsell instead; the control plane refuses the data either way.
 import { Download, History, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import {
@@ -26,6 +27,7 @@ import {
   CloudApiSkeletonRows
 } from '../cloud-api/cloud-api-parts'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { AuditLogScrollRegion } from './AuditLogScrollRegion'
 import { EnterpriseUpsell, EnterpriseUpsellLine, type EnterpriseContact } from './EnterpriseUpsell'
 import { auditCategoryLabel, auditEventSentence, unnamedPersonIn } from './enterprise-audit-copy'
 import { useAppStore } from '@/store'
@@ -364,55 +366,60 @@ export function EnterpriseAuditLog(props: EnterpriseAuditLogProps): React.JSX.El
               />
             </div>
           ) : (
-            <ul
-              aria-label={t('settings.enterprise.audit.title', 'Audit log')}
-              aria-busy={log.refreshing}
-              className={log.refreshing ? 'opacity-60' : undefined}
+            <AuditLogScrollRegion
+              label={t('settings.enterprise.audit.scrollLabel', 'Audit log entries')}
             >
-              {log.events.map((event) => (
-                <li
-                  key={event.id}
-                  data-settings-row=""
-                  className="flex items-center gap-3 py-2 text-xs"
-                >
-                  <AuditSentence sentence={auditEventSentence(event, t, locale, nameOf)} />
-                  <span className="w-28 shrink-0 truncate text-muted-foreground">
-                    {auditCategoryLabel(event.category, t)}
-                  </span>
-                  <span className="w-48 shrink-0 truncate text-foreground">
-                    <ActorCell event={event} viewerUserId={props.viewerUserId} />
-                  </span>
-                  <span
-                    className="w-24 shrink-0 text-right text-muted-foreground"
-                    title={formatAbsoluteTime(event.at, locale)}
-                  >
-                    {formatRelativeFromNow(event.at, props.now, locale)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {log.moreError ? (
-            <div data-settings-row="" className="py-3">
-              <CloudApiErrorNotice message={log.moreError} onRetry={props.onLoadMore} />
-            </div>
-          ) : log.hasMore ? (
-            <div data-settings-row="" className="flex justify-center py-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-disabled={log.loadingMore}
-                aria-busy={log.loadingMore}
-                onClick={() => (log.loadingMore ? undefined : props.onLoadMore())}
+              <ul
+                aria-label={t('settings.enterprise.audit.title', 'Audit log')}
+                aria-busy={log.refreshing}
+                // The region draws the top rule; the first row's own rule would double it.
+                className={cn('-mt-px', log.refreshing && 'opacity-60')}
               >
-                {log.loadingMore ? (
-                  <Loader2 className="animate-spin motion-reduce:animate-none" />
-                ) : null}
-                {t('settings.enterprise.audit.showMore', 'Show more')}
-              </Button>
-            </div>
-          ) : null}
+                {log.events.map((event) => (
+                  <li
+                    key={event.id}
+                    data-settings-row=""
+                    className="flex items-center gap-3 py-2 text-xs"
+                  >
+                    <AuditSentence sentence={auditEventSentence(event, t, locale, nameOf)} />
+                    <span className="w-28 shrink-0 truncate text-muted-foreground">
+                      {auditCategoryLabel(event.category, t)}
+                    </span>
+                    <span className="w-48 shrink-0 truncate text-foreground">
+                      <ActorCell event={event} viewerUserId={props.viewerUserId} />
+                    </span>
+                    <span
+                      className="w-24 shrink-0 text-right text-muted-foreground"
+                      title={formatAbsoluteTime(event.at, locale)}
+                    >
+                      {formatRelativeFromNow(event.at, props.now, locale)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {log.moreError ? (
+                <div data-settings-row="" className="py-3">
+                  <CloudApiErrorNotice message={log.moreError} onRetry={props.onLoadMore} />
+                </div>
+              ) : log.hasMore ? (
+                <div data-settings-row="" className="flex justify-center py-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-disabled={log.loadingMore}
+                    aria-busy={log.loadingMore}
+                    onClick={() => (log.loadingMore ? undefined : props.onLoadMore())}
+                  >
+                    {log.loadingMore ? (
+                      <Loader2 className="animate-spin motion-reduce:animate-none" />
+                    ) : null}
+                    {t('settings.enterprise.audit.showMore', 'Show more')}
+                  </Button>
+                </div>
+              ) : null}
+            </AuditLogScrollRegion>
+          )}
         </>
       )}
     </SettingsGroup>

@@ -1507,6 +1507,7 @@
         "emptyBody": "Changes to members, API keys, secrets, workspaces and settings will show up here.",
         "clearFilters": "Clear filters",
         "showMore": "Show more",
+        "scrollLabel": "Audit log entries",
         "category": {
           "members": "Members",
           "security": "Security",

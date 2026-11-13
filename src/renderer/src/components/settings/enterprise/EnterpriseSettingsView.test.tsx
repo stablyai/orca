@@ -170,6 +170,26 @@ describe('audit log', () => {
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
   })
 
+  it('scrolls a long log in place: rows and Show more inside, header, export and filters outside', () => {
+    render(
+      <EnterpriseSettingsView
+        audit={fixtureAuditProps({ log: { ...EMPTY, events: FIXTURE_EVENTS, hasMore: true } })}
+      />
+    )
+    const region = screen.getByRole('region', { name: 'Audit log entries' })
+    // Capped so the settings page keeps a normal length, and reachable by keyboard to scroll.
+    expect(region.className).toContain('max-h-[min(24rem,60vh)]')
+    expect(region.className).toContain('overflow-y-auto')
+    expect(region.tabIndex).toBe(0)
+    expect(region.querySelector('ul[aria-label="Audit log"]')).toBeTruthy()
+    expect(region.contains(screen.getByRole('button', { name: 'Show more' }))).toBe(true)
+    expect(region.contains(screen.getByRole('button', { name: 'Export CSV' }))).toBe(false)
+    expect(region.contains(screen.getByRole('combobox', { name: 'Filter by activity' }))).toBe(
+      false
+    )
+    expect(region.contains(screen.getByText('Audit log', { selector: 'h3' }))).toBe(false)
+  })
+
   it('offers both filters and the export, and exports once per click', () => {
     const onExport = vi.fn()
     const { rerender } = render(<EnterpriseSettingsView audit={fixtureAuditProps({ onExport })} />)
