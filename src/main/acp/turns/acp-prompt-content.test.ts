@@ -71,12 +71,15 @@ describe('ACP prompt content', () => {
     mkdirSync(join(root, 'my dir'), { recursive: true })
     writeFileSync(join(root, 'a.txt'), 'a')
     writeFileSync(join(root, 'my dir', 'b.txt'), 'b')
+    writeFileSync(join(root, "it's.txt"), 'c')
+    writeFileSync(join(root, 'report!'), 'd')
+    writeFileSync(join(root, 'report'), 'e')
     mkdirSync(join(dir, 'outside'))
     writeFileSync(join(dir, 'outside', 'c.txt'), 'secret')
     // A junction needs no privilege on Windows.
     symlinkSync(join(dir, 'outside'), join(root, 'escape'), 'junction')
     const text =
-      'Read @a.txt. and @"my dir/b.txt", not @../outside/c.txt @escape/c.txt @missing.txt me@a.txt'
+      'Read @a.txt. and @"my dir/b.txt" @it\'s.txt, see:@report! not @../outside/c.txt @escape/c.txt @missing.txt'
     const real = realpathSync(root)
 
     expect(await acpPromptBlocks(message({ type: 'text', text }), true, root)).toEqual([
@@ -86,7 +89,9 @@ describe('ACP prompt content', () => {
         type: 'resource_link',
         uri: pathToFileURL(join(real, 'my dir', 'b.txt')).href,
         name: 'my dir/b.txt'
-      }
+      },
+      { type: 'resource_link', uri: pathToFileURL(join(real, "it's.txt")).href, name: "it's.txt" },
+      { type: 'resource_link', uri: pathToFileURL(join(real, 'report!')).href, name: 'report!' }
     ])
   })
 })
