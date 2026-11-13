@@ -1,6 +1,11 @@
 import { formatBytes } from '../../shared/format-bytes'
 import { terminalSafeLine } from '../../shared/terminal/output/terminal-safe-text'
-import type { WorkspaceCleanupEvaluation } from '../../shared/workspace-cleanup/workspace-cleanup-evaluation'
+import type {
+  WorkspaceCleanupEvaluation,
+  WorkspaceCleanupKeepCause,
+  WorkspaceCleanupRuleReason,
+  WorkspaceCleanupWaiting
+} from '../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import {
   WORKSPACE_CLEANUP_UNWATCHED_CAUSES,
   type WorkspaceCleanupPreview,
@@ -37,14 +42,19 @@ function workspaceCells(ref: WorkspaceCleanupWorkspaceRef): string[] {
   return [ref.displayName || ref.branch || ref.path, ref.repoName]
 }
 
+function formatKeepWhy(
+  cause: WorkspaceCleanupKeepCause,
+  reason?: WorkspaceCleanupRuleReason,
+  waiting?: WorkspaceCleanupWaiting
+): string {
+  const label = formatWorkspaceCleanupKeepCause(cause, waiting)
+  return reason ? `${label} (${formatWorkspaceCleanupRuleReason(reason)})` : label
+}
+
 function formatWhy(evaluation: WorkspaceCleanupEvaluation): string {
-  if (evaluation.action !== 'keep') {
-    return formatWorkspaceCleanupRuleReason(evaluation.reason)
-  }
-  const cause = formatWorkspaceCleanupKeepCause(evaluation.cause, evaluation.waiting)
-  return evaluation.reason
-    ? `${cause} (${formatWorkspaceCleanupRuleReason(evaluation.reason)})`
-    : cause
+  return evaluation.action === 'keep'
+    ? formatKeepWhy(evaluation.cause, evaluation.reason, evaluation.waiting)
+    : formatWorkspaceCleanupRuleReason(evaluation.reason)
 }
 
 function formatRunRowWhy(row: WorkspaceCleanupRunRow): string {
@@ -52,9 +62,7 @@ function formatRunRowWhy(row: WorkspaceCleanupRunRow): string {
   if (row.outcome === 'failed') {
     parts.push(row.error ?? 'failed')
   } else if (row.keepCause) {
-    parts.push(
-      formatWhy({ action: 'keep', cause: row.keepCause, reason: row.reason, waiting: row.waiting })
-    )
+    parts.push(formatKeepWhy(row.keepCause, row.reason, row.waiting))
   } else if (row.reason) {
     parts.push(formatWorkspaceCleanupRuleReason(row.reason))
   }
@@ -77,7 +85,7 @@ export function formatWorkspaceCleanupPreview(preview: WorkspaceCleanupPreview):
     return preview.rows.some(
       (row) => row.evaluation.action === 'keep' && row.evaluation.cause === 'rules-off'
     )
-      ? 'No cleanup rule is on, so nothing would be removed.'
+      ? `${NO_RULE_APPLIES}, so nothing would be removed.`
       : 'No workspace is watched by a cleanup rule.'
   }
   const removing = watched.filter((row) => row.evaluation.action !== 'keep').length
