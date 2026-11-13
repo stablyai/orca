@@ -83,7 +83,7 @@ export class AgentSessionSubscribers {
         await this.forkMarkers.refresh(subscriber, journal, true)
         await refreshDerivedStopNotes(port, subscriber, journal, hostNow, work)
       } else {
-        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, work, hostNow)
+        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
       await publishSubscriberLiveText(this.deliveryPort(), {
@@ -177,8 +177,7 @@ export class AgentSessionSubscribers {
     const port = this.deliveryPort(sessionId, journal)
     for (const subscriber of this.subscribers(sessionId)) {
       this.enqueue(subscriber, async () => {
-        const work = (await port.hooks.readCurrentWork?.(sessionId, journal)) ?? undefined
-        await publishSubscriberSnapshot(port, subscriber, journal, fence, work, hostNow)
+        await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
         await publishSubscriberLiveText(this.deliveryPort(), {
           sessionId,
           journal,

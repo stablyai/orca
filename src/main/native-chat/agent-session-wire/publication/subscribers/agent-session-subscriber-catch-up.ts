@@ -1,6 +1,5 @@
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage,
   type AgentSessionSlashCommand,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
@@ -17,8 +16,11 @@ import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
 import {
   createAgentSessionCatchUpReader,
-  readAgentSessionHydrationPage
+  readAgentSessionHydrationFrame,
+  type AgentSessionHistoryFrame
 } from '../history/agent-session-history-page'
+import type { JournalDomainHistoryWork } from '../../../agent-session-journal/journal-domain-history-page'
+import type { StructuredAgentSessionWorkFrameReader } from '../../observations/structured-agent-session-status-reader'
 import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
 import {
   subscriberCommandsChanged,
@@ -34,6 +36,7 @@ export type SubscriberDeliveryPort = {
       sessionId: string,
       journal: AgentSessionJournal
     ) => Promise<StructuredAgentSessionObservedWork | null>
+    readWorkFrame?: StructuredAgentSessionWorkFrameReader
   }
   emit: (
     subscriber: Subscriber,
@@ -85,14 +88,19 @@ export async function deliverToSubscriber(
   const reader = subscriberHistoryReader(subscriber)
   const readPage = createAgentSessionCatchUpReader(journal, reader)
   while (true) {
-    const read = await readPage({
-      sessionId: subscriber.sessionId,
-      direction: 'after',
-      cursor: subscriber.cursor,
-      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-    })
-    work = await workThroughPage(port, subscriber.sessionId, journal, work, read.page)
-    const result = withPublishedWorkResult(read, work)
+    const frame = await readWorkFrame(port, subscriber.sessionId, journal, (frameWork) =>
+      readPage(
+        {
+          sessionId: subscriber.sessionId,
+          direction: 'after',
+          cursor: subscriber.cursor,
+          limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+        },
+        frameWork
+      )
+    )
+    work = frame.work
+    const result = withPublishedWorkResult(frame.value, work)
     if (!result.ok) {
       const page = { ...result.page, fence: subscriber.fence }
       await emit(
@@ -128,9 +136,11 @@ export async function deliverToSubscriber(
     }
     // Bound synchronous catch-up; older history remains available through paging.
     if (page.hasNewer && subscriber.snapshotCatchUp !== false) {
-      const hydrated = await readAgentSessionHydrationPage(journal, subscriber.fence, reader)
-      work = await workThroughPage(port, subscriber.sessionId, journal, work, hydrated)
-      const tail = withPublishedWork(hydrated, work)
+      const hydrated = await readWorkFrame(port, subscriber.sessionId, journal, (frameWork) =>
+        readAgentSessionHydrationFrame(journal, subscriber.fence, reader, frameWork)
+      )
+      work = hydrated.work
+      const tail = withPublishedWork(hydrated.value, work)
       await emit(
         subscriber,
         {
@@ -187,25 +197,22 @@ export async function deliverToSubscriber(
   }
 }
 
-function pagePassedWork(page: AgentSessionHistoryPage, work: StructuredAgentSessionObservedWork) {
-  const cursor = page.liveCursor ?? page.window.nextCursor
-  return cursor.epoch !== work.cursor.epoch || cursor.sequence > work.cursor.sequence
-}
-
-/** Restated copies must not be older than the rows they replace, so re-answer work the page passed.
- *  A page holding a not-yet-adopted commit keeps its own rows; that commit's publish restates work. */
-async function workThroughPage(
+/** Rows and the work overlaid on them come from one reader snapshot at the adopted cursor. */
+async function readWorkFrame<T>(
   port: SubscriberDeliveryPort,
   sessionId: string,
   journal: AgentSessionJournal,
-  work: StructuredAgentSessionObservedWork | undefined,
-  page: AgentSessionHistoryPage
-): Promise<StructuredAgentSessionObservedWork | undefined> {
-  if (!work || !pagePassedWork(page, work)) {
-    return work
+  rows: (work: JournalDomainHistoryWork | undefined) => Promise<AgentSessionHistoryFrame<T>>
+): Promise<{ work: StructuredAgentSessionObservedWork | undefined; value: T }> {
+  const reader = port.hooks.readWorkFrame
+  if (!reader) {
+    return { work: undefined, value: (await rows(undefined)).result }
   }
-  const current = (await port.hooks.readCurrentWork?.(sessionId, journal)) ?? undefined
-  return current && !pagePassedWork(page, current) ? current : undefined
+  const frame = await reader(sessionId, journal, async (work) => {
+    const read = await rows(work)
+    return { value: read.result, ...(read.work ? { work: read.work } : {}) }
+  })
+  return { work: frame.work ?? undefined, value: frame.value }
 }
 
 async function emitCaughtUp(
@@ -252,16 +259,13 @@ export async function publishSubscriberSnapshot(
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   fence: number,
-  answered: StructuredAgentSessionObservedWork | undefined,
   hostNow: number
 ): Promise<void> {
-  const hydrated = await readAgentSessionHydrationPage(
-    journal,
-    fence,
-    subscriberHistoryReader(subscriber)
+  const hydrated = await readWorkFrame(port, subscriber.sessionId, journal, (frameWork) =>
+    readAgentSessionHydrationFrame(journal, fence, subscriberHistoryReader(subscriber), frameWork)
   )
-  const work = await workThroughPage(port, subscriber.sessionId, journal, answered, hydrated)
-  const page = withPublishedWork(hydrated, work)
+  const work = hydrated.work
+  const page = withPublishedWork(hydrated.value, work)
   if (!port.isActive(subscriber)) {
     return
   }

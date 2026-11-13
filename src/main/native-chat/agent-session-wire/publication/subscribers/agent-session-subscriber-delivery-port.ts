@@ -16,7 +16,12 @@ export function subscriberDeliveryPort(
   queueChanged = true
 ): SubscriberDeliveryPort {
   let work: Promise<StructuredAgentSessionObservedWork | null> | undefined
-  let queue: Promise<QueuePublication | undefined> | undefined
+  let queue:
+    | {
+        work: StructuredAgentSessionObservedWork | null
+        value: Promise<QueuePublication | undefined>
+      }
+    | undefined
   const read = () =>
     Promise.resolve(
       sessionId && journal ? base.hooks.readCurrentWork?.(sessionId, journal) : null
@@ -33,16 +38,43 @@ export function subscriberDeliveryPort(
     }
     return value
   }
-  const hooks =
+  const readWorkFrame = base.hooks.readWorkFrame
+  const hooks: SubscriberDeliveryPort['hooks'] =
     sessionId && journal
       ? {
           ...base.hooks,
           readCurrentWork: readWork,
+          // A frame's answer is current at the adopted cursor, so later readers share it.
+          ...(readWorkFrame
+            ? {
+                readWorkFrame: async (id, source, rows) => {
+                  const frame = await readWorkFrame(id, source, rows)
+                  const shared = await work
+                  if (
+                    frame.work &&
+                    sameJournalCursor(frame.work.cursor, journal.cursor()) &&
+                    !sameWorkCursor(shared ?? null, frame.work)
+                  ) {
+                    work = Promise.resolve(frame.work)
+                  }
+                  return frame
+                }
+              }
+            : {}),
+          // The queue is read with the shared work answer and follows it to newer cursors.
           readQueuePublication: queueChanged
-            ? () =>
-                (queue ??= readWork().then((value) =>
-                  base.hooks.readQueuePublication?.(sessionId, value ?? undefined)
-                ))
+            ? async () => {
+                const current = await readWork()
+                if (!queue || !sameWorkCursor(queue.work, current)) {
+                  queue = {
+                    work: current,
+                    value: Promise.resolve(
+                      base.hooks.readQueuePublication?.(sessionId, current ?? undefined)
+                    )
+                  }
+                }
+                return queue.value
+              }
             : undefined
         }
       : base.hooks
@@ -60,4 +92,11 @@ export function subscriberDeliveryPort(
         hooks
       )
   }
+}
+
+function sameWorkCursor(
+  a: StructuredAgentSessionObservedWork | null,
+  b: StructuredAgentSessionObservedWork | null
+): boolean {
+  return a === b || (a !== null && b !== null && sameJournalCursor(a.cursor, b.cursor))
 }

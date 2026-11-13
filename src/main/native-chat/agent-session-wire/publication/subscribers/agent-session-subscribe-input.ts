@@ -1,6 +1,7 @@
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
+import type { StructuredAgentSessionWorkFrameReader } from '../../observations/structured-agent-session-status-reader'
 import type {
   SubscriberFieldHooks,
   SubscriberFieldState
@@ -58,5 +59,6 @@ export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
     sessionId: string,
     journal: AgentSessionJournal
   ) => Promise<StructuredAgentSessionObservedWork | null>
+  readWorkFrame?: StructuredAgentSessionWorkFrameReader
   now?: () => number
 }

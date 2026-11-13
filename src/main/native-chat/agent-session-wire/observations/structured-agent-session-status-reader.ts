@@ -1,4 +1,6 @@
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import type { JournalDomainHistoryWork } from '../../agent-session-journal/journal-domain-history-page'
+import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
 import { StructuredAgentSessionObservedWork } from './structured-agent-session-observed-work'
 import { captureStructuredAgentSessionWorkAuthority } from './structured-agent-session-work-authority'
 import type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
@@ -8,6 +10,16 @@ import {
 } from './structured-agent-session-status-journal-projection'
 
 type Observed = (projection: StructuredAgentSessionJournalProjection) => void
+
+/** Rows and current work from one reader snapshot, validated against live authority. */
+export type StructuredAgentSessionWorkFrameReader = <T>(
+  sessionId: string,
+  journal: SqlAgentSessionJournal,
+  rows: (work: JournalDomainHistoryWork | undefined) => Promise<{
+    value: T
+    work?: JournalSqlWorkResult
+  }>
+) => Promise<{ work: StructuredAgentSessionObservedWork | null; value: T }>
 /** The existing per-handle cache binds the reader to its real live owners and publication path. */
 export function createStructuredAgentSessionStatusReader(
   deps: StructuredAgentSessionStatusFeedDeps,
@@ -51,14 +63,14 @@ export function createStructuredAgentSessionStatusReader(
     return source ? readSql(sessionId, source, refresh, observed) : null
   }
 
-  const work = async (sessionId: string, journal: SqlAgentSessionJournal) => {
-    const answer = await projections.readWorkSql(journal, () =>
-      captureStructuredAgentSessionWorkAuthority(journal, sessionId, deps, {
-        cursor: journal.cursor(),
-        revision: journal.stopMarks.revision(),
-        latest: null
-      })
-    )
+  const capture = (sessionId: string, journal: SqlAgentSessionJournal) => () =>
+    captureStructuredAgentSessionWorkAuthority(journal, sessionId, deps, {
+      cursor: journal.cursor(),
+      revision: journal.stopMarks.revision(),
+      latest: null
+    })
+
+  const observedWork = (journal: SqlAgentSessionJournal, answer: JournalSqlWorkResult | null) => {
     if (!answer) {
       return null
     }
@@ -73,5 +85,13 @@ export function createStructuredAgentSessionStatusReader(
     )
   }
 
-  return Object.assign(read, { work })
+  const work = async (sessionId: string, journal: SqlAgentSessionJournal) =>
+    observedWork(journal, await projections.readWorkSql(journal, capture(sessionId, journal)))
+
+  const workFrame: StructuredAgentSessionWorkFrameReader = async (sessionId, journal, rows) => {
+    const frame = await projections.readWorkFrame(journal, capture(sessionId, journal), rows)
+    return { work: observedWork(journal, frame.answer), value: frame.value }
+  }
+
+  return Object.assign(read, { work, workFrame })
 }

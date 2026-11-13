@@ -7,7 +7,7 @@ import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-s
 import { prepareJournalDomainImport, type JournalDomainImport } from './journal-domain-import'
 import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { readJournalSqlPoint } from './journal-sql-point-read'
-import { readJournalDomainHistoryPage } from './journal-domain-history-page'
+import { readJournalDomainHistoryFrame } from './journal-domain-history-page'
 import { journalDomainImportState } from './journal-domain-import-rows'
 
 if (
@@ -75,7 +75,11 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         })
         break
       case 'domain-history':
-        reply({ type: 'page', id, result: readJournalDomainHistoryPage(db, operation.request) })
+        reply({
+          type: 'page',
+          id,
+          ...readJournalDomainHistoryFrame(db, operation.request, operation.work)
+        })
         break
       case 'point':
         reply({ type: 'point', id, result: readJournalSqlPoint(db, operation.request) })

@@ -28,6 +28,10 @@ import {
   type QueuedImageHistoryPolicy
 } from '../agent-session-wire/publication/history/agent-session-queued-image-reader'
 import { JournalSqlScope } from './journal-sql-scope'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalSqlWork } from './journal-sql-work-read'
+import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-read'
+import { sameJournalCursor } from './replay/journal-cursor'
 import { readJournalDomainSourceHeaders } from './journal-domain-source-items'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import {
@@ -69,10 +73,30 @@ type HistoryReaderForm = Pick<HistoryReader, 'form' | 'budgetBytes'> & {
   presentSubmission?: (send: AgentJournalSubmission) => AgentJournalSubmission
 }
 
-/** The caller owns a readonly connection; head, headers, bodies and any reset share one snapshot. */
+/** Work answered in the page's own snapshot; `unlessAt` keeps a caller's answer at that snapshot. */
+export type JournalDomainHistoryWork = {
+  read: JournalSqlWorkRead
+  unlessAt?: Pick<JournalSqlWorkResult, 'cursor' | 'physicalCursor'>
+}
+
+export type JournalDomainHistoryFrame = {
+  result: AgentSessionHistoryResult
+  work?: JournalSqlWorkResult
+}
+
 export function readJournalDomainHistoryPage(
   db: Database.Database,
   request: JournalDomainHistoryRequest,
+  reader?: HistoryReaderForm
+): AgentSessionHistoryResult {
+  return readJournalDomainHistoryFrame(db, request, undefined, reader).result
+}
+
+/** The caller owns a readonly connection; head, headers, bodies, any reset and work share one snapshot. */
+export function readJournalDomainHistoryFrame(
+  db: Database.Database,
+  request: JournalDomainHistoryRequest,
+  work?: JournalDomainHistoryWork,
   reader: HistoryReaderForm = request.reader?.form === 'bounded'
     ? {
         form: (item) => boundedFrameItem(agentJournalItemForWire(item)),
@@ -82,17 +106,36 @@ export function readJournalDomainHistoryPage(
         ...CLIENT_HISTORY_READER,
         budgetBytes: request.reader?.budgetBytes ?? CLIENT_HISTORY_READER.budgetBytes
       }
-): AgentSessionHistoryResult {
+): JournalDomainHistoryFrame {
   db.exec('BEGIN')
   try {
-    const result = readHistory(db, readHead(db, request.sessionId), request, {
+    const head = readHead(db, request.sessionId)
+    const result = readHistory(db, head, request, {
       ...reader,
       ...(request.reader?.queuedImages
         ? { presentSubmission: queuedImageSubmissionPresenter(request.reader.queuedImages) }
         : {})
     })
+    const physicalCursor = { epoch: head.epoch, sequence: head.cursor.sequence }
+    const answered =
+      work &&
+      !(
+        work.unlessAt &&
+        sameJournalCursor(work.unlessAt.cursor, head.cursor) &&
+        sameJournalCursor(work.unlessAt.physicalCursor, physicalCursor)
+      )
+        ? readJournalSqlWork(
+            new JournalSqlStatusContext(
+              new JournalSqlScope(db, request.sessionId, head.epoch),
+              work.read.operation.kind === 'state' || work.read.operation.kind === 'input'
+                ? work.read.operation.kind
+                : undefined
+            ),
+            work.read
+          )
+        : undefined
     db.exec('COMMIT')
-    return result
+    return { result, ...(answered ? { work: answered } : {}) }
   } catch (error) {
     db.exec('ROLLBACK')
     throw error

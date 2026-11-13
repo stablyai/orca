@@ -4,6 +4,7 @@ import {
 } from '../../agent-session-journal/journal-observer-read'
 import { journalSqlWorkAnswerIsCurrent } from '../../agent-session-journal/journal-sql-work-answer'
 import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
+import type { JournalDomainHistoryWork } from '../../agent-session-journal/journal-domain-history-page'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   JournalWorkAuthority,
@@ -127,40 +128,62 @@ export class StructuredAgentSessionJournalProjections {
 
   /** Narrow work and full status occupy the same validated per-journal entry. */
   async readWorkSql(journal: SqlAgentSessionJournal, capture: () => CapturedWork | null) {
+    // No rows ride along, so a current cached answer needs no read.
+    const frame = await this.readWorkFrame(journal, capture, async (work) => ({
+      value: undefined,
+      ...(work && !work.unlessAt ? { work: await journal.reads.work(work.read) } : {})
+    }))
+    return frame.answer
+  }
+
+  /** Answer work in the same reader snapshot as the caller's rows; a cached answer is reused only
+   *  at that snapshot, and an answer main has not adopted yet is read again once it has. */
+  async readWorkFrame<T>(
+    journal: SqlAgentSessionJournal,
+    capture: () => CapturedWork | null,
+    read: (work: JournalDomainHistoryWork | undefined) => Promise<{
+      value: T
+      work?: JournalSqlWorkResult
+    }>
+  ): Promise<{ answer: JournalSqlWorkResult | null; value: T }> {
     for (;;) {
       const captured = capture()
       if (!captured) {
         this.byJournal.delete(journal)
-        return null
+        return { answer: null, value: (await read(undefined)).value }
       }
-      const answer = this.currentWorkSql(journal, captured)
-      if (answer) {
-        return answer
-      }
+      const cached = this.currentWorkSql(journal, captured)
       const authority = copyJournalCurrentWorkAuthority(captured.authority)
-      const result = await journal.reads.work({ authority, operation: { kind: 'state' } })
+      const frame = await read({
+        read: { authority, operation: { kind: 'state' } },
+        ...(cached
+          ? { unlessAt: { cursor: cached.cursor, physicalCursor: cached.physicalCursor } }
+          : {})
+      })
+      const answer = frame.work ?? cached
       const recaptured = capture()
       if (!recaptured) {
         this.byJournal.delete(journal)
-        return null
+        return { answer: null, value: frame.value }
       }
       if (
+        !answer ||
         recaptured.contextId !== captured.contextId ||
-        !journalSqlWorkAnswerIsCurrent(journal, () => recaptured.authority, authority, result)
+        !journalSqlWorkAnswerIsCurrent(journal, () => recaptured.authority, authority, answer)
       ) {
         continue
       }
       if (
-        this.currentEntry(journal)?.kind !== 'full' ||
-        !this.currentWorkSql(journal, recaptured)
+        frame.work &&
+        (this.currentEntry(journal)?.kind !== 'full' || !this.currentWorkSql(journal, recaptured))
       ) {
         this.byJournal.set(journal, {
           kind: 'work-only',
-          answer: result,
+          answer: frame.work,
           contextId: captured.contextId
         })
       }
-      return result
+      return { answer, value: frame.value }
     }
   }
 
