@@ -137,35 +137,54 @@ public enum BackgroundInputTransport {
                 return isChromiumNode(current) ? .other : .webKitContent
             }
             if role == kAXWindowRole as String { return .other }
-            var parent: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(current, kAXParentAttribute as CFString, &parent) == .success,
-                  let parent,
-                  CFGetTypeID(parent) == AXUIElementGetTypeID()
-            else {
-                return .other
-            }
-            // SAFETY: the CFTypeID check above proves this is an AXUIElement.
-            current = parent as! AXUIElement
+            guard let next = parent(of: current) else { return .other }
+            current = next
         }
         return .other
     }
 
     /// The element and its parent as `ForegroundEffect` reads them.
-    public static func pressTarget(_ element: AXUIElement) -> [(role: String?, labels: [String?])] {
-        var chain: [(role: String?, labels: [String?])] = []
+    public static func pressTarget(_ element: AXUIElement) -> [ForegroundEffect.Node] {
+        var chain: [ForegroundEffect.Node] = []
         var current: AXUIElement? = element
         while let node = current, chain.count < 2 {
-            chain.append((
-                role: stringAttribute(node, kAXRoleAttribute as String),
-                labels: [stringAttribute(node, kAXTitleAttribute as String), stringAttribute(node, kAXDescriptionAttribute as String)]
+            var roleValue: CFTypeRef?
+            // Why: a hung app answers each read only after the messaging timeout; the action that follows reports it.
+            guard AXUIElementCopyAttributeValue(node, kAXRoleAttribute as CFString, &roleValue) != .cannotComplete else { break }
+            let role = roleValue as? String
+            chain.append(ForegroundEffect.Node(
+                role: role,
+                labels: [stringAttribute(node, kAXTitleAttribute as String), stringAttribute(node, kAXDescriptionAttribute as String)],
+                // Why: only a combobox needs the walk up to its page, so other presses cost no extra reads.
+                inWebContent: role == kAXComboBoxRole as String && isInWebArea(node)
             ))
-            var parent: CFTypeRef?
-            current = AXUIElementCopyAttributeValue(node, kAXParentAttribute as CFString, &parent) == .success
-                && parent.map { CFGetTypeID($0) == AXUIElementGetTypeID() } == true
-                // SAFETY: the CFTypeID check above proves parent is an AXUIElement.
-                ? (parent as! AXUIElement) : nil
+            current = parent(of: node)
         }
         return chain
+    }
+
+    private static func isInWebArea(_ element: AXUIElement) -> Bool {
+        var current: AXUIElement? = element
+        for _ in 0..<48 {
+            guard let node = current else { return false }
+            let role = stringAttribute(node, kAXRoleAttribute as String)
+            if role == "AXWebArea" { return true }
+            if role == kAXWindowRole as String { return false }
+            current = parent(of: node)
+        }
+        return false
+    }
+
+    private static func parent(of element: AXUIElement) -> AXUIElement? {
+        var parent: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXParentAttribute as CFString, &parent) == .success,
+              let parent,
+              CFGetTypeID(parent) == AXUIElementGetTypeID()
+        else {
+            return nil
+        }
+        // SAFETY: the CFTypeID check above proves this is an AXUIElement.
+        return (parent as! AXUIElement)
     }
 
     // MARK: Keys

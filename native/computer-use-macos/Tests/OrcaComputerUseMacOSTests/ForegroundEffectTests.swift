@@ -2,30 +2,35 @@ import OrcaComputerUseMacOSCore
 import XCTest
 
 final class ForegroundEffectTests: XCTestCase {
+    private typealias Node = ForegroundEffect.Node
+
     func testPressingAMenuOwnerOrItsLabelShowsAMenu() {
         for role in ["AXPopUpButton", "AXMenuButton", "AXComboBox"] {
-            XCTAssertEqual(ForegroundEffect.ofPress([(role: role, labels: [])]), .showsMenu, role)
-            XCTAssertEqual(ForegroundEffect.ofPress([(role: "AXStaticText", labels: ["Small"]), (role: role, labels: [])]), .showsMenu, role)
+            XCTAssertEqual(ForegroundEffect.ofPress([Node(role: role)]), .showsMenu, role)
+            XCTAssertEqual(ForegroundEffect.ofPress([Node(role: "AXStaticText", labels: ["Small"]), Node(role: role)]), .showsMenu, role)
         }
-        XCTAssertNil(ForegroundEffect.ofPress([
-            (role: "AXStaticText", labels: []), (role: "AXGroup", labels: []), (role: "AXPopUpButton", labels: []),
-        ]))
+        XCTAssertNil(ForegroundEffect.ofPress([Node(role: "AXStaticText"), Node(role: "AXGroup"), Node(role: "AXPopUpButton")]))
+    }
+
+    func testAWebComboboxIsATextInputNotAMenu() {
+        XCTAssertNil(ForegroundEffect.ofPress([Node(role: "AXComboBox", inWebContent: true)]))
+        XCTAssertEqual(ForegroundEffect.ofPress([Node(role: "AXPopUpButton", inWebContent: true)]), .showsMenu)
     }
 
     func testOnlyAButtonWhoseTitleEndsInAnEllipsisOpensADialog() {
-        XCTAssertEqual(ForegroundEffect.ofPress([(role: "AXButton", labels: ["Save\u{2026}", nil])]), .opensDialog)
-        XCTAssertEqual(ForegroundEffect.ofPress([(role: "AXButton", labels: [nil, "Export... "])]), .opensDialog)
-        XCTAssertNil(ForegroundEffect.ofPress([(role: "AXButton", labels: ["Save", "Saves the file\u{2026} now"])]))
-        XCTAssertNil(ForegroundEffect.ofPress([(role: "AXLink", labels: ["Read more..."])]))
-        XCTAssertNil(ForegroundEffect.ofPress([(role: "AXStaticText", labels: ["Loading..."]), (role: "AXGroup", labels: [])]))
+        XCTAssertEqual(ForegroundEffect.ofPress([Node(role: "AXButton", labels: ["Save\u{2026}", nil])]), .opensDialog)
+        XCTAssertEqual(ForegroundEffect.ofPress([Node(role: "AXButton", labels: [nil, "Export... "])]), .opensDialog)
+        XCTAssertNil(ForegroundEffect.ofPress([Node(role: "AXButton", labels: ["Save", "Saves the file\u{2026} now"])]))
+        XCTAssertNil(ForegroundEffect.ofPress([Node(role: "AXLink", labels: ["Read more..."])]))
+        XCTAssertNil(ForegroundEffect.ofPress([Node(role: "AXStaticText", labels: ["Loading..."]), Node(role: "AXGroup")]))
     }
 
     func testContextMenuClicksShowAMenuOnAnyTarget() {
-        let plainButton: [(role: String?, labels: [String?])] = [(role: "AXButton", labels: ["OK"])]
+        let plainButton = [Node(role: "AXButton", labels: ["OK"])]
         XCTAssertEqual(ForegroundEffect.ofClick(button: .right, control: false, target: plainButton), .showsMenu)
         XCTAssertEqual(ForegroundEffect.ofClick(button: .left, control: true, target: plainButton), .showsMenu)
         XCTAssertNil(ForegroundEffect.ofClick(button: .left, control: false, target: plainButton))
         XCTAssertEqual(ForegroundEffect.ofAction("AXShowMenu", target: plainButton), .showsMenu)
-        XCTAssertNil(ForegroundEffect.ofAction("AXScrollToVisible", target: [(role: "AXPopUpButton", labels: [])]))
+        XCTAssertNil(ForegroundEffect.ofAction("AXScrollToVisible", target: [Node(role: "AXPopUpButton")]))
     }
 }

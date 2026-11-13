@@ -1667,7 +1667,10 @@ private func clickPointer(
         }
         hitElement = found
     }
-    try requireNoForegroundEffect(clickEffect(button: button, modifiers: modifiers, on: hitElement))
+    // Why: an element click already checked its target before trying AXPress.
+    if element == nil {
+        try requireNoForegroundEffect(clickEffect(button: button, modifiers: modifiers, on: hitElement))
+    }
     let hit = try backgroundClickHit(hitElement, snapshot: snapshot)
     try withTransportErrors {
         try BackgroundInputTransport.click(
@@ -1705,7 +1708,7 @@ private func requireNoForegroundEffect(_ effect: ForegroundEffect?) throws {
     case nil:
         return
     case .showsMenu:
-        throw ProviderError.coded("background_unavailable", "this would open a menu over the user's screen and take their keyboard, so nothing was sent; for a popup menu, combo box or web <select>, set the option with set-value on that element. Ask the user before retrying with --restore-window.")
+        throw ProviderError.coded("background_unavailable", "this would open a menu over the user's screen and take their keyboard, so nothing was sent; for a popup menu, native combo box or web <select>, set the option with set-value on that element. Ask the user before retrying with --restore-window.")
     case .opensDialog:
         throw ProviderError.coded("background_unavailable", "this button's title ends in an ellipsis, so it most likely opens a dialog or sheet that brings the app to the front; nothing was sent. Ask the user before retrying with --restore-window.")
     }
