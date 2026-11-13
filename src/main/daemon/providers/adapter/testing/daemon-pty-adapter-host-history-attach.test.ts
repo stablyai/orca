@@ -130,11 +130,15 @@ describe('host-owned attach replies', () => {
     // The attacher's stream socket, connected after its control socket.
     const stream = clientSockets.at(-1)!
     stream.pause()
+    let attaching: Promise<unknown> | undefined
     try {
       let settled = false
-      const attaching = attacher
-        .spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
-        .finally(() => (settled = true))
+      attaching = attacher.spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
+      // Observed at once; awaiting it below still fails the test with its own error.
+      void attaching.then(
+        () => (settled = true),
+        () => (settled = true)
+      )
       await waitFor(() => reconstruction.calls.mock.calls.length > 0)
       // Held bulk counts two bytes a char: over the 4 MiB global and 64 KiB session marks.
       const chunk = `${'x'.repeat(78)}\r\n`.repeat(820)
@@ -152,7 +156,10 @@ describe('host-owned attach replies', () => {
       await owner.disconnectOnly()
       expect(child.resume).not.toHaveBeenCalled()
     } finally {
+      // Pass or fail: release the held replay and the stream, and settle the issued attach.
+      reconstruction.open()
       stream.resume()
+      await attaching?.catch(() => {})
     }
     await waitFor(() => child.resume.mock.calls.length > 0, 20_000)
   }, 30_000)

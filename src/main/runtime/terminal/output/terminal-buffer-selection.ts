@@ -174,7 +174,13 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   protected async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean; currentFrame?: boolean } = {}
+    wait: {
+      timeoutMs?: number
+      retireOnTimeout?: boolean
+      currentFrame?: boolean
+      visible?: boolean
+      visibleScreenOnly?: boolean
+    } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
   }
@@ -183,7 +189,13 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   protected async awaitProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean; currentFrame?: boolean } = {}
+    wait: {
+      timeoutMs?: number
+      retireOnTimeout?: boolean
+      currentFrame?: boolean
+      visible?: boolean
+      visibleScreenOnly?: boolean
+    } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
@@ -193,7 +205,13 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     // A current frame joins only one taken for the PTY's present grid.
     const grid = wait.currentFrame ? this.getTerminalSize(ptyId) : undefined
     let acquisition = acquisitions.get(ptyId)
+    // A visible read never inherits an ordinary acquisition a grid change retired; it takes its own,
+    // owned by its visible-read entry, and leaves the shared one to deep history.
+    const retiredForVisible =
+      (wait.visible === true || wait.visibleScreenOnly === true) &&
+      acquisition?.visibleRetired === true
     const current =
+      !retiredForVisible &&
       acquisition?.generation === generation &&
       (!wait.currentFrame || sameProviderFrameGrid(acquisition.grid ?? null, grid ?? null))
     if (current && acquisition?.timedOut) {
@@ -208,12 +226,14 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
         timedOut: false,
         ...(grid !== undefined ? { grid } : {})
       }
-      acquisitions.set(ptyId, acquisition)
-      void promise.finally(() => {
-        if (acquisitions.get(ptyId) === acquisition) {
-          acquisitions.delete(ptyId)
-        }
-      })
+      if (!retiredForVisible) {
+        acquisitions.set(ptyId, acquisition)
+        void promise.finally(() => {
+          if (acquisitions.get(ptyId) === acquisition) {
+            acquisitions.delete(ptyId)
+          }
+        })
+      }
     }
     if (acquisition.timedOut) {
       return { snapshot: null, late: acquisition.promise }

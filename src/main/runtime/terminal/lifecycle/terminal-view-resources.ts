@@ -142,9 +142,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     Set<TerminalKittyKeyboardModeTracker>
   >()
 
+  // `visibleRetired`: a grid change since it began; deep history may still join it, a visible read may not.
   protected providerBufferAcquisitionsByPtyId = new Map<
     string,
-    ProviderBufferAcquisition & { grid?: ProviderFrameGrid }
+    ProviderBufferAcquisition & { grid?: ProviderFrameGrid; visibleRetired?: true }
   >()
 
   // Current-frame reads never join or inherit a deep or timed-out history acquisition.
@@ -173,6 +174,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerFrameAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.providerVisibleStateReadsByPtyId.delete(ptyId)
     this.restoredAgentDialogRuledOutPtys.delete(ptyId)
   }
 
@@ -181,6 +183,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerFrameAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleStateReadsByPtyId.delete(ptyId)
+    const ordinary = this.providerBufferAcquisitionsByPtyId.get(ptyId)
+    if (ordinary) {
+      ordinary.visibleRetired = true
+    }
   }
 
   protected ptyLifecycleGenerationById = new Map<string, number>()

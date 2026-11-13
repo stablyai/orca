@@ -127,8 +127,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
         this.captureProviderVisibleState(ptyId, entry)
       )
     }
-    const owns = (): boolean => this.providerVisibleStateReadsByPtyId.get(ptyId) === owner
+    // Ownership is the exact entry of the current lifecycle; a retired one writes nothing.
     const generation = owner.generation
+    const owns = (): boolean =>
+      this.providerVisibleStateReadsByPtyId.get(ptyId) === owner &&
+      this.getPtyLifecycleGeneration(ptyId) === generation
     if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
       return null
     }
@@ -138,13 +141,13 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       { scrollbackRows: 0 },
       {
         timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-        ...(owner.currentFrame ? { currentFrame: true } : {})
+        ...(owner.currentFrame ? { currentFrame: true } : { visible: true })
       }
     )
     if (!owns()) {
       return null
     }
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (!snapshot) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }
@@ -167,7 +170,6 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const frameGrid = { cols: snapshot.cols, rows: snapshot.rows }
     if (
       !owns() ||
-      this.getPtyLifecycleGeneration(ptyId) !== generation ||
       this.getPtyOutputSequence(ptyId) > snapshot.seq ||
       !providerFrameFitsGrid(this.getTerminalSize(ptyId), owner.grid, frameGrid)
     ) {

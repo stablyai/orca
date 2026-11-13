@@ -148,9 +148,10 @@ describe('DaemonServer attachment lifecycle', () => {
     })
     const displaced = new DaemonClient({ socketPath, tokenPath })
     const successor = new DaemonClient({ socketPath, tokenPath })
+    let failed: Promise<boolean> | undefined
     try {
       await displaced.ensureConnected()
-      const failed = displaced.request('createOrAttach', { sessionId, cols: 80, rows: 24 }).then(
+      failed = displaced.request('createOrAttach', { sessionId, cols: 80, rows: 24 }).then(
         () => false,
         () => true
       )
@@ -171,6 +172,9 @@ describe('DaemonServer attachment lifecycle', () => {
         expect(daemon.host.sessions.get(sessionId)?.hasAttachedClients).toBe(false)
       )
     } finally {
+      // Pass or fail: release the held attach and settle its request.
+      finishDisplaced.resolve()
+      await failed
       displaced.disconnect()
       successor.disconnect()
     }
