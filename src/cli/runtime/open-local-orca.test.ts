@@ -7,10 +7,10 @@ import type { RuntimeRpcSuccess } from './types'
 vi.mock('./launch', () => ({ launchOrcaApp: vi.fn() }))
 
 function status(desktopWindowStatus: string): RuntimeRpcSuccess<CliStatusResult> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: openLocalOrca reads only app.desktopWindowStatus.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: openLocalOrca reads only runtime.reachable and app.desktopWindowStatus.
   return {
     ok: true,
-    result: { app: { desktopWindowStatus } }
+    result: { runtime: { reachable: true }, app: { desktopWindowStatus } }
   } as unknown as RuntimeRpcSuccess<CliStatusResult>
 }
 
@@ -19,20 +19,53 @@ describe('openLocalOrca', () => {
     vi.mocked(launchOrcaApp).mockClear()
   })
 
-  it('does not relaunch an Orca whose window is already available', async () => {
-    const available = status('available')
+  it('asks a running Orca to show its window instead of relaunching it', async () => {
+    const readStatus = vi
+      .fn()
+      .mockResolvedValueOnce(status('openable'))
+      .mockResolvedValueOnce(status('available'))
+    const openWindowInBackground = vi.fn(async () => ({
+      id: '1',
+      ok: true as const,
+      result: { requested: true },
+      _meta: { runtimeId: 'runtime' }
+    }))
 
-    await expect(openLocalOrca(async () => available, 1_000)).resolves.toBe(available)
+    await openLocalOrca(readStatus, openWindowInBackground, 1_000)
+
+    expect(openWindowInBackground).toHaveBeenCalledOnce()
     expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
-  it('launches Orca when only a headless runtime is running', async () => {
+  it('does not relaunch an older Orca whose window is already available', async () => {
+    const available = status('available')
+
+    await expect(
+      openLocalOrca(
+        async () => available,
+        async () => {
+          throw new Error('method_not_found')
+        },
+        1_000
+      )
+    ).resolves.toBe(available)
+    expect(launchOrcaApp).not.toHaveBeenCalled()
+  })
+
+  it('launches Orca when an older headless runtime cannot open its own window', async () => {
     const readStatus = vi
       .fn()
       .mockResolvedValueOnce(status('openable'))
       .mockResolvedValueOnce(status('available'))
 
-    await openLocalOrca(readStatus, 1_000)
+    await openLocalOrca(
+      readStatus,
+      async () => {
+        throw new Error('method_not_found')
+      },
+      1_000
+    )
+
     expect(launchOrcaApp).toHaveBeenCalledOnce()
   })
 })

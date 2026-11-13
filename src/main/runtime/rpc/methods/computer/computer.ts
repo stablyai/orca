@@ -55,8 +55,7 @@ export const COMPUTER_METHODS = [
     handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../../computer/macos-permissions/macos-computer-use-permissions')
-      // Agents call this on errors; System Settings over the user's work is only worth it when something is missing.
-      return openComputerUsePermissions(params.id, { skipGranted: true })
+      return openComputerUsePermissions(params.id, { skipGranted: params.skipGranted === true })
     }
   }),
   defineMethod({

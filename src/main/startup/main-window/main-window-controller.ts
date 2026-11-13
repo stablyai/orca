@@ -53,6 +53,10 @@ const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
 export function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
+  // The launch's first window honours the background request `orca open` put on its argv.
+  const revealInBackground =
+    options.revealInBackground ??
+    (!state.hasOpenedMainWindow && argvRequestsBackgroundOpen(process.argv))
   const { store, keybindings } = requireMainWindowServices({
     store: state.store,
     runtime: state.runtime,
@@ -91,7 +95,7 @@ export function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWind
     }
   }
   if (state.isServeMode) {
-    applyServeDesktopWindowActivationPolicy({ warn: console.warn })
+    applyServeDesktopWindowActivationPolicy({ warn: console.warn, background: revealInBackground })
   }
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
@@ -144,10 +148,7 @@ export function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWind
     },
     deferLoad: true,
     ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
-    // The launch's first window honours the background request `orca open` put on its argv.
-    revealInBackground:
-      options.revealInBackground ??
-      (!state.hasOpenedMainWindow && argvRequestsBackgroundOpen(process.argv)),
+    revealInBackground,
     title: state.devInstanceIdentity?.name ?? app.name,
     getKeybindings: () => keybindings.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {

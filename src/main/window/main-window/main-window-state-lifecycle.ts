@@ -19,7 +19,7 @@ export type MainWindowStateLifecycle = {
 export function installMainWindowStateLifecycle(args: {
   mainWindow: BrowserWindow
   revealOnDidFinishLoad: boolean
-  revealInBackground: boolean
+  revealInBackground?: boolean
   savedMaximized: boolean
   savedFullScreen: boolean
   store: Store | null
@@ -27,7 +27,7 @@ export function installMainWindowStateLifecycle(args: {
   const {
     mainWindow,
     revealOnDidFinishLoad,
-    revealInBackground,
+    revealInBackground = false,
     savedMaximized,
     savedFullScreen,
     store

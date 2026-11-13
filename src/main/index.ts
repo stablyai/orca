@@ -53,7 +53,8 @@ import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows
 import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
 import type { MainWindowOpenOptions } from './window/main-window/main-window-contracts'
 import type { DesktopActivationRequest } from './startup/serve-launch/serve-desktop-activation'
-import { argvRequestsBackgroundOpen } from '../shared/background-open-argv'
+import { argvRequestsBackgroundOpen, BACKGROUND_OPEN_ARG } from '../shared/background-open-argv'
+import { setBackgroundWindowOpener } from './window/activation/background-window-open'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
@@ -63,6 +64,7 @@ function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWindow {
 }
 
 setMainWindowOpener(openMainWindow)
+setBackgroundWindowOpener(() => requestDesktopActivation([BACKGROUND_OPEN_ARG]))
 
 function focusExistingWindow(request: DesktopActivationRequest = {}): void {
   focusExistingWindowAction(request)
