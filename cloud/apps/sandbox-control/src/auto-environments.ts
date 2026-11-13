@@ -1,8 +1,8 @@
 // Automatic environments: Conductor-style "the repo is already there". An environment build (golden +
 // the repo checked out, snapshotted) is opt-in for admins; without one every create of a repo cloned it
 // from scratch (stablyai/orca: ~55 s). So the first create of a repo that no environment of the account
-// lists makes a default environment for it (just the repo, blobless, no install script) and builds it in
-// the background. Later creates boot from its active build (environments.ts resolveEnvironmentBoot) and
+// lists makes a default environment for it (the repo, blobless, plus its lockfile's JavaScript
+// dependencies; no install script) and builds it in the background. Later creates boot from its active build (environments.ts resolveEnvironmentBoot) and
 // only fetch what changed. Scoped per account like every environment; the usual golden refresh keeps
 // it on the current image. Unused for 14 days it is deleted with its snapshots, unless an admin edited
 // it (that makes it an ordinary 'org' environment).
@@ -38,7 +38,9 @@ function autoConfig(environment: EnvironmentRow): BuildConfig {
     envVarNames: [],
     machineSize: environment.machine_size,
     // History and trees only: a smaller snapshot and a faster build; file contents load on demand.
-    cloneFilter: 'blob:none'
+    cloneFilter: 'blob:none',
+    // Dependencies from the lockfile, so creates start warm (PARITY-AUTO-ENV-DEPS); soft on failure.
+    autoInstall: true
   }
 }
 
