@@ -3,7 +3,7 @@ import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reade
 import '../mobile-file-preview-operations'
 import { sessionLaunchUnreadReplySchema } from '../../transport/rpc/rpc-uninterpreted-reply-schemas'
 import '../../agent-history/mobile-ai-vault-resume-reply-schema'
-import '../../browser/mobile-session-browser-reply-schema'
+import '../../browser/tab-navigation/mobile-session-browser-reply-schema'
 import './mobile-file-tap-reply-schema'
 
 // Keep the host’s file-exists message so note creation can retry.

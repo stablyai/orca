@@ -182,6 +182,28 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('components.settings.voice.cleanup.label', 'AI cleanup'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.cleanupDescription',
+      'Fix punctuation, numbers and spoken corrections with your agent before text lands.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.cleanupKeyword',
+        'correction word'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.cleanupScratchKeyword',
+        'scratch that'
+      )
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.voice.pane.search.silenceStopTitle',
       'Stop after silence'

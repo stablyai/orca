@@ -27,7 +27,7 @@ import { useCliRegistrationActions } from './use-cli-registration-actions'
 import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshness/use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type CliSectionProps = {
   currentPlatform: string

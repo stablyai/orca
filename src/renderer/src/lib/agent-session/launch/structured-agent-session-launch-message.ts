@@ -10,7 +10,8 @@ import { stageStructuredLaunchPrompt } from './structured-agent-session-staged-p
 import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch-registry'
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-state-store'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
-import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { trackStructuredLaunchPromptOutcome } from './structured-agent-session-launch-prompt-outcome'
 import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent-session-launch-input'
 import { structuredAgentSessionSendOut } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
@@ -36,7 +37,7 @@ export function relaunchFailedStructuredAgentSessionWithMessage(
     group: state.callers,
     launchResult: state.promise,
     target: state.intent.target,
-    options: { requestId: newAgentLaunchRequestId(), prompt: text },
+    options: { requestId: createNonSecureContextUuid(), prompt: text },
     stagedPrompt: stageStructuredLaunchPrompt(sessionId, text, options)
   })
   trackStructuredLaunchPromptOutcome(state, caller)
@@ -69,7 +70,7 @@ export function sendMessageToStartingStructuredAgentSession(
     group: state.callers,
     launchResult: state.promise,
     target: state.intent.target,
-    options: { requestId: newAgentLaunchRequestId(), prompt: text },
+    options: { requestId: createNonSecureContextUuid(), prompt: text },
     stagedPrompt
   })
   // Only an opening message decides the launch; a later one coming back must not fail the chat.

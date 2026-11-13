@@ -1,3 +1,5 @@
+import type * as UseMobileTasksProjectLoadingActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-loading-actions'
+import type * as UseMobileTasksProjectRepositoryResolutionModule from '../../../tasks/project-board/use-mobile-tasks-project-repository-resolution'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -150,7 +152,6 @@ function mountModelHook<Actions>(
 export function taskProjectBoardLoadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -162,9 +163,9 @@ export function taskProjectBoardLoadMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const boardLoad: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-loading-actions')
-    >('use-mobile-tasks-project-loading-actions.tsx').useMobileTasksProjectLoadingActions
+    const useActions = modules.load<typeof UseMobileTasksProjectLoadingActionsModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-loading-actions.tsx'
+    ).useMobileTasksProjectLoadingActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
@@ -223,10 +224,8 @@ export function taskProjectBoardLoadMountAdapters(
     })
   }
   const repoSlugs: MountAdapter = (context) => {
-    const useResolution = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-repository-resolution')
-    >(
-      'use-mobile-tasks-project-repository-resolution.tsx'
+    const useResolution = modules.load<typeof UseMobileTasksProjectRepositoryResolutionModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-repository-resolution.tsx'
     ).useMobileTasksProjectRepositoryResolution
     return mountModelHook(context, {
       useHook: (model) => useResolution(model),

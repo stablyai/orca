@@ -271,6 +271,7 @@ export async function acquireAcpStructuredSession(input: {
     open: (signal) =>
       initializeAcpStructuredSession({
         acquire,
+        signal,
         deps,
         generation,
         launch,

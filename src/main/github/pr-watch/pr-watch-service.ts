@@ -4,12 +4,12 @@
 import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
-} from '../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+} from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import { resolveGitHubApiRepositoryCandidates } from '../github-api-repository'
+import { resolveGitHubApiRepositoryCandidates } from '../repositories/github-api-repository'
 import { observedPRCheckRollup } from '../client/lookup/pr-refresh-outcome-assembly'
 import {
   addPRRefreshOutcomeObserver,
@@ -17,8 +17,12 @@ import {
   enqueuePRRefresh,
   schedulePRWatchRead,
   setPRWatchJobHooks
-} from '../pr-refresh-coordinator'
-import { prChecksDone, prWatchNextDueAt, type PRWatchJob } from '../pr-refresh-watch-jobs'
+} from '../pull-requests/refresh/pr-refresh-coordinator'
+import {
+  prChecksDone,
+  prWatchNextDueAt,
+  type PRWatchJob
+} from '../pull-requests/refresh/pr-refresh-watch-jobs'
 import { deletePRMovedHeads, endPRWatchState } from './pr-check-event-tables'
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
 import { PREventDeliveryTrigger } from './pr-event-delivery'

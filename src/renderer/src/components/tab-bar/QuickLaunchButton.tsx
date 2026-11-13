@@ -10,8 +10,9 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import {
   agentLaunchPromptOwnership,
@@ -96,8 +97,8 @@ export function useTabAgentMenuLaunch({
       const { agent } = row
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
-      const result = launchAgentInNewTab({
-        requestId: newAgentLaunchRequestId(),
+      const result = launchAgentInNewTabWithOutcome({
+        requestId: createNonSecureContextUuid(),
         focusIntent: captureNativeChatComposerFocusIntent(),
         ...(row.kind === 'chat' || row.kind === 'cli'
           ? {

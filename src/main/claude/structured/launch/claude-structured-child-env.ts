@@ -5,15 +5,15 @@ import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 // What a structured Claude child's environment is built from, shared by its launch and the
 // `--version` probe that runs the same binary.
 
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
-import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
+import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { resolveClaudeCommand } from '../../../codex-cli/command'
-import { withoutInheritedClaudeConfigDir } from '../../claude-config-dir-pin'
-import { stripInheritedClaudeSessionEnv } from '../../../../shared/agent-launch/startup/claude-parent-session-env'
+import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
@@ -100,7 +100,7 @@ export function claudeChildEnv(
   { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
   const inherited = withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform)
-  stripInheritedClaudeSessionEnv(inherited)
+  stripInheritedAgentSessionEnv(inherited)
   const env = decorateEnv(overlayEnvironmentVariables(inherited, sources.overlay, process.platform))
   return runtimeOnPath
     ? withCliRuntimeOnPath(sources.command, env, { platform: process.platform })

@@ -9,7 +9,7 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { completeWorkerTerminalRelease } from '../worker/worker-release-completion'
+import { completeWorkerTerminalRelease } from '../worker/release/worker-release-completion'
 import type { RuntimeTerminalShow } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../../../orchestration/terminal-authority/orchestration-compatibility-authority'
 

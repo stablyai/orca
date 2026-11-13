@@ -13,10 +13,10 @@ import {
 
 import { structuredLaunchIdentity } from './structured-agent-session-launch-registry'
 import {
-  getPersistedStructuredAgentLaunchRecord,
   setStructuredLaunchState,
   type StructuredLaunchState
 } from './structured-agent-session-launch-state-store'
+import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 
 import {
   initialStructuredLaunchSelection,
@@ -27,7 +27,7 @@ export function restorePersistedStructuredLaunchState(
   worktreeId: string,
   sessionId: string
 ): StructuredLaunchState | undefined {
-  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  const record = readStructuredAgentLaunchRecord(sessionId)
   if (!record) {
     return undefined
   }

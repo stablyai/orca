@@ -23,8 +23,12 @@ import { isPickedImageMime, mobilePickedFileFallbackName } from './mobile-picked
 // Refusals reject; only user cancellation returns an empty selection.
 
 // The page cannot load a native cache URI; the composer falls back to an inline data URI.
-function pickedImage(base64: string, fileName: string | undefined): PickedMobileImage {
-  return { base64, fileName }
+function pickedImage(
+  base64: string,
+  fileName: string | undefined,
+  mime: string
+): PickedMobileImage {
+  return { base64, fileName, mime }
 }
 
 // Older shells lack nameMedia; derive a filename from MIME instead.
@@ -58,7 +62,7 @@ async function* readPicked(
       // Release before yielding because callers may stop after one image and strand scarce handles.
       unread.shift()
       await releaseStagedMedia(verbs, item.handle)
-      yield pickedImage(base64, fileName)
+      yield pickedImage(base64, fileName, item.mime)
     }
   } finally {
     await releaseAllStagedMedia(verbs, unread)

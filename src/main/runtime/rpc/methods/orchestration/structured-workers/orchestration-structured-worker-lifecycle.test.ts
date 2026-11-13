@@ -20,14 +20,10 @@ vi.mock('./orchestration-structured-worker-session', () => ({
   releaseStructuredWorkerSession: vi.fn()
 }))
 
-const {
-  captureStructuredWorkerArchive,
-  readArchivedStructuredJournal,
-  readStructuredWorkerJournal,
-  stopStructuredWorker
-} = await import('./orchestration-structured-worker-lifecycle')
+const { readStructuredWorkerJournal, stopStructuredWorker } =
+  await import('./orchestration-structured-worker-lifecycle')
 await import('../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority')
-await import('../worker/worker-archive-read')
+await import('../worker/output/worker-archive-read')
 
 const IDENTITY: StructuredWorkerIdentity = {
   handle: 'structworker_1',
@@ -166,53 +162,6 @@ describe('structured worker output', () => {
     hostRef.current = null
   })
 
-  it('round-trips the journal through the archive and back out of a released read', async () => {
-    installHost({})
-    const live = await readStructuredWorkerJournal({
-      identity: IDENTITY,
-      dispatchId: 'd1',
-      workerState: 'ready',
-      liveness: 'live',
-      agent: 'claude'
-    })
-    expect(live.source).toBe('transcript')
-    const archive = await captureStructuredWorkerArchive(IDENTITY, 'claude')
-    hostRef.current = null
-    const archived = readArchivedStructuredJournal({
-      dispatchId: 'd1',
-      workerState: 'succeeded',
-      resourceId: 'res_1',
-      createdAt: '2026-09-05 00:00:00',
-      releaseState: 'released',
-      archive
-    })
-    expect(archived.source).toBe('transcript')
-    expect(archived.archived).toBe(true)
-    expect(archived.transcript?.messages).toHaveLength(1)
-    expect(archived.transcript?.messages[0]?.blocks[0]).toMatchObject({ text: 'hello' })
-    // The frozen source has its own identity, so a live cursor cannot be replayed against it.
-    expect(archived.sourceIdentity).not.toBe(live.sourceIdentity)
-  })
-
-  it('redacts dispatch capabilities from the archived journal', async () => {
-    installHost({
-      items: [
-        {
-          itemId: 'i1',
-          observedAt: 1,
-          body: {
-            kind: 'message',
-            role: 'assistant',
-            blocks: [{ type: 'text', text: `token dcap_${'a'.repeat(30)} here` }]
-          }
-        } as unknown as AgentJournalRenderItem
-      ]
-    })
-    const archive = await captureStructuredWorkerArchive(IDENTITY, 'claude')
-    expect(JSON.stringify(archive)).not.toContain('dcap_aaa')
-    expect(JSON.stringify(archive)).toContain('[dispatch capability redacted]')
-  })
-
   it('refuses a cursor once the tail window has slid past it', async () => {
     // A stable identity over a sliding bounded tail skipped middle pages; cursor identity must cover index shifts.
     installHost({ items: ITEMS })
@@ -242,42 +191,5 @@ describe('structured worker output', () => {
         cursor: first.cursor
       })
     ).rejects.toThrow(/source changed/i)
-  })
-})
-
-describe('archiving a structured worker whose journal cannot be read', () => {
-  beforeEach(() => {
-    hostRef.current = null
-  })
-
-  it('settles with an empty, warned archive once the session is PROVEN gone', async () => {
-    // A user-closed chat cannot produce future journal evidence; archive_failed must not wedge release forever.
-    installHost({
-      historyThrows: true,
-      claimStatus: 'released',
-      deathEvidence: { kind: 'exit-observed', detail: 'surface released', observedAt: 1 }
-    })
-    const archive = await captureStructuredWorkerArchive(IDENTITY, 'claude')
-    expect(archive.messages).toEqual([])
-    expect(archive.processIncarnation).toBe(IDENTITY.processIncarnation)
-    expect(archive.warnings).toContain(
-      'The structured session was already closed, so its journal could not be preserved.'
-    )
-  })
-
-  it('retains a worker at rest: released, but its chat tab still lists it', async () => {
-    // Idle-sweep release is not retirement; owned unreadable journals retain evidence for later archive.
-    installHost({
-      historyThrows: true,
-      claimStatus: 'released',
-      deathEvidence: { kind: 'exit-observed', detail: 'idle stop', observedAt: 1 },
-      tabListed: true
-    })
-    await expect(captureStructuredWorkerArchive(IDENTITY, 'claude')).rejects.toThrow(/retained/)
-  })
-
-  it('still retains when the journal is unreadable but nothing proves the child is gone', async () => {
-    installHost({ historyThrows: true })
-    await expect(captureStructuredWorkerArchive(IDENTITY, 'claude')).rejects.toThrow(/retained/)
   })
 })

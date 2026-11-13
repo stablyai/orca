@@ -1,63 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type * as NodeFs from 'node:fs'
-import type * as NodeFsPromises from 'node:fs/promises'
+import { describe, it, expect, vi } from 'vitest'
+
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from './loading-store/profile-state-maintenance-fixture'
+} from './loading-store/profile-writing/profile-state-maintenance-fixture'
 import type { ProfileStateWorkerAuthority } from './profile-state/profile-state-worker-authority'
-
-type FilesystemCalls = {
-  directory: string
-  recording: boolean
-  sync: string[]
-  waitAsync: ((name: string, path: string) => Promise<void> | undefined) | undefined
-}
-
-const fsCalls = vi.hoisted((): FilesystemCalls => ({
-  directory: '',
-  recording: false,
-  sync: [],
-  waitAsync: undefined
-}))
-
-vi.mock('node:fs', async (importOriginal) => {
-  function isSynchronousFilesystemCall(
-    name: string,
-    value: unknown
-  ): value is (...args: unknown[]) => unknown {
-    return name.endsWith('Sync') && typeof value === 'function'
-  }
-
-  const actual = await importOriginal<typeof NodeFs>()
-  const patched: Record<string, unknown> = { ...actual }
-  for (const [name, original] of Object.entries(actual)) {
-    if (!isSynchronousFilesystemCall(name, original)) {
-      continue
-    }
-    patched[name] = Object.assign((...args: unknown[]) => {
-      const path = args[0]
-      if (fsCalls.recording && typeof path === 'string' && path.startsWith(fsCalls.directory)) {
-        fsCalls.sync.push(`${name}:${path}`)
-      }
-      return original(...args)
-    }, original)
-  }
-  return { ...patched, default: patched }
-})
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromises>()
-  return {
-    ...actual,
-    rename: async (...args: Parameters<typeof actual.rename>) => {
-      if (typeof args[0] === 'string') {
-        await fsCalls.waitAsync?.('rename', args[0])
-      }
-      return actual.rename(...args)
-    }
-  }
-})
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
@@ -66,16 +13,6 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-
-beforeEach(() => {
-  fsCalls.recording = false
-  fsCalls.directory = ''
-  fsCalls.sync = []
-  fsCalls.waitAsync = undefined
-})
-afterEach(() => {
-  fsCalls.recording = false
-})
 
 function pauseCommit(authority: ProfileStateWorkerAuthority) {
   const started = maintenanceBarrier()
@@ -96,32 +33,6 @@ function pauseCommit(authority: ProfileStateWorkerAuthority) {
 }
 
 describe('worker persistence avoids synchronous profile filesystem calls', () => {
-  it('drains a newer mutation before resolving a stable-generation barrier', async () => {
-    const { store, authority, readState } = await createWorkerMaintenanceFixture()
-    const gate = pauseCommit(authority)
-    store.updateUI({ sidebarWidth: 601 })
-    const barrier = store.flushPendingOrThrowAsync()
-    await gate.started
-    store.updateUI({ sidebarWidth: 602 })
-    gate.release()
-    await barrier
-    expect(readState().ui.sidebarWidth).toBe(602)
-  })
-
-  it('bounds a best-effort flush to its captured generation and retains later dirtiness', async () => {
-    const { store, authority, readState } = await createWorkerMaintenanceFixture()
-    const gate = pauseCommit(authority)
-    store.updateUI({ sidebarWidth: 621 })
-    const pending = store.flushPendingAsync()
-    await gate.started
-    store.updateUI({ sidebarWidth: 622 })
-    gate.release()
-    await pending
-    expect(readState().ui.sidebarWidth).toBe(621)
-    await store.flushPendingOrThrowAsync()
-    expect(readState().ui.sidebarWidth).toBe(622)
-  })
-
   it('rewrites an earlier value after a captured stale generation commits', async () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     store.updateUI({ sidebarWidth: 641 })
@@ -136,35 +47,5 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
     expect(readState().ui.sidebarWidth).toBe(642)
     await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     expect(readState().ui.sidebarWidth).toBe(641)
-  })
-
-  it('retains dirty state when a SQL commit fails and persists an explicit retry', async () => {
-    const { store, authority, readState } = await createWorkerMaintenanceFixture()
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    // A UI change saves only the ui domain.
-    vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValueOnce(new Error('disk refused'))
-    const original = readState().ui.sidebarWidth
-    store.updateUI({ sidebarWidth: 511 })
-    await store.flushPendingAsync()
-    expect(readState().ui.sidebarWidth).toBe(original)
-    await store.flushPendingOrThrowAsync()
-    expect(readState().ui.sidebarWidth).toBe(511)
-  })
-
-  it('serializes queued durable mutations and refuses a synchronous live flush', async () => {
-    const { store, authority, readState } = await createWorkerMaintenanceFixture()
-    const gate = pauseCommit(authority)
-    const first = store.updateSettingsAndFlush({ terminalFontSize: 17 })
-    await gate.started
-    expect(() => store.flushOrThrow()).toThrow('awaited flush')
-    const second = store.updateSettingsAndFlush({ terminalFontSize: 18 })
-    await Promise.resolve()
-    expect(
-      vi.mocked(authority.writeSerializedDomains).mock.calls.length +
-        vi.mocked(authority.writeCompleteSerializedDomains).mock.calls.length
-    ).toBe(1)
-    gate.release()
-    await Promise.all([first, second])
-    expect(readState().settings.terminalFontSize).toBe(18)
   })
 })

@@ -4,7 +4,10 @@ import type {
   BundledSkillPlan,
   BundledSkillPlanEntry
 } from '../../../../../shared/bundled-skill-plan'
-import { isBundledSkillAutoUpdateOp } from '../../../../../shared/bundled-skill-summary'
+import {
+  holdsCurrentBundledSkillCopy,
+  isBundledSkillAutoUpdateOp
+} from '../../../../../shared/bundled-skill-summary'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   bundledSkillTargetKey,
@@ -12,6 +15,7 @@ import {
 } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useAppStore } from '@/store/index'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
@@ -19,6 +23,11 @@ import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-s
 type AttemptState = 'running' | 'settled'
 // Keyed by target; each scan prunes what it no longer observes, so the map stays plan-sized.
 const attemptsByTarget = new Map<string, Map<string, AttemptState>>()
+// Current copies asked to record their marker this session; one per host pairing, skill and bytes.
+// Why never released on failure: a retry would re-run on every plan refresh while the host stays
+// busy or unreachable. A missing marker is best effort; the next session, a manual update, or any
+// later write of the skill records it.
+const markedCopies = new Set<string>()
 
 /** Drop settled attempts for states this scan no longer sees; running ones still own their skills. */
 function pruneAttempts(targetKey: string, liveKeys: ReadonlySet<string>): void {
@@ -154,15 +163,39 @@ export function autoUpdateUnmodifiedSkills(
       keys.push(key)
     }
   }
-  if (started.length > 0) {
+  // Why: a copy already at this build's digest plans keep-only, so no update ever runs to mark it.
+  // Asked when no update starts, as a record-only call that can never write a skill.
+  const recordOnly = started.length === 0
+  // Why the pairing revision: a re-pair may put a different machine behind the same server ID.
+  const host =
+    target.kind === 'environment' ? getRuntimeEnvironmentRevision(target.environmentId) : undefined
+  const marking =
+    canStart && recordOnly
+      ? entries.flatMap(({ entry, key }) => {
+          const mark = `${targetKey}#${host ?? ''}:${entry.name}@${entry.digest}`
+          return !key && !markedCopies.has(mark) && holdsCurrentBundledSkillCopy(entry)
+            ? [{ name: entry.name, mark }]
+            : []
+        })
+      : []
+  for (const { mark } of marking) {
+    markedCopies.add(mark)
+  }
+  const names = recordOnly ? marking.map(({ name }) => name) : started
+  if (names.length > 0) {
     // The host re-plans under its locks and re-checks each location right before writing.
-    void runAutomaticSkillUpdate(target, started, () =>
-      autoUpdateBundledSkillsOnTarget(target, started)
+    void runAutomaticSkillUpdate(target, names, () =>
+      autoUpdateBundledSkillsOnTarget(target, names, { recordOnly })
     )
       .then(
         (ran) => reportPreservedEdits(ran?.value ?? null),
         // Settling the keys below means the same state is never retried; the nudge takes over.
-        () => reportUncertainOutcome(target, plan)
+        // A record-only call writes no skill, so its failure has nothing to warn about.
+        () => {
+          if (!recordOnly) {
+            reportUncertainOutcome(target, plan)
+          }
+        }
       )
       .catch(() => undefined)
       .finally(() => {
@@ -171,7 +204,10 @@ export function autoUpdateUnmodifiedSkills(
         for (const key of keys) {
           settled.set(key, 'settled')
         }
-        notifyInstalledAgentSkillsChanged()
+        // Markers never change this build's own plan, so only an update needs a re-plan.
+        if (!recordOnly) {
+          notifyInstalledAgentSkillsChanged()
+        }
       })
   }
   return owned
@@ -180,6 +216,7 @@ export function autoUpdateUnmodifiedSkills(
 /** @internal - tests need a clean module between cases. */
 export function _resetSkillFreshnessAutoUpdate(): void {
   attemptsByTarget.clear()
+  markedCopies.clear()
 }
 
 /** @internal - lets tests prove the attempt map stays bounded. */

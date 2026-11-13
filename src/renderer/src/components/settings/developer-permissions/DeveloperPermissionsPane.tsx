@@ -28,7 +28,8 @@ import {
 } from './developer-permission-status'
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SETTINGS_GROUP_ROW_BLEED_CLASS, SettingsGroup } from '../section-layout/SettingsGroup'
+import { cn } from '@/lib/class-names'
 import {
   DEVELOPER_PERMISSIONS_OVERVIEW_ID,
   getDeveloperPermissionSettingId
@@ -346,7 +347,10 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
             <div key={permission.id} data-settings-row="">
               <div
                 data-settings-section={settingId}
-                className="-mx-5 flex items-center justify-between gap-4 px-5 py-3"
+                className={cn(
+                  SETTINGS_GROUP_ROW_BLEED_CLASS,
+                  'flex items-center justify-between gap-4 py-3'
+                )}
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>

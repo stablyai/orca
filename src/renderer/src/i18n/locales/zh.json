@@ -368,8 +368,6 @@
       "permissionsMixed": "大多数代理使用的是{{mode}}，选择一种模式会重置已标记的例外，自定义参数除外",
       "permissionsSearchDescription": "选择“替我批准”、“完全访问”或各智能体自己的权限设置。",
       "editRowPermissions": "{{agent}} 权限：{{mode}}",
-      "expandAgentSettings": "展开代理设置",
-      "collapseAgentSettings": "折叠代理设置",
       "permissionArgsTerminalOnly": "这些参数可能控制 {{agent}} 的终端权限，因此 Orca 不添加任何标志。聊天使用上方的权限选择",
       "localSaveFailed": "无法保存智能体设置。请重试",
       "localSaveFailedAgent": "无法保存 {{agent}} 设置。请重试",
@@ -2858,7 +2856,6 @@
       "Terminal": {
         "73768427cf": "关闭",
         "f82e9f02df": "取消",
-        "7958465754": "本地终端中还有正在运行的进程，是否仍要关闭窗口？",
         "2fa9c69ff3": "关闭窗口？",
         "cd51e28d8b": "保存",
         "0037b21794": "不保存",
@@ -3490,7 +3487,6 @@
             "runningTerminalBlocker": "正在运行的终端进程",
             "terminalLivenessUnknownBlocker": "终端状态未知",
             "dirtyEditorBufferBlocker": "未保存的编辑器缓冲区",
-            "volatileLocalContextBlocker": "易变本地上下文",
             "recentVisibleContextBlocker": "最近访问的标签页",
             "liveAgentBlocker": "活动代理",
             "sshDisconnectedBlocker": "远程不可用",
@@ -3656,6 +3652,8 @@
             "15dd899676": "添加到 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "终端问题",
+            "errorTitle": "终端错误",
             "e4aa243f8c": "重新启动守护进程",
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
@@ -7194,14 +7192,11 @@
           "e8da2af684": "可安装",
           "ed3e110e61": "已检测",
           "02e0143be5": "已安装",
-          "92033495ff": "自动",
           "f9f127d664": "覆盖二进制路径或名称，并编辑此代理的默认启动参数或环境",
           "f95b5c79b8": "安装",
           "fe4d630c94": "文档",
-          "8dc0192e48": "已禁用",
           "5200dac9da": "重置",
           "2e45ca29b6": "命令",
-          "d4d2a45d63": "启用",
           "1c9a9679ec": "{{value0}} 可用性",
           "0d9e293a02": "刷新",
           "c9b33eb5c0": "刷新中…",
@@ -7220,10 +7215,8 @@
           "25a41a9aad": "重新检测此服务器上安装的代理",
           "remoteDetectionFailed": "无法检测已安装的代理，请检查主机连接后重试",
           "retryDetection": "重试",
-          "storedDefaultUndetected": "已保存为默认代理，但目前未检测到",
           "noAgentsDetected": "未检测到任何代理，如果已安装代理，检测可能已超时",
-          "9f30095d49": "智能体权限",
-          "3bddd54c9e": "默认智能体"
+          "9f30095d49": "智能体权限"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -7250,8 +7243,6 @@
             "ba1d9a0607": "边栏色调"
           },
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出",
-          "interfaceDefaultFont": "默认字体",
-          "terminalDefaultFont": "默认字体",
           "interfaceTitle": "界面",
           "terminalTitle": "终端",
           "windowSidebarSummary": "侧边栏、状态栏和文件浏览器",
@@ -8128,16 +8119,12 @@
           "5426ecbdcb": "本地脚本将不会运行",
           "95a0411b3e": "模板",
           "175daba180": "例子",
-          "b20c5df6ca": "添加\"orca.yaml\"文件以启用此仓库的共享设置、存档或议题自动化默认值，示例模板：",
-          "56f9a4a1d0": "正在使用 `orca.yaml`",
           "623e0c9f31": "无法解析 `orca.yaml`",
-          "5a67e4793d": "未检测到 `orca.yaml`",
           "07ba35bc68": "检查 `scripts:` 下的缩进，钩子键应使用两个空格，命令行应使用四个空格",
           "787ca433ef": "仅定义支持的键：`scripts`、`setup`、`archive` 和 `issueCommand`",
           "ecc73d9125": "将你的文件与下面可用的模板进行比较，并在需要时复制该结构",
           "0cc712b823": "核心配置文件存在于仓库根目录中，但 Orca 尚无法解析支持的钩子定义",
           "aba825233f": "文件含当前版本无法识别的配置键，请更新 Orca 或检查拼写",
-          "ca424ff135": "共享挂钩和议题自动化默认值在仓库中定义，可供所有使用它的人使用",
           "8bfe65fc60": "使用本地命令",
           "8d6c56bff8": "运行两者",
           "0fa21e19ec": "工作区的名称，通常基于分支名称",
@@ -12119,7 +12106,7 @@
               "tokenHint": "存储库、项目和工作区访问令牌是从匹配的 Bitbucket 设置页面创建的，并且需要读取访问拉取请求的权限",
               "basicHint": "为您的帐户创建 Atlassian API 令牌，然后将其与拥有它的电子邮件地址配对",
               "scopesTitle": "请选择以下 Bitbucket API 令牌范围：",
-              "scopeUser": "验证您的帐户",
+              "scopeUser": "显示您的帐户名称",
               "scopeRepository": "读取构建状态",
               "scopeReadPullRequest": "读取拉取请求",
               "scopeWritePullRequest": "创建拉取请求",
@@ -16800,6 +16787,14 @@
                     "logins": {
                       "title": "保持登录状态",
                       "body": "把现有登录信息导入 Orca，立即保持登录状态"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 扩展程序",
+                        "body": "从 Chrome 应用商店安装扩展程序，并将其固定在地址栏旁。",
+                        "action": "打开应用商店",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {
@@ -17187,17 +17182,17 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "收起",
-          "showMore": "显示更多"
+          "showMore": "显示更多",
+          "copied": "已复制",
+          "copyFailed": "复制失败",
+          "copyPrompt": "复制提示词"
         },
         "AutomationDetail": {
           "host": "主机",
-          "a1d52c2189": "使用范围",
-          "449fc83bf7": "Token",
           "401f40ae79": "预计，花费",
           "a7c312430d": "最后一次运行",
           "2df8970cd5": "代理",
           "e353ab9516": "预检查",
-          "620b22145e": "优雅",
           "15ea446b93": "会话",
           "5405a09b1f": "运行位置",
           "2f8baf5360": "创建自",
@@ -17207,7 +17202,6 @@
           "1f6026358e": "删除自动化",
           "d79452fb30": "恢复自动化",
           "91a4155e95": "暂停自动化",
-          "4b1ea02d2e": "编辑自动化",
           "2fb1605beb": "立即运行",
           "221916d93c": "创建自动化来开始安排代理工作",
           "b09b2384fd": "已暂停",
@@ -17217,7 +17211,6 @@
           "noGrace": "无宽限期",
           "graceMinutes_other": "{{count}} 分钟",
           "graceHours_other": "{{count}} 小时",
-          "usageCoverageRuns_other": "{{known}}/{{count}} 次运行",
           "usageUnavailable": "不可用",
           "noRuns": "无运行记录",
           "projectDefault": "项目默认值",
@@ -17227,7 +17220,12 @@
           "precheckNone": "无",
           "migrate": "迁移",
           "migrateNotice": "{{host}} 已升级为新的远程主机。请迁移此自动化以继续运行。",
-          "needsMigration": "需要迁移"
+          "needsMigration": "需要迁移",
+          "repeats": "重复",
+          "missedRunGrace": "错过运行宽限期",
+          "execution": "执行",
+          "notRunYet": "尚未运行",
+          "usageDetail_other": "{{tokens}} Token · 已报告 {{known}}/{{count}} 次运行"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -20201,7 +20199,6 @@
           "browsePlugins": "浏览插件",
           "browseThemePlugins": "浏览主题插件",
           "colorMode": "颜色模式",
-          "colorModeCaption": "浅色、深色或跟随系统。",
           "darkLook": "深色外观",
           "darkLooks": "深色外观",
           "lightLook": "浅色外观",
@@ -20217,10 +20214,8 @@
           "slotLabel": "要编辑的外观",
           "sourceBuiltIn": "内置",
           "sourceCommunity": "终端调色板",
-          "themes": "主题",
-          "themesCaption": "可选。使用应用主题和终端调色板进一步自定义。"
-        },
-        "subtitle": "选择浅色或深色，也可以再选一个主题。两者都可以随时在设置中更改。"
+          "themes": "主题"
+        }
       },
       "integrations": {
         "capabilities": {
@@ -20385,6 +20380,7 @@
           "about": {
             "parakeetV3": "速度快。支持 {{languages}} 种欧洲语言。",
             "parakeetV2": "速度快。仅支持英语，英语最准确。",
+            "parakeetUnifiedEn": "仅限英语。说话时即时显示文字。",
             "whisperTiny": "下载最小。适合试用听写。",
             "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
             "senseVoice": "速度快。适用于中文、日语和韩语。",
@@ -20913,7 +20909,8 @@
       "remove": "移除…",
       "empty": "此配置文件未启用任何扩展程序",
       "visitWebStore": "访问 Chrome 应用商店",
-      "manage": "管理扩展程序"
+      "manage": "管理扩展程序",
+      "openWebStoreFailed": "无法打开 Chrome 应用商店。"
     },
     "history": {
       "clear": "清除浏览记录",
@@ -21836,7 +21833,6 @@
       "cancel": "取消"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 聊天",
       "chatSignIn": "登录",
       "chatChangeAccount": "更换帐户",
       "chatRetry": "重试登录",
@@ -21854,23 +21850,13 @@
       "chatFailed": "登录失败，请重试",
       "chatOtherClient": "另一个客户端正在登录",
       "chatReadFailed": "无法检查 {{host}} 上的登录",
-      "signIn": "在此主机上启动 agy 并完成其浏览器登录，然后保存当前帐户，要添加其他帐户，请在 agy 中使用 /logout 并再次登录",
-      "docs": "登录说明",
       "retry": "重试",
-      "identityUnknown": "登录身份不可用",
-      "signedOut": "没有登录本机 agy 帐户",
       "changed": "本机帐户已更改，在启动 agy 之前再次选择已保存的帐户",
-      "save": "保存当前帐户",
       "refresh": "刷新帐户",
       "usage": "刷新使用情况",
-      "working": "正在更新帐户",
       "usageReading": "会话：{{session}} · 每周：{{weekly}}",
       "saved": "已保存的 Google 帐户",
-      "nativeActive": "原生账户",
-      "selected": "已选择",
-      "select": "选择",
       "remove": "移除",
-      "sessions": "选择适用于该主机上的新 agy 会话，现有会话可能会保留其以前的帐户",
       "searchDescription": "在执行主机上保存并选择本机 agy Google 帐户",
       "title": "Antigravity",
       "keyword": {
@@ -21882,7 +21868,6 @@
       "authMethod": "登录方式",
       "personal": "Google 账户",
       "gcpProject": "Google Cloud 项目",
-      "gcpLocation": "Google Cloud 位置",
       "settingsIncomplete": "请选择 Antigravity 账户类型并输入其 Google Cloud 项目和位置。",
       "settingsLoadFailed": "Orca 无法加载 Antigravity 登录设置。请重试。",
       "settingsSaveFailed": "Orca 无法保存 Antigravity 登录设置。请重试。",
@@ -23205,11 +23190,10 @@
     "setByArguments": "由参数设置",
     "searchModels": "搜索模型",
     "noModels": "没有与搜索匹配的模型。",
-    "legacyModels": "旧版模型",
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型",
+    "moreModelsWithCount": "更多模型 ({{total}})",
     "use": "使用",
     "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",

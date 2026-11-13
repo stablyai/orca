@@ -7,8 +7,8 @@ files:
   - src/**
 ignores:
   - '**/*.test.*'
-  - src/main/persistence/loading-store/write-scheduling.ts
+  - src/main/persistence/loading-store/profile-writing/write-scheduling.ts
   - src/main/persistence/loading-store/store.ts
-  - src/main/persistence/loading-store/profile-state-maintenance.ts
+  - src/main/persistence/loading-store/profile-writing/profile-state-maintenance.ts
 rule:
   pattern: scheduleFullProfileSave($$$)

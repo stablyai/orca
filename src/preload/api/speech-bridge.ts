@@ -1,4 +1,5 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import type { DictationCleanupResult } from '../../shared/dictation-cleanup'
 import { ipcRenderer } from 'electron'
 import type {
   DictationContext,
@@ -99,6 +100,14 @@ export const speechApi = {
     audioPorts.delete(sessionId)
     return ipcRenderer.invoke('speech:cancelDictation', sessionId)
   },
+  cleanUpDictation: (
+    text: string,
+    context: DictationContext | undefined,
+    requestId: string
+  ): Promise<DictationCleanupResult> =>
+    ipcRenderer.invoke('speech:cleanUpDictation', { text, context, requestId }),
+  cancelDictationCleanup: (requestId: string): Promise<void> =>
+    ipcRenderer.invoke('speech:cancelDictationCleanup', requestId),
 
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>

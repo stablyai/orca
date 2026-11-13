@@ -6,7 +6,6 @@ import type {
   DiagnosticsStatusPayload
 } from '../../../../../preload/api/telemetry-api'
 import { Label } from '../../ui/label'
-import { Separator } from '../../ui/separator'
 import {
   getDiagnosticBundleDescription,
   PrivacyDiagnosticBundleControls
@@ -271,7 +270,6 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       {status?.disabledReason ? (
         <DiagnosticsDisabledStateNote reason={status.disabledReason} />
       ) : null}
-      <Separator />
       <PrivacyDiagnosticsRow
         icon={<FileText className="size-4" />}
         title={t(

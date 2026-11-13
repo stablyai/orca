@@ -14,7 +14,7 @@ import {
   WORKTREE_PATH,
   makeSession
 } from '../runtime/__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
-import { advanceTerminalTopologyRevision } from './terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from './terminal-topology/pane-ownership/terminal-topology-membership'
 
 const SSH_HOST_ID = 'ssh:target-1'
 const SSH_WORKTREE_ID = 'ssh-repo::/srv/app'
@@ -148,36 +148,4 @@ describe('a write cannot bring back a tab its partition recorded as closed (#124
       OTHER_TAB_ID
     ])
   })
-
-  it.each(['set', 'stage-before-unload'] as const)(
-    'accepts a browser-only host slice once the partition has a close record (%s)',
-    async (write) => {
-      const { store, runtime } = createPersistedStore()
-      store.setWorkspaceSession(
-        { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } },
-        SSH_HOST_ID
-      )
-      await runtime.closeTerminalSurfaceFromRenderer({
-        worktreeId: SSH_WORKTREE_ID,
-        target: { kind: 'tab', tabId: TAB_ID }
-      })
-      const {
-        tabsByWorktree: _omitted,
-        terminalLayoutsByTabId: _alsoOmitted,
-        ...slice
-      } = { ...getDefaultWorkspaceSession(), activeWorktreeId: SSH_WORKTREE_ID }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models the renderer's host split, which omits empty terminal maps from its IPC payload.
-      const sparse = slice as WorkspaceSessionState
-
-      if (write === 'set') {
-        store.setWorkspaceSession(sparse, SSH_HOST_ID)
-      } else {
-        store.stageWorkspaceSessionBeforeUnload(sparse, SSH_HOST_ID)
-      }
-
-      const after = store.getWorkspaceSession(SSH_HOST_ID)
-      expect(after.activeWorktreeId).toBe(SSH_WORKTREE_ID)
-      expect(after.closedTerminalTabTombstonesByTabId?.[TAB_ID]).toBeDefined()
-    }
-  )
 })

@@ -15,6 +15,7 @@ import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
 import { PRIVACY_SETTING_ANCHORS } from './privacy-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
 export type BlockedReason = { kind: 'env'; reason: EnvBlockedReason }
@@ -92,7 +93,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
   }
 
   return (
-    <div id={PRIVACY_SETTING_ANCHORS.overview} className="space-y-4">
+    <SettingsGroup id={PRIVACY_SETTING_ANCHORS.overview}>
       <div
         id={PRIVACY_SETTING_ANCHORS.usageData}
         data-settings-row=""
@@ -133,7 +134,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 
       {blocked ? <BlockedHelper blocked={blocked} id={PRIVACY_PANE_BLOCKED_HELPER_ID} /> : null}
       <PrivacyDiagnosticsSection />
-    </div>
+    </SettingsGroup>
   )
 }
 

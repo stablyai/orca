@@ -7,7 +7,7 @@ import {
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import type { PluginWorkerHandle } from './workers/plugin-host-process'
+import type { PluginWorkerHandle } from './workers/parent-process/plugin-host-process-types'
 
 /** Whether an approved worker subscribes to `event` (open panels are asked separately). */
 export function pluginWorkersWantEvent(
