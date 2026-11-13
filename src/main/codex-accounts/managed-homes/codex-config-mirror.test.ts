@@ -56,22 +56,21 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('still guards every managed home against the daemon socket limit', async () => {
+  it('does not generate a deprecated feature when the system config is absent', async () => {
     await mirror.safeSyncToManagedHomes()
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      `[features]\n${OVERRIDE_LINE}\n`
-    )
+    expect(existsSync(join(managedHomePath, 'config.toml'))).toBe(false)
     expect(existsSync(join(testState.fakeHomeDir, '.codex'))).toBe(false)
   })
 
-  it('adds the guard without touching settings already in the managed home', async () => {
-    writeFileSync(join(managedHomePath, 'config.toml'), 'model = "gpt-5"\n')
+  it('removes the old Orca override without touching existing managed settings', async () => {
+    writeFileSync(
+      join(managedHomePath, 'config.toml'),
+      `model = "gpt-5"\n\n[features]\n${OVERRIDE_LINE}\n`
+    )
 
     await mirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      `model = "gpt-5"\n\n[features]\n${OVERRIDE_LINE}\n`
-    )
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe('model = "gpt-5"\n')
   })
 })

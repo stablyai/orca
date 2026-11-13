@@ -1,7 +1,5 @@
 import { realpathSync } from 'node:fs'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { unixSocketPathFits } from '../../../../shared/unix-socket-path-limit'
-import { upsertTableSettingsInContent } from '../settings/codex-config-settings-upsert'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -11,10 +9,8 @@ import {
 } from '../toml/config-toml-line-scan'
 import { parseTomlTableHeaderPath } from '../toml/config-toml-key-path'
 
-// Codex >=0.157 auto-starts a daemon; long managed homes exceed its socket's sun_path limit.
 const DAEMON_SOCKET_SEGMENTS = ['app-server-control', 'app-server-control.sock']
 export const CODEX_DAEMON_OVERRIDE_MARKER = '# orca: CODEX_HOME too long for the daemon socket'
-const DAEMON_OVERRIDE_RAW = `false ${CODEX_DAEMON_OVERRIDE_MARKER}`
 
 export function codexDaemonSocketPath(homePath: string, platform = process.platform): string {
   const wsl = parseWslUncPath(homePath)
@@ -33,43 +29,9 @@ export function codexDaemonSocketPath(homePath: string, platform = process.platf
   return [canonical.replace(/[\\/]+$/, ''), ...DAEMON_SOCKET_SEGMENTS].join(separator)
 }
 
-export function codexDaemonSocketPathExceedsLimit(
-  homePath: string,
-  platform = process.platform
-): boolean {
-  // WSL uses Linux limits; native Windows uds_windows also has a 108-byte sun_path.
-  const os = platform === 'darwin' && !parseWslUncPath(homePath) ? 'darwin' : 'linux'
-  return !unixSocketPathFits(codexDaemonSocketPath(homePath, platform), os)
-}
-
-const unguardableHomesWarned = new Set<string>()
-
-/** Applies (or removes) Orca's daemon override so it tracks the home's current path. */
-export function applyCodexDaemonSocketGuard(
-  config: string,
-  homePath: string,
-  platform = process.platform
-): string {
-  if (!codexDaemonSocketPathExceedsLimit(homePath, platform)) {
-    return stripCodexDaemonOverride(config)
-  }
-  const guarded = upsertTableSettingsInContent(
-    config,
-    'features',
-    new Map([['daemon_auto_start', DAEMON_OVERRIDE_RAW]])
-  )
-  if (
-    !guarded.includes(CODEX_DAEMON_OVERRIDE_MARKER) &&
-    !/\bdaemon_auto_start\s*=\s*false\b/.test(guarded) &&
-    !unguardableHomesWarned.has(homePath)
-  ) {
-    // Inline/array features tables block upsert; warn once so an ineffective guard is visible.
-    unguardableHomesWarned.add(homePath)
-    console.warn(
-      `[codex-config] Could not turn off Codex daemon auto-start in ${homePath}: its config defines features in a form Orca cannot extend. Codex may fail with "path must be shorter than SUN_LEN"; add daemon_auto_start = false to features in ~/.codex/config.toml.`
-    )
-  }
-  return guarded
+// daemon_auto_start は現行Codexで無効なため、起動時の --no-daemon に任せる。
+export function applyCodexDaemonSocketGuard(config: string): string {
+  return stripCodexDaemonOverride(config)
 }
 
 export function isOnlyCodexDaemonOverride(config: string): boolean {
