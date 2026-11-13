@@ -79,7 +79,7 @@ describe('computer-use setup cancellation', () => {
 
   beforeEach(() => {
     vi.resetModules()
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     mocks.spawn.mockReset().mockReturnValue({ unref: () => {} })
     mocks.spawnSync.mockReset()
     mocks.runProcess.mockReset().mockResolvedValue({ exitCode: 0 })
@@ -105,27 +105,40 @@ describe('computer-use setup cancellation', () => {
     expect(setupLaunches()).toEqual([])
   })
 
-  it('reports queued immediately but reports launched only after both cleanup commands complete', async () => {
-    const cleanup = cleanupGate()
-    mocks.runProcess.mockImplementationOnce(() => cleanup.promise)
-    const { permissions } = await loadModules()
-    const first = permissions.openComputerUsePermissions('accessibility')
-    await settleTurn()
-    const queued = await permissions.openComputerUsePermissions('screenshots')
-    expect(queued).toMatchObject({
-      launchedHelper: true,
-      launchQueued: true,
-      openedSettings: false
-    })
-    expect(setupLaunches()).toEqual([])
-    cleanup.resolve()
-    await expect(first).resolves.toMatchObject({
-      launchedHelper: true,
-      launchQueued: false,
-      openedSettings: true
-    })
-    expect(setupLaunches()).toEqual([['--permission', 'accessibility']])
-  })
+  it.each(['screenshots', 'accessibility'] as const)(
+    'delivers the latest queued %s request after the active cleanup finishes',
+    async (latestPermission) => {
+      const cleanup = cleanupGate()
+      mocks.runProcess.mockImplementationOnce(() => cleanup.promise)
+      const { permissions } = await loadModules()
+      const first = permissions.openComputerUsePermissions('accessibility')
+      await settleTurn()
+      await permissions.openComputerUsePermissions('screenshots')
+      const queued = await permissions.openComputerUsePermissions(latestPermission)
+      expect(queued).toMatchObject({
+        launchedHelper: true,
+        launchQueued: true,
+        openedSettings: false
+      })
+      expect(setupLaunches()).toEqual([])
+      cleanup.resolve()
+      await expect(first).resolves.toMatchObject({
+        launchedHelper: true,
+        launchQueued: false,
+        openedSettings: true
+      })
+      expect(setupLaunches()).toEqual([['--permission', 'accessibility']])
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(setupLaunches()).toEqual(
+        latestPermission === 'screenshots'
+          ? [
+              ['--permission', 'accessibility'],
+              ['--permission', 'screenshots']
+            ]
+          : [['--permission', 'accessibility']]
+      )
+    }
+  )
 
   it('drains the complete old launch before reset and cancels older pending joiners', async () => {
     const firstCleanup = cleanupGate()
