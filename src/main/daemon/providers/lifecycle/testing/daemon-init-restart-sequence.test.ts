@@ -248,6 +248,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(legacies[0]).toBe(legacyAdapter)
     expect(legacyAdapter.dispose).not.toHaveBeenCalled()
     expect(legacyAdapter.disconnectOnly).not.toHaveBeenCalled()
+    expect(currentAtConstruction.retireHistoryOwnership).toHaveBeenCalledOnce()
+    expect(legacyAdapter.retireHistoryOwnership).not.toHaveBeenCalled()
     expect(disposeRouterOnlySpy).toHaveBeenCalledTimes(1)
     expect(oldRouterDispose).not.toHaveBeenCalled()
 

@@ -24,6 +24,7 @@ export type MockAdapter = {
   }
   getActiveSessionIds: Mock
   fanoutSyntheticExits: Mock
+  retireHistoryOwnership: Mock
   listProcesses: Mock
   listSessions: Mock
   establishLifecycleLease: Mock

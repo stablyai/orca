@@ -119,6 +119,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly options: MockAdapter['options']
     readonly getActiveSessionIds: Mock
     readonly fanoutSyntheticExits: Mock
+    readonly retireHistoryOwnership: Mock
     readonly listProcesses: Mock
     readonly listSessions: Mock
     readonly establishLifecycleLease: Mock
@@ -137,6 +138,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
       this.fanoutSyntheticExits = vi.fn(() => {
         this.callOrder.push('fanoutSyntheticExits')
       })
+      this.retireHistoryOwnership = vi.fn()
       this.listProcesses = vi.fn(async () =>
         listProcessesControl.current ? listProcessesControl.current() : []
       )
