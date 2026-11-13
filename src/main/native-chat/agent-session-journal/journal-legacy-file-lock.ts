@@ -18,7 +18,7 @@ export function journalLegacyFileLockPath(): string {
   return existsSync(staged) ? staged : resolve('native/journal-file-lock/.build', name)
 }
 
-/** Both helper modes are bounded; only observed exit releases the source gate. */
+/** Lock mode waits for exit before source access; metadata failures can settle immediately. */
 async function startLegacyHelper(
   filename: string,
   signal: AbortSignal,
@@ -125,7 +125,10 @@ async function startLegacyHelper(
     }
   } catch (error) {
     force()
-    await close().catch(() => {})
+    const closed = close().catch(() => {})
+    if (!check) {
+      await closed
+    }
     throw error
   } finally {
     clearTimeout(startup)

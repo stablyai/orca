@@ -541,3 +541,28 @@ it('settles an unchanged permanent proof refusal and retries a recoverable reade
   await recovered.retirement.run()
   expect(existsSync(recovered.filename)).toBe(false)
 })
+
+it('retires in the same owner after a missing helper is restored', async () => {
+  let available = false
+  let now = 0
+  vi.spyOn(performance, 'now').mockImplementation(() => now)
+  const test = await profile(undefined, {
+    check: async () => {},
+    present: () => {
+      if (!available) {
+        throw new JournalLegacyRetentionError('legacy journal lock asset is unavailable')
+      }
+    }
+  })
+  await test.retirement.run()
+  expect(test.errors).toHaveLength(1)
+  expect(existsSync(test.filename)).toBe(true)
+  available = true
+  now = 60_001
+  await test.retirement.run()
+  expect(test.receiptState().phase).toBe('grace')
+  test.arm()
+  await test.retirement.run()
+  expect(test.errors).toHaveLength(1)
+  expect(existsSync(test.filename)).toBe(false)
+})

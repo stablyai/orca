@@ -1,2 +1,2 @@
-/** A frozen source cannot make this cleanup refusal recover without a descriptor change. */
+/** Only refusals from the frozen-source proof are permanent for that descriptor. */
 export class JournalLegacyRetentionError extends Error {}

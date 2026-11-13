@@ -77,12 +77,8 @@ export class JournalLegacyRetirement {
     try {
       await this.attempt()
     } catch (error) {
-      if (error instanceof JournalLegacyRetentionError) {
-        this.retained = true
-      } else {
-        this.retryAt = performance.now() + this.retryDelay
-        this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
-      }
+      this.retryAt = performance.now() + this.retryDelay
+      this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
       const reason = error instanceof Error ? error.message : String(error)
       if (this.diagnosed !== reason) {
         this.diagnosed = reason
@@ -163,7 +159,10 @@ export class JournalLegacyRetirement {
       this.boundary,
       this.stopped.signal,
       this.rest
-    )
+    ).catch((error) => {
+      this.retained = error instanceof JournalLegacyRetentionError
+      throw error
+    })
     this.proven = true
     this.retryDelay = 60_000
   }
