@@ -8,6 +8,7 @@ import type {
   CloudAuditEvent
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { ACCOUNT_AUDIT_ACTIONS, type ActionCopy } from './enterprise-audit-account-copy'
+import { SSO_AUDIT_ACTIONS } from './enterprise-audit-sso-copy'
 
 export function auditCategoryLabel(category: CloudAuditCategory, t: Translate = translate): string {
   switch (category) {
@@ -212,6 +213,7 @@ const ACTIONS: Record<string, ActionCopy> = {
       t('settings.enterprise.audit.action.secretDeleteNamed', 'Deleted secret {{name}}', { name })
   },
   ...ACCOUNT_AUDIT_ACTIONS,
+  ...SSO_AUDIT_ACTIONS,
   'routine.create': {
     plain: (t) => t('settings.enterprise.audit.action.routineCreate', 'Created a routine')
   },

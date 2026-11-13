@@ -1,3 +1,5 @@
+import type { OrcaProfileReconnectReason } from './orca-profile-reconnect-reason'
+import type { OrcaOrgMembersRoster } from './orca-org-roster'
 import type { OrcaOrgMemberMfaFields } from './orca-account-mfa'
 import './constants'
 import { ORCA_BROWSER_PARTITION } from './browser/browser-session-partition'
@@ -56,6 +58,7 @@ export type OrcaProfileAuthStatus = {
   capabilities?: OrcaCloudCapabilities
   credentialError?: string
   setupMessage?: string
+  reconnectReason?: OrcaProfileReconnectReason
 }
 
 export type OrcaProfileSummary = {
@@ -268,12 +271,7 @@ export type OrcaOrgPendingInvite = {
   createdAt: number
 }
 
-export type OrcaOrgMembersRoster = {
-  members: OrcaOrgMember[]
-  pendingInvites: OrcaOrgPendingInvite[]
-  viewerRole: OrcaOrgRole
-  canManageMembers: boolean
-}
+export type { OrcaOrgMembersRoster }
 
 export type OrcaProfileOrgMembersListArgs = {
   orgId: string
