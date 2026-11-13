@@ -7,7 +7,8 @@ import { isDispatchMutationMessageType } from '../../../../../shared/rpc-contrac
 const WORKER_REPORT_METHODS: ReadonlySet<string> = new Set([
   'orchestration.send',
   'orchestration.ask',
-  'orchestration.check'
+  'orchestration.check',
+  'orchestration.ackMessages'
 ])
 
 /**

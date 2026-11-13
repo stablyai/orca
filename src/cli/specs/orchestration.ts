@@ -92,9 +92,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: "Check this agent's messages",
     usage:
-      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
+      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id> | --ack-ids <msg_id,...>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
       "  default: return the bound Run's oldest unread FIFO batch and mark it handled.\n" +
       '  --ack: optional; acknowledges a batch from an older Orca that does not mark it.\n' +
+      '  --ack-ids: mark only the listed messages read; never take another batch.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return recent messages for the handle; does not mark read.\n' +
       '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
@@ -107,6 +108,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'terminal',
       'run',
       'ack',
+      'ack-ids',
       'unread',
       'peek',
       'all',
@@ -118,6 +120,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { terminal: 'caller' },
     notes: [
+      '--ack-ids returns markedIds and alreadyReadIds. Every ID must belong to the current mailbox; unknown, foreign or legacy IDs reject the whole selection. It cannot combine with other read, acknowledgment, formatting or wait options. Quote comma-separated IDs in PowerShell. Older runtimes are refused before consuming mail.',
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',

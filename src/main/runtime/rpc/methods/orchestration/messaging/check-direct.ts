@@ -9,6 +9,7 @@ import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lif
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { z } from 'zod'
+import { acknowledgeSelectedMessages } from './selective-message-ack'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
@@ -19,11 +20,17 @@ export async function checkDirectMailbox(args: {
   handle: string
   typeFilter: MessageType[] | undefined
   signal: AbortSignal | undefined
+  recordMutationReceipt?: (receipt: unknown) => void
 }): Promise<unknown> {
   const { params, runtime, db, handle, typeFilter, signal } = args
   // Direct mail has no Delivery, so any --ack names one outside this mailbox.
   if (params.ack) {
     throw staleDelivery(db, params.ack)
+  }
+  if (params.ackIds) {
+    return acknowledgeSelectedMessages(db, handle, params.ackIds, {
+      recordReceipt: args.recordMutationReceipt
+    })
   }
   // Honor legacy unread:false callers for compatibility (design doc §5).
   const showAll = params.all === true || (params.unread === false && params.peek !== true)

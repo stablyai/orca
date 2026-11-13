@@ -97,4 +97,43 @@ describe('a structured worker that names itself by session id', () => {
       ])
     })
   })
+
+  it('preserves selected wake-up mail until a released session is running again', async () => {
+    const { run } = resultOf(
+      await h.dispatch(
+        orchestrationRequest(
+          'orchestration.runCreate',
+          { objective: 'sleeping coordinator' },
+          { sessionId: workerSession }
+        )
+      )
+    )
+    const runId = idOf(run)
+    const message = h.db.insertMessage({
+      from: 'term_sender',
+      to: `run:${runId}`,
+      runId,
+      subject: 'wake-up question',
+      type: 'question'
+    })
+    const record = h.records.get(workerSession)!
+    record.lease = { ...record.lease, claimStatus: 'released' }
+    const acknowledge = () =>
+      h.dispatch(
+        orchestrationRequest(
+          'orchestration.ackMessages',
+          { ackIds: [message.id] },
+          { sessionId: workerSession }
+        )
+      )
+
+    expect(await acknowledge()).toMatchObject({
+      ok: false,
+      error: { code: 'session_caller_not_live', data: { effectsApplied: false } }
+    })
+    expect(h.db.getMessageById(message.id)?.read).toBe(0)
+
+    record.lease = { ...record.lease, claimStatus: 'live' }
+    expect(resultOf(await acknowledge())).toMatchObject({ markedIds: [message.id] })
+  })
 })

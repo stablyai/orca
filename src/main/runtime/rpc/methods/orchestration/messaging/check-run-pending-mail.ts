@@ -10,6 +10,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { z } from 'zod'
+import { acknowledgeSelectedMessages } from './selective-message-ack'
 
 export async function checkRunPendingMail(args: {
   params: z.infer<typeof CheckParams>
@@ -51,6 +52,29 @@ export async function checkRunPendingMail(args: {
     db.getDeliveryRaw(params.ack)?.mailbox_handle === `dispatch:${residual.id}`
       ? params.ack
       : undefined
+  const ownsResidual = (): boolean => {
+    if (!residual) {
+      return false
+    }
+    return (
+      residual.run_id !== run.id &&
+      (residual.assignee_orca_session_id === null ||
+        residual.assignee_orca_session_id === caller.orcaSessionId) &&
+      callerHoldsDispatchPane(residual, paneKey) &&
+      currentDispatchAssigneeRun(runtime, db, residual)?.id === run.id &&
+      Boolean(params.ackIds || residualAck || !db.hasOutstandingMailboxDelivery(address))
+    )
+  }
+  if (params.ackIds) {
+    revalidateConsumer()
+    return {
+      result: acknowledgeSelectedMessages(db, address, params.ackIds, {
+        mailboxIdentity: { runId: run.id },
+        recordReceipt: recordMutationReceipt,
+        residualMailbox: residual && ownsResidual() ? `dispatch:${residual.id}` : undefined
+      })
+    }
+  }
   const acknowledgeRun = () =>
     params.ack
       ? db.acknowledgeRunDelivery({
@@ -74,15 +98,7 @@ export async function checkRunPendingMail(args: {
     const result = acknowledgedOnlyReceipt({ runId: run.id }, acknowledged.delivery.id)
     return { acknowledged: acknowledged.delivery.id, result }
   }
-  if (
-    residual &&
-    residual.run_id !== run.id &&
-    (residual.assignee_orca_session_id === null ||
-      residual.assignee_orca_session_id === caller.orcaSessionId) &&
-    callerHoldsDispatchPane(residual, paneKey) &&
-    currentDispatchAssigneeRun(runtime, db, residual)?.id === run.id &&
-    (residualAck || !db.hasOutstandingMailboxDelivery(address))
-  ) {
+  if (residual && ownsResidual()) {
     const result = await checkWorkerMailbox({
       params: { ...params, ack: residualAck, wait: false },
       runtime,

@@ -40,6 +40,7 @@ export const CheckParams = z
     // Why: one-release RPC compatibility only; the public CLI uses --format because no terminal input is injected.
     inject: OptionalBoolean,
     ack: OptionalString,
+    ackIds: z.array(z.string().trim().min(1)).min(1).optional(),
     compatibilityAck: OptionalString,
     compatibilityQuestionAck: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
@@ -48,6 +49,28 @@ export const CheckParams = z
     timeoutMs: OptionalFiniteNumber
   })
   .superRefine((params, ctx) => {
+    if (
+      params.ackIds &&
+      [
+        params.ack,
+        params.compatibilityAck,
+        params.compatibilityQuestionAck,
+        params.unread,
+        params.peek,
+        params.all,
+        params.types,
+        params.format,
+        params.inject,
+        params.wait,
+        params.timeoutMs
+      ].some((value) => value !== undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          '--ack-ids cannot be combined with other read, acknowledgment, formatting or wait options.'
+      })
+    }
     // Why: CLI encodes --peek as {peek:true, unread:false} for pre-peek runtimes, so that pair is one mode, not a conflict.
     const modes = [
       params.unread === true,

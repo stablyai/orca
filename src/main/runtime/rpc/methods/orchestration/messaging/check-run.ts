@@ -96,6 +96,9 @@ export async function checkRunMailbox(args: {
   revalidateConsumer()
 
   const pending = await checkRunPendingMail({ ...args, run, revalidateConsumer })
+  if (params.ackIds) {
+    return pending.result
+  }
   if (handsOverBatch(pending.result)) {
     return pending.result
   }

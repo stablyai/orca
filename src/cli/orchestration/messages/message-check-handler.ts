@@ -4,7 +4,7 @@ import { printResult } from '../../output/command-result-output'
 import { withReceiptNext } from '../receipt-next-text'
 import { printOrchestrationResult } from '../agent-view'
 import { checkView } from './message-agent-views'
-import { getOptionalStringFlag } from '../../arguments/flags'
+import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/types'
 import type { RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import {
@@ -24,6 +24,9 @@ import {
   orchestrationCallerLabel,
   resolveOrchestrationTerminalHandle
 } from '../identity/terminal-identity'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { CheckParams } from '../../../shared/rpc-contract/orchestration-params'
+import { ORCHESTRATION_SELECTIVE_ACK_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 
 type CheckResult = {
   messages: MessageSummary[]
@@ -36,6 +39,8 @@ type CheckResult = {
   connectionLost?: boolean
   legacyCompatibility?: LegacyCompatibilityResult
   next?: string
+  markedIds?: string[]
+  alreadyReadIds?: string[]
 }
 
 export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
@@ -44,6 +49,26 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     await refuseAgentServerRoute('check', ctx)
     const wait = flags.has('wait')
     const peek = flags.has('peek')
+    const ackIds = getPresentStringFlag(flags, 'ack-ids')
+      ?.split(',')
+      .map((id) => id.trim())
+    if (ackIds) {
+      CheckParams.parse({
+        ackIds,
+        ...Object.fromEntries(
+          ['ack', 'unread', 'peek', 'all', 'types', 'format', 'inject', 'wait', 'timeout-ms']
+            .filter((flag) => flags.has(flag))
+            .map((flag) => [flag === 'timeout-ms' ? 'timeoutMs' : flag, flags.get(flag)])
+        )
+      })
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (!status.result.capabilities?.includes(ORCHESTRATION_SELECTIVE_ACK_RUNTIME_CAPABILITY)) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support --ack-ids. No messages were consumed.'
+        )
+      }
+    }
     // Older runtimes ignore peek, making --unread --peek destructive.
     if ([flags.has('unread'), peek, flags.has('all')].filter(Boolean).length > 1) {
       throw new RuntimeClientError(
@@ -61,24 +86,39 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
-      result = await callOrchestrationMutation<CheckResult>(client, flags, 'orchestration.check', {
-        terminal,
-        terminalPaneKey: paneKey || undefined,
-        // unread:false makes hosts that ignore peek fall back to non-consuming all mode.
-        unread: flags.has('unread') ? true : peek ? false : undefined,
-        peek: peek ? true : undefined,
-        all: flags.has('all') ? true : undefined,
-        types: getOptionalStringFlag(flags, 'types'),
-        format: flags.has('format') ? true : undefined,
-        inject: flags.has('inject') ? true : undefined,
-        compatibilityCliCommand: resolveCompatibilityCliCommand(),
-        run: getOptionalStringFlag(flags, 'run'),
-        ack: getOptionalStringFlag(flags, 'ack'),
-        wait: wait ? true : undefined,
-        timeoutMs
-      })
+      result = await callOrchestrationMutation<CheckResult>(
+        client,
+        flags,
+        ackIds ? 'orchestration.ackMessages' : 'orchestration.check',
+        {
+          terminal,
+          terminalPaneKey: paneKey || undefined,
+          // unread:false makes hosts that ignore peek fall back to non-consuming all mode.
+          unread: flags.has('unread') ? true : peek ? false : undefined,
+          peek: peek ? true : undefined,
+          all: flags.has('all') ? true : undefined,
+          types: getOptionalStringFlag(flags, 'types'),
+          format: flags.has('format') ? true : undefined,
+          inject: flags.has('inject') ? true : undefined,
+          compatibilityCliCommand: resolveCompatibilityCliCommand(),
+          run: getOptionalStringFlag(flags, 'run'),
+          ack: getOptionalStringFlag(flags, 'ack'),
+          ackIds,
+          wait: wait ? true : undefined,
+          timeoutMs
+        }
+      )
     } finally {
       stopKeepalive?.()
+    }
+    if (ackIds) {
+      printResult(
+        result,
+        json,
+        (value) =>
+          `Marked read: ${value.markedIds?.join(', ') || '(none)'}\nAlready read: ${value.alreadyReadIds?.join(', ') || '(none)'}`
+      )
+      return
     }
     if (peek) {
       result = filterLegacyPeekResult(result, wait)
