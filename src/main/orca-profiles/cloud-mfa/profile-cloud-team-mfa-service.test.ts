@@ -35,7 +35,7 @@ describe('normalizeTeamMfaPolicy', () => {
       policy: null,
       self: 'on',
       setupUrl,
-      manage: { available: false, pendingMembers: 3, inactiveEnforceAt: 500 }
+      manage: { available: false, pendingMembers: 3, inactiveEnforceAt: 500, ssoHandled: false }
     })
   })
 
@@ -60,6 +60,34 @@ describe('normalizeTeamMfaPolicy', () => {
     }
     expect(sameOriginUrl('https://user:pw@cloud.orca.dev/x', API)).toBeNull()
     expect(sameOriginUrl('http://cloud.orca.dev/x', API)).toBeNull()
+  })
+})
+
+describe('single sign-on', () => {
+  it('reads the delegated state and the team-level flag', () => {
+    const read = normalizeTeamMfaPolicy(
+      {
+        policy: { enforceAt: 200, setAt: 100 },
+        self: { mfa: 'delegated' },
+        setupUrl,
+        available: true,
+        pendingMembers: 0,
+        ssoHandled: true
+      },
+      API
+    )
+    expect(read.self).toBe('delegated')
+    expect(read.manage?.ssoHandled).toBe(true)
+  })
+
+  it('treats anything but true as not handled', () => {
+    for (const ssoHandled of [undefined, 'true', 1, null]) {
+      const read = normalizeTeamMfaPolicy(
+        { policy: null, self: { mfa: 'on' }, setupUrl, available: true, ssoHandled },
+        API
+      )
+      expect(read.manage?.ssoHandled).toBe(false)
+    }
   })
 })
 

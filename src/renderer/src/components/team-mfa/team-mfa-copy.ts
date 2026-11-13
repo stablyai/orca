@@ -43,7 +43,7 @@ export function mfaUrgency(enforceAt: number, now: number, blocked: boolean): Te
   return mfaDaysLeft(enforceAt, now) <= MFA_URGENT_DAYS ? 'soon' : 'quiet'
 }
 
-/** "Acme requires MFA in 2 days": the title once the deadline is close. */
+/** "Acme requires two-factor authentication in 2 days": the title once the deadline is close. */
 export function mfaSoonTitle(
   teamName: string,
   enforceAt: number,
@@ -52,15 +52,23 @@ export function mfaSoonTitle(
 ): string {
   const days = mfaDaysLeft(enforceAt, now)
   if (days <= 0) {
-    return t('auto.components.teamMfa.soonTitleNow', '{{value0}} requires MFA now', {
-      value0: teamName
-    })
+    return t(
+      'auto.components.teamMfa.soonTitleNow',
+      '{{value0}} requires two-factor authentication now',
+      {
+        value0: teamName
+      }
+    )
   }
-  return t('auto.components.teamMfa.soonTitle', '{{value0}} requires MFA in {{count}} days', {
-    value0: teamName,
-    count: days,
-    defaultValue_one: '{{value0}} requires MFA in {{count}} day'
-  })
+  return t(
+    'auto.components.teamMfa.soonTitle',
+    '{{value0}} requires two-factor authentication in {{count}} days',
+    {
+      value0: teamName,
+      count: days,
+      defaultValue_one: '{{value0}} requires two-factor authentication in {{count}} day'
+    }
+  )
 }
 
 /**

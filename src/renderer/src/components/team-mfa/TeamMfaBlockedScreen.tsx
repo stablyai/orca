@@ -57,7 +57,7 @@ export function TeamMfaBlockedScreen({
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <OpenExternalSplitButton size="sm" link={setupUrl} onClick={onSetUp}>
-          {t('auto.components.teamMfa.setUp', 'Set up MFA')}
+          {t('auto.components.teamMfa.setUp', 'Set up two-factor')}
         </OpenExternalSplitButton>
         <Button
           type="button"

@@ -30,7 +30,16 @@ function answer(workspace: 'private' | 'shared'): { ok: true; value: CloudSecret
       secrets:
         workspace === 'shared'
           ? []
-          : [{ name: 'SENTRY_DSN', kind: 'env', scope: 'personal', hint: null, updatedAt: 0, shadowed: [] }]
+          : [
+              {
+                name: 'SENTRY_DSN',
+                kind: 'env',
+                scope: 'personal',
+                hint: null,
+                updatedAt: 0,
+                shadowed: []
+              }
+            ]
     }
   }
 }
@@ -110,7 +119,10 @@ describe('missing-secrets ask', () => {
     await waitFor(() => expect(result.current.load.status).toBe('ready'))
     expect(effective).toHaveBeenCalledWith({ repo: REPO, workspace: 'shared' })
     const load = result.current.load
-    expect(load.status === 'ready' && load.data).toMatchObject({ shared: true, missing: ['SENTRY_DSN'] })
+    expect(load.status === 'ready' && load.data).toMatchObject({
+      shared: true,
+      missing: ['SENTRY_DSN']
+    })
   })
 
   it('no runtime environment (the build sheet, before the workspace exists): default view', async () => {

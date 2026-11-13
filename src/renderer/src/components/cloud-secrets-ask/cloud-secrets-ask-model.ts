@@ -93,7 +93,9 @@ export type CloudSecretsAskData = {
 }
 
 /** Where this person can save a missing value for this workspace; empty when nowhere reaches it. */
-export function askScopes(data: Pick<CloudSecretsAskData, 'caller' | 'repoKey' | 'shared'>): CloudSecretScope[] {
+export function askScopes(
+  data: Pick<CloudSecretsAskData, 'caller' | 'repoKey' | 'shared'>
+): CloudSecretScope[] {
   return writableScopes(data.caller, {
     repo: data.repoKey !== null,
     shared: true,

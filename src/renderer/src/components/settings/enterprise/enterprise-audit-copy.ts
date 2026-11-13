@@ -214,6 +214,38 @@ const ACTIONS: Record<string, ActionCopy> = {
   },
   ...ACCOUNT_AUDIT_ACTIONS,
   ...SSO_AUDIT_ACTIONS,
+  'mfa.policy.enabled': {
+    plain: (t) =>
+      t('settings.enterprise.audit.action.mfaPolicyEnabled', 'Required two-factor authentication')
+  },
+  'mfa.policy.changed': {
+    plain: (t) =>
+      t(
+        'settings.enterprise.audit.action.mfaPolicyChanged',
+        'Changed the two-factor authentication date'
+      )
+  },
+  'mfa.policy.disabled': {
+    plain: (t) =>
+      t(
+        'settings.enterprise.audit.action.mfaPolicyDisabled',
+        'Stopped requiring two-factor authentication'
+      )
+  },
+  'mfa.reminder.resent': {
+    plain: (t) =>
+      t(
+        'settings.enterprise.audit.action.mfaReminderResent',
+        'Sent a two-factor authentication reminder'
+      )
+  },
+  'mfa.member.reset': {
+    plain: (t) =>
+      t(
+        'settings.enterprise.audit.action.mfaMemberReset',
+        'Reset a member’s two-factor authentication'
+      )
+  },
   'routine.create': {
     plain: (t) => t('settings.enterprise.audit.action.routineCreate', 'Created a routine')
   },

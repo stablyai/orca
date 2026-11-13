@@ -108,7 +108,9 @@ describe('S4-b secret request card', () => {
     render(<Harness />)
     await act(async () => {})
     expect(workspaceSharing).toHaveBeenCalledWith({ runtimeEnvironmentId: 'env-1' })
-    expect(screen.getByText('This workspace is shared, so it doesn’t get personal secrets.')).toBeTruthy()
+    expect(
+      screen.getByText('This workspace is shared, so it doesn’t get personal secrets.')
+    ).toBeTruthy()
     expect(screen.queryByLabelText('Value for NPM_TOKEN')).toBeNull()
     expect(screen.getByRole('button', { name: 'Add secret' }).getAttribute('aria-disabled')).toBe(
       'true'

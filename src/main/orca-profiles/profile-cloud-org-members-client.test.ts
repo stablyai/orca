@@ -41,7 +41,8 @@ describe('normalizeRoster', () => {
         { userId: 'c', email: 'c@x.dev', role: 'member', mfa: 'pending', mfaDeadline: 1_800_000 },
         { userId: 'd', email: 'd@x.dev', role: 'member', mfa: 'pending', mfaDeadline: 'soon' },
         { userId: 'e', email: 'e@x.dev', role: 'member', mfa: true },
-        { userId: 'f', email: 'f@x.dev', role: 'member' }
+        { userId: 'f', email: 'f@x.dev', role: 'member' },
+        { userId: 'g', email: 'g@x.dev', role: 'member', mfa: 'sso' }
       ]
     })
     expect(roster.members.map((m) => [m.mfa, m.mfaDeadline])).toEqual([
@@ -51,7 +52,8 @@ describe('normalizeRoster', () => {
       ['pending', 1_800_000],
       ['pending', undefined],
       [undefined, undefined],
-      [undefined, undefined]
+      [undefined, undefined],
+      ['sso', undefined]
     ])
     expect('mfa' in roster.members[5]!).toBe(false)
   })
