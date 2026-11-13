@@ -103,6 +103,25 @@ describe('quick-command client compatibility', () => {
     expect(state.settings.terminalQuickCommands).toEqual([edited, ...commands.slice(2)])
   })
 
+  it('keeps the stored close-tab setting when a client that cannot see it edits the command', async () => {
+    const { dispatcher, state } = makeDispatcher([{ ...shortCommand, closeTabOnSuccess: true }])
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.updateTerminalQuickCommands', {
+        mutation: { type: 'upsert', command: { ...shortCommand, label: 'Edited' } }
+      }),
+      { clientKind: 'runtime', clientCapabilities: [] }
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { terminalQuickCommands: [{ ...shortCommand, label: 'Edited' }] }
+    })
+    expect(state.settings.terminalQuickCommands).toEqual([
+      { ...shortCommand, label: 'Edited', closeTabOnSuccess: true }
+    ])
+  })
+
   it.each(['runtime', 'mobile'] as const)(
     'refuses a stale %s client edit of a hidden prompt before saving anything',
     async (clientKind) => {

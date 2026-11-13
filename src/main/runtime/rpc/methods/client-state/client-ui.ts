@@ -28,6 +28,7 @@ import { TerminalQuickCommandsUpdate } from '../../../../../shared/rpc-contract/
 import { AgentLaunchSettingsMutation } from '../../../../../shared/rpc-contract/agent-launch-settings-params'
 import {
   assertTerminalQuickCommandMutationReadableForClient,
+  keepCloseTabOnSuccessForClient,
   projectTerminalQuickCommandsForClient
 } from '../terminal/terminal-quick-command-client-capabilities'
 
@@ -122,14 +123,13 @@ export const CLIENT_UI_METHODS = [
     permission: 'settings-write',
     params: TerminalQuickCommandsUpdate,
     handler: (params, ctx) => {
-      assertTerminalQuickCommandMutationReadableForClient(
-        ctx.runtime.getClientTerminalQuickCommands(),
-        params.mutation,
-        ctx
-      )
+      const commands = ctx.runtime.getClientTerminalQuickCommands()
+      assertTerminalQuickCommandMutationReadableForClient(commands, params.mutation, ctx)
       return {
         terminalQuickCommands: projectTerminalQuickCommandsForClient(
-          ctx.runtime.updateClientTerminalQuickCommands(params.mutation),
+          ctx.runtime.updateClientTerminalQuickCommands(
+            keepCloseTabOnSuccessForClient(commands, params.mutation, ctx)
+          ),
           ctx
         )
       }

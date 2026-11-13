@@ -36,6 +36,28 @@ export function projectTerminalQuickCommandsForClient(
     : readable.slice(0, LEGACY_MAX_QUICK_COMMANDS)
 }
 
+// Clients without the capability never see the flag, so their edits must keep the stored value.
+export function keepCloseTabOnSuccessForClient(
+  commands: TerminalQuickCommand[],
+  mutation: TerminalQuickCommandMutation,
+  ctx: QuickCommandReader
+): TerminalQuickCommandMutation {
+  if (
+    mutation.type === 'delete' ||
+    ctx.clientKind === undefined ||
+    ctx.clientCapabilities?.includes(
+      TERMINAL_QUICK_COMMAND_CLOSE_TAB_ON_SUCCESS_RUNTIME_CAPABILITY
+    ) ||
+    mutation.command.action === 'agent-prompt'
+  ) {
+    return mutation
+  }
+  const existing = commands.find((command) => command.id === mutation.command.id)
+  return existing && 'closeTabOnSuccess' in existing
+    ? { ...mutation, command: { ...mutation.command, closeTabOnSuccess: true } }
+    : mutation
+}
+
 export function assertTerminalQuickCommandMutationReadableForClient(
   commands: TerminalQuickCommand[],
   mutation: TerminalQuickCommandMutation,
