@@ -112,6 +112,13 @@ export const TERMINAL_ACCESSORY_KEY_DEFINITIONS: TerminalAccessoryKey[] = [
   { id: 'tab', label: 'Tab', bytes: '\t', accessibilityLabel: 'Tab' },
   { id: 'enter', label: 'Enter', bytes: '\r', accessibilityLabel: 'Enter' },
   { id: 'shiftTab', label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
+  // Why: Kitty keyboard protocol encodes a modifier tap as press and release key events.
+  {
+    id: 'shift',
+    label: 'Shift',
+    bytes: '\x1b[57441;2:1u\x1b[57441;1:3u',
+    accessibilityLabel: 'Shift'
+  },
   { id: 'space', label: 'Space', bytes: ' ', accessibilityLabel: 'Space' },
   { id: 'backspace', label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
   {
