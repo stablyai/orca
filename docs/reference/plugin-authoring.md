@@ -379,6 +379,25 @@ banner offers Reload or Overwrite. Saving to a remote host needs an Orca server 
 replace binary files. Source shows the binary placeholder, unsaved bytes are not kept across
 restarts, and bytes tabs don't autosave.
 
+Set `"diff": true` (needs `engines.orca` `>=1.4.259`; text editors only) to also offer the
+editor in a single-file diff tab (unstaged, staged, branch or commit), beside Orca's diff, which
+stays the default. There the document is read-only. `content` is the changed side (in an unstaged
+diff, the tab's unsaved text when it has any) and `diff.original` the side the change started
+from, the left side of Orca's diff. An added file has an empty original, a deleted file an empty
+`content`, and a side Orca could not read is empty too. `session()` ignores `diff`, so a
+diff view reads both sides from `get()` and `onDidChange`, which also fires when only the original
+side changes, for example after staging:
+
+```js
+orca.document.onDidChange((doc) => {
+  if (doc.diff) renderDiff(doc.diff.original.text, doc.content.text)
+  else renderEditor(doc.content.text)
+})
+```
+
+Orca offers no such editor for combined diffs, truncated large diffs, binary diffs, diffs it
+could not read or a rename from a file the editor does not open.
+
 Documents and edits are capped at 64 MiB, text or bytes, on every route (local, SSH and paired
 hosts): a larger file shows "too large to open", and a larger edit is rejected with `too_large`.
 Past 16 MiB the tab notes that the file may take a moment. Orca saves on its own save shortcut pressed
@@ -402,7 +421,7 @@ To test an editor's sync logic in Node, `mockEditorHost` from `orca/testing` ins
 import { assert, mockEditorHost, test } from 'orca/testing'
 
 test('keeps an agent write', async () => {
-  const host = mockEditorHost({ text: '{"elements":[]}' }) // or { bytes }, plus { readOnly, colorScheme }
+  const host = mockEditorHost({ text: '{"elements":[]}' }) // or { bytes }, plus { readOnly, colorScheme, original }
   await import('./sync.ts') // your code calls orca.document.session()
   host.replace('{"elements":[1]}') // an outside change
   host.conflictNext() // the next edit is refused with `conflict`

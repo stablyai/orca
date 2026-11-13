@@ -30,7 +30,8 @@ type ContributionValidationManifest = {
     iconThemes: IdentifiedContribution[]
     fonts: { family: string }[]
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
-    customEditors: (IdentifiedContribution & PluginFileMatch)[]
+    customEditors: (IdentifiedContribution &
+      PluginFileMatch & { contentKind?: string; diff?: boolean })[]
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
@@ -108,6 +109,13 @@ export function validatePluginManifestContributions(
         code: 'custom',
         path: ['contributes', 'customEditors', index, 'extensions'],
         message: 'must list at least one extension or file name'
+      })
+    }
+    if (editor.diff === true && editor.contentKind === 'bytes') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'customEditors', index, 'diff'],
+        message: 'diff tabs offer text editors only'
       })
     }
   }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
-import { PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
+import {
+  PLUGIN_EDITOR_DIFF_SINCE,
+  PLUGIN_MANIFEST_V2_SINCE
+} from '../manifest/plugin-schema-field-docs'
 import { matchPluginFile, pluginFileMatchRank } from './plugin-file-match'
 import { requiresPluginContentApproval } from '../approval/plugin-consent-fingerprint'
 import { pluginUpdateAccessGrowth } from '../approval/plugin-update-access-growth'
@@ -56,6 +59,20 @@ describe('contributes.customEditors', () => {
     // Narrower reach keeps the approval.
     expect(pluginUpdateAccessGrowth(editor({}), option).contributions).toEqual([])
     expect(growth(editor({ priority: 'option', extensions: ['.excalidraw'] }))).toEqual([])
+  })
+
+  it('counts reading diffs as more reach, and refuses diffs for a bytes editor', () => {
+    const editor = (fields: Record<string, unknown>) =>
+      parsed({
+        engines: { orca: `>=${PLUGIN_EDITOR_DIFF_SINCE}` },
+        contributes: { customEditors: [{ ...excalidraw, ...fields }] }
+      })
+    expect(pluginUpdateAccessGrowth(editor({}), editor({ diff: true })).contributions).toEqual([
+      'customEditors'
+    ])
+    expect(() => editor({ diff: true, contentKind: 'bytes' })).toThrow(
+      'diff tabs offer text editors only'
+    )
   })
 })
 

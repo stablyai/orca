@@ -3411,6 +3411,7 @@ const ORCA_PLUGIN_AUTHORING_MANIFEST_REFERENCE_MARKDOWN = [
   "- `priority` (\"default\" | \"option\", since 1.4.245): `default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`; a longer suffix such as `.sketch.json` is not one of them and opens by default.",
   "- `contentKind` (\"text\" | \"bytes\", since 1.4.245): `text` (the default) sends the file as text and accepts full-text edits. `bytes` sends the file's raw bytes, for binary formats such as spreadsheets, and accepts full-byte edits.",
   "- `frame` (\"any\" | \"isolated\", since 1.4.248): `any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.",
+  "- `diff` (boolean, since 1.4.259): `true` also offers this editor in a single-file diff tab, beside Orca's diff, which stays the default. The editor then gets the changed side as a read-only document and the side the change started from as `diff.original`. Text editors only.",
   "",
   "## NewFileContribution",
   "",
@@ -3741,7 +3742,7 @@ const ORCA_PLUGIN_AUTHORING_TESTING_REFERENCE_MARKDOWN = [
   "- `MountOptions = { host?: MockHost; theme?: 'light' | 'dark'; locale?: string; visible?: boolean; panelId?: string; persisted?: { plugin?: Record<string, unknown>; workspace?: Record<string, unknown> } }`",
   "- `MountWorkerOptions = { host?: MockHost; events?: readonly string[]; commands?: readonly string[]; hooks?: readonly (string | { event: string; onError?: 'pass' | 'deny' })[] }`",
   "- `MockHostOptions = { capabilities?: readonly string[]; results?: Record<string, unknown>; requests?: MockRequests; storage?: Record<string, JsonValue>; settings?: Record<string, JsonValue>; secrets?: Record<string, string> }`",
-  "- `MockEditorHostOptions = { readOnly?: boolean; colorScheme?: 'light' | 'dark'; locale?: string; fileType?: string }`",
+  "- `MockEditorHostOptions = { readOnly?: boolean; colorScheme?: 'light' | 'dark'; locale?: string; fileType?: string; original?: string }`",
   "- `CheckScenario = MockHostOptions & { persisted?: MountOptions['persisted']; theme?: 'light' | 'dark'; events?: readonly { [E in keyof OrcaEvents]: { event: E; payload: OrcaEvents[E] } }[keyof OrcaEvents][] }`",
   "",
 ].join('\n')

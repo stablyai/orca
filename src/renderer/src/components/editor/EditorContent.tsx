@@ -298,6 +298,7 @@ export function EditorContent({
   return (
     <EditorDiffFileSurface
       activeFile={activeFile}
+      customEditor={customEditor}
       diffContent={diffContents[activeFile.id]}
       editBuffer={editBuffers[activeFile.id]}
       resolvedLanguage={monacoLanguage}

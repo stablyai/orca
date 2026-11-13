@@ -35,4 +35,14 @@ describe('mockEditorHost', () => {
     expect(replaced.at(-1)).toBe('agentoutside!')
     doc.dispose()
   })
+
+  it('hands a diff tab its original side, read-only', async () => {
+    host = mockEditorHost({ text: '<after/>' }, { original: '<before/>' })
+    const document = await host.orca.document.get()
+    expect(document).toMatchObject({
+      readOnly: true,
+      content: { kind: 'text', text: '<after/>' },
+      diff: { original: { kind: 'text', text: '<before/>' } }
+    })
+  })
 })
