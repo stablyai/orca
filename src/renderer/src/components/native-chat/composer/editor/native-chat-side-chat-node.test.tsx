@@ -3,6 +3,7 @@ import { createRef } from 'react'
 import { act, cleanup, render, waitFor, within } from '@testing-library/react'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import { closeHistory } from '@tiptap/pm/history'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -61,6 +62,9 @@ function backspace(editor: Editor): void {
 }
 
 const pill = (container: HTMLElement) => container.querySelector('[data-native-chat-side-chat]')
+const textbox = (container: HTMLElement) => within(container).getByRole('textbox')
+// Absence is read from the document: a removed or never-mounted node view looks the same in the DOM.
+const hasPill = (editor: Editor) => JSON.stringify(editor.getJSON()).includes('nativeChatSideChat')
 // React node views mount after the transaction that inserts them.
 const pillShown = (container: HTMLElement) => waitFor(() => expect(pill(container)).not.toBeNull())
 
@@ -69,28 +73,27 @@ describe('side chat pill', () => {
     const { input, editor, container } = setup()
     type(editor, '/btw ')
     await pillShown(container)
-    expect(pill(container)?.textContent).toBe('Side chat')
     expect(input.value).toBe('/btw ')
-    expect(container.textContent).toContain('Ask a side question')
+    expect(textbox(container).getAttribute('aria-placeholder')).toBeTruthy()
     type(editor, 'why?')
     expect(input.value).toBe('/btw why?')
-    expect(container.textContent).not.toContain('Ask a side question')
+    expect(textbox(container).getAttribute('aria-placeholder')).toBeNull()
   })
 
   it('keeps /btw plain text where side chat is unavailable, it is not leading, or no ASCII space follows', () => {
     const unavailable = setup({ sideChat: false })
     type(unavailable.editor, '/btw why?')
-    expect(pill(unavailable.container)).toBeNull()
+    expect(hasPill(unavailable.editor)).toBe(false)
     expect(unavailable.input.value).toBe('/btw why?')
 
     const midDraft = setup()
     type(midDraft.editor, 'hi /side ')
-    expect(pill(midDraft.container)).toBeNull()
+    expect(hasPill(midDraft.editor)).toBe(false)
     expect(midDraft.input.value).toBe('hi /side ')
 
     const nbsp = setup()
     type(nbsp.editor, '/btw\u00a0why?')
-    expect(pill(nbsp.container)).toBeNull()
+    expect(hasPill(nbsp.editor)).toBe(false)
     expect(nbsp.input.value).toBe('/btw\u00a0why?')
   })
 
@@ -99,7 +102,7 @@ describe('side chat pill', () => {
     type(empty.editor, '/BTW ')
     await pillShown(empty.container)
     backspace(empty.editor)
-    expect(pill(empty.container)).toBeNull()
+    expect(hasPill(empty.editor)).toBe(false)
     expect(empty.input.value).toBe('/BTW')
     expect(empty.input.selectionStart).toBe(4)
 
@@ -108,7 +111,7 @@ describe('side chat pill', () => {
     await pillShown(asked.container)
     act(() => asked.input.setSelectionRange(6, 6))
     backspace(asked.editor)
-    expect(pill(asked.container)).toBeNull()
+    expect(hasPill(asked.editor)).toBe(false)
     expect(asked.input.value).toBe('/side q')
     expect(asked.input.selectionStart).toBe(5)
   })
@@ -122,9 +125,34 @@ describe('side chat pill', () => {
     expect(view.input.value).toBe('/btw ')
     await pillShown(view.container)
     view.rerenderWith(false)
-    expect(pill(view.container)).toBeNull()
+    expect(hasPill(view.editor)).toBe(false)
     expect(view.input.value).toBe('/btw ')
-    expect(view.container.textContent).not.toContain('Ask a side question')
+    expect(textbox(view.container).getAttribute('aria-placeholder')).toBeNull()
+  })
+
+  it('never brings the pill back through undo or redo once side chat is unavailable', async () => {
+    const { input, editor, container, rerenderWith } = setup()
+    type(editor, '/btw why?')
+    await pillShown(container)
+    act(() => {
+      editor.view.dispatch(closeHistory(editor.state.tr))
+      editor.commands.selectAll()
+      editor.commands.deleteSelection()
+    })
+    rerenderWith(false)
+    act(() => {
+      editor.commands.undo()
+    })
+    expect(input.value).toBe('/btw why?')
+    expect(hasPill(editor)).toBe(false)
+    act(() => {
+      editor.commands.undo()
+    })
+    act(() => {
+      editor.commands.redo()
+    })
+    expect(input.value).toBe('/btw why?')
+    expect(hasPill(editor)).toBe(false)
   })
 
   it('saves the pill as text, so an editor without the node keeps and edits the draft', async () => {
@@ -177,7 +205,7 @@ describe('side chat pill', () => {
     await pillShown(container)
     act(() => input.setSelectionRange(0, 0))
     type(editor, 'x')
-    expect(pill(container)).toBeNull()
+    expect(hasPill(editor)).toBe(false)
     expect(input.value).toBe('x/btw q')
   })
 })
