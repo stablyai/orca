@@ -115,13 +115,13 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     removeFillerWords: owner?.removeFillerWords ?? true,
     dictationTerms: owner?.dictationTerms,
     worktreeId: owner?.worktreeId,
-    onTranscript: (text) => {
+    onTranscript: (text, heard) => {
       const current = ownerRef.current
       if (!current) {
         return
       }
       const starting = screenFor(screensRef.current, current, true)
-      if (starting?.shown() && starting.insert(text)) {
+      if (starting?.shown() && starting.insert(text, heard)) {
         return
       }
       void insertMobileDictationAway(current, text).then((inserted) => {

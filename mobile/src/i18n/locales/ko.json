@@ -1316,6 +1316,8 @@
       "durationMinutes_one": "{{count}}분",
       "durationMinutes_other": "{{count}}분",
       "discard": "녹음 삭제",
+      "cancelSending": "보내기 취소",
+      "sendingIn": "{{seconds}}초 후 보내기",
       "retry": "받아쓰기 다시 시도",
       "retryShort": "다시 시도"
     },
@@ -1340,6 +1342,7 @@
       "listeningOnComputer": "듣는 중. 컴퓨터에서 받아쓰는 중입니다.",
       "finishing": "마무리 중.",
       "inserted": "삽입됨.",
+      "insertedSending": "삽입됨. {{duration}} 후에 보냅니다.",
       "cancelled": "받아쓰기가 취소되었습니다.",
       "movedTo": "이 휴대폰의 받아쓰기가 멈췄습니다. {{computer}}에서 계속합니다.",
       "movedToComputer": "이 휴대폰의 받아쓰기가 멈췄습니다. 컴퓨터에서 계속합니다.",

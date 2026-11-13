@@ -1361,6 +1361,8 @@
       "durationMinutes_other": "{{count}} minutes",
       "durationMinutes_many": "{{count}} minutes",
       "discard": "Supprimer l’enregistrement",
+      "cancelSending": "Annuler l’envoi",
+      "sendingIn": "Envoi dans {{seconds}} s",
       "retry": "Relancer la dictée",
       "retryShort": "Réessayer"
     },
@@ -1385,6 +1387,7 @@
       "listeningOnComputer": "Écoute. Transcription sur l’ordinateur.",
       "finishing": "Finalisation.",
       "inserted": "Inséré.",
+      "insertedSending": "Inséré. Envoi dans {{duration}}.",
       "cancelled": "Dictée annulée.",
       "movedTo": "Ce téléphone a arrêté de transcrire. Suite sur {{computer}}.",
       "movedToComputer": "Ce téléphone a arrêté de transcrire. Suite sur l’ordinateur.",

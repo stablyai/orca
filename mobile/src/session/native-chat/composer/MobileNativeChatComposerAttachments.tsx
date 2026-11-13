@@ -19,6 +19,7 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
 import { chatTextAttachmentName } from '../../../../../src/shared/native-chat-text-attachment-references'
+import { useMobileDictationAutoSendWithdraw } from './use-mobile-native-chat-composer-auto-send'
 
 const THUMB_SIZE = 58
 // Items sit 12pt in from the composer box's edge (box padding plus strip padding).
@@ -51,6 +52,8 @@ export function MobileNativeChatComposerAttachments({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const onOpenFile = useMobileNativeChatOpenFile()
+  // Removing or opening an attachment takes the message over, as a text edit does, so a dictation countdown ends.
+  const takeOver = useMobileDictationAutoSendWithdraw()
   if (images.length === 0 && files.length === 0) {
     return null
   }
@@ -86,7 +89,10 @@ export function MobileNativeChatComposerAttachments({
           {onRemoveImage ? (
             <RemoveBadge
               label={t('chat.composerAttachments.removeImage', 'Remove image')}
-              onPress={() => onRemoveImage(image.id)}
+              onPress={() => {
+                takeOver()
+                onRemoveImage(image.id)
+              }}
             />
           ) : null}
         </View>
@@ -100,7 +106,12 @@ export function MobileNativeChatComposerAttachments({
             style={styles.fileText}
             disabled={!file.path || !onOpenFile}
             accessibilityRole="button"
-            onPress={() => file.path && onOpenFile?.(file.path)}
+            onPress={() => {
+              if (file.path && onOpenFile) {
+                takeOver()
+                onOpenFile(file.path)
+              }
+            }}
           >
             <Text style={styles.fileName} numberOfLines={1}>
               {chatTextAttachmentName(file.name, pastedText)}
@@ -126,7 +137,10 @@ export function MobileNativeChatComposerAttachments({
               label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
                 name: chatTextAttachmentName(file.name, pastedText)
               })}
-              onPress={() => onRemoveFile(file.id)}
+              onPress={() => {
+                takeOver()
+                onRemoveFile(file.id)
+              }}
             />
           ) : null}
         </View>

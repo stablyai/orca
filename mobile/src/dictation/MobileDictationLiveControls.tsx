@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState, type Ref } from 'react'
 import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert, Laptop, Mic, RotateCcw, Smartphone, Square, X } from 'lucide-react-native'
+import {
+  ArrowUp,
+  CircleAlert,
+  Laptop,
+  Mic,
+  RotateCcw,
+  Smartphone,
+  Square,
+  X
+} from 'lucide-react-native'
 import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -29,13 +38,15 @@ export function MobileDictationCancelButton({
   onCancel,
   targetRef,
   compact = false,
-  discards = false
+  discards = false,
+  label
 }: {
   onCancel: () => void
   targetRef?: Ref<HostInstance>
   compact?: boolean
   // After a failure, ✕ throws the kept recording away.
   discards?: boolean
+  label?: string
 }): React.JSX.Element {
   useMobileColorScheme()
   useMobileTranslation()
@@ -44,7 +55,7 @@ export function MobileDictationCancelButton({
       ref={targetRef}
       accessibilityRole="button"
       accessibilityLabel={
-        discards ? dictationControlsCopy.discard() : dictationControlsCopy.cancel()
+        label ?? (discards ? dictationControlsCopy.discard() : dictationControlsCopy.cancel())
       }
       style={({ pressed }) => [
         composerInputStyles.controlButton,
@@ -240,6 +251,29 @@ export function MobileDictationFinishingNote({
       <EngineIcon kind="computer" color={colors.textSecondary} />
       <Text style={styles.finishing} numberOfLines={1}>
         {dictationControlsCopy.finishingOn(computerName)}
+      </Text>
+    </View>
+  )
+}
+
+function secondsUntil(deadline: number): number {
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+}
+
+// The dictated message's send countdown; the screen reader heard it once when it began, so the ticking stays silent.
+export function MobileDictationAutoSendNote({ deadline }: { deadline: number }): React.JSX.Element {
+  useMobileColorScheme()
+  useMobileTranslation()
+  const [seconds, setSeconds] = useState(() => secondsUntil(deadline))
+  useEffect(() => {
+    const interval = setInterval(() => setSeconds(secondsUntil(deadline)), 250)
+    return () => clearInterval(interval)
+  }, [deadline])
+  return (
+    <View style={styles.row} importantForAccessibility="no-hide-descendants" aria-hidden>
+      <ArrowUp pointerEvents="none" size={16} color={colors.textSecondary} strokeWidth={2.2} />
+      <Text style={styles.finishing} numberOfLines={1}>
+        {dictationControlsCopy.sendingIn(seconds)}
       </Text>
     </View>
   )

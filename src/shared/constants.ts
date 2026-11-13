@@ -8,6 +8,7 @@ import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-at
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
 import { DICTATION_LANGUAGE_AUTO } from './dictation-language'
+import { DEFAULT_DICTATION_AUTO_SEND_DELAY_MS } from './dictation-auto-send'
 import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from './voice-model-unload'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
@@ -106,6 +107,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     dictationHoldToRecord: true,
     removeFillerWords: true,
     terminalConfirmBeforeInsert: false,
+    autoSendAfterDictation: false,
+    autoSendDelayMs: DEFAULT_DICTATION_AUTO_SEND_DELAY_MS,
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
     microphoneDeviceLabel: null,

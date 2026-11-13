@@ -1402,6 +1402,8 @@
       "durationMinutes_few": "{{count}} минуты",
       "durationMinutes_many": "{{count}} минут",
       "discard": "Удалить запись",
+      "cancelSending": "Отменить отправку",
+      "sendingIn": "Отправка: {{seconds}} с",
       "retry": "Повторить диктовку",
       "retryShort": "Повторить"
     },
@@ -1426,6 +1428,7 @@
       "listeningOnComputer": "Слушаю. Распознавание на компьютере.",
       "finishing": "Завершение.",
       "inserted": "Вставлено.",
+      "insertedSending": "Вставлено. До отправки: {{duration}}.",
       "cancelled": "Диктовка отменена.",
       "movedTo": "Этот телефон перестал распознавать. Продолжение на {{computer}}.",
       "movedToComputer": "Этот телефон перестал распознавать. Продолжение на компьютере.",

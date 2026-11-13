@@ -4,13 +4,15 @@ import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-hos
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { useHostProfile } from '../host-catalog/use-host-profile'
 import type { MobileDictationLive } from './mobile-dictation-live-context'
+import type { MobileDictationAutoSend } from './mobile-dictation-auto-send'
 import { dictationFailureReason } from './mobile-dictation-controls-copy'
 
-// What every dictation control reads while one runs or waits for Retry: meter, engine, the computer's name, cancel and Retry.
+// What every dictation control reads while one runs or waits for Retry: meter, engine, the computer's name, cancel, Retry and auto-send.
 export function useMobileDictationLive(
   dictation: Pick<UseMobileDictationResult, 'meter' | 'engine' | 'failure' | 'retry'>,
   cancel: () => void,
-  hostId: string
+  hostId: string,
+  autoSend: MobileDictationAutoSend
 ): MobileDictationLive {
   const cancelLatest = useRef(cancel)
   useLayoutEffect(() => {
@@ -27,9 +29,10 @@ export function useMobileDictationLive(
       computerName,
       cancel: stableCancel,
       failureReason,
-      retry: () => void retry()
+      retry: () => void retry(),
+      autoSend
     }),
-    [meter, engine, computerName, stableCancel, failureReason, retry]
+    [meter, engine, computerName, stableCancel, failureReason, retry, autoSend]
   )
 }
 

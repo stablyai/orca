@@ -26,10 +26,16 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     setCreateWarningState,
     createWarning,
     dictation,
+    dictationAutoSend,
     cancelDictation,
     handleSessionContentRowLayout
   } = controller
-  const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
+  const dictationLive = useMobileDictationLive(
+    dictation,
+    cancelDictation,
+    hostId,
+    dictationAutoSend
+  )
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
       <View style={styles.sessionContentMain}>

@@ -1320,6 +1320,8 @@
       "durationMinutes_one": "{{count}} dakika",
       "durationMinutes_other": "{{count}} dakika",
       "discard": "Kaydı sil",
+      "cancelSending": "Göndermeyi iptal et",
+      "sendingIn": "{{seconds}} sn içinde gönderiliyor",
       "retry": "Dikteyi yeniden dene",
       "retryShort": "Yeniden dene"
     },
@@ -1344,6 +1346,7 @@
       "listeningOnComputer": "Dinleniyor. Bilgisayarda yazıya dökülüyor.",
       "finishing": "Tamamlanıyor.",
       "inserted": "Eklendi.",
+      "insertedSending": "Eklendi. {{duration}} içinde gönderilecek.",
       "cancelled": "Dikte iptal edildi.",
       "movedTo": "Bu telefon yazıya dökmeyi bıraktı. {{computer}} üzerinde devam ediliyor.",
       "movedToComputer": "Bu telefon yazıya dökmeyi bıraktı. Bilgisayarda devam ediliyor.",

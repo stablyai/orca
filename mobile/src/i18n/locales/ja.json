@@ -1316,6 +1316,8 @@
       "durationMinutes_one": "{{count}} 分",
       "durationMinutes_other": "{{count}} 分",
       "discard": "録音を破棄",
+      "cancelSending": "送信をキャンセル",
+      "sendingIn": "{{seconds}}秒後に送信",
       "retry": "音声入力を再試行",
       "retryShort": "再試行"
     },
@@ -1340,6 +1342,7 @@
       "listeningOnComputer": "聞き取り中。コンピュータで文字起こししています。",
       "finishing": "仕上げ中。",
       "inserted": "挿入しました。",
+      "insertedSending": "挿入しました。{{duration}}後に送信します。",
       "cancelled": "音声入力をキャンセルしました。",
       "movedTo": "このスマートフォンでの文字起こしが止まりました。{{computer}} で続けます。",
       "movedToComputer": "このスマートフォンでの文字起こしが止まりました。コンピュータで続けます。",

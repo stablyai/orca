@@ -14,8 +14,9 @@ import {
   stopAfterSilenceSeconds,
   type StopAfterSilenceSeconds
 } from '../../../src/shared/dictation-silence-stop'
+import { mobileDictationAutoSendDelayMs } from '../dictation/mobile-dictation-auto-send'
 
-// The computer's dictation settings as this session reads them: mic shown, mode, filler switch, and whether setup is needed first.
+// The computer's dictation settings as this session reads them: mic shown, mode, filler switch, auto-send, and whether setup is needed first.
 export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapabilitiesModel) {
   const { client, connState, worktreeId, setShowDictationSetup, setDictationMode } = scope
   const { setDictationEnabled } = scope
@@ -27,6 +28,14 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
   const [silenceSeconds, setSilenceSeconds] = useState<StopAfterSilenceSeconds>(
     DEFAULT_STOP_AFTER_SILENCE_SECONDS
   )
+  // The host's "Send when dictation ends" delay for chat dictation; null while off or unread.
+  const [autoSendDelayMs, setAutoSendDelayMs] = useState<number | null>(null)
+  // It sends on its own, so another host or worktree reads as off until its own setup read lands.
+  const [autoSendReadFor, setAutoSendReadFor] = useState({ client, worktreeId })
+  if (autoSendReadFor.client !== client || autoSendReadFor.worktreeId !== worktreeId) {
+    setAutoSendReadFor({ client, worktreeId })
+    setAutoSendDelayMs(null)
+  }
   // Only a host setup read sets this; while false, the host's start refusal decides (older hosts, first tap before the read).
   const dictationNeedsSetupRef = useRef(false)
 
@@ -44,11 +53,15 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
         setRemoveFillerWords(setup.removeFillerWords !== false)
         setDictationTerms(setup.dictationTerms)
         setSilenceSeconds(stopAfterSilenceSeconds(setup))
+        setAutoSendDelayMs(mobileDictationAutoSendDelayMs(setup))
         setDictationEnabled(!dictationMicHidden(setup))
         dictationNeedsSetupRef.current = dictationNeedsSetup(setup)
       }
     } catch {
-      // Keep the last settings when an older host cannot report them.
+      // Keep the last settings when an older host cannot report them, but never a send that may be stale.
+      if (read === dictationSettingsReadRef.current) {
+        setAutoSendDelayMs(null)
+      }
     }
   }, [client, connState, phoneDictation.refresh, setDictationEnabled, setDictationMode, worktreeId])
 
@@ -80,6 +93,7 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
     removeFillerWords,
     dictationTerms,
     silenceSeconds,
+    autoSendDelayMs,
     dictationNeedsSetupRef,
     closeDictationSetup,
     refreshDictationMode

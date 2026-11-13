@@ -18,6 +18,9 @@ export const dictationControlsCopy = {
   finishing: () => translate('dictation.controls.finishing', 'Finishing dictation'),
   cancel: () => translate('dictation.controls.cancel', 'Cancel dictation'),
   discard: () => translate('dictation.controls.discard', 'Discard recording'),
+  cancelSending: () => translate('dictation.controls.cancelSending', 'Cancel sending'),
+  sendingIn: (seconds: number) =>
+    translate('dictation.controls.sendingIn', 'Sending in {{seconds}}s', { seconds }),
   retry: () => translate('dictation.controls.retry', 'Retry dictation'),
   retryShort: () => translate('dictation.controls.retryShort', 'Retry'),
   recordingKept: () => translate('dictation.failure.recordingKept', 'Recording kept'),

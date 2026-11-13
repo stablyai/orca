@@ -1316,6 +1316,8 @@
       "durationMinutes_one": "{{count}} 分鐘",
       "durationMinutes_other": "{{count}} 分鐘",
       "discard": "捨棄錄音",
+      "cancelSending": "取消傳送",
+      "sendingIn": "{{seconds}} 秒後傳送",
       "retry": "重試聽寫",
       "retryShort": "重試"
     },
@@ -1340,6 +1342,7 @@
       "listeningOnComputer": "正在聽。正在電腦上轉寫。",
       "finishing": "正在完成。",
       "inserted": "已插入。",
+      "insertedSending": "已插入。{{duration}}後傳送。",
       "cancelled": "已取消聽寫。",
       "movedTo": "此手機已停止轉寫。在 {{computer}} 上繼續。",
       "movedToComputer": "此手機已停止轉寫。在電腦上繼續。",

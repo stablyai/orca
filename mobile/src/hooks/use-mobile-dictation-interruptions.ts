@@ -11,6 +11,7 @@ export function useMobileDictationInterruptions({
   status,
   audioPhase,
   stopWhenStarted,
+  cutShort,
   applyStatus,
   finish,
   abandon
@@ -19,6 +20,7 @@ export function useMobileDictationInterruptions({
   status: RefObject<DictationStatus>
   audioPhase: RefObject<MobileDictationAudioPhase>
   stopWhenStarted: RefObject<boolean>
+  cutShort: RefObject<boolean>
   applyStatus: (next: DictationStatus) => void
   finish: (emptyTranscriptMessage: string) => Promise<void>
   abandon: (reason: string | null) => Promise<void>
@@ -26,9 +28,11 @@ export function useMobileDictationInterruptions({
   useEffect(() => {
     const interrupted = () => {
       if (status.current === 'recording') {
+        cutShort.current = true
         void finish(dictationSessionErrorMessage('interrupted'))
       } else if (audioPhase.current === 'holding') {
         // The mic is live while the host start is pending: close it now, and finish with what it heard once the start commits.
+        cutShort.current = true
         stopWhenStarted.current = true
         applyStatus('processing')
         void capture.end()
@@ -50,5 +54,5 @@ export function useMobileDictationInterruptions({
       sub.remove()
       appState.remove()
     }
-  }, [abandon, applyStatus, audioPhase, capture, finish, status, stopWhenStarted])
+  }, [abandon, applyStatus, audioPhase, capture, cutShort, finish, status, stopWhenStarted])
 }

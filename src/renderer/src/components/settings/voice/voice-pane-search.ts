@@ -89,6 +89,28 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('components.settings.voice.autoSend.label', 'Send when dictation ends'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.autoSendDescription',
+      'Send a dictated chat message after a short pause you can cancel.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.autoSendKeyword',
+        'auto send'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.handsFreeKeyword',
+        'hands-free'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.voice.pane.search.microphoneTitle', 'Microphone'),
     description: translate(
       'auto.components.settings.voice.pane.search.microphoneDescription',

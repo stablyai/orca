@@ -38,7 +38,7 @@ export function concludeMobileDictationFailure(
   run.recording.current.clear()
   const kept = run.keptTranscript.take(dictationId)
   if (kept) {
-    run.onTranscript.current(kept)
+    run.onTranscript.current(kept, { partial: true })
   }
   run.reportError(err)
 }

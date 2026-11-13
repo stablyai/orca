@@ -70,6 +70,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const recordingRef = useRef(new MobileDictationRecording())
   const sendHeldAudioRef = useRef(() => {})
   const stopWhenStartedRef = useRef(false)
+  const cutShortRef = useRef(false)
   const generationRef = useRef(0)
 
   useLayoutEffect(() => {
@@ -140,6 +141,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       enabled: enabledRef,
       generation: generationRef,
       stopWhenStarted: stopWhenStartedRef,
+      cutShort: cutShortRef,
       audioPhase: audioPhaseRef,
       pendingChunks: pendingChunksRef,
       pendingAudioBudget: pendingAudioBudgetRef,
@@ -218,6 +220,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       const client = clientRef.current
       const dictationId = activeIdRef.current
       const wasUnderway = statusRef.current === 'starting' || statusRef.current === 'recording'
+      // A kept recording the user never stopped replays on Retry as a draft.
+      if (reason !== null && wasUnderway) {
+        cutShortRef.current = true
+      }
       // Only the user's discard drops a kept recording; an interruption while it waits leaves it for Retry.
       if (reason !== null && dictationId === null && failureRef.current) {
         return
@@ -255,6 +261,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     status: statusRef,
     audioPhase: audioPhaseRef,
     stopWhenStarted: stopWhenStartedRef,
+    cutShort: cutShortRef,
     applyStatus,
     finish: finishDictation,
     abandon: abandonDictation

@@ -12,8 +12,9 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import { MobileNativeChatDictationPreviewContext } from './mobile-native-chat-dictation-preview-context'
 import { setMobileNativeChatDraftText } from './mobile-native-chat-draft-store'
+import { useMobileNativeChatComposerAutoSend } from './use-mobile-native-chat-composer-auto-send'
 
-// The composer's side of dictation: where its words land, and the grey words heard so far.
+// The composer's side of dictation: where its words land, the grey words heard so far, and the send when it ends.
 export function useMobileNativeChatComposerDictation({
   draftScopeKey,
   value,
@@ -25,6 +26,7 @@ export function useMobileNativeChatComposerDictation({
   insertDictation: ((insert: (draft: string) => string) => boolean | void) | undefined
   placeCaret: (at: number) => void
 }) {
+  const autoSend = useMobileNativeChatComposerAutoSend(draftScopeKey)
   // Dictation lands on the selection the field had when it started, so taps elsewhere while talking don't move it.
   const selectionRef = useRef<MobileDictationAnchor | null>(null)
   const shownScopeRef = useRef(draftScopeKey)
@@ -74,6 +76,7 @@ export function useMobileNativeChatComposerDictation({
       ? { ...splitDraftForDictation(value, heard.text, heard.anchor), text: heard.text }
       : null
   return {
+    autoSend,
     preview,
     readSelection: (event: TextInputSelectionChangeEvent) => {
       selectionRef.current = readMobileDictationAnchor(event, value)

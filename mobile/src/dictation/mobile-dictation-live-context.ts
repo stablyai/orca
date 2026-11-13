@@ -1,6 +1,7 @@
 import { createContext } from 'react'
 import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
+import type { MobileDictationAutoSend } from './mobile-dictation-auto-send'
 
 export type MobileDictationLive = {
   readonly meter: MobileDictationMeter
@@ -12,6 +13,8 @@ export type MobileDictationLive = {
   // The short reason a dictation failed with its recording kept; Retry plays it to the computer again.
   readonly failureReason: string | null
   readonly retry: () => void
+  // "Send when dictation ends": the chat composer counts down, sends, and withdraws it when the user takes over.
+  readonly autoSend: MobileDictationAutoSend
 }
 
 // The chat mic sits several composers deep (overlay, queued edits); it reads the live dictation from here.

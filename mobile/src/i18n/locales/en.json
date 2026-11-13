@@ -536,6 +536,8 @@
       "meterOnComputer": "Recording, {{duration}}, on the computer",
       "meter": "Recording, {{duration}}",
       "discard": "Discard recording",
+      "cancelSending": "Cancel sending",
+      "sendingIn": "Sending in {{seconds}}s",
       "retry": "Retry dictation",
       "retryShort": "Retry"
     },
@@ -560,6 +562,7 @@
       "listeningOnComputer": "Listening. Transcribing on the computer.",
       "finishing": "Finishing.",
       "inserted": "Inserted.",
+      "insertedSending": "Inserted. Sending in {{duration}}.",
       "cancelled": "Dictation cancelled.",
       "movedTo": "This phone stopped transcribing. Continuing on {{computer}}.",
       "movedToComputer": "This phone stopped transcribing. Continuing on the computer.",

@@ -39,6 +39,9 @@ export const dictationSetupSchema = z.looseObject({
   removeFillerWords: salvagedOptional('removeFillerWords', z.boolean()),
   // Absent from older hosts, which stop after a minute; the shared reader maps absent and unknown to that.
   stopAfterSilenceSeconds: salvagedOptional('stopAfterSilenceSeconds', z.number().nullable()),
+  // Absent from older hosts, which send nothing on their own; the phone then leaves dictated chat as a draft.
+  autoSendAfterDictation: salvagedOptional('autoSendAfterDictation', z.boolean()),
+  autoSendDelayMs: salvagedOptional('autoSendDelayMs', z.number()),
   // Absent from older hosts, which spell nothing; malformed entries are dropped.
   dictationTerms: salvagedOptional(
     'dictationTerms',
