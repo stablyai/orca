@@ -147,6 +147,7 @@ describe('a running idle chat whose strip is expired holds Send with its hint (E
           holdKey: 'unused',
           agent: 'claude'
         }),
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the install slot reads only target/agent/isVisible/sessionId/tabId and the layout tag
         slot: useNativeChatInstallSlot(props as never, 'Claude', 'pane' as never)
       }))
       // Active: nothing holds the composer.
