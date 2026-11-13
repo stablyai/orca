@@ -3,12 +3,26 @@
     "target": "es2022",
     "module": "es2022",
     "moduleResolution": "bundler",
-    "lib": ["es2022"],
-    "types": ["@cloudflare/workers-types", "@types/node"],
+    "lib": [
+      "es2024"
+    ],
+    "types": [
+      "@cloudflare/workers-types",
+      "@types/node"
+    ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@xterm/xterm": [
+        "./types/xterm-theme.d.ts"
+      ]
+    }
   },
-  "include": ["src", "test", "image"]
+  "include": [
+    "src",
+    "test",
+    "image"
+  ]
 }

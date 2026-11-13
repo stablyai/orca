@@ -7,7 +7,7 @@
     "dev": "wrangler dev -c wrangler.jsonc -c wrangler.build-runner.jsonc --port 8791 --ip 127.0.0.1",
     "db:migrate:local": "wrangler d1 migrations apply SANDBOX_DB --local",
     "golden-image": "tsx image/build-golden-image.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/typecheck.mjs",
     "test": "vitest run"
   },
   "dependencies": {

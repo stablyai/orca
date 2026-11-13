@@ -69,7 +69,7 @@ export function providerEnabled(env: Pick<Env, 'AGENT_ACCOUNTS_CLAUDE' | 'AGENT_
   return { claude: states.claude === 'on', codex: states.codex === 'on' }
 }
 
-export function credentialState(row: Pick<CredentialRow, 'state' | 'expires_at'> | null, now: number): CredentialState {
+export function credentialState(row: Pick<CredentialRow, 'state' | 'expires_at' | 'suspect_at'> | null, now: number): CredentialState {
   if (!row) {
     return 'none'
   }

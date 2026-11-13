@@ -124,7 +124,7 @@ describe('SEC-6c: secret-handling code logs only through the redacting sink', ()
 
   it('the secret-handling modules never call console directly', () => {
     for (const file of FILES) {
-      const source = readFileSync(fileURLToPath(new URL(`../src/${file}`, import.meta.url)), 'utf8')
+      const source = readFileSync(fileURLToPath(new URL(`../src/${file}`, import.meta.url).href), 'utf8')
       expect({ file, direct: /\bconsole\s*\.\s*[a-z]+\s*\(/.test(source) }).toEqual({ file, direct: false })
     }
   })

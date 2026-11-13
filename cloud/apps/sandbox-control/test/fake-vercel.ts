@@ -67,7 +67,10 @@ export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   snapshots: Map<string, ProviderSnapshot & { sandboxName: string; creationMethod: string; createdAt: number }>
   commands: { sessionId: string; command: string; args?: string[]; env: Record<string, string> }[]
   /** Answers commands the fake does not know (in-VM orca CLI, routine runners); undefined falls through. */
-  commandHandler?: (params: RunCommandParams, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
+  commandHandler?: (
+    params: RunCommandParams,
+    sessionId: string
+  ) => { exitCode: number; stdout: string; stderr: string } | Promise<{ exitCode: number; stdout: string; stderr: string }> | undefined
   failStart: boolean
   failEnvRefresh: boolean
   /** Exit code orca-ssh-keys answers with (0 = success; 3 = image without sshd). */
