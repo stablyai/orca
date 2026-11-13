@@ -59,6 +59,10 @@ export class RelayOriginPool {
     return this.activeOrigin?.hasLiveControl() ?? false
   }
 
+  isRecovering(): boolean {
+    return this.isCurrent() && Boolean(this.rotationPromise || this.drainRetry.pending)
+  }
+
   applyAssignmentMetadata(assignment: RelayAssignment): boolean {
     const current = this.assignment
     if (!this.isCurrent() || !current || assignment.assignmentEpoch < current.assignmentEpoch) {

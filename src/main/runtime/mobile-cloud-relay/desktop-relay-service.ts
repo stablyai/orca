@@ -75,6 +75,8 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
+          // A self-closed broker is neither live nor recovering, so this rebuilds it now.
+          onSelfClose: () => this.ensureLive(),
           resolvePreferredRegion: regionPreference.resolvePreferredRegion,
           measureRegionDecision: regionPreference.measureRegionDecision,
           onAssignedCellActive: regionPreference.noteAssignedCell,

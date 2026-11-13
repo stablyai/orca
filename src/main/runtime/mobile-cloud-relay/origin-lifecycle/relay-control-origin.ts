@@ -9,6 +9,7 @@ import type {
 } from '../control-channel/relay-control-protocol'
 import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
 import type { RelayAssignment } from '../director/relay-http-client'
+import { RelayDataAttachHealth } from './relay-data-attach-health'
 
 const OBSERVED_OPEN_LIMIT = 16
 
@@ -32,16 +33,27 @@ export class RelayControlOrigin {
     { message: RelayConnectionOpenMessage; seenAt: number }
   >()
   private readonly detachMobileSocketTransport: () => void
+  private readonly attachHealth: RelayDataAttachHealth
 
   constructor(options: RelayControlOriginOptions) {
     this.options = options
     this.assignment = options.assignment
+    // Reuse the drain path so the pool re-asks the director and rebinds or moves cells.
+    this.attachHealth = new RelayDataAttachHealth(options.assignment.cellUrl, () =>
+      options.onDrain(this, { type: 'drain', graceMs: 0, recovery: 'resolve-director' })
+    )
     this.transport = new CloudRelayTransport({
       cellUrl: options.assignment.cellUrl,
       relayHostId: options.relayHostId,
       generation: 0,
       createSocket: options.createDataSocket,
-      onConnectionClosed: (connectionId) => options.onConnectionReleased(connectionId, this)
+      onConnectionClosed: (connectionId) => options.onConnectionReleased(connectionId, this),
+      onAttachSettled: (attached) => {
+        // Closing terminates sockets mid-attach; that is not evidence about the path.
+        if (!this.closed) {
+          this.attachHealth.note(attached)
+        }
+      }
     })
     this.detachMobileSocketTransport = options.mobileSocketWiring.attachTransport(
       this.transport,

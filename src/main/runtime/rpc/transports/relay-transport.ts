@@ -27,6 +27,8 @@ type CloudRelayTransportOptions = {
   generation: number
   createSocket?: (url: string) => WebSocket
   onConnectionClosed?: (connectionId: string) => void
+  /** Whether a data socket reached its first relay frame; the owner discards reports while stopping. */
+  onAttachSettled?: (attached: boolean) => void
 }
 
 function relayWebSocketOrigin(cellUrl: string): string {
@@ -50,6 +52,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   private generation: number
   private readonly createSocket: (url: string) => WebSocket
   private readonly onConnectionClosed: ((connectionId: string) => void) | undefined
+  private readonly onAttachSettled: ((attached: boolean) => void) | undefined
   private readonly socketsByConnectionId = new Map<string, WebSocket>()
   private readonly metadataBySocket = new Map<WebSocket, MobileSocketTransportMetadata>()
   private readonly clientIds = new Map<WebSocket, string>()
@@ -64,6 +67,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.relayHostId = options.relayHostId
     this.generation = options.generation
     this.onConnectionClosed = options.onConnectionClosed
+    this.onAttachSettled = options.onAttachSettled
     this.createSocket =
       options.createSocket ??
       ((url) =>
@@ -156,6 +160,8 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       let attached = false
       let finalized = false
       const deadline = setTimeout(() => {
+        // Each failure path finalizes, and success clears the deadline, so one report per socket.
+        this.onAttachSettled?.(false)
         socket.terminate()
         // Expired attaches are unusable; release even if terminate never emits close.
         finalize()
@@ -179,6 +185,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         if (!attached) {
           attached = true
           clearTimeout(deadline)
+          this.onAttachSettled?.(true)
         }
         const message: RelayMessagePayload = isBinary
           ? new Uint8Array(raw as Buffer)
@@ -211,21 +218,29 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       }
       const onError = (error: Error): void => {
         if (!opened) {
+          this.onAttachSettled?.(false)
           finalize()
           reject(error)
         }
+      }
+      // A 4xxx close before the first frame is the relay refusing this attach (ticket, seat).
+      const onClose = (code: number): void => {
+        if (!attached && code >= 4000 && code < 5000) {
+          this.onAttachSettled?.(false)
+        }
+        finalize()
       }
       this.detachListenersBySocket.set(socket, () => {
         finalized = true
         socket.off('message', onMessage)
         socket.off('open', onOpen)
         socket.off('error', onError)
-        socket.off('close', finalize)
+        socket.off('close', onClose)
       })
       socket.on('message', onMessage)
       socket.once('open', onOpen)
       socket.once('error', onError)
-      socket.once('close', finalize)
+      socket.once('close', onClose)
     })
   }
 
