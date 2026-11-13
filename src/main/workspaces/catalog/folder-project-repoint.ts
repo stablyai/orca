@@ -16,6 +16,7 @@ import {
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getResolvedFolderWorkspacePathStatus } from '../../project-groups/folder-workspace-path-status'
 import { findProjectAtSameRealPath } from './project-realpath-identity'
+import { assertWslMoveHostSetupWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import type { Store } from '../../persistence/loading-store/store'
 
 export type FolderProjectRepointResult =
@@ -26,6 +27,8 @@ export type FolderProjectRepointResult =
 type RepointStore = Pick<
   Store,
   | 'getRepos'
+  | 'getRepo'
+  | 'getProjects'
   | 'updateRepo'
   | 'getAllWorktreeMeta'
   | 'getAllWorktreeLineage'
@@ -106,6 +109,13 @@ export async function repointMovedFolderProject(
   if (!stillCurrent || stillCurrent.path !== repo.path) {
     return { outcome: 'not-applicable' }
   }
+  // The awaited probes can straddle a WSL move fencing this project; migrating then would leave
+  // the move's already-exported snapshot stale, so re-run the handler's fence check here too.
+  assertWslMoveHostSetupWritable(store, {
+    projectId: args.projectId,
+    hostId: LOCAL_EXECUTION_HOST_ID,
+    repoId
+  })
   migrateFolderProjectWorktreeIds(store, current, newPath)
   const updated = store.updateRepo(current, { path: newPath })
   return updated ? { outcome: 'repointed', repo: updated } : { outcome: 'not-applicable' }
