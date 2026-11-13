@@ -21179,7 +21179,7 @@
         "openAlreadySubscribed": "This account already has a plan. Use Manage billing to change it.",
         "openNoAccount": "There is no billing account yet. Choose a plan first.",
         "openUnconfigured": "Billing is unavailable in this build.",
-        "openFailed": "Could not reach billing. Try again.",
+        "openFailed": "Couldn’t reach billing. Try again.",
         "endsOn": "Plan ends {{value0}}",
         "renewsOn": "Renews {{value0}}",
         "continueInBrowser": "Continue in your browser. This updates when you come back.",
@@ -21409,6 +21409,7 @@
           "featureOverageNoRate": "Optional overage up to a monthly spend cap you set"
         },
         "capLabel2": "Monthly spend cap",
+        "capNotSaved": "Couldn’t save",
         "capSaved": "Saved",
         "checkout": {
           "attention2": "Stripe needs one more step",
@@ -24479,7 +24480,9 @@
         "offStatus2": "Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.",
         "turnOff": "Turn off overage",
         "memberOn5": "Overage is on, up to your {{cap}} spend cap.",
-        "memberOff5": "Off until an owner or admin turns it on."
+        "memberOff5": "Off until an owner or admin turns it on.",
+        "turnOffFailed": "Couldn’t turn off overage.",
+        "turnOnFailed": "Couldn’t turn on overage."
       },
       "overageUsed": "{{value0}} of {{value1}} used",
       "capZero2": "Set a spend cap above $0, or turn overage off."
