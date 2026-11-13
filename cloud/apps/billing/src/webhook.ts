@@ -140,6 +140,17 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
       console.error(JSON.stringify({ error: 'record_subscription_price', message: error instanceof Error ? error.message.slice(0, 200) : '' }))
     })
   }
+  // Cancelling either way: cancel_at_period_end (older API versions, the API) or cancel_at (the
+  // portal on 2025-09-30.clover sets a date instead). A canceled subscription isn't "cancelling".
+  const cancelAt =
+    subscription.status === 'canceled'
+      ? null
+      : typeof subscription.cancel_at === 'number' && subscription.cancel_at > 0
+        ? subscription.cancel_at * 1000
+        : subscription.cancel_at_period_end
+          ? periodEnd * 1000
+          : null
+  const cancelling = cancelAt !== null ? 1 : 0
   await upsertSubscription(db, {
     stripe_subscription_id: subscription.id,
     account_id: accountId,
@@ -150,7 +161,8 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     overage_enabled: overageItemId ? 1 : 0,
     current_period_start: periodStart * 1000,
     current_period_end: periodEnd * 1000,
-    cancel_at_period_end: subscription.cancel_at_period_end ? 1 : 0,
+    cancel_at_period_end: cancelling,
+    cancel_at: cancelAt,
     updated_at: now,
     billing_interval: match.interval,
     overage_item_id: overageItemId,
@@ -167,7 +179,7 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     accountId,
     subscriptionAuditEvents(
       known,
-      { status: subscription.status, plan: match.plan, billing_interval: match.interval, seats, cancel_at_period_end: subscription.cancel_at_period_end ? 1 : 0, current_period_end: periodEnd * 1000 },
+      { status: subscription.status, plan: match.plan, billing_interval: match.interval, seats, cancel_at_period_end: cancelling, current_period_end: periodEnd * 1000 },
       now
     )
   )
