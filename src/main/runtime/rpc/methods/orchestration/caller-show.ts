@@ -20,7 +20,7 @@ import type { z } from 'zod'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import type { RpcContext } from '../../core'
 import { defineOrchestrationMethod } from './access/orchestration-method-access'
-import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
+import { openClosedWorkerTerminal } from './worker/follow-up/closed-worker-terminal'
 import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
 async function locateParty(

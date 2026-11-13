@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import { RateLimitService } from './rate-limit-service'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
 import { fetchOpenCodeGoUsage } from '../providers/opencode-go/opencode-go-usage-source-selection'
 import {
+  deferred,
   errorProvider,
   flushMicrotasks,
   okProvider,
@@ -176,5 +178,24 @@ describe('RateLimitService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('reads the account picked by a second switch made during a refresh', async () => {
+    const service = new RateLimitService()
+    const reads = [deferred<ProviderRateLimits>(), deferred<ProviderRateLimits>()]
+    vi.mocked(fetchActiveClaudeRateLimits)
+      .mockReturnValueOnce(reads[0].promise)
+      .mockReturnValueOnce(reads[1].promise)
+      .mockResolvedValueOnce(okProvider('claude', 55))
+    void service.refresh()
+    await flushMicrotasks(20)
+    void service.refreshForClaudeAccountChange('acct-a')
+    reads[0].resolve(okProvider('claude', 0))
+    await flushMicrotasks(40)
+    // The first switch's rerun is reading when the user switches again.
+    void service.refreshForClaudeAccountChange('acct-b')
+    reads[1].resolve(okProvider('claude', 11))
+    await flushMicrotasks(60)
+    expect(service.getState().claude?.session?.usedPercent).toBe(55)
   })
 })

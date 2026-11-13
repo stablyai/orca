@@ -7530,8 +7530,6 @@
             "df205a675e": "色調強度",
             "ba1d9a0607": "側邊欄色調"
           },
-          "interfaceDefaultFont": "預設字型",
-          "terminalDefaultFont": "預設字型",
           "interfaceTitle": "介面",
           "terminalTitle": "終端機",
           "windowSidebarSummary": "側邊欄、狀態列和檔案瀏覽器",

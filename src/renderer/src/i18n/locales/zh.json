@@ -7243,8 +7243,6 @@
             "ba1d9a0607": "边栏色调"
           },
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出",
-          "interfaceDefaultFont": "默认字体",
-          "terminalDefaultFont": "默认字体",
           "interfaceTitle": "界面",
           "terminalTitle": "终端",
           "windowSidebarSummary": "侧边栏、状态栏和文件浏览器",

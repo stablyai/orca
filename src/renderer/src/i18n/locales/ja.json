@@ -7033,8 +7033,6 @@
             "ba1d9a0607": "サイドバーの色合い"
           },
           "b707773a0d": "有効にすると、ウィンドウを閉じても Orca は終了せず、システムトレイで実行を続けます。",
-          "interfaceDefaultFont": "デフォルトフォント",
-          "terminalDefaultFont": "デフォルトフォント",
           "interfaceTitle": "インターフェース",
           "terminalTitle": "ターミナル",
           "windowSidebarSummary": "サイドバー、ステータスバー、ファイルエクスプローラー",

@@ -7321,8 +7321,6 @@
             "ba1d9a0607": "Tinte de la barra lateral"
           },
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
-          "interfaceDefaultFont": "Fuente predeterminada",
-          "terminalDefaultFont": "Fuente predeterminada",
           "interfaceTitle": "Interfaz",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barra lateral, barra de estado y explorador de archivos",

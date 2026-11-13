@@ -7686,8 +7686,6 @@
             "df205a675e": "Renk Yoğunluğu",
             "ba1d9a0607": "Kenar Çubuğu Rengi"
           },
-          "interfaceDefaultFont": "Varsayılan yazı tipi",
-          "terminalDefaultFont": "Varsayılan yazı tipi",
           "interfaceTitle": "Arayüz",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Kenar çubuğu, durum çubuğu ve dosya gezgini",

@@ -8367,8 +8367,6 @@
             "df205a675e": "Tint strength",
             "ba1d9a0607": "Sidebar tint"
           },
-          "interfaceDefaultFont": "Default font",
-          "terminalDefaultFont": "Default font",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Sidebar, status bar, and file explorer",
