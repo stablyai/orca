@@ -56,17 +56,20 @@ export async function createMarkdownTokensProvider(
   const [
     editorCore,
     { default: markdownGrammars },
+    { default: yamlGrammars },
     { bundledLanguagesInfo },
     { rules: darkRules },
     { rules: lightRules }
   ] = await Promise.all([
     loadEditorCore(),
     import('shiki/langs/markdown.mjs'),
+    import('shiki/langs/yaml.mjs'),
     import('shiki/langs'),
     loadBuiltInMarkdownRules('dark'),
     loadBuiltInMarkdownRules('light')
   ])
-  await editorCore.core.loadLanguage(...markdownGrammars)
+  // Why: frontmatter includes source.yaml directly, without a fence label to trigger lazy loading.
+  await editorCore.core.loadLanguage(...markdownGrammars, ...yamlGrammars)
 
   // Why: Orca's editors all use the built-in theme names; redefining them keeps every setTheme caller unchanged.
   monaco.editor.defineTheme('vs-dark', {
