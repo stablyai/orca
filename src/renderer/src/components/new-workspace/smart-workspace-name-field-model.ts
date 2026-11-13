@@ -108,6 +108,7 @@ export type WorkItemSourceSearchProps = Pick<
   gitlabEnabled?: boolean
   typedTextEnabled?: boolean
   defaultLinearWorkspaceId?: string
+  initialMode?: SmartNameMode
 }
 export type NormalizedWorkItemSourceSearchProps = WorkItemSourceSearchProps & {
   disabled: boolean

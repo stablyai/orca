@@ -150,7 +150,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
           : null,
     [props.linearSourceContext, selectedRepo]
   )
-  const state = useWorkItemSourceState(textOnly, value)
+  const state = useWorkItemSourceState(textOnly, value, props.initialMode)
   // Why: Linear's status must come from the host the search runs on, not the focused one (#32924).
   const hasLinearSearchSource = linearSourceContext !== null
   const linearConnection = useLinearSourceConnection({
