@@ -27,6 +27,7 @@ import { resolveBundledOrcadRuntime } from '../../runtime-launch/orcad-bundled-r
 import { skipForMissingInputs } from '../native-slots/orcad-node-slot-fixture'
 import { buildDaemonSessionClient } from '../daemon-processes/orcad-daemon-session-client-fixture'
 import type { ServeCleanupDiagnostics } from './orcad-serve-cleanup-diagnostics.test-fixture'
+import { boundedText } from './orcad-serve-cleanup-redaction.test-fixture'
 import {
   killAndAwaitExit,
   killProfileDaemons,
@@ -105,7 +106,7 @@ function profile(): string {
 describe.skipIf(skip)('orca serve on orcad', () => {
   // Real server startup, CLI commands and graceful shutdown each cross process boundaries.
   it('deletes a linked worktree through the real CLI with a durable host journal', async () => {
-    const userData = profile()
+    const userData = realpathSync(profile())
     const home = join(userData, 'isolated-home')
     const repo = join(userData, 'repo')
     const worktree = join(userData, 'feature')
@@ -144,12 +145,18 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     ])
     await git(['worktree', 'add', '-q', worktree, '-b', 'feature'])
     const cli = async (args: string[]) => {
+      reportServePhase(userData, 'beforeCli', { args })
       const result = await runProcess({
         program: runtime!,
         args: [join(slotDir, ORCAD_CLI_ENTRY_FILENAME), ...args, '--json'],
         cwd: repo,
         env,
         timeoutMs: 60_000
+      })
+      reportServePhase(userData, 'afterCli', {
+        args,
+        code: result.code,
+        failure: result.code === 0 ? undefined : boundedText(result.stdout + result.stderr)
       })
       expect(
         result.code,
@@ -268,6 +275,32 @@ describe.skipIf(skip)('orca serve on orcad', () => {
 
 const running = new Map<string, ReturnType<typeof spawnProcess>>()
 const readinessByProfile = new Map<string, ServeReadiness>()
+const launchDiagnostics = new Map<string, { listenerVersion: string; stderr: () => string }>()
+
+function reportServePhase(
+  userData: string,
+  phase: string,
+  details: Record<string, unknown> = {}
+): void {
+  if (process.platform !== 'win32' && process.env.ORCA_SERVE_CLEANUP_DIAGNOSTICS !== '1') {
+    return
+  }
+  const child = running.get(userData)
+  const launch = launchDiagnostics.get(userData)
+  console.error(
+    '[orcad-serve-stop]',
+    JSON.stringify({
+      phase,
+      userData,
+      pid: child?.pid,
+      exitCode: child?.exitCode,
+      signalCode: child?.signalCode,
+      listenerVersionFromLaunchEnv: launch?.listenerVersion,
+      ...details,
+      stderrTail: boundedText(launch?.stderr() ?? '', 8_192)
+    })
+  )
+}
 
 async function serveDaemonPid(userData: string): Promise<number> {
   const { readiness, stderr } = await serveOnce(userData, [
@@ -304,6 +337,11 @@ async function serveOnce(
   running.set(userData, child)
   let stdout = ''
   let stderr = ''
+  launchDiagnostics.set(userData, {
+    listenerVersion: env.ORCA_VERSION ?? '0.0.0-orcad',
+    stderr: () => stderr
+  })
+  reportServePhase(userData, 'spawned')
   child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')))
   const line = await new Promise<string>((resolveLine, reject) => {
     const timer = setTimeout(() => reject(new Error(`no readiness: ${stderr}`)), 120_000)
@@ -318,41 +356,68 @@ async function serveOnce(
   })
   const readiness: ServeReadiness = JSON.parse(line)
   readinessByProfile.set(userData, readiness)
+  reportServePhase(userData, 'ready')
   return { readiness, stderr }
 }
 
 /** SIGTERM preserves daemon terminals on POSIX; Windows uses its stop-request file. */
 async function stopServe(userData: string): Promise<void> {
   const child = running.get(userData)
-  running.delete(userData)
   if (!child || child.exitCode !== null) {
+    running.delete(userData)
+    launchDiagnostics.delete(userData)
     return
   }
-  await recordProfileDaemons(userData)
-  const exited = new Promise((settle) => child.once('exit', settle))
-  if (process.platform === 'win32') {
-    const lockPath = join(userData, ORCAD_LOCK_FILE_NAME)
-    const lock = JSON.parse(readFileSync(lockPath, 'utf8'))
-    const readiness = readinessByProfile.get(userData)
-    if (lock.pid !== child.pid || lock.startedAtMs === null || !readiness?.runtimeId) {
-      throw new Error('Cannot prove ownership of the serve process to stop')
-    }
-    const instance = { pid: lock.pid, startedAtMs: lock.startedAtMs, nonce: lock.nonce, lockPath }
-    writeFileSync(
-      orcadManagedStopRequestPath(instance),
-      JSON.stringify({
-        schemaVersion: 1,
-        transactionId: randomUUID(),
-        version: lock.version,
-        runtimeId: readiness.runtimeId,
-        instance
+  let phase = 'beforeDaemonRecording'
+  reportServePhase(userData, phase)
+  const diagnosticTimer = setTimeout(() => reportServePhase(userData, `waiting:${phase}`), 10_000)
+  diagnosticTimer.unref()
+  try {
+    await recordProfileDaemons(userData)
+    phase = 'afterDaemonRecording'
+    reportServePhase(userData, phase)
+    const exited = new Promise((settle) => child.once('exit', settle))
+    if (process.platform === 'win32') {
+      const lockPath = join(userData, ORCAD_LOCK_FILE_NAME)
+      const lock = JSON.parse(readFileSync(lockPath, 'utf8'))
+      const readiness = readinessByProfile.get(userData)
+      if (lock.pid !== child.pid || lock.startedAtMs === null || !readiness?.runtimeId) {
+        throw new Error('Cannot prove ownership of the serve process to stop')
+      }
+      const instance = { pid: lock.pid, startedAtMs: lock.startedAtMs, nonce: lock.nonce, lockPath }
+      const requestPath = orcadManagedStopRequestPath(instance)
+      phase = 'beforeStopPublication'
+      reportServePhase(userData, phase, {
+        lockVersion: lock.version,
+        startedAtMs: lock.startedAtMs,
+        requestPath
       })
-    )
-  } else {
-    child.kill('SIGTERM')
+      writeFileSync(
+        requestPath,
+        JSON.stringify({
+          schemaVersion: 1,
+          transactionId: randomUUID(),
+          version: lock.version,
+          runtimeId: readiness.runtimeId,
+          instance
+        })
+      )
+    } else {
+      child.kill('SIGTERM')
+    }
+    phase = 'awaitingExit'
+    reportServePhase(userData, phase)
+    await exited
+    reportServePhase(userData, 'exited')
+    running.delete(userData)
+    readinessByProfile.delete(userData)
+    launchDiagnostics.delete(userData)
+  } catch (error) {
+    reportServePhase(userData, `failed:${phase}`)
+    throw error
+  } finally {
+    clearTimeout(diagnosticTimer)
   }
-  readinessByProfile.delete(userData)
-  await exited
 }
 
 async function stopServeProfile(userData: string, shellPid: number | null): Promise<void> {
