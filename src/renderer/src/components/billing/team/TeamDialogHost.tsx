@@ -234,6 +234,13 @@ export function TeamPageBody({
           openTeammateProfile(userId)
         }}
         onDismissArrival={clearTeamPageArrival}
+        onOpenEnterprise={() => {
+          // SSO, SCIM and the audit log live in Settings › Enterprise (#614); the dialog points there.
+          closeTeamPage()
+          const store = useAppStore.getState()
+          store.openSettingsTarget({ pane: 'cloud-enterprise', repoId: null })
+          store.openSettingsPage()
+        }}
         inline={inline}
         dangerZone={
           org && teamDelete.check ? (
@@ -251,13 +258,18 @@ export function TeamPageBody({
   )
 }
 
-/** The Team page's dialog surface: top-anchored so loading and checkout arrivals never jump. */
+/**
+ * The Team page's dialog surface, centred in the window like every other dialog, whichever entry
+ * point opened it (account menu, Create a team, the post-checkout hand-off). It used to be pinned
+ * 6vh from the top (`top-[6vh] translate-y-0`), so it sat high on screen (TEAM-MODAL-CENTER).
+ */
 export function TeamDialogContent({ children }: { children: React.ReactNode }): React.JSX.Element {
   const t = useTranslate()
   return (
     <DialogContent
       scrollable
-      className="top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-2xl"
+      data-team-dialog=""
+      className="max-h-[88vh] sm:max-w-2xl"
       onOpenAutoFocus={(event) => {
         event.preventDefault()
         if (event.currentTarget instanceof HTMLElement) {
