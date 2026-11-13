@@ -13,13 +13,13 @@
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmBuildFailureActions.tsx",
-    "line": 412,
+    "line": 418,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmBuildFailureCard.tsx",
-    "line": 138,
+    "line": 161,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
