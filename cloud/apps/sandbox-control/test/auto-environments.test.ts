@@ -2,7 +2,8 @@
 // with the repo checked out and only fetch what changed.
 import { describe, expect, it } from 'vitest'
 import { HostedSandboxReadyResponseSchema } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
-import { AUTO_ENVIRONMENT_UNUSED_MS, expireAutoEnvironments } from '../src/auto-environments'
+import { AUTO_ENVIRONMENT_UNUSED_MS, AUTO_RETRY_AFTER_MS, expireAutoEnvironments } from '../src/auto-environments'
+import { refreshStaleEnvironments } from '../src/environment-golden-refresh'
 import { START_COMMAND } from '../src/sandbox-vm-commands'
 import { GOLDEN, createHarness } from './harness'
 
@@ -116,6 +117,61 @@ describe('automatic environments', () => {
       '::orca-step:: install\nInstalling dependencies automatically: corepack pnpm install --frozen-lockfile\nInstalled dependencies in 42s.\n'
     )
     expect(build.autoInstall).toEqual({ manager: 'pnpm', outcome: 'installed' })
+  })
+
+  it('every build of an automatic environment installs from the lockfile: manual Rebuild and golden refresh too (AUTO-ENV-DEPS-NOT-RUNNING)', async () => {
+    const { h, settle, finishBuild } = await setup()
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', repo: { url: REPO } }, headers: FEATURES })
+    await settle()
+    const { env, buildId } = await finishBuild()
+    // An active build from before #660: its stored config has no autoInstall (dev's Eval Team case).
+    h.raw.prepare('UPDATE environment_builds SET config = ? WHERE id = ?').run(
+      JSON.stringify({ revision: 1, repos: [{ url: REPO, defaultBranch: null }], installScript: '', envVarNames: [], machineSize: 'standard' }),
+      buildId
+    )
+    const lastCommand = () => [...h.vercel.buildCommands.values()].at(-1)!
+
+    // Golden refresh: a new golden makes the active build stale; the refresh reuses its stored config.
+    h.raw.prepare('UPDATE environment_builds SET base_snapshot_id = ? WHERE id = ?').run('snap_old_golden', buildId)
+    const deps = {
+      db: h.env.SANDBOX_DB,
+      provider: h.vercel,
+      entitlements: { checkStart: async () => h.billing.decision, reportUsage: async () => h.billing.usageAnswer, listSuspensions: async () => [] },
+      now: h.now,
+      config: { environment: 'test', goldenSnapshotId: GOLDEN, region: 'iad1' }
+    }
+    expect((await refreshStaleEnvironments(deps as never)).started).toBe(1)
+    expect(lastCommand().env).toMatchObject({ ORCA_AUTO_INSTALL: '1', ORCA_CLONE_FILTER: 'blob:none' })
+    // Let the refresh build finish, so a manual Rebuild may start.
+    const refresh = h.raw.prepare('SELECT id FROM environment_builds WHERE environment_id = ? ORDER BY number DESC').get(env.id) as { id: string }
+    lastCommand().logs = `${JSON.stringify({ data: '::orca-step:: clone\n', stream: 'stdout' })}\n`
+    lastCommand().exitCode = 0
+    h.advance(1000)
+    expect((await h.call('GET', `/v1/environments/${env.id}/builds/${refresh.id}`)).body.build.status).toBe('succeeded')
+
+    // Manual Rebuild by the account's own admin: no config passed, the environment's own.
+    const rebuilt = await h.call('POST', `/v1/environments/${env.id}/builds`)
+    expect(rebuilt.status).toBe(200)
+    expect(lastCommand().env).toMatchObject({ ORCA_AUTO_INSTALL: '1', ORCA_CLONE_FILTER: 'blob:none' })
+  })
+
+  it('a failed automatic build retried by a later create installs from the lockfile too', async () => {
+    const { h, settle } = await setup()
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', repo: { url: REPO } }, headers: FEATURES })
+    await settle()
+    const first = [...h.vercel.buildCommands.values()].at(-1)!
+    first.logs = `${JSON.stringify({ data: '::orca-step:: clone\n', stream: 'stdout' })}\n`
+    first.exitCode = 10
+    h.advance(1000)
+    const env = h.raw.prepare("SELECT id FROM environments WHERE kind = 'auto'").get() as { id: string }
+    const failed = h.raw.prepare('SELECT id FROM environment_builds WHERE environment_id = ?').get(env.id) as { id: string }
+    expect((await h.call('GET', `/v1/environments/${env.id}/builds/${failed.id}`)).body.build.status).toBe('failed')
+    h.advance(AUTO_RETRY_AFTER_MS + 60_000)
+    const count = h.vercel.buildCommands.size
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w2', machineSize: 'standard', repo: { url: REPO } }, headers: FEATURES })
+    await settle()
+    expect(h.vercel.buildCommands.size).toBe(count + 1)
+    expect([...h.vercel.buildCommands.values()].at(-1)!.env).toMatchObject({ ORCA_AUTO_INSTALL: '1', ORCA_CLONE_FILTER: 'blob:none' })
   })
 
   it("an admin's environment never installs automatically, with or without its own script", async () => {
