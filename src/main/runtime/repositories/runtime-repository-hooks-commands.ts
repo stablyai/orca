@@ -2,7 +2,7 @@ import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
-import type { Repo } from '../../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   getEffectiveHooks,
@@ -21,7 +21,7 @@ import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gat
 import { hashOrcaHookTrustContent } from '../../workspace-hooks/created-worktree-setup-trust'
 
 type RuntimeRepositoryHooksCommandsDeps = {
-  resolveRepo: (selector: string) => Promise<Repo>
+  resolveRepo: (selector: string) => Promise<WorkspaceHookOwner>
 }
 
 export class RuntimeRepositoryHooksCommands {
@@ -121,7 +121,7 @@ function hookTrust(scriptContent: string): { contentHash: string; scriptContent:
 }
 
 function archiveTrust(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   sharedHooks: OrcaHooks | null
 ): { contentHash: string; scriptContent: string } | null {
   const localArchive = repo.hookSettings?.scripts.archive?.trim()

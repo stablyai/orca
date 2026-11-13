@@ -76,7 +76,7 @@ export function registerRepoHandlers(
   }
   registerProjectHostSetupHandlers(mainWindow, store, metadata)
   registerRepoCreationHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata)
-  registerProjectGroupHandlers(mainWindow, store)
+  registerProjectGroupHandlers(mainWindow, store, runtime)
   registerFolderWorkspaceHandlers(mainWindow, store, runtime)
   registerNestedRepoImportHandler(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerRepoUpdateHandler(mainWindow, store)

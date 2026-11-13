@@ -1,3 +1,4 @@
+import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-hook-settings-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'
@@ -6,6 +7,7 @@ import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { FolderWorkspaceHookCreateShape } from '../../../shared/rpc-contract/folder-workspace-params'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -18,6 +20,7 @@ export const ProjectGroupCreateArgs = z.object({
 export const ProjectGroupUpdateArgs = z.object({
   groupId: z.string().min(1),
   updates: z.object({
+    hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
@@ -145,6 +148,7 @@ function assertFolderWorkspaceLinkedSourceContextMatch(
 
 export const FolderWorkspaceCreateArgs = z
   .object({
+    ...FolderWorkspaceHookCreateShape,
     projectGroupId: z.string().min(1),
     name: z.string().optional(),
     folderPath: z.string().nullable().optional(),

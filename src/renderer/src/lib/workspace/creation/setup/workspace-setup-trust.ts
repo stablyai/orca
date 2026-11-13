@@ -1,3 +1,7 @@
+import {
+  projectGroupHookOwner,
+  projectGroupHookTrustKey
+} from '../../../../../../shared/workspace-hook-owner'
 import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
@@ -74,10 +78,18 @@ function explicitFolderRunUnderRepoTrust<T extends SetupDecision | undefined>(
   if (decision !== undefined && decision !== 'inherit') {
     return decision
   }
-  const repo = state.repos.find(
-    (candidate) =>
-      candidate.id === repoId && (!ownerHostId || getRepoExecutionHostId(candidate) === ownerHostId)
+  const group = state.projectGroups.find(
+    (entry) =>
+      projectGroupHookTrustKey(entry) === repoId &&
+      (!ownerHostId || getRepoExecutionHostId(entry) === ownerHostId)
   )
+  const repo =
+    (group ? projectGroupHookOwner(group) : null) ??
+    state.repos.find(
+      (candidate) =>
+        candidate.id === repoId &&
+        (!ownerHostId || getRepoExecutionHostId(candidate) === ownerHostId)
+    )
   return repo &&
     isFolderRepo(repo) &&
     (repo.hookSettings?.setupRunPolicy ?? 'run-by-default') === 'run-by-default'

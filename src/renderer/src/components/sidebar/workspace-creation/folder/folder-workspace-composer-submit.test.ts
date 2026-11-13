@@ -63,7 +63,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
       quickAgent: 'codex',
       autoRenameBranchFromWork: false,
       agentCmdOverrides: {},
-      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      createFolderWorkspace: vi.fn(async () => ({ folderWorkspace: makeFolderWorkspace() })),
       onOpenChange: vi.fn()
     })
 
@@ -80,7 +80,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
       quickAgent: 'claude',
       autoRenameBranchFromWork: false,
       agentCmdOverrides: {},
-      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      createFolderWorkspace: vi.fn(async () => ({ folderWorkspace: makeFolderWorkspace() })),
       onOpenChange: vi.fn()
     })
 

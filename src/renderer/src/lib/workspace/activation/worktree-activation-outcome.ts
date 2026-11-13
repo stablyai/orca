@@ -1,3 +1,4 @@
+import type { WorktreeSetupLaunch } from '../../../../../shared/worktree/launch-types'
 import { toast } from 'sonner'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
@@ -31,6 +32,8 @@ export type FolderWorkspaceActivationOptions = Omit<
   WorkspaceRevealOptions,
   'clearSidebarFilters'
 > & {
+  setup?: WorktreeSetupLaunch
+  backendStartupTerminalSpawned?: boolean
   startup?: WorktreeStartupPayload
   runtimeEnvironmentId?: string | null
 }

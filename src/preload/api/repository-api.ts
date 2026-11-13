@@ -1,3 +1,4 @@
+import type { GroupHookCheckResult } from '../../shared/project-group-hooks'
 import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { CloneTargetArgs, CloneTargetCheck } from '../../shared/git/clone/clone-target-check'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -124,6 +125,7 @@ export type ProjectsApi = {
 }
 
 export type ProjectGroupsApi = {
+  checkHooks: (args: { groupId: string; background?: boolean }) => Promise<GroupHookCheckResult>
   list: () => Promise<ProjectGroup[]>
   create: (args: {
     name: string

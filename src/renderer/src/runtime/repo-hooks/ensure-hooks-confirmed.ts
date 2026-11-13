@@ -1,3 +1,5 @@
+import { findHookRepo, hookRepoOwnerHostId } from './hook-owner-resolution'
+import { projectGroupHookTrustKey } from '../../../../shared/workspace-hook-owner'
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
@@ -12,15 +14,12 @@ import { getVmRecipeTrustContent } from './vm-recipe-trust-content'
 import { getIssueCommandTrustContent, isUserOwnedIssueCommand } from './issue-command-trust-content'
 import {
   checkRuntimeHooks,
+  checkRuntimeGroupHooks,
   readRuntimeIssueCommand,
   type IssueCommandReadResult
 } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
-import {
-  getRepoExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
 
@@ -35,36 +34,6 @@ function enqueueTrustPrompt<T>(task: () => Promise<T>): Promise<T> {
 
 export function __resetTrustPromptChainForTests(): void {
   trustPromptChain = Promise.resolve()
-}
-
-function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
-  return hostId
-    ? state.repos.find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
-    : state.repos.find((repo) => repo.id === repoId)
-}
-
-/** Inspect on the captured runtime owner, then explicit host, then repo owner; never substitute focused host, including server-owned SSH repos. */
-function hookRepoOwnerHostId(
-  state: AppState,
-  repoId: string,
-  hostId?: ExecutionHostId,
-  runtimeOwnerEnvironmentId?: string | null
-): ExecutionHostId {
-  const ownerEnvironmentId = runtimeOwnerEnvironmentId?.trim()
-  if (ownerEnvironmentId) {
-    return toRuntimeExecutionHostId(ownerEnvironmentId)
-  }
-  const rows = hostId ? [] : state.repos.filter((entry) => entry.id === repoId)
-  // Why: with the id on two hosts, trusting one row's script could run the other's unseen.
-  if (rows.length > 1) {
-    throw new Error('The project exists on more than one host.')
-  }
-  const repo = rows[0] ?? null
-  const ownerHostId = hostId ?? (repo ? getRepoExecutionHostId(repo) : null)
-  if (!ownerHostId) {
-    throw new Error('The project host is unknown.')
-  }
-  return ownerHostId
 }
 
 /** A run carries the approved content's hash (empty content included) unless the whole repo is trusted. */
@@ -303,10 +272,15 @@ export async function ensureHooksApproved(
         if (sourcePolicy === 'local-only') {
           return RUN_ANY
         }
-        const result = await checkRuntimeHooks(
-          hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
-          repoId
+        const group = state.projectGroups.find(
+          (entry) => projectGroupHookTrustKey(entry) === repoId
         )
+        const result = group
+          ? await checkRuntimeGroupHooks(getRepoExecutionHostId(group), group.id)
+          : await checkRuntimeHooks(
+              hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
+              repoId
+            )
         if (result.status === 'error') {
           return SKIP
         }

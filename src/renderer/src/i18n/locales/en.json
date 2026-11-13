@@ -1418,6 +1418,14 @@
       "cleanup": {
         "recipeDescription": "Clean up dictated text before it lands."
       }
+    },
+    "groupHooks": {
+      "title": "Project Settings > {{name}}",
+      "example": "Example: create a worktree in each repo (this machine only)",
+      "useExample": "Use this example",
+      "agentSetupFailed": "Could not start {{agent}} because Setup did not complete successfully. Check the Setup tab and try again.",
+      "description": "Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+      "supportedKeys": "Define only the supported keys: `scripts` and `setup`."
     }
   },
   "menu": {
@@ -23193,7 +23201,8 @@
   "common": {
     "retry": "Retry",
     "cancel": "Cancel",
-    "unassigned": "Unassigned"
+    "unassigned": "Unassigned",
+    "copy": "Copy"
   },
   "terminal": {
     "sessionSaveFailure": {

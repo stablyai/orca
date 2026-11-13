@@ -81,6 +81,11 @@ describe.each([
       if (target.kind === 'create-worktree') {
         expect(boundary.createManagedWorktree).toHaveBeenCalledTimes(1)
         expect(boundary.createTerminal).not.toHaveBeenCalled()
+      } else if (target.kind === 'create-folder-workspace') {
+        expect(boundary.createTerminal).not.toHaveBeenCalled()
+        expect(boundary.createFolderWorkspace).toHaveBeenCalledWith(
+          expect.objectContaining({ startupAgent: 'claude', startupPrompt: 'Reply with OK' })
+        )
       } else {
         expect(boundary.createTerminal).toHaveBeenCalledTimes(1)
         expect(boundary.createTerminal).toHaveBeenCalledWith(

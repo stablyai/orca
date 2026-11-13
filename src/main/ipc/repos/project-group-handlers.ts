@@ -1,3 +1,5 @@
+import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/repo-params'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
@@ -21,7 +23,19 @@ import {
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
 import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 
-export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerProjectGroupHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: Pick<OrcaRuntimeService, 'checkProjectGroupHooks'>
+): void {
+  ipcMain.handle('projectGroups:checkHooks', (_event, rawArgs: unknown) => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupHooksCheck,
+      rawArgs,
+      'invalid_project_group_hooks_check_args'
+    )
+    return runtime.checkProjectGroupHooks(args.groupId, { background: args.background })
+  })
   ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {

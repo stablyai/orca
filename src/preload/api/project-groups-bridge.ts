@@ -3,6 +3,7 @@ import type { NestedRepoScanResult } from '../../shared/project-group-types'
 import type { PreloadApi } from '../api-types'
 
 export const projectGroupsApi = {
+  checkHooks: (args) => ipcRenderer.invoke('projectGroups:checkHooks', args),
   list: () => ipcRenderer.invoke('projectGroups:list'),
   create: (args) => ipcRenderer.invoke('projectGroups:create', args),
   update: (args) => ipcRenderer.invoke('projectGroups:update', args),

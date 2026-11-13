@@ -21,7 +21,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
   })
 
   it('quotes quick-agent startup for POSIX when the folder group is a local WSL UNC path', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const createFolderWorkspace = vi.fn(async () => ({ folderWorkspace: makeFolderWorkspace() }))
     const projectGroup = {
       ...makeProjectGroup(),
       parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
@@ -55,7 +55,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
   })
 
   it('quotes quick-agent startup for the Windows OS the SSH relay reported', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const createFolderWorkspace = vi.fn(async () => ({ folderWorkspace: makeFolderWorkspace() }))
     const projectGroup = {
       ...makeProjectGroup(),
       connectionId: 'ssh-windows',
@@ -109,7 +109,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
   })
 
   it('quotes quick-agent startup for the Orca server that owns the folder group', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const createFolderWorkspace = vi.fn(async () => ({ folderWorkspace: makeFolderWorkspace() }))
     const projectGroup = {
       ...makeProjectGroup(),
       executionHostId: 'runtime:win-box',
@@ -157,7 +157,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
   })
 
   it('refuses an agent launch on an Orca server that never reported its OS', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const createFolderWorkspace = vi.fn(async () => ({ folderWorkspace: makeFolderWorkspace() }))
     useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
 
     await expect(
