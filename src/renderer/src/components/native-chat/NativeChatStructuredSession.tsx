@@ -189,11 +189,10 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   // Unknown prompts leave the composer usable; a send starts a turn whose cancel can resolve them.
   const promptsUnanswerable = pendingPromptsAllUnanswerableHere(controller.prompts)
   const subagents = useStructuredNativeChatSubagents({ ...props, paneKey, controller })
+  const subagentOpen = subagents.openId !== null
   // A subagent's view takes the composer's place; the main agent's prompts still show.
   const composerShown =
-    (prompt === null || promptsUnanswerable) &&
-    readFailure?.final !== true &&
-    subagents.openId === null
+    (prompt === null || promptsUnanswerable) && readFailure?.final !== true && !subagentOpen
   // An owned prompt keeps its card; otherwise a missing program leaves the composer disabled.
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
@@ -362,7 +361,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             target={props.target}
             isVisible={props.isVisible}
           />
-          {prompt || subagents.openId !== null ? null : (
+          {prompt || subagentOpen ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}
               runtimeContext={imageRuntimeContext}
@@ -374,9 +373,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               workingStartedAt={controller.workingStartedAt}
             />
           )}
-          {composerShown || subagents.openId !== null ? null : (
-            <NativeChatPromptSlotNotices notices={notices} />
-          )}
+          {composerShown || subagentOpen ? null : <NativeChatPromptSlotNotices notices={notices} />}
           <NativeChatStructuredPromptCard
             key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
             prompt={prompt}
@@ -386,7 +383,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             answerInputRef={questionAnswerInputRef}
           />
           {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
-          {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
+          {composerShown && <NativeChatInstallSlot install={install} agentLabel={agentLabel} />}
           {subagents.statusBar}
           {composerShown ? (
             <NativeChatComposer

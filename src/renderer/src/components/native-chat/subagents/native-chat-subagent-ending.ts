@@ -63,7 +63,9 @@ export function nativeChatSubagentEnding({
       return { kind: 'aside', aside: 'stopped' }
     case 'unverifiable':
       return { kind: 'aside', aside: 'no-reply' }
-    default:
+    case 'working':
+    case 'idle':
+    case null:
       return rows.length === 0 ? { kind: 'aside', aside: 'no-steps' } : null
   }
 }
