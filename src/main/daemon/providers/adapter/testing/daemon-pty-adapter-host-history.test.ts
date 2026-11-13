@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   promises as fsPromises,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync
@@ -243,6 +244,52 @@ describe('daemon-owned terminal history', () => {
       const { id } = await adapter.spawn(request)
       expect(spawned).toBe(1)
       expect(new HistoryReader(root).probeRestorableHistory(id).status).toBe('restorable')
+    },
+    30_000
+  )
+
+  // Known recovery that cannot be replayed stays exactly as saved while a new process starts.
+  it.each([
+    ['an actual protection marker', '.unreadable-recovery', ''],
+    ['malformed saved metadata', 'meta.json', '{"cwd": "/tmp", '],
+    [
+      'saved metadata over its bound',
+      'meta.json',
+      JSON.stringify({ cwd: `/${'x'.repeat(70_000)}` })
+    ]
+  ] as const)(
+    'keeps %s untouched and starts the process',
+    async (_, name, content) => {
+      const child = createMockSubprocess()
+      let spawned = 0
+      harness = await startDaemonAdapterHarness(
+        () => {
+          spawned += 1
+          return child
+        },
+        {},
+        { hostHistory: true }
+      )
+      const request = { sessionId: 'host-history-protected', cols: 80, rows: 24, cwd: '/tmp' }
+      const dir = join(harness.dir, 'history', getHistorySessionDirName(request.sessionId))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'output.log'), 'SAVED_LOG_BYTES')
+      writeFileSync(join(dir, name), content)
+      const saved = () =>
+        Object.fromEntries(
+          readdirSync(dir)
+            .sort()
+            .map((file) => [file, readFileSync(join(dir, file), 'utf8')])
+        )
+      const before = saved()
+
+      // This client keeps no app-side history store, so the daemon's own hold meets these files.
+      const { id } = await harness.adapter.spawn(request)
+      expect(spawned).toBe(1)
+      child._simulateData('NEW_ROW\r\n')
+      // The journal starts no origin over them: its history stays unavailable instead.
+      expect(await harness.server.host.historyJournals!.live(id)?.flush()).toBe(false)
+      expect(saved()).toEqual(before)
     },
     30_000
   )

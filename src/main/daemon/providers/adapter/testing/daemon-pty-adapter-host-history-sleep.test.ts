@@ -235,7 +235,19 @@ describe('host Sleep through disk-only Wake', () => {
     // Sync point only: the physical exit happened and its final checkpoint is being read back.
     await readback.promise
     await expect(sleeping).rejects.toThrow()
+    // Fixture signal only: the same-ID start has reached the daemon's history hold.
+    const journals = harness!.server.host.historyJournals!
+    const prepareHold = journals.prepareHold.bind(journals)
+    const holding = Promise.withResolvers<void>()
+    vi.spyOn(journals, 'prepareHold').mockImplementation((id, opts) => {
+      if (id === sessionId) {
+        holding.resolve()
+      }
+      return prepareHold(id, opts)
+    })
     const successor = open().spawn(request(sessionId))
+    await holding.promise
+    expect(child()).toBe(slept)
     release.resolve()
 
     const woken = await successor
