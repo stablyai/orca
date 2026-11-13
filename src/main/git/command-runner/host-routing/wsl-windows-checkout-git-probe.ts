@@ -12,7 +12,7 @@ import {
 } from '../../../wsl/filesystem/wsl-automount-root'
 import { acquireGitAdmission } from '../admission/git-subprocess-admission'
 import { nonInteractiveGitEnv } from '../git-environment/git-process-env'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { isWslDirectGitReadCommand } from '../../../../shared/git/commands/git-command-classification'
 import {
   classifyLineEndingSample,

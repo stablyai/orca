@@ -6,7 +6,7 @@ import {
   gitResultWithExecutionContext,
   type GitExecutionContext
 } from './host-routing/wsl-git-path-preparation'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   pendingWslDirectGitReadEnvironment,
   resolveGitCommand

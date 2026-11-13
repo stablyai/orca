@@ -18,7 +18,7 @@ import {
   SelectWorkspace,
   TeamId,
   WorkspaceSelection
-} from '../../../../../../shared/rpc-contract/linear-params'
+} from '../../../../../../shared/rpc-contract/linear/linear-params'
 
 export const LINEAR_METHODS = [
   defineMethod({

@@ -21,10 +21,10 @@ import type {
   WorkspaceLineageEdge,
   WorktreeLineage
 } from '../worktree/lineage-types'
-import { folderLineageEdgeOf } from '../worktree/folder-lineage-parents'
-import { isCrossStoreWorkspaceLineage } from '../worktree/cross-store-lineage-records'
+import { folderLineageEdgeOf } from '../worktree/lineage/folder-lineage-parents'
+import { isCrossStoreWorkspaceLineage } from '../worktree/lineage/cross-store-lineage-records'
 import type { Worktree } from '../worktree/types'
-import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
+import { getWorkspaceRowKindFacts } from '../worktree/visibility/workspace-kinds'
 import { SMART_TIERS } from './sort-stamps'
 
 /** A row's parent in another Orca store; a missing or unreadable record leaves the row standalone. */

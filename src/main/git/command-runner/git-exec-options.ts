@@ -2,7 +2,7 @@ import type { GitExecutionContext } from './host-routing/wsl-git-path-preparatio
 // Bound output to avoid V8 string overflow; match the relay's MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 export type GitExecOptions = {
   cwd: string
@@ -29,6 +29,8 @@ export type GitExecOptions = {
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
+  /** File materialization during worktree creation has a separate concurrency budget. */
+  admissionClass?: 'checkout'
   /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */
   admissionExempt?: true
   /** Native macOS deletion spawns use the shared process worker. */

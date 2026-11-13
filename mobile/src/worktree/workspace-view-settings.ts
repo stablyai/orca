@@ -19,7 +19,7 @@ import type {
   ProjectOrderBy,
   WorktreeCardProperty
 } from '../../../src/shared/ui-chrome-types'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../src/shared/worktree/card-properties'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../src/shared/worktree/row-display/card-properties'
 import {
   WORKSPACE_GROUP_BY_CHOICES,
   WORKSPACE_SORT_BY_CHOICES

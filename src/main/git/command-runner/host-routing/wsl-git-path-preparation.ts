@@ -1,7 +1,7 @@
 import { createAbortError } from '../process-capture/abort-error'
 import type { GitExecOptions } from '../git-exec-options'
 import type { ResolvedCommand } from './wsl-command-resolution'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting,

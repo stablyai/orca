@@ -40,7 +40,7 @@ export async function runOpenCodeTextTask(input: {
   const deadline = AbortSignal.timeout(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
   const signal = AbortSignal.any([canceled.signal, deadline])
   const cancel = () => canceled.abort()
-  const lane = localGenerationLaneKey(input.operation, input.target.cwd)
+  const lane = localGenerationLaneKey(input.operation, input.target.cwd, input.target.laneId)
   setLocalGenerationCancelToken(lane, cancel)
   try {
     if (input.shouldExecute?.() === false) {

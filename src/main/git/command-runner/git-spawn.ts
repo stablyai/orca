@@ -12,7 +12,7 @@ import {
 } from './host-routing/wsl-git-path-preparation'
 import { untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
 import { buildNetworkSshPolicyEnv } from './git-environment/git-ssh-policy-env'

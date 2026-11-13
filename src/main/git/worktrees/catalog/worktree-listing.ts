@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { resolveGitMetadataPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
-import { isWorktreeCreatePreparation } from '../../../../shared/worktree/create-preparation'
+import { isWorktreeCreatePreparation } from '../../../../shared/worktree/creation/create-preparation'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   readCheckedOutBranchRef,

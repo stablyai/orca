@@ -5,7 +5,7 @@ import {
   getMobileSessionTabTitle,
   getMobileTerminalTabHostAgentIdentity,
   resolveMobileTerminalTabAgentId
-} from '../../terminal/session/mobile-terminal-tab-agent'
+} from './mobile-terminal-tab-agent'
 import {
   agentDotState,
   agentRowTimeAt,
@@ -16,13 +16,18 @@ import type { MobileSessionTab } from './mobile-session-tabs'
 
 export type MobileSessionTabGroup = 'needs-you' | 'working' | 'other'
 
-export type MobileSessionTabRow = {
+/** What the tab bar draws for every tab; cheap enough to rebuild on each tab snapshot and clock tick. */
+export type MobileSessionTabSummary = {
   tab: MobileSessionTab
   title: string
   /** The agent whose icon marks the tab; null draws the tab kind's icon. */
   agentId: string | null
   dotState: AgentDotState | undefined
   group: MobileSessionTabGroup
+}
+
+/** A row of the all-tabs sheet: the summary plus what only the open sheet shows. */
+export type MobileSessionTabRow = MobileSessionTabSummary & {
   /** The second line: the state, then what the tab is doing or showing. */
   detail: string
   timeAt: number | null
@@ -88,14 +93,30 @@ function tabKindLabel(tab: MobileSessionTab): string {
   }
 }
 
-export function buildMobileSessionTabRow(
+export function buildMobileSessionTabSummary(
   tab: MobileSessionTab,
   terminals: readonly { handle: string; agentIdentity?: string }[],
   now: number
-): MobileSessionTabRow {
+): MobileSessionTabSummary {
   const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
-  const title = getMobileSessionTabTitle(tab, hostAgentIdentity)
   const dotState = mobileSessionTabDotState(tab, now)
+  return {
+    tab,
+    title: getMobileSessionTabTitle(tab, hostAgentIdentity),
+    agentId:
+      tab.type === 'agent-session'
+        ? tab.agent
+        : tab.type === 'terminal'
+          ? resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
+          : null,
+    dotState,
+    group: tabGroup(dotState)
+  }
+}
+
+// Why: the preview scans each agent's last message, so only the open sheet pays for it (STA-15103).
+export function buildMobileSessionTabRow(summary: MobileSessionTabSummary): MobileSessionTabRow {
+  const { tab, title, dotState } = summary
   const stateWord = dotState && dotState !== 'idle' ? agentStateLabel(dotState) : ''
   const content = tabContent(tab, title, dotState)
   const timeAt =
@@ -105,16 +126,7 @@ export function buildMobileSessionTabRow(
         ? tab.chatStatus.updatedAt
         : null
   return {
-    tab,
-    title,
-    agentId:
-      tab.type === 'agent-session'
-        ? tab.agent
-        : tab.type === 'terminal'
-          ? resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
-          : null,
-    dotState,
-    group: tabGroup(dotState),
+    ...summary,
     detail: [stateWord, content].filter(Boolean).join(' · ') || tabKindLabel(tab),
     timeAt
   }

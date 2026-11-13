@@ -1,6 +1,6 @@
 import type { GitExecutionContext } from '../command-runner/host-routing/wsl-git-path-preparation'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   createGitObjectQuarantine,
   inheritedObjectStore,

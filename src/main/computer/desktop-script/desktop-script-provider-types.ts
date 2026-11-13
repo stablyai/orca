@@ -79,6 +79,10 @@ export type BridgeSnapshot = {
   elements?: BridgeElement[]
   /** Set by the client when treeLines show only this element's subtree. */
   rootElementIndex?: number
+  /** Cache only: for elements a subtree read returned, the root of the latest read that returned them. */
+  subtreeReadRoots?: ReadonlyMap<number, number>
+  /** Cache only: the next index a subtree read may assign, so dropped indexes are never reused. */
+  nextElementIndex?: number
 }
 
 export type BridgeWindow = {

@@ -7,7 +7,7 @@ import {
   NotificationReportDesktopPresenceParams,
   NotificationUnsubscribeParams,
   NotificationsSubscribeParams
-} from '../../../../../shared/rpc-contract/notifications-params'
+} from '../../../../../shared/rpc-contract/notifications/notifications-params'
 
 // Use a per-process counter so same-millisecond subscriptions cannot collide.
 let notificationsSubscriptionSeq = 0

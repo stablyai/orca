@@ -58,7 +58,7 @@ describe('SkillSharedLinkRow', () => {
     await openDeleteMenu()
     expect(deletePackage).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     expect(deletePackage).toHaveBeenCalledWith('pkg_1')
     await vi.waitFor(() => expect(onDeleted).toHaveBeenCalledOnce())

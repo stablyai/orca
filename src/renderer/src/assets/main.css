@@ -870,6 +870,25 @@ body[data-modal-overlay-open]
   }
 }
 
+@utility control-interaction {
+  @media (hover: hover) {
+    &:not(:disabled, [aria-disabled='true']):hover {
+      outline: 1px solid var(--ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &:not(:disabled, [aria-disabled='true']):focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  &:not(:disabled, [aria-disabled='true']):active {
+    outline: 2px solid var(--ring);
+    outline-offset: 0;
+  }
+}
+
 /* Tailwind must generate this utility; a plain class silently emits no scrollbar-none CSS. */
 @utility scrollbar-none {
   -ms-overflow-style: none;
@@ -1654,6 +1673,7 @@ html.native-shell .app-layout {
 
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
+[data-worktree-family-segment='primary'],
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1666,6 +1686,7 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
+.dark [data-worktree-family-segment='primary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1691,16 +1712,32 @@ html.native-shell .app-layout {
   }
 }
 
+[data-worktree-family-segment='secondary'],
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 15%, transparent);
 }
 
+.dark [data-worktree-family-segment='secondary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
+}
+
+/* Family paint owns the surface in both themes, including secondary occurrences. */
+.worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active],
+.dark .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
+[data-worktree-family-segment],
+.dark [data-worktree-family-segment] {
+  box-shadow: none;
 }
 
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */

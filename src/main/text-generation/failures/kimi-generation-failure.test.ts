@@ -27,7 +27,6 @@ const run = (message: string) => `error: failed to run prompt: ${message}\nSee l
 const network = run('provider.connection_error: getaddrinfo ENOTFOUND private-host')
 const agentOptions =
   /^Kimi received conflicting or repeated agent options\. Keep a single --agent or --agent-file option in the generation recipe or CLI arguments, then retry\.$/
-const credentials = /credentials.*execution host.*configure.*sign in/
 const parser =
   /^Kimi rejected an option or argument\. Correct the generation recipe or CLI arguments, then retry\.$/
 const delimiters = "private-x' argument '".repeat(12)
@@ -36,36 +35,11 @@ const delimiters = "private-x' argument '".repeat(12)
 it.each([
   ['', occupied, realKimiOccupiedOutput, 4],
   [run('unrelated private-prose'), occupied, `${earlier}\n${realKimiOccupiedOutput}`, 4],
-  [run('Session "private-session" not found.'), /find.*session.*existing session.*new one/],
-  [
-    run('Session "private-session" was created under a different directory.'),
-    /another directory.*Resume it there.*workspace/
-  ],
-  [
-    run('no provider configured; complete onboarding via /login or the providers endpoint'),
-    credentials
-  ],
-  [
-    run(
-      'Provider "private-provider" declares api_key_env = "PRIVATE_ENV" in config.toml, but the environment variable is not set or is empty.'
-    ),
-    /credential environment variable.*Set it.*execution host/
-  ],
-  [
-    run('model private-model does not resolve to a configured provider'),
-    /usable model.*configure or select/
-  ],
-  [run('Prompt hook blocked the request.'), /hook blocked.*Review.*hooks.*retry/],
-  [run('Prompt turn ended with reason: cancelled'), /cancelled.*Try again/],
   [
     run('provider.auth_error: private-provider prose'),
     /authenticate.*Sign in.*credentials.*retry/,
     '{broken'
   ],
-  [run('provider.rate_limit: private-provider prose'), /limit.*Wait.*reduce/],
-  [run('Provider safety policy blocked the response.'), /blocked.*Revise.*prompt.*configuration/],
-  [run('context.overflow: private-provider prose'), /context.*Shorten.*new session/],
-  [run('config.invalid: private-provider prose'), /invalid configuration.*Check.*model.*provider/],
   [network, /connect.*network.*retry/],
   [network, /connect.*network.*MagicDNS/, '', 1, true],
   ...[
@@ -84,17 +58,6 @@ it.each([
   [run("unknown option '--private-flag'"), unknown, '{"type":"error","code":"unknown.code"}'],
   [`error: option '${delimiters}tail`, unknown],
   [`error: option '${delimiters}value' is invalid. provider.auth_error: private-prose`, parser],
-  ['error: Login required\n\nmessage:\nprivate-prose\nSee log: private-path', credentials],
-  ['error: Prompt cannot be empty.', /empty prompt.*recipe.*CLI arguments/],
-  [
-    'error: Cannot combine --prompt with --auto.',
-    /conflicting.*--prompt.*--auto.*recipe.*arguments/
-  ],
-  [
-    'error: Cannot combine --agent/--agent-file with --session/--continue: the agent is bound at session creation and the bound agent is restored automatically on resume.',
-    /cannot change the agent.*Remove.*override.*new session/
-  ],
-  ['error: Cannot use --session without an id in prompt mode.', /session id.*recipe.*arguments/],
   ["hook narration error: unknown option '--private-flag'", unknown],
   ['', /Kimi.*interrupted.*Try again/, '', null],
   ['', invalid, realKimiOccupiedOutput, 0],

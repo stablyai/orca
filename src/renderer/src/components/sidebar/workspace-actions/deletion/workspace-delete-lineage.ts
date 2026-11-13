@@ -1,7 +1,7 @@
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 
 type WorkspaceDeleteLineage = {
   directChildren: Worktree[]

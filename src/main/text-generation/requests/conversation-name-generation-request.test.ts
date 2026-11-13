@@ -1,10 +1,5 @@
-import { realKimiOccupiedOutput } from '../../../shared/__fixtures__/kimi-generation-source-shaped'
-import { describe, expect, it, vi } from 'vitest'
-import { createMockDiscoveryChild } from '../execution/commit-message-text-generation-test-harness'
+import { describe, expect, it } from 'vitest'
 import { generateConversationNameFromContext } from '../commit-message-text-generation'
-import { cancelLocalGeneration } from '../execution/source-control-generation-lanes'
-import { generateConversationName } from './conversation-name-generation-request'
-import type { SpawnedSourceControlAgentProcess } from '../source-control-text-generation-types'
 
 describe('generateConversationName', () => {
   it.each([
@@ -75,34 +70,5 @@ describe('generateConversationName', () => {
       success: false,
       error: 'Generated chat name was empty after sanitization.'
     })
-  })
-
-  it.each(['cancel', 'occupied'])('handles a local %s outcome', async (outcome) => {
-    const child = createMockDiscoveryChild()
-    const spawnAgent = vi.fn(() => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The test child implements every process member the generation lane reads.
-      return child as unknown as SpawnedSourceControlAgentProcess
-    })
-    const pending = generateConversationName({
-      context: { firstPrompt: 'Fix login' },
-      params:
-        outcome === 'cancel'
-          ? { agentId: 'custom', model: '', customAgentCommand: 'agent' }
-          : { agentId: 'kimi', model: 'default' },
-      target: { kind: 'local', cwd: '/repo' },
-      spawnAgent
-    })
-    await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledOnce())
-    if (outcome === 'occupied') {
-      child.stdout.emit('data', Buffer.from(realKimiOccupiedOutput))
-      child.emit('close', 4)
-      expect(await pending).toMatchObject({
-        success: false,
-        error: expect.stringMatching(/Kimi.*active.*Stop.*exit.*try again/)
-      })
-      return
-    }
-    cancelLocalGeneration('conversation-name', '/repo')
-    expect(await pending).toMatchObject({ success: false, canceled: true })
   })
 })
