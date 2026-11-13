@@ -1,7 +1,7 @@
 import { hasActiveTraceSink, startSpan, withSpan, type ActiveSpan } from './tracer'
 import { getGitOperationCause } from './git-operation-cause'
 import { resolveGitAdmissionTier } from '../git/command-runner/admission/git-operation-executor'
-import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 const GIT_ACTION_NAMES: Record<string, readonly string[]> = {
   worktree: ['list', 'add', 'remove', 'move', 'prune', 'lock', 'unlock', 'repair'],
