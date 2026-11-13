@@ -17,7 +17,7 @@ import {
   type CmdJTaskSourceUrl,
   getCmdJTaskUrlCreatePreview
 } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 
 import {

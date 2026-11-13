@@ -29,6 +29,11 @@ type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections &
   Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl'> &
   Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'>
 
+// cmdk skipped disabled actions; keyboard order and default highlight must too.
+function isDisabledPaletteEntry(entry: PaletteListEntry): boolean {
+  return entry.type === 'quick-action' && entry.result.disabled === true
+}
+
 export function useWorktreeJumpPaletteListEntries({
   hasQuery,
   openTabsLeadSections,
@@ -42,7 +47,7 @@ export function useWorktreeJumpPaletteListEntries({
 }: WorktreeJumpPaletteListEntriesInput) {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
-  const listEntries = useMemo<PaletteListEntry[]>(() => {
+  const { listEntries, defaultSelectionStart } = useMemo(() => {
     const entries: PaletteListEntry[] = []
     const {
       visibleWorktreeItems,
@@ -186,13 +191,16 @@ export function useWorktreeJumpPaletteListEntries({
       if (browserNavigationItem) {
         entries.push(browserNavigationItem)
       }
-      return entries
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (!hasQuery) {
+      pushExtras({ emptyQuery: 'first' })
+      // Rows above this index lead the list without taking the default selection.
+      const defaultSelectionStart = entries.length
       pushOpenTabSection()
       pushWorktreeSection()
-      pushExtras('all')
-      return entries
+      pushExtras({ emptyQuery: 'last' })
+      return { listEntries: entries, defaultSelectionStart }
     }
     if (browserNavigationItem) {
       entries.push(browserNavigationItem)
@@ -215,7 +223,7 @@ export function useWorktreeJumpPaletteListEntries({
       if (showCreateAction) {
         entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
       }
-      return entries
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (middleLeadsSections) {
       pushProjectAndMiddleSections()
@@ -237,7 +245,7 @@ export function useWorktreeJumpPaletteListEntries({
     if (showCreateAction) {
       entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
     }
-    return entries
+    return { listEntries: entries, defaultSelectionStart: 0 }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     handleExpandSection,
@@ -267,11 +275,7 @@ export function useWorktreeJumpPaletteListEntries({
   )
   const selectionItemIds = useMemo(
     () =>
-      getWorktreePaletteSelectionItemIds(
-        listEntries,
-        listEntryRenderKeys,
-        (entry) => entry.type === 'quick-action' && entry.result.disabled === true
-      ),
+      getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys, isDisabledPaletteEntry),
     [listEntries, listEntryRenderKeys]
   )
   // See more expands inside flushSync; its focus handoff reads the committed order from here.
@@ -279,15 +283,28 @@ export function useWorktreeJumpPaletteListEntries({
   useLayoutEffect(() => {
     selectionItemIdsRef.current = selectionItemIds
   }, [selectionItemIds])
+  // null keeps the shared rule: first row, never an unasked Create.
+  const defaultSelectionItemId = useMemo(
+    () =>
+      defaultSelectionStart > 0
+        ? (getWorktreePaletteSelectionItemIds(
+            listEntries.slice(defaultSelectionStart),
+            listEntryRenderKeys.slice(defaultSelectionStart),
+            isDisabledPaletteEntry
+          )[0] ?? null)
+        : null,
+    [defaultSelectionStart, listEntries, listEntryRenderKeys]
+  )
   useEffect(() => {
-    autoSelectedItemIdRef.current = selectionItemIds[0] ?? null
-  }, [autoSelectedItemIdRef, selectionItemIds])
+    autoSelectedItemIdRef.current = defaultSelectionItemId ?? selectionItemIds[0] ?? null
+  }, [autoSelectedItemIdRef, defaultSelectionItemId, selectionItemIds])
   return {
     listEntries,
     listEntryRenderKeys,
     selectableItems,
     selectionItemIds,
-    selectionItemIdsRef
+    selectionItemIdsRef,
+    defaultSelectionItemId
   }
 }
 

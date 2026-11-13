@@ -20,6 +20,8 @@ export function isBundledSkillOpKind(value: string): value is BundledSkillOpKind
 
 export const BUNDLED_SKILL_LEAVE_REASONS = Object.freeze([
   'edited',
+  /** A copy another Orca build (newer, or a dev build) installed; its bytes are unknown here. */
+  'other-build',
   'other',
   'unwritable',
   'unreadable',
@@ -161,7 +163,10 @@ export const BundledSkillAutoUpdateRequestSchema = z.strictObject({
   names: z
     .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
     .min(1)
-    .max(64)
+    .max(64),
+  /** Only record which copies already hold this build's bytes; never update any skill. Hosts
+   *  that predate it reject the request, so they write nothing either. */
+  recordOnly: z.literal(true).optional()
 })
 export type BundledSkillAutoUpdateRequest = z.infer<typeof BundledSkillAutoUpdateRequestSchema>
 // Desktop IPC may target a chat provider without a CLI on PATH; the remote v1 schema stays frozen.

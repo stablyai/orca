@@ -1,5 +1,5 @@
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-request-refresh-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { CacheEntry } from '../cache/cache-model'
 
 /** What a PR refresh candidate tells main about the cached answer it may keep. */

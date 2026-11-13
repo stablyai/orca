@@ -7,13 +7,13 @@ import {
   type NativeChatTranscriptAgent
 } from '../../shared/native-chat/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { forEachSessionFile } from '../ai-vault/session-scanner-discovery'
+import { forEachSessionFile } from '../ai-vault/discovery/session-scanner-discovery'
 import {
   claudeProjectsHostDirs,
   codexHomeSessionsDir,
   ompSessionsRootDirs,
   uniqueDirs
-} from '../ai-vault/session-scanner-roots'
+} from '../ai-vault/discovery/session-scanner-roots'
 import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -24,12 +24,16 @@ import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
   wslAgentSessionsDirs
-} from './host-readable-transcript-path'
-import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
-import { findWslSessionPath } from './wsl-session-path-scan'
-import { findClaudeSessionFile } from './session-file-resolver-claude-probe'
-import { parseSshTranscriptPath } from './ssh-transcript-path'
-import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
+} from './transcript-discovery/host-readable-transcript-path'
+import {
+  SESSION_FILE_ID_LAYOUTS,
+  type SessionIdLookupAgent
+} from './transcript-discovery/session-file-id-layouts'
+import { findWslSessionPath } from './transcript-discovery/wsl-session-path-scan'
+import { findClaudeSessionFile } from './transcript-discovery/session-file-resolver-claude-probe'
+import { parseSshTranscriptPath } from './transcript-filesystem/ssh-transcript-path'
+import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
+import type { WslTranscriptFsError } from './transcript-filesystem/wsl-transcript-fs-error'
 
 // Read shared discovery roots per call; preference order prevents cross-account matches.
 function claudeProjectsDirs(): string[] {

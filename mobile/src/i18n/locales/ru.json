@@ -364,8 +364,7 @@
       "pausedState": "Приостановлено",
       "queuedState": "В очереди",
       "resume": "Продолжить",
-      "resumeSending": "Возобновить отправку сообщений из очереди",
-      "title": "Очередь сообщений"
+      "resumeSending": "Возобновить отправку сообщений из очереди"
     },
     "offlineQueue": {
       "failed": "Не отправлено — нажмите «Отправить», чтобы повторить",
@@ -1676,7 +1675,6 @@
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
       "deleteDestroysEnvironment": "Также будет уничтожено окружение «{{environment}}», созданное для него Orca, вместе с незакоммиченными изменениями и запущенными терминалами.",
       "deleteKeepsEnvironment": "Окружение «{{environment}}», созданное для него Orca, продолжит работать: в его рецепте нет шага уничтожения.",
-      "deleteWorktree": "Удалить рабочее дерево",
       "pin": "Закрепить",
       "primaryWorktreeDeleteHint": "Основное рабочее дерево нельзя удалить. Вместо этого уберите проект.",
       "removeHost": "Удалить сервер",
@@ -1850,7 +1848,6 @@
       "daysAgo_one": "{{count}} дн. назад",
       "daysAgo_other": "{{count}} дн. назад",
       "deleteConfirmMessage": "Комментарий на GitHub будет удалён безвозвратно.",
-      "deleteConfirmTitle": "Удалить комментарий?",
       "editPlaceholder": "Измените комментарий…",
       "hoursAgo_few": "{{count}} ч назад",
       "hoursAgo_many": "{{count}} ч назад",
@@ -2459,13 +2456,10 @@
       "loadFailed": "Не удалось загрузить пул-реквест"
     },
     "queuedCardText": {
-      "showLess": "Свернуть",
       "showLessHint": "Сворачивает сообщение",
-      "showMore": "Показать больше",
       "showMoreHint": "Показывает сообщение целиком"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Удалить это сообщение из очереди",
       "images_few": "{{count}} изображения",
       "images_many": "{{count}} изображений",
       "images_one": "{{count}} изображение",
@@ -2474,7 +2468,6 @@
       "send": "Отправить",
       "sendAgainHint": "Отправить это сообщение ещё раз",
       "sendHint": "Отправить это сообщение",
-      "showLessHint": "Сворачивает сообщение",
       "steer": "Сейчас",
       "steerHint": "Отправить сообщение, не прерывая работу модели"
     },
@@ -2531,7 +2524,6 @@
       "addTitle": "Добавить быструю команду",
       "chooseAgentTitle": "Выбрать агента",
       "deleteConfirmMessage": "Эта быстрая команда будет удалена из сохранённого списка.",
-      "deleteConfirmTitle": "Удалить «{{label}}»?",
       "editTitle": "Изменить быструю команду",
       "editorDescription": "Сохраняйте команды терминала или запросы агентам для быстрого доступа.",
       "title": "Быстрые команды",
@@ -2594,8 +2586,7 @@
     "tabStrip": {
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
       "newTab": "Новая вкладка",
-      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Очистить терминал",
@@ -2638,6 +2629,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Не удалось прикрепить (повторное подключение)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Не удалось закрыть вкладку. Попробуйте ещё раз.",
+      "closeFailedDesktopNotReady": "Не удалось закрыть вкладку. Orca на компьютере ещё загружается. Попробуйте ещё раз через минуту."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Не удалось выполнить команду браузера",
@@ -4312,7 +4307,6 @@
       "outcome": "Результат",
       "allOutcomes": "Все результаты",
       "couldNotStart": "Не удалось запустить",
-      "deleteAutomationTitle": "Удалить автоматизацию?",
       "deleteRetained": "Удалить «{{name}}» и сохранённые запуски?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Не удалось проверить исходную панель агента. Подключитесь заново и повторите попытку.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Исходную панель агента больше нельзя открыть. Сохранённый вывод остаётся здесь.",

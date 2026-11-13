@@ -7,7 +7,7 @@ import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtime
 import { ephemeralVmFailureFromError } from '../../shared/ephemeral-vm-failure-copy'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
-import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
+import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { releaseEphemeralVmRuntimeEnvironments } from './runtime-environment-release'
 import { cleanupEphemeralVmRuntime } from './runtime-service'
 import { removeEphemeralVmRuntimeSshTarget } from './runtime-ssh-cleanup'

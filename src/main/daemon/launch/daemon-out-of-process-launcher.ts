@@ -8,7 +8,7 @@ import {
   holdDaemonAdoptionLease,
   reconcileDaemonPidOwnership
 } from './daemon-endpoint-adoption'
-import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../../startup/first-window-startup-services'
+import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../../startup/pty-startup/first-window-startup-services'
 import {
   DAEMON_CHILD_STARTUP_TIMEOUT_MS,
   DaemonEndpointUnavailableError,

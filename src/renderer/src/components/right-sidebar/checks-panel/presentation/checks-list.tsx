@@ -23,7 +23,7 @@ import {
   openAppHttpLink,
   openAppHttpLinkFromAnchor
 } from '@/lib/browser/navigation/app-http-link-open'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const t = useTranslate()

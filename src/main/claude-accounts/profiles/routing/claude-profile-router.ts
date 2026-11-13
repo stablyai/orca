@@ -15,7 +15,7 @@ import {
 import { claudeProfileMissing } from './claude-profile-launch-errors'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ClaudeManagedAccount } from '../../../../shared/managed-account-types'
-import { probeRecentClaudeCliVersion } from '../../../claude/claude-hook-event-versions'
+import { probeRecentClaudeCliVersion } from '../../../claude/cli-capabilities/claude-hook-event-versions'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { resolveClaudeCommand } from '../../../codex-cli/command'
 import {
@@ -43,7 +43,7 @@ import {
   isSameClaudeLogin,
   type ClaudeFolderLogin
 } from '../../sign-in/claude-account-folder'
-import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
+import { resolveLoginShellEnvironment } from '../../../startup/shell-environment/login-shell-environment'
 
 export type ClaudeProfileRouterSettings = Pick<
   GlobalSettings,

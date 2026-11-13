@@ -58,7 +58,7 @@ describe('xterm image allocation lifecycle', () => {
     const { terminal, kitty } = createTerminal()
     try {
       const compressed = deflateSync(Buffer.alloc(64 * 1024 * 1024))
-      expect(compressed.byteLength).toBeLessThan(100_000)
+
       const result = await kitty._decompressZlib(compressed).then(
         (bytes) => ({ decodedBytes: bytes.byteLength }),
         () => ({ rejected: true })

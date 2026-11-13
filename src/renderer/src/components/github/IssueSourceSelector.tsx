@@ -1,5 +1,5 @@
 import React from 'react'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'

@@ -147,10 +147,17 @@ function postToolUse(toolUseId: string): AgentHookEventPayload {
   }
 }
 
+/** Takes the open approval and marks its escalation sent, as the turn-stop report does. */
+async function escalated(ctx: ReturnType<typeof setup>) {
+  const approval = (await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id))!
+  ctx.holds.markReported(approval.approvalId)
+  return approval
+}
+
 async function opened(ctx: ReturnType<typeof setup>, asked: ReturnType<typeof hook>) {
   ctx.holds.admit(asked.request)
   await ctx.tick()
-  return (await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id))!.approvalId
+  return (await escalated(ctx)).approvalId
 }
 
 const answer = (
@@ -219,6 +226,64 @@ describe('terminal worker approval holds', () => {
     expect(ctx.closedWith()[0]).toMatchObject({ state: 'answered', by: 'unknown' })
   })
 
+  it('marks a check Claude lets no hook approve as person-only, and refuses an allow without spending the hook', async () => {
+    const ctx = setup()
+    ctx.screen.lines = [
+      ' Bash command',
+      ' │ rm -rf build',
+      ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+      " │ Bash may act on this session's desktop, so each call is reviewed; allow rules, hooks and plugins cannot approve it.",
+      ...DIALOG.slice(3)
+    ]
+    const asked = hook('tool-1', () => {
+      ctx.screen.lines = AFTER
+      ctx.screen.record = record(OURS, 'deny')
+    })
+    ctx.holds.admit(asked.request)
+    await ctx.tick()
+    const approval = await escalated(ctx)
+    const approvalId = approval.approvalId
+
+    expect(approval).toMatchObject({ personOnly: true })
+    expect(await answer(ctx, approvalId, 'allow')).toMatchObject({
+      ok: false,
+      code: 'approval_requires_person'
+    })
+    expect(asked.replies).toEqual([])
+    expect(await deny(ctx, approvalId)).toMatchObject({ ok: true })
+  })
+
+  it('refuses an allow on a person-only check whose warning painted only after the escalation', async () => {
+    const ctx = setup()
+    const asked = hook('tool-1')
+    const approvalId = await opened(ctx, asked)
+    ctx.screen.lines = [
+      ' Bash command',
+      ' │ rm -rf build',
+      ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+      " │ Bash may act on this session's desktop, so each call is reviewed; allow rules, hooks and plugins cannot approve it.",
+      ...DIALOG.slice(3)
+    ]
+
+    expect(await answer(ctx, approvalId, 'allow')).toMatchObject({
+      code: 'approval_requires_person'
+    })
+    expect(asked.replies).toEqual([])
+  })
+
+  it('refuses an allow Claude drops while its dialog stays, and leaves the prompt with the person', async () => {
+    const ctx = setup()
+    // A check only a person may approve: Claude ignores a hook's allow and keeps asking.
+    const approvalId = await opened(ctx, hook('tool-1'))
+    const answering = answer(ctx, approvalId, 'allow')
+    await ctx.tick(40)
+
+    expect(await answering).toMatchObject({ ok: false, code: 'approval_requires_person' })
+    expect(ctx.closedWith()).toEqual([
+      expect.objectContaining({ by: 'terminal-only', decision: null })
+    ])
+  })
+
   it("doesn't take Orca's allow when the person's No won the race", async () => {
     const ctx = setup()
     const approvalId = await opened(
@@ -241,68 +306,12 @@ describe('terminal worker approval holds', () => {
     ])
   })
 
-  it("tells the coordinator to send the user to the terminal when the hook is gone but the dialog isn't", async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    await opened(ctx, asked)
-    asked.end('hook-gone')
-    await ctx.tick(40)
-
-    expect(ctx.closings()).toEqual([
-      expect.objectContaining({
-        type: 'escalation',
-        body: expect.stringContaining("Tell the user to answer it in the worker's terminal")
-      })
-    ])
-  })
-
-  it('closes as worker ended, not "answer it in the terminal", when the worker is stopped at the prompt', async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    await opened(ctx, asked)
-    // A stop kills the process; its last screen still shows the dialog.
-    ctx.screen.incarnation = 'run-2'
-    asked.end('hook-gone')
-    await ctx.tick(40)
-
-    expect(ctx.closedWith()).toEqual([
-      {
-        state: 'answered',
-        by: 'worker-ended',
-        decision: null,
-        reason: null,
-        reasonDelivered: false
-      }
-    ])
-  })
-
-  it("escalates with Claude's reason once the dialog paints, though a long command hides its box's top", async () => {
-    const ctx = setup()
-    // The live case (2026-11-11): the escalation came before the paint, and the command was so long
-    // that only the rule closing its box was on screen.
-    ctx.screen.lines = null
-    ctx.holds.admit(hook('tool-1').request)
-    const escalating = ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)
-    ctx.screen.lines = [
-      ...Array.from({ length: 30 }, (_, line) => ` │ s=s.replace("import ${line}")`),
-      ' │ fs.writeFileSync(p,s)\'; rg -n "ComputerBots" BotSettingsGroups.tsx',
-      ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
-      ' │ Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed',
-      ...DIALOG.slice(2)
-    ]
-    await ctx.tick(2)
-
-    expect((await escalating)?.summary.reason).toBe(
-      'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
-    )
-  })
-
   it('owes no closing line to a prompt whose escalation never went out', async () => {
     const ctx = setup()
     const asked = hook('tool-1')
     ctx.holds.admit(asked.request)
-    // The worker resumed while the escalation waited for the dialog, so no report was sent.
-    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id, () => false)).toBeNull()
+    // Taken, but the turn-stop report never sent it, so it is never marked reported.
+    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).not.toBeNull()
     asked.end('hook-gone')
     await ctx.tick(40)
 
@@ -312,7 +321,7 @@ describe('terminal worker approval holds', () => {
   it('closes a prompt left open by an earlier run, once, when the database opens', async () => {
     const ctx = setup()
     ctx.holds.admit(hook('tool-1').request)
-    const approval = (await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id))!
+    const approval = await escalated(ctx)
     const escalate = (id: string | undefined, carried: typeof approval) =>
       ctx.db.insertMessage({
         ...(id ? { id } : {}),

@@ -15,7 +15,7 @@ import {
 } from './comment-markdown-github-attachment-media'
 import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
-import { readGitHubCalloutKind } from '../../../../shared/github/github-callouts'
+import { readGitHubCalloutKind } from '../../../../shared/github/markdown/github-callouts'
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,

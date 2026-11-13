@@ -14,48 +14,248 @@ jobs:
   apply-os-label:
     runs-on: ubuntu-slim
     timeout-minutes: 5
+    # Serialize runs per issue; each run reconciles from current state, so order does not matter.
+    concurrency:
+      group: ${{ github.workflow }}-issue-${{ github.event.issue.number }}
+      cancel-in-progress: false
     steps:
-      - name: Apply OS label from issue form
+      - name: Reconcile OS and mobile labels from issue form
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const issue = context.payload.issue;
-            const body = issue.body || "";
-            const osMatch = body.match(/^### Operating system\s+(.+)$/m);
+            // The only labels this workflow may add or remove.
+            const MANAGED_LABELS = ["os:macos", "os:Windows", "os:linux", "os:mobile", "mobile"];
+            const MAX_PASSES = 3;
 
-            if (!osMatch) {
-              core.info("No operating system field found. Skipping.");
-              return;
+            const NOTE_PREFIX =
+              "> \u{1F310} **Translation note (machine-translated by an assistant on ";
+            const NOTE_SUFFIX =
+              "):** This issue's title was originally written in Chinese and has been translated to English (the body is unchanged). The original, untranslated text is preserved intact in the collapsible section below.";
+            const NOTE_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+            // Metadata headings in accepted order; equal rank = current/legacy names of one field.
+            const HEADING_RANKS = new Map([
+              ["Summary", 1],
+              ["Where were you using Orca?", 2],
+              ["Client", 2],
+              ["Operating system", 3],
+              ["Host operating system", 3],
+              ["Remote host operating system", 4],
+              ["Orca version", 5],
+              ["Coding harness and version", 6],
+              ["Details", 7],
+              ["Reproduction steps", 7],
+            ]);
+            const FREE_TEXT_RANK = 7;
+
+            const OS_LABELS = new Map([
+              ["macos", "os:macos"],
+              ["windows", "os:Windows"],
+              ["linux", "os:linux"],
+              ["ios", "os:mobile"],
+              ["android", "os:mobile"],
+              ["other", null],
+            ]);
+            // Value: whether the choice means the mobile app. Retired option strings stay for open issues.
+            const WHERE_IS_MOBILE = new Map([
+              ["desktop only", false],
+              ["desktop + ssh host", false],
+              ["desktop + orca server", false],
+              ["desktop + wsl", false],
+              ["mobile app", true],
+              ["web browser", false],
+              ["other", false],
+              ["desktop (this computer)", false],
+              ["desktop + ssh", false],
+              ["desktop + orca remote server", false],
+              ["mobile (ios)", true],
+              ["mobile (android)", true],
+              ["web / browser", false],
+            ]);
+            const CLIENT_IS_MOBILE = new Map([
+              ...WHERE_IS_MOBILE,
+              ["desktop", false],
+              ["mobile", true],
+              ["web", false],
+            ]);
+            const REMOTE_OS_VALUES = new Set(["linux", "macos", "windows", "other", "not sure"]);
+
+            const isBlank = (line) => /^[ \t]*$/.test(line);
+            const isHeading = (line) => /^###(?:[ \t]|$)/.test(line);
+            const isUnselected = (value) => value === "" || value === "_no response_";
+            const isTranslationNote = (line) =>
+              line.length === NOTE_PREFIX.length + 10 + NOTE_SUFFIX.length &&
+              line.startsWith(NOTE_PREFIX) &&
+              line.endsWith(NOTE_SUFFIX) &&
+              NOTE_DATE.test(line.slice(NOTE_PREFIX.length, NOTE_PREFIX.length + 10));
+
+            // Reads only the leading metadata prefix; null means "not a recognizable bug form".
+            function readFormFields(body) {
+              if (typeof body !== "string") {
+                return null;
+              }
+              const lines = body.replace(/\r\n/g, "\n").split("\n");
+              let index = 0;
+              const skipBlankLines = () => {
+                while (index < lines.length && isBlank(lines[index])) {
+                  index += 1;
+                }
+              };
+
+              skipBlankLines();
+              if (index < lines.length && isTranslationNote(lines[index])) {
+                index += 1;
+                if (index >= lines.length || !isBlank(lines[index])) {
+                  return null;
+                }
+                skipBlankLines();
+              }
+
+              const fields = new Map();
+              let lastRank = 0;
+              while (index < lines.length) {
+                const line = lines[index];
+                if (!isHeading(line)) {
+                  return null;
+                }
+                // Exact "### <heading>" only; any other heading shape is unknown.
+                const name = line.startsWith("### ") ? line.slice(4) : null;
+                const rank = HEADING_RANKS.get(name);
+                if (rank === undefined || rank < lastRank || fields.has(name)) {
+                  return null;
+                }
+                if (rank === FREE_TEXT_RANK) {
+                  // Free text starts here and is never inspected.
+                  return fields;
+                }
+                lastRank = rank;
+                index += 1;
+
+                let value = "";
+                let valueLines = 0;
+                while (index < lines.length && !isHeading(lines[index])) {
+                  if (!isBlank(lines[index])) {
+                    value = lines[index];
+                    valueLines += 1;
+                  }
+                  index += 1;
+                }
+                if (valueLines > 1) {
+                  return null;
+                }
+                fields.set(name, value.trim().toLowerCase());
+              }
+              return null;
             }
 
-            const selectedOs = osMatch[1].trim().toLowerCase();
-            const osLabelMap = {
-              macos: "os:macos",
-              windows: "os:Windows",
-              linux: "os:linux",
-            };
+            // Returns the managed labels the body asks for, or null to leave the issue untouched.
+            function desiredLabelsFor(body) {
+              const fields = readFormFields(body);
+              if (!fields || !fields.has("Orca version")) {
+                return null;
+              }
+              const osHeading = ["Operating system", "Host operating system"].find((name) =>
+                fields.has(name),
+              );
+              if (!osHeading) {
+                return null;
+              }
+              const desired = new Set();
 
-            const desiredLabel = osLabelMap[selectedOs];
-            if (!desiredLabel) {
-              core.info(`No OS label configured for "${selectedOs}". Skipping.`);
-              return;
+              const os = fields.get(osHeading);
+              if (!isUnselected(os)) {
+                if (!OS_LABELS.has(os)) {
+                  return null;
+                }
+                const osLabel = OS_LABELS.get(os);
+                if (osLabel) {
+                  desired.add(osLabel);
+                }
+              }
+
+              // The current heading wins by presence, even when blank.
+              const whereChoices = fields.has("Where were you using Orca?")
+                ? [fields.get("Where were you using Orca?"), WHERE_IS_MOBILE]
+                : fields.has("Client")
+                  ? [fields.get("Client"), CLIENT_IS_MOBILE]
+                  : null;
+              if (whereChoices && !isUnselected(whereChoices[0])) {
+                const [where, isMobileByChoice] = whereChoices;
+                if (!isMobileByChoice.has(where)) {
+                  return null;
+                }
+                if (isMobileByChoice.get(where)) {
+                  desired.add("mobile");
+                }
+              }
+
+              // Validated only; the remote host never contributes a label.
+              const remoteOs = fields.get("Remote host operating system") ?? "";
+              if (!isUnselected(remoteOs) && !REMOTE_OS_VALUES.has(remoteOs)) {
+                return null;
+              }
+              return desired;
             }
 
-            const managedLabels = Object.values(osLabelMap);
-            const existingLabels = issue.labels.map((label) =>
-              typeof label === "string" ? label : label.name,
-            );
-            const labelsToKeep = existingLabels.filter(
-              (label) => !managedLabels.includes(label),
-            );
-            const nextLabels = [...new Set([...labelsToKeep, desiredLabel])];
-
-            await github.rest.issues.setLabels({
+            const issueRef = {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: issue.number,
-              labels: nextLabels,
-            });
+              issue_number: context.payload.issue.number,
+            };
 
-            core.info(`Applied label ${desiredLabel} to issue #${issue.number}.`);
+            // The event is only a signal: decisions come from the issue as it is now.
+            async function readCurrentIssue() {
+              const { data } = await github.rest.issues.get(issueRef);
+              const labelNames = (data.labels ?? []).map((label) =>
+                typeof label === "string" ? label : label.name,
+              );
+              const desired = desiredLabelsFor(data.body);
+              const present = MANAGED_LABELS.filter((label) => labelNames.includes(label));
+              return {
+                desired,
+                toAdd: desired ? MANAGED_LABELS.filter((l) => desired.has(l) && !present.includes(l)) : [],
+                toRemove: desired ? present.filter((l) => !desired.has(l)) : [],
+              };
+            }
+
+            let state = await readCurrentIssue();
+            let hasWritten = false;
+            for (let pass = 1; ; pass += 1) {
+              if (!state.desired) {
+                if (hasWritten) {
+                  throw new Error(
+                    `Issue #${issueRef.issue_number} stopped matching the bug form while labels were being updated. Managed labels may be incomplete; rerun this job once the issue body is settled.`,
+                  );
+                }
+                core.info("No recognizable bug form at the start of the issue body. Labels left untouched.");
+                return;
+              }
+              if (state.toAdd.length === 0 && state.toRemove.length === 0) {
+                core.info(
+                  `Issue #${issueRef.issue_number} managed labels match the form: [${[...state.desired].join(", ")}].`,
+                );
+                return;
+              }
+              if (pass > MAX_PASSES) {
+                throw new Error(
+                  `Issue #${issueRef.issue_number} labels still differ from the form after ${MAX_PASSES} passes (to add: [${state.toAdd.join(", ")}], to remove: [${state.toRemove.join(", ")}]). The issue is probably being edited; rerun this job.`,
+                );
+              }
+
+              hasWritten = true;
+              if (state.toAdd.length > 0) {
+                await github.rest.issues.addLabels({ ...issueRef, labels: state.toAdd });
+              }
+              for (const name of state.toRemove) {
+                try {
+                  await github.rest.issues.removeLabel({ ...issueRef, name });
+                } catch (error) {
+                  // Already gone is the desired outcome; the re-read below verifies real state.
+                  if (error?.status !== 404) {
+                    throw error;
+                  }
+                }
+              }
+              state = await readCurrentIssue();
+            }
