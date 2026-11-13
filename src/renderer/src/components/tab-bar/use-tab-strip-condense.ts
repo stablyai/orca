@@ -93,7 +93,10 @@ export function useTabStripCondense({
   const planRef = useRef(plan)
   const windowStartRef = useRef<number | null>(null)
   const inputsRef = useRef({ ids, activeId, frozen, heldWidths })
-  inputsRef.current = { ids, activeId, frozen, heldWidths }
+  // Declared before the effects that read it, so they see this render's inputs.
+  useLayoutEffect(() => {
+    inputsRef.current = { ids, activeId, frozen, heldWidths }
+  })
 
   const replan = useCallback(() => {
     if (!surface) {

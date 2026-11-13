@@ -10,7 +10,7 @@ import { TAB_ICON_ONLY_WIDTH_PX } from './tab-strip-width-budget'
 
 type TabStripSlotProps = {
   className: string
-  style: React.CSSProperties | undefined
+  style: (React.CSSProperties & Record<'--tab-slot-width', string>) | undefined
   'data-tab-strip-slot': string
   'data-active-tab-dock': '' | undefined
   'data-tab-density': 'icon' | undefined
@@ -46,8 +46,7 @@ export function useTabStripSlotProps(
       'has-[[data-tab-rename-input]]:w-[300px] has-[[data-tab-rename-input]]:flex-none',
       docks && 'sticky inset-x-0 z-10'
     ),
-    style:
-      fixedWidth !== null ? ({ '--tab-slot-width': fixedWidth } as React.CSSProperties) : undefined,
+    style: fixedWidth !== null ? { '--tab-slot-width': fixedWidth } : undefined,
     'data-tab-strip-slot': tabId,
     'data-active-tab-dock': docks ? '' : undefined,
     'data-tab-density': iconOnly ? 'icon' : undefined

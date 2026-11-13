@@ -71,17 +71,17 @@ export function useTitlebarChromeFoldObserver({
 
 /** Width the header loses going from `from` to `to`: visible parts tagged with a step in between. */
 function measureFoldableWidth(controls: HTMLElement, from: number, to: number): number {
-  const inRange = (element: Element | null): element is HTMLElement => {
-    const step = Number((element as HTMLElement | null)?.dataset?.titlebarFoldStep)
+  const inRange = (element: Element | null | undefined): element is HTMLElement => {
+    if (!(element instanceof HTMLElement)) {
+      return false
+    }
+    const step = Number(element.dataset.titlebarFoldStep)
     return step > from && step <= to
   }
   let total = 0
   for (const element of controls.querySelectorAll<HTMLElement>('[data-titlebar-fold-step]')) {
     // A nested part folds with its parent; count the parent once.
-    if (
-      !inRange(element) ||
-      inRange(element.parentElement?.closest('[data-titlebar-fold-step]') ?? null)
-    ) {
+    if (!inRange(element) || inRange(element.parentElement?.closest('[data-titlebar-fold-step]'))) {
       continue
     }
     const style = getComputedStyle(element)

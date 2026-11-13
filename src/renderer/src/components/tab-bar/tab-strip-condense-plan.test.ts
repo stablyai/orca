@@ -7,7 +7,7 @@ function plan(
   width: number,
   ids = SIX,
   activeId: string | null = 'c',
-  previous = null as number | null
+  previous: number | null = null
 ) {
   return planTabStrip({ width, ids, activeId, previousWindowStart: previous })
 }

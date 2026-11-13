@@ -48,7 +48,7 @@ function TerminalEntryIcon({ tab }: { tab: TerminalTab }): React.JSX.Element {
 
 function EntryIcon({ entry }: { entry: TabStripEntry }): React.JSX.Element {
   if (entry.kind === 'paired') {
-    return <Laptop className="size-3 shrink-0 text-blue-500" aria-hidden />
+    return <Laptop className="size-3 shrink-0 text-callout-note" aria-hidden />
   }
   const { item } = entry
   switch (item.type) {
@@ -61,7 +61,7 @@ function EntryIcon({ entry }: { entry: TabStripEntry }): React.JSX.Element {
         <BrowserFavicon
           faviconUrl={item.data.faviconUrl}
           className="size-3"
-          fallbackClassName="text-blue-500"
+          fallbackClassName="text-callout-note"
         />
       )
     case 'simulator':
@@ -109,15 +109,14 @@ function EntryRow({
             })
           : label
       }
-      className={cn('gap-2', isCurrent && 'bg-accent/60')}
       onSelect={onSelect}
     >
       <span className="flex size-4 shrink-0 items-center justify-center">
         <EntryIcon entry={entry} />
       </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{label}</span>
       {needsAttention ? (
-        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-amber-500" />
+        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-warning" />
       ) : null}
       {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
     </DropdownMenuItem>
@@ -176,6 +175,14 @@ export function TabStripOverflowChip({
   const contentRef = useRef<HTMLDivElement>(null)
   const pendingFocusIdRef = useRef<string | null>(null)
   const indexBindings = useTabIndexBindings()
+  // tab.selectByIndex counts unified tabs in strip order; paired rows have no digit.
+  const unifiedIndexById = useMemo(
+    () =>
+      new Map(
+        entries.filter((entry) => entry.kind === 'item').map((entry, index) => [entry.id, index])
+      ),
+    [entries]
+  )
   const activeEntry = entries.find((entry) => entry.id === activeId) ?? entries[0]
   const activeLabel = useEntryLabel(activeEntry!, generatedTabTitlesEnabled)
   const hiddenAttention = entries.filter(
@@ -221,18 +228,21 @@ export function TabStripOverflowChip({
   const attentionSuffix =
     hiddenAttention.length > 0
       ? t('tabStrip.overflow.needAttention', ', {{count}} need attention', {
-          count: hiddenAttention.length
+          count: hiddenAttention.length,
+          defaultValue_one: ', {{count}} needs attention'
         })
       : ''
   const name =
     (chipOnly
       ? t('tabStrip.overflow.chipOnlyName', '{{title}}, {{count}} tabs', {
           title: activeLabel,
-          count: entries.length
+          count: entries.length,
+          defaultValue_one: '{{title}}, {{count}} tab'
         })
-      : t('tabStrip.overflow.moreTabs', '{{count}} more tabs', { count: hiddenIds.size })) +
-    attentionSuffix
-  let unifiedIndex = 0
+      : t('tabStrip.overflow.moreTabs', '{{count}} more tabs', {
+          count: hiddenIds.size,
+          defaultValue_one: '{{count}} more tab'
+        })) + attentionSuffix
 
   return (
     <Tooltip>
@@ -257,7 +267,7 @@ export function TabStripOverflowChip({
               {hiddenAttention.length > 0 ? (
                 <span
                   aria-hidden
-                  className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500"
+                  className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-status-warning"
                 />
               ) : null}
             </button>
@@ -306,11 +316,14 @@ export function TabStripOverflowChip({
             )
           }}
         >
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            {t('tabStrip.overflow.openTabs', '{{count}} open tabs', { count: entries.length })}
+          <DropdownMenuLabel>
+            {t('tabStrip.overflow.openTabs', '{{count}} open tabs', {
+              count: entries.length,
+              defaultValue_one: '{{count}} open tab'
+            })}
           </DropdownMenuLabel>
           {entries.map((entry) => {
-            const index = entry.kind === 'item' ? unifiedIndex++ : MAX_SHORTCUT_ROWS
+            const index = unifiedIndexById.get(entry.id) ?? MAX_SHORTCUT_ROWS
             return (
               <EntryRow
                 key={entry.id}

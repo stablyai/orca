@@ -81,7 +81,7 @@ export function TerminalTabLeadingIcon({
         {showUnreadActivity ? (
           <span
             aria-hidden
-            className="absolute -right-1 -top-1 size-1.5 rounded-full bg-amber-500 ring-1 ring-tab-inactive"
+            className="absolute -right-1 -top-1 size-1.5 rounded-full bg-status-warning ring-1 ring-tab-inactive"
           />
         ) : dotState ? (
           <span
