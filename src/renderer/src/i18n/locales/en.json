@@ -23324,6 +23324,10 @@
       "decline": "No thanks",
       "failed": "Could not turn on Claude Code theme sync",
       "failedDescription": "Turn it on in Settings."
+    },
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "Orca could not find PowerShell 7 (pwsh.exe), so this terminal opened Windows PowerShell instead.",
+      "commandPrompt": "Orca could not find PowerShell 7 (pwsh.exe), so this terminal opened Command Prompt instead."
     }
   },
   "fileExplorer": {

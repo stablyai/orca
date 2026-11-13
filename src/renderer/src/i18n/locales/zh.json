@@ -22066,6 +22066,10 @@
       "gotIt": "知道了",
       "title": "Claude Code 在较宽的终端中会在聊天旁打开自己的差异面板，那个面板属于 Claude，而不是 Orca",
       "body": "要隐藏它，请在 Claude Code 中输入 /diff，Claude 会在之后的会话中记住这一选择"
+    },
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "Orca 未找到 PowerShell 7 (pwsh.exe)，因此此终端改为打开了 Windows PowerShell。",
+      "commandPrompt": "Orca 未找到 PowerShell 7 (pwsh.exe)，因此此终端改为打开了命令提示符。"
     }
   },
   "fileSearch": {

@@ -22026,6 +22026,10 @@
       "gotIt": "Entendido",
       "body": "Para ocultarlo, escriba /diff en Claude Code. Claude recuerda esa elección para sesiones posteriores.",
       "title": "Claude Code puede abrir su propio panel de diferencias al lado del chat en terminales anchas. Ese panel es de Claude, no de Orca."
+    },
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "Orca no encontró PowerShell 7 (pwsh.exe), así que este terminal abrió Windows PowerShell en su lugar.",
+      "commandPrompt": "Orca no encontró PowerShell 7 (pwsh.exe), así que este terminal abrió el Símbolo del sistema en su lugar."
     }
   },
   "quickOpen": {

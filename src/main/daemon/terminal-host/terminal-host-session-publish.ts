@@ -72,6 +72,7 @@ export async function spawnAndPublishSession(
       terminalShellArgs: opts.terminalShellArgs,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
+      terminalWindowsPwshNotFoundNotices: opts.terminalWindowsPwshNotFoundNotices,
       isCanceled: opts.isCanceled,
       assertCreateAllowed: deps.assertCreateAllowed,
       ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})

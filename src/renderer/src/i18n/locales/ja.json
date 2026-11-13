@@ -21726,6 +21726,10 @@
       "gotIt": "了解",
       "title": "Claude Code は、ワイドターミナルでチャットの横に独自の差分パネルを開くことができます。そのパネルは Claude のものであり、Orca のものではありません。",
       "body": "非表示にするには、Claude Code で /diff と入力してください。Claude はこの選択を今後のセッションでも記憶します。"
+    },
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "Orca は PowerShell 7 (pwsh.exe) を見つけられなかったため、このターミナルでは代わりに Windows PowerShell を開きました。",
+      "commandPrompt": "Orca は PowerShell 7 (pwsh.exe) を見つけられなかったため、このターミナルでは代わりにコマンド プロンプトを開きました。"
     }
   },
   "fileSearch": {

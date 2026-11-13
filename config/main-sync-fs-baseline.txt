@@ -443,7 +443,6 @@
 1 src/main/providers/local-pty/local-pty-shell-ready-wrapper-root.ts
 1 src/main/providers/shell-launch/macos/login-session-pty-probe.ts
 3 src/main/providers/shell-launch/macos/tcc-login-shell.ts
-3 src/main/providers/shell-launch/windows/powershell-executable.ts
 2 src/main/providers/working-directory/validation.ts
 4 src/main/pty/history/fish-history-session.ts
 4 src/main/pty/history/terminal-history-deletion.ts

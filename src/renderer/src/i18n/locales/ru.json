@@ -22521,7 +22521,11 @@
       "count_many": "{{count}} работающих терминалов"
     },
     "restartedInputNotSent": "Терминал перезапустился во время ввода, поэтому часть текста могла не дойти. Проверьте новую оболочку, прежде чем вводить текст снова.",
-    "typingBeforeStartNotSent": "Часть клавиш, нажатых во время запуска терминала, не была отправлена."
+    "typingBeforeStartNotSent": "Часть клавиш, нажатых во время запуска терминала, не была отправлена.",
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "Orca не удалось найти PowerShell 7 (pwsh.exe), поэтому в этом терминале вместо него открыт Windows PowerShell.",
+      "commandPrompt": "Orca не удалось найти PowerShell 7 (pwsh.exe), поэтому в этом терминале вместо него открыта командная строка."
+    }
   },
   "fileExplorer": {
     "root": {

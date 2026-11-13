@@ -5,6 +5,7 @@ import { startDaemon, type DaemonHandle } from './server/daemon-main'
 import { createPtySubprocess } from './pty-subprocess/pty-subprocess'
 import { warmWindowsConptyOnce } from './pty-subprocess/windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pty/shell-startup/pwsh'
+import { warmWindowsPwshSearch } from '../providers/shell-launch/windows/powershell-search'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './observability/daemon-file-log'
 import { PROTOCOL_VERSION } from './protocol/daemon-protocol-version'
 import { detectOwnCgroupScopeUnit, ownFreshDaemonScope } from './process-scopes/daemon-cgroup-scope'
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
   const processCeiling = initializeTerminalScopes(daemonScope, log)
   startDaemonScopeDeathWatch({ daemonScope, log })
   void warmPwshAvailabilityCache()
+  warmWindowsPwshSearch()
 
   // Detached stderr is unavailable; retain TCC preflight failures in diagnostic logs.
   const runMacosLoginPreflight = async (): Promise<void> => {

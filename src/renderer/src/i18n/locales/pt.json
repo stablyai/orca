@@ -22797,7 +22797,11 @@
       "count_one": "{{count}} terminal em execução"
     },
     "restartedInputNotSent": "O terminal reiniciou enquanto você digitava, então parte da entrada pode não ter chegado a ele. Verifique o novo shell antes de digitar novamente.",
-    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas."
+    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas.",
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "O Orca não encontrou o PowerShell 7 (pwsh.exe), então este terminal abriu o Windows PowerShell no lugar.",
+      "commandPrompt": "O Orca não encontrou o PowerShell 7 (pwsh.exe), então este terminal abriu o Prompt de Comando no lugar."
+    }
   },
   "fileExplorer": {
     "root": {

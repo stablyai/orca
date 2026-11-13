@@ -21790,7 +21790,11 @@
       "count_other": "Çalışan {{count}} terminal"
     },
     "restartedInputNotSent": "Siz yazarken terminal yeniden başlatıldı, bu nedenle girdilerinizin bir kısmı terminale ulaşmamış olabilir. Yeniden yazmadan önce yeni kabuğu kontrol edin.",
-    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi."
+    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi.",
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "Orca, PowerShell 7'yi (pwsh.exe) bulamadı, bu nedenle bu terminal bunun yerine Windows PowerShell'i açtı.",
+      "commandPrompt": "Orca, PowerShell 7'yi (pwsh.exe) bulamadı, bu nedenle bu terminal bunun yerine Komut İstemi'ni açtı."
+    }
   },
   "fileExplorer": {
     "root": {

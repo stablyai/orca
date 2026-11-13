@@ -22405,6 +22405,10 @@
       "gotIt": "J'ai compris",
       "title": "Claude Code peut ouvrir son propre panneau de différences à côté du chat dans les terminaux larges. Ce panneau appartient à Claude, pas à Orca.",
       "body": "Pour le masquer, tapez /diff dans Claude Code. Claude se souvient de ce choix pour les sessions ultérieures."
+    },
+    "windowsPwshNotFound": {
+      "windowsPowerShell": "Orca n'a pas trouvé PowerShell 7 (pwsh.exe), ce terminal a donc ouvert Windows PowerShell à la place.",
+      "commandPrompt": "Orca n'a pas trouvé PowerShell 7 (pwsh.exe), ce terminal a donc ouvert l'invite de commandes à la place."
     }
   },
   "fileSearch": {

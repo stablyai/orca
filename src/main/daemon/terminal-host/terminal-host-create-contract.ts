@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import type { WindowsPwshNotFoundNotices } from '../../providers/shell-launch/windows/pwsh-not-found-notice'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -28,6 +29,7 @@ export type CreateOrAttachOptions = {
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  terminalWindowsPwshNotFoundNotices?: WindowsPwshNotFoundNotices
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
   historySeedChunks?: readonly string[]

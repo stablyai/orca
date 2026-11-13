@@ -18,7 +18,10 @@ import {
   shouldProbeWindowsPowerShellAvailability,
   type WindowsPowerShellShellFamily
 } from '../shell-launch/windows/powershell'
-import { buildWindowsPowerShellSpawnAttempts } from '../shell-launch/windows/shell-fallback-chain'
+import {
+  buildWindowsPowerShellSpawnAttempts,
+  type WindowsShellSpawnAttempt
+} from '../shell-launch/windows/shell-fallback-chain'
 import { resolveWindowsShellLaunchArgs } from '../shell-launch/windows/shell-args'
 import { assertSafeAgentStartupCwd } from '../working-directory/default-cwd'
 import type { PtySpawnOptions } from '../pty/provider-contract'
@@ -48,7 +51,7 @@ export type LocalPtyLaunchPlan = {
   effectiveCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
-  windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
+  windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   shellReadyLaunch: ReturnType<typeof getShellLaunchConfig> | null
   getFallbackShellReadyConfig:
     | ((shell: string) => ReturnType<typeof getShellLaunchConfig>)
@@ -62,7 +65,7 @@ export type LocalPtyLaunchPlan = {
 export class DeferredLocalPtyLaunchPlan {
   constructor(
     readonly availability: boolean | Promise<boolean>,
-    readonly finish: (available: boolean) => LocalPtyLaunchPlan
+    readonly finish: (available: boolean) => Promise<LocalPtyLaunchPlan>
   ) {}
 }
 
@@ -74,7 +77,7 @@ function finalizeLocalPtyLaunchPlan(
     effectiveCwd: string
     validationCwd: string
     startupCommandDeliveredInShellArgs?: boolean
-    windowsFallbackAttempts?: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
+    windowsFallbackAttempts?: WindowsShellSpawnAttempt[]
   }
 ): LocalPtyLaunchPlan {
   ensureNodePtySpawnHelperExecutable()
@@ -133,7 +136,7 @@ function createWindowsLocalPtyLaunchPlan(
   })
   const shouldResolvePowerShellFamily =
     powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
-  const finish = (pwshAvailable: boolean): LocalPtyLaunchPlan => {
+  const finish = async (pwshAvailable: boolean): Promise<LocalPtyLaunchPlan> => {
     let shellPath: string
     if (resolvedGitBashPath) {
       shellPath = resolvedGitBashPath
@@ -149,12 +152,17 @@ function createWindowsLocalPtyLaunchPlan(
         : shellFamily
     }
     // Bare pwsh.exe may resolve to a failing Store alias; use absolute executable/fallback attempts.
-    const windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
+    const windowsFallbackAttempts = await buildWindowsPowerShellSpawnAttempts({
       shellPath,
       cwd,
       defaultCwd,
       wslContext: seed.launchWslContext,
-      startupCommand: args.command
+      startupCommand: args.command,
+      // Main's env plus the spawn's own; PATH here is what the shell will see.
+      env: args.env ? { ...process.env, ...args.env } : process.env,
+      requestedShell: shellFamily,
+      powerShellImplementation,
+      pwshNotFoundNotices: args.terminalWindowsPwshNotFoundNotices
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -183,9 +191,11 @@ function createWindowsLocalPtyLaunchPlan(
       windowsFallbackAttempts
     })
   }
-  return shouldProbePwsh
-    ? new DeferredLocalPtyLaunchPlan(getOptions().pwshAvailable?.() ?? false, finish)
-    : finish(false)
+  // Locating PowerShell is async, so every Windows plan defers.
+  return new DeferredLocalPtyLaunchPlan(
+    shouldProbePwsh ? (getOptions().pwshAvailable?.() ?? false) : false,
+    finish
+  )
 }
 
 export function createLocalPtyLaunchPlan(

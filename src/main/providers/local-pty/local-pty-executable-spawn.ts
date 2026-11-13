@@ -11,6 +11,7 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from '../shell-launch/macos/tcc-login-shell'
 import { formatLocalPtyEnvironmentDiag } from '../working-directory/validation'
+import { forgetWindowsPowerShellAfterLaunchFailure } from '../shell-launch/windows/powershell-search'
 
 let didEnsureSpawnHelperExecutable = false
 
@@ -144,6 +145,9 @@ function spawnWindowsFallbackChain(
 ): ShellSpawnResult | null {
   const { termName = 'xterm-256color', cols, rows, env, ptySpawn } = params
   const attempts = params.windowsFallbackAttempts ?? []
+  if (attempts.length > 0) {
+    forgetWindowsPowerShellAfterLaunchFailure(params.shellPath)
+  }
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
