@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { commands, found, mocks, read, rpcRead } from './runtime-hosted-pr-snapshot-test-harness'
-import { PrForBranch } from '../../../../shared/rpc-contract/github-pull-request-params'
+import { PrForBranch } from '../../../../shared/rpc-contract/github/github-pull-request-params'
 
 it('promotes a shared selected demand without losing other rows or renewing its attempt', async () => {
   const branches = ['ordinary-a', 'selected-a', 'selected-b']
