@@ -6,9 +6,11 @@ import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-t
 import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import {
   createWorkspaceCleanupFingerprint,
+  getWorkspaceCleanupAutomationRunReasons,
   getWorkspaceCleanupInactivityReasons,
   getWorkspaceCleanupMergeReasons,
   isWorkspaceOldForCleanup,
+  type WorkspaceCleanupAutomationRunLookup,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupReason
@@ -32,11 +34,12 @@ export async function buildWorkspaceCleanupCandidate(args: {
   prCache: PRCacheView<PRInfo>
   skipGit: boolean
   forceGitCheck: boolean
+  findAutomationRun: WorkspaceCleanupAutomationRunLookup
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupCandidate> {
   const { repo, worktree, scannedAt, route, prCache, skipGit, forceGitCheck, signal } = args
   const blockers: WorkspaceCleanupBlocker[] = []
-  const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
+  const reasons = getWorkspaceCleanupWorkspaceReasons(worktree, scannedAt, args.findAutomationRun)
   const repoIsFolder = isFolderRepo(repo)
 
   if (worktree.isMainWorktree) {
@@ -107,7 +110,8 @@ export async function buildWorkspaceCleanupCandidate(args: {
 export function buildWorkspaceCleanupCandidateFromError(
   repo: Repo,
   worktree: Worktree,
-  scannedAt: number
+  scannedAt: number,
+  findAutomationRun: WorkspaceCleanupAutomationRunLookup
 ): WorkspaceCleanupCandidate {
   return {
     worktreeId: worktree.id,
@@ -118,7 +122,7 @@ export function buildWorkspaceCleanupCandidateFromError(
     displayName: worktree.displayName ?? '',
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
-    reasons: getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt),
+    reasons: getWorkspaceCleanupWorkspaceReasons(worktree, scannedAt, findAutomationRun),
     blockers: ['git-status-error'],
     lastActivityAt: worktree.lastActivityAt,
     ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
@@ -163,6 +167,17 @@ export function getWorkspaceCleanupInactivityReasonsForWorkspace(
   scannedAt: number
 ): WorkspaceCleanupReason[] {
   return getWorkspaceCleanupInactivityReasons(workspace, scannedAt)
+}
+
+function getWorkspaceCleanupWorkspaceReasons(
+  worktree: Worktree,
+  scannedAt: number,
+  findAutomationRun: WorkspaceCleanupAutomationRunLookup
+): WorkspaceCleanupReason[] {
+  return [
+    ...getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt),
+    ...getWorkspaceCleanupAutomationRunReasons(worktree.automationProvenance, findAutomationRun)
+  ]
 }
 
 function shouldReadWorkspaceCleanupGitEvidence(args: {

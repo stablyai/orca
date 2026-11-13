@@ -7,6 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../../shared/worktree/types'
 import { mergeWorktree } from '../worktree-metadata-merge'
 import type {
+  WorkspaceCleanupAutomationRunLookup,
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanError,
@@ -83,6 +84,7 @@ export async function scanWorkspaceCleanup(
   }
   // One snapshot per scan: merged-review evidence reads it without the network.
   const prCache = store.getGitHubCache().pr
+  const findAutomationRun = createWorkspaceCleanupAutomationRunLookup(store)
   const progress = createWorkspaceCleanupProgressEmitter(args.scanId, scannedAt, options)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -99,6 +101,7 @@ export async function scanWorkspaceCleanup(
           repoOwnerCount: repoOwnerCountById.get(repo.id) ?? 1,
           scannedAt,
           prCache,
+          findAutomationRun,
           targetWorktreeIds: targetWorktreeIdsByRepo.get(repo.id),
           refreshTargetActivity: args.worktreeId !== undefined || args.refreshActivity === true,
           includeAllWorkspaces: args.includeAllWorkspaces === true,
@@ -120,6 +123,14 @@ export async function scanWorkspaceCleanup(
   }
 }
 
+/** One run snapshot per scan; a store that keeps no automations finds no runs. */
+function createWorkspaceCleanupAutomationRunLookup(
+  store: RuntimeStore
+): WorkspaceCleanupAutomationRunLookup {
+  const runsById = new Map((store.listAutomationRuns?.() ?? []).map((run) => [run.id, run]))
+  return (runId) => runsById.get(runId)
+}
+
 async function scanRepoWorkspaces(
   args: {
     store: RuntimeStore
@@ -127,6 +138,7 @@ async function scanRepoWorkspaces(
     repoOwnerCount: number
     scannedAt: number
     prCache: PRCacheView<PRInfo>
+    findAutomationRun: WorkspaceCleanupAutomationRunLookup
     targetWorktreeIds?: ReadonlySet<string>
     refreshTargetActivity: boolean
     includeAllWorkspaces: boolean
@@ -140,6 +152,7 @@ async function scanRepoWorkspaces(
     repoOwnerCount,
     scannedAt,
     prCache,
+    findAutomationRun,
     targetWorktreeIds,
     refreshTargetActivity,
     includeAllWorkspaces,
@@ -262,13 +275,19 @@ async function scanRepoWorkspaces(
         // Defer Git for active rows during fleet scans; forced removal preflight reads fresh evidence.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
+        findAutomationRun,
         signal
       }).catch((error) => {
         if (error instanceof WorkspaceCleanupScanCancelledError) {
           throw error
         }
         console.error('Workspace cleanup candidate scan failed', error)
-        return buildWorkspaceCleanupCandidateFromError(repo, worktreeWithActivity, scannedAt)
+        return buildWorkspaceCleanupCandidateFromError(
+          repo,
+          worktreeWithActivity,
+          scannedAt,
+          findAutomationRun
+        )
       })
       onCandidateScanned?.(candidate)
       return candidate
