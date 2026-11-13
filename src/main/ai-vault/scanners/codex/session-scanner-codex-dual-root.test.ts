@@ -1,5 +1,5 @@
 import type * as TranscriptFs from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
-import { copyFile, link, mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, copyFile, link, mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ import { isolatedScanRoots, jsonLines } from '../../scanner-fixtures/session-sca
 
 const reads = vi.hoisted(() => ({
   failed: '',
+  failedSlice: '',
   cancel: null as AbortController | null,
   paths: [] as string[]
 }))
@@ -20,6 +21,12 @@ vi.mock(
     const actual = await importOriginal<typeof TranscriptFs>()
     return {
       ...actual,
+      readTranscriptSlice: async (...args: Parameters<typeof actual.readTranscriptSlice>) => {
+        if (args[0] === reads.failedSlice) {
+          throw Object.assign(new Error('unreadable'), { code: 'EACCES' })
+        }
+        return actual.readTranscriptSlice(...args)
+      },
       openTranscriptReadStream: (...args: Parameters<typeof actual.openTranscriptReadStream>) => {
         reads.paths.push(args[0])
         if (args[0] === reads.failed) {
@@ -42,6 +49,7 @@ afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
   reads.failed = ''
+  reads.failedSlice = ''
   reads.cancel = null
   reads.paths = []
   resetSessionParseCacheForTests()
@@ -410,4 +418,27 @@ it('keeps distinct canonical rollouts and execution namespaces, preferring nonem
       .find((choice) => choice.file.path === paths[1])
       ?.alternatives?.map((candidate) => candidate.file.path)
   ).toEqual([paths[1], paths[0]])
+})
+
+it('falls back when a growing cached preferred file fails its resume boundary read', async () => {
+  const fixture = await canonicalCopies()
+  expect((await scanAiVaultSessions(fixture.options)).sessions[0].filePath).toBe(fixture.real)
+  await appendFile(
+    fixture.real,
+    jsonLines([
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'newaliasmessage' }]
+        }
+      }
+    ])
+  )
+  await copyFile(fixture.real, fixture.managed)
+  reads.failedSlice = fixture.real
+  const result = await scanAiVaultSessions(fixture.options)
+  expect(result.sessions).toHaveLength(1)
+  expect(result.sessions[0]).toMatchObject({ filePath: fixture.managed, messageCount: 2 })
 })

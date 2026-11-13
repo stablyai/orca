@@ -7,15 +7,19 @@ import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/sessi
 import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
 import { registerTranscriptConsumer } from '../../ai-vault/transcripts/session-transcript-consumers'
 import { physicalSessionCandidates } from '../../ai-vault/session-scanner-types'
-import { discoverSessionSearchCandidates } from '../discovery/session-search-scan-roots'
+import { isolatedScanRoots } from '../../ai-vault/scanner-fixtures/session-scanner-test-fixtures'
+import {
+  discoverSessionSearchCandidates,
+  type SessionSearchScanRoots
+} from '../discovery/session-search-scan-roots'
 import { SessionSearchDirectoryListings } from '../discovery/session-search-directory-listings'
 import { SessionSearchStore } from '../storage/session-search-store'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { runSessionSearchPass } from './session-search-pass'
 import {
-  openSessionSearchIndexerHarness,
-  type SessionSearchIndexerHarness
-} from './session-search-indexer-test-fixture'
+  openSessionSearchIndexFile,
+  type SessionSearchIndexFile
+} from '../storage/session-search-index-test-fixture'
 
 const io = vi.hoisted(() => ({ failed: '', paths: [] as string[] }))
 vi.mock(
@@ -39,20 +43,23 @@ vi.mock(
   }
 )
 
-let harness: SessionSearchIndexerHarness
+let index: SessionSearchIndexFile
+let roots: SessionSearchScanRoots
 let store: SessionSearchStore
 let unregister: () => void
 let real: string
 let managed: string
 beforeEach(async () => {
-  harness = await openSessionSearchIndexerHarness('ss-codex-aliases')
-  const home = join(harness.root, 'real')
-  const managedHome = join(harness.root, 'codex-accounts', 'account', 'home')
+  index = await openSessionSearchIndexFile('ss-codex-aliases')
+  const root = dirname(index.path)
+  roots = isolatedScanRoots(root)
+  const home = join(root, 'real')
+  const managedHome = join(root, 'codex-accounts', 'account', 'home')
   const name = 'rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
   real = join(home, 'sessions', name)
   managed = join(managedHome, 'sessions', name)
-  harness.roots = {
-    ...harness.roots,
+  roots = {
+    ...roots,
     codexSessionsDir: dirname(real),
     defaultCodexHomeDir: home,
     additionalCodexSessionsDirs: [dirname(managed)]
@@ -81,7 +88,7 @@ beforeEach(async () => {
   await copyFile(real, managed)
   io.failed = real
   io.paths = []
-  store = new SessionSearchStore(harness.databasePath, (error) => {
+  store = new SessionSearchStore(index.path, (error) => {
     throw error
   })
   unregister = registerSessionSearchIndexConsumer(store)
@@ -91,30 +98,28 @@ afterEach(async () => {
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   store.close()
-  await harness.cleanup()
+  await index.close()
   io.failed = ''
 })
 const sweep = () =>
   runSessionSearchPass({
     store,
-    roots: harness.roots,
+    roots,
     full: true,
     recentPerAgent: 100,
     listings: new SessionSearchDirectoryListings(),
     overdue: () => true
   })
 function matches() {
-  return harness.read((db) =>
-    db
-      .prepare("SELECT user_text FROM messages_fts WHERE messages_fts MATCH 'readablealiasneedle'")
-      .all()
-  )
+  return index.db
+    .prepare("SELECT user_text FROM messages_fts WHERE messages_fts MATCH 'readablealiasneedle'")
+    .all()
 }
 
 it('indexes a readable alias despite a failed preferred open and an overdue pass, then reuses it after restart', async () => {
   await sweep()
   expect(matches()).toEqual([{ user_text: 'readablealiasneedle' }])
-  const discovered = await discoverSessionSearchCandidates(harness.roots, {
+  const discovered = await discoverSessionSearchCandidates(roots, {
     limitPerAgent: Infinity
   })
   const candidate = discovered.candidates
@@ -132,7 +137,7 @@ it('indexes a readable alias despite a failed preferred open and an overdue pass
   unregister()
   store.close()
   resetSessionParseCacheForTests()
-  store = new SessionSearchStore(harness.databasePath, (error) => {
+  store = new SessionSearchStore(index.path, (error) => {
     throw error
   })
   unregister = registerSessionSearchIndexConsumer(store)
@@ -162,10 +167,43 @@ it('does not try another source when a consumer drain fails', async () => {
 
 it('does not try another source when flushing the writer fails', async () => {
   io.failed = ''
-  const flush = vi.fn(async () => {
-    throw new Error('flush failed')
-  })
+  const flush = vi
+    .fn<() => Promise<void>>()
+    .mockRejectedValueOnce(new Error('flush failed'))
+    .mockResolvedValue(undefined)
   Object.assign(store, { flush })
-  await expect(sweep()).rejects.toThrow('flush failed')
+  await sweep()
   expect(io.paths).toEqual([real])
+})
+
+it('keeps a successfully excluded canonical rollout excluded on unchanged sweeps', async () => {
+  const body = [
+    {
+      type: 'session_meta',
+      payload: {
+        id: '019f0000-1111-7222-8333-444444444444',
+        source: { internal: 'guardian_review' },
+        cwd: '/repo/app'
+      }
+    },
+    {
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'readablealiasneedle' }]
+      }
+    }
+  ]
+    .map((line) => JSON.stringify(line))
+    .join('\n')
+  await writeFile(real, `${body}\n`)
+  await copyFile(real, managed)
+  io.failed = ''
+  await sweep()
+  expect(matches()).toEqual([])
+  io.paths = []
+  await sweep()
+  expect(io.paths).toEqual([])
+  expect(matches()).toEqual([])
 })

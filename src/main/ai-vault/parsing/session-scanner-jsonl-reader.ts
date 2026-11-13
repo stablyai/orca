@@ -15,7 +15,7 @@ import {
 
 const sourceFailures = new WeakSet<object>()
 
-function noteSourceFailure(error: unknown): void {
+export function noteTranscriptSourceFailure(error: unknown): void {
   if (typeof error === 'object' && error !== null) {
     sourceFailures.add(error)
   }
@@ -93,13 +93,13 @@ export async function consumeCompleteJsonlLines(args: {
       'scan',
       args.signal
     )
-    rawStream.on('error', noteSourceFailure)
+    rawStream.on('error', noteTranscriptSourceFailure)
     stream = compressed ? zstdTranscriptStream(rawStream) : rawStream
     if (stream !== rawStream) {
-      stream.on('error', noteSourceFailure)
+      stream.on('error', noteTranscriptSourceFailure)
     }
   } catch (error) {
-    noteSourceFailure(error)
+    noteTranscriptSourceFailure(error)
     throw error
   }
   let chunkStart = args.start
@@ -179,9 +179,9 @@ export async function consumeCompleteJsonlLines(args: {
     throwIfAiVaultScanCancelled(args.signal)
     throw error
   } finally {
-    rawStream.off('error', noteSourceFailure)
+    rawStream.off('error', noteTranscriptSourceFailure)
     if (stream !== rawStream) {
-      stream.off('error', noteSourceFailure)
+      stream.off('error', noteTranscriptSourceFailure)
     }
   }
 

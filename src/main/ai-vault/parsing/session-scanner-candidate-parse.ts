@@ -108,6 +108,9 @@ export async function parseSessionCandidates(args: {
           if (result.sourceFailed) {
             continue
           }
+          if (!result.session && result.issue) {
+            break
+          }
           if (!result.session || isTextTaskRequestSession(result.session)) {
             provisional = undefined
             break

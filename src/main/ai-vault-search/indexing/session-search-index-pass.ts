@@ -56,7 +56,7 @@ export async function runSessionSearchIndexPass(
         if (
           (cutoffMs === null || candidate.file.mtimeMs >= cutoffMs) &&
           row?.state === 'current' &&
-          store.coversTranscript(candidate)
+          cursor !== null
         ) {
           deferred = false
           break
@@ -99,7 +99,16 @@ export async function runSessionSearchIndexPass(
         break
       }
       // Consumer/store failures cannot authorize reading another physical alias.
-      await store.flush?.()
+      try {
+        await store.flush?.()
+      } catch (error) {
+        throwIfAiVaultScanCancelled(options.signal)
+        console.warn(
+          '[ai-vault-search] indexing skipped',
+          candidate.agent,
+          error instanceof Error ? error.name : 'FlushError'
+        )
+      }
       break
     }
     if (deferred && !due) {
