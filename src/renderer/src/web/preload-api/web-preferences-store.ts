@@ -1,10 +1,7 @@
 import * as chatSettings from './web-native-chat-settings'
 import type { PreloadApi } from '../../../../preload/api-types'
-import {
-  getDefaultSettings,
-  getDefaultUIState,
-  getWorktreeCardModeProperties
-} from '../../../../shared/constants'
+import { getDefaultSettings, getDefaultUIState } from '../../../../shared/constants'
+import { getWorktreeCardModeProperties } from '../../../../shared/worktree/row-display/card-properties'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../shared/osc52-clipboard-settings'
@@ -77,7 +74,6 @@ export function getStoredSettings(): GlobalSettings {
   const settings = mergeSettings(
     {
       ...defaults,
-      rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: null
     },
     migratedStored

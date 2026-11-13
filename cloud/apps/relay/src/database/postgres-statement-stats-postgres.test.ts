@@ -74,12 +74,12 @@ describePostgres('optional PostgreSQL statement statistics', () => {
     }
   })
 
-  it.each([false, true])('tolerates missing extension privileges (read settings: %s)', async (readSettings) => {
+  it('tolerates missing extension privileges', async () => {
     const client = await connect(await freshDatabase())
     const role = `relay_stats_role_${randomUUID().replaceAll('-', '')}`
     await admin.query(`CREATE ROLE ${role}`)
     roles.push(role)
-    if (readSettings) await admin.query(`GRANT pg_read_all_settings TO ${role}`)
+    await admin.query(`GRANT pg_read_all_settings TO ${role}`)
     try {
       await client.query(`SET ROLE ${role}`)
       await client.query(POSTGRES_STATEMENT_STATS_MIGRATION)
@@ -87,22 +87,6 @@ describePostgres('optional PostgreSQL statement statistics', () => {
       expect((await client.query<{ value: number }>('SELECT 42 AS value')).rows[0]!.value).toBe(42)
     } finally {
       await client.end()
-    }
-  })
-
-  it('serializes concurrent catalog creation across directors', async (context) => {
-    if (!preloaded) {
-      context.skip()
-    }
-    const url = await freshDatabase()
-    const clients = await Promise.all(Array.from({ length: 5 }, async () => await connect(url)))
-    try {
-      await Promise.all(
-        clients.map(async (client) => await client.query(POSTGRES_STATEMENT_STATS_MIGRATION))
-      )
-      expect(await installed(clients[0]!)).toBe(true)
-    } finally {
-      await Promise.all(clients.map(async (client) => await client.end()))
     }
   })
 

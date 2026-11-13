@@ -1,5 +1,5 @@
 import type { TerminalOptionEdits } from '../../../../shared/agent-launch/choices/agent-launch-choices'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig

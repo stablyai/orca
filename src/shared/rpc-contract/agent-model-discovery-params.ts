@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { OptionalExecutionHostId } from './worktree-params'
+import { OptionalExecutionHostId } from './workspaces/worktree-params'
 
 export const AgentDiscoverTerminalModels = z.object({
   agentId: z.string().min(1),

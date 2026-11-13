@@ -55,9 +55,18 @@ export type ChatWorkerApprovalAnswer =
   | { ok: true; prompt: ChatWorkerPrompt; optionLabel: string }
   | {
       ok: false
-      code: 'approval_not_open' | 'approval_option_missing' | 'approval_refused'
+      code:
+        | 'approval_not_open'
+        | 'approval_option_missing'
+        | 'approval_refused'
+        | 'approval_requires_person'
       message: string
     }
+
+/** Why an agent's allow was refused: the worker's own agent says only a person may approve it. */
+export function personOnlyMessage(approvalId: string): string {
+  return `The worker's agent lets only a person approve ${approvalId}, so it stays with the user. You can deny it with a reason, or leave it.`
+}
 
 /** Answer as Orca with the one option the decision may pick; the chat checks the revision it read. */
 export async function answerChatWorkerApproval(input: {
@@ -65,6 +74,8 @@ export async function answerChatWorkerApproval(input: {
   approvalId: string
   dispatchId: string
   decision: WorkerApprovalDecision
+  /** An agent answers for the coordinator: the agent's person-only prompts stay with the person. */
+  byAgent?: boolean
   readPrompt?: ChatWorkerPromptReader
 }): Promise<ChatWorkerApprovalAnswer> {
   const { sessionId, approvalId, decision } = input
@@ -84,6 +95,11 @@ export async function answerChatWorkerApproval(input: {
   }
   if (!prompt) {
     return notOpen
+  }
+  // A prompt answered meanwhile is not open, whoever may answer it.
+  const open = prompt.body.resolution.state === 'pending'
+  if (open && decision === 'allow' && input.byAgent && prompt.body.personOnly) {
+    return { ok: false, code: 'approval_requires_person', message: personOnlyMessage(approvalId) }
   }
   const option = workerApprovalOption(prompt.body.options, decision)
   if (!option) {

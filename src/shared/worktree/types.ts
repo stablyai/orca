@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
-import type { WorktreeCatalogVersion } from './catalog-version'
+import type { WorktreeCatalogVersion } from './catalog/catalog-version'
 import type { AutomationExecutionTargetType } from '../automations/automation-definition'
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
@@ -62,6 +62,9 @@ export type GitWorktreeInfo = {
   isMainWorktree: boolean
   /** Local delete failed after Git deregistration; list the leftover so Delete can retry. */
   removalError?: string
+  removing?: true
+  /** The owning host durably recorded this pending deletion. Older hosts omit it. */
+  removalRecorded?: true
 }
 
 /** Read HEAD/branch without spawning Git to refresh background head moves without structural worktrees:changed fanout. */
@@ -164,9 +167,6 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
-  /** The host is deleting this checkout in the background; Git lists it until that finishes.
-   *  Sent only to clients that advertise `worktree.background-removal.v1`. */
-  removing?: true
 } & GitWorktreeInfo
 
 /** Only CLI-created workspaces carry this; missing means not CLI-created, including older rows. */

@@ -1,4 +1,5 @@
 import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
+import { acpSessionStartMeta } from '../../launch/acp-session-meta'
 import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the
@@ -35,6 +36,7 @@ import {
 
 type AcpHandshakeInput = {
   acquire: StructuredAgentSessionAcquireInput
+  signal: AbortSignal
   deps: AcpStructuredSessionAdapterDeps
   generation: string
   launch: AcpStructuredLaunch
@@ -67,6 +69,13 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
   options.adoptInitialize(initialized)
+  const meta = await spec.resolveSessionMeta?.({
+    initialized,
+    cwd: launch.cwd,
+    env: launch.env,
+    signal: input.signal
+  })
+  assertStarting()
   // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({
     advertised: (initialized.authMethods ?? []).map((method) => method.id),
@@ -74,6 +83,7 @@ export async function initializeAcpStructuredSession(
     antigravityChatAuth: launch.antigravityChatAuth
   })
   const setup = {
+    ...acpSessionStartMeta(spec, meta),
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
     resumePreference: spec.resumePreference

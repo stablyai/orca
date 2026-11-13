@@ -1,7 +1,7 @@
 import { assertAntigravityTerminalEffort } from '../../../../terminal/catalog/antigravity-terminal-effort'
 import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
 import { chatWorkerMode, type chatAssigneeOf } from '../chat-assignee-admission'
-import type { startLocalWorker } from './local-worker-start'
+import type { startLocalWorker } from './start/local-worker-start'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
 export async function workerTerminalMode(

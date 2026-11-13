@@ -4,7 +4,7 @@ import '../../../../shared/agent-kind'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
-import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
 import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
 import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'

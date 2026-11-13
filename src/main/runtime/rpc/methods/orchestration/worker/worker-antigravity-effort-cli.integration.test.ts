@@ -6,7 +6,7 @@ import {
 import { getFollowUpDispatch } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { AGENT_MODEL_DISCOVERY_METHODS } from '../../terminal/agent-model-discovery'
 import { methodNamed, rpcContext, runtimeStub } from '../../agent-launch/agent-launch.test-fixture'
-import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
+import { receipt, useHelperFollowUpCli } from './testing/helper-follow-up-cli.test-support'
 
 const listing = {
   success: true as const,

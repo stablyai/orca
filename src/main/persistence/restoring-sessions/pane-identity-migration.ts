@@ -6,7 +6,10 @@ import type {
 } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { collectLayoutLeafIdsInOrder, firstLayoutLeafId } from './terminal-layout-normalization'
+import {
+  collectLayoutLeafIdsInOrder,
+  firstLayoutLeafId
+} from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function findWorktreeIdForTab(
   session: WorkspaceSessionState,

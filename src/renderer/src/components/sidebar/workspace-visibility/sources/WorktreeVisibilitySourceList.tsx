@@ -22,8 +22,8 @@ import {
   normalizeWorktreeVisibilitySourcePreferences,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatch
-} from '../../../../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../../../shared/worktree/configured-worktree-base-path'
+} from '../../../../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility

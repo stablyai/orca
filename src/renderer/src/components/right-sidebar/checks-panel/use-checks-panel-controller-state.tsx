@@ -10,7 +10,7 @@ import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/row-display/git-identity-display'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/execution-host/project-runtime-preference'
@@ -20,9 +20,9 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { PRRefreshErrorType } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
 import type { PRCommentsListSelectionClearRequest } from './comments/pr-comments-list-selection'
 import {

@@ -4,14 +4,15 @@ import type { HostedReviewCreationProvider } from '../../shared/source-control/h
 import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
 import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
 import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
-import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
-import { acquire, ghExecFileAsync, release } from '../github/gh-utils'
+import { getEnterpriseGitHubRepoSlug } from '../github/repositories/github-enterprise-repository'
+import { acquire, release } from '../github/execution/github-operation-slots'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import { getProjectSlug } from '../gitlab/merge-requests/merge-request-lookup'
 import {
   acquire as acquireGlab,
   release as releaseGlab
 } from '../gitlab/requests/glab-request-admission'
-import { glabExecFileAsync } from '../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../git/command-runner/hosted-cli/glab-exec-file'
 import { glabRepoExecOptions } from '../gitlab/projects/gitlab-project-ref-resolution'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {

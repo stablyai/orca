@@ -11,7 +11,7 @@ import {
 } from '../worktrees-slice-test-harness'
 import { createCompatibleRuntimeStatusResponse } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
-import { WorktreeCreate } from '../../../../../../shared/rpc-contract/worktree-create-params'
+import { WorktreeCreate } from '../../../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../../../../../main/runtime/rpc/methods/workspaces/worktree-create-args'
 
 vi.mock('sonner', () => ({

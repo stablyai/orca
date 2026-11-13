@@ -10,7 +10,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
 import { registerFilesystemHandlers } from '../filesystem/filesystem'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerGitHubHandlers } from '../source-control/github'
 import { registerGitLabHandlers } from '../source-control/gitlab'
@@ -78,16 +78,14 @@ import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
 import { registerZcodePlanCredentialsHandlers } from '../zcode-plan-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
 import { registerCursorAccountHandlers } from '../cursor-accounts'
-import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
-import {
-  registerClipboardHandlers,
-  setTrustedClipboardRendererWebContentsId
-} from '../../window/clipboard-ipc-handlers'
+import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
+import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
+import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
-import type { AutomationService } from '../../automations/service'
+import type { AutomationService } from '../../automations/automation-service'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
@@ -101,15 +99,15 @@ import {
   prepareRuntimeAiVaultSessionResume,
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
-} from '../../ai-vault/runtime-session-scanner'
-import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
+} from '../../ai-vault/runtime-hosts/runtime-session-scanner'
+import { callRuntimeSessionSearch } from '../../ai-vault/runtime-hosts/runtime-session-search-call'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault/ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
 import { settleWithinMs } from '../../startup/quit/quit-teardown-deadline'
-import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 
 let registered = false
 // Same cap as the restart path's auth preservation: bookkeeping must not hold Restart on a stalled disk.
@@ -296,5 +294,5 @@ export function registerCoreHandlers(
     }
   })
   registerUpdaterHandlers(store)
-  registerSpeechHandlers(store)
+  registerSpeechHandlers(store, commitMessageAgentEnv)
 }

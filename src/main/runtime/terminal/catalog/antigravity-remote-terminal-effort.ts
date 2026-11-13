@@ -1,6 +1,6 @@
 import { assertAntigravityTerminalEffort } from './antigravity-terminal-effort'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { WorkerStartInput } from '../../rpc/methods/orchestration/worker/worker-start-schema'
+import type { WorkerStartInput } from '../../rpc/methods/orchestration/worker/start/worker-start-input'
 import type { DiscoverCommitMessageModelsResult } from '../../../text-generation/source-control-text-generation-types'
 import {
   runtimeRepoSelectorText,

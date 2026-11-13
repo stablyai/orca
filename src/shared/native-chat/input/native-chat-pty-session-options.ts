@@ -92,6 +92,7 @@ export function createNativeChatPtySessionOptions(
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
     models: activeModels(),
+    legacyInventory: models,
     record,
     mode: args.mode,
     modelLabel: args.modelLabel,
@@ -104,6 +105,7 @@ export function createNativeChatPtySessionOptions(
     snapshot = buildNativeChatSessionOptionSnapshot({
       catalog,
       models: activeModels(),
+      legacyInventory: models,
       record,
       mode: args.mode,
       modelLabel: args.modelLabel,

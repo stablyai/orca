@@ -18,9 +18,10 @@ import {
 } from '../../history/seed-transfer/terminal-history-seed-chunks'
 import type { DaemonCreateOrAttachResult as CreateOrAttachResult } from '../../protocol/daemon-create-or-attach-result'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { PtySpawnOptions, PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
-import { isMissingWorkingDirectoryError } from '../../../providers/working-directory-validation'
+import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
+import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
+import { isMissingWorkingDirectoryError } from '../../../providers/working-directory/validation'
 
 /** A daemon kept running across an update trusts `interactive` even for a claimed resume. */
 function forwardedSpawnIntent(intent: SpawnIntent, claim: unknown): SpawnIntent {

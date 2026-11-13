@@ -2,8 +2,8 @@ import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
-import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
-import { isRootClaudeFrame } from '../claude-turn-opening'
+import { settleClaudeTurnEndWaiters } from './turns/claude-request-end-wait'
+import { isRootClaudeFrame } from './turns/claude-turn-opening'
 
 export function claudeTurnResumePointWriter(
   sessionId: string,

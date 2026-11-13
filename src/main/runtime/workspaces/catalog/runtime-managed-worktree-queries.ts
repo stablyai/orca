@@ -25,14 +25,14 @@ import {
   applyMetadataFallbackVisibility,
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
-} from '../../../../shared/worktree/ownership'
+} from '../../../../shared/worktree/visibility/ownership'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
-} from '../../../../shared/worktree/visibility-sources'
+} from '../../../../shared/worktree/visibility/visibility-sources'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
@@ -43,7 +43,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   getRetiredNameRegistryForRepo,
   hasRetiredNameRegistryStore
@@ -158,11 +158,9 @@ export class RuntimeManagedWorktreeQueries {
         worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
       }
     }
-    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
-      this.deps.scanRepo(target)
-    )
+    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, this.deps.scanRepo)
     // Publish overtaken scans as non-authoritative: throwing would drop client rows. Prune nothing; the overtaking mutation's event requests a fresh listing.
-    if (scan.ok && !scan.superseded) {
+    if (scan.ok && !scan.superseded && scan.authorityCurrent()) {
       // Headless hosts lack ipcMain listings; runtime must sweep its own metadata too (#17776).
       if (scan.metadataPruneExpectation && canPruneAuthoritativeLocalMetadata(store)) {
         await pruneMetadataMissingFromAuthoritativeLocalScan({
@@ -170,12 +168,13 @@ export class RuntimeManagedWorktreeQueries {
           repo,
           gitWorktrees: scan.worktrees,
           scan: scan.metadataPruneExpectation,
-          scanGeneration: scan.scanGeneration
+          scanGeneration: scan.scanGeneration,
+          isCallerCurrent: scan.authorityCurrent
         })
       }
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, {
-        scanGeneration: scan.scanGeneration
-      })
+      if (scan.lineagePrune && scan.authorityCurrent()) {
+        pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, scan.lineagePrune)
+      }
     }
     const matcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
@@ -204,7 +203,7 @@ export class RuntimeManagedWorktreeQueries {
     })
     return {
       repoId: repo.id,
-      authoritative: scan.ok && !scan.superseded,
+      authoritative: scan.ok && !scan.superseded && scan.authorityCurrent(),
       source: scan.ok ? 'git' : 'metadata-fallback',
       workspaceMetadata: listed.workspaceMetadata,
       // Stamp the scan's starting generation: that is the catalog its rows describe.

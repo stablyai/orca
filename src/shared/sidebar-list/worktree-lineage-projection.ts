@@ -5,14 +5,14 @@ import {
 import type { ExecutionHostId } from '../execution-host'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../worktree/lineage-types'
-import type { FolderLineageRecordOf } from '../worktree/folder-lineage-parents'
-import type { CrossStoreLineageView } from '../worktree/cross-store-lineage-resolution'
+import type { FolderLineageRecordOf } from '../worktree/lineage/folder-lineage-parents'
+import type { CrossStoreLineageView } from '../worktree/lineage/cross-store-lineage-resolution'
 import {
   getProjectedWorktreeLineage,
   getSameStoreLineageParent,
   resolveWorkspaceLineageParents,
   type WorktreeWithInlineLineage
-} from '../worktree/workspace-lineage-graph'
+} from '../worktree/lineage/workspace-lineage-graph'
 import type { Worktree } from '../worktree/types'
 
 export type LineageRenderInfo =

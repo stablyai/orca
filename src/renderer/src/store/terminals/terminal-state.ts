@@ -1,5 +1,5 @@
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -7,7 +7,7 @@ import type {
 import type {
   PaneResumeOutcome,
   PaneStartStatus
-} from '../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SavedResumeStartupSource,

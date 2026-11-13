@@ -9,10 +9,10 @@ import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths
 import { ensureWslPinnedRuntime } from '../../../wsl/execution/wsl-pinned-runtime'
 import { runWslProcess, type WslSpec } from '../../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
-import { translateArgsForWsl } from '../../../git/command-runner/wsl-path-translation'
-import { spawnSourceControlAgent } from '../../../text-generation/source-control-agent-launch'
-import { killSourceControlAgentProcess } from '../../../text-generation/source-control-agent-termination'
-import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../../text-generation/source-control-generation-limits'
+import { translateArgsForWsl } from '../../../git/command-runner/host-routing/wsl-path-translation'
+import { spawnSourceControlAgent } from '../../../text-generation/execution/source-control-agent-launch'
+import { killSourceControlAgentProcess } from '../../../text-generation/execution/source-control-agent-termination'
+import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../../text-generation/execution/source-control-generation-limits'
 import { waitForProcessExitUntil } from '../../../provider-process/provider-process-exit-deadline'
 import type {
   TextGenerationOperation,

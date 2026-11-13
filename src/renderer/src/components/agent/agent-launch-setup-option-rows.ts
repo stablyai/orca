@@ -212,18 +212,7 @@ export function agentLaunchSetupOptionRows(
   return rows
 }
 
-/** Speed rows sit apart from the rest; launch also lifts level rows onto speed's line. */
-export function agentLaunchSetupRowGroups(rows: SessionOptionDescriptor[], launch: boolean) {
-  const isSpeed = (row: SessionOptionDescriptor) =>
-    row.id === 'fastMode' || row.id === 'serviceTier'
-  const isLevel = (row: SessionOptionDescriptor) =>
-    launch && !isSpeed(row) && row.category === 'thought_level' && row.kind.type === 'select'
-  return {
-    level: rows.filter(isLevel),
-    speed: rows.filter(isSpeed),
-    rest: rows.filter((row) => !isSpeed(row) && !isLevel(row))
-  }
-}
+export { agentLaunchSetupRowGroups } from './agent-launch-setup-row-groups'
 
 export function agentLaunchSetupCatalogState(
   entry: AgentPickerEntry,
@@ -292,18 +281,22 @@ export function agentLaunchSetupCatalogState(
   return { hasModels, catalogPending, catalogMessage }
 }
 
-/** Visible model rows, plus the model the list starts on. */
+/** Visible model rows, the expanded legacy rows below their toggle, and the model the list starts on. */
 export function agentLaunchSetupModelRows(
   models: readonly AgentPickerModel[],
   currentModel: string | undefined,
   query: string,
-  legacy: boolean,
+  legacyExpanded: boolean,
   modelInArguments: boolean
 ) {
-  const rows: { id: string; label: string; unlisted?: true }[] = models.filter(
-    (model) =>
-      !model.hidden && (model.id === currentModel || query || Boolean(model.isLegacy) === legacy)
-  )
+  type Row = { id: string; label: string; unlisted?: true }
+  // A hidden row is listed by a matching search, or while it is the current choice.
+  const listed = models.filter((model) => !model.hidden || query || model.id === currentModel)
+  // Membership ignores the selection, so picking a model never moves rows in the open list.
+  const folded = (model: AgentPickerModel) => !query && Boolean(model.isLegacy)
+  const rows: Row[] = listed.filter((model) => !folded(model))
+  const legacyRows: Row[] = listed.filter(folded)
+  const shownLegacy = legacyExpanded ? legacyRows : []
   // Why one keyed list: when the catalog later lists an unlisted current model, its row keeps
   // its identity, so the highlight stays on it instead of jumping to the first model.
   if (currentModel && !models.some((model) => model.id === currentModel)) {
@@ -311,6 +304,13 @@ export function agentLaunchSetupModelRows(
   }
   // An Arguments-owned text action has no current model row, so it starts on its default as before.
   const start =
-    !modelInArguments && rows.some((row) => row.id === currentModel) ? currentModel : undefined
-  return { rows, start }
+    !modelInArguments && [...rows, ...shownLegacy].some((row) => row.id === currentModel)
+      ? currentModel
+      : undefined
+  return {
+    rows,
+    legacyRows: shownLegacy,
+    legacyCount: legacyRows.length,
+    start
+  }
 }

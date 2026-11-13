@@ -111,3 +111,5 @@ export type ResolveTerminalWorkspaceLaunchScopeResult = ReturnType<
 export type SelectorArgs = [selector: string, options?: WorkspaceSelectorOptions]
 export type SelectorResult = Promise<ResolvedWorktree>
 export type CandidateResult = Promise<WorkspaceSelectorCandidate>
+
+export type MobileSessionTabsChangedOptions = { immediate?: boolean }

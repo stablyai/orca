@@ -7,7 +7,7 @@ import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posi
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { isWslAvailableAsync } from '../../wsl/discovery/wsl-availability'
 import { resolveGitBashPath } from '../../pty/shell-startup/git-bash'
-import { resolveProcessCwd } from '../process-cwd'
+import { resolveProcessCwd } from '../working-directory/process-cwd'
 import {
   dataListeners,
   exitListeners,
@@ -24,7 +24,7 @@ import {
   type ExitCallback
 } from './local-pty-provider-state'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import type { PtyProcessInfo } from '../pty-process-info'
+import type { PtyProcessInfo } from '../pty/process-info'
 
 export function writeLocalPty(id: string, data: string): boolean {
   // Hold private DSR/OSC replies through cooked-mode echo; CPR/DA cannot overtake held replies (#13137, #7329, #15559).

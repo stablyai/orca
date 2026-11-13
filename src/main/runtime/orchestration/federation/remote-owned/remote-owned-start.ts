@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../../rpc/core'
-import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/workers'
-import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/worker-start-budgets'
+import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/worker-start-method'
+import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { assertRemoteAntigravityEffort } from '../../../terminal/catalog/antigravity-remote-terminal-effort'
 import { OrchestrationError } from '../../orchestration-error'
 import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
@@ -69,7 +69,8 @@ function adoptedTaskId(key: string): string {
 const StartedOnServer = z.object({
   dispatchId: z.string().min(1),
   run: z.object({ id: z.string().min(1) }).optional(),
-  agent: z.string().nullable().optional()
+  agent: z.string().nullable().optional(),
+  state: z.string().optional()
 })
 
 /**
@@ -187,15 +188,18 @@ export async function startRemoteOwnedWorker(
         { server: server.name }
       )
     }
-    prepareWorkerStartCard(
-      runtime,
-      ctx.orchestrationCaller
-    )({
-      dispatchId: started.data.dispatchId,
-      workerAddress: `dispatch:${started.data.dispatchId}`,
-      task: task.spec,
-      agent: null
-    })
+    // As local and attached starts do: a start the server could not ready leaves no card.
+    if (started.data.state === 'ready') {
+      prepareWorkerStartCard(
+        runtime,
+        ctx.orchestrationCaller
+      )({
+        dispatchId: started.data.dispatchId,
+        workerAddress: `dispatch:${started.data.dispatchId}`,
+        task: task.spec,
+        agent: started.data.agent ?? null
+      })
+    }
   }
   const answer = inServerTerms(receipt, { server: server.name, forward })
   return withRun(

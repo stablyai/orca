@@ -8,7 +8,7 @@ import { resolveAgentTerminalDiscoveryLaunch } from '../launch/agent-launch-scop
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
-} from '../../../text-generation/commit-message-agent-environment'
+} from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   discoverCommitMessageModelsLocal,
   type DiscoverCommitMessageModelsResult

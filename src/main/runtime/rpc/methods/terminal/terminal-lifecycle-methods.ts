@@ -1,4 +1,4 @@
-import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
@@ -7,7 +7,7 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../../shared/runtime-navigation'
-import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
+import { withTerminalCloseAttribution } from '../../terminal/terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
@@ -17,8 +17,8 @@ import {
   TerminalReveal,
   TerminalSplit,
   TerminalWait
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({

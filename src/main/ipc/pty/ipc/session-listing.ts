@@ -1,10 +1,10 @@
 import type { ResourceViewAdmission } from '../../../../shared/resource-view-admission'
-import { assertResourceViewVisible } from '../../../window/resource-view-admission'
+import { assertResourceViewVisible } from '../../../window/visibility/resource-view-admission'
 import { getPtyIpc } from '../pty-host-bindings'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
-} from '../../../providers/pty-process-list-admission'
+} from '../../../providers/pty/process-list-admission'
 import {
   ptySessionIdentity,
   type PtyListedSession,
