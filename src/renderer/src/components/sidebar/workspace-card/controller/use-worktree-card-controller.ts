@@ -1,4 +1,5 @@
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
+import { useIsCloudPrimaryRow } from '@/lib/orca-cloud/cloud-host-rows'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
@@ -100,13 +101,16 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     openModal: foundation.openModal
   })
 
+  // A cloud workspace's own row (owned or paired) is deletable: the sandbox goes, after the cloud confirm.
+  const cloudPrimary = useIsCloudPrimaryRow(worktree)
   // Why: delete is destructive, so it only appears while holding Option/Alt, not in the ordinary hover chrome.
   const showDeleteQuickAction =
     !props.affiliateListMode &&
     canShowWorkspaceDeleteQuickAction({
       deleteModifierPressed: linked.deleteModifierPressed,
       isDeleting: linked.isDeleting,
-      isMainWorktree: worktree.isMainWorktree
+      isMainWorktree: worktree.isMainWorktree,
+      cloudPrimary
     })
   const workspaceActions = useWorktreeCardWorkspaceActions({
     worktree,
