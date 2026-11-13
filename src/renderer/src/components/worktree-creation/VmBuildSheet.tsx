@@ -162,7 +162,8 @@ export function VmBuildSheet({
   // Unknown roles get the owner's copy; only a known member is told to ask someone else.
   const canManageBilling =
     billing.result?.status !== 'ok' || billing.result.entitlement.canManageBilling
-  const derived = deriveVmBuildSteps(entry, now, { cloud }).map((step) =>
+  const github = entry.request.githubSource
+  const derived = deriveVmBuildSteps(entry, now, { cloud, checks: !github }).map((step) =>
     nothingStarted(failure) && step.state === 'failed'
       ? { ...step, state: 'pending' as const, elapsedMs: null }
       : step
@@ -190,7 +191,7 @@ export function VmBuildSheet({
   const sourceRepo = useAppStore((state) =>
     recipe ? state.repos.find((repo) => repo.id === recipe.sourceRepoId) : undefined
   )
-  const repoName = orcaCloudRepoName(sourceRepo)
+  const repoName = github?.fullName ?? orcaCloudRepoName(sourceRepo)
   const [connectingGitHub, setConnectingGitHub] = React.useState(false)
   const connectGitHub = (): void => {
     setConnectingGitHub(true)
@@ -322,7 +323,7 @@ export function VmBuildSheet({
                   : Boolean(entry.request.ephemeralVmRuntimeId)
               }
               firstErrorLine={firstErrorLine}
-              canFixWithAgent={Boolean(recipe)}
+              canFixWithAgent={Boolean(recipe) && !github}
               canManageBilling={canManageBilling}
               signingIn={signingIn}
               connectingGitHub={connectingGitHub}

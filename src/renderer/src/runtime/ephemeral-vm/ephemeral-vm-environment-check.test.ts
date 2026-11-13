@@ -166,6 +166,34 @@ describe('gateVmCreateOnEnvironmentCheck', () => {
     expect(record?.notices.map((notice) => notice.kind)).toEqual(['push', 'setup'])
   })
 
+  it('a failed reach of origin waits for a confirming check before any line shows (ENV-ORIGIN-TOAST)', async () => {
+    callRuntimeRpc.mockResolvedValue({
+      ...cloudWarnings,
+      checks: [
+        ...cloudWarnings.checks,
+        {
+          id: 'git.fetch',
+          category: 'git',
+          status: 'fail',
+          message: 'Cannot reach remote "origin".'
+        }
+      ]
+    })
+    const confirm = vi.fn().mockResolvedValue('reachable')
+    await expect(gateVmCreateOnEnvironmentCheck('c1', 'env-1', '/w', CLOUD, confirm)).resolves.toBe(
+      'proceed'
+    )
+    // The rest show now; the fetch line is the confirmer's to add, never published straight away.
+    expect(getCloudSetupNoticesRecord('env-1')?.notices.map((notice) => notice.kind)).toEqual([
+      'push',
+      'setup'
+    ])
+    expect(confirm).toHaveBeenCalledOnce()
+    const [published, notice] = confirm.mock.calls[0]
+    expect(published.notices.map((n: { kind: string }) => n.kind)).toEqual(['push', 'setup'])
+    expect(notice.kind).toBe('fetch')
+  })
+
   it('Orca Cloud stops only on a fatal check, lists just it, and can start over', async () => {
     callRuntimeRpc.mockResolvedValue(cloudFatal)
     const gate = gateVmCreateOnEnvironmentCheck('c1', 'env-1', '/w', CLOUD)

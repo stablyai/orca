@@ -1,5 +1,5 @@
 // W-123 in the top bar when the workspace in front is a cloud workspace; click copies its link
-// (the same as ⌘⌥⇧L) and confirms in place. Renders nothing for local workspaces or before the
+// (the same as ⌘⌥⇧L) and confirms in place; the tooltip says who the link is for. Renders nothing for local workspaces or before the
 // number is known.
 import React, { useEffect, useState } from 'react'
 import { Check, Link2 } from 'lucide-react'
@@ -41,6 +41,10 @@ export function CloudWorkspaceNumberChip({
   const label = formatWorkspaceNumber(number)
   const shortcut = formatOptionalPrimaryShortcutLabel('cloudWorkspace.copyLink', keybindings)
   const copiedLabel = t('auto.components.cloudWorkspaces.linkCopiedShort', 'Link copied')
+  const hint = t(
+    'auto.components.cloudWorkspaces.copyLinkHint',
+    'Teammates with access can open this workspace'
+  )
   return (
     <>
       <Tooltip open={tipOpen || copied} onOpenChange={setTipOpen}>
@@ -56,6 +60,7 @@ export function CloudWorkspaceNumberChip({
             aria-label={t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
               number: label
             })}
+            aria-description={hint}
             className={cn(
               'mr-2 flex h-6 items-center gap-1 rounded-md px-1.5 font-mono max-[960px]:hidden text-2xs tabular-nums text-muted-foreground outline-none [-webkit-app-region:no-drag] hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-ring',
               copied && 'text-foreground'
@@ -75,10 +80,14 @@ export function CloudWorkspaceNumberChip({
             copiedLabel
           ) : (
             <>
-              {t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
-                number: label
-              })}
-              {shortcut ? <span className="ml-1.5 text-muted-foreground">{shortcut}</span> : null}
+              <div>
+                {t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
+                  number: label
+                })}
+                {shortcut ? <span className="ml-1.5 text-muted-foreground">{shortcut}</span> : null}
+              </div>
+              {/* Says what the link is for: the W-number alone didn't (N-05 follow-up). */}
+              <div className="text-muted-foreground">{hint}</div>
             </>
           )}
         </TooltipContent>

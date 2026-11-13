@@ -245,14 +245,11 @@ export function installHostedSandbox(
       usageRefresh.noteStarted()
     },
     onStopped: (environmentId) => registry.stopEnvironment(environmentId),
-    onWake: ({ workspaceId, phase, startedAt, message }) =>
+    onWake: (event) =>
       workspaces.emitWakeProgress({
-        workspaceId,
-        phase,
-        startedAt,
-        message,
+        ...event,
         // Later phases inherit the source recorded at `waking`.
-        source: phase === 'waking' ? workspaces.takeWakeSource(workspaceId) : 'open'
+        source: event.phase === 'waking' ? workspaces.takeWakeSource(event.workspaceId) : 'open'
       })
   })
   installed = { registry }

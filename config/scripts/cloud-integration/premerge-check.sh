@@ -139,7 +139,14 @@ else
     node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
     node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
     # run-vitest.mjs applies the repo's test env policy (e.g. ORCA_BACKGROUND_LAUNCH=1); bare vitest gives false failures.
-    node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts "${tests[@]}"
+    # Batches of PREMERGE_TEST_BATCH (default 150) files: a PR touching widely imported modules (#574) selected so many
+    # tests that spawning vitest failed with E2BIG. Every batch must pass (set -e); same files, same gate.
+    batch=${PREMERGE_TEST_BATCH:-150}
+    for ((i = 0; i < ${#tests[@]}; i += batch)); do
+      chunk=("${tests[@]:i:batch}")
+      echo "premerge: vitest batch $((i / batch + 1)) of $(((${#tests[@]} + batch - 1) / batch)) (${#chunk[@]} file(s))"
+      node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts "${chunk[@]}"
+    done
   fi
 fi
 for app in $(git diff --name-only "$base"...HEAD -- cloud/apps | cut -d/ -f1-3 | sort -u); do

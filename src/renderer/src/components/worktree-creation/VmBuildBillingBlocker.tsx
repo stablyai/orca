@@ -22,7 +22,8 @@ export type BillingBlockerPhase =
   /** A fix in the browser (portal): re-check on return, or with Check again. */
   | { kind: 'browser'; checking: boolean; stillBlocked: boolean }
 
-function blockerCopy(
+/** The blocker's words per refusal; also the waking card's, so a refused wake says the same. */
+export function blockerCopy(
   kind: BillingBlockKind,
   t: Translate
 ): { title: string; body: string; ask: string } {

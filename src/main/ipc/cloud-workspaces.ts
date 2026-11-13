@@ -16,6 +16,7 @@ import { profileReaderKey, profileReadPins } from '../cloud-workspaces/cloud-rea
 import { setCloudPairingVerifiedListener } from '../cloud-workspaces/cloud-pairing-seam'
 import { requestCloudGonePrune } from '../hosted-sandbox/cloud-gone-prune-request'
 import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
+import { wakePairedSandbox } from '../cloud-workspaces/cloud-paired-wake'
 import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 import type { RemovedServerStore } from './runtime-environments/runtime-environment-removal-cleanup'
@@ -225,6 +226,11 @@ export function registerCloudWorkspacesHandlers(
       : parsed.success
         ? s.revokeGrant(parsed.data.id, parsed.data.grantId)
         : INVALID
+  })
+  handle('cloudWorkspaces:wake', async (args) => {
+    const parsed = z.object({ id: Id }).safeParse(args)
+    const s = await getService()
+    return !s ? NOT_CONFIGURED : parsed.success ? wakePairedSandbox(s, parsed.data.id) : INVALID
   })
   handle('cloudWorkspaces:sleep', async (args) => {
     const parsed = z.object({ id: Id }).safeParse(args)

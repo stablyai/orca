@@ -1,172 +1,162 @@
 // @vitest-environment happy-dom
-// PAIRED-HELD-STRIPS: "Start in Orca Cloud" from a GitHub-only repo starts the chosen agent once per
-// create, even with no prompt (its launch is what shows "isn't set up · Set up once" when it can't
-// run yet); a repo still cloning is waited for, and a wait that runs out says so.
+// GH-CREATE-SHEET: a GitHub-only Orca Cloud create runs on the same build sheet as any cloud
+// create (a pending creation with the Orca Cloud recipe), streams its build log there, and its Retry
+// never makes a second sandbox: after a lost answer it resends the same Idempotency-Key, and after a
+// failed open it only opens the sandbox it already has.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 
-const mocks = vi.hoisted(() => {
-  const state: {
-    opened: { ok: true; worktreeId: string | null; hostId?: string }
-    worktree: string | null
-    launches: { agent: string; prompt?: string; worktreeId: string }[]
-    toasts: string[]
-    dismissed: string[]
-    cloud: boolean
-  } = {
-    cloud: true,
-    opened: { ok: true, worktreeId: 'wt-1' },
-    worktree: null,
-    launches: [],
-    toasts: [],
-    dismissed: []
-  }
-  return state
-})
+const mocks = vi.hoisted(() => ({
+  open: vi.fn(
+    async (): Promise<
+      { ok: true; worktreeId: string | null } | { ok: false; message: string }
+    > => ({
+      ok: true,
+      worktreeId: null
+    })
+  )
+}))
 
-vi.mock('sonner', () => {
-  const toast = Object.assign((text: string) => mocks.toasts.push(text), {
-    loading: () => 'toast-1',
-    error: (text: string) => mocks.toasts.push(text),
-    dismiss: (id?: string) => {
-      if (id) {
-        mocks.dismissed.push(id)
+vi.mock('@/components/cloud-workspaces/open-cloud-workspace', () => ({
+  openCloudWorkspace: mocks.open
+}))
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: vi.fn()
+}))
+
+import {
+  retryGitHubCloudCreate,
+  startCloudWorkspaceFromGitHub
+} from './start-cloud-workspace-from-github'
+import { resetGitHubCreateKeysForTest } from './github-cloud-create-key'
+
+type CreateArgs = { repoUrl: string; title?: string; provisionId?: string; idempotencyKey?: string }
+type ProvisionListener = (event: { provisionId: string; stream: string; chunk: string }) => void
+
+let listener: ProvisionListener | null = null
+const createFromGitHub = vi.fn<(args: CreateArgs) => Promise<unknown>>()
+
+beforeEach(() => {
+  resetGitHubCreateKeysForTest()
+  useAppStore.setState({ pendingWorktreeCreations: {}, activePendingCreationId: null })
+  Object.assign(window, {
+    api: {
+      ...window.api,
+      orcaCloudWorkspace: { createFromGitHub },
+      cloudWorkspaces: {
+        get: vi.fn(async (id: string) => ({ ok: true, value: { id } }))
+      },
+      ephemeralVm: {
+        onProvisionEvent: (callback: ProvisionListener) => {
+          listener = callback
+          return () => {
+            listener = null
+          }
+        },
+        cancelProvision: vi.fn(async () => ({ cancelled: true }))
       }
     }
   })
-  return { toast }
 })
-vi.mock('@/components/cloud-workspaces/open-cloud-workspace', () => ({
-  openCloudWorkspace: async () => mocks.opened,
-  firstWorktreeOnHost: () => mocks.worktree
-}))
-vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTabWithOutcome: (args: {
-    agent: string
-    prompt?: string
-    worktreeId: string
-  }) => {
-    mocks.launches.push({ agent: args.agent, prompt: args.prompt, worktreeId: args.worktreeId })
-  }
-}))
-vi.mock('./orca-cloud-environment-id', () => ({
-  isOrcaCloudEnvironmentForLaunch: async () => mocks.cloud
-}))
-vi.mock('@/components/agent-tab-launch-context', () => ({
-  captureAgentTabLaunchContext: () => ({})
-}))
-vi.mock('@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts', () => ({
-  resolveDefaultAgentForWorktree: async () => 'claude'
-}))
 
-const { startCloudWorkspaceFromGitHub } = await import('./start-cloud-workspace-from-github')
+afterEach(() => {
+  vi.clearAllMocks()
+})
 
-const request = (prompt: string, agent: string | null = 'claude') => ({
+const REQUEST = {
   repoUrl: 'https://github.com/acme/web',
   fullName: 'acme/web',
-  prompt,
-  agent
-})
+  prompt: 'Fix login',
+  agent: null,
+  composerRepoId: 'repo-1'
+}
 
-beforeEach(() => {
-  mocks.opened = { ok: true, worktreeId: 'wt-1' }
-  mocks.worktree = null
-  mocks.launches = []
-  mocks.toasts = []
-  mocks.dismissed = []
-  mocks.cloud = true
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      orcaCloudWorkspace: {
-        createFromGitHub: async () => ({ ok: true, value: { sandboxId: 'sbx_1' } })
-      },
-      cloudWorkspaces: { get: async () => ({ ok: true, value: { workspaceId: 'sbx_1' } }) }
-    }
-  })
-})
-afterEach(() => vi.useRealTimers())
+function onlyCreation() {
+  const entries = Object.values(useAppStore.getState().pendingWorktreeCreations)
+  expect(entries).toHaveLength(1)
+  return entries[0]!
+}
 
-describe('startCloudWorkspaceFromGitHub', () => {
-  it('starts the chosen agent with no prompt, once', async () => {
-    await startCloudWorkspaceFromGitHub(request(''))
-    expect(mocks.launches).toEqual([{ agent: 'claude', prompt: undefined, worktreeId: 'wt-1' }])
-  })
-
-  it('sends a typed prompt with it', async () => {
-    await startCloudWorkspaceFromGitHub(request('fix the flaky test'))
-    expect(mocks.launches).toEqual([
-      { agent: 'claude', prompt: 'fix the flaky test', worktreeId: 'wt-1' }
-    ])
-  })
-
-  it('no agent chosen and no prompt: starts nothing', async () => {
-    await startCloudWorkspaceFromGitHub(request('', null))
-    expect(mocks.launches).toEqual([])
-  })
-
-  it('a repo still cloning is waited for, then the agent starts', async () => {
-    mocks.opened = { ok: true, worktreeId: null, hostId: 'runtime:env-1' }
-    const started = startCloudWorkspaceFromGitHub(request(''))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(mocks.launches).toEqual([])
-    mocks.worktree = 'wt-late'
-    useAppStore.setState({})
-    await started
-    expect(mocks.launches).toEqual([{ agent: 'claude', prompt: undefined, worktreeId: 'wt-late' }])
-  })
-
-  it('a wait that runs out says so and starts nothing', async () => {
-    vi.useFakeTimers()
-    mocks.opened = { ok: true, worktreeId: null, hostId: 'runtime:env-1' }
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const started = startCloudWorkspaceFromGitHub(request(''))
-    await vi.advanceTimersByTimeAsync(90_000)
-    await started
-    expect(mocks.launches).toEqual([])
-    expect(mocks.toasts.at(-1)).toBe(
-      'Claude didn’t start because the workspace was still getting ready. Start it from the workspace.'
+describe('GitHub-only create on the build sheet', () => {
+  it('opens the sheet as an Orca Cloud build and streams its log there', async () => {
+    let finish: (value: unknown) => void = () => {}
+    createFromGitHub.mockImplementation(
+      (args: CreateArgs) =>
+        new Promise((resolve) => {
+          listener?.({
+            provisionId: args.provisionId ?? '',
+            stream: 'stderr',
+            chunk: '[orca-cloud] provisioning\n'
+          })
+          finish = resolve
+        })
     )
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('agent was not started'))
-    info.mockRestore()
-  })
-
-  it('FAIL-CLOSED: a host never confirmed as Orca Cloud gets no agent, and says so', async () => {
-    vi.useFakeTimers()
-    mocks.opened = { ok: true, worktreeId: 'wt-1', hostId: 'runtime:env-1' }
-    mocks.cloud = false
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const started = startCloudWorkspaceFromGitHub(request(''))
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(mocks.launches).toEqual([])
-    mocks.cloud = true
-    await vi.advanceTimersByTimeAsync(1_000)
-    await started
-    expect(mocks.launches).toEqual([{ agent: 'claude', prompt: undefined, worktreeId: 'wt-1' }])
-    mocks.launches = []
-    mocks.cloud = false
-    const never = startCloudWorkspaceFromGitHub(request(''))
-    await vi.advanceTimersByTimeAsync(91_000)
-    await never
-    expect(mocks.launches).toEqual([])
-    expect(mocks.toasts.at(-1)).toContain(
-      'didn’t start because the workspace was still getting ready'
+    const started = startCloudWorkspaceFromGitHub(REQUEST)
+    const entry = onlyCreation()
+    expect(useAppStore.getState().activePendingCreationId).toBe(entry.creationId)
+    expect(entry.request.ephemeralVmRecipe?.provider).toBe('orca-cloud')
+    expect(entry.request.githubSource).toMatchObject({
+      fullName: 'acme/web',
+      composerRepoId: 'repo-1'
+    })
+    expect(entry.request.displayName).toBe('Fix login')
+    await vi.waitFor(() =>
+      expect(onlyCreation().provisioningLog).toContain('[orca-cloud] provisioning')
     )
-    info.mockRestore()
+    expect(createFromGitHub).toHaveBeenCalledWith({
+      repoUrl: REQUEST.repoUrl,
+      title: 'Fix login',
+      provisionId: entry.creationId,
+      idempotencyKey: `create:${entry.creationId}`
+    })
+    finish({ ok: true, value: { sandboxId: 'sbx_1' } })
+    expect(await started).toBe(true)
+    // Opened: the workspace replaces the sheet.
+    expect(useAppStore.getState().pendingWorktreeCreations).toEqual({})
   })
 
-  it('the notice goes away if the workspace becomes ready after all', async () => {
-    vi.useFakeTimers()
-    mocks.opened = { ok: true, worktreeId: null, hostId: 'runtime:env-1' }
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const started = startCloudWorkspaceFromGitHub(request(''))
-    await vi.advanceTimersByTimeAsync(90_000)
-    await started
-    expect(mocks.dismissed).toEqual(['toast-1'])
-    mocks.worktree = 'wt-late'
-    useAppStore.setState({})
-    await vi.advanceTimersByTimeAsync(0)
-    expect(mocks.dismissed).toContain('cloud-agent-not-started:runtime:env-1')
-    info.mockRestore()
+  it('a billing refusal stays on the sheet with its code for the blocker', async () => {
+    createFromGitHub.mockResolvedValue({
+      ok: false,
+      code: 'entitlement_denied',
+      message: 'denied',
+      reason: 'cloudPlanRequired'
+    })
+    expect(await startCloudWorkspaceFromGitHub(REQUEST)).toBe(false)
+    expect(onlyCreation()).toMatchObject({ status: 'error', errorCode: 'cloudPlanRequired' })
+  })
+
+  it('Retry after a lost answer resends the same key, so no second sandbox is made', async () => {
+    createFromGitHub.mockRejectedValueOnce(new Error('ipc dropped'))
+    await startCloudWorkspaceFromGitHub(REQUEST)
+    const { creationId } = onlyCreation()
+    createFromGitHub.mockResolvedValueOnce({ ok: true, value: { sandboxId: 'sbx_1' } })
+    retryGitHubCloudCreate(creationId)
+    await vi.waitFor(() => expect(createFromGitHub).toHaveBeenCalledTimes(2))
+    const keys = createFromGitHub.mock.calls.map((call) => call[0].idempotencyKey)
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it('Retry after an answered failure is a new attempt with a new key', async () => {
+    createFromGitHub.mockResolvedValueOnce({ ok: false, code: 'failed', message: 'clone failed' })
+    await startCloudWorkspaceFromGitHub(REQUEST)
+    const { creationId } = onlyCreation()
+    createFromGitHub.mockResolvedValueOnce({ ok: true, value: { sandboxId: 'sbx_2' } })
+    retryGitHubCloudCreate(creationId)
+    await vi.waitFor(() => expect(createFromGitHub).toHaveBeenCalledTimes(2))
+    const keys = createFromGitHub.mock.calls.map((call) => call[0].idempotencyKey)
+    expect(keys[1]).toBe(`${keys[0]}:retry-1`)
+  })
+
+  it('Retry after a failed open opens the same sandbox and never creates again', async () => {
+    createFromGitHub.mockResolvedValue({ ok: true, value: { sandboxId: 'sbx_1' } })
+    mocks.open.mockResolvedValueOnce({ ok: false, message: 'pairing failed' })
+    expect(await startCloudWorkspaceFromGitHub(REQUEST)).toBe(false)
+    const failed = onlyCreation()
+    expect(failed).toMatchObject({ status: 'error', phase: 'creating' })
+    retryGitHubCloudCreate(failed.creationId)
+    await vi.waitFor(() => expect(useAppStore.getState().pendingWorktreeCreations).toEqual({}))
+    expect(createFromGitHub).toHaveBeenCalledTimes(1)
+    expect(mocks.open).toHaveBeenCalledTimes(2)
   })
 })

@@ -57,7 +57,10 @@ describe('resume whose client quits mid-wake', () => {
     }
     t.background.length = 0
     const request = t.h.call('POST', `/v1/sandboxes/${t.id}/resume`)
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    // Wait (bounded) for the claim; a fixed sleep raced under full-suite load.
+    for (let i = 0; i < 200 && t.row().status !== 'resuming'; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
     expect(t.row().status).toBe('resuming')
     expect(t.background.length).toBeGreaterThan(0)
     // The client is gone: only the work handed to waitUntil carries on.

@@ -72,3 +72,8 @@ export class HostedEntitlementDeniedError extends EnvironmentProviderError {
 export function isHostedEntitlementDenied(error: unknown): error is HostedEntitlementDeniedError {
   return error instanceof HostedEntitlementDeniedError
 }
+
+/** For a failed wake/restart/unarchive event: the plan's refusal, so the card can say why. */
+export function wakeBillingDenial(error: unknown): { billingDenial?: { reason: string | null } } {
+  return isHostedEntitlementDenied(error) ? { billingDenial: { reason: error.reason ?? null } } : {}
+}

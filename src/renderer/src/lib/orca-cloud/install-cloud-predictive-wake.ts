@@ -21,6 +21,7 @@ import {
   refreshCloudWorkspaceStatus
 } from './orca-cloud-workspace-store'
 import { isWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
+import { isPairedCloudWorkspace, wakePairedCloudWorkspace } from './paired-cloud-wake'
 
 /** A fresh status (cheap while asleep: no VM probe) and billing's caps, read just before waking. */
 async function serverAllowsPredictiveWake(workspaceId: string): Promise<boolean> {
@@ -35,6 +36,20 @@ async function serverAllowsPredictiveWake(workspaceId: string): Promise<boolean>
   return predictiveWakeServerVerdict(status, limit) === 'ok'
 }
 
+/** Asleep, not archived, not already waking, not held read-only: owned and PAIRED alike. */
+export function isPredictiveWakeCandidate(workspaceId: string): boolean {
+  const snapshot = getCloudWorkspaceSnapshot()
+  // People can't tell an owned workspace from a paired one; both wake on intent, same caps.
+  return (
+    (snapshot.ids.has(workspaceId) || isPairedCloudWorkspace(workspaceId)) &&
+    snapshot.status[workspaceId]?.status?.state === 'sleeping' &&
+    !isCloudWorkspaceArchived(workspaceId) &&
+    !snapshot.wake[workspaceId] &&
+    // Kept on screen read-only after its Sleep: only an explicit Wake wakes it.
+    !isWorktreeSleepViewHeld(workspaceId)
+  )
+}
+
 function claimInMain(workspaceId: string): void {
   void window.api.ephemeralVm.resumeWorkspace({ workspaceId, claimOnly: true }).catch(() => null)
 }
@@ -47,19 +62,17 @@ export function installCloudPredictiveWake(): () => void {
     createPredictiveWakeController({
       now: Date.now,
       isEnabled: () => useAppStore.getState().settings?.orcaCloudPredictiveWake !== false,
-      isWakeCandidate: (workspaceId) => {
-        const snapshot = getCloudWorkspaceSnapshot()
-        return (
-          snapshot.ids.has(workspaceId) &&
-          snapshot.status[workspaceId]?.status?.state === 'sleeping' &&
-          !isCloudWorkspaceArchived(workspaceId) &&
-          !snapshot.wake[workspaceId] &&
-          // Kept on screen read-only after its Sleep: only an explicit Wake wakes it.
-          !isWorktreeSleepViewHeld(workspaceId)
-        )
-      },
+      isWakeCandidate: isPredictiveWakeCandidate,
       preflight: serverAllowsPredictiveWake,
       wake: async (workspaceId) => {
+        if (isPairedCloudWorkspace(workspaceId)) {
+          // No VM record here to resume: the control plane wakes it. Quiet, like the owned path.
+          const woke = (await wakePairedCloudWorkspace(workspaceId, { quiet: true })).ok
+          if (woke && useAppStore.getState().activeWorktreeId === workspaceId) {
+            claimPredictiveWake(workspaceId)
+          }
+          return woke
+        }
         // Quiet: a refusal leaves no failed-resume record behind (main), and no card (store).
         const result = await window.api.ephemeralVm
           .resumeWorkspace({ workspaceId, quiet: true })
@@ -90,14 +103,17 @@ export function installCloudPredictiveWake(): () => void {
   // intent wake so main returns it to the normal idle window.
   const unsubscribeActive = useAppStore.subscribe((state, previous) => {
     const active = state.activeWorktreeId
-    if (
-      active &&
-      active !== previous.activeWorktreeId &&
-      getCloudWorkspaceSnapshot().ids.has(active)
-    ) {
-      if (isPredictiveWakeOutstanding(active)) {
-        claimPredictiveWake(active)
-      }
+    if (!active || active === previous.activeWorktreeId) {
+      return
+    }
+    const owned = getCloudWorkspaceSnapshot().ids.has(active)
+    if (!owned && !isPairedCloudWorkspace(active)) {
+      return
+    }
+    if (isPredictiveWakeOutstanding(active)) {
+      claimPredictiveWake(active)
+    }
+    if (owned) {
       // Main may still hold it as woken-unopened (also after the window's own hold ran out).
       claimInMain(active)
     }

@@ -14,7 +14,7 @@ const FATAL_CHECK_IDS: ReadonlySet<string> = new Set([
   'tool.git'
 ])
 
-export type CloudSetupNoticeKind = 'push' | 'setup' | 'check'
+export type CloudSetupNoticeKind = 'push' | 'fetch' | 'setup' | 'check'
 
 /** One problem the opened workspace shows as a single dismissible line. */
 export type CloudSetupNotice = {
@@ -72,6 +72,10 @@ function noticeKind(
     case 'git.push':
       // "No commits yet" is a warn with nothing to do; only a refused push needs access.
       return check.status === 'fail' ? 'push' : null
+    case 'git.fetch':
+      // Reaching origin needs the sandbox's GitHub credential (swapped in by egress); a fresh sandbox
+      // can miss it for a moment, so the workspace confirms before saying so (ENV-ORIGIN-TOAST).
+      return check.status === 'fail' ? 'fetch' : null
     case 'setup.run':
       return options.setupRunsOnCreate ? null : 'setup'
     // Advice for the repository, not a problem with this workspace.

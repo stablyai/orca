@@ -38,7 +38,13 @@ const REPO = 'https://github.com/acme/web'
 const githubUser = {
   githubUser: async () => ({ connected: false as const }),
   connectGitHubUser: async () => ({ authorizeUrl: 'https://github.com/login/oauth/authorize' }),
-  disconnectGitHubUser: async () => ({ connected: false as const })
+  disconnectGitHubUser: async () => ({ connected: false as const }),
+  // The GitHub-only create's progress (GH-CREATE-SHEET): an older control plane has no boot plan.
+  bootPlan: async (): Promise<'clone' | 'update'> => {
+    throw new Error('not_found')
+  },
+  cloneStatus: async () => ({ state: 'done' as const }),
+  destroy: async (id: string) => ({ id, status: 'destroyed' as const })
 }
 const unusedCreate = async (): Promise<never> => {
   throw new Error('not called')
@@ -72,11 +78,15 @@ it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anyt
     ok: true,
     value: { sandboxId: 'sbx_1' }
   })
-  expect(create).toHaveBeenLastCalledWith({
-    workspaceId: expect.stringMatching(/^web-[0-9a-f]{8}$/),
-    machineSize: 'standard',
-    repo: { url: 'https://github.com/acme/web.git' }
-  })
+  expect(create).toHaveBeenLastCalledWith(
+    {
+      workspaceId: expect.stringMatching(/^web-[0-9a-f]{8}$/),
+      machineSize: 'standard',
+      repo: { url: 'https://github.com/acme/web.git' }
+    },
+    undefined,
+    undefined
+  )
   expect(
     await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: 'https://gitlab.com/acme/web' })
   ).toMatchObject({ ok: false })
@@ -108,13 +118,15 @@ it('a GitHub-only create keeps the typed name as the workspace title (NAME-DROPP
     { repoIds: async () => null }
   )
   await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: '  ik-paired  ' })
-  expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'ik-paired' }))
+  expect(create.mock.lastCall?.[0]).toEqual(expect.objectContaining({ title: 'ik-paired' }))
   // No name typed: no title (lists fall back to the repository's name), never an empty one.
   await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: '   ' })
-  expect(create).toHaveBeenLastCalledWith(expect.not.objectContaining({ title: expect.anything() }))
+  expect(create.mock.lastCall?.[0]).toEqual(
+    expect.not.objectContaining({ title: expect.anything() })
+  )
   // The control plane caps titles at 120.
   await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: 'x'.repeat(200) })
-  expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'x'.repeat(120) }))
+  expect(create.mock.lastCall?.[0]).toEqual(expect.objectContaining({ title: 'x'.repeat(120) }))
 })
 const SESSION = 'cs_abcdefghijklmnopqrstuv'
 

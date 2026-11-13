@@ -44,6 +44,8 @@ export type CloudWakeProgressEvent = {
   startedAt: number
   at: number
   message?: string
+  /** The plan refused it (billing's deny reason, null when unsaid): the card says why, not the code. */
+  billingDenial?: { reason: string | null }
 }
 
 export type CloudOomEvent = {
@@ -116,6 +118,13 @@ export type OrcaCloudWorkspaceApi = {
     repoUrl: string
     /** The name typed in the composer; becomes the workspace's title (NAME-DROPPED). */
     title?: string
+    /**
+     * The window's creation id (GH-CREATE-SHEET): progress streams as `ephemeralVm:provisionEvent`
+     * under it, and `ephemeralVm.cancelProvision` with it cancels the create.
+     */
+    provisionId?: string
+    /** One per Create press; a retry after a lost answer reuses it and gets the same sandbox. */
+    idempotencyKey?: string
   }) => Promise<CloudWorkspaceResult<{ sandboxId: string }>>
   onWakeProgress: (callback: (event: CloudWakeProgressEvent) => void) => () => void
   onOom: (callback: (event: CloudOomEvent) => void) => () => void

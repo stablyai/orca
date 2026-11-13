@@ -5,7 +5,7 @@ type ReturnSource = Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>
 
 /** What the user typed for the agent: a prompt queued during the build, else the composer's. */
 export function typedComposerPrompt(entry: ReturnSource): string {
-  return entry.heldChatMessage ?? entry.request.note
+  return entry.heldChatMessage ?? entry.request.githubSource?.prompt ?? entry.request.note
 }
 
 /**
@@ -19,6 +19,23 @@ export function composerDataFromRefusedCreate(
 ): ComposerModalData {
   const { request } = entry
   const recipe = request.ephemeralVmRecipe
+  const github = request.githubSource
+  if (github) {
+    // The GitHub repository has no clone here: back on Orca Cloud with it picked again; "locally"
+    // keeps the composer's own project.
+    return {
+      ...(github.composerRepoId ? { initialRepoId: github.composerRepoId } : {}),
+      ...(local
+        ? {}
+        : {
+            initialEphemeralVmRecipeId: recipe?.recipeId,
+            initialCloudGitHubRepo: github.fullName
+          }),
+      prefilledName: entry.heldChatMessage ?? github.prompt,
+      recovery: { note: '', agent: request.agent },
+      telemetrySource: request.telemetrySource ?? 'unknown'
+    }
+  }
   return {
     initialRepoId: recipe?.sourceRepoId ?? request.repoId,
     ...(!local && recipe ? { initialEphemeralVmRecipeId: recipe.recipeId } : {}),
