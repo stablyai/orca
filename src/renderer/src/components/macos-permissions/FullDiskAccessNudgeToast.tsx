@@ -43,7 +43,7 @@ export function FullDiskAccessNudgeToast({
       : t('auto.hooks.useMacosTccPromptNotice.titleOne', 'macOS just interrupted an agent')
 
   return (
-    <div className="relative w-[26rem] max-w-full rounded-lg border border-border bg-popover px-3.5 py-3.5 text-popover-foreground shadow-floating">
+    <div className="@container relative w-[26rem] max-w-full rounded-lg border border-border bg-popover px-3.5 py-3.5 text-popover-foreground shadow-floating">
       <Button
         variant="ghost"
         size="icon"
@@ -66,9 +66,17 @@ export function FullDiskAccessNudgeToast({
           </p>
         </div>
       </div>
-      {/* Why: indent by illustration width + gap so the actions start under the title. */}
-      <div className="mt-3 ml-[90px] flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <Button variant="default" size="sm" onClick={onEnable}>
+      {/* Why: on a roomy card, indent by illustration width + gap so the actions start
+          under the title. Below ~22rem of card width (20rem content box) that indent would
+          push the button past the border, so the row drops it and stacks full width. */}
+      <div className="mt-3 flex flex-col items-start gap-y-1.5 @[20rem]:ml-[90px] @[20rem]:flex-row @[20rem]:flex-wrap @[20rem]:items-center @[20rem]:gap-x-2">
+        {/* Why: Button is nowrap/shrink-0 by default; let the label wrap rather than overflow. */}
+        <Button
+          variant="default"
+          size="sm"
+          className="h-auto min-h-8 max-w-full whitespace-normal"
+          onClick={onEnable}
+        >
           {t('auto.hooks.useMacosTccPromptNotice.enable', 'Turn on Full Disk Access')}
         </Button>
         <button

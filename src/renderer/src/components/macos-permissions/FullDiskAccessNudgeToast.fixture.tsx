@@ -38,3 +38,15 @@ export const narrowWindow = defineFixture({
     />
   )
 })
+
+export const mediumWindow = defineFixture({
+  width: 360,
+  render: () => (
+    <FullDiskAccessNudgeToast
+      promptCount={1}
+      onEnable={noop}
+      onClose={noop}
+      onDontShowAgain={noop}
+    />
+  )
+})
