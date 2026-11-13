@@ -248,7 +248,8 @@ describe('PaneAgentIdentities authority', () => {
         : {
             id: request.id,
             ok: true,
-            value: request.orcaSessionId.startsWith(`claude_${request.path}`)
+            value:
+              request.kind === 'has' && request.orcaSessionId.startsWith(`claude_${request.path}`)
           }
     let path = 'storeA'
     const settled: SettledAgentIdentityPlace[] = []

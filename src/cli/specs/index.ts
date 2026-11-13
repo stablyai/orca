@@ -14,6 +14,7 @@ import { ENVIRONMENT_COMMAND_SPECS } from './environment'
 import { MANAGED_SERVER_COMMAND_SPECS } from './managed-server'
 import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
 import { AGENT_LAUNCH_COMMAND_SPECS } from './agent-launch'
+import { AGENT_CONVERSATION_COMMAND_SPECS } from './agent-conversations'
 import { CONNECTOR_COMMAND_SPECS } from './connector'
 import { DIAGNOSTICS_COMMAND_SPECS } from './diagnostics'
 import { SPEECH_COMMAND_SPECS } from './speech'
@@ -51,6 +52,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
+  ...AGENT_CONVERSATION_COMMAND_SPECS,
   ...CHAT_COMMAND_SPECS,
   ...CONNECTOR_COMMAND_SPECS,
   ...DIAGNOSTICS_COMMAND_SPECS,

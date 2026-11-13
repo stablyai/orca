@@ -1,4 +1,5 @@
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
+import { AgentConversationRefusal } from '../../agent-conversations/agent-conversation-refusal'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
@@ -206,6 +207,9 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
+  }
+  if (error instanceof AgentConversationRefusal) {
+    return errorResponse(id, meta, error.code, message)
   }
   // A recipe workspace removal keeps its environment's own code (archive hook, PTY stop, selector).
   if (

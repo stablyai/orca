@@ -165,6 +165,18 @@ export class PaneAgentIdentities {
     return authority === this.demand.generation ? known : undefined
   }
 
+  /** The provider conversation this host linked `id` to: `{ key: null }` for none, undefined
+   *  when the store cannot answer now. An explicit lookup, never per hook. */
+  async providerKeyOf(id: string): Promise<{ key: AgentProviderKey | null } | undefined> {
+    return this.demand.lookup((client, path) => client.providerKeyOf(path, id))
+  }
+
+  async idsOfProviderSession(providerSessionId: string): Promise<OrcaSessionId[] | undefined> {
+    return this.demand.lookup((client, path) =>
+      client.idsOfProviderSession(path, providerSessionId)
+    )
+  }
+
   /** Keeps the indexes and demand subscriptions exact: `place` is a legacy row key or a
    *  canonical subject. Admission subscribes here, after the row is stored. */
   setPlace(place: string, paneKey: string, identity: RowAgentIdentity | undefined): void {

@@ -9,7 +9,11 @@ import {
   type ProviderSessionSighting,
   type SettledAgentIdentityPlace
 } from '../identity/pane-agent-identities'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderKey } from '../identity/agent-provider-key'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -25,6 +29,12 @@ type SleepingAgentSighting = Pick<
   SleepingAgentSessionRecord,
   'agent' | 'providerSession' | 'connectionId'
 >
+
+/** One terminal agent conversation's own transcript, as the payload naming it reported it. */
+export type TerminalAgentTranscriptSource = {
+  key: AgentProviderKey
+  providerSession: AgentProviderSessionMetadata
+}
 
 /** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
 export abstract class AgentHookServerAgentIdentities extends AgentHookServerState {
@@ -171,6 +181,86 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       }
     }
     return places
+  }
+
+  /** Whether this host minted terminal agent `id`; undefined when the store cannot answer now. */
+  async isTerminalAgentId(id: string): Promise<boolean | undefined> {
+    return this.agentIdentities.isTerminalIdentity(id)
+  }
+
+  /** Orca ids this host linked to a provider's own session id. */
+  async terminalAgentIdsOfProviderSession(providerSessionId: string): Promise<OrcaSessionId[]> {
+    return (await this.agentIdentities.idsOfProviderSession(providerSessionId)) ?? []
+  }
+
+  /** Where terminal agent `id`'s transcript is: a current row carrying the id, in any state (a read
+   *  needs no running agent), else a sleeping record naming its provider key. The session id and
+   *  path come from one payload, never from a pane, so a row attributed to the wrong pane still
+   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer. */
+  async terminalAgentTranscriptSource(
+    id: string,
+    listSleeping: () => readonly SleepingAgentSighting[]
+  ): Promise<TerminalAgentTranscriptSource | null | undefined> {
+    const authority = this.agentIdentities.authority()
+    const live = this.liveTranscriptSource(id)
+    if (live) {
+      return live
+    }
+    const linked = await this.agentIdentities.providerKeyOf(id)
+    if (!linked || authority !== this.agentIdentities.generation) {
+      return undefined
+    }
+    const { key } = linked
+    // Sleeping records carry no WSL distro, so on Windows one cannot name its guest's path.
+    if (!key || process.platform === 'win32') {
+      return null
+    }
+    for (const record of listSleeping()) {
+      const recordKey = agentProviderKeyOf({
+        agent: record.agent,
+        providerSession: record.providerSession,
+        connectionId: record.connectionId ?? null
+      })
+      if (recordKey && sameProviderKey(recordKey, key)) {
+        return { key, providerSession: record.providerSession }
+      }
+    }
+    return null
+  }
+
+  private liveTranscriptSource(id: string): TerminalAgentTranscriptSource | null {
+    let best: { key: AgentProviderKey; row: EnrichedAgentHookEventPayload } | null = null
+    for (const place of this.agentIdentities.placesOf(id)) {
+      const subject = place.canonical
+        ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
+        : undefined
+      const status = subject && this.canonicalStatusStore.getParent(subject)?.status
+      const row = place.canonical
+        ? status && structuredStatusLegacyEvent(status)
+        : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+          (this.state.lastStatusByPaneKey.get(place.key) as
+            | EnrichedAgentHookEventPayload
+            | undefined)
+      const key = place.canonical
+        ? this.agentIdentities.canonicalIdentity(place.key)?.key
+        : row?.agentIdentity?.key
+      if (!row?.providerSession || !key) {
+        continue
+      }
+      // Rows of one conversation share its key; prefer one that reported the transcript path.
+      const hasPath = (candidate: EnrichedAgentHookEventPayload): boolean =>
+        Boolean(candidate.providerSession?.transcriptPath)
+      if (
+        !best ||
+        (hasPath(row) && !hasPath(best.row)) ||
+        (hasPath(row) === hasPath(best.row) && row.receivedAt > best.row.receivedAt)
+      ) {
+        best = { key, row }
+      }
+    }
+    return best?.row.providerSession
+      ? { key: best.key, providerSession: best.row.providerSession }
+      : null
   }
 
   /** The pane's terminal agent id, keyed as Copy Session ID picks its id: a confirmed live row

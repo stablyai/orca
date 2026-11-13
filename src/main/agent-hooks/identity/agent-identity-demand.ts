@@ -2,6 +2,7 @@ import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import type { AgentProviderKey } from './agent-provider-key'
 import type { AgentIdentityClient } from './agent-identity-worker-client'
 import type { RowAgentIdentity } from './pane-agent-identities'
+import { AgentIdentityLookupQueue, type AgentIdentityLookup } from './agent-identity-lookup-queue'
 
 /** One exact provider key some current row or caller needs: the identity they all carry, the
  *  places to re-stamp, and explicit callers waiting for its answer. Dropped once nothing current
@@ -13,7 +14,9 @@ export type KeyDemand = {
   waiters: Set<(id: OrcaSessionId | null) => void>
 }
 
-type Operation = { kind: 'identify'; keyString: string } | { kind: 'has'; id: string }
+type Operation =
+  | { kind: 'identify'; keyString: string }
+  | { kind: 'lookup'; lookup: AgentIdentityLookup }
 
 const RETRY_DELAY_MS = 30_000
 /** An explicit caller (Copy, refusal) waits at most this long; its row demand outlives it. */
@@ -39,7 +42,8 @@ export class AgentIdentityDemand {
   private readonly unresolved = new Set<string>()
   /** Keys a Copy click may send once despite the failure backoff. */
   private readonly bypass = new Set<string>()
-  private readonly memberships = new Map<string, Set<(known: boolean | undefined) => void>>()
+  /** Explicit read-only questions (membership, an `orca agent` read), unsent, in order. */
+  private readonly lookups = new AgentIdentityLookupQueue(CALLER_WAIT_MS)
 
   constructor(
     private readonly databasePath: () => string | null,
@@ -113,29 +117,21 @@ export class AgentIdentityDemand {
   }
 
   /** Membership shares the failure gate: during the backoff it answers unavailable at once. */
-  async has(id: string): Promise<boolean | undefined> {
+  has = (id: string) => this.lookup((client, path) => client.has(path, id))
+
+  /** An explicit read-only question under the store's one-at-a-time queue and failure gate;
+   *  undefined when the store cannot answer now. A sent question leaves `lookups`. */
+  async lookup<T>(
+    run: (client: AgentIdentityClient, path: string) => Promise<T | undefined>
+  ): Promise<T | undefined> {
     this.syncAuthority()
     if (!this.authorityPath || Date.now() < this.retryAt) {
       return undefined
     }
     const generation = this.generationValue
-    const known = await new Promise<boolean | undefined>((resolve) => {
-      const waiters = this.memberships.get(id) ?? new Set()
-      const waiter = (answer: boolean | undefined): void => {
-        clearTimeout(timer)
-        waiters.delete(waiter)
-        if (waiters.size === 0 && this.memberships.get(id) === waiters) {
-          this.memberships.delete(id)
-        }
-        resolve(answer)
-      }
-      const timer = setTimeout(() => waiter(undefined), CALLER_WAIT_MS)
-      timer.unref()
-      waiters.add(waiter)
-      this.memberships.set(id, waiters)
-      this.schedulePump()
-    })
-    return generation === this.generationValue ? known : undefined
+    const answer = this.lookups.enqueue(run)
+    this.schedulePump()
+    return generation === this.generationValue ? await answer : undefined
   }
 
   /** A different store path is a different authority: nothing carries across. */
@@ -164,12 +160,7 @@ export class AgentIdentityDemand {
     this.failing = false
     this.clearWake()
     this.bypass.clear()
-    for (const waiters of this.memberships.values()) {
-      for (const waiter of waiters) {
-        waiter(undefined)
-      }
-    }
-    this.memberships.clear()
+    this.lookups.cancelAll()
     for (const [keyString, demand] of this.keys) {
       for (const waiter of demand.waiters) {
         waiter(null)
@@ -236,9 +227,9 @@ export class AgentIdentityDemand {
       }
       return { kind: 'identify', keyString: explicit }
     }
-    const membership = this.memberships.keys().next().value
-    if (membership !== undefined) {
-      return { kind: 'has', id: membership }
+    const lookup = this.lookups.next()
+    if (lookup) {
+      return { kind: 'lookup', lookup }
     }
     const keyString = this.unresolved.values().next().value
     return keyString === undefined ? null : { kind: 'identify', keyString }
@@ -264,15 +255,10 @@ export class AgentIdentityDemand {
     this.active = operation
     const generation = this.generationValue
     const current = (): boolean => generation === this.generationValue
-    if (operation.kind === 'has') {
-      void client.has(path, operation.id).then((known) => {
-        if (current()) {
-          for (const waiter of this.memberships.get(operation.id) ?? []) {
-            waiter(known)
-          }
-        }
-        this.finish(operation, generation, known === undefined)
-      })
+    if (operation.kind === 'lookup') {
+      void operation.lookup
+        .send(client, path)
+        .then((failed) => this.finish(operation, generation, failed))
       return
     }
     const { keyString } = operation

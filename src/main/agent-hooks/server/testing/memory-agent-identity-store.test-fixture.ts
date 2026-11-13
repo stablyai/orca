@@ -27,6 +27,28 @@ export class MemoryAgentIdentityClient implements AgentIdentityClient {
     return [...this.ids].some(([key, id]) => id === orcaSessionId && key.startsWith(pathPrefix))
   }
 
+  async providerKeyOf(
+    path: string,
+    orcaSessionId: string
+  ): Promise<{ key: AgentProviderKey | null }> {
+    const linked = [...this.ids].find(([keyString, id]) => {
+      return id === orcaSessionId && keyString.startsWith(JSON.stringify([path]).slice(0, -1))
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: map keys are JSON.stringify([path, key]) written above.
+    return { key: linked ? (JSON.parse(linked[0]) as [string, AgentProviderKey])[1] : null }
+  }
+
+  async idsOfProviderSession(path: string, providerSessionId: string): Promise<OrcaSessionId[]> {
+    const pathPrefix = JSON.stringify([path]).slice(0, -1)
+    return [...this.ids]
+      .filter(
+        ([keyString]) =>
+          keyString.startsWith(pathPrefix) &&
+          keyString.includes(`"providerSessionId":${JSON.stringify(providerSessionId)}`)
+      )
+      .map(([, id]) => id)
+  }
+
   readonly isRetiring = false
 
   retired(): Promise<void> {

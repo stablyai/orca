@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS provider_links(
 
 const SELECT_LINK = `SELECT orca_session_id FROM provider_links
   WHERE execution_host = ? AND wsl_distro = ? AND agent = ? AND provider_session_id = ? AND locator = ?`
+// Reverse lookups for `orca agent` reads; indexes only, so older builds open the file unchanged.
+const LOOKUP_INDEX_SQL = `CREATE INDEX IF NOT EXISTS provider_links_by_orca_session
+  ON provider_links(orca_session_id);
+CREATE INDEX IF NOT EXISTS provider_links_by_provider_session
+  ON provider_links(provider_session_id);`
+const PROVIDER_SESSION_ID_MATCH_LIMIT = 8
 
 /** Orca ids for provider conversations, which nothing can rebuild: the file is never deleted, and
  *  an unreadable one throws so ids stay unavailable. A linked key is never relinked. Runs only in
@@ -97,6 +103,36 @@ export class AgentIdentityStore {
     )
   }
 
+  /** The provider conversation `id` names: each mint links exactly one key. */
+  providerKeyOf(id: string): AgentProviderKey | null {
+    const row = this.db
+      .prepare(
+        `SELECT execution_host, wsl_distro, agent, provider_session_id, locator
+         FROM provider_links WHERE orca_session_id = ? LIMIT 1`
+      )
+      .get(id)
+    return row
+      ? {
+          executionHost: String(row.execution_host),
+          wslDistro: String(row.wsl_distro),
+          agent: String(row.agent),
+          providerSessionId: String(row.provider_session_id),
+          locator: String(row.locator)
+        }
+      : null
+  }
+
+  /** Orca ids linked to a provider's own session id, so a caller can be told which to use. */
+  idsOfProviderSession(providerSessionId: string): OrcaSessionId[] {
+    return this.db
+      .prepare(
+        `SELECT DISTINCT orca_session_id FROM provider_links WHERE provider_session_id = ? LIMIT ${PROVIDER_SESSION_ID_MATCH_LIMIT}`
+      )
+      .all(providerSessionId)
+      .map((row) => row.orca_session_id)
+      .filter((id): id is OrcaSessionId => typeof id === 'string' && isOrcaSessionId(id))
+  }
+
   close(): void {
     this.db.close()
   }
@@ -140,6 +176,12 @@ function openIdentityDatabase(
         throw error
       }
     }
+    try {
+      db.exec(LOOKUP_INDEX_SQL)
+    } catch (error) {
+      // A busy file still answers lookups, by scan; the next open adds the indexes.
+      console.warn('[agent-hooks] agent identity lookup indexes deferred', error)
+    }
     return { db, readOnly: false }
   } catch (error) {
     db.close()
@@ -168,9 +210,20 @@ export function handleAgentIdentityRequest(
 ): AgentIdentityWorkerResponse {
   try {
     const opened = storeFor(request.path)
-    return request.kind === 'identify'
-      ? { id: request.id, ok: true, value: opened.identify(request.key) }
-      : { id: request.id, ok: true, value: opened.has(request.orcaSessionId) }
+    switch (request.kind) {
+      case 'identify':
+        return { id: request.id, ok: true, value: opened.identify(request.key) }
+      case 'has':
+        return { id: request.id, ok: true, value: opened.has(request.orcaSessionId) }
+      case 'providerKeyOf':
+        return { id: request.id, ok: true, value: opened.providerKeyOf(request.orcaSessionId) }
+      case 'idsOfProviderSession':
+        return {
+          id: request.id,
+          ok: true,
+          value: opened.idsOfProviderSession(request.providerSessionId)
+        }
+    }
   } catch (error) {
     // A store that failed to open is reopened by the next request, never rebuilt.
     store?.store.close()

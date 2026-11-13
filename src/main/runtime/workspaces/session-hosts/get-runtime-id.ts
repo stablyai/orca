@@ -2,6 +2,7 @@ import { crewWorkspaceNames } from '../../orchestration/crew/crew-workspace-name
 import { isDeepStrictEqual } from 'node:util'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { TerminalListHostScope } from '../../terminal/query/terminal-list-host-scope'
 
 export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope {
@@ -47,6 +48,20 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
     if (!isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.get(worktreeId)))) {
       this.crewChanges.notify(new Set(['names']))
     }
+  }
+
+  /** Every saved sleeping-agent record, for an explicit lookup by conversation (never per hook). */
+  listSleepingAgentSessionRecords(): SleepingAgentSessionRecord[] {
+    const sessions = new Set<WorkspaceSessionState>()
+    for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
+      const session = this.workspaceSessions.get(worktreeId)
+      if (session) {
+        sessions.add(session)
+      }
+    }
+    return [...sessions].flatMap((session) =>
+      Object.values(session.sleepingAgentSessionsByPaneKey ?? {})
+    )
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

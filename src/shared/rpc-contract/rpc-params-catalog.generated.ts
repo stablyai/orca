@@ -90,6 +90,7 @@ import {
   AgentActivityClearParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
+import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch/agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch/agent-launch-settings-params'
 import {
@@ -857,6 +858,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
+  'agent.list': AgentListParams,
+  'agent.read': AgentReadParams,
+  'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,

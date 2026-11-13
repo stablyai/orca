@@ -7,7 +7,7 @@ import type {
 import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import type { AgentIdentityClient, AgentIdentityLookup } from './agent-identity-worker-client'
 import { handleAgentIdentityRequest } from './agent-identity-worker-entry'
-import { isOrcaSessionId } from '../../../shared/orca-session-address'
+import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 
 /** The worker's real SQL handler behind an asynchronous boundary, counting requests. Each answer
  *  can be held so a test decides when (and in which order) replies arrive. */
@@ -43,6 +43,36 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
     return response.ok && typeof response.value === 'boolean' ? response.value : undefined
   }
 
+  async providerKeyOf(
+    path: string,
+    orcaSessionId: string
+  ): Promise<{ key: AgentProviderKey | null } | undefined> {
+    const response = handleAgentIdentityRequest({
+      id: 0,
+      kind: 'providerKeyOf',
+      path,
+      orcaSessionId
+    })
+    return response.ok && typeof response.value === 'object' && !Array.isArray(response.value)
+      ? { key: response.value }
+      : undefined
+  }
+
+  async idsOfProviderSession(
+    path: string,
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | undefined> {
+    const response = handleAgentIdentityRequest({
+      id: 0,
+      kind: 'idsOfProviderSession',
+      path,
+      providerSessionId
+    })
+    return response.ok && Array.isArray(response.value)
+      ? response.value.filter(isOrcaSessionId)
+      : undefined
+  }
+
   /** Lets every held request answer, oldest first. */
   release(): void {
     for (const resolve of this.held.splice(0)) {
@@ -76,7 +106,11 @@ export class ScriptedIdentityWorkers {
   answer: (request: AgentIdentityWorkerRequest) => ScriptedAnswer = (request) =>
     request.kind === 'identify'
       ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
-      : { id: request.id, ok: true, value: this.known.has(request.orcaSessionId) }
+      : {
+          id: request.id,
+          ok: true,
+          value: request.kind === 'has' && this.known.has(request.orcaSessionId)
+        }
   private readonly exits: (() => void)[] = []
 
   readonly factory = (): WorkerRequestTransport => {

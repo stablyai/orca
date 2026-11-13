@@ -68,6 +68,16 @@ ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
 
 If a launch reply is lost, use the returned `operationId` to re-issue the exact same command from the same directory against the same execution host with `--retry-launch <operationId>`. Keep that ID on every retry: the host replays the accepted launch instead of starting another agent or submitting the brief twice. Do not retry as a fresh launch. If replay says the outcome is unknown or expired, or an older host gives no replay ID, inspect the workspace and agent without sending input before deciding whether another launch is needed. A host that cannot safely carry prompts or honor background/focus requests is refused before launch; update Orca on that execution host.
 
+## Agents by ID
+
+Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<agent>_<uuid>`; what Copy Orca Session ID copies on a chat and Copy Agent ID on a terminal). Use it to find and read agents:
+
+- `ORCA agent list --json` lists the agents open in this host's workspaces, with `orcaSessionId`, `kind` (chat or terminal), state, workspace and last reply. A terminal agent has no ID until it first reports to Orca. Agents on other hosts are not listed; the output names those hosts and the `--environment` to use.
+- `ORCA agent show <id> --json` shows where one agent is open (none if closed, two if resumed in two panes).
+- `ORCA agent read <id> --json` reads what the agent said: a chat's history or a terminal agent's transcript, never its screen. It needs no running agent and never starts one. Pass the returned `cursor` with `--cursor` to read only newer entries. A terminal agent is readable while Orca knows its transcript (open, or asleep in a workspace).
+
+A chat keeps its ID across `/clear`; a terminal agent gets a new one. A provider's own conversation id or a `term_…` handle is refused with the ID to use. To message an agent, use `terminal send` or `orchestration send` as below.
+
 ## Worktrees
 
 An Orca worktree is Orca's tracked view of a repo checkout, its metadata, terminals, browser tabs, and UI state.

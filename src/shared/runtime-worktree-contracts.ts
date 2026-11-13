@@ -34,7 +34,7 @@ export type RuntimeWorktreeSetResult = {
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
-  /** The host's Orca id for this terminal agent's conversation; old hosts omit it. */
+  /** The host's Orca id for this agent's conversation (a chat's /clear root); old hosts omit it. */
   orcaSessionId?: string
   parentPaneKey: string | null
   state: AgentStatusState
