@@ -1,5 +1,4 @@
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachments/workspace-attachment-capabilities'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from './sidebar-inputs-switch'
 
 export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
   'worktree.rename-error-dismiss.v1' as const
@@ -108,7 +107,7 @@ export const WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY = 'worktree.folder-setup.v
 // Hosts that honor branchIntent 'create-exact': the unsuffixed new branch, or a coded refusal.
 export const WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY =
   'worktree.create.exact-name.v1' as const
-// Hosts that publish worktreeRowsChanged (only while the sidebar feed is off), so a phone's workspace list polls worktree.ps only as a backstop.
+// Hosts that publish worktreeRowsChanged, so phones and paired desktops read worktree.ps on agent status changes and poll only as a backstop.
 export const WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'worktree.rows-changed-event.v1' as const
 
@@ -140,5 +139,5 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY,
   WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY,
-  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [] : [WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY])
+  WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY
 ] as const

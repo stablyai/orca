@@ -9,7 +9,7 @@ export const SERVER_FETCH_TIMEOUT_MS = 5_000
 export const WorktreePsReplySchema = z.object({ worktrees: z.array(z.looseObject({})) })
 
 /** Collapse server-relative local/SSH hosts to the server id, matching the desktop sidebar. */
-export function stampServerWorktreeRows<Row extends { hostId?: string }>(
+export function stampServerWorktreeRows<Row extends object>(
   environmentId: string,
   rows: readonly Row[]
 ): (Row & { hostId: `runtime:${string}` })[] {

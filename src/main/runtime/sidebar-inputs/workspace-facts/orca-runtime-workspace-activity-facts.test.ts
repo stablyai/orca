@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -91,6 +93,28 @@ describe('runtime workspace activity facts', () => {
       expect(runtime.getWorkspaceActivityFacts().facts[WT]?.agent).toBe('permission')
     } finally {
       detach()
+    }
+  })
+
+  // Paired desktops can't read this host's feed, so the row notice stays on with it.
+  it('still announces agent row changes and their capability', async () => {
+    const runtime = new OrcaRuntimeService()
+    const events: RuntimeClientEvent['type'][] = []
+    const stop = runtime.onClientEvent((event) => events.push(event.type))
+    const server = new AgentHookServer()
+    const detach = runtime.attachAgentStatusStore(server)
+    try {
+      server.ingestTerminalStatus({
+        paneKey: `tab-1:${LEAF}`,
+        tabId: 'tab-1',
+        payload: { state: 'working', agentType: 'claude' }
+      })
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(events).toContain('worktreeRowsChanged')
+      expect(RUNTIME_CAPABILITIES).toContain('worktree.rows-changed-event.v1')
+    } finally {
+      detach()
+      stop()
     }
   })
 })

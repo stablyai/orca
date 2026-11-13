@@ -18,14 +18,24 @@ import {
 import type { ServerWorktreeRows } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import {
   SERVER_WORKTREE_LIMIT,
-  WorktreePsReplySchema,
   stampServerWorktreeRows
 } from '../../mobile-desktop-relay/server-worktree-fetch'
+import {
+  isWorktreeCatalogRow,
+  worktreeCatalogRowDelta,
+  type WorktreeCatalogSnapshot
+} from '../../../../shared/worktree/catalog-row-delta'
 import type { PairedServerCatalog } from '../../../../shared/sidebar-list/sidebar-project-catalog'
 import { fetchPairedServerCatalog } from '../../../../shared/sidebar-list/paired-server-catalog'
 
-// Owner-approved fallback for changes a server announces no event for (status-only, older servers).
+// Backstop for changes a server announces no event for (terminal counts, unread, PR badge) and for older servers.
 export const FALLBACK_REFRESH_MS = 30_000
+
+type ServerRow = { [key: string]: unknown; worktreeId: string }
+
+const serverRowDeltas = worktreeCatalogRowDelta((row): row is ServerRow =>
+  isWorktreeCatalogRow(row)
+)
 
 type ServerEntry = {
   environmentId: string
@@ -36,6 +46,8 @@ type ServerEntry = {
   contactGeneration: number
   /** Null until a fetch under this pairing answered. */
   rows: MobileRelayServerWorktreeRow[] | null
+  /** The server's rows under its snapshot id, the base of the next delta read; null asks in full. */
+  delta: WorktreeCatalogSnapshot<ServerRow> | null
   /** The rows are the server's answer since it last came into contact; else unverifiable. */
   confirmed: boolean
   /** Its repos and project groups as last fetched under this pairing; null until one answered. */
@@ -115,6 +127,7 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
           inContact: false,
           contactGeneration: 0,
           rows: null,
+          delta: null,
           confirmed: false,
           catalog: null,
           catalogStale: true,
@@ -132,6 +145,8 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
         entry.contactGeneration += 1
         entry.confirmed = false
         entry.catalogStale ||= inContact
+        // A reconnect starts from a full read.
+        entry.delta = null
         this.revision.bump()
       }
       // Why current(): a replaced transport can end the stream without telling it.
@@ -249,11 +264,20 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     // Only on contact, ready, a replay or reposChanged, which every catalog write announces.
     const readCatalog = entry.catalogStale
     entry.catalogStale = false
-    const [response, catalog] = await Promise.all([
-      call('worktree.ps', {
-        limit: SERVER_WORKTREE_LIMIT,
-        supportsWorktreeVisibilitySourceDefaults: true
-      }).catch(() => null), // An unreachable server keeps its last rows.
+    const held = entry.delta
+    const [read, catalog] = await Promise.all([
+      serverRowDeltas
+        .read(async (snapshot) => {
+          const response = await call('worktree.ps', {
+            limit: SERVER_WORKTREE_LIMIT,
+            supportsWorktreeVisibilitySourceDefaults: true,
+            ...snapshot
+          })
+          return response.ok
+            ? { accepted: true as const, value: response.result }
+            : { accepted: false as const, code: 'request_failed' }
+        }, held)
+        .catch(() => null), // An unreachable server keeps its last rows.
       readCatalog
         ? fetchPairedServerCatalog(entry.environmentId, call, entry.catalog).catch(() => null)
         : null
@@ -268,15 +292,25 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     } else if (readCatalog) {
       entry.catalogStale = true
     }
-    const reply = response?.ok ? WorktreePsReplySchema.safeParse(response.result) : null
-    if (!reply?.success) {
+    if (!read?.ok) {
+      // A reply no rows can be built from re-reads in full; an unreachable server keeps its base.
+      if (read) {
+        entry.delta = null
+      }
       this.unconfirm(entry)
       return
     }
-    entry.rows = stampServerWorktreeRows(entry.environmentId, reply.data.worktrees)
     // An answer from before a contact gap may keep its rows, but cannot vouch for them now.
-    entry.confirmed = entry.inContact && entry.contactGeneration === contactGeneration
-    // Every answer moves the revision: rows carry activity that changes without a catalog event.
+    const confirmed = entry.inContact && entry.contactGeneration === contactGeneration
+    // An unchanged reply hands back the held snapshot itself.
+    const rowsChanged = read.snapshot !== held
+    entry.delta = read.snapshot
+    if (rowsChanged) {
+      entry.rows = stampServerWorktreeRows(entry.environmentId, read.snapshot.worktrees)
+    } else if (confirmed === entry.confirmed) {
+      return
+    }
+    entry.confirmed = confirmed
     this.revision.bump()
   }
 }

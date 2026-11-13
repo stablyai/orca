@@ -7,7 +7,9 @@ import {
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
-import { PairedServerRowsProducer } from './paired-server-rows-producer'
+import { WorktreeRowsChanges } from '../../client/events/worktree-rows-change-events'
+import { workspaceChangeOfClientEvent } from '../../mobile-desktop-relay/relay-host-workspace-change'
+import { FALLBACK_REFRESH_MS, PairedServerRowsProducer } from './paired-server-rows-producer'
 
 function snapshot(environmentId: string, live: boolean): RuntimeHostStatusSnapshot {
   return {
@@ -31,6 +33,10 @@ function snapshot(environmentId: string, live: boolean): RuntimeHostStatusSnapsh
 
 function psReply(rows: Record<string, unknown>[]): RuntimeRpcResponse<unknown> {
   return { id: 'ps', ok: true, result: { worktrees: rows }, _meta: { runtimeId: 'runtime-a' } }
+}
+
+function reply(result: unknown): RuntimeRpcResponse<unknown> {
+  return { id: 'ps', ok: true, result, _meta: { runtimeId: 'runtime-a' } }
 }
 
 function row(worktreeId: string, extra: Record<string, unknown> = {}) {
@@ -269,6 +275,119 @@ describe('PairedServerRowsProducer', () => {
     expect(rowsOf(producer, 'runtime:box')).toMatchObject({
       freshness: 'live',
       rows: [{ worktreeId: 'current' }]
+    })
+  })
+
+  describe('agent row changes', () => {
+    function attached(servers = [{ id: 'box', live: true }]) {
+      const fake = fakeHosts(servers)
+      const producer = new PairedServerRowsProducer({
+        hasDemand: () => true,
+        hostLabelOverrides: () => new Map()
+      })
+      producer.attach(fake.hosts)
+      const ids = () => rowsOf(producer, 'runtime:box')?.rows.map((entry) => entry.worktreeId)
+      const snapshotParams = () =>
+        fake.call.mock.calls.map(
+          ([, , params]) =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree.ps params are the producer's own object.
+            (params as { afterSnapshotId?: string | null }).afterSnapshotId
+        )
+      return { ...fake, producer, ids, snapshotParams }
+    }
+
+    it('reads the server within 2 s of a status change, once for a burst of them', async () => {
+      const { call, watches } = attached()
+      call.mockResolvedValue(psReply([row('a')]))
+      watches.get('box')?.onChange()
+      await vi.advanceTimersByTimeAsync(0)
+      call.mockClear()
+      // The server's own emitter, delivered over the client-event stream the watch reads.
+      const server = new WorktreeRowsChanges((event) => {
+        const change = workspaceChangeOfClientEvent(event)
+        if (change) {
+          watches.get('box')?.onChange(change)
+        }
+      })
+
+      // An agent steps every 100 ms for 1.5 s.
+      for (let step = 0; step < 15; step += 1) {
+        server.changed()
+        await vi.advanceTimersByTimeAsync(100)
+      }
+      expect(call).toHaveBeenCalledTimes(0)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(call).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(call).toHaveBeenCalledTimes(1)
+    })
+
+    it('applies added, changed and removed rows from a delta, and skips an unchanged reply', async () => {
+      const { call, watches, producer, ids, snapshotParams } = attached()
+      call.mockResolvedValueOnce(
+        reply({ worktrees: [row('a'), row('b'), row('c')], snapshotId: 's1' })
+      )
+      watches.get('box')?.onChange()
+      await vi.advanceTimersByTimeAsync(0)
+
+      call.mockResolvedValueOnce(
+        reply({
+          snapshotId: 's2',
+          baseSnapshotId: 's1',
+          rowsFromBase: [0, row('b', { displayName: 'b renamed' }), row('d')]
+        })
+      )
+      await producer.refresh('box')
+      expect(ids()).toEqual(['a', 'b', 'd'])
+      expect(rowsOf(producer, 'runtime:box')?.rows[1]?.displayName).toBe('b renamed')
+
+      const revision = producer.snapshot().revision
+      call.mockResolvedValueOnce(reply({ unchanged: true, snapshotId: 's2' }))
+      await producer.refresh('box')
+      expect(producer.snapshot().revision).toBe(revision)
+      expect(ids()).toEqual(['a', 'b', 'd'])
+      expect(snapshotParams()).toEqual([null, 's1', 's2'])
+    })
+
+    it('reads in full when a delta cannot be rebuilt and after a reconnect', async () => {
+      const { call, watches, producer, ids, snapshotParams, state, publishStatus } = attached()
+      call.mockResolvedValueOnce(reply({ worktrees: [row('a')], snapshotId: 's1' }))
+      watches.get('box')?.onChange()
+      await vi.advanceTimersByTimeAsync(0)
+
+      // A delta indexing past the held rows answers a base this desktop no longer matches.
+      call.mockResolvedValueOnce(
+        reply({ snapshotId: 's2', baseSnapshotId: 's1', rowsFromBase: [4] })
+      )
+      call.mockResolvedValueOnce(reply({ worktrees: [row('x')], snapshotId: 's3' }))
+      await producer.refresh('box')
+      expect(ids()).toEqual(['x'])
+
+      state.servers = [{ id: 'box', live: false }]
+      publishStatus()
+      state.servers = [{ id: 'box', live: true }]
+      publishStatus()
+      call.mockResolvedValueOnce(reply({ worktrees: [row('y')], snapshotId: 's4' }))
+      watches.get('box')?.onChange()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(ids()).toEqual(['y'])
+      expect(rowsOf(producer, 'runtime:box')?.freshness).toBe('live')
+      expect(snapshotParams()).toEqual([null, 's1', null, null])
+    })
+
+    it('reads an older server in full on every refresh and every 30 s', async () => {
+      const { call, watches, producer, ids, snapshotParams } = attached()
+      call.mockResolvedValueOnce(psReply([row('a')]))
+      watches.get('box')?.onChange()
+      await vi.advanceTimersByTimeAsync(0)
+      const revision = producer.snapshot().revision
+
+      call.mockResolvedValueOnce(psReply([row('a'), row('b')]))
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+      expect(ids()).toEqual(['a', 'b'])
+      expect(producer.snapshot().revision).toBeGreaterThan(revision)
+      expect(snapshotParams()).toEqual([null, null])
     })
   })
 })

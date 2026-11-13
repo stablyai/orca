@@ -57,7 +57,7 @@ export const homeWorktreeCountsQuery = defineHostQuery<
       'reposChanged',
       // The desktop Agents list changed; worktree.ps carries its verdicts.
       'agentListChanged',
-      // Agent status changes on hosts without the sidebar feed (worktree.rows-changed-event.v1).
+      // Agent status changes (worktree.rows-changed-event.v1); the floor folds it and sidebarInputsChanged into one read.
       'worktreeRowsChanged'
     ],
     floorMs: HOME_WORKTREE_REFRESH_FLOOR_MS

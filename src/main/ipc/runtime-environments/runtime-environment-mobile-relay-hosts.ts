@@ -49,6 +49,7 @@ import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 import { recipeVmServerState } from './runtime-environment-recipe-vm-wake'
 import { RECIPE_VM_PHONE_OPEN_HOLD_MS } from '../../../shared/remote-runtime/recipe-vm-wake'
+import { workspaceChangeOfClientEvent } from '../../runtime/mobile-desktop-relay/relay-host-workspace-change'
 
 const retirementListeners = new Set<(environmentId: string) => void>()
 
@@ -263,10 +264,10 @@ function watchRuntimeEnvironmentChanges(
           const { response } = payload
           // A replay may stand for missed events of any kind.
           const change = isRuntimeSubscriptionReplayResponse(response)
-            ? 'reposChanged'
-            : workspaceChangeOf(response.result)
+            ? { catalog: true }
+            : workspaceChangeOfClientEvent(response.result)
           if (change) {
-            callbacks.onChange({ catalog: change !== 'worktreesChanged' })
+            callbacks.onChange(change)
           }
         }
       },
@@ -282,14 +283,6 @@ function watchRuntimeEnvironmentChanges(
     }
   }, end)
   return { close, current }
-}
-
-function workspaceChangeOf(message: unknown): 'ready' | 'worktreesChanged' | 'reposChanged' | null {
-  if (typeof message !== 'object' || message === null || !('type' in message)) {
-    return null
-  }
-  const { type } = message
-  return type === 'ready' || type === 'worktreesChanged' || type === 'reposChanged' ? type : null
 }
 
 function pairingRevision(environment: KnownRuntimeEnvironment): number {
