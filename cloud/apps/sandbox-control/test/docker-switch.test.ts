@@ -1,9 +1,7 @@
 // PARITY-DOCKER: every workspace boot tells the VM whether Docker is on (ORCA_DOCKER), default on;
-// SANDBOX_DOCKER=off turns it off everywhere at the next start or wake. The registries `docker pull`
-// needs are on the default egress allowlist.
+// SANDBOX_DOCKER=off turns it off everywhere at the next start or wake.
 import { describe, expect, it } from 'vitest'
 import { START_COMMAND } from '../src/sandbox-vm-commands'
-import { CONTAINER_REGISTRY_HOSTS, DEFAULT_EGRESS_ALLOWLIST } from '../src/network-policy'
 import { createHarness } from './harness'
 
 async function boot(env: Record<string, string> = {}) {
@@ -28,21 +26,5 @@ describe('the Docker switch (SANDBOX_DOCKER)', () => {
 
   it('any other value leaves it on', async () => {
     expect((await boot({ SANDBOX_DOCKER: 'on' })).at(-1)?.ORCA_DOCKER).toBe('on')
-  })
-})
-
-describe('container registries on the egress allowlist', () => {
-  it('lists the mirror, Docker Hub and GHCR', () => {
-    for (const host of [
-      'mirror.gcr.io',
-      'registry-1.docker.io',
-      'auth.docker.io',
-      'production.cloudflare.docker.com',
-      'ghcr.io',
-      'pkg-containers.githubusercontent.com'
-    ]) {
-      expect(CONTAINER_REGISTRY_HOSTS).toContain(host)
-      expect(DEFAULT_EGRESS_ALLOWLIST).toContain(host)
-    }
   })
 })

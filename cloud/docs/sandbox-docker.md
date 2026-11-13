@@ -19,7 +19,10 @@ Every Orca Cloud workspace has Docker. `docker`, `docker compose` and `docker bu
 
 ## Network and credentials
 
-- **Egress:** container traffic leaves through the workspace VM, so the workspace's network policy applies to containers exactly as to the VM. The default allowlist includes the registries `CONTAINER_REGISTRY_HOSTS` in `src/network-policy.ts`: mirror.gcr.io, Docker Hub and GHCR.
+- **Egress:** container traffic leaves through the workspace VM, so the workspace's network policy applies to containers exactly as to the VM.
+  - With open egress (#525, the default once it is deployed), image pulls just work.
+  - The "limited" preset gets the registry hosts in a follow-up after #525: mirror.gcr.io, registry-1.docker.io, auth.docker.io, production.cloudflare.docker.com, ghcr.io and pkg-containers.githubusercontent.com.
+  - Until #525 is live, the current allowlist does not include registries, so `docker pull` is blocked. The golden with Docker is not promoted before then.
 - **Credential hosts:** Orca swaps a placeholder for the real credential on the way out for some hosts: GitHub's git, api.github.com, Orca-account agent sign-ins and egress secrets. Real tokens never enter the VM or containers. Those hosts are TLS-terminated by the provider's proxy, whose certificate containers don't trust by default. A container that must reach one mounts the workspace's proxy CA:
 
   ```sh
