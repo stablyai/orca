@@ -224,6 +224,12 @@ export function useAutomationsPageFocus(
       }
       if (performance.now() < keepUntil) {
         handle = requestAnimationFrame(keepReturnedFocus)
+        return
+      }
+      // Why: the row never came back (the refetch dropped it); land on the page's own target
+      // rather than leaving focus on the body.
+      if (!stillOurs && !container.querySelector(selector)) {
+        container.querySelector<HTMLElement>(PAGE_FOCUS_TARGET)?.focus({ preventScroll: false })
       }
     }
     const attempt = (): void => {

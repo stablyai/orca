@@ -69,22 +69,26 @@ export const RUN_START_DRIFT_LABEL_MS = 60_000
  * When a run actually launched, or null.
  * - Dispatched and completed runs launched at their dispatch time; older records without
  *   one keep their start time.
- * - A failed run launched only if it got as far as a session or terminal (failure after
- *   launch). The chat launcher stamps `dispatchedAt` even when it refuses or throws before
- *   starting anything, so that time alone is not evidence.
+ * - A failed terminal run gets `dispatchedAt` only once it was dispatched, so that time is
+ *   durable launch evidence even after terminal retention clears its pane key.
+ * - A failed chat run launched only if it reached a chat session: the chat launcher stamps
+ *   `dispatchedAt` even when it refuses or throws before starting anything.
  * - Skipped and missed runs never launched; their `startedAt` is an observation time.
  */
 export function getAutomationRunLaunchedAt(
   run: Pick<
     AutomationRun,
-    'status' | 'dispatchedAt' | 'startedAt' | 'chatSessionId' | 'terminalPaneKey'
+    'status' | 'dispatchedAt' | 'startedAt' | 'chatSessionId' | 'terminalPaneKey' | 'sessionKind'
   >
 ): number | null {
   if (run.status === 'completed' || run.status === 'dispatched') {
     return run.dispatchedAt ?? run.startedAt
   }
-  if (run.status === 'dispatch_failed' && (run.chatSessionId || run.terminalPaneKey)) {
-    return run.dispatchedAt ?? run.startedAt
+  if (run.status !== 'dispatch_failed') {
+    return null
   }
-  return null
+  if (run.sessionKind === 'chat') {
+    return run.chatSessionId ? (run.dispatchedAt ?? run.startedAt) : null
+  }
+  return run.dispatchedAt ?? (run.terminalPaneKey ? run.startedAt : null)
 }

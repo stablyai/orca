@@ -53,6 +53,7 @@ describe('when a run launched', () => {
     startedAt: null,
     chatSessionId: null,
     terminalPaneKey: null,
+    sessionKind: 'chat' as const,
     ...overrides
   })
 
@@ -64,9 +65,18 @@ describe('when a run launched', () => {
     ).toBeNull()
   })
 
+  it('keeps a launched terminal run whose pane key retention cleared', () => {
+    // Terminal runs get dispatchedAt only at dispatch; retention later drops the pane key.
+    expect(getAutomationRunLaunchedAt(run({ sessionKind: 'terminal', dispatchedAt: 5 }))).toBe(5)
+  })
+
   it('is the dispatch time when a run failed after it launched a session or terminal', () => {
     expect(getAutomationRunLaunchedAt(run({ dispatchedAt: 5, chatSessionId: 'chat-1' }))).toBe(5)
-    expect(getAutomationRunLaunchedAt(run({ dispatchedAt: 5, terminalPaneKey: 'pane-1' }))).toBe(5)
+    expect(
+      getAutomationRunLaunchedAt(
+        run({ sessionKind: 'terminal', dispatchedAt: 5, terminalPaneKey: 'pane-1' })
+      )
+    ).toBe(5)
   })
 
   it('is the dispatch time of a dispatched or completed run', () => {

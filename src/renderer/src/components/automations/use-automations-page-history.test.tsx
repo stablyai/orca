@@ -12,6 +12,7 @@ import {
 import { AUTOMATIONS_REVEAL_RUN_EVENT } from './runs/automations-reveal-run'
 import {
   automationsPageNotFoundLocation,
+  automationsRunPageFocusKey,
   automationsRunReturnSelector
 } from './use-automations-page-routing'
 
@@ -316,6 +317,27 @@ describe('returning to a run whose table is still loading', () => {
     expect(reveal.mock.calls[0]?.[0]).toMatchObject({
       detail: { runId: 'r9', runKey: 'row-b::r9' }
     })
+  })
+
+  it('falls back to the page search when a refetch drops the focused row for good', () => {
+    const container = mountRunsPage()
+    const cached = addRow(container)
+    mountReturn(container)
+    expect(document.activeElement).toBe(cached)
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    cached.remove()
+    act(() => {
+      vi.advanceTimersByTime(5200)
+    })
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Search runs')
+  })
+
+  it('moves title focus between same-id runs on different hosts', () => {
+    expect(automationsRunPageFocusKey('r9', 'row-a')).not.toBe(
+      automationsRunPageFocusKey('r9', 'row-b')
+    )
   })
 
   it('focuses the row once the reloaded data lists it (1.2s read)', () => {

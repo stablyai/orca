@@ -1,7 +1,10 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import {
+  getAutomationRunListedAt,
+  type AutomationRun
+} from '../../../../../shared/automations/history/automation-run'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   formatAutomationDateTime,
@@ -96,7 +99,7 @@ export function AutomationRecentRunsRail({
                       ) : null}
                     </span>
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {formatAutomationDateTime(run.scheduledFor, t, intlLocale)}
+                      {formatAutomationDateTime(getAutomationRunListedAt(run), t, intlLocale)}
                     </span>
                   </button>
                 </li>

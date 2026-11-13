@@ -32,6 +32,11 @@ export function automationsRunReturnSelector(runId: string, rowKey: string | und
     : byId
 }
 
+/** The run page's focus identity; the same run id can exist under two hosts. */
+export function automationsRunPageFocusKey(runId: string, rowKey: string | undefined): string {
+  return `run:${rowKey ? automationRunFocusKey(rowKey, runId) : runId}`
+}
+
 /** A missing destination is still where the user went; replaying it shows not-found again. */
 export function automationsPageNotFoundLocation(
   notFound: AutomationRunNotFound
@@ -135,7 +140,7 @@ export function useAutomationsPageRouting(
       ? null
       : location.page === 'run'
         ? {
-            key: `run:${location.runId}`,
+            key: automationsRunPageFocusKey(location.runId, selectedRow?.key),
             page: 'run',
             parents: ['detail', 'automationRuns', 'runs'],
             returnSelector: automationsRunReturnSelector(location.runId, selectedRow?.key),
