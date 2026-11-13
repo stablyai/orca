@@ -190,7 +190,7 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     expectSignedOut(refused)
   })
 
-  it('a 401 from the provider marks the account revoked and the session falls off it', async () => {
+  it('a 401 confirmed by a later real 401 revokes the account and the session falls off it', async () => {
     const { h, as, proxied, reply, lastEnv } = await setup()
     const mia = await as('mia')
     await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
@@ -200,7 +200,11 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     const otherSession: string = other.body.sandbox.session.id
     reply.status = 401
     expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(401)
-    // Confirmed by the control plane's own auth check (dead token), then revoked.
+    // RS-2: the auth check (dead token) only puts it in question; a later real request's 401 revokes it.
+    await vi.waitFor(async () =>
+      expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude).toMatchObject({ state: 'expired', needsCheck: true })
+    )
+    expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(401)
     await vi.waitFor(async () => expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.state).toBe('revoked'))
     // Already off the account: no placeholder in new shells, and the proxy refuses with a clear reason.
     await vi.waitFor(() => expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined())
@@ -334,12 +338,62 @@ describe('a provider 401 revokes only when confirmed', () => {
     expect(await state()).toBe('active')
   })
 
-  it('a confirmed dead token is revoked once and audited', async () => {
+  it('RS-2: a failed auth check alone never revokes: "needs check" (shown as expired), still usable', async () => {
+    const { h, reply, send, state, auditRows, upstream, check } = await running()
+    reply.status = 401
+    await send()
+    await vi.waitFor(async () => expect(await auditRows()).toEqual([{ action: 'suspect', reason: 'provider_401_check_auth_failure', upstream_path: '/v1/messages' }]))
+    expect(await state()).toBe('expired')
+    const mia = await h.token('mia', undefined, 'sandbox')
+    expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude).toMatchObject({ state: 'expired', needsCheck: true })
+    // The real credential still goes out, so the next real request can confirm it either way.
+    reply.status = 200
+    upstream.length = 0
+    await send()
+    expect(upstream.at(-1)?.headers.get('authorization')).toBe(`Bearer ${SETUP_TOKEN}`)
+    expect(check.calls).toBe(1)
+  })
+
+  it('RS-2: needs check + a later real 401 revokes (audited); the probe alone never did', async () => {
     const { reply, send, state, auditRows } = await running()
     reply.status = 401
     await send()
+    await vi.waitFor(async () => expect((await auditRows()).map((row) => row.action)).toEqual(['suspect']))
+    await send()
     await vi.waitFor(async () => expect(await state()).toBe('revoked'))
-    expect(await auditRows()).toEqual([{ action: 'revoked', reason: 'provider_401_confirmed_by_check', upstream_path: '/v1/messages' }])
+    expect(await auditRows()).toEqual([
+      { action: 'suspect', reason: 'provider_401_check_auth_failure', upstream_path: '/v1/messages' },
+      { action: 'revoked', reason: 'provider_401_after_check_failure', upstream_path: '/v1/messages' }
+    ])
+  })
+
+  it('RS-2: needs check + a later real request that succeeds clears it back to active (audited)', async () => {
+    const { reply, send, state, auditRows } = await running()
+    reply.status = 401
+    await send()
+    await vi.waitFor(async () => expect((await auditRows()).map((row) => row.action)).toEqual(['suspect']))
+    reply.status = 200
+    await send()
+    await vi.waitFor(async () => expect(await state()).toBe('active'))
+    expect((await auditRows()).at(-1)).toEqual({ action: 'kept', reason: 'request_succeeded_after_check_failure', upstream_path: '/v1/messages' })
+  })
+
+  it('RS-2: a check that can\'t reach the provider changes nothing', async () => {
+    const ctx = await setup()
+    const mia = await ctx.as('mia')
+    await ctx.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    const created = await ctx.h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    ctx.reply.status = 401
+    ctx.check.status = 0
+    await ctx.proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
+    await vi.waitFor(async () =>
+      expect((await ctx.h.env.SANDBOX_DB.prepare('SELECT action, reason FROM agent_credential_audit').all()).results).toEqual([
+        { action: 'kept', reason: 'check_inconclusive' }
+      ])
+    )
+    expect((await ctx.h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude).toEqual(expect.objectContaining({ state: 'active' }))
+    expect((await ctx.h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.needsCheck).toBeUndefined()
   })
 })
 
@@ -358,14 +412,14 @@ describe('POST /v1/agent-credentials/claude/verify (pre-launch check)', () => {
     expect(check.calls).toBe(1)
   })
 
-  it('a dead token is revoked (and audited); an inconclusive check keeps it', async () => {
+  it('RS-2: a dead token only needs a check (audited, never revoked by the probe); an inconclusive check keeps it', async () => {
     const dead = await setup()
     const mia = await dead.as('mia')
     await dead.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
-    const revoked = await dead.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
-    expect(revoked.body).toMatchObject({ claude: { state: 'revoked' }, checked: true, verifiedAt: null })
+    const suspect = await dead.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(suspect.body).toMatchObject({ claude: { state: 'expired', needsCheck: true }, checked: true, verifiedAt: null })
     const rows = (await dead.h.env.SANDBOX_DB.prepare('SELECT action, reason FROM agent_credential_audit').all()).results
-    expect(rows).toEqual([{ action: 'revoked', reason: 'verify_confirmed_auth_failure' }])
+    expect(rows).toEqual([{ action: 'suspect', reason: 'verify_check_auth_failure' }])
 
     const flaky = await setup()
     const ada = await flaky.as('ada')
