@@ -5,7 +5,7 @@ const KEY_FRAME_TAG = 2
 const SEED_TAG = 4
 const MAX_PACKET_BYTES = 32 * 1024 * 1024
 
-export type AvccFrame = { config: boolean; keyFrame: boolean; bytes: ArrayBuffer }
+export type AvccFrame = { config: boolean; keyFrame: boolean; seed: boolean; bytes: ArrayBuffer }
 
 export class AvccFrameParser {
   private readonly header = new Uint8Array(5)
@@ -51,14 +51,12 @@ export class AvccFrameParser {
       }
       const bytes = this.payload.buffer
       this.payload = null
-      // The connect-time JPEG seed only previews; the decoder starts from the description and IDR.
-      if (this.tag !== SEED_TAG) {
-        this.onFrame({
-          config: this.tag === DESCRIPTION_TAG,
-          keyFrame: this.tag === KEY_FRAME_TAG,
-          bytes
-        })
-      }
+      this.onFrame({
+        config: this.tag === DESCRIPTION_TAG,
+        keyFrame: this.tag === KEY_FRAME_TAG,
+        seed: this.tag === SEED_TAG,
+        bytes
+      })
     }
   }
 }

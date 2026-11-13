@@ -6,6 +6,7 @@ type VideoFrameMessage = {
   deviceId: string
   config: boolean
   keyFrame: boolean
+  seed?: boolean
   bytes: ArrayBuffer
 }
 type VideoMetaMessage = {
@@ -76,6 +77,7 @@ export function useEmulatorVideoStream(
     let disposed = false
     let configured = false
     let waitingForKeyFrame = true
+    let hasVideoFrame = false
     let timestamp = 0
     let configBytes: Uint8Array | null = null
     let reportedSize: StreamSize | null = null
@@ -108,6 +110,7 @@ export function useEmulatorVideoStream(
           }
           reportSize(frame.displayWidth, frame.displayHeight)
           ctx.drawImage(frame, 0, 0)
+          hasVideoFrame = true
         }
         frame.close()
       },
@@ -139,6 +142,7 @@ export function useEmulatorVideoStream(
     const startStream = (): void => {
       const id = newVideoStreamId()
       streamId = id
+      hasVideoFrame = false
       void startVideoStream({ deviceId, streamId: id })
         .then((started) => {
           if (disposed) {
@@ -210,6 +214,22 @@ export function useEmulatorVideoStream(
 
     unsubFrame = api.onVideoStreamFrame?.((msg) => {
       if (disposed || msg.streamId !== streamId || msg.deviceId !== deviceId) {
+        return
+      }
+      if (avcc && msg.seed) {
+        if (!hasVideoFrame && canvas && ctx) {
+          void createImageBitmap(new Blob([msg.bytes], { type: 'image/jpeg' }))
+            .then((bitmap) => {
+              if (!disposed && msg.streamId === streamId && !hasVideoFrame) {
+                canvas.width = bitmap.width
+                canvas.height = bitmap.height
+                ctx.drawImage(bitmap, 0, 0)
+                reportSize(bitmap.width, bitmap.height)
+              }
+              bitmap.close()
+            })
+            .catch(() => {})
+        }
         return
       }
       const data = new Uint8Array(msg.bytes)

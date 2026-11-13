@@ -258,12 +258,13 @@ it('streams a registered iOS device from its helper and releases it with the ren
 
   const [callbacks] = mocks.avccCallbacks
   const bytes = new ArrayBuffer(4)
-  callbacks.onFrame({ config: true, keyFrame: false, bytes })
+  callbacks.onFrame({ config: true, keyFrame: false, seed: false, bytes })
   expect(sender.send).toHaveBeenCalledWith('emulator:videoStreamFrame', {
     streamId: 'ios-stream',
     deviceId: IOS_UDID,
     config: true,
     keyFrame: false,
+    seed: false,
     bytes
   })
 

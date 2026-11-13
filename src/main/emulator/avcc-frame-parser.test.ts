@@ -35,4 +35,16 @@ describe('AvccFrameParser', () => {
       [false, false, [7]]
     ])
   })
+
+  it('forwards the connect-time JPEG seed before the description', () => {
+    const wire = [...packet(4, [0xff, 0xd8]), ...packet(1, [1, 0x64, 0, 0x33])]
+    const frames = parse([wire.slice(0, 6), wire.slice(6)])
+
+    expect(
+      frames.map(({ frame, bytes }) => [frame.seed, frame.config, frame.keyFrame, bytes])
+    ).toEqual([
+      [true, false, false, [0xff, 0xd8]],
+      [false, true, false, [1, 0x64, 0, 0x33]]
+    ])
+  })
 })

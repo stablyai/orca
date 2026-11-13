@@ -67,6 +67,7 @@ export const emulatorApi = {
       deviceId: string
       config: boolean
       keyFrame: boolean
+      seed?: boolean
       bytes: ArrayBuffer
     }) => void
   ): (() => void) => {
@@ -77,6 +78,7 @@ export const emulatorApi = {
         deviceId: string
         config: boolean
         keyFrame: boolean
+        seed?: boolean
         bytes: ArrayBuffer
       }
     ) => callback(data)

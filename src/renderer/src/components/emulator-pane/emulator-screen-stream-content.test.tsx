@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
 
 type FrameListener = (data: { streamId: string; bytes: ArrayBuffer }) => void
@@ -12,6 +12,7 @@ type VideoFrameListener = (data: {
   deviceId: string
   config: boolean
   keyFrame: boolean
+  seed?: boolean
   bytes: ArrayBuffer
 }) => void
 
@@ -62,6 +63,7 @@ let originalCreateObjectURL: typeof URL.createObjectURL | undefined
 let originalRevokeObjectURL: typeof URL.revokeObjectURL | undefined
 let objectUrlCounter: number
 let streamCounter: number
+let drawImage: Mock
 
 beforeEach(() => {
   ;(
@@ -77,6 +79,13 @@ beforeEach(() => {
   stopFrameStream = vi.fn(async () => {})
   startVideoStream = vi.fn(async (args: { streamId: string }) => ({ streamId: args.streamId }))
   stopVideoStream = vi.fn(async () => {})
+  drawImage = vi.fn()
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+    const context: CanvasRenderingContext2D = Object.create(null)
+    context.drawImage = drawImage
+    context.clearRect = vi.fn()
+    return context
+  })
   vi.stubGlobal('VideoDecoder', FakeVideoDecoder)
   vi.stubGlobal(
     'EncodedVideoChunk',
@@ -179,14 +188,14 @@ async function renderStream(
   })
 }
 
-async function renderIosStream(onStreamError = vi.fn()): Promise<void> {
+async function renderIosStream(onStreamError = vi.fn(), onStreamSize = vi.fn()): Promise<void> {
   await act(async () => {
     root.render(
       <EmulatorScreenStreamContent
         deviceId={IOS_UDID}
         loading={false}
         onStreamError={onStreamError}
-        onStreamSize={vi.fn()}
+        onStreamSize={onStreamSize}
         previewUrl={IOS_PREVIEW_URL}
         showStream={true}
         streamError={false}
@@ -200,7 +209,10 @@ function videoStreamId(call: number): string {
   return startVideoStream.mock.calls[call][0].streamId
 }
 
-async function sendVideo(streamId: string, packet: 'config' | 'key' | 'delta'): Promise<void> {
+async function sendVideo(
+  streamId: string,
+  packet: 'config' | 'key' | 'delta' | 'seed'
+): Promise<void> {
   await act(async () => {
     for (const listener of videoFrameListeners) {
       listener({
@@ -208,6 +220,7 @@ async function sendVideo(streamId: string, packet: 'config' | 'key' | 'delta'): 
         deviceId: IOS_UDID,
         config: packet === 'config',
         keyFrame: packet === 'key',
+        seed: packet === 'seed',
         bytes: new Uint8Array([1, 0x64, 0x00, 0x33]).buffer
       })
     }
@@ -261,6 +274,46 @@ describe('EmulatorScreenStreamContent', () => {
     expect(decoder.configs[0]).toMatchObject({ codec: 'avc1.640033' })
     expect(decoder.chunks.map((chunk) => chunk.type)).toEqual(['key'])
     expect(container.querySelector('canvas')).not.toBeNull()
+  })
+
+  it('paints the JPEG seed and reports its size before H.264 arrives', async () => {
+    const seed = { width: 400, height: 800, close: vi.fn() }
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(seed))
+    const onStreamSize = vi.fn()
+    await renderIosStream(vi.fn(), onStreamSize)
+
+    await sendVideo(videoStreamId(0), 'seed')
+
+    expect(drawImage).toHaveBeenLastCalledWith(seed, 0, 0)
+    expect(container.querySelector('canvas')?.width).toBe(400)
+    expect(container.querySelector('canvas')?.height).toBe(800)
+    expect(onStreamSize).toHaveBeenLastCalledWith({ width: 400, height: 800 })
+    expect(seed.close).toHaveBeenCalledOnce()
+    await sendVideo(videoStreamId(0), 'config')
+    await sendVideo(videoStreamId(0), 'key')
+    expect(drawImage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ displayWidth: 1206, displayHeight: 2622 }),
+      0,
+      0
+    )
+  })
+
+  it('does not let a late JPEG seed paint over a decoded H.264 frame', async () => {
+    const seed = { width: 400, height: 800, close: vi.fn() }
+    const pending = Promise.withResolvers<typeof seed>()
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(() => pending.promise)
+    )
+    await renderIosStream()
+    await sendVideo(videoStreamId(0), 'seed')
+    await sendVideo(videoStreamId(0), 'config')
+    await sendVideo(videoStreamId(0), 'key')
+
+    await act(async () => pending.resolve(seed))
+
+    expect(drawImage).not.toHaveBeenCalledWith(seed, 0, 0)
+    expect(seed.close).toHaveBeenCalledOnce()
   })
 
   it('falls back to the iOS JPEG stream without reporting a disconnect when H.264 fails', async () => {
