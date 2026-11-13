@@ -18,6 +18,7 @@ import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-pr
 import { AgentSpinner } from './AgentSpinner'
 import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
+import { WorktreeRowRepo } from './WorktreeRowRepo'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
 import { WorktreeUnsavedName } from './WorktreeUnsavedName'
@@ -204,14 +205,12 @@ function WorktreeListRowComponent({
             ) : null}
             {/* Show repo identity only outside grouping/title-chip cases; Folder fallback matches desktop. */}
             {showRepoInMetaRow && (
-              <>
-                <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
-                {cardDetails.projectName && (
-                  <Text style={styles.repoName} numberOfLines={1}>
-                    {item.repo}
-                  </Text>
-                )}
-              </>
+              <WorktreeRowRepo
+                name={item.repo}
+                showName={cardDetails.projectName}
+                repoIcon={repoIcon}
+                color={repoColor}
+              />
             )}
             {cardDetails.identity && (
               <Text style={styles.branchName} numberOfLines={1}>
@@ -358,11 +357,6 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     marginTop: 2,
     gap: spacing.xs
-  },
-  repoName: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    maxWidth: 100
   },
   branchName: {
     fontSize: 11,

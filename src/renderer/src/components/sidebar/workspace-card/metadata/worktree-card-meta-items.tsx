@@ -26,8 +26,12 @@ export function WorktreeCardMetaRepoBadge({
           className={cn(
             'flex items-center gap-1.5 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60',
             // Why: keep a 6rem name floor (+1.625rem chrome) so the branch shrinks first; grow only into width the branch leaves free.
-            showName ? 'min-w-0 max-w-max shrink-0 grow basis-[7.625rem]' : 'shrink-0'
+            showName
+              ? 'min-w-0 max-w-max shrink-0 grow basis-[7.625rem]'
+              : 'shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring'
           )}
+          // Why: without the name, the tooltip is the only way to read it, so keyboard users must reach it.
+          {...(showName ? {} : { role: 'img', tabIndex: 0 })}
         >
           <RepoBadgeMark color={repo.badgeColor} />
           {showName && (

@@ -25,7 +25,12 @@ export function WorktreeCardRepoChip({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
+          className={cn(
+            'inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5',
+            !showName && 'outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          )}
+          // Why: without the name, the tooltip is the only way to read it, so keyboard users must reach it.
+          {...(showName ? {} : { role: 'img', tabIndex: 0 })}
           aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
             value0: repo.displayName
           })}
