@@ -1,4 +1,7 @@
-import type { HostedReviewProvider } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type {
+  HostedReviewInfo,
+  HostedReviewProvider
+} from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   resolveHostedReviewCreationProvider,
   type HostedReviewCreationProvider
@@ -63,4 +66,16 @@ export function localizedHostedReviewCopy(
     titleLabel: t('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
     providerName: t('auto.i18n.hostedReview.copy.c7d1e5f9a8', 'GitHub')
   }
+}
+
+/** Names one review the way its host does, e.g. "PR #412" or "MR #7". */
+export function hostedReviewNumberLabel(
+  review: Pick<HostedReviewInfo, 'provider' | 'number'>,
+  t: Translate = translate
+): string {
+  const { shortLabel } = localizedHostedReviewCopy(
+    resolveSupportedHostedReviewCopyProvider(review.provider),
+    t
+  )
+  return `${shortLabel} #${review.number}`
 }

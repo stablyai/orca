@@ -6,6 +6,10 @@ import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
+import {
+  isBranchSectionAutoCollapsed,
+  markBranchSectionToggledByUser
+} from '../listing/merged-branch-section-disclosure'
 
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 
@@ -17,10 +21,16 @@ function createDefaultCollapsedSections(): Set<string> {
 const collapsedSectionsByWorktree = new BoundedMap<string, Set<string>>({ maxEntries: 512 })
 
 function readCollapsedSections(worktreeId: string | null): Set<string> {
-  return (
-    (worktreeId ? collapsedSectionsByWorktree.get(worktreeId) : undefined) ??
-    createDefaultCollapsedSections()
-  )
+  const cached = worktreeId ? collapsedSectionsByWorktree.get(worktreeId) : undefined
+  if (cached) {
+    return cached
+  }
+  const sections = createDefaultCollapsedSections()
+  // The disclosure record outlives this cache, so an evicted automatic collapse stays collapsed.
+  if (worktreeId && isBranchSectionAutoCollapsed(worktreeId)) {
+    sections.add('branch')
+  }
+  return sections
 }
 
 export function useSourceControlPanelViewState({
@@ -86,6 +96,29 @@ export function useSourceControlPanelViewState({
       setCollapsedSections(next)
       if (activeWorktreeId) {
         collapsedSectionsByWorktree.set(activeWorktreeId, next)
+        if (section === 'branch') {
+          markBranchSectionToggledByUser(activeWorktreeId)
+        }
+      }
+    },
+    [activeWorktreeId, collapsedSections]
+  )
+
+  // Automatic disclosure leaves the user's toggle ownership untouched.
+  const setBranchSectionCollapsed = useCallback(
+    (collapsed: boolean) => {
+      if (collapsedSections.has('branch') === collapsed) {
+        return
+      }
+      const next = new Set(collapsedSections)
+      if (collapsed) {
+        next.add('branch')
+      } else {
+        next.delete('branch')
+      }
+      setCollapsedSections(next)
+      if (activeWorktreeId) {
+        collapsedSectionsByWorktree.set(activeWorktreeId, next)
       }
     },
     [activeWorktreeId, collapsedSections]
@@ -114,6 +147,7 @@ export function useSourceControlPanelViewState({
     isGitHistoryExpanded,
     isMac,
     setBaseRefDialogOpen,
+    setBranchSectionCollapsed,
     setFileListScrollElement,
     setFilterExpanded,
     setFilterQuery,

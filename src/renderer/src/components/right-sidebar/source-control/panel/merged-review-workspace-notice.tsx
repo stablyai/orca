@@ -3,10 +3,7 @@ import { GitMerge, LoaderCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  localizedHostedReviewCopy,
-  resolveSupportedHostedReviewCopyProvider
-} from '@/i18n/hosted-review-localized-copy'
+import { hostedReviewNumberLabel } from '@/i18n/hosted-review-localized-copy'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { resolveMergedReviewWorkspaceReadiness } from '../../../../../../shared/source-control/decisions/merged-review-workspace-readiness'
@@ -39,10 +36,7 @@ export function SourceControlMergedReviewNotice({
   if (!review || !readiness || !statusHeadOid) {
     return null
   }
-  const label = `${
-    localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(review.provider), t)
-      .shortLabel
-  } #${review.number}`
+  const label = hostedReviewNumberLabel(review, t)
   const canDelete = readiness.kind === 'safe-to-delete' && !worktree.isMainWorktree
 
   let message: string

@@ -13804,6 +13804,8 @@
             "aaf1451654": "Taslak {{value0}} Oluştur",
             "26511c22b4": "Oluşturuluyor...",
             "d7ae61269b": "Branch'e Commit Edildi",
+            "branchSectionMerged": "Merge edildi",
+            "branchSectionReviewMerged": "{{review}} merge edildi",
             "48a003c1b1": "Stage Edilen Değişiklikler",
             "d4ef4bafc5": "Değişiklikler",
             "9339382454": "Tümünü stage'den çıkar",

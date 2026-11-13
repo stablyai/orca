@@ -50,6 +50,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     hasUncommittedEntries,
     isResolvingConflictsWithAI,
     isAbortingOperation,
+    isBranchDiffEditorActive,
     isCheckingRecoveryAdmission,
     isCommitting,
     isExecutingBulk,
@@ -73,6 +74,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     revealInExplorer,
     selectedKeySet,
     setBaseRefDialogOpen,
+    setBranchSectionCollapsed,
     sourceControlAiActionsVisible,
     sourceControlViewMode,
     statusReadError,
@@ -92,6 +94,9 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   )
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
+  // Only a complete status read proves HEAD and the uncommitted count.
+  const statusHeadOid =
+    statusReadError === undefined && repositoryHuge === undefined ? model.activeGitStatusHead : null
   const showGenericEmptyState =
     statusReadError === undefined &&
     !hasUncommittedEntries &&
@@ -140,11 +145,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         <SourceControlMergedReviewNotice
           review={model.hostedReview}
           worktree={activeWorktree}
-          statusHeadOid={
-            statusReadError === undefined && repositoryHuge === undefined
-              ? model.activeGitStatusHead
-              : null
-          }
+          statusHeadOid={statusHeadOid}
           uncommittedCount={model.entries.length}
         />
       )}
@@ -232,6 +233,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           totalBranchEntryCount={branchEntries.length}
           collapsedSections={collapsedSections}
           toggleSection={toggleSection}
+          setBranchSectionCollapsed={setBranchSectionCollapsed}
+          review={model.isFolder ? null : model.hostedReview}
+          statusHeadOid={statusHeadOid}
+          uncommittedCount={model.entries.length}
+          isMainWorktree={activeWorktree.isMainWorktree}
+          isBranchDiffEditorActive={isBranchDiffEditorActive}
           sourceControlViewMode={sourceControlViewMode}
           visibleBranchTreeRows={visibleBranchTreeRows}
           fileListScrollElement={fileListScrollElement}

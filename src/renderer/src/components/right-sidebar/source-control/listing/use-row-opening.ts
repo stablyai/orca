@@ -96,6 +96,21 @@ export function useSourceControlRowOpening({
     () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
     [activeOpenAvailableRowKeys, activeOpenFileSignature]
   )
+  // Read the editor itself: open-row keys drop collapsed, filtered and older-compare rows.
+  const isBranchDiffEditorActive = useSourceControlState((s) => {
+    if (
+      !activeWorktreeId ||
+      s.activeTabTypeByWorktree?.[placementId ?? activeWorktreeId] !== 'editor'
+    ) {
+      return false
+    }
+    const activeFileId = s.activeFileIdByWorktree?.[placementId ?? activeWorktreeId]
+    const activeFile = activeFileId ? openFileIndex(s.openFiles).get(activeFileId) : undefined
+    return (
+      activeFile?.worktreeId === activeWorktreeId &&
+      (activeFile.diffSource === 'branch' || activeFile.diffSource === 'combined-branch')
+    )
+  })
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => {
@@ -161,5 +176,11 @@ export function useSourceControlRowOpening({
     ]
   )
 
-  return { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff }
+  return {
+    resolveSplitTargetGroupId,
+    activeOpenRowKeys,
+    isBranchDiffEditorActive,
+    handleOpenDiff,
+    openCommittedDiff
+  }
 }
