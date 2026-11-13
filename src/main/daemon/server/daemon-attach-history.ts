@@ -43,6 +43,7 @@ export function openAttachHistory(
   let line: string | undefined
   let encodedClaim: CreateOrAttachResult['agentSessionEnsure']
   // One absolute deadline for every admission, join, retry and settlement of this attach.
+  let deadline: AbortSignal | null = null
   let signal: AbortSignal | null = null
   const owned = (): PreparedDaemonReply | null => {
     const held = consumer
@@ -55,10 +56,8 @@ export function openAttachHistory(
       if (!journal || !session || journal.gapped) {
         return null
       }
-      signal ??= AbortSignal.any([
-        request.cancelSignal,
-        AbortSignal.timeout(ATTACH_HISTORY_IMAGE_DEADLINE_MS)
-      ])
+      deadline ??= AbortSignal.timeout(ATTACH_HISTORY_IMAGE_DEADLINE_MS)
+      signal ??= AbortSignal.any([request.cancelSignal, deadline])
       consumer ??= journals.reads.admit(signal)
       const reader = consumer
       if (!reader) {
@@ -102,10 +101,17 @@ export function openAttachHistory(
       }
     }
   }
+  // This attach's own history deadline leaves the healthy terminal in place: the same ID retries.
+  const ownDeadline = (error: unknown): boolean =>
+    deadline !== null &&
+    deadline.aborted &&
+    error === deadline.reason &&
+    !request.cancelSignal.aborted
   const fail = (error: unknown): unknown => {
     const reply = owned()
     consumer = null
-    const failure = error instanceof Error ? error : new TerminalHistoryUnavailableError()
+    const failure =
+      error instanceof Error && !ownDeadline(error) ? error : new TerminalHistoryUnavailableError()
     return reply ? withPreparedReply(failure, { release: reply.release }) : failure
   }
   const finish = async (

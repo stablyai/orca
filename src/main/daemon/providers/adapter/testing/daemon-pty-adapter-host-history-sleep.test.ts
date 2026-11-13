@@ -10,6 +10,7 @@ import type * as FileReaderModule from '../../../history/storage/terminal-histor
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import {
   createMockSubprocess,
+  ReplyHoldingAdapter,
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
@@ -101,7 +102,7 @@ async function startHost() {
     adapters.push(adapter)
     return adapter
   }
-  return { children, spawnCwds, open, historyPath, child: () => children.at(-1)! }
+  return { children, spawnCwds, open, options, historyPath, child: () => children.at(-1)! }
 }
 
 function existingFolder(): string {
@@ -258,6 +259,59 @@ describe('host Sleep through disk-only Wake', () => {
     expect(child()).not.toBe(slept)
     expect(slept.kill).toHaveBeenCalledTimes(1)
     expect(child().kill).not.toHaveBeenCalled()
+  }, 30_000)
+
+  // GH1207: a Sleep that had to list its unbound session ends only the process it listed.
+  it('refuses a Sleep whose listed session was replaced meanwhile, then Sleeps the successor', async () => {
+    const { open, options, child } = await startHost()
+    const sessionId = 'sleep-replaced-while-listed'
+    const first = open()
+    await first.spawn(request(sessionId))
+    const listed = child()
+    await first.disconnectOnly()
+    // A relaunched app that never mounted this pane: its Sleep must list it to learn its identity.
+    const relaunched = new ReplyHoldingAdapter(options)
+    adapters.push(relaunched)
+    const release = Promise.withResolvers<void>()
+    const held = relaunched.holdNextReply('listSessions', release.promise)
+    const stale = relaunched.shutdown(sessionId, { keepHistory: true })
+    await held
+    listed._simulateExit(0)
+    await relaunched.spawn(request(sessionId))
+    const successor = child()
+    release.resolve()
+
+    await expect(stale).rejects.toThrow()
+    expect(successor.kill).not.toHaveBeenCalled()
+    relaunched.write(sessionId, 'successor-input')
+    await waitFor(() => successor.write.mock.calls.some(([data]) => data === 'successor-input'))
+    exitAfterOutput(successor, 'SUCCESSOR_EXIT\r\n')
+    await relaunched.shutdown(sessionId, { keepHistory: true })
+    expect(successor.kill).toHaveBeenCalledTimes(1)
+  }, 30_000)
+
+  // GH1207: a bound Sleep waiting for its lock behind a same-ID start never ends that start.
+  it('refuses a bound Sleep whose session was replaced before its lock, then Sleeps the successor', async () => {
+    const { open, child } = await startHost()
+    const sessionId = 'sleep-replaced-before-lock'
+    const adapter = open()
+    await adapter.spawn(request(sessionId))
+    const replaced = child()
+    // One turn: the Sleep captures its binding, the process exits, and the next start takes the lock.
+    replaced._simulateExit(0)
+    const stale = adapter.shutdown(sessionId, { keepHistory: true })
+    const starting = adapter.spawn(request(sessionId))
+
+    await expect(stale).rejects.toThrow()
+    await starting
+    const successor = child()
+    expect(successor).not.toBe(replaced)
+    expect(successor.kill).not.toHaveBeenCalled()
+    adapter.write(sessionId, 'successor-input')
+    await waitFor(() => successor.write.mock.calls.some(([data]) => data === 'successor-input'))
+    exitAfterOutput(successor, '')
+    await adapter.shutdown(sessionId, { keepHistory: true })
+    expect(successor.kill).toHaveBeenCalledTimes(1)
   }, 30_000)
 
   // A source that keeps changing under a cold read is not absent, corrupt or a fresh start.

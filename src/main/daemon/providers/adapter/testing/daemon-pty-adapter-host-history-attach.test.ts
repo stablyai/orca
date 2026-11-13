@@ -289,6 +289,36 @@ describe('host-owned attach replies', () => {
     expect(deep!.oscLinks).toEqual(link)
   }, 30_000)
 
+  // GH1247: an attach past its own history deadline keeps the live terminal for a same-ID Retry.
+  // Real time: the attach waits out its existing 5 s internal history deadline.
+  it('refuses an attach past its own history deadline as retryable, then attaches the same process', async () => {
+    const child = createMockSubprocess()
+    let spawned = 0
+    const { open } = await startHostHistory(() => {
+      spawned += 1
+      return child
+    })
+    const sessionId = 'attach-own-deadline'
+    const original = await open().spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
+    child._simulateData('BASE_ROW\r\n')
+    const reconstruction = gateReconstruction(
+      harness!.server.host.historyJournals!.live(sessionId)!
+    )
+    const attacher = open()
+
+    await expect(attacher.spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })).rejects.toThrow(
+      'terminal_history_unavailable'
+    )
+    expect(spawned).toBe(1)
+    expect(child.kill).not.toHaveBeenCalled()
+    reconstruction.open()
+    const attached = await attacher.spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
+    expect(attached.incarnationId).toBe(original.incarnationId)
+    expect(spawned).toBe(1)
+    attacher.write(sessionId, 'typed-after-retry')
+    await waitFor(() => child.write.mock.calls.some(([data]) => data === 'typed-after-retry'))
+  }, 30_000)
+
   // The joined image is for an older cut; the attach retries at the new one before detaching.
   it('retries a joined attach whose live cut moved, with its old viewer kept until then', async () => {
     const child = createMockSubprocess()

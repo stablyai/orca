@@ -192,9 +192,14 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
   })
 }
 
-/** The caller's own remaining budget, never longer than this request may wait for its reply. */
+/**
+ * The caller's own remaining budget in whole milliseconds, never longer than this request may
+ * wait for its reply; rounding down never grants time the caller does not have.
+ */
 function remainingBudget(requested: unknown, timeoutMs: number): number {
-  return typeof requested === 'number' && Number.isFinite(requested)
-    ? Math.min(requested, timeoutMs)
-    : timeoutMs
+  return Math.floor(
+    typeof requested === 'number' && Number.isFinite(requested)
+      ? Math.min(requested, timeoutMs)
+      : timeoutMs
+  )
 }

@@ -22,14 +22,9 @@ export async function flushDaemonHistory(
   payload: FlushHistoryRequest['payload'],
   disconnected: AbortSignal
 ): Promise<FlushHistoryResult> {
-  const budget = payload.remainingBudgetMs
   const signal = AbortSignal.any([
     disconnected,
-    AbortSignal.timeout(
-      typeof budget === 'number' && Number.isFinite(budget)
-        ? Math.max(1, Math.min(FLUSH_HISTORY_BUDGET_MS, budget))
-        : FLUSH_HISTORY_BUDGET_MS
-    )
+    historyBudgetSignal(payload.remainingBudgetMs, FLUSH_HISTORY_BUDGET_MS)
   ])
   const { sessionId, expectedIncarnationId: expected, intent } = payload
   const journals = host.historyJournals
@@ -109,7 +104,11 @@ export async function flushDaemonHistory(
       immediate: payload.immediate === true,
       onAccepted: () => journal.authorizeSleep(operation)
     },
-    { session, kill: (id, options) => host.kill(id, options) }
+    {
+      session,
+      teardownTracked: () => host.sessionTeardown.isTracked(session),
+      kill: (id, options) => host.kill(id, options)
+    }
   )
   if (!termination.accepted) {
     journal.refuseSleep(operation, termination.reason)
@@ -145,6 +144,22 @@ function failed(
   incarnationId: string
 ): Unavailable {
   return unavailable(failure?.phase ?? 'preflight', failure?.reason ?? 'gap', incarnationId)
+}
+
+/**
+ * A request's remaining budget as its deadline: whole milliseconds within `maxMs`. A budget with
+ * under one millisecond left is already expired, so it starts no work.
+ */
+export function historyBudgetSignal(budget: unknown, maxMs: number): AbortSignal {
+  const ms =
+    typeof budget === 'number' && Number.isFinite(budget)
+      ? Math.floor(Math.min(maxMs, budget))
+      : maxMs
+  return ms >= 1
+    ? AbortSignal.timeout(ms)
+    : AbortSignal.abort(
+        new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+      )
 }
 
 function abortReason(signal: AbortSignal): 'canceled' | 'deadline' {

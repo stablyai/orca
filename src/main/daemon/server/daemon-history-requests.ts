@@ -5,7 +5,7 @@ import { recordDaemonStreamBacklogEvent } from '../transport/stream/daemon-strea
 import type { GetSnapshotRequest, GetSnapshotResult } from '../protocol/daemon-rpc-contract'
 import type { FlushHistoryRequest, FlushHistoryResult } from '../protocol/daemon-history-protocol'
 import type { TerminalHistoryJournals } from '../history/journal/terminal-history-journals'
-import { flushDaemonHistory } from './daemon-history-flush'
+import { flushDaemonHistory, historyBudgetSignal } from './daemon-history-flush'
 import { resolveDaemonSessionScrollbackRows } from '../sessions/daemon-session-scrollback-window'
 import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
 import { ABANDONED_REPLY, withPreparedReply } from './daemon-reply-obligation'
@@ -44,18 +44,16 @@ function answerWithin(
     typeof requested === 'number' && Number.isFinite(requested)
       ? Math.max(0, Math.min(50_000, Math.floor(requested)))
       : undefined
-  const budget = request.payload.remainingBudgetMs
-  const budgetMs =
-    typeof budget === 'number' && Number.isFinite(budget)
-      ? Math.max(1, Math.min(DEEP_SNAPSHOT_BUDGET_MS, budget))
-      : DEEP_SNAPSHOT_BUDGET_MS
   return host.historyJournals
     ? readDaemonHistorySnapshot(
         host,
         host.historyJournals,
         {
           id: request.id,
-          signal: AbortSignal.any([disconnected, AbortSignal.timeout(budgetMs)])
+          signal: AbortSignal.any([
+            disconnected,
+            historyBudgetSignal(request.payload.remainingBudgetMs, DEEP_SNAPSHOT_BUDGET_MS)
+          ])
         },
         { ...request.payload, scrollbackRows }
       )

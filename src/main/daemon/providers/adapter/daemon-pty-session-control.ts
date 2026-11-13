@@ -10,12 +10,12 @@ import { DaemonPtySessionInput } from './daemon-pty-session-input'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
 import { readDaemonSleepFolder } from './daemon-live-sleep-cwd'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
-import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
 import * as unlistedSession from '../routing/daemon-unlisted-session'
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
-import type { ShutdownOptions } from './daemon-pty-host-history'
-import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
+import type { HostHistoryBinding, ShutdownOptions } from './daemon-pty-host-history'
+import type { InventoryRequest } from './daemon-pty-inventory-observation'
+import { sleepHostTarget } from './daemon-pty-host-sleep'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
@@ -26,7 +26,16 @@ const MAX_TOMBSTONES = 1000
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   protected abstract adoptListedSessionForSleep(
     sessionId: string,
-    deadlineMs?: number
+    deadlineMs: number | undefined,
+    observation: InventoryRequest,
+    captured: HostHistoryBinding | undefined
+  ): Promise<HostHistoryBinding | undefined>
+
+  /** A legacy Sleep's final checkpoint and cold-restore cache; refuses before the kill if unsaved. */
+  protected abstract saveLegacySleepHistory(
+    id: string,
+    opts: ShutdownOptions,
+    sleepCwd: string | null
   ): Promise<void>
 
   async attach(id: string): Promise<PtySpawnResult> {
@@ -124,11 +133,35 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       }
       return
     }
+    // Before any await: this Sleep ends only the binding it began with, never one installed while
+    // it waited, and the observation records every same-ID spawn, exit or reconnect meanwhile.
+    const observation = this.ptyInventory.begin()
+    const captured = this.hostHistory.enabled ? this.hostHistory.get(id) : undefined
     const shutdown = Promise.resolve().then(async () => {
-      // Outside the spawn lock, which adopting the session's history takes itself.
-      await this.ensureConnected(opts.deadlineMs)
-      await this.adoptListedSessionForSleep(id, opts.deadlineMs).catch(() => {})
-      await this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
+      try {
+        // Outside the spawn lock, which adopting the session's history takes itself.
+        await this.ensureConnected(opts.deadlineMs)
+        let binding = captured
+        try {
+          binding = await this.adoptListedSessionForSleep(
+            id,
+            opts.deadlineMs,
+            observation,
+            captured
+          )
+        } catch (error) {
+          // A superseded target refuses this Sleep; other adoption failures keep their old policy.
+          if (error instanceof FinalCheckpointWaitExpiredError) {
+            throw error
+          }
+        }
+        const sleepTarget = { binding, observation }
+        await this.withHistorySpawnLock(id, () =>
+          this.shutdownWithHistoryLock(id, { ...opts, sleepTarget })
+        )
+      } finally {
+        this.ptyInventory.end(observation)
+      }
     })
     this.keepHistoryShutdowns.add(shutdown)
     try {
@@ -143,69 +176,29 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     await this.ensureConnected(opts.deadlineMs)
     // Sleep may precede the first periodic checkpoint; persist the screen before killing.
     if (opts.keepHistory) {
-      // Captured before the probe: only this exact binding's process may end or be cleaned up.
-      const binding = this.hostHistory.enabled ? this.hostHistory.get(id) : undefined
-      const sleepCwd = await readDaemonSleepFolder(this.client, id, {
-        wslDistro: this.wslDistrosBySessionId.get(id),
-        paneKey: this.wslPaneKeysBySessionId.get(id),
-        live: this.activeSessionIds.has(id),
-        deadlineMs: opts.deadlineMs
-      })
+      const probeFolder = () =>
+        readDaemonSleepFolder(this.client, id, {
+          wslDistro: this.wslDistrosBySessionId.get(id),
+          paneKey: this.wslPaneKeysBySessionId.get(id),
+          live: this.activeSessionIds.has(id),
+          deadlineMs: opts.deadlineMs
+        })
       if (this.hostHistory.enabled) {
-        // The daemon ends this exact process itself; no second kill, no main readback.
-        const sleep = { ...opts, cwd: sleepCwd }
-        const slept = await this.hostHistory.finalizeSleep(this.client, id, binding, sleep)
-        if (!slept) {
-          throw new FinalCheckpointWaitExpiredError(id)
-        }
+        // Only the binding this Sleep began with (or adopted for it) may end.
+        const slept = await sleepHostTarget(
+          id,
+          opts.sleepTarget,
+          {
+            client: this.client,
+            bindings: this.hostHistory,
+            inventory: this.ptyInventory,
+            probeFolder
+          },
+          opts
+        )
         return this.completeShutdownWithHistoryLock(id, opts, slept)
       }
-      const committed = await this.runExclusiveCheckpoint(
-        async () => {
-          // Set inside: a caller past its deadline leaves this checkpoint running without it.
-          if (sleepCwd) {
-            this.probedShellCwds.set(id, sleepCwd)
-          }
-          try {
-            await this.checkpointSessions([id], { final: true, teardown: true })
-          } finally {
-            this.probedShellCwds.delete(id)
-          }
-        },
-        { callerDeadlineMs: opts.deadlineMs }
-      )
-      // Caller timeout leaves the checkpoint running; preserve the live PTY until recovery data is verified.
-      if (!committed) {
-        throw new FinalCheckpointWaitExpiredError(id)
-      }
-      const wslDistro = this.wslDistrosBySessionId.get(id)
-      const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
-      const detected = detection?.status === 'restored' ? detection.restoreInfo : null
-      const restoreInfo = detected
-        ? {
-            ...detected,
-            cwd:
-              normalizeWslColdRestoreCwd({
-                recoveredCwd: detected.cwd,
-                requestedCwd: this.initialCwds.get(id) ?? resolveSafePtyDefaultCwd(),
-                wslDistro
-              }) ?? ''
-          }
-        : null
-      const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
-      const unreadable =
-        detection?.status === 'unreadable' ||
-        (detection?.status === 'restored' && detection.hasUnreadableRecovery)
-      if (coldRestore) {
-        this.coldRestoreCache.set(id, coldRestore)
-        if (this.coldRestoreCache.has(id)) {
-          this.sleepRestoreSessionIds.add(id)
-        }
-        // Intentional sleep keeps the final checkpoint authoritative; physical exit must not mark history clean.
-        this.historyManager?.suspendSession(id)
-      } else if (unreadable) {
-        this.historyManager?.suspendSession(id)
-      }
+      await this.saveLegacySleepHistory(id, opts, await probeFolder())
     }
     try {
       await this.client.request(

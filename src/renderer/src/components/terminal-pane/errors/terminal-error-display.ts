@@ -148,9 +148,16 @@ export function isTerminalHistoryUnavailableError(error: string): boolean {
   )
 }
 
-/** Reattach failures that kept the saved session, where Retry asks the same terminal again. */
+/**
+ * Failures that kept the saved session, where Retry asks again. Each line may come from either
+ * recoverable family (a refused start before creation included), as one pane's Retries accumulate.
+ */
 export function isReattachRetryError(error: string): boolean {
-  return isPaneOwnerRecoveryError(error) || isTerminalHistoryUnavailableError(error)
+  const lines = error.split('\n').filter((line) => line.length > 0)
+  return (
+    lines.length > 0 &&
+    lines.every((line) => isPaneOwnerRecoveryError(line) || isTerminalHistoryUnavailableError(line))
+  )
 }
 
 function humanizeUnreattachableSession(error: string, t: Translate = translate): string {

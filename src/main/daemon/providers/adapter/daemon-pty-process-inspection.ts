@@ -18,7 +18,10 @@ import {
   clientOnlyUnverifiableInspection
 } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
-import { awaitHistoryAdmissionReady } from './daemon-pty-host-history'
+import { awaitHistoryAdmissionReady, type HostHistoryBinding } from './daemon-pty-host-history'
+import type { InventoryRequest } from './daemon-pty-inventory-observation'
+import { bindListedHostSession } from './daemon-pty-host-sleep'
+import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Detached daemon PTYs can host agents; cleanup must not treat every foreground process as an idle shell.
@@ -125,39 +128,51 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     killed: string[]
   }> {
     await this.ensureConnected()
-    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+    // Begun before the inventory: a session spawned, exited or reconnected since is not adopted from it.
+    const observation = this.ptyInventory.begin()
+    try {
+      const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
 
-    const alive: string[] = []
-    const killed: string[] = []
+      const alive: string[] = []
+      const killed: string[] = []
 
-    for (const session of result.sessions) {
-      if (!session.isAlive) {
-        continue
-      }
-      // Unminted IDs cannot establish workspace membership and are treated as orphans.
-      const { worktreeId } = parsePtySessionId(session.sessionId)
-
-      if (worktreeId === null || !validWorktreeIds.has(worktreeId)) {
-        try {
-          await this.client.request('kill', { sessionId: session.sessionId })
-        } catch {
-          /* Orphan cleanup is best-effort. */
+      for (const session of result.sessions) {
+        if (!session.isAlive) {
+          continue
         }
-        killed.push(session.sessionId)
-      } else {
-        alive.push(session.sessionId)
-        await this.adoptLiveSession(session)
-      }
-    }
+        // Unminted IDs cannot establish workspace membership and are treated as orphans.
+        const { worktreeId } = parsePtySessionId(session.sessionId)
 
-    return { alive, killed }
+        if (worktreeId === null || !validWorktreeIds.has(worktreeId)) {
+          try {
+            await this.client.request('kill', { sessionId: session.sessionId })
+          } catch {
+            /* Orphan cleanup is best-effort. */
+          }
+          killed.push(session.sessionId)
+        } else {
+          alive.push(session.sessionId)
+          await this.adoptLiveSession(session, { observation })
+          bindListedHostSession(this.hostHistory, this.ptyInventory, observation, session)
+        }
+      }
+
+      return { alive, killed }
+    } finally {
+      this.ptyInventory.end(observation)
+    }
   }
 
-  /** Recover daemon-only ownership and WSL pane keys before Sleep checkpoints a reopened session. */
+  /**
+   * Recover daemon-only ownership and WSL pane keys before Sleep checkpoints a reopened session.
+   * Returns this Sleep's target: the binding it began with, or the one this inventory installed.
+   */
   protected async adoptListedSessionForSleep(
     sessionId: string,
-    deadlineMs?: number
-  ): Promise<void> {
+    deadlineMs: number | undefined,
+    observation: InventoryRequest,
+    captured: HostHistoryBinding | undefined
+  ): Promise<HostHistoryBinding | undefined> {
     // Keep seed-failed sessions suspended so a fresh screen cannot overwrite their restore history.
     const needsAdoption =
       !!this.historyManager &&
@@ -169,10 +184,9 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       !this.wslPaneKeysBySessionId.has(sessionId) &&
       this.wslDistrosBySessionId.get(sessionId) !== undefined
     // A host Sleep ends one exact incarnation; a listed-only session still needs its identity.
-    const needsHostBinding =
-      this.hostHistory.enabled && !this.hostHistory.get(sessionId)?.incarnationId
+    const needsHostBinding = this.hostHistory.enabled && !captured?.incarnationId
     if (!needsAdoption && !needsPaneKey && !needsHostBinding) {
-      return
+      return captured
     }
     // Captured before the inventory, lock and replay awaits that precede any writer install.
     const admission = needsAdoption ? this.historyManager?.hold(sessionId) : undefined
@@ -185,19 +199,36 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       const session = result.sessions.find(
         (entry) => entry.sessionId === sessionId && entry.isAlive
       )
+      // What this inventory listed applies only while nothing newer replaced the session's owner.
+      const applies =
+        session !== undefined &&
+        this.hostHistory.get(sessionId) === captured &&
+        this.ptyInventory.stillApplies(observation, sessionId, session.incarnationId)
       if (session && needsAdoption) {
-        await this.adoptLiveSession(session, { activeOnlyIfReconciled: true }, admission)
-      } else if (session?.wslDistro && session.paneKey) {
+        await this.adoptLiveSession(
+          session,
+          { activeOnlyIfReconciled: true, observation },
+          admission
+        )
+      } else if (applies && session?.wslDistro && session.paneKey) {
         this.wslDistrosBySessionId.set(sessionId, session.wslDistro)
         this.wslPaneKeysBySessionId.set(sessionId, session.paneKey)
       }
-      if (session?.incarnationId && needsHostBinding) {
-        this.hostHistory.bind(sessionId, {
-          incarnationId: session.incarnationId,
-          admission: undefined,
-          outcome: undefined
-        })
+      if (!needsHostBinding || !session?.incarnationId) {
+        return captured
       }
+      if (!applies) {
+        // A successor took the ID while this listed it: never adopt or probe it for this Sleep.
+        throw new FinalCheckpointWaitExpiredError(sessionId)
+      }
+      // Same admission as the captured binding (if any), so binding releases no claim.
+      const binding = {
+        incarnationId: session.incarnationId,
+        admission: captured?.admission,
+        outcome: captured?.outcome
+      }
+      this.hostHistory.bind(sessionId, binding)
+      return binding
     } finally {
       this.historyManager?.drop(sessionId, admission)
     }
@@ -205,7 +236,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
 
   private async adoptLiveSession(
     session: SessionInfo,
-    opts: { activeOnlyIfReconciled?: boolean } = {},
+    opts: { activeOnlyIfReconciled?: boolean; observation?: InventoryRequest } = {},
     captured?: HistoryWriterAdmission
   ): Promise<void> {
     // A retired manager's hold is permanently closed, so a late inventory cannot reacquire the ID.
@@ -221,15 +252,20 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
 
   private async adoptLiveSessionWith(
     session: SessionInfo,
-    opts: { activeOnlyIfReconciled?: boolean },
+    opts: { activeOnlyIfReconciled?: boolean; observation?: InventoryRequest },
     admission: HistoryWriterAdmission | undefined
   ): Promise<void> {
     // Include background sessions in the final disconnect checkpoint.
     if (!opts.activeOnlyIfReconciled) {
       this.activeSessionIds.add(session.sessionId)
     }
-    // Sleep reads a WSL shell's folder by what only the daemon still knows about the pane.
-    if (session.wslDistro) {
+    // Sleep reads a WSL shell's folder by what only the daemon still knows about the pane; a newer
+    // spawn's routing wins over what an older inventory listed.
+    if (
+      session.wslDistro &&
+      (!opts.observation ||
+        this.ptyInventory.stillApplies(opts.observation, session.sessionId, session.incarnationId))
+    ) {
       this.wslDistrosBySessionId.set(session.sessionId, session.wslDistro)
       if (session.paneKey) {
         this.wslPaneKeysBySessionId.set(session.sessionId, session.paneKey)

@@ -32,9 +32,7 @@ import type { TakePendingOutputResult } from '../../protocol/daemon-rpc-contract
 import { ColdRestorePayloadCache } from '../../history/restoration/cold-restore-payload-cache'
 import { HistoryManager } from '../../history/storage/history-manager'
 import type { HistoryCheckpointResult } from '../../history/storage/terminal-history-manager-options'
-import type { HistoryRecoveryFreeze } from '../../history/storage/terminal-history-recovery-quarantine'
 import { HistoryReader } from '../../history/restoration/history-reader'
-import type { HistoryWriterAdmission } from '../../history/storage/terminal-history-writer-handoff'
 import { DaemonPtyHostHistoryBindings } from './daemon-pty-host-history'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
 import type {
@@ -52,13 +50,7 @@ export type PendingDaemonSpawnOperation = {
   ignoreNextExit: boolean
 }
 
-export type HistoryRecoveryContext = {
-  /** Captured once at spawn entry, before any lock, retry or recovery await. */
-  admission: HistoryWriterAdmission | undefined
-  freeze: HistoryRecoveryFreeze | null
-  unreadableSessionId: string | null
-  identityChanged: boolean
-}
+export type { HistoryRecoveryContext } from './daemon-pty-host-history'
 
 export type SnapshotCheckpointResult = {
   checkpoint: HistoryCheckpointResult

@@ -52,7 +52,8 @@ export class TerminalHost {
   private sessions = new Map<string, Session>()
   // Serializes creates for one id across async spawn validation.
   private pendingCreations = new Map<string, PendingTerminalCreation>()
-  private sessionTeardown = new TerminalSessionTeardown(this.sessions)
+  // Read by Sleep: a teardown already tracking a Session must not be joined and escalated.
+  readonly sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones: TerminalHostTombstones
   private readonly spawnOptions: Pick<TerminalHostOptions, 'spawnSubprocess' | 'spawnGate'>
   private onSessionReaped: TerminalHostOptions['onSessionReaped']

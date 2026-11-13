@@ -12,6 +12,7 @@ import {
 } from '../../providers/adapter/testing/daemon-pty-adapter-test-harness'
 import { answerDaemonControlRequest } from '../daemon-control-request'
 import { answerDaemonHistoryRequest } from '../daemon-history-requests'
+import { flushDaemonHistory } from '../daemon-history-flush'
 import { HISTORY_READ_CONSUMERS } from '../../history/journal/terminal-history-read-admission'
 import type { GetSnapshotRequest } from '../../protocol/daemon-rpc-contract'
 import { requestDaemonRpc } from '../../transport/client/daemon-client-rpc-request'
@@ -140,6 +141,56 @@ describe('deep-history replies through the actual outer writer', () => {
     adapter!.write(spawned.id, 'still-typing')
     await waitFor(() => child().write.mock.calls.some(([data]) => data === 'still-typing'))
   }, 30_000)
+
+  // GH1279: a caller's budget is whole milliseconds at each receiver, so a fraction is not refused.
+  it('serves a fractional budget at both receivers and starts nothing on an exhausted one', async () => {
+    const { spawned, writes, ask } = await openDeepOwnership()
+
+    await ask({ remainingBudgetMs: 40.5 })
+    expect(JSON.parse(writes.at(-1)!.line)).toMatchObject({
+      ok: true,
+      payload: { history: { kind: expect.stringMatching(/^(origin|fold)$/) } }
+    })
+    writes.at(-1)!.settle()
+    await ask({ remainingBudgetMs: 0.4 })
+    expect(JSON.parse(writes.at(-1)!.line)).toMatchObject({
+      ok: true,
+      payload: { snapshot: null, history: { kind: 'unavailable' } }
+    })
+    writes.at(-1)!.settle()
+
+    const committed = await flushDaemonHistory(
+      harness!.server.host,
+      {
+        sessionId: spawned.id,
+        intent: 'commit',
+        expectedIncarnationId: spawned.incarnationId!,
+        remainingBudgetMs: 40.5
+      },
+      new AbortController().signal
+    )
+    expect(committed).toMatchObject({ status: 'committed', incarnationId: spawned.incarnationId })
+  }, 30_000)
+
+  // GH1279: the stamped budget never grants a fraction of a millisecond the caller does not have.
+  it('stamps whole milliseconds of the caller budget on a deep snapshot request', async () => {
+    const lines: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the request path only writes the encoded line.
+    const socket = { write: (line: string) => lines.push(line) } as unknown as Socket
+    const reply = requestDaemonRpc({
+      socket,
+      pendingRequests: new DaemonPendingRequests(),
+      id: 'fractional',
+      type: 'getSnapshot',
+      payload: { sessionId: 'deep-owned', scrollbackRows: 5000, remainingBudgetMs: 12.7 },
+      timeoutMs: 40.5,
+      unmatchedCancelGraceMs: 0,
+      onCreateCancellationFailure: () => {},
+      settleCreateCancellation: async () => ({ canceled: false })
+    })
+    await expect(reply).rejects.toThrow()
+    expect(JSON.parse(lines[0]!).payload.remainingBudgetMs).toBe(12)
+  })
 
   // The caller's remaining wait travels with a deep read, so the daemon stops by the same time.
   it('sends the caller budget with a deep snapshot request', async () => {

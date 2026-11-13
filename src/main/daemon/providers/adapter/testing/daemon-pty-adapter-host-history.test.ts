@@ -18,10 +18,18 @@ import { decodeLogHeader } from '../../../history/storage/terminal-history-log'
 import { HistoryReader } from '../../../history/restoration/history-reader'
 import {
   createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
   ReplyHoldingAdapter,
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
+
+/** A legacy adapter's own periodic checkpoint pass, which has no public trigger. */
+class PeriodicCheckpointAdapter extends DaemonPtyAdapter {
+  checkpointNow(ids: string[]): Promise<unknown> {
+    return this.checkpointSessions(ids, { final: false })
+  }
+}
 
 let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 let adapter: DaemonPtyAdapter | undefined
@@ -297,6 +305,83 @@ describe('daemon-owned terminal history', () => {
     },
     30_000
   )
+
+  // GH1226: a start reads its seed only once the predecessor's already-issued write has landed.
+  // Real time: the start waits out the existing 10 s readiness deadline before refusing.
+  it('reads no seed before the predecessor write lands, then seeds every row once', async () => {
+    let spawned = 0
+    harness = await startDaemonAdapterHarness(
+      () => {
+        spawned += 1
+        return createMockSubprocess()
+      },
+      {},
+      { hostHistory: true }
+    )
+    const root = join(harness.dir, 'history')
+    const legacyChild = createMockSubprocess()
+    const legacy = await startDaemonAdapterHarness(() => legacyChild, {
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION
+    })
+    const predecessor = new PeriodicCheckpointAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath: legacy.socketPath,
+      tokenPath: legacy.tokenPath,
+      historyPath: root
+    })
+    try {
+      const request = { sessionId: 'host-history-seed-ready', cols: 80, rows: 24, cwd: '/tmp' }
+      await predecessor.spawn(request)
+      legacyChild._simulateData('OLD_ROW\r\n')
+      await predecessor.checkpointNow([request.sessionId])
+      // The predecessor's next append is issued and held on disk.
+      const appendFile = fsPromises.appendFile
+      const appending = Promise.withResolvers<void>()
+      const landed = Promise.withResolvers<void>()
+      let held = false
+      vi.spyOn(fsPromises, 'appendFile').mockImplementation(async (...args) => {
+        if (!held) {
+          held = true
+          appending.resolve()
+          await landed.promise
+        }
+        return appendFile(...args)
+      })
+      legacyChild._simulateData('TAIL_ROW\r\n')
+      const tail = predecessor.checkpointNow([request.sessionId])
+      await appending.promise
+      // A seed read lets the held write land only after the read itself completed.
+      const read = HistoryReader.prototype.detectColdRestoreState
+      vi.spyOn(HistoryReader.prototype, 'detectColdRestoreState').mockImplementation(
+        async function (this: HistoryReader, ...args) {
+          const detection = await read.apply(this, args)
+          landed.resolve()
+          return detection
+        }
+      )
+      adapter = new DaemonPtyAdapter({
+        socketPath: harness.socketPath,
+        tokenPath: harness.tokenPath,
+        historyPath: root
+      })
+
+      await expect(adapter.spawn(request)).rejects.toThrow('terminal_history_unavailable')
+      expect(spawned).toBe(0)
+      landed.resolve()
+      await tail
+      const woken = await adapter.spawn(request)
+      expect(spawned).toBe(1)
+      const scrollback = woken.coldRestore?.scrollback ?? ''
+      expect(scrollback.split('OLD_ROW')).toHaveLength(2)
+      expect(scrollback.split('TAIL_ROW')).toHaveLength(2)
+    } finally {
+      vi.restoreAllMocks()
+      predecessor.dispose()
+      legacy.adapter.dispose()
+      await legacy.server.shutdown()
+      rmSync(legacy.dir, { recursive: true, force: true })
+    }
+  }, 30_000)
 
   // A start whose process never existed used to leave an ended predecessor marked restorable.
   it('restores the clean-ended predecessor when the fresh process never forked', async () => {

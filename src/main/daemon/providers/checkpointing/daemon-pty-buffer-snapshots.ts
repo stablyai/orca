@@ -8,7 +8,10 @@ import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-sc
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import type { CapturedHistoryWriter } from '../../history/storage/history-manager'
-import { readHostHistorySnapshot } from '../adapter/daemon-pty-host-history'
+import { readHostHistorySnapshot, type ShutdownOptions } from '../adapter/daemon-pty-host-history'
+import { FinalCheckpointWaitExpiredError } from '../adapter/daemon-pty-lifecycle-errors'
+import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
+import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
@@ -193,6 +196,62 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     } catch (error) {
       console.warn('[history] durable snapshot overlay failed:', sessionId, error)
       return liveSnapshot
+    }
+  }
+
+  protected async saveLegacySleepHistory(
+    id: string,
+    opts: ShutdownOptions,
+    sleepCwd: string | null
+  ): Promise<void> {
+    let saved = false
+    const committed = await this.runExclusiveCheckpoint(
+      async () => {
+        // Set inside: a caller past its deadline leaves this checkpoint running without it.
+        if (sleepCwd) {
+          this.probedShellCwds.set(id, sleepCwd)
+        }
+        try {
+          const completed = await this.checkpointSessions([id], { final: true, teardown: true })
+          saved = completed.has(id)
+        } finally {
+          this.probedShellCwds.delete(id)
+        }
+      },
+      { callerDeadlineMs: opts.deadlineMs }
+    )
+    // Caller timeout leaves the checkpoint running, and a deferred final save (its source kept
+    // changing) saved nothing new: either way the live PTY stays until recovery data is saved.
+    if (!committed || (this.historyManager && !saved)) {
+      throw new FinalCheckpointWaitExpiredError(id)
+    }
+    const wslDistro = this.wslDistrosBySessionId.get(id)
+    const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
+    const detected = detection?.status === 'restored' ? detection.restoreInfo : null
+    const restoreInfo = detected
+      ? {
+          ...detected,
+          cwd:
+            normalizeWslColdRestoreCwd({
+              recoveredCwd: detected.cwd,
+              requestedCwd: this.initialCwds.get(id) ?? resolveSafePtyDefaultCwd(),
+              wslDistro
+            }) ?? ''
+        }
+      : null
+    const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
+    const unreadable =
+      detection?.status === 'unreadable' ||
+      (detection?.status === 'restored' && detection.hasUnreadableRecovery)
+    if (coldRestore) {
+      this.coldRestoreCache.set(id, coldRestore)
+      if (this.coldRestoreCache.has(id)) {
+        this.sleepRestoreSessionIds.add(id)
+      }
+      // Intentional sleep keeps the final checkpoint authoritative; physical exit must not mark history clean.
+      this.historyManager?.suspendSession(id)
+    } else if (unreadable) {
+      this.historyManager?.suspendSession(id)
     }
   }
 

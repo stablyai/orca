@@ -4,6 +4,7 @@ import { DaemonPtyCheckpointScheduler } from './daemon-pty-checkpoint-scheduler'
 import type { SnapshotCheckpointResult } from '../adapter/daemon-pty-runtime-state'
 import type { GetSnapshotResult, TakePendingOutputResult } from '../../protocol/daemon-rpc-contract'
 import type { CapturedHistoryWriter } from '../../history/storage/history-manager'
+import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
 
 export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpointScheduler {
   // Defer without appending so cooldown preserves a consistent log prefix; keep the session dirty for retry.
@@ -107,6 +108,36 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       writer?: CapturedHistoryWriter | null
     }
   ): Promise<SnapshotCheckpointResult> {
+    // The complete saved source comes first, so a source that keeps changing consumes no output.
+    let source: { restoreInfo: ColdRestoreInfo | null } | null = null
+    const historyReader = this.historyReader
+    if (this.historyManager && historyReader && opts.forceLiveSnapshot !== true) {
+      try {
+        source = {
+          restoreInfo: await historyReader.detectColdRestore(sessionId, {
+            ignoreCleanEnd: true,
+            wslDistro: this.wslDistrosBySessionId.get(sessionId)
+          })
+        }
+      } catch (error) {
+        if (error instanceof TerminalHistoryUnavailableError) {
+          // Nothing drained: the daemon's ordered queue keeps every record for the next full pass.
+          this.sessionsNeedingFullCheckpoint.add(sessionId)
+          this.markSessionDirty(sessionId)
+          return { checkpoint: 'retryable', snapshot: null }
+        }
+        console.warn('[history] durable history rebuild failed:', sessionId, error)
+      }
+      // A writer replaced during the read no longer owns this checkpoint; its successor drains.
+      const writer =
+        opts.writer === undefined ? this.historyManager.captureWriter(sessionId) : opts.writer
+      if (!writer?.writer.admitted) {
+        this.sessionsNeedingFullCheckpoint.delete(sessionId)
+        this.sessionsNeedingLiveCheckpoint.delete(sessionId)
+        this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
+        return { checkpoint: 'unavailable', snapshot: null }
+      }
+    }
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
       sessionId,
       includeSnapshot: true,
@@ -115,32 +146,24 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     if (take?.snapshot && this.historyManager) {
       // Missing drainedRecords on older daemons cannot mean empty: snapshotting still drained their queue.
       // Teardown records repeat held bytes already emitted; use drainedRecords to avoid replaying them twice.
-      let durable: NonNullable<TakePendingOutputResult['snapshot']>
-      try {
-        durable =
-          take.drainedRecords === undefined || opts.forceLiveSnapshot === true || take.overflowed
-            ? take.snapshot
-            : await this.buildDurableHistorySnapshot(
-                sessionId,
-                take.snapshot,
-                take.drainedRecords,
-                {
-                  isFirstTake: take.seq === 1,
-                  ...(opts.requireContinuityProof === true
-                    ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
-                    : {})
-                }
-              )
-      } catch (error) {
-        if (!(error instanceof TerminalHistoryUnavailableError)) {
-          throw error
-        }
-        // The saved source kept changing: write nothing, and re-anchor on the next pass.
-        this.sessionsNeedingFullCheckpoint.add(sessionId)
-        this.sessionsNeedingLiveCheckpoint.add(sessionId)
-        this.markSessionDirty(sessionId)
-        return { checkpoint: 'retryable', snapshot: take.snapshot }
-      }
+      const durable =
+        take.drainedRecords === undefined ||
+        opts.forceLiveSnapshot === true ||
+        take.overflowed ||
+        !source
+          ? take.snapshot
+          : await this.buildDurableHistoryFromSource(
+              sessionId,
+              take.snapshot,
+              source.restoreInfo,
+              take.drainedRecords,
+              {
+                isFirstTake: take.seq === 1,
+                ...(opts.requireContinuityProof === true
+                  ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
+                  : {})
+              }
+            )
       // Set only inside an exclusive final pass (Sleep or quit), so no other checkpoint sees it.
       const probedCwd = this.probedShellCwds.get(sessionId)
       const snapshot = probedCwd ? { ...durable, cwd: probedCwd } : durable
@@ -174,31 +197,26 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     return { checkpoint: 'unavailable', snapshot: take?.snapshot ?? null }
   }
 
-  protected async buildDurableHistorySnapshot(
+  /** The complete history from a source captured before the drain plus every drained record, once. */
+  protected async buildDurableHistoryFromSource(
     sessionId: string,
     liveSnapshot: NonNullable<TakePendingOutputResult['snapshot']>,
+    restoreInfo: ColdRestoreInfo | null,
     pendingRecords: TakePendingOutputResult['records'],
     opts: {
       isFirstTake: boolean
       requiredPreviousPendingOutputSeq?: number
     }
   ): Promise<NonNullable<TakePendingOutputResult['snapshot']>> {
-    if (!this.historyReader) {
+    if (
+      (!restoreInfo && !opts.isFirstTake) ||
+      (opts.requiredPreviousPendingOutputSeq !== undefined &&
+        restoreInfo?.pendingOutputSeq !== opts.requiredPreviousPendingOutputSeq)
+    ) {
+      console.warn('[history] durable continuity unproven; using live snapshot:', sessionId)
       return liveSnapshot
     }
     try {
-      const restoreInfo = await this.historyReader.detectColdRestore(sessionId, {
-        ignoreCleanEnd: true,
-        wslDistro: this.wslDistrosBySessionId.get(sessionId)
-      })
-      if (
-        (!restoreInfo && !opts.isFirstTake) ||
-        (opts.requiredPreviousPendingOutputSeq !== undefined &&
-          restoreInfo?.pendingOutputSeq !== opts.requiredPreviousPendingOutputSeq)
-      ) {
-        console.warn('[history] durable continuity unproven; using live snapshot:', sessionId)
-        return liveSnapshot
-      }
       return await buildDurableCheckpointSnapshot({
         liveSnapshot,
         restoreInfo,
@@ -207,10 +225,6 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         resizeModel: this.historyManager?.hostingResizeModel()
       })
     } catch (error) {
-      // A changing source is not a failed rebuild; never publish the live view in its place.
-      if (error instanceof TerminalHistoryUnavailableError) {
-        throw error
-      }
       console.warn('[history] durable history rebuild failed:', sessionId, error)
       return liveSnapshot
     }

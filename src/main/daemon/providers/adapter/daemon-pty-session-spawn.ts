@@ -8,7 +8,7 @@ import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
 } from '../../protocol/daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
-import { newHistoryRecoveryContext } from './daemon-pty-host-history'
+import { newHistoryRecoveryContext, requirePrecreateReadiness } from './daemon-pty-host-history'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
@@ -226,10 +226,12 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       if ((await this.getAppliedSize(sessionId)) !== null) {
         restoreSkippedForLiveSession = true
         if (this.historyManager && !this.historyManager.hasWriter(sessionId)) {
+          await requirePrecreateReadiness(historyRecovery, this.hostHistory.enabled)
           await detectColdRestore()
           restoreInfo = null
         }
       } else {
+        await requirePrecreateReadiness(historyRecovery, this.hostHistory.enabled)
         restoreInfo = await detectColdRestore()
       }
     }

@@ -298,8 +298,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    // A rebuild runs after its records left the daemon; a changing source must not publish shallowly.
-    it('writes no checkpoint while the saved source keeps changing, then saves it all', async () => {
+    // GH1238: a source that keeps changing defers the save without draining output, so the
+    // next stable pass still saves history deeper than the daemon's live window, nothing lost.
+    it('keeps deep history and pending output when the saved source keeps changing', async () => {
       const checkpointing = new CheckpointingAdapter({
         protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath,
@@ -313,9 +314,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cwd: '/home/user',
         sessionId: 'changing-source'
       })
-      lastSubprocess._simulateData('SAVED_EARLIER\r\n')
+      // Saved rows well past the daemon's 1,000-row live window.
+      lastSubprocess._simulateData(
+        Array.from({ length: 3000 }, (_, i) => `LINE_${String(i + 1).padStart(5, '0')}\r\n`).join(
+          ''
+        )
+      )
       await checkpointing.checkpointNow([id])
-      lastSubprocess._simulateData('DRAINED_DURING_CHANGE\r\n')
+      lastSubprocess._simulateData('DURING_CHANGE\r\n')
       const sessionDir = join(historyDir, getHistorySessionDirName(id))
       let touches = 0
       sourceChange.during = () => {
@@ -324,11 +330,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
       const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
 
+      await historyAdapter.getBufferSnapshot(id, { scrollbackRows: 5000 })
       await expect(historyAdapter.shutdown(id, { keepHistory: true })).rejects.toThrow()
       expect(checkpointSpy).not.toHaveBeenCalled()
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
 
       sourceChange.during = () => {}
+      lastSubprocess._simulateData('NEWEST\r\n')
+      await checkpointing.checkpointNow([id])
       await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
       const restored = await historyAdapter.spawn({
         cols: 80,
@@ -336,8 +345,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cwd: '/home/user',
         sessionId: id
       })
-      expect(restored.coldRestore?.scrollback).toContain('SAVED_EARLIER')
-      expect(restored.coldRestore?.scrollback).toContain('DRAINED_DURING_CHANGE')
+      const scrollback = restored.coldRestore?.scrollback ?? ''
+      expect(scrollback).toContain('LINE_00010')
+      expect(scrollback.split('DURING_CHANGE')).toHaveLength(2)
+      expect(scrollback.split('NEWEST')).toHaveLength(2)
     })
 
     it('cold restores the second sleep/wake cycle with post-wake output', async () => {

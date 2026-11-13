@@ -1535,7 +1535,12 @@ export function createRemoteRuntimePtyTransport(
       } catch (error) {
         lastError = error
         const clientError = toRemoteRuntimeClientErrorLike(error)
-        if (!isRecoverableRemoteRuntimeConnectionError(clientError)) {
+        // A history refusal can follow the physical create, so it is an unknown outcome too:
+        // later attempts reconcile this same create and never resend it blindly.
+        if (
+          !isRecoverableRemoteRuntimeConnectionError(clientError) &&
+          !isTerminalHistoryUnavailableError(runtimeTerminalErrorMessage(error))
+        ) {
           throw error
         }
         setAwaitingSshSignIn(false)
@@ -4039,6 +4044,12 @@ export function createRemoteRuntimePtyTransport(
         } else if (isRecoverablePaneBindingError(error)) {
           setAwaitingSshSignIn(false)
           scheduleConnectRetryAfterRecoverableFailure()
+        } else if (isTerminalHistoryUnavailableError(message)) {
+          // The host kept, or may have just created, this pane's terminal: park the same create
+          // for a reconciling Retry instead of canceling the recovery it needs.
+          setAwaitingSshSignIn(false)
+          scheduleConnectRetryAfterRecoverableFailure()
+          surfaceErrorMessage(message)
         } else {
           recovery.cancel()
           emitRecoveryState()

@@ -1,4 +1,4 @@
-type InventoryRequest = {
+export type InventoryRequest = {
   sequence: number
   transportEpoch: number
   owners: Map<string, string | undefined>
@@ -38,6 +38,19 @@ export class DaemonPtyInventoryObservation {
     }
     this.pending.add(request)
     return request
+  }
+
+  /**
+   * Whether what this request listed for `id` is still current: no reconnect, no same-ID spawn
+   * and no exit of that incarnation since it began.
+   */
+  stillApplies(request: InventoryRequest, id: string, incarnation: string | undefined): boolean {
+    const retired = request.retirements.get(id)
+    return (
+      request.transportEpoch === this.transportEpoch &&
+      !request.replacements.has(id) &&
+      !(retired && (retired.has(undefined) || retired.has(incarnation)))
+    )
   }
 
   end(request: InventoryRequest): void {

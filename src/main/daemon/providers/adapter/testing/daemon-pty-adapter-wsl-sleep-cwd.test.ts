@@ -6,6 +6,7 @@ import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { setActiveSink } from '../../../../observability/tracer'
 import type { DaemonServer } from '../../../server/daemon-server'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
+import { HistoryReader } from '../../../history/restoration/history-reader'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 import type { WslGuestProcessRow } from '../../../../wsl/execution/wsl-guest-pane-processes'
 import type * as GuestProcessesModule from '../../../../wsl/execution/wsl-guest-pane-processes'
@@ -157,6 +158,30 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
 
     expect(readRows).toHaveBeenCalledWith('Ubuntu', expect.any(Number), { running: true })
     expect(checkpointCwd(id)).toBe(`${WSL_CWD}\\deep\\er`)
+  })
+
+  // GH1217: a pane a relaunched app adopted at startup but never mounted still owns a quit save.
+  it('saves the folder at quit for a pane a relaunched app adopted but never reattached', async () => {
+    const before = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
+    const { id } = await before.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: WSL_CWD,
+      env: { ORCA_PANE_KEY: PANE_KEY },
+      sessionId: 'repo::/repo@@quit-unmounted'
+    })
+    await before.disconnectOnly()
+    adapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
+    expect((await adapter.reconcileOnStartup(new Set(['repo::/repo']))).alive).toContain(id)
+    // The shell moved after the first app quit; only this app's quit can save the new folder.
+    readRows.mockResolvedValue(shellIn('/home/jin/repo/later'))
+
+    await adapter.disconnectOnly()
+
+    const restored = await new HistoryReader(historyDir()).detectColdRestore(id, {
+      ignoreCleanEnd: true
+    })
+    expect(restored?.cwd).toBe(`${WSL_CWD}\\later`)
   })
 
   it('wakes the pane in that folder', async () => {

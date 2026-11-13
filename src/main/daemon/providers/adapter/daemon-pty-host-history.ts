@@ -13,7 +13,8 @@ import {
   awaitDaemonWorkWithinCallerDeadline,
   remainingDaemonRequestTimeoutMs
 } from '../../launch/daemon-request-deadline'
-import type { HistoryRecoveryContext } from './daemon-pty-runtime-state'
+import type { HistoryRecoveryFreeze } from '../../history/storage/terminal-history-recovery-quarantine'
+import type { HostSleepTarget } from './daemon-pty-host-sleep'
 
 // Legacy predecessors' already-issued file work; a stalled disk fails this start, never its fence.
 const HOST_HISTORY_HANDOFF_WAIT_MS = 10_000
@@ -24,9 +25,23 @@ export type ShutdownOptions = {
   deadlineMs?: number
   /** A close's removal claim, captured before its lock and kill awaits. */
   historyAdmission?: HistoryWriterAdmission
+  /** The exact binding a keep-history Sleep began with, and the inventory observation since. */
+  sleepTarget?: HostSleepTarget
 }
 
-type HostHistoryBinding = {
+export type HistoryRecoveryContext = {
+  /** Captured once at spawn entry, before any lock, retry or recovery await. */
+  admission: HistoryWriterAdmission | undefined
+  freeze: HistoryRecoveryFreeze | null
+  unreadableSessionId: string | null
+  identityChanged: boolean
+  /** One absolute deadline for this operation's wait on its predecessors' issued writes. */
+  readyBy: number | null
+  /** That wait's result, reused by every later check of the same operation. */
+  ready: boolean | null
+}
+
+export type HostHistoryBinding = {
   incarnationId: string | undefined
   /** Absent for a binding adopted live from the daemon: no main writer ever needed fencing. */
   admission: HistoryWriterAdmission | undefined
@@ -119,7 +134,8 @@ export class DaemonPtyHostHistoryBindings {
     if (!admission) {
       return
     }
-    const ready = await awaitHistoryAdmissionReady(admission)
+    // A seed read already waited for the predecessors; this reuses that result and deadline.
+    const ready = await awaitRecoveryReadiness(historyRecovery)
     if (!this.enabled) {
       return
     }
@@ -184,7 +200,49 @@ export class DaemonPtyHostHistoryBindings {
 export function newHistoryRecoveryContext(
   admission: HistoryWriterAdmission | undefined
 ): HistoryRecoveryContext {
-  return { admission, freeze: null, unreadableSessionId: null, identityChanged: false }
+  return {
+    admission,
+    freeze: null,
+    unreadableSessionId: null,
+    identityChanged: false,
+    readyBy: null,
+    ready: null
+  }
+}
+
+/**
+ * Whether every predecessor's already-issued writes for this ID have landed: waited once per
+ * operation within one absolute deadline, then reused, so a later check never waits again.
+ */
+export async function awaitRecoveryReadiness(
+  historyRecovery: HistoryRecoveryContext
+): Promise<boolean> {
+  const admission = historyRecovery.admission
+  if (!admission) {
+    return true
+  }
+  if (historyRecovery.ready === null) {
+    historyRecovery.readyBy ??= Date.now() + HOST_HISTORY_HANDOFF_WAIT_MS
+    historyRecovery.ready = await awaitDaemonWorkWithinCallerDeadline(
+      admission.ready,
+      historyRecovery.readyBy
+    )
+  }
+  return historyRecovery.ready
+}
+
+/**
+ * Before any create, the predecessors' issued writes land before a seed is read: a read that
+ * finished first would seed this start from an older source than the one then on disk.
+ */
+export async function requirePrecreateReadiness(
+  historyRecovery: HistoryRecoveryContext,
+  hostOwned: boolean
+): Promise<void> {
+  const ready = await awaitRecoveryReadiness(historyRecovery)
+  if (hostOwned && (!ready || historyRecovery.admission?.current() === false)) {
+    throw new TerminalHistoryUnavailableError()
+  }
 }
 
 export function awaitHistoryAdmissionReady(admission: HistoryWriterAdmission): Promise<boolean> {

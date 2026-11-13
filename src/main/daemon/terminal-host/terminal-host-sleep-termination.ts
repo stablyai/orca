@@ -31,6 +31,8 @@ export function beginTerminalHostSleepTermination(
   request: TerminalHostSleepTerminationRequest,
   deps: {
     session: SleepTerminationTarget
+    /** A teardown already tracked for this exact Session, even one whose signal was refused. */
+    teardownTracked: () => boolean
     kill: (
       id: string,
       options: { immediate: boolean; onReservationAccepted: () => void }
@@ -42,7 +44,9 @@ export function beginTerminalHostSleepTermination(
     return { accepted: false, reason: 'exited' }
   }
   // An in-progress teardown already claimed the process; joining it could escalate it.
-  if (session.isTerminating) {
+  // A refused root signal clears `isTerminating` while its teardown stays tracked, so the
+  // tracked teardown refuses too: an immediate kill would join and escalate it unreserved.
+  if (session.isTerminating || deps.teardownTracked()) {
     return { accepted: false, reason: 'terminating' }
   }
   let accepted = false

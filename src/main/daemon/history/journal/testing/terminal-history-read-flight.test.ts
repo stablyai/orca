@@ -106,9 +106,9 @@ describe('shared deep-history flight', () => {
     record(journal, 'PRESSURED_ROW\r\n')
     const consumer = reads.admit(new AbortController().signal)!
     const found = await consumer.acquire(journal, 5000, async () => {})
-    expect(found).not.toBe('image')
+    // This proof needs the actual cold flight; a cached image or a refusal cannot stand in for it.
     if (found === 'image' || found === null) {
-      return
+      throw new Error(`expected a cold flight, got ${String(found)}`)
     }
     expect(found.capture()).toBe(true)
     // Still shared with the writer's queue, so the read adds nothing until pressure severs it.

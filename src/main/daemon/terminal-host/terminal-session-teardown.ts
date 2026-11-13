@@ -37,7 +37,8 @@ export class TerminalSessionTeardown {
     }
   }
 
-  isTracked(session: Session): boolean {
+  // Identity only: any holder of the exact Session object can ask.
+  isTracked(session: object): boolean {
     return [...this.operations.values()].some((operation) => operation.session === session)
   }
 
