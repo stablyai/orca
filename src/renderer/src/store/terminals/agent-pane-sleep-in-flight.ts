@@ -7,7 +7,7 @@ export function trackAgentPaneSleep(paneKey: string, run: () => Promise<void>): 
     .finally(() => {
       if (sleeping.get(paneKey) === pending) {
         sleeping.delete(paneKey)
-        window.api.ui.notifySleepingMailAvailability?.()
+        window.api.ui.notifySleepingMailAvailability?.(paneKey)
       }
     })
     .catch(() => undefined)

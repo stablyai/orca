@@ -24,12 +24,13 @@ export function registerSleepingMailAvailability(
   return addFanoutListener(
     ipcMain,
     'ui:sleepingMailAvailability',
-    (event: Electron.IpcMainEvent) => {
+    (event: Electron.IpcMainEvent, paneKey: unknown) => {
       if (
         event.sender === window.webContents &&
-        event.senderFrame === window.webContents.mainFrame
+        event.senderFrame === window.webContents.mainFrame &&
+        typeof paneKey === 'string'
       ) {
-        runtime.retrySleptMailboxWakes()
+        runtime.retrySleptMailboxWakes(paneKey)
       }
     }
   )

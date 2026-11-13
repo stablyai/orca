@@ -600,6 +600,12 @@ it.each([10, 100])(
       // One Run: refresh (1), custody validation (2), queue/start admission (4).
       expect(newest.mock.calls.length).toBeLessThanOrEqual(7)
       expect(newest).toHaveBeenCalled()
+      newest.mockClear()
+      runtime.retrySleptMailboxWakes('tab-0:11111111-1111-4111-8111-000000000000')
+      await settled()
+      expect(inventory).not.toHaveBeenCalled()
+      expect(newest.mock.calls.filter(([mailbox]) => mailbox !== mailboxes[0])).toEqual([])
+      expect(newest.mock.calls.length).toBeLessThanOrEqual(7)
       session = {
         ...session,
         sleepingAgentSessionsByPaneKey: Object.fromEntries(

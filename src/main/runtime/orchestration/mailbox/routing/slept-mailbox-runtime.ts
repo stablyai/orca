@@ -212,11 +212,16 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.sleptMailboxWake.request(mailbox, reservedTypes)
   }
 
-  retrySleptMailboxWakes(): void {
+  retrySleptMailboxWakes(paneKey?: string): void {
     this.watchSleepingMail()
-    this.sleepingMailPublication = ''
+    if (paneKey === undefined) {
+      this.sleepingMailPublication = ''
+    }
     this.getExistingOrchestrationDb()
-    this.publishSleepingMail()
+    this.publishSleepingMail(
+      paneKey === undefined ? undefined : [],
+      paneKey === undefined ? undefined : [paneKey]
+    )
   }
 
   private readonly settledMailWakeIds = new Set<string>()

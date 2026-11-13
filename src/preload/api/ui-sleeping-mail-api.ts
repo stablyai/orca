@@ -6,7 +6,7 @@ export type SleepingMailUiApi = {
     callback: (worktreeIds: string[], settledMailWakeIds?: string[]) => void
   ) => () => void
   replySleepingAgentWake: (reply: { requestId: string; woke: boolean }) => void
-  notifySleepingMailAvailability: () => void
+  notifySleepingMailAvailability: (paneKey: string) => void
   onResumeSleepingAgents: (callback: (data: SleepingAgentWakeRequest) => void) => () => void
 }
 
@@ -20,7 +20,8 @@ export const sleepingMailUiApi = {
     return () => ipcRenderer.removeListener('ui:sleepingMailChanged', listener)
   },
   replySleepingAgentWake: (reply) => ipcRenderer.send('ui:resumeSleepingAgentsReply', reply),
-  notifySleepingMailAvailability: () => ipcRenderer.send('ui:sleepingMailAvailability'),
+  notifySleepingMailAvailability: (paneKey) =>
+    ipcRenderer.send('ui:sleepingMailAvailability', paneKey),
   onResumeSleepingAgents: (callback: (data: SleepingAgentWakeRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SleepingAgentWakeRequest) =>
       callback(data)
