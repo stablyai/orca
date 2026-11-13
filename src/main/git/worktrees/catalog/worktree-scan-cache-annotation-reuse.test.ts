@@ -25,7 +25,9 @@ vi.mock('./worktree-list-reader', () => ({
 import {
   _resetWorktreeScanCacheForTests,
   listWorktreeGraph,
-  listWorktrees
+  listWorktrees,
+  listWorktreesSharedStrict,
+  bumpWorktreeScanGeneration
 } from './worktree-scan-cache'
 import { __resetSparseCheckoutStateCacheForTests } from '../sparse-checkout/worktree-sparse-checkout-cache'
 
@@ -85,4 +87,37 @@ describe('graph and annotated worktree scans', () => {
     releaseProbe()
     expect((await annotatedScan)[0]?.isSparse).toBe(true)
   })
+})
+
+it('shares only matching live cancellation scopes and preserves generation freshness', async () => {
+  _resetWorktreeScanCacheForTests()
+  readWorktreeListMock.mockReset()
+  __resetSparseCheckoutStateCacheForTests()
+  const pending = Promise.withResolvers<GitWorktreeInfo[]>()
+  readWorktreeListMock.mockReturnValue(pending.promise)
+  detectSparseCheckoutMock.mockResolvedValue(false)
+  const first = new AbortController()
+  const other = new AbortController()
+  const reads = [
+    listWorktreesSharedStrict('/repo', { signal: first.signal }),
+    listWorktreesSharedStrict('/repo', { signal: first.signal }),
+    listWorktreesSharedStrict('/repo', { signal: other.signal }),
+    listWorktreesSharedStrict('/repo')
+  ]
+  expect(readWorktreeListMock).toHaveBeenCalledTimes(3)
+  bumpWorktreeScanGeneration('/repo')
+  reads.push(listWorktreesSharedStrict('/repo', { signal: first.signal }))
+  expect(readWorktreeListMock).toHaveBeenCalledTimes(4)
+  first.abort()
+  await expect(listWorktreesSharedStrict('/repo', { signal: first.signal })).rejects.toThrow()
+  expect(readWorktreeListMock).toHaveBeenCalledTimes(4)
+  pending.resolve([])
+  const outcomes = await Promise.allSettled(reads)
+  expect(outcomes.map((outcome) => outcome.status)).toEqual([
+    'rejected',
+    'rejected',
+    'fulfilled',
+    'fulfilled',
+    'rejected'
+  ])
 })

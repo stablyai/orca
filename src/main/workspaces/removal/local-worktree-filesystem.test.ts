@@ -1,15 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { runProcessMock, lstatMock, statMock, realpathMock, readFileMock, rmMock } = vi.hoisted(
-  () => ({
-    runProcessMock: vi.fn(),
-    lstatMock: vi.fn(),
-    statMock: vi.fn(),
-    realpathMock: vi.fn(),
-    readFileMock: vi.fn(),
-    rmMock: vi.fn()
-  })
-)
+const {
+  runProcessMock,
+  lstatMock,
+  statMock,
+  realpathMock,
+  readFileMock,
+  rmMock,
+  groupSignal,
+  groupForce
+} = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
+  lstatMock: vi.fn(),
+  statMock: vi.fn(),
+  realpathMock: vi.fn(),
+  readFileMock: vi.fn(),
+  rmMock: vi.fn(),
+  groupSignal: vi.fn(),
+  groupForce: vi.fn()
+}))
 
 // Process-host tests own encoding, timeouts, and console hiding; assert guest commands here.
 vi.mock('@orca/process-host', () => ({
@@ -24,7 +33,18 @@ vi.mock('node:fs/promises', () => ({
   rm: rmMock
 }))
 
-import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
+vi.mock('../../git/command-runner/process-capture/wsl-process-group-termination', () => ({
+  createWslProcessGroupTermination: () => ({
+    signal: groupSignal,
+    force: groupForce,
+    wrapGuestArgs: (args: string[]) => args,
+    stripControlOutput: (text: string) => text
+  })
+}))
+
+import type { ProcessSpec, ProcessResult } from '@orca/process-host/process-spec'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
+import { removeLocalWorktreePath, getLocalWorktreePathAccess } from './local-worktree-filesystem'
 import '../../filesystem/host-tree-removal'
 import { isWorktreePathMissing } from './worktree-removal-safety'
 
@@ -60,6 +80,8 @@ describe('local worktree filesystem runtime access', () => {
     realpathMock.mockReset()
     readFileMock.mockReset()
     rmMock.mockReset()
+    groupSignal.mockReset()
+    groupForce.mockReset()
     completeExecFile()
   })
 
@@ -108,3 +130,97 @@ describe('local worktree filesystem runtime access', () => {
     }
   )
 })
+
+it('does not start a WSL recursive delete when already cancelled', async () => {
+  await withPlatform('win32', async () => {
+    runProcessMock.mockClear()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      removeLocalWorktreePath('C:/repo/wt', { wslDistro: 'Ubuntu' }, controller.signal)
+    ).rejects.toBe(controller.signal.reason)
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+})
+
+it.each(['normal', 'no-spawn', 'cancel', 'unverified-timeout'] as const)(
+  'joins WSL recursive delete outcome with qualified proof: %s',
+  async (mode) => {
+    await withPlatform('win32', async () => {
+      let release!: (proof: boolean) => void
+      const groupEnded = new Promise<boolean>((resolve) => {
+        release = resolve
+      })
+      groupSignal.mockReturnValue(groupEnded)
+      groupForce.mockResolvedValue(false)
+      let complete!: (result: ProcessResult) => void
+      const childOutcome = new Promise<ProcessResult>((resolve) => {
+        complete = resolve
+      })
+      let spec!: ProcessSpec
+      runProcessMock.mockImplementation((input: ProcessSpec) => {
+        spec = input
+        if (mode === 'no-spawn') {
+          input.onChildTerminated?.()
+          return Promise.reject(new Error('wsl.exe missing'))
+        }
+        return childOutcome
+      })
+      const controller = new AbortController()
+      let settled = false
+      const pending = removeLocalWorktreePath(
+        'C:/repo/wt',
+        { wslDistro: 'Ubuntu' },
+        controller.signal
+      )
+      const outcome = pending.then(
+        () => {
+          settled = true
+          return undefined
+        },
+        (error: unknown) => {
+          settled = true
+          return error
+        }
+      )
+      if (mode === 'no-spawn') {
+        expect(await outcome).toMatchObject({ message: 'wsl.exe missing' })
+        return
+      }
+      const result = {
+        code: 0,
+        signal: null,
+        stdout: '',
+        stderr: '',
+        timedOut: mode === 'unverified-timeout'
+      }
+      if (mode === 'normal') {
+        spec.onChildTerminated?.()
+        complete(result)
+        controller.abort()
+        expect(await outcome).toBeUndefined()
+        return
+      }
+      if (mode === 'cancel') {
+        controller.abort()
+      }
+      if (typeof spec.terminationBarrier !== 'object') {
+        throw new Error('guest barrier missing')
+      }
+      const stopping = spec.terminationBarrier.signal(createFakeSpawnedChild(1234))
+      spec.onChildTerminated?.()
+      complete(result)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      release(mode === 'cancel')
+      await stopping
+      if (mode === 'cancel') {
+        expect(await outcome).toBe(controller.signal.reason)
+      } else {
+        await Promise.resolve()
+        expect(settled).toBe(false)
+      }
+    })
+  }
+)

@@ -1,3 +1,4 @@
+import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdown-checkpoint'
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
 import { app, type Event } from 'electron'
@@ -23,7 +24,7 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import { stopCodexStateDbBackfillRecoveries } from '../../codex/history/index/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../../codex/history/bridges/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-repo-ref-maintenance'
-import { stopBackgroundWorktreeRemovals } from '../../workspaces/removal/worktree-background-removal'
+import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
@@ -116,6 +117,15 @@ function installWillQuitHandler(): void {
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
     markHostShuttingDown()
+    state.profileShutdownCheckpoint ??= beginProfileShutdownCheckpoint(state.store, paneGridFlush)
+    const removalShutdown = worktreeRemovalLifetime.close()
+    const removalQuiescence = removalShutdown.then(
+      () => true,
+      (error) => {
+        console.error('[worktrees] Failed to finish stopping workspace deletion:', error)
+        return false
+      }
+    )
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
@@ -163,8 +173,6 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
-    // Deletes may take minutes; stop now and let durable records resume them next launch.
-    stopBackgroundWorktreeRemovals()
     // Chat teardown reads background work afterward; clearing status loses subagent/command-only resume offers.
     agentHookServer.stop({ keepStatus: true })
     // Windows bare hook paths lack POSIX ORCA_PANE_KEY guards, so remove Grok hooks on quit; bound cleanup because GROK_HOME can be a stalled network mount.
@@ -208,7 +216,7 @@ function installWillQuitHandler(): void {
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
     const finalStore = state.store
-    const beginSshShutdownAndFinalSave = () => {
+    const beginSshShutdownAndFinalSave = (removalStopped: boolean) => {
       // Mark SSH leases detached synchronously immediately before final flush; no await may separate mutation from save.
       const sshShutdown = beginSshShutdown()
       killAllPty()
@@ -220,18 +228,22 @@ function installWillQuitHandler(): void {
         try {
           await finalStore.flushFinalOrThrowAsync()
           await finalStore.freezeWritesAsync()
-          state.profileStateAdmission?.release()
-          state.profileStateAdmission = undefined
+          if (removalStopped) {
+            state.profileStateAdmission?.release()
+            state.profileStateAdmission = undefined
+          }
         } catch (error) {
           console.error('[persistence] Failed to finalize profile state:', error)
         }
       })()
       return { sshShutdown, watcherShutdown, storeFlush }
     }
-    // Flush pending pane grids first (bounded at 1s); without one, begin final save synchronously.
-    const finalSaves = paneGridFlush
-      ? paneGridFlush.then(beginSshShutdownAndFinalSave)
-      : beginSshShutdownAndFinalSave()
+    // Removal writers and pending pane grids must settle before the profile freezes.
+    const finalSaves = Promise.all([
+      paneGridFlush,
+      removalQuiescence,
+      state.profileShutdownCheckpoint.catch(() => {})
+    ]).then(([, stopped]) => beginSshShutdownAndFinalSave(stopped))
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)
@@ -263,9 +275,13 @@ function installWillQuitHandler(): void {
       rpcStopAndClear
     ]).then(() => state.runtime?.closeNotificationDismissals())
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
-    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+    const daemonTeardown = removalQuiescence.then(() =>
+      isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+    )
     // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     settleTeardownWithinDeadline([
+      { name: 'worktree-removals', promise: removalShutdown },
+      { name: 'state-checkpoint', promise: state.profileShutdownCheckpoint },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },

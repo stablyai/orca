@@ -4,6 +4,7 @@ import { endSubprocessStdin } from '../../../../shared/subprocess-stdin-write'
 import { runProcess } from '@orca/process-host'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import type { WslProcessGroupTermination } from './wsl-process-group-termination'
+import { createWslGuestTerminationProof } from './wsl-guest-termination-proof'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
@@ -34,6 +35,10 @@ export async function execFileCaptureToTermination(
   options: Omit<ExecFileCaptureOptions, 'onStderr' | 'stdin'> & { stdin?: string | Uint8Array },
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
+  if (options.signal?.aborted) {
+    options.onChildTerminated?.()
+    throw createAbortError()
+  }
   // runProcess already reports spawn cost through spawnProcess.
   let program: string
   try {
@@ -46,6 +51,10 @@ export async function execFileCaptureToTermination(
     throw error
   }
   const captureBytes = options.encoding === 'buffer'
+  const proof = termination ? createWslGuestTerminationProof(termination) : undefined
+  if (proof) {
+    void proof.terminated.then(() => options.onChildTerminated?.())
+  }
   const pending = runProcess({
     program,
     args,
@@ -56,11 +65,12 @@ export async function execFileCaptureToTermination(
     captureStdoutAsBytes: captureBytes,
     captureStderrAsBytes: captureBytes,
     signal: options.signal,
-    terminationBarrier: termination ?? true,
-    onChildTerminated: options.onChildTerminated,
+    terminationBarrier: proof?.barrier ?? true,
+    onChildTerminated: proof?.onChildTerminated ?? options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
-  const result = await pending
+  const result = await pending.finally(() => proof?.terminated)
+  const aborted = !!options.signal?.aborted && (!proof || proof.stopping)
   const stdout = captureBytes ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
   const stderrBytes = result.stderrBytes ?? Buffer.alloc(0)
   const stderr = captureBytes
@@ -69,34 +79,29 @@ export async function execFileCaptureToTermination(
         Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
       : stderrBytes
     : (termination?.stripControlOutput(result.stderr) ?? result.stderr)
-  if (
-    result.code === 0 &&
-    !result.timedOut &&
-    !result.outputTruncated &&
-    !options.signal?.aborted
-  ) {
+  if (result.code === 0 && !result.timedOut && !result.outputTruncated && !aborted) {
     return { stdout, stderr }
   }
-  if (result.timedOut && !options.signal?.aborted) {
+  if (result.timedOut && !aborted) {
     options.onDeadlineKill?.()
   }
   const cleanStderr = typeof stderr === 'string' ? stderr : stderr.toString('utf8')
   const error = result.timedOut
     ? (options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
     : new Error(
-        options.signal?.aborted
+        aborted
           ? 'The operation was aborted.'
           : result.outputTruncated
             ? // Reject clipped output: JSON/JSONL consumers could otherwise accept an incomplete result.
               `${command} produced more than ${options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER} bytes of output.`
             : cleanStderr.trim() || `${command} exited with ${result.code}.`
       )
-  if (options.signal?.aborted) {
+  if (aborted) {
     error.name = 'AbortError'
   }
   throw Object.assign(error, {
     code: result.code,
-    killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,
+    killed: result.timedOut || result.signal !== null || aborted,
     signal: result.signal,
     outputTruncated: result.outputTruncated,
     stdout,

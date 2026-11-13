@@ -37,7 +37,17 @@ export async function removeWorktree(
   // Reserve forceBranchDelete for failed-creation rollback so user deletes preserve unmerged commits.
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  options = removalWorkerOptions(options)
+  const writers: Promise<void>[] = []
+  const observe = options.observeChildTermination
+  options = removalWorkerOptions({
+    ...options,
+    observeChildTermination: (terminated, writes) => {
+      observe?.(terminated, writes)
+      if (writes) {
+        writers.push(terminated)
+      }
+    }
+  })
   try {
     // Wait out ref packing before deleting branches; concurrent pruning can finish safely.
     return await withRepoRefMaintenancePaused('worktree-remove', () =>
@@ -46,6 +56,7 @@ export async function removeWorktree(
       )
     )
   } finally {
+    await Promise.all(writers)
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
     invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
@@ -74,7 +85,14 @@ async function performRemoveWorktree(
   const longPathArgs = windowsLongPathGitArgs(repoPath)
   const execOptions = {
     ...gitExecOptions(repoPath, options),
-    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {}),
+    ...(options.checkoutDeleteSignal
+      ? {
+          signal: options.checkoutDeleteSignal,
+          ...(process.platform === 'win32' && (options.wslDistro || parseWslPath(repoPath))
+            ? { terminationBarrier: true }
+            : {})
+        }
+      : {}),
     ...gitEnvWithoutYesNoPrompt(),
     admissionExempt: true as const
   }
@@ -143,12 +161,26 @@ export async function finishUnregisteredWorktreeRemoval(
   assertCheckoutGone: () => Promise<void>,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  options = removalWorkerOptions(options)
-  await assertCheckoutGone()
-  await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
-    console.warn(`[git] worktree prune failed in ${repoPath}`, error)
-  )
-  return deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
+  const writers: Promise<void>[] = []
+  const observe = options.observeChildTermination
+  options = removalWorkerOptions({
+    ...options,
+    observeChildTermination: (terminated, writes) => {
+      observe?.(terminated, writes)
+      if (writes) {
+        writers.push(terminated)
+      }
+    }
+  })
+  try {
+    await assertCheckoutGone()
+    await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
+      console.warn(`[git] worktree prune failed in ${repoPath}`, error)
+    )
+    return await deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
+  } finally {
+    await Promise.all(writers)
+  }
 }
 
 /** Clean up an unregistered checkout's branch using normal preservation rules, without deleting files. */
@@ -158,7 +190,17 @@ export async function deleteBranchOfUnregisteredWorktree(
   branch: { name: string; head: string } | null,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  options = removalWorkerOptions(options)
+  const writers: Promise<void>[] = []
+  const observe = options.observeChildTermination
+  options = removalWorkerOptions({
+    ...options,
+    observeChildTermination: (terminated, writes) => {
+      observe?.(terminated, writes)
+      if (writes) {
+        writers.push(terminated)
+      }
+    }
+  })
   try {
     if (!branch?.name || !(await localBranchExists(repoPath, branch.name, options))) {
       return {}
@@ -167,6 +209,7 @@ export async function deleteBranchOfUnregisteredWorktree(
       deleteBranchOfRemovedWorktree(repoPath, branch.name, branch.head, options)
     )
   } finally {
+    await Promise.all(writers)
     invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }

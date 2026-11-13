@@ -91,6 +91,51 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
     })
   })
 
+  it.each(['inventory', 'watcher', 'delete', 'success'] as const)(
+    'keeps partial-removal cancellation distinct from success at %s',
+    async (phase) => {
+      const controller = new AbortController()
+      if (phase === 'inventory') {
+        listWorktreesStrictMock.mockImplementationOnce(async () => {
+          controller.abort()
+          return []
+        })
+      }
+      const closeWatcher = vi.fn(async () => {
+        if (phase === 'watcher') {
+          controller.abort()
+        }
+      })
+      removeLocalWorktreePathMock.mockImplementationOnce(async () => {
+        controller.abort()
+        if (phase === 'delete') {
+          throw controller.signal.reason
+        }
+      })
+      const pending = recoverPartialLocalWorktreeRemoval({
+        error: new Error('Git deregistered but left files'),
+        force: true,
+        canonicalWorktreePath: '/repo/feature',
+        repoPath: '/repo',
+        localWorktreeGitOptions: {},
+        registeredWorktree: { branch: 'feature', head: 'abc' },
+        deleteBranch: true,
+        closeWatcher,
+        signal: controller.signal
+      })
+      if (phase === 'success') {
+        await expect(pending).resolves.toBeDefined()
+      } else {
+        const error = await pending.catch((error: unknown) => error)
+        expect(error).toBe(controller.signal.reason)
+        expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+      }
+      if (phase === 'inventory' || phase === 'watcher') {
+        expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+      }
+    }
+  )
+
   it('does not recursively delete while watcher teardown remains unconfirmed', async () => {
     await withPlatform('win32', async () => {
       const watcherError = new Error('file watcher process did not exit after termination deadline')

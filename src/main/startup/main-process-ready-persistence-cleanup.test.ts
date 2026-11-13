@@ -1,9 +1,23 @@
+import {
+  worktreeRemovalLifetime,
+  _resetWorktreeRemovalLifetimeForTests
+} from '../workspaces/removal/worktree-removal-lifetime'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { holdRemovalMetadata } from '../workspaces/removal/worktree-removal-lifetime.test-fixtures'
+import { readWorktreeRemovalRecords } from '../workspaces/removal/worktree-removal-records'
+import { _resetPendingWorktreeRemovalsForTests } from '../workspaces/removal/worktree-background-removal'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 
 const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   state: {
-    store: { freezeWritesAsync: vi.fn(async () => {}) },
+    profileShutdownCheckpoint: null as Promise<void> | null,
+    store: {
+      flushPendingOrThrowAsync: vi.fn(async () => {}),
+      freezeWritesAsync: vi.fn(async () => {})
+    },
     profileStateAdmission: initialAdmission(),
     desktopActivationGate: initialActivationGate(),
     mainProcessI18nReady: Promise.resolve()
@@ -40,9 +54,11 @@ const options = {
 }
 
 beforeEach(() => {
+  _resetWorktreeRemovalLifetimeForTests()
   vi.clearAllMocks()
   state.profileStateAdmission = { release: vi.fn() }
   state.desktopActivationGate = null
+  state.profileShutdownCheckpoint = null
 })
 
 describe('startup persistence lifetime', () => {
@@ -81,4 +97,51 @@ describe('startup persistence lifetime', () => {
       log.mockRestore()
     }
   })
+})
+
+it('freezes the profile after a drained removal fails without releasing its ownership', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    await expect(
+      worktreeRemovalLifetime.prepare(
+        async () => {
+          throw new Error('load failed')
+        },
+        () => {},
+        async () => {}
+      )
+    ).rejects.toThrow('load failed')
+    const failure = new Error('runtime startup failed')
+    runtime.mockRejectedValueOnce(failure)
+    await expect(initializeMainProcessReady(options)).rejects.toBe(failure)
+    expect(state.store.freezeWritesAsync).toHaveBeenCalledOnce()
+    expect(state.profileStateAdmission?.release).not.toHaveBeenCalled()
+  } finally {
+    log.mockRestore()
+  }
+})
+
+it('joins successful removal metadata and its journal before failed startup freezes or releases the profile', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orca-startup-removal-'))
+  try {
+    const pending = await holdRemovalMetadata(directory)
+    const failure = new Error('runtime startup failed')
+    runtime.mockRejectedValueOnce(failure)
+    const rejected = expect(initializeMainProcessReady(options)).rejects.toBe(failure)
+    await vi.waitFor(() => expect(worktreeRemovalLifetime.closing).toBe(true))
+    expect(state.store.freezeWritesAsync).not.toHaveBeenCalled()
+    expect(state.profileStateAdmission?.release).not.toHaveBeenCalled()
+    expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
+    pending.release()
+    await rejected
+    await pending.result
+    expect(await readFile(join(directory, 'metadata-finished'), 'utf8')).toBe('removed')
+    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
+    expect(state.store.freezeWritesAsync).toHaveBeenCalledOnce()
+    expect(state.profileStateAdmission).toBeUndefined()
+  } finally {
+    vi.restoreAllMocks()
+    _resetPendingWorktreeRemovalsForTests()
+    await rm(directory, { recursive: true, force: true })
+  }
 })

@@ -1,14 +1,27 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../../shared/orcad-artifacts'
+import {
+  ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_NODE_RUNTIME_MARKER_FILENAME
+} from '../../../../shared/orcad-artifacts'
 import {
   findBundledWebClientRoot,
   WEB_CLIENT_INDEX_FILENAME
 } from '../../../../shared/bundled-web-client-root'
 import { orcadServeArgs } from '../../../../shared/orcad-serve-argv'
+import { orcadManagedStopRequestPath } from '../../host-lifecycle/managed-stop/orcad-managed-stop-request'
+import { readWorktreeRemovalRecords } from '../../../workspaces/removal/worktree-removal-records'
 import { ORCAD_LOCK_FILE_NAME } from '../../instance-lock/orcad-instance-lock'
 import { resolveBundledOrcadRuntime } from '../../runtime-launch/orcad-bundled-runtime'
 import { skipForMissingInputs } from '../native-slots/orcad-node-slot-fixture'
@@ -90,6 +103,76 @@ function profile(): string {
 }
 
 describe.skipIf(skip)('orca serve on orcad', () => {
+  // Real server startup, CLI commands and graceful shutdown each cross process boundaries.
+  it('deletes a linked worktree through the real CLI with a durable host journal', async () => {
+    const userData = profile()
+    const home = join(userData, 'isolated-home')
+    const repo = join(userData, 'repo')
+    const worktree = join(userData, 'feature')
+    for (const path of [home, repo]) {
+      mkdirSync(path, { recursive: true })
+    }
+    const env = {
+      ...serveEnv(userData),
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: join(home, '.config'),
+      XDG_CACHE_HOME: join(home, '.cache'),
+      XDG_DATA_HOME: join(home, '.local', 'share'),
+      XDG_STATE_HOME: join(home, '.local', 'state'),
+      CLAUDE_CONFIG_DIR: join(home, '.claude'),
+      CODEX_HOME: join(home, '.codex'),
+      ORCA_E2E_USER_DATA_DIR: userData,
+      ORCA_E2E_HOME_DIR: home,
+      ORCA_USER_DATA_PATH: userData
+    }
+    const git = async (args: string[]) => {
+      const result = await runProcess({ program: 'git', args, cwd: repo, env, timeoutMs: 30_000 })
+      expect(result.code, result.stderr).toBe(0)
+      return result.stdout
+    }
+    await git(['init', '-q'])
+    await git([
+      '-c',
+      'user.name=Removal Test',
+      '-c',
+      'user.email=removal@example.invalid',
+      'commit',
+      '--allow-empty',
+      '-qm',
+      'seed'
+    ])
+    await git(['worktree', 'add', '-q', worktree, '-b', 'feature'])
+    const cli = async (args: string[]) => {
+      const result = await runProcess({
+        program: runtime!,
+        args: [join(slotDir, ORCAD_CLI_ENTRY_FILENAME), ...args, '--json'],
+        cwd: repo,
+        env,
+        timeoutMs: 60_000
+      })
+      expect(result.code, result.stderr).toBe(0)
+      const response = JSON.parse(result.stdout)
+      expect(response.ok).toBe(true)
+      return response.result
+    }
+    try {
+      await serveOnce(userData, ['--bind', '127.0.0.1', '--port', '0', '--json'], env)
+      await cli(['repo', 'add', '--path', repo])
+      await cli(['worktree', 'rm', '--worktree', `path:${worktree}`, '--force', '--delete-branch'])
+      expect(existsSync(worktree)).toBe(false)
+      expect(await git(['worktree', 'list', '--porcelain'])).not.toContain(
+        `worktree ${worktree.replaceAll('\\', '/')}`
+      )
+      expect(await git(['branch', '--list', 'feature'])).toBe('')
+    } finally {
+      await stopServeProfile(userData, null)
+    }
+    expect(await readWorktreeRemovalRecords(join(userData, 'profiles', 'local-default'))).toEqual(
+      []
+    )
+  }, 180_000)
+
   it('refuses with exit 78 while the desktop app holds the profile', async () => {
     const userData = profile()
     writeFileSync(
@@ -181,6 +264,7 @@ describe.skipIf(skip)('orca serve on orcad', () => {
 })
 
 const running = new Map<string, ReturnType<typeof spawnProcess>>()
+const readinessByProfile = new Map<string, ServeReadiness>()
 
 async function serveDaemonPid(userData: string): Promise<number> {
   const { readiness, stderr } = await serveOnce(userData, [
@@ -198,18 +282,20 @@ async function serveDaemonPid(userData: string): Promise<number> {
 }
 
 type ServeReadiness = {
+  runtimeId: string
   pairing?: { webClientUrl?: unknown }
   health?: { terminalDaemon?: { state?: string; pid: number } }
 }
 
 async function serveOnce(
   userData: string,
-  args: string[]
+  args: string[],
+  env = serveEnv(userData)
 ): Promise<{ readiness: ServeReadiness; stderr: string }> {
   const child = spawnProcess({
     program: runtime!,
     args: [join(slotDir, 'orcad.js'), ...args],
-    env: serveEnv(userData),
+    env,
     timeoutMs: null
   })
   running.set(userData, child)
@@ -228,6 +314,7 @@ async function serveOnce(
     })
   })
   const readiness: ServeReadiness = JSON.parse(line)
+  readinessByProfile.set(userData, readiness)
   return { readiness, stderr }
 }
 
@@ -240,7 +327,28 @@ async function stopServe(userData: string): Promise<void> {
   }
   await recordProfileDaemons(userData)
   const exited = new Promise((settle) => child.once('exit', settle))
-  child.kill('SIGTERM')
+  if (process.platform === 'win32') {
+    const lockPath = join(userData, ORCAD_LOCK_FILE_NAME)
+    const lock = JSON.parse(readFileSync(lockPath, 'utf8'))
+    const readiness = readinessByProfile.get(userData)
+    if (lock.pid !== child.pid || lock.startedAtMs === null || !readiness?.runtimeId) {
+      throw new Error('Cannot prove ownership of the serve process to stop')
+    }
+    const instance = { pid: lock.pid, startedAtMs: lock.startedAtMs, nonce: lock.nonce, lockPath }
+    writeFileSync(
+      orcadManagedStopRequestPath(instance),
+      JSON.stringify({
+        schemaVersion: 1,
+        transactionId: randomUUID(),
+        version: lock.version,
+        runtimeId: readiness.runtimeId,
+        instance
+      })
+    )
+  } else {
+    child.kill('SIGTERM')
+  }
+  readinessByProfile.delete(userData)
   await exited
 }
 

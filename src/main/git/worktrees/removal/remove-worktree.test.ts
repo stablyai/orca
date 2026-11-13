@@ -85,6 +85,35 @@ describe('removeWorktree', () => {
     })
   })
 
+  it('keeps an aborted removal pending until the mutation child termination is confirmed', async () => {
+    const termination = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<void>()
+    const abort = new Error('checkout delete stopped')
+    gitExecFileAsyncMock.mockImplementation(async (args, options) => {
+      if (args.includes('remove')) {
+        expect(options.spawnOnWorkerThread).toBe(true)
+        options.observeChildTermination(termination.promise, true)
+        started.resolve()
+        throw abort
+      }
+      return { stdout: '', stderr: '' }
+    })
+    let settled = false
+    const result = removeWorktree('/repo', '/repo/feature', false, {
+      knownRemovedWorktree: { branch: 'feature', head: 'abc' },
+      deleteBranch: false
+    })
+    const outcome = result.catch((error: unknown) => {
+      settled = true
+      return error
+    })
+    await started.promise
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    termination.resolve()
+    expect(await outcome).toBe(abort)
+  })
+
   it('preserves the branch when requested for a pre-existing local branch checkout', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {

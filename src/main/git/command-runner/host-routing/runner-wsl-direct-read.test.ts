@@ -1,3 +1,7 @@
+import * as processHost from '@orca/process-host'
+import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
+import { removeLocalWorktreePath } from '../../../workspaces/removal/local-worktree-filesystem'
+import { removeWorktree } from '../../worktrees/removal/worktree-removal'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeSpawnedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 
@@ -159,6 +163,115 @@ describe('WSL direct Git reads', () => {
       expect(kill?.[1]).toContain('4321')
     })
   })
+
+  it.each([
+    ['git', true],
+    ['git', false],
+    ['filesystem', true],
+    ['filesystem', false]
+  ] as const)(
+    'E1 retains %s removal until guest termination is proved: confirmed=%s',
+    async (kind, confirmed) => {
+      await withPlatform('win32', async () => {
+        vi.useFakeTimers()
+        seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
+        const command = createMockChild()
+        let guestConfirmed = confirmed
+        let barrier: ProcessTerminationBarrier | undefined
+        const runProcess = processHost.runProcess
+        const processSeam = vi
+          .spyOn(processHost, 'runProcess')
+          .mockImplementation((spec, capture) => {
+            if (spec.terminationBarrier && typeof spec.terminationBarrier === 'object') {
+              barrier ??= spec.terminationBarrier
+            }
+            return runProcess(spec, capture)
+          })
+        command.kill.mockImplementation(() => {
+          queueMicrotask(() => command.emit('close', null, 'SIGKILL'))
+          return true
+        })
+        spawnMock.mockImplementation((_program, args) => {
+          if (spawnMock.mock.calls.length === 1) {
+            queueMicrotask(() => {
+              const marker = String(args?.join(' ')).match(
+                /(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/
+              )?.[1]
+              command.stderr.emit('data', Buffer.from(`${marker}4321\n`))
+            })
+            return command
+          }
+          const terminator = createMockChild()
+          queueMicrotask(() => {
+            const running = args?.includes('--running')
+            if (running) {
+              terminator.stdout.emit('data', Buffer.from(`${DISTRO}\n`))
+            }
+            terminator.emit('close', running || guestConfirmed ? 0 : 1, null)
+          })
+          return terminator
+        })
+        const controller = new AbortController()
+        let terminated = false
+        let settled = false
+        const pending =
+          kind === 'filesystem'
+            ? removeLocalWorktreePath(
+                String.raw`C:\repo\feature`,
+                { wslDistro: DISTRO },
+                controller.signal
+              )
+            : removeWorktree(String.raw`C:\repo`, String.raw`C:\repo\feature`, false, {
+                wslDistro: DISTRO,
+                deleteBranch: false,
+                knownRemovedWorktree: { branch: 'feature', head: 'abc' },
+                checkoutDeleteSignal: controller.signal,
+                observeChildTermination: (ended) => {
+                  void ended.then(() => {
+                    terminated = true
+                  })
+                }
+              })
+        const outcome = pending.then(
+          () => {
+            settled = true
+          },
+          (error: unknown) => {
+            settled = true
+            return error
+          }
+        )
+        try {
+          await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+          await Promise.resolve()
+          controller.abort()
+          await vi.advanceTimersByTimeAsync(15_000)
+          if (confirmed) {
+            expect(await outcome).toMatchObject({ name: 'AbortError' })
+            if (kind === 'git') {
+              expect(terminated).toBe(true)
+            }
+            expect(settled).toBe(true)
+          } else {
+            expect(terminated).toBe(false)
+            expect(settled).toBe(false)
+            expect(command.kill).toHaveBeenCalled()
+            // Release the fixture's held owner with independent guest proof, never shim closure.
+            guestConfirmed = true
+            if (!barrier) {
+              throw new Error('guest barrier missing')
+            }
+            await barrier.force(command)
+            expect(await outcome).toMatchObject({ name: 'AbortError' })
+          }
+          expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('setsid --wait')
+        } finally {
+          processSeam.mockRestore()
+          vi.useRealTimers()
+        }
+      })
+    }
+  )
 
   it('stops waiting for a wedged probe and reads through the shell route', async () => {
     await withPlatform('win32', async () => {
