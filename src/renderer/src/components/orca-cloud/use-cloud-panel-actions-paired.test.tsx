@@ -26,10 +26,17 @@ vi.mock('./cloud-workspace-actions', () => ({
   wakeCloudWorkspace: vi.fn()
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-workspace-store', () => ({
-  useCloudWorkspace: (select: (state: unknown) => unknown) => select({})
+  useCloudWorkspace: (select: (state: unknown) => unknown) => select({ paired: { wt: 'env-1' } })
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-workspace-rows', () => ({
   isPairedCloudStatusRow: () => mocks.paired
+}))
+const access = vi.hoisted(() => {
+  const state: { value: string | null } = { value: null }
+  return state
+})
+vi.mock('@/components/cloud-workspaces/cloud-workspace-identity', () => ({
+  usePairedCloudAccess: () => access.value
 }))
 
 const { useCloudPanelActions } = await import('./use-cloud-panel-actions')
@@ -51,8 +58,25 @@ describe('the hovercard actions on a paired row', () => {
     ])
   })
 
-  it('a paired row offers Wake, Restart, Sleep and Delete (PAIRED-WAKE); not Archive or Move yet', () => {
+  it('PAIRED-ARCHIVE: a paired row of its creator also offers Archive and Unarchive; never Move', () => {
     mocks.paired = true
+    for (const known of [null, 'owner']) {
+      access.value = known
+      expect(offered()).toEqual([
+        'onArchive',
+        'onDelete',
+        'onRestart',
+        'onSleep',
+        'onUnarchive',
+        'onWake'
+      ])
+    }
+  })
+
+  it("a teammate's paired row (known not to be theirs) offers no Archive: only its creator can", () => {
+    mocks.paired = true
+    access.value = 'granted'
     expect(offered()).toEqual(['onDelete', 'onRestart', 'onSleep', 'onWake'])
+    access.value = null
   })
 })

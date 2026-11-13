@@ -80,7 +80,7 @@ export function archiveCloudWorkspace(
       return { ok: false, code: 'failed', message, userMessage: message }
     }
     const archived = await bridge.archive({
-      workspaceId,
+      ...cloudWorkspaceTarget(workspaceId),
       ...(deps.pullRequests?.length ? { pullRequests: deps.pullRequests } : {})
     })
     if (archived.ok) {
@@ -100,7 +100,7 @@ export function unarchiveCloudWorkspace(
     return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'unarchive', async () => {
-    const result = await bridge.unarchive({ workspaceId })
+    const result = await bridge.unarchive(cloudWorkspaceTarget(workspaceId))
     if (result.ok) {
       noteCloudArchiveChanged()
       // Mark it unarchived so the wake path's archive guard lets the wake through.

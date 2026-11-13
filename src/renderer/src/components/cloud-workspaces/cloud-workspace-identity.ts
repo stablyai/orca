@@ -10,6 +10,8 @@ export type CloudWorkspaceIdentity = {
   number: number | null
   link: string | null
   title: string | null
+  /** What this account may do with it (PAIRED-ARCHIVE: only its creator archives a sandbox). */
+  access?: CloudWorkspace['access']
 }
 
 type State = {
@@ -27,7 +29,13 @@ function publish(next: State): void {
 }
 
 function sameIdentity(a: CloudWorkspaceIdentity | undefined, b: CloudWorkspaceIdentity): boolean {
-  return a !== undefined && a.number === b.number && a.link === b.link && a.title === b.title
+  return (
+    a !== undefined &&
+    a.number === b.number &&
+    a.link === b.link &&
+    a.title === b.title &&
+    a.access === b.access
+  )
 }
 
 /** Folds a list (or one workspace) the control plane returned into the cache. */
@@ -35,7 +43,12 @@ export function rememberCloudWorkspaces(workspaces: readonly CloudWorkspace[]): 
   let changed = false
   const next = new Map(state.bySandbox)
   for (const w of workspaces) {
-    const identity = { number: w.number ?? null, link: w.link ?? null, title: w.title }
+    const identity = {
+      number: w.number ?? null,
+      link: w.link ?? null,
+      title: w.title,
+      access: w.access
+    }
     if (!sameIdentity(next.get(w.id), identity)) {
       next.set(w.id, identity)
       changed = true
@@ -126,4 +139,19 @@ export function useCloudWorktreeNumber(
 export function resetCloudWorkspaceIdentityForTests(): void {
   state = { bySandbox: new Map(), sandboxByWorktree: new Map(), sandboxByHost: new Map() }
   listeners.clear()
+}
+
+/**
+ * PAIRED-ARCHIVE: this account's access to the sandbox behind a paired server, or null while the
+ * team list hasn't named it (bindings or list not read yet).
+ */
+export function usePairedCloudAccess(
+  environmentId: string | null | undefined
+): CloudWorkspace['access'] | null {
+  return useSyncExternalStore(subscribe, () => {
+    const sandboxId = environmentId
+      ? state.sandboxByHost.get(toRuntimeExecutionHostId(environmentId))
+      : undefined
+    return (sandboxId ? state.bySandbox.get(sandboxId)?.access : undefined) ?? null
+  })
 }

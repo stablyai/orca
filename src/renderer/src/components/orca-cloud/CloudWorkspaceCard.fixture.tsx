@@ -27,9 +27,15 @@ const actions = {
   onMoveToComputer: noop,
   onDelete: noop
 }
-// PAIRED-CHROME: what a paired row (created on another desktop) can do today: no Archive or Move
-// until PAIRED-ARCHIVE.
-const pairedActions = { onWake: noop, onRestart: noop, onSleep: noop, onDelete: noop }
+// A paired row (created on another desktop): everything but Move to this computer (PAIRED-ARCHIVE).
+const pairedActions = {
+  onWake: noop,
+  onRestart: noop,
+  onArchive: noop,
+  onUnarchive: noop,
+  onSleep: noop,
+  onDelete: noop
+}
 
 const running: HostedWorkspaceStatus = {
   state: 'ready',
@@ -194,7 +200,7 @@ export const menuOpen = defineFixture({
 export const pairedRunningCard = card({ id: 'card-paired-running', paired: true })
 /** PAIRED-CHROME: a paired row asleep: Wake, as on an owned row. */
 export const pairedAsleepCard = card({ id: 'card-paired-asleep', state: 'sleeping', paired: true })
-/** PAIRED-CHROME: the ⋯ menu on a paired row: Details, Restart and Delete; no Move or Archive. */
+/** PAIRED-ARCHIVE: the ⋯ menu on a paired row: Details, Restart, Archive and Delete; no Move. */
 export const pairedMenuOpen = defineFixture({
   width: 320,
   render: () => (
@@ -218,6 +224,13 @@ export const pairedMenuOpen = defineFixture({
       ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
+})
+
+/** PAIRED-ARCHIVE: a paired row archived: the same snapshot line and Unarchive as an owned one. */
+export const pairedArchivedCard = card({
+  id: 'card-paired-archived',
+  state: 'archived',
+  paired: true
 })
 
 /** Archived: the snapshot line names the day it is deleted; Unarchive is the one action. */

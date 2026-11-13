@@ -77,11 +77,11 @@ export type OrcaCloudWorkspaceApi = {
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
   restart: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
-  archive: (args: {
-    workspaceId: string
-    pullRequests?: HostedArchivePullRequest[]
-  }) => Promise<CloudWorkspaceResult<null>>
-  unarchive: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
+  archive: (
+    args: CloudWorkspaceTarget & { pullRequests?: HostedArchivePullRequest[] }
+  ) => Promise<CloudWorkspaceResult<null>>
+  /** A paired one also names its server (PAIRED-ARCHIVE), as for status and restart. */
+  unarchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   getArchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
   /** Workspace ids of every Orca Cloud workspace this desktop knows (the sidebar dot / hover card). */
   listCloudWorkspaceIds: () => Promise<string[]>
