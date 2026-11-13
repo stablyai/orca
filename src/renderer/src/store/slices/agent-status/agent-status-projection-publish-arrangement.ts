@@ -15,7 +15,7 @@ export function publishProjectionArrangement(
   state: AppState,
   topology: ProjectionTopology,
   rows: ProjectionRows,
-  arrange: Set<string>
+  { arrange, cleanup }: { arrange: Set<string>; cleanup: Set<string> }
 ): void {
   const { changedTabs } = topology
   const { prepared } = rows
@@ -93,10 +93,7 @@ export function publishProjectionArrangement(
       }
     }
   }
-  for (const owner of new Set([
-    ...arrange,
-    ...[...prepared.values()].flatMap((row) => (row.worktreeId ? [row.worktreeId] : []))
-  ])) {
+  for (const owner of cleanup) {
     const b = data.worktrees.get(owner)
     if (b && !b.keys.size && !b.counts.size) {
       data.worktrees.delete(owner)

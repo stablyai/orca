@@ -196,8 +196,8 @@ export class AgentStatusProjection {
       }
       publishCounts()
       publishProjectionTopology(data, state, changes, topology, rows)
-      const arrange = publishProjectionRows(data, state, topology, rows)
-      publishProjectionArrangement(data, state, topology, rows, arrange)
+      const rowUpdates = publishProjectionRows(data, state, topology, rows)
+      publishProjectionArrangement(data, state, topology, rows, rowUpdates)
     }
   }
 }

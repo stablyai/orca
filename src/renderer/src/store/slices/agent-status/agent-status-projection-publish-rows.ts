@@ -16,14 +16,28 @@ export function publishProjectionRows(
   state: AppState,
   topology: ProjectionTopology,
   rows: ProjectionRows
-): Set<string> {
+): { arrange: Set<string>; cleanup: Set<string> } {
   const { moved, acceptedKeys, now, ownerOf } = topology
   const { prepared } = rows
   const arrange = new Set<string>()
+  const cleanup = new Set<string>()
   for (const [key, next] of prepared) {
+    const previousContribution = data.contributions.get(key)
+    if (previousContribution) {
+      cleanup.add(previousContribution.worktreeId)
+    }
+    if (next.contribution) {
+      cleanup.add(next.contribution.worktreeId)
+    }
     data.replaceContribution(key, next.contribution)
     const oldKeys = data.rowsForSource.get(key) ?? EMPTY_KEYS,
       oldOwner = data.ownerForSource.get(key)
+    if (oldOwner) {
+      cleanup.add(oldOwner)
+    }
+    if (next.worktreeId) {
+      cleanup.add(next.worktreeId)
+    }
     for (const rowKey of oldKeys) {
       if (oldOwner !== next.worktreeId || !next.rows.some((row) => row.paneKey === rowKey)) {
         if (oldOwner) {
@@ -201,5 +215,5 @@ export function publishProjectionRows(
       }
     }
   }
-  return arrange
+  return { arrange, cleanup }
 }
