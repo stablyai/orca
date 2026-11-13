@@ -16,7 +16,8 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import { SleptMailboxWake } from './slept-mailbox-wake'
-import { sleepingMailOwnerMailboxes } from './sleeping-mail-owner-mailboxes'
+import { countDiscoveryRows } from './sleeping-mail-discovery-work.test-fixture'
+import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 
 const pane = 'tab:11111111-1111-4111-8111-111111111111'
 const otherPane = 'other:22222222-2222-4222-8222-222222222222'
@@ -156,7 +157,11 @@ it.each([10, 100])(
         expect(getRun.mock.calls.length).toBe(baseline)
       }
       expect(discover).not.toHaveBeenCalled()
-      expect(prepare.mock.calls.filter(([sql]) => sql.includes('WITH candidates'))).toEqual([])
+      expect(
+        prepare.mock.calls.filter(([sql]) =>
+          /FROM (runs|dispatch_contexts|remote_dispatch_attachments) INDEXED BY/.test(sql)
+        )
+      ).toEqual([])
       await expect(runtime.readSleepingMailHold('term_history')).resolves.toBeNull()
     } finally {
       vi.restoreAllMocks()
@@ -209,7 +214,11 @@ it.each([10, 100])(
       })
       getRun.mockClear()
       await settled()
-      expect(prepare.mock.calls.filter(([sql]) => sql.includes('WITH candidates'))).toEqual([])
+      expect(
+        prepare.mock.calls.filter(([sql]) =>
+          /FROM (runs|dispatch_contexts|remote_dispatch_attachments) INDEXED BY/.test(sql)
+        )
+      ).toEqual([])
       // This message's Run scope needs one current owner read; unrelated history contributes none.
       expect(getRun.mock.calls).toEqual([[runs[0]!.id]])
       changeSessionTopology()
@@ -230,7 +239,7 @@ it.each([10, 100])(
 )
 
 it.each([10, 100])(
-  'a changed pane discovers eligible old mail without walking %i historical runs',
+  'a changed pane discovers old eligible mail across its %i currently bound runs',
   async (count) => {
     const db = new OrchestrationDb(':memory:')
     const runs = Array.from({ length: count }, () =>
@@ -267,10 +276,14 @@ it.each([10, 100])(
       await settled()
       expect(bell).toHaveBeenLastCalledWith(['folder:projection'])
       expect(newest.mock.calls.map(([address]) => address)).toEqual([mailbox, mailbox, mailbox])
-      // Refresh, request and batch each resolve this one candidate; no history-dependent lookup.
+      // Only the selected mailbox needs full owner resolution; discovery seeks the current pane range.
       expect(new Set(getRun.mock.calls.map(([id]) => id))).toEqual(new Set([oldest.id]))
       expect(getRun.mock.calls.length).toBeLessThanOrEqual(5)
-      expect(prepare.mock.calls.filter(([sql]) => sql.includes('WITH candidates'))).toHaveLength(1)
+      expect(
+        prepare.mock.calls.filter(([sql]) =>
+          /FROM (runs|dispatch_contexts|remote_dispatch_attachments) INDEXED BY/.test(sql)
+        )
+      ).toHaveLength(3)
       expect(await runtime.readSleepingMailHold(mailbox)).toMatchObject({ openTab: true })
       newest.mockClear()
       write({ [pane]: { ...sleeper, mailWake: { id: 'custody', capturedAt: 1, startedAt: 2 } } })
@@ -339,7 +352,7 @@ it.each([10, 100])(
       expect(callback).not.toHaveBeenCalled()
       write({ ...equivalent, 'pane-0': { ...equivalent['pane-0']!, capturedAt: 2 } })
       await settled()
-      expect(discover.mock.calls).toEqual([['pane-0']])
+      expect(discover.mock.calls.map(([paneKey]) => paneKey)).toEqual(['pane-0'])
       expect(callback.mock.calls).toEqual([['pane-0']])
     } finally {
       vi.restoreAllMocks()
@@ -415,85 +428,125 @@ it('updates equivalent references, maintains invocation-only changes, and scopes
 })
 
 it.each([10, 100])(
-  'populated discovery plans lead eligible mail, not %i historical owner rows',
-  (count) => {
+  'real record/topology producers stay within changed owner ranges with %i unrelated eligible pairs',
+  async (n) => {
     const db = new OrchestrationDb(':memory:')
+    const ownerKey = (i: number) =>
+      `tab-${i}:11111111-1111-4111-8111-${String(i).padStart(12, '0')}`
+    const owners = Array.from({ length: 3 }, (_, i) => {
+      const paneKey = ownerKey(i)
+      const run = db.createRun({
+        objective: 'old current owner',
+        coordinatorHandle: `term_owner_${i}`,
+        coordinatorPaneKey: paneKey
+      })
+      db.createRun({
+        objective: 'new current owner, empty',
+        coordinatorHandle: `term_owner_${i}`,
+        coordinatorPaneKey: paneKey
+      })
+      const task = db.createTask({ spec: 'owned', runId: run.id })
+      const dispatch = createRootDispatch(db, task.id, `term_owner_${i}`, paneKey)
+      for (const to of [`run:${run.id}`, `dispatch:${dispatch.id}`]) {
+        db.insertMessage({ runId: run.id, from: 'worker', to, subject: 'eligible' })
+      }
+      return { paneKey, dispatch }
+    })
+    for (let i = 0; i < n; i++) {
+      const run = db.createRun({
+        objective: 'unrelated eligible',
+        coordinatorHandle: `term_unrelated_${i}`,
+        coordinatorPaneKey: ownerKey(1000 + i)
+      })
+      const task = db.createTask({ spec: 'unrelated', runId: run.id })
+      const dispatch = createRootDispatch(db, task.id, `term_unrelated_${i}`, ownerKey(1000 + i))
+      for (const to of [`run:${run.id}`, `dispatch:${dispatch.id}`]) {
+        db.insertMessage({ runId: run.id, from: 'worker', to, subject: 'eligible' })
+      }
+    }
+    db.db.exec('ANALYZE')
+    const { runtime, write, bell } = fixture(db)
     try {
-      const runs = Array.from({ length: count }, () =>
-        db.createRun({
-          objective: 'history',
-          coordinatorHandle: 'term_history',
-          coordinatorPaneKey: pane
+      await settled()
+      const work = countDiscoveryRows(db)
+      const inventory = vi.spyOn(db, 'getUndeliveredUnreadMailboxHandles')
+      for (const k of [1, 3]) {
+        write({})
+        await settled()
+        work.clear()
+        write(
+          Object.fromEntries(
+            owners.slice(0, k).map(({ paneKey }) => [paneKey, { ...sleeper, paneKey }])
+          )
+        )
+        await settled()
+        expect(bell).toHaveBeenLastCalledWith(['folder:projection'])
+        // Each changed owner has two current Runs and one active Dispatch; two inboxes have mail.
+        expect(work.owners).toHaveLength(3 * k)
+        expect(work.probes).toHaveLength(3 * k)
+        expect(work.messages).toHaveLength(2 * k)
+        expect(
+          work.plans.filter((detail) => /SCAN (?!CONSTANT ROW)|MATERIALIZE/.test(detail))
+        ).toEqual([])
+        console.info(
+          'producer-owner-proof',
+          JSON.stringify({
+            unrelatedEligible: 2 * n,
+            k,
+            ownerRows: work.owners.length,
+            probes: work.probes.length,
+            messageRows: work.messages.length,
+            plans: [...new Set(work.plans)]
+          })
+        )
+      }
+      work.clear()
+      changeSessionTopology()
+      await settled()
+      expect(work.owners).toEqual([])
+      expect(work.probes).toEqual([])
+      expect(work.messages).toEqual([])
+      expect(
+        work.plans.filter((detail) => /SCAN (?!CONSTANT ROW)|MATERIALIZE/.test(detail))
+      ).toEqual([])
+      console.info(
+        'unrelated-session-proof',
+        JSON.stringify({
+          unrelatedEligible: 2 * n,
+          ownerRows: work.owners.length,
+          probes: work.probes.length,
+          plans: [...new Set(work.plans)]
         })
       )
-      const first = runs[0]!
-      db.insertMessage({
-        runId: first.id,
-        from: 'worker',
-        to: `run:${first.id}`,
-        subject: 'eligible'
-      })
-      for (let i = 0; i < count; i++) {
-        db.db
-          .prepare(`INSERT INTO remote_dispatch_attachments
-          (dispatch_id, task_id, home_peer_fingerprint, runtime_epoch, pane_key, state, terminal_handle)
-          VALUES (?, 'task', 'peer', 'epoch', ?, 'ready', 'term_history')`)
-          .run(`remote-${i}`, pane)
-      }
-      db.insertMessage({
-        runId: first.id,
-        from: 'worker',
-        to: 'dispatch:remote-0',
-        subject: 'remote eligible'
-      })
-      db.db.exec('ANALYZE')
-      const prepare = vi.spyOn(db.db, 'prepare')
-      expect(sleepingMailOwnerMailboxes(db, pane)).toEqual([`run:${first.id}`, 'dispatch:remote-0'])
-      const sql = prepare.mock.calls.find(([sql]) => sql.includes('WITH candidates'))![0]
-      prepare.mockRestore()
-      const plans = db.db
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all(pane.slice(4), pane.slice(4), pane.slice(4))
-        .map((row) => String(row.detail))
-      expect(plans.some((detail) => detail.includes('idx_messages_mail_wake_candidate'))).toBe(true)
+      work.clear()
+      db.completeDispatch(owners[0]!.dispatch.id)
+      await settled()
+      // Captured owner identities avoid alias discovery; known inboxes refresh without existence probes.
+      expect(work.owners).toHaveLength(2)
+      expect(work.probes).toHaveLength(1)
+      expect(work.messages).toEqual([])
       expect(
-        plans.filter((detail) =>
-          /SCAN (runs|dispatch_contexts|remote_dispatch_attachments)/.test(detail)
+        work.plans.some((detail) =>
+          /idx_runs_current_coordinator_handle|idx_dispatch_assignee_handle|idx_crew_remote_handle/.test(
+            detail
+          )
         )
-      ).toEqual([])
-      expect(plans.some((detail) => /SEARCH runs .*\(id=\?\)/.test(detail))).toBe(true)
-      expect(plans.some((detail) => /SEARCH dispatch_contexts .*\(id=\?\)/.test(detail))).toBe(true)
-      expect(plans).toEqual(
-        expect.arrayContaining([
-          expect.stringMatching(/SEARCH remote_dispatch_attachments .*\(dispatch_id=\?\)/)
-        ])
+      ).toBe(false)
+      expect(inventory).not.toHaveBeenCalled()
+      console.info(
+        'completion-proof',
+        JSON.stringify({
+          unrelatedEligible: 2 * n,
+          ownerRows: work.owners.length,
+          probes: work.probes.length,
+          messageRows: work.messages.length,
+          plans: [...new Set(work.plans)]
+        })
       )
-      const addressQuery = vi.spyOn(db.db, 'prepare')
-      expect(sleepingMailOwnerMailboxes(db, null, 'term_history')).toEqual([
-        `run:${first.id}`,
-        'dispatch:remote-0'
-      ])
-      const addressSql = addressQuery.mock.calls.find(([sql]) =>
-        sql.includes('WITH candidates')
-      )![0]
-      addressQuery.mockRestore()
-      const addressPlans = db.db
-        .prepare(`EXPLAIN QUERY PLAN ${addressSql}`)
-        .all('term_history', null, 'term_history', null, 'term_history')
-        .map((row) => String(row.detail))
-      expect(
-        addressPlans.filter((detail) =>
-          /SCAN (runs|dispatch_contexts|remote_dispatch_attachments)/.test(detail)
-        )
-      ).toEqual([])
-      expect(addressPlans).toEqual(
-        expect.arrayContaining([
-          expect.stringMatching(/SEARCH runs .*\(id=\?\)/),
-          expect.stringMatching(/SEARCH remote_dispatch_attachments .*\(dispatch_id=\?\)/)
-        ])
-      )
+      work.stop()
     } finally {
       vi.restoreAllMocks()
+      runtime.setNotifier(null)
       db.close()
     }
   }

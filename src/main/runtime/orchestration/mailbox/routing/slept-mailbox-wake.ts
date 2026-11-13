@@ -150,9 +150,11 @@ export class SleptMailboxWake {
     }
   }
 
-  discover(paneKey: string): readonly string[] {
+  discover(paneKey: string, visited?: Set<string>): readonly string[] {
     const db = this.deps.db()
-    return db && this.hasObligation(paneKey) ? sleepingMailOwnerMailboxes(db, paneKey) : []
+    return db && this.hasObligation(paneKey)
+      ? sleepingMailOwnerMailboxes(db, paneKey, undefined, undefined, visited)
+      : []
   }
 
   hasObligation(paneKey: string): boolean {
