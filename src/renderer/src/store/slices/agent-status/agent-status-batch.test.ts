@@ -223,6 +223,29 @@ describe('setAgentStatuses', () => {
           { rendererPtyId: null, row: { prompt: 'unbound' } }
         ])
         expect(visits).toBe(0)
+        const deep = (count: number): TerminalPaneLayoutNode =>
+          count === 1
+            ? tree(1)
+            : {
+                type: 'split',
+                direction: 'horizontal',
+                first: deep(count - 1),
+                second: tree(1, count)
+              }
+        store.setState({
+          tabsByWorktree: {
+            'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', title: 'pi', ptyId: 'sole-tab' })]
+          },
+          terminalLayoutsByTabId: { 'tab-1': { ...layout, root: deep(width), ptyIdsByLeafId: {} } }
+        })
+        await vi.advanceTimersByTimeAsync(16)
+        visits = 0
+        store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'deep' })
+        await vi.advanceTimersByTimeAsync(16)
+        expect(batches.at(-1)?.rows).toMatchObject([
+          { rendererPtyId: null, row: { prompt: 'deep' } }
+        ])
+        expect(visits).toBe(0)
       } finally {
         stop()
         unregister()

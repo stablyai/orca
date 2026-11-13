@@ -65,12 +65,23 @@ export function rendererTerminalBinding(
   return (typeof leafCount === 'function' ? leafCount() : leafCount) === 1 ? tabPtyId : null
 }
 
+const savedTerminalLeafCountByRoot = new WeakMap<object, number>()
+
 /** Saved terminal leaves counted up to 2: the binding only asks "exactly one?". */
 export function countSavedTerminalLeavesUpToTwo(
   savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
 ): number {
+  const root = savedLayout?.root
+  if (!root) {
+    return 0
+  }
+  // Why: saved layouts are immutable store values, so status churn reuses the count.
+  const cached = savedTerminalLeafCountByRoot.get(root)
+  if (cached !== undefined) {
+    return cached
+  }
   let count = 0
-  const stack = savedLayout?.root ? [savedLayout.root] : []
+  const stack = [root]
   while (stack.length > 0 && count < 2) {
     const node = stack.pop()!
     if (node.type === 'leaf') {
@@ -79,6 +90,7 @@ export function countSavedTerminalLeavesUpToTwo(
       stack.push(node.second, node.first)
     }
   }
+  savedTerminalLeafCountByRoot.set(root, count)
   return count
 }
 
