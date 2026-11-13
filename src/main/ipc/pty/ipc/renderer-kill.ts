@@ -52,7 +52,7 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
 export async function stopReplacedPanePty(
   deps: PtyKillIpcDeps,
   id: string
-): Promise<PtyRetirementEvidence> {
+): Promise<PtyRetirementEvidence | void> {
   return stopRendererOwnedPtyAs(deps, { id }, 'replaced')
 }
 
@@ -69,7 +69,7 @@ async function stopRendererOwnedPtyAs(
   deps: PtyKillIpcDeps,
   args: { id: string; keepHistory?: boolean },
   intentionalStop: TerminalIntentionalStopKind | null
-): Promise<PtyRetirementEvidence> {
+): Promise<PtyRetirementEvidence | void> {
   if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
     // Runtime handles belong to terminal.close; unowned routing could target a local provider.
     throw new Error('Invalid PTY provider id')
@@ -98,16 +98,14 @@ async function stopRendererOwnedPtyAs(
 async function stopRendererOwnedPtyProcess(
   deps: PtyKillIpcDeps,
   args: { id: string; keepHistory?: boolean }
-): Promise<PtyRetirementEvidence> {
+): Promise<PtyRetirementEvidence | void> {
   const { store, runtime, getLocalPtyProviderStartupPromise, shutdownProviderAndDetectExit } = deps
   runtime?.markPtyStopRequested?.(args.id)
   const connectionId = getPtySshConnectionId(args.id)
   const bridgedStop = stopLegacyRelayBridgedPty(args.id, connectionId, args.keepHistory === true)
   if (bridgedStop) {
     await bridgedStop
-    return PtyRetirementWithoutProof.because(
-      'the legacy relay stop did not return incarnation proof'
-    )
+    return
   }
   // Await daemon ownership handoff before shutdown or fallback can orphan restored PTYs (#7742).
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(args.id))
