@@ -67,7 +67,7 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
-import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
+import { structuredAgentSessionPaneReadFailure } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
@@ -149,11 +149,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     startFailures,
     agentName: agentLabel
   })
-  // A lost contact is the host notice's to say; the read adds only a refusal the host sent.
-  const readFailure =
-    controller.status === 'error' && !(hostOutage && !controller.readRefusal)
-      ? structuredAgentSessionReadFailureNotice(controller.readRefusal)
-      : null
+  const readFailure = structuredAgentSessionPaneReadFailure(controller, hostOutage)
   // Final read refusal replaces the pane because no existing action can succeed.
   const viewState = selectNativeChatViewState(session, { readRetries: readFailure?.final !== true })
   const paneActive = props.isVisible && props.isFocusedGroup

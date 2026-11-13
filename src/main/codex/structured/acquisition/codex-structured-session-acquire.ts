@@ -4,10 +4,7 @@ import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
 } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import type {
-  AgentSessionAcquisition,
-  StructuredAgentSessionAcquireInput
-} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { AgentSessionAcquisition } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   closeFailedCodexAcquisition,
@@ -31,39 +28,15 @@ import { providerSpawnAbsent } from '../../../provider-process/provider-executab
 import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   assertCodexConnectionOpen,
-  mintCodexAcquisitionGeneration,
-  type CodexAcquisitionRegistry,
-  type CodexAcquisitionAttempt,
-  type CodexSession,
-  type CodexStructuredSessionAdapterDeps
+  mintCodexAcquisitionGeneration
 } from '../session-lifecycle/codex-structured-session-state'
-import type { CodexStructuredSessionTeardown } from '../session-lifecycle/codex-structured-session-teardown'
-import type { CodexStructuredNotificationRetry } from '../session-lifecycle/codex-structured-notification-retry'
-import type { deliverCodexServerRequest } from '../session-lifecycle/codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
-import type { CodexRealtimeVoice } from '../realtime/codex-realtime-voice'
+import type { CodexStructuredSessionAcquireRequest } from './codex-structured-session-acquire-request'
 
-export async function acquireCodexStructuredSession(input: {
-  input: StructuredAgentSessionAcquireInput
-  deps: CodexStructuredSessionAdapterDeps
-  sessions: Map<string, CodexSession>
-  acquisitions: CodexAcquisitionRegistry
-  notificationRetries: CodexStructuredNotificationRetry
-  deliver: (
-    acquisition: CodexAcquisitionAttempt['window'],
-    sessionId: string,
-    event: () => unknown,
-    retainedBytes?: number
-  ) => void
-  handleServerRequest: (
-    sessionId: string,
-    request: Parameters<typeof deliverCodexServerRequest>[2]
-  ) => void
-  handleUnhandledFrame: (sessionId: string, kind: string, payload: unknown) => void
-  forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
-  observeRealtime?: CodexRealtimeVoice['observe']
-}): Promise<AgentSessionAcquisition> {
+export async function acquireCodexStructuredSession(
+  input: CodexStructuredSessionAcquireRequest
+): Promise<AgentSessionAcquisition> {
   const { input: acquireInput, deps, sessions, acquisitions, notificationRetries } = input
   const sessionId = acquireInput.identity.sessionId
   const { previousAttempt, attempt } = acquisitions.start(sessionId)
