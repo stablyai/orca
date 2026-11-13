@@ -109,5 +109,22 @@ export const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
+  },
+  userImageAttachments: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  imageCompactThumb: {
+    width: 58,
+    height: 58,
+    borderRadius: radii.control
+  },
+  imageRetryText: {
+    fontSize: typography.metaSize
+  },
+  imageLoading: {
+    alignItems: 'center',
+    justifyContent: 'center'
   }
 }))
