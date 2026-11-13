@@ -16,6 +16,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 import { buildRuntimeMobileAgentStatus } from '../../session-lifecycle/projection/runtime-mobile-agent-status-builder'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 
 describe('terminal rename before renderer graph hydration', () => {
   it.each(['Media Engine Orch', null])(
@@ -72,6 +73,46 @@ describe('terminal rename before renderer graph hydration', () => {
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(title)
     }
   )
+
+  it('publishes the name to paired clients while no window pane holds the terminal', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'paired-client-pty' }))),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const published: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot), 'paired-desktop')
+
+    await runtime.renameTerminal(created.handle, 'Cafe24 - 44793')
+
+    expect(
+      published
+        .at(-1)
+        ?.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab')
+    ).toMatchObject({ customTitle: 'Cafe24 - 44793' })
+  })
 })
 
 describe('terminal rename display', () => {
