@@ -3,6 +3,10 @@ import type {
   PreparedProfileStateWrite
 } from '../../loading-store/profile-writing/profile-state-authority'
 import { isRecord } from '../documents/profile-state-document-validation'
+import {
+  isProfileStateDenseArray,
+  isProfileStateStringArray
+} from '../documents/profile-state-domain-patches'
 
 export type ProfileStateWriterInitialization = {
   databasePath: string
@@ -69,36 +73,32 @@ function isReplacement(value: unknown): value is ProfileStateDomainReplacement {
   )
 }
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry: unknown) => typeof entry === 'string')
-}
-
 function isPatchOperation(value: unknown): boolean {
   return (
     isRecord(value) &&
-    isStringArray(value.path) &&
+    isProfileStateStringArray(value.path) &&
     (value.kind === 'remove' ||
       (value.kind === 'set' && typeof value.payload === 'string') ||
-      (value.kind === 'order' && isStringArray(value.keys)))
+      (value.kind === 'order' && isProfileStateStringArray(value.keys)))
   )
 }
 
 function isPreparedWrite(value: unknown): value is PreparedProfileStateWrite {
   return (
     isRecord(value) &&
-    isStringArray(value.domainOrder) &&
-    Array.isArray(value.replacements) &&
+    isProfileStateStringArray(value.domainOrder) &&
+    isProfileStateDenseArray(value.replacements) &&
     value.replacements.every(isReplacement) &&
-    Array.isArray(value.patches) &&
+    isProfileStateDenseArray(value.patches) &&
     value.patches.every(
       (patch: unknown) =>
         isRecord(patch) &&
         typeof patch.domain === 'string' &&
-        Array.isArray(patch.operations) &&
+        isProfileStateDenseArray(patch.operations) &&
         patch.operations.every(isPatchOperation)
     ) &&
     (value.complete === undefined || typeof value.complete === 'boolean') &&
-    (value.runPayloads === undefined || isStringArray(value.runPayloads))
+    (value.runPayloads === undefined || isProfileStateStringArray(value.runPayloads))
   )
 }
 
@@ -123,13 +123,12 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
       return typeof value.targetPath === 'string' && value.targetPath.length > 0
     case 'write-complete':
     case 'write-domains':
-      return Array.isArray(value.replacements) && value.replacements.every(isReplacement)
+      return isProfileStateDenseArray(value.replacements) && value.replacements.every(isReplacement)
     case 'write-automation':
       return (
-        Array.isArray(value.replacements) &&
+        isProfileStateDenseArray(value.replacements) &&
         value.replacements.every(isReplacement) &&
-        Array.isArray(value.runPayloads) &&
-        value.runPayloads.every((payload: unknown) => typeof payload === 'string')
+        isProfileStateStringArray(value.runPayloads)
       )
     default:
       return false

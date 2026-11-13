@@ -81,9 +81,11 @@ export function capturePreparedProfileStateWrite({
   const domainOrder: string[] = []
   const replacements: ProfileStateDomainReplacement[] = []
   const patches: ProfileStateDomainPatch[] = []
-  const fingerprint = complete
-    ? createHash('sha1').update(protectedStorageDegraded ? 'safeStorage-degraded\0' : '')
-    : undefined
+  const fingerprint = complete ? createHash('sha1') : undefined
+  const hashField = (value: string): void => {
+    fingerprint?.update(`${value.length}:`, 'utf16le').update(value, 'utf16le')
+  }
+  hashField(protectedStorageDegraded ? 'degraded' : 'protected')
   let eligibleComplete = complete && !pendingEncryption
   let splitEqual = true
   // Complete serialization captures entries before any hook; selective reads each key in turn.
@@ -100,7 +102,8 @@ export function capturePreparedProfileStateWrite({
       appendProfileStateOwnValue(patches, captured.patch)
       candidates.set(domain, captured.value)
       splitEqual &&= captured.patch.operations.length === 0
-      fingerprint?.update(JSON.stringify([domain, 'split']))
+      hashField('split')
+      hashField(domain)
       continue
     }
     if (split) {
@@ -125,7 +128,9 @@ export function capturePreparedProfileStateWrite({
       appendProfileStateOwnValue(replacements, { domain, payload })
     }
     if (complete && !split && payload !== null) {
-      fingerprint?.update(JSON.stringify([domain, 'value', substituted!.stateHash]))
+      hashField('value')
+      hashField(domain)
+      hashField(substituted!.stateHash)
     }
     if (split) {
       candidates.set(domain, payload === null ? undefined : JSON.parse(payload))

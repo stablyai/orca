@@ -151,6 +151,113 @@ describe('profile state split capture', () => {
     expect(observations).toBe(0)
   })
 
+  it('leaves accessor descriptors with an inherited data value to native fallback once', () => {
+    const snapshots = new ProfileStateSplitSnapshots()
+    snapshots.seed({ workspaceSession: {} })
+    let reads = 0
+    let calls = ''
+    const stateToSave = {
+      workspaceSession: {
+        get toJSON() {
+          reads++
+          return (key: string) => {
+            calls += key
+            return { activeTabId: 'native' }
+          }
+        }
+      }
+    }
+    let captured: ReturnType<typeof capturePreparedProfileStateWrite>
+    Object.defineProperty(Object.prototype, 'value', { value: 'inherited', configurable: true })
+    try {
+      captured = capturePreparedProfileStateWrite({
+        snapshots,
+        stateToSave,
+        complete: true,
+        secretSubs: [],
+        protectedSecretUpdates: []
+      })
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'value')
+    }
+    expect(reads).toBe(1)
+    expect(calls).toBe('workspaceSession')
+    expect(captured.write?.replacements).toEqual([
+      { domain: 'workspaceSession', payload: '{"activeTabId":"native"}' }
+    ])
+  })
+
+  it('hashes complete bookkeeping without invoking additional native array hooks', () => {
+    const snapshots = new ProfileStateSplitSnapshots()
+    snapshots.seed({ workspaceSession: {} })
+    let keys = ''
+    let plain: ReturnType<typeof capturePreparedProfileStateWrite>
+    let array: ReturnType<typeof capturePreparedProfileStateWrite>
+    Object.defineProperty(Array.prototype, 'toJSON', {
+      configurable: true,
+      value(key: string) {
+        keys += `${key};`
+        if (key !== 'marker') {
+          throw new Error('unexpected metadata serialization')
+        }
+        return ['native']
+      }
+    })
+    try {
+      plain = capturePreparedProfileStateWrite({
+        snapshots,
+        stateToSave: { workspaceSession: {}, marker: 'kept' },
+        complete: true,
+        secretSubs: [],
+        protectedSecretUpdates: []
+      })
+      array = capturePreparedProfileStateWrite({
+        snapshots,
+        stateToSave: { workspaceSession: {}, marker: [] },
+        complete: true,
+        secretSubs: [],
+        protectedSecretUpdates: []
+      })
+    } finally {
+      Reflect.deleteProperty(Array.prototype, 'toJSON')
+    }
+    expect(keys).toBe('marker;')
+    expect(plain.write?.replacements).toEqual([
+      { domain: 'workspaceSession', payload: '{}' },
+      { domain: 'marker', payload: '"kept"' }
+    ])
+    expect(array.write?.replacements).toEqual([
+      { domain: 'workspaceSession', payload: '{}' },
+      { domain: 'marker', payload: '["native"]' }
+    ])
+  })
+
+  it('does not skip changed complete names, order or protection state', () => {
+    const snapshots = new ProfileStateSplitSnapshots()
+    snapshots.seed({})
+    const capture = (stateToSave: Record<string, unknown>, protectedStorageDegraded = false) =>
+      capturePreparedProfileStateWrite({
+        snapshots,
+        stateToSave,
+        protectedStorageDegraded,
+        complete: true,
+        secretSubs: [],
+        protectedSecretUpdates: []
+      })
+    const original = { ':': 'saved', '\ud800': 'same' }
+    capture(original).acknowledge()
+    expect(capture(original).unchanged).toBe(true)
+    const changed = capture({ ':': 'saved', '\ud801': 'same' })
+    expect(changed.unchanged).toBe(false)
+    expect(changed.write?.replacements).toEqual([
+      { domain: ':', payload: '"saved"' },
+      { domain: '\ud801', payload: '"same"' }
+    ])
+    expect(capture({ '\ud800': 'same', ':': 'saved' }).unchanged).toBe(false)
+    expect(capture(original, true).unchanged).toBe(false)
+    expect(capture({ ':': '' }).unchanged).toBe(false)
+  })
+
   it('seeds an absent root and rejects missing order targets without inherited reads', () => {
     const snapshots = new ProfileStateSplitSnapshots()
     const [patch] = prepareProfileStateDomainPatches([

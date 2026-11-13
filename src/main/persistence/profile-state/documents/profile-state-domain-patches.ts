@@ -22,7 +22,7 @@ export type PreparedProfileStateDomainPatch = {
 
 type PathNode = { mutation?: boolean; order?: boolean; children: Map<string, PathNode> }
 
-function isDenseArray(value: unknown): value is unknown[] {
+export function isProfileStateDenseArray(value: unknown): value is unknown[] {
   if (!Array.isArray(value)) {
     return false
   }
@@ -36,13 +36,13 @@ function isDenseArray(value: unknown): value is unknown[] {
 }
 
 export function isProfileStateStringArray(value: unknown): value is string[] {
-  return isDenseArray(value) && value.every((entry) => typeof entry === 'string')
+  return isProfileStateDenseArray(value) && value.every((entry) => typeof entry === 'string')
 }
 
 export function prepareProfileStateDomainPatches(
   patches: readonly ProfileStateDomainPatch[]
 ): PreparedProfileStateDomainPatch[] {
-  if (!isDenseArray(patches)) {
+  if (!isProfileStateDenseArray(patches)) {
     throw new Error('Profile state patches must be an array')
   }
   const domains = new Set<string>()
@@ -51,7 +51,11 @@ export function prepareProfileStateDomainPatches(
       isRecord(patch) && typeof patch.domain === 'string'
         ? PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(patch.domain)
         : undefined
-    if (depth === undefined || domains.has(patch.domain) || !isDenseArray(patch.operations)) {
+    if (
+      depth === undefined ||
+      domains.has(patch.domain) ||
+      !isProfileStateDenseArray(patch.operations)
+    ) {
       throw new Error('Profile state patch domain is invalid or repeated')
     }
     domains.add(patch.domain)
