@@ -46,6 +46,29 @@ export type NativeChatTranscriptRowContext = {
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
 
+/**
+ * Margins that space the "New" line evenly between what it separates: a full row gap above (20px
+ * at the default size), trimmed below so the next text reads as far from the line as the block above.
+ * Above the turn bar, the bar's own top padding asks for a deeper trim. Your sent bubble ends in its
+ * hover-only copy and time row; that blank row counts as space above, so the line moves up into it.
+ */
+function newRowsMarkerSpacing(
+  place: NativeChatNewRowsMarkerState['place'],
+  slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>,
+  deliveryNotice: NativeChatDeliveryNotice | undefined
+): string {
+  if (place === 'above-row') {
+    return '-mb-1.5'
+  }
+  const afterHoverMeta =
+    slot.drawsMessage &&
+    !slot.receipt &&
+    slot.message.role === 'user' &&
+    !slot.message.from &&
+    deliveryNotice === undefined
+  return cn('-mb-3', afterHoverMeta && '-mt-6')
+}
+
 /** Wrap message, status and rollup for one virtualized measurement; internal spacing is the row’s, inter-row gaps the window’s. */
 export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
@@ -77,7 +100,11 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
-    <NativeChatNewRowsMarker marker={newRowsMarker} onReveal={context.onScrollMessageToTop} />
+    <NativeChatNewRowsMarker
+      marker={newRowsMarker}
+      onReveal={context.onScrollMessageToTop}
+      className={newRowsMarkerSpacing(newRowsMarker.place, slot, deliveryNotice)}
+    />
   ) : null
   const statusRow = status ? (
     <NativeChatWorkingStatus
@@ -94,10 +121,14 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     // The negative margin shortens the measured row, which is what moves the next one up.
     // A row that holds its response's actions keeps the gap whole: they stay in flow above the
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
+    // So does a row the "New" line follows, so the line sits the same full gap below any row.
     <div
       className={cn(
         'flex flex-col gap-5',
-        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3'
+        slot.continuesTurn &&
+          !(slot.endsResponse && !slot.activeTurnIsWorking) &&
+          !newRowsMarkerBelow &&
+          '-mb-3'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
