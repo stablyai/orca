@@ -10,7 +10,6 @@ import {
   NEW_ROWS_MARKER_LINGER_MS
 } from './NativeChatNewRowsMarker'
 import type { NativeChatNewRowsMarkerState as Marker } from './native-chat-new-rows-marker'
-import { overrideLayoutProperty } from '../virtualization/native-chat-windowing-test-harness'
 
 afterEach(cleanup)
 
@@ -60,6 +59,19 @@ const VIEWPORT_PX = 600
 const ROW_TOP_PX = 1_000
 
 let restoreLayout: (() => void)[] = []
+
+/** Stub one layout property on every element; returns the restore. */
+function overrideLayoutProperty(name: string, descriptor: PropertyDescriptor): () => void {
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name)
+  Object.defineProperty(HTMLElement.prototype, name, { configurable: true, ...descriptor })
+  return () => {
+    if (original) {
+      Object.defineProperty(HTMLElement.prototype, name, original)
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, name)
+    }
+  }
+}
 
 /** Place the view bottom aboveMarkerPx short of a marker positioned intoRowPx within its row. */
 function pane(

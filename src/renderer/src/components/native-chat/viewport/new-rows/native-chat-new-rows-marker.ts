@@ -127,8 +127,6 @@ function nativeChatPromptRanWhileAway(
   if (
     at === undefined ||
     slot.message.queued === true ||
-    // Orca's own turn for something the reader did here (a card answer, a bot they made), not news.
-    slot.message.orcaNotice !== undefined ||
     compareAgentJournalPositions(at, left.position) <= 0
   ) {
     return false

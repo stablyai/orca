@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from '../scroll/native-chat-autoscroll'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
 import { nativeChatScrollOffsetWithin } from '../virtualization/use-native-chat-viewport-align'

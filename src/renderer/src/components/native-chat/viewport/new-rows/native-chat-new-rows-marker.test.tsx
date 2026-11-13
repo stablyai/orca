@@ -349,12 +349,6 @@ describe('useNativeChatNewRowsMarker', () => {
       expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
     })
 
-    it("does not draw for Orca's own turn on something the reader did", () => {
-      const notice: NativeChatMessage = { ...row('made-bot', 3, 'user'), orcaNotice: 'bot-created' }
-      const view = leaveAndReturn(SEEN, [...SEEN, notice, row('answer', 4)])
-      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'measure' })
-    })
-
     it('draws when a prompt this pane never sent ran, such as an auto-continue', () => {
       const view = leaveAndReturn(SEEN, [...SEEN, row('continue', 3, 'user'), row('answer', 4)])
       expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
