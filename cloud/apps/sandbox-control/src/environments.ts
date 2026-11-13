@@ -257,6 +257,8 @@ export type BootSource = {
   auto?: boolean
   /** The golden the build started from (environment-security.ts compares it with the floor). */
   baseSnapshotId: string | null
+  /** When the build finished (ms): a just-made snapshot gets one retry on a provider 404 (lifecycle.ts). */
+  builtAt?: number | null
 }
 
 type BootBuildRow = {
@@ -266,6 +268,7 @@ type BootBuildRow = {
   status: string
   snapshot_id: string | null
   snapshot_deleted_at: number | null
+  finished_at: number | null
   result: string | null
   config: string
   base_snapshot_id?: string | null
@@ -296,7 +299,8 @@ function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): Boot
     repoDir: dir,
     machineSize,
     region: build.region,
-    baseSnapshotId: build.base_snapshot_id ?? null
+    baseSnapshotId: build.base_snapshot_id ?? null,
+    builtAt: build.finished_at
   }
 }
 

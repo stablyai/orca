@@ -21,6 +21,12 @@ import {
 } from './paired-cloud-wake'
 import { getCloudWorkspaceSnapshot, seedCloudWorkspaceSnapshot } from './orca-cloud-workspace-store'
 import { resetCloudWorkspaceIdentityForTests } from '@/components/cloud-workspaces/cloud-workspace-identity'
+import type { CloudWorkspaceBinding } from '../../../../preload/api/cloud-workspaces-api'
+import {
+  captureWakeInput,
+  isWorkspaceWaking,
+  resetWakeInputForTests
+} from '@/components/terminal-pane/input/wake-input-buffer'
 
 const ROW = 'push-test::/workspace/orca-sandbox-push-test'
 const asleep = {
@@ -89,6 +95,36 @@ describe('waking a paired workspace', () => {
     expect(wake).toHaveBeenCalledWith('sbx_gh')
     // Wake progress never turns it into an owned id (owned-only flows key on those).
     expect(getCloudWorkspaceSnapshot().ids.has(ROW)).toBe(false)
+  })
+
+  it('holds typing from the press, before the bindings read answers (PAIRED-WAKE-TYPE-THROUGH)', async () => {
+    resetWakeInputForTests()
+    let answer: (value: Record<string, CloudWorkspaceBinding>) => void = () => undefined
+    window.api.cloudWorkspaces.environmentBindings = () =>
+      new Promise((resolve) => {
+        answer = resolve
+      })
+    const waking = wakePairedCloudWorkspace(ROW)
+    // Still reading the bindings: the first keys typed now are held, not sent to the asleep server.
+    expect(isWorkspaceWaking(ROW)).toBe(true)
+    expect(
+      captureWakeInput(
+        ROW,
+        'leaf',
+        'g',
+        () => undefined,
+        () => false
+      )
+    ).toBe(true)
+    answer({ sbx_gh: { environmentId: 'env-gh', grantId: null } })
+    expect(await waking).toEqual({ ok: true })
+    resetWakeInputForTests()
+  })
+
+  it('a predictive (quiet) wake holds nothing', async () => {
+    resetWakeInputForTests()
+    await wakePairedCloudWorkspace(ROW, { quiet: true })
+    expect(isWorkspaceWaking(ROW)).toBe(false)
   })
 
   it('a refusal (billing cap) comes back with its reason, and shows as a failed wake', async () => {

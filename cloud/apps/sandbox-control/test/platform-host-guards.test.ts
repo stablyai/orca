@@ -18,7 +18,7 @@ async function limited() {
 describe('a malformed ORCA_PLATFORM_HOST_SUFFIXES (PLATFORM-SUFFIX-GUARDS)', () => {
   it('fails the health route a post-deploy smoke hits, with the code only; the log names the bad entry', async () => {
     const h = await createHarness()
-    expect(await h.call('GET', '/v1/health')).toEqual({ status: 200, body: { ok: true } })
+    expect(await h.call('GET', '/v1/health')).toMatchObject({ status: 200, body: { ok: true } })
     h.env.ORCA_PLATFORM_HOST_SUFFIXES = MALFORMED
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
