@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import { createOrgCheckedFetch } from '../hosted-sandbox/hosted-sandbox-org-fetch'
 import { cloudSecretsFailureCode, createCloudSecretsClient } from './cloud-secrets-client'
 
 type Seen = { method: string; url: string; body: string | null; authorization: string | null }
@@ -35,20 +37,28 @@ const VIEW = {
 
 describe('createCloudSecretsClient', () => {
   it('re-mints once on 401 stale_token (admin write window), and not for other 401s', async () => {
+    // The single re-mint path is the control-plane fetch (hosted-sandbox-org-fetch), as wired by
+    // cloud-secrets-ipc; the request layer itself never re-mints.
     const tokens = ['old', 'new']
     let invalidated = 0
     const seen: string[] = []
     let answers: Response[] = []
+    const getAccessToken = async (): Promise<string> => tokens[Math.min(invalidated, 1)] ?? 'new'
     const client = createCloudSecretsClient({
       baseUrl: 'https://control.test',
-      getAccessToken: async () => tokens[Math.min(invalidated, 1)]!,
-      invalidateAccessToken: () => {
-        invalidated++
-      },
-      fetch: async (_input, init) => {
-        seen.push(new Headers(init?.headers).get('authorization') ?? '')
-        return answers.shift()!
-      }
+      getAccessToken,
+      fetch: createOrgCheckedFetch({
+        fetchImpl: async (_input, init) => {
+          seen.push(new Headers(init?.headers).get('authorization') ?? '')
+          return answers.shift() ?? Response.json({}, { status: 500 })
+        },
+        orgHeader: () => 'org-1',
+        getAccessToken,
+        invalidateAccessToken: () => {
+          invalidated++
+        },
+        orgSwitchError: () => new EnvironmentProviderError('conflict', 'switch failed')
+      })
     })
     answers = [
       Response.json({ error: 'unauthorized', reason: 'stale_token' }, { status: 401 }),
@@ -58,12 +68,14 @@ describe('createCloudSecretsClient', () => {
     expect(seen).toEqual(['Bearer old', 'Bearer new'])
     expect(invalidated).toBe(1)
 
+    // Still stale after the re-mint: exactly one re-mint, then the refusal surfaces.
     answers = [
       Response.json({ error: 'unauthorized', reason: 'stale_token' }, { status: 401 }),
       Response.json({ error: 'unauthorized', reason: 'stale_token' }, { status: 401 })
     ]
     await expect(client.remove({ scope: 'org' }, 'DATABASE_URL')).rejects.toThrow()
     expect(invalidated).toBe(2)
+    expect(seen).toHaveLength(4)
 
     answers = [Response.json({ error: 'unauthorized' }, { status: 401 })]
     await expect(client.remove({ scope: 'org' }, 'DATABASE_URL')).rejects.toThrow()

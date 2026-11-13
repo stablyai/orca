@@ -16,7 +16,10 @@ export type OrcaProfilesAuthActions = {
     orgId?: string
     name?: string
   }) => Promise<CreateCloudLinkedOrcaProfileResult | null>
-  connectCurrentOrcaProfile: () => Promise<ConnectCurrentOrcaProfileResult | null>
+  /** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+  connectCurrentOrcaProfile: (args?: {
+    openBrowser?: boolean
+  }) => Promise<ConnectCurrentOrcaProfileResult | null>
   refreshCurrentOrcaProfileAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult | null>
   signOutCurrentOrcaProfile: () => Promise<SignOutCurrentOrcaProfileResult | null>
   selectOrcaProfileOrg: (orgId: string | null) => Promise<SelectOrcaProfileOrgResult | null>
@@ -74,11 +77,11 @@ export const createOrcaProfilesAuthActions: StateCreator<
       }
     },
 
-    connectCurrentOrcaProfile: async () => {
+    connectCurrentOrcaProfile: async (args) => {
       const attempt = ++nextConnectAttempt
       try {
         // Pending PKCE must not block retry; newer linked waits supersede older callbacks.
-        const result = await window.api.orcaProfiles.connectCurrent()
+        const result = await window.api.orcaProfiles.connectCurrent(args)
         if (attempt < appliedConnectAttempt) {
           return result
         }

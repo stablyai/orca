@@ -41,6 +41,8 @@ export type CloudSetupStartRequest = {
   repoId: string
   /** The rows still open when the user clicked (account, team, plan, github). */
   needs: CloudSetupStep['id'][]
+  /** COPY-LINK-FIRST-CLICK: false starts the same trip without opening the browser. */
+  openBrowser?: boolean
 }
 /**
  * Null when the session couldn't open; the composer then falls back to today's actions.
@@ -48,7 +50,7 @@ export type CloudSetupStartRequest = {
  */
 type SessionStarter = (
   request: CloudSetupStartRequest
-) => Promise<{ sessionId: string } | { cancelled: true } | null>
+) => Promise<{ sessionId: string; url?: string } | { cancelled: true } | null>
 
 let source: SessionSource | null = null
 let starter: SessionStarter | null = null

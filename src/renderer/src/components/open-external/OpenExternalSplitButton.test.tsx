@@ -56,6 +56,28 @@ describe('OpenExternalSplitButton', () => {
     )
   })
 
+  it('a loopback sign-in link says where it works, in the menu and once copied', async () => {
+    render(
+      <OpenExternalSplitButton
+        link="http://127.0.0.1:5555/auth?state=s"
+        copyHint="Open it in any browser on this computer."
+        onClick={vi.fn()}
+      >
+        Sign in
+      </OpenExternalSplitButton>
+    )
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'More link options' }))
+    const item = await screen.findByRole('menuitem', { name: /Copy link/ })
+    expect(item.textContent).toContain('Open it in any browser on this computer.')
+    await user.click(item)
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Link copied', {
+        description: 'Open it in any browser on this computer.'
+      })
+    )
+  })
+
   it('mints a lazy URL the same way on Copy link, then copies it without opening', async () => {
     const onOpen = vi.fn()
     const mint = vi.fn(async () => 'https://billing.stripe.com/p/session/test_123')

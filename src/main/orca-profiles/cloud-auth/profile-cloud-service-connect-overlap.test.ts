@@ -34,7 +34,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./profile-cloud-pkce', () => ({
-  beginOrcaCloudPkceFlow: beginOrcaCloudPkceFlowMock
+  beginOrcaCloudPkceFlow: beginOrcaCloudPkceFlowMock,
+  pkceSignInOptions: () => ({})
 }))
 
 vi.mock('./profile-cloud-client', () => ({

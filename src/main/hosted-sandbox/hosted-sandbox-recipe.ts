@@ -49,7 +49,8 @@ const LifecyclePayload = z.looseObject({ recipeResult: EphemeralVmRecipeResultSc
 export function createHostedSandboxRecipeClient(config: HostedSandboxConfig) {
   return createHostedSandboxControlPlaneClient({
     baseUrl: config.controlPlaneUrl,
-    getAccessToken: config.getAccessToken
+    getAccessToken: config.getAccessToken,
+    fetch: config.fetch
   })
 }
 
