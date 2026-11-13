@@ -77,7 +77,7 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!match) {
     return null
   }
-  const name = match[1]!.toLowerCase()
+  const name = match[1]!.toLowerCase().replace(/^new$/, 'clear')
   const argument = match[2]?.trim() ?? ''
   // Other commands take one line; a longer message that starts with their name is for the agent.
   return /[\n\r\u2028\u2029]/.test(argument) &&
