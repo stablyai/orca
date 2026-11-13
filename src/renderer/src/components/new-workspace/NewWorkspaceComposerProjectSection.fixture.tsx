@@ -8,6 +8,7 @@ import {
 import { NewWorkspaceComposerProjectSection } from './NewWorkspaceComposerProjectSection'
 import type { EphemeralVmRecipeOption } from './run-target-options'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
+import type { CloudStartView } from './run-on/cloud-start-view'
 
 const projects: NewWorkspaceProjectOption[] = [
   {
@@ -87,17 +88,38 @@ const orcaCloudRecipe: EphemeralVmRecipeOption = {
   create: 'orca-cloud create'
 }
 
+const handoffCloudStart = (githubHandoff: 'waiting' | 'timed-out'): CloudStartView => ({
+  onSelectOrcaCloud: () => {},
+  onUserPick: () => {},
+  cloudOnly: {
+    repos: [],
+    showMore: null,
+    picked: null,
+    folderProject: false,
+    githubStep: null,
+    pick: () => {},
+    clear: () => {},
+    moreAccess: () => {},
+    githubHandoff,
+    checkGitHubAgain: () => {},
+    start: async () => false
+  }
+})
+
 function ProjectAndHostPreview({
   folderOnly = false,
-  orcaCloud
+  orcaCloud,
+  githubHandoff
 }: {
   folderOnly?: boolean
+  /** Back from GitHub's access page (REPO-ACCESS-REFRESH). */
+  githubHandoff?: 'waiting' | 'timed-out'
   /** Offers Orca Cloud with this entitlement. */
   orcaCloud?: OrcaCloudRunTargetAccess
 }): React.JSX.Element {
   const [project, setProject] = useState(folderOnly ? 'folder' : 'orca')
   const [host, setHost] = useState('local')
-  const [recipe, setRecipe] = useState<string | null>(null)
+  const [recipe, setRecipe] = useState<string | null>(githubHandoff ? 'cloud' : null)
   return (
     <div className="space-y-4 rounded-xl border border-border bg-background p-4">
       <h1 className="text-base font-semibold">Create workspace</h1>
@@ -129,6 +151,7 @@ function ProjectAndHostPreview({
         selectedEphemeralVmRecipeId={recipe}
         onEphemeralVmRecipeChange={setRecipe}
         {...(orcaCloud ? { orcaCloudAccess: orcaCloud } : {})}
+        {...(githubHandoff ? { cloudStart: handoffCloudStart(githubHandoff) } : {})}
         handleAddSshHost={() => {}}
         handleAddRemoteServer={() => {}}
         handleConnectRunTargetHost={async () => {}}
@@ -214,4 +237,13 @@ export const hostMenuOrcaCloudNoPlanMember = defineFixture({
       orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: false }}
     />
   )
+})
+
+export const waitingForGitHub = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="waiting" />
+})
+export const githubHandoffTimedOut = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="timed-out" />
 })

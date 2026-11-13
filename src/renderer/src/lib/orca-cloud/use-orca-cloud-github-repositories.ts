@@ -93,7 +93,11 @@ export function selectCloudOnlyRepositories(
     .sort((a, b) => a.fullName.localeCompare(b.fullName))
 }
 
-export function useOrcaCloudGitHubRepositories(enabled: boolean): {
+/** `refreshSignal`: each change reads the list again (after the cache was invalidated). */
+export function useOrcaCloudGitHubRepositories(
+  enabled: boolean,
+  refreshSignal = 0
+): {
   repos: OrcaCloudGitHubRepository[] | null
   /** Present while GitHub has more pages than are listed. */
   showMore: (() => void) | null
@@ -116,7 +120,7 @@ export function useOrcaCloudGitHubRepositories(enabled: boolean): {
     return () => {
       cancelled = true
     }
-  }, [enabled, identity, moreRequests])
+  }, [enabled, identity, moreRequests, refreshSignal])
   const visible = useMemo(
     () =>
       enabled && listing
