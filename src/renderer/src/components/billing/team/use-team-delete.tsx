@@ -9,7 +9,7 @@ import type {
   OrcaProfileOrgDeleteCheckResult,
   OrcaProfileOrgDeleteResult
 } from '../../../../../shared/orca-org-delete'
-import { openCloudWorkspacesHome } from '../../cloud-workspaces/cloud-workspaces-home-nav'
+import { openCloudWorkspacePicker } from '../../cloud-workspaces/cloud-workspace-picker-store'
 import { TeamDeleteDialogView } from './TeamDeleteDialog'
 import type { TeamDeleteCheck } from './TeamDeleteSection'
 import { teamDeleteFailure, type TeamDeleteDialogError } from './team-delete-copy'
@@ -36,13 +36,9 @@ export function teamDeleteCheckFrom(
   }
 }
 
-/** Home with every team workspace, and the Archived switch on when any are archived. */
-async function showTeamWorkspaces(): Promise<void> {
-  const archived = await window.api.cloudWorkspaces
-    .list({ scope: 'team', archived: 'only' })
-    .then((result) => result.ok && result.value.length > 0)
-    .catch(() => false)
-  openCloudWorkspacesHome({ scope: 'team', archived })
+/** Every team workspace, archived ones too, so each can be deleted before the team. */
+function showTeamWorkspaces(): void {
+  openCloudWorkspacePicker({ kind: 'team-cleanup' })
 }
 
 export function useTeamDelete({
@@ -130,7 +126,7 @@ export function useTeamDelete({
     if (code === 'subscription_active') {
       onManageBilling()
     } else {
-      void showTeamWorkspaces()
+      showTeamWorkspaces()
     }
   }
 

@@ -1,5 +1,5 @@
-// The small marks after a cloud workspace's title on Home: private, started by a routine, and its
-// W-number (shown on hover or focus; its space is held so nothing shifts).
+// The small marks after a cloud workspace's title in Open cloud workspace…: private, started by a
+// routine, and its W-number (shown on hover or focus; its space is held so nothing shifts).
 import React from 'react'
 import { CalendarClock, Lock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'

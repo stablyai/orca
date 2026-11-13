@@ -157,7 +157,7 @@ import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
 import { audit, auditSession } from './api/audit'
-import { AuditIngestError, AuditIngestSchema, ingestAuditEvents } from './api/audit-ingest'
+import { ALL_EVENT_FAMILIES, AUTH_EVENT_FAMILIES, AuditIngestError, AuditIngestSchema, BILLING_EVENT_FAMILIES, ingestAuditEvents } from './api/audit-ingest'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSlept, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
@@ -1261,7 +1261,9 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       const memberPush =
         request.method === 'POST' && (url.pathname === '/v1/internal/org-members/removed' || url.pathname === '/v1/internal/members/role-changed')
       const authOnly = (memberPush || teamDelete !== null || auditIngest) && (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
-      if (!authOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
+      // Billing's bearer (CONTROL_PLANE_TOKEN) reaches this one route, for billing events only.
+      const billingOnly = !authOnly && auditIngest && (await isOperator(request, env.CONTROL_PLANE_TOKEN))
+      if (!authOnly && !billingOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
       }
       if (auditIngest) {
@@ -1271,7 +1273,8 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
           return fail('invalid_request', 400)
         }
         try {
-          return json(await ingestAuditEvents(env.SANDBOX_DB, body.data, (deps.now ?? Date.now)()))
+          const families = authOnly ? AUTH_EVENT_FAMILIES : billingOnly ? BILLING_EVENT_FAMILIES : ALL_EVENT_FAMILIES
+          return json(await ingestAuditEvents(env.SANDBOX_DB, body.data, (deps.now ?? Date.now)(), families))
         } catch (error) {
           if (error instanceof AuditIngestError) {
             return fail('invalid_request', 400, error.message)

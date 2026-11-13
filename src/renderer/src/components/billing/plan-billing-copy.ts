@@ -141,7 +141,7 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':
-      return t('auto.components.billing.openFailed', 'Could not reach billing. Try again.')
+      return t('auto.components.billing.openFailed', 'Couldn’t reach billing. Try again.')
   }
 }
 
@@ -181,6 +181,6 @@ export function overageFailureCopy(
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':
-      return t('auto.components.billing.openFailed', 'Could not reach billing. Try again.')
+      return t('auto.components.billing.openFailed', 'Couldn’t reach billing. Try again.')
   }
 }

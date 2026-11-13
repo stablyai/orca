@@ -121,7 +121,10 @@ describe('secret store routes for the desktop UI', () => {
     expect(res.body.caller).toEqual({ userId: 'mia', orgId: 'acme', orgRole: 'member', canWrite: { personal: true, org: false, repo: false } })
     expect(res.body.precedence.agent_key[0]).toBe('org')
     const byName = Object.fromEntries(res.body.secrets.map((s: { name: string }) => [s.name, s]))
-    expect(byName.ANTHROPIC_API_KEY).toMatchObject({ kind: 'agent_key', scope: 'org', hint: 'aaaa', shadowed: [{ scope: 'personal', hint: 'bbbb' }] })
+    expect(byName.ANTHROPIC_API_KEY).toMatchObject({ kind: 'agent_key', scope: 'org', hint: null, shadowed: [{ scope: 'personal', hint: 'bbbb' }] })
+    // SEC-6b: a member sees no hint for a team value; the admin who can write it does.
+    const forAdmin = await h.call('GET', '/v1/secrets/effective?repo=acme/app', { bearer: ada })
+    expect(forAdmin.body.secrets.find((s: { name: string }) => s.name === 'ANTHROPIC_API_KEY').hint).toBe('aaaa')
     expect(byName.SHARED_FLAG).toMatchObject({ kind: 'env', scope: 'repo', shadowed: [{ scope: 'personal' }, { scope: 'org' }] })
     expect(JSON.stringify(res.body)).not.toContain(ORG_KEY)
   })

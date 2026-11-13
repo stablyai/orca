@@ -51,6 +51,6 @@ describe('billing "Copy link"', () => {
       }
     })
     await expect(billingPortalLink()).resolves.toBeNull()
-    expect(toastError).toHaveBeenCalledWith('Could not reach billing. Try again.')
+    expect(toastError).toHaveBeenCalledWith('Couldn’t reach billing. Try again.')
   })
 })
