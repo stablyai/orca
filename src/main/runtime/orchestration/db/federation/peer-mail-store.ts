@@ -75,10 +75,28 @@ export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
   return rows.map((row) => row.environment_id)
 }
 
-export function listPeerConversationIds(this: OrchestrationDb, peerFingerprint: string): string[] {
+/** One server's check, for its pull loop: a seek on that server's home rows, not every server's. */
+export function hasHomePeerMailEnvironment(this: OrchestrationDb, environmentId: string): boolean {
+  return (
+    this.db
+      .prepare(
+        `SELECT 1 FROM peer_mail_conversations WHERE role = 'home' AND environment_id = ? LIMIT 1`
+      )
+      .get(environmentId) !== undefined
+  )
+}
+
+/** Conversations a paired Orca opened here that hold replies it has not acknowledged yet. */
+export function listPeerConversationIdsWithPendingReplies(
+  this: OrchestrationDb,
+  peerFingerprint: string
+): string[] {
   const statement = this.db.prepare(
-    `SELECT conversation_id FROM peer_mail_conversations
-     WHERE role = 'peer' AND peer_fingerprint = ?`
+    `SELECT DISTINCT c.conversation_id FROM federation_relay_items i
+     JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
+     WHERE i.direction = 'to_home' AND i.acked_at IS NULL
+       AND c.role = 'peer' AND c.peer_fingerprint = ?
+     ORDER BY c.conversation_id`
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
   const rows = statement.all(peerFingerprint) as { conversation_id: string }[]
@@ -118,6 +136,14 @@ export function insertPeerMailMessage(
   | { message: MessageRow | undefined; duplicate: true } {
   this.db.exec('SAVEPOINT peer_mail_insert')
   try {
+    // A peer Run's conversation keeps its own queue sequence, so it never carries peer mail.
+    if (this.getPeerRunForConversation(params.conversationId)) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Conversation ${params.conversationId} belongs to a coordinated Run. Nothing was delivered.`,
+        { effectsApplied: false }
+      )
+    }
     if (params.peerFingerprint !== undefined) {
       const conversation = this.getPeerMailConversation(params.conversationId)
       if (
@@ -163,7 +189,8 @@ export type PeerMailStoreMethods = {
   openHomePeerMailConversation: typeof openHomePeerMailConversation
   getPeerMailConversation: typeof getPeerMailConversation
   listHomePeerMailEnvironments: typeof listHomePeerMailEnvironments
-  listPeerConversationIds: typeof listPeerConversationIds
+  hasHomePeerMailEnvironment: typeof hasHomePeerMailEnvironment
+  listPeerConversationIdsWithPendingReplies: typeof listPeerConversationIdsWithPendingReplies
   getPeerMailMessage: typeof getPeerMailMessage
   isPeerMailSenderLabel: typeof isPeerMailSenderLabel
   insertPeerMailMessage: typeof insertPeerMailMessage
@@ -174,7 +201,8 @@ export function attachPeerMailStore(ctor: { prototype: object }): void {
     openHomePeerMailConversation,
     getPeerMailConversation,
     listHomePeerMailEnvironments,
-    listPeerConversationIds,
+    hasHomePeerMailEnvironment,
+    listPeerConversationIdsWithPendingReplies,
     getPeerMailMessage,
     isPeerMailSenderLabel,
     insertPeerMailMessage

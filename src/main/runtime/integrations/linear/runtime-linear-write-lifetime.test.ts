@@ -1,8 +1,9 @@
+import type { RuntimeLinearCommandPorts } from './runtime-linear-command-base'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import * as mutations from '../../../linear/linear-issue-mutations'
-import * as comments from '../../../linear/linear-issue-comments'
-import * as relations from '../../../linear/issue-relation-write'
-import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
+import * as mutations from '../../../linear/issues/linear-issue-mutations'
+import * as comments from '../../../linear/issues/linear-issue-comments'
+import * as relations from '../../../linear/issues/issue-relation-write'
+import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
 import { RuntimeLinearReadCommands } from './runtime-linear-read-commands'
 import type { LinearIssueTaskUpdateRequest } from '../../../../shared/linear/agent-access'
 
@@ -26,7 +27,10 @@ const issue = {
 const target = { issue, workspaceId: 'w1' }
 const team = { ...issue.team, workspaceId: 'w1' }
 
-function commands(listResolvedWorktrees: () => Promise<[]> = async () => []) {
+function commands(
+  listResolvedWorktrees: RuntimeLinearCommandPorts['listResolvedWorktrees'] = async () => [],
+  emitClientEvent: RuntimeLinearCommandPorts['emitClientEvent'] = () => {}
+) {
   const unusedSelector = async () => {
     throw new Error('unused')
   }
@@ -39,7 +43,7 @@ function commands(listResolvedWorktrees: () => Promise<[]> = async () => []) {
     resolveWorkspaceSelector: unusedSelector,
     listResolvedWorktrees,
     setWorktreeMeta: () => {},
-    emitClientEvent: () => {}
+    emitClientEvent
   }
   const result = new RuntimeLinearReadCommands(ports)
   vi.spyOn(result, 'resolveLinearAgentWriteTarget').mockResolvedValue(target)

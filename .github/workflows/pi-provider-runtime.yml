@@ -5,7 +5,7 @@ on:
     paths:
       - 'src/shared/source-control/ai/generation/commit-message-agent-specs-primary.ts'
       - 'tests/tools/pi-provider-runtime-smoke.mjs'
-      - 'src/main/pi/rpc-history-*.ts'
+      - 'src/main/pi/rpc/history/rpc-history-*.ts'
       - '.github/workflows/pi-provider-runtime.yml'
 permissions:
   contents: read

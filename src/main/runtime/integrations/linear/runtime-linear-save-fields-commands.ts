@@ -1,8 +1,8 @@
-import type { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/linear-issue-lookups'
+import type { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/issues/linear-issue-lookups'
 import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
 import type { LinearCreateFieldIntent } from './linear-create-field-intent'
 import { sameStringSet } from './linear-label-id-equality'
-import { linearError } from '../../../linear/issue-context/errors'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
 import { RuntimeLinearTaskFieldCommands } from './runtime-linear-task-fields-commands'
 
 export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldCommands {

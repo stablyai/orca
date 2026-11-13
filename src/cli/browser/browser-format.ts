@@ -1,10 +1,14 @@
 import { readBrowserActionEffects } from '../../shared/browser-action-effects'
-import { writeCliScreenshotTempFile } from '../cli-screenshot-temp-file'
+import { formatBrowserPasskeyRequest } from '../../shared/browser-passkey-request'
+import { writeCliScreenshotTempFile } from '../screenshots/cli-screenshot-temp-file'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { formatBrowserAnnotationsAsMarkdown } from '../../shared/browser/annotations/browser-annotation-output'
 import type {
+  BrowserPasskeyRequest,
   BrowserProfileListResult,
   BrowserScreenshotResult,
   BrowserSnapshotResult,
+  BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
   BrowserTabListResult,
   BrowserTabProfileCloneResult,
@@ -15,8 +19,16 @@ import type {
 export function formatSnapshot(result: BrowserSnapshotResult): string {
   // Older runtimes leave url and title unset.
   const location = [result.title, result.url].filter(Boolean).join(' — ')
-  const header = [`page: ${result.browserPageId}`, ...(location ? [location] : [])].join('\n')
+  const header = [
+    `page: ${result.browserPageId}`,
+    ...(location ? [location] : []),
+    ...(result.passkeyRequest ? [formatPasskeyRequest(result.passkeyRequest)] : [])
+  ].join('\n')
   return `${header}\n${formatSnapshotBody(result.snapshot)}`
+}
+
+function formatPasskeyRequest({ origin }: BrowserPasskeyRequest): string {
+  return formatBrowserPasskeyRequest(origin, 'dialog dismiss')
 }
 
 function formatSnapshotBody(snapshot: BrowserSnapshotResult['snapshot']): string {
@@ -132,6 +144,13 @@ export function formatTabShow(result: BrowserTabShowResult | BrowserTabCurrentRe
   ].join('\n')
 }
 
+// The same text the tab's Copy button gives, so an agent reads what the user would send.
+export function formatTabAnnotations(result: BrowserTabAnnotationsResult): string {
+  return result.annotations.length > 0
+    ? formatBrowserAnnotationsAsMarkdown(result.annotations)
+    : `No unsent notes on tab ${result.tab.browserPageId}`
+}
+
 export function formatTabProfileShow(result: BrowserTabProfileShowResult): string {
   return [
     `page: ${result.browserPageId}`,
@@ -181,6 +200,9 @@ export function formatBrowserActionEffects(result: unknown): string {
   }
   for (const error of effects.consoleErrors ?? []) {
     lines.push(`Console error: ${error}`)
+  }
+  if (effects.passkeyRequest) {
+    lines.push(formatPasskeyRequest(effects.passkeyRequest))
   }
   if (effects.loading) {
     lines.push('Still loading; run `wait --load load`, then `snapshot`.')

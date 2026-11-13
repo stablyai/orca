@@ -103,6 +103,8 @@ ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
 ORCA repo add --path /abs/folder --kind folder --json
 ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
+ORCA repo hide --repo id:<repoId> --json
+ORCA repo unhide --repo id:<repoId> --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
@@ -125,6 +127,8 @@ ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 `repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each. With `--environment`, pass an absolute path on that server.
 
 Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.
+
+Workspace cleanup: `ORCA workspace cleanup preview --json` shows what the user's cleanup rules would remove now and why each other workspace stays (`rows[].evaluation`). `ORCA workspace cleanup run --json` runs the rules now, on the same path as the scheduled runner (every workspace is re-checked right before removal, nothing is forced), and prints the finished run's rows. `ORCA workspace cleanup report --json` lists recent runs; `nextRunAt` is null when no rule is on. Rules live in Orca settings; these commands never change them. Run `run` only when the user asks for cleanup.
 
 Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
 `hide` hides them; `inherit` clears the repo override and follows the global default.
@@ -282,8 +286,8 @@ Use them only when the user explicitly asks to publish through Orca. A generic r
 public link, page, or URL does not select Orca, and a provider the user names always wins.
 
 **Only a human can turn publishing on or off.** `share` and `update` need the device-wide
-setting under Settings → Artifacts ("Allow publishing public artifact links"); there is no
-CLI or RPC way to grant it. `list`, `unshare`, and `delete` are never gated, so old links
+setting under Settings → Artifacts ("Allow publishing public artifact links"), which is on
+for new profiles; there is no CLI or RPC way to grant it. `list`, `unshare`, and `delete` are never gated, so old links
 stay auditable and revocable.
 
 A denied share fails with `artifact_sharing_disabled` before any upload. Do not retry. Tell

@@ -1,11 +1,11 @@
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
+import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
-} from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   resolvePrimaryLayoutPtyId,

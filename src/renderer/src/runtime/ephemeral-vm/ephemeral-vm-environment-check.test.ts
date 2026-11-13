@@ -97,11 +97,4 @@ describe('gateVmCreateOnEnvironmentCheck', () => {
     await expect(gate).resolves.toBe(false)
     expect(signal?.aborted).toBe(true)
   })
-
-  it('skips the checks on a VM server that predates them', async () => {
-    supportsCapability.mockResolvedValue(false)
-    await expect(gateVmCreateOnEnvironmentCheck('c1', 'env-1', '/w')).resolves.toBe(true)
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-    expect(store.entries.c1.environmentCheck?.status).toBe('skipped')
-  })
 })

@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../../shared/repo-types'
+import { getRepositoryPresenceSearchEntries } from './repository-project-presence-search'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import {
   getRepoExecutionHostId,
@@ -202,22 +203,7 @@ function getRepositorySearchParts(
             )
           ]
         }
-  const removeProject: SettingsSearchEntry = {
-    title: t('auto.components.settings.repository.search.bbbe994528', 'Remove project'),
-    description: t(
-      'auto.components.settings.repository.search.c86478c3d8',
-      'Remove this project from Orca.'
-    ),
-    keywords: [
-      repo.displayName,
-      ...translateSearchKeyword('auto.components.settings.repository.search.3067595d82', 'delete'),
-      ...translateSearchKeyword('auto.components.settings.repository.search.6469de5368', 'project'),
-      ...translateSearchKeyword(
-        'auto.components.settings.repository.search.cc876ca5f2',
-        'repository'
-      )
-    ]
-  }
+  const { removeProject, sidebarVisibility } = getRepositoryPresenceSearchEntries(repo, t)
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     jira,
@@ -226,10 +212,11 @@ function getRepositorySearchParts(
     github,
     fork,
     projectRuntime,
+    sidebarVisibility,
     removeProject,
     sourceControlAi: isFolder ? undefined : getRepositoryGitAuthorSearchEntries(repo, t),
     mcp: isFolder ? undefined : getRepositoryMcpConfigSearchEntries(repo, t),
-    hooks: isFolder ? undefined : getRepositoryGitHooksSearchEntries(repo, t)
+    hooks: getRepositoryGitHooksSearchEntries(repo, t)
   }
 }
 
@@ -258,7 +245,7 @@ export function getRepositoryPaneSearchEntries(
   if (!isFolderRepo(repo)) {
     entries.push(...getRepositoryGitWorktreeSearchEntries(repo, t))
   }
-  entries.push(parts.removeProject)
+  entries.push(parts.sidebarVisibility, parts.removeProject)
   if (parts.sourceControlAi) {
     entries.push(...parts.sourceControlAi)
   }
@@ -291,9 +278,10 @@ export function getRepositoryPaneSearchMetadata(
   if (worktrees) {
     identity.push(...worktrees.identity)
   }
-  identity.push(parts.removeProject)
   return {
     identity,
+    removeProject: parts.removeProject,
+    sidebarVisibility: parts.sidebarVisibility,
     projectRuntime: parts.projectRuntime ? [parts.projectRuntime] : [],
     sparsePresets: worktrees?.sparsePresets ?? [],
     sharedPaths: worktrees?.sharedPaths ?? [],

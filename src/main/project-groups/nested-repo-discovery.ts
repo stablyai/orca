@@ -1,8 +1,8 @@
 import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import type { NestedRepoCandidate, NestedRepoScanResult } from '../../shared/project-group-types'
-import { isGitRepoAsync } from '../git/repo'
-import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
+import { isGitRepoAsync } from '../git/repositories/discovery/repo-detection'
+import { awaitWindowsHostGitEnvironmentReady } from '../git/command-runner/host-routing/windows-host-git-environment'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   isIgnoredNestedRepoDirectory,

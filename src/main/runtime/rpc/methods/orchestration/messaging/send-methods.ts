@@ -7,7 +7,7 @@ import {
 } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { SendParams } from './send-params'
-import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { isWorkerReportOutcome, parseRemoteWorkerPayload } from './message-payload'
 import { resolveMessageRun } from '../routing'
 import {
@@ -17,16 +17,17 @@ import {
   type SendRecipientWarning
 } from './recipient-routing'
 import { replayAcceptedSend } from './send-replay'
-import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/legacy-remote'
+import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
 import { withPeerMailSend } from './peer-mail-send'
-import { mayNameSession } from './session-recipient'
+import { prepareSessionRecipient } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
-import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -39,6 +40,8 @@ export const ORCHESTRATION_SEND_METHODS = [
     access: {
       kind: 'writes',
       caller: 'from',
+      callerPane: 'senderPaneKey',
+      server: 'on',
       targets: { to: 'party', threadId: 'message', run: 'run', payload: 'dispatch' }
     },
     permission: 'workspace',
@@ -158,19 +161,28 @@ export const ORCHESTRATION_SEND_METHODS = [
         const sendWarnings: SendRecipientWarning[] = []
         let messageRunId = routing.run?.id
         if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
-          if (mayNameSession(to)) {
-            // Recipient routing reads the session record store, which the host opens lazily.
-            await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-          }
+          const terminal = await prepareSessionRecipient(runtime, to, revalidateLegacyCoordinator)
           const recipient = resolveBareOrchestrationRecipient({
             runtime,
             db,
             handle: to,
             senderRunId: routing.run?.id,
-            explicitRunId: params.run
+            explicitRunId: params.run,
+            terminalRecipient: terminal
           })
           if (!recipient.ok) {
             throw new OrchestrationError(recipient.code, recipient.message)
+          }
+          // A paired Orca's former worker may since have taken up local work; it is no longer its to reach.
+          if (
+            orchestrationCaller?.kind === 'peer' &&
+            recipient.runId !== orchestrationCaller.peerRun.run_id
+          ) {
+            throw new OrchestrationError(
+              'forbidden',
+              `${params.to} now works outside the Run ${orchestrationCaller.peerRun.home_label} coordinates here. No effects were applied.`,
+              { effectsApplied: false }
+            )
           }
           to = recipient.to
           messageRunId = recipient.runId
@@ -210,7 +222,7 @@ export const ORCHESTRATION_SEND_METHODS = [
                     message: params
                   })
                 : plan
-            // A dispatch: address carries no recipient warnings, so `next` stays last.
+            // The mail started the worker's next turn itself, so nothing holds it; `next` stays last.
             if (followUp?.kind === 'started') {
               if (typeof followUp.receipt.dispatchId === 'string') {
                 passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
@@ -233,6 +245,9 @@ export const ORCHESTRATION_SEND_METHODS = [
               messageRunId = runBound.runId
               sendWarnings.push(runBound.warning)
             }
+          }
+          if (federatedTarget) {
+            sendWarnings.push(relayedDeliveryUnknownWarning(to))
           }
           const federatedControl = sendFederatedControlMail({
             params,
@@ -270,7 +285,10 @@ export const ORCHESTRATION_SEND_METHODS = [
             db,
             params.type === 'worker_done' ? settledDispatchId(sent) : undefined
           )
-          return sent
+          // Read only once the mail is stored: an await before it could let the worker settle and miss it.
+          return federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
+            ? sent
+            : withDeliveryHoldWarning(sent, runtime, db, to)
         }
         return sendGroupMessage({
           params,

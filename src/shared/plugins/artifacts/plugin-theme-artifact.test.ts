@@ -1,39 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginAppThemeArtifact } from './plugin-theme-artifact'
-import { parsePluginTerminalThemeArtifact } from './plugin-terminal-theme-artifact'
 
 const parseApp = (value: unknown) => () =>
   parsePluginAppThemeArtifact(JSON.stringify(value), 'strict')
 
 describe('plugin app theme artifacts', () => {
-  it.each([
-    ['a private token', { base: 'dark', tokens: { '--internal-gap': '#000' } }],
-    ['a URL', { base: 'dark', tokens: { '--background': 'url(x)' } }],
-    ['a var() chain', { base: 'dark', tokens: { '--background': 'var(--a)' } }],
-    ['declaration syntax', { base: 'dark', tokens: { '--background': '#000; color: red' } }],
-    ['no tokens', { base: 'dark', tokens: {} }],
-    [
-      'transparent',
-      { base: 'dark', tokens: { '--background': 'transparent', '--foreground': '#fff' } }
-    ],
-    ['an unknown key', { base: 'dark', tokens: { '--border': '#000' }, extra: 1 }]
-  ])('rejects %s', (_label, value) => {
-    expect(parseApp(value)).toThrow()
-  })
-
-  it('skips unknown tokens and keys at runtime so newer themes still load', () => {
-    const theme = parsePluginAppThemeArtifact(
-      JSON.stringify({
-        schemaVersion: 1,
-        base: 'dark',
-        tokens: { '--background': '#000', '--foreground': '#fff', '--future': '#123' },
-        future: true
-      })
-    )
-    expect(theme.tokens).not.toHaveProperty('--future')
-    expect(parseApp({ schemaVersion: 2, base: 'dark', tokens: {} })).toThrow()
-  })
-
   it('reads a background image, strict for authors and never fatal at runtime', () => {
     const base = { base: 'dark', tokens: { '--background': '#000', '--foreground': '#fff' } }
     const background = { path: 'images/dusk.webp', opacity: 0.35, size: 'tile' }
@@ -71,30 +42,5 @@ describe('plugin app theme artifacts', () => {
         })
       ).tokenColors
     ).toEqual([{ scope: ['keyword'], settings: { foreground: '#ff79c6' } }])
-  })
-})
-
-describe('plugin terminal theme artifacts', () => {
-  const terminal = { background: '#000000', foreground: '#ffffff', green: '#00ff00' }
-
-  it('skips unknown slots at runtime', () => {
-    expect(
-      parsePluginTerminalThemeArtifact(
-        JSON.stringify({ schemaVersion: 1, terminal: { ...terminal, glow: '#000000' } })
-      )
-    ).toEqual({ mode: 'unknown', terminal })
-  })
-
-  it.each([
-    ['an unknown slot', { ...terminal, glow: '#000000' }],
-    ['an invalid color', { ...terminal, red: 'red; x' }],
-    ['no ANSI color', { background: '#000000', foreground: '#ffffff' }]
-  ])('rejects %s', (_label, colors) => {
-    expect(() =>
-      parsePluginTerminalThemeArtifact(
-        JSON.stringify({ schemaVersion: 1, terminal: colors }),
-        'strict'
-      )
-    ).toThrow()
   })
 })

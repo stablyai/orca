@@ -1,3 +1,4 @@
+import type * as HostWorktreeActionsModule from '../../../host-screen/workspace-actions/use-host-worktree-actions'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -24,9 +25,9 @@ export function hostWorktreeActionMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'host.worktree-actions': (context) => {
-      const useActions = modules.load<
-        typeof import('../../../host-screen/use-host-worktree-actions')
-      >('mobile/src/host-screen/use-host-worktree-actions.ts').useHostWorktreeActions
+      const useActions = modules.load<typeof HostWorktreeActionsModule>(
+        'mobile/src/host-screen/workspace-actions/use-host-worktree-actions.ts'
+      ).useHostWorktreeActions
       const state = observableModel(context, {
         pinnedIds: new Set<string>(),
         worktrees: [ROW],

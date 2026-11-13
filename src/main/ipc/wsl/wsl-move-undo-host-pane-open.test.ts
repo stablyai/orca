@@ -8,17 +8,17 @@ import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { setWslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { setWslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import {
   registerWslMoveDesktopRewriteStore,
   resetWslMoveDesktopRewriteStoresForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+} from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 import {
   isHostSpawnFencedForWslMoveUndo,
   resetWslMoveUndoSpawnFencesForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
-import type { WslMoveHostCopyStop } from '../../persistence/moving-wsl-projects/wsl-move-host-copy-stop'
+} from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-spawn-fence'
+import type { WslMoveHostCopyStop } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-copy-stop'
 
 type Handler = (event: unknown, request?: unknown) => unknown
 

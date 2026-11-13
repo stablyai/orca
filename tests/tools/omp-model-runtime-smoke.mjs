@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { getPiAgentStatusExtensionSource } from '../../src/main/pi/agent-status-extension-source.ts'
+import { getPiAgentStatusExtensionSource } from '../../src/main/pi/managed-extensions/agent-status/agent-status-extension-source.ts'
 const reference = process.argv[2]
 if (!reference) {
   throw new Error('Pass a read-only oh-my-pi checkout path')

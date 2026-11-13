@@ -1,4 +1,4 @@
-import type { PtyManagementSession } from '../../../../../../preload/api/pty-management-api'
+import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
 import { LoaderCircle, RefreshCw, RotateCw, Trash2, X } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'

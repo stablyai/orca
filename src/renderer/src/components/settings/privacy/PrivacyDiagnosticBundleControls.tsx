@@ -2,7 +2,7 @@ import { Check, Clipboard, Eye, FileText, Loader2, Trash2, UploadCloud, X } from
 import type {
   DiagnosticsBundlePayload,
   DiagnosticsStatusPayload
-} from '../../../../../preload/api/telemetry-api'
+} from '../../../../../preload/api/diagnostics/telemetry-api'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

@@ -1,4 +1,7 @@
-import type { CheckStatus, ProviderCheckSummary } from '../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../shared/github/pull-requests/pull-request-types'
 import {
   deriveBitbucketBuildStatus,
   summarizeBitbucketBuildStatuses,

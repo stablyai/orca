@@ -12,8 +12,10 @@ import {
 } from '../../../diagnostics/telemetry/telemetry'
 import { useAppStore } from '../../../store/index'
 import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
+import { PRIVACY_SETTING_ANCHORS } from './privacy-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
 export type BlockedReason = { kind: 'env'; reason: EnvBlockedReason }
@@ -91,8 +93,12 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
   }
 
   return (
-    <div className="space-y-4">
-      <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
+    <SettingsGroup id={PRIVACY_SETTING_ANCHORS.overview}>
+      <div
+        id={PRIVACY_SETTING_ANCHORS.usageData}
+        data-settings-row=""
+        className="flex items-center justify-between gap-4 py-2"
+      >
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
@@ -112,7 +118,6 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
             >
               {t('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
             </button>
-            .
           </p>
         </div>
         <Switch
@@ -129,7 +134,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 
       {blocked ? <BlockedHelper blocked={blocked} id={PRIVACY_PANE_BLOCKED_HELPER_ID} /> : null}
       <PrivacyDiagnosticsSection />
-    </div>
+    </SettingsGroup>
   )
 }
 

@@ -1,3 +1,4 @@
+import type { EditorDiscardGeneration } from '../../save/flush/editor-discard-epoch'
 import {
   useCallback,
   useEffect,
@@ -8,7 +9,7 @@ import {
 } from 'react'
 import type { Editor } from '@tiptap/react'
 import { registerPendingEditorFlush } from '../../save/flush/editor-pending-flush'
-import { focusLeftView, staleViewEditEpoch } from '../../save/flush/editor-stale-view-edit'
+import { focusLeftView } from '../../save/flush/editor-stale-view-edit'
 import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
 
 type PendingSerializationParams = {
@@ -32,15 +33,15 @@ export function useRichMarkdownPendingSerialization({
   reconcileRoundTripRef
 }: PendingSerializationParams) {
   const serializeTimerRef = useRef<number | null>(null)
-  // Why: the discard epoch when the pending edit began; a Discard since then drops it silently.
-  const pendingEditEpochRef = useRef(0)
+  // Why: the discard generation when the pending edit began; a Discard since then drops it silently.
+  const pendingEditGenerationRef = useRef<EditorDiscardGeneration | null>(null)
   const flushPendingSerialization = useCallback((): boolean => {
     if (serializeTimerRef.current === null) {
       return false
     }
     window.clearTimeout(serializeTimerRef.current)
     serializeTimerRef.current = null
-    if (pendingEditEpochRef.current !== staleViewEditEpoch(fileId)) {
+    if (pendingEditGenerationRef.current?.discarded === true) {
       // Why: a Discard since typing began owns the text and dirty flag now.
       return true
     }
@@ -91,7 +92,7 @@ export function useRichMarkdownPendingSerialization({
 
   return {
     serializeTimerRef,
-    pendingEditEpochRef,
+    pendingEditGenerationRef,
     flushPendingSerialization,
     flushOnFocusLeave
   }

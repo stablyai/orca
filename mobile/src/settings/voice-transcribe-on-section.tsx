@@ -12,8 +12,8 @@ import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { DictationEnginePreference } from '../mobile-web-shell/bridge/bridge-speech-verbs'
-import { isSpeechBusyError } from '../platform/native-speech'
-import { onDeviceSpeechLocale } from '../platform/on-device-speech-locale'
+import { isSpeechBusyError } from '../platform/speech/native-speech'
+import { onDeviceSpeechLocale } from '../platform/speech/on-device-speech-locale'
 import {
   DEFAULT_DICTATION_ENGINE_PREFERENCE,
   loadDictationEnginePreference,

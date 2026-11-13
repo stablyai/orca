@@ -1,5 +1,5 @@
 import { defineStreamingMethod } from '../../core'
-import { PluginPanelSessionParams } from '../../../../../shared/rpc-contract/plugins-params'
+import { PluginPanelSessionParams } from '../../../../../shared/rpc-contract/plugins/plugins-params'
 import { bindRpcPanelOwner, requirePluginService } from './plugins'
 
 let panelSessionSeq = 0

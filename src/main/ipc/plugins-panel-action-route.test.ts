@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
       mocks.handlers.set(name, handler)
   }
 }))
-vi.mock('../plugins/panels/plugin-frame-guest-sessions', () => ({
+vi.mock('../plugins/panels/guest-isolation/plugin-frame-guest-sessions', () => ({
   bindPluginFrameGuests: () => {},
   clearPluginFrameStorage: async () => {},
   preparePluginFrameGuest: async () => null

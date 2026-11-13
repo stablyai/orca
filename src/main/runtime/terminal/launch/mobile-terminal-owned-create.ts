@@ -14,7 +14,7 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runt
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
-import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
+import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import {
   buildHeadlessMobileSessionTabGroups,

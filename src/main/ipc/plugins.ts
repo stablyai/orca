@@ -10,7 +10,7 @@ import {
 import { uninstallInstalledPlugin } from '../plugins/installation/plugin-uninstall'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
-import { handlePluginPanelStateRequest } from '../plugins/panels/plugin-panel-state'
+import { handlePluginPanelStateRequest } from '../plugins/panels/panel-lifetime/plugin-panel-state'
 import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
@@ -18,11 +18,11 @@ import { registerPluginRemotePanelHandlers } from './plugin-remote-panel-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
 import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
 import { registerPluginEditorSaveHookHandler } from './plugin-editor-save-hook-ipc'
-import { readPluginPanelImage } from '../plugins/panels/plugin-panel-image'
+import { readPluginPanelImage } from '../plugins/panels/panel-lifetime/plugin-panel-image'
 import {
   bindPluginFrameGuests,
   clearPluginFrameStorage
-} from '../plugins/panels/plugin-frame-guest-sessions'
+} from '../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import { pluginConsentRequestSchema } from '../../shared/plugins/approval/plugin-consent-request'
 import {

@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import type { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import { ChevronLeft, ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
@@ -46,7 +46,7 @@ export function MobileSourceControlHeader({
   const t = useMobileTranslation()
   // Here, not in the panel, so the hint's timers re-render only the bar.
   const showRefreshLine = useRefreshHint(refreshing)
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const actions: ActionSheetAction[] = [
     {

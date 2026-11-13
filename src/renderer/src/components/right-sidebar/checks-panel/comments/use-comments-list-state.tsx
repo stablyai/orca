@@ -22,7 +22,7 @@ import { getPRCommentPresentationClasses } from './pr-comment-presentation'
 import type {
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult

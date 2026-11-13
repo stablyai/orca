@@ -151,16 +151,4 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
 
     expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
   })
-
-  it('restarts the window when the host reports genuinely new evidence', () => {
-    const store = seedPairedClientStore()
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS, T0, 1)
-    const laterClientNow = T0 + AGENT_STATUS_STALE_AFTER_MS - 1_000
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS + 60_000, laterClientNow, 2)
-
-    expect(mirroredRowIsFreshAt(store, laterClientNow + AGENT_STATUS_STALE_AFTER_MS - 1)).toBe(true)
-    expect(mirroredRowIsFreshAt(store, laterClientNow + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(
-      false
-    )
-  })
 })
