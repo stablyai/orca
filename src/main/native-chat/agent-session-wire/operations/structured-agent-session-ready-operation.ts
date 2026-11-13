@@ -223,7 +223,8 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
           result: await run({ ok: true, child: child.child, deadline, signal: authority?.signal })
         }
       }
-      context.deliveryOrder.reconcile(
+      // Queued sends reserve their places first so this operation stays behind them.
+      await context.deliveryOrder.reconcile(
         envelope.sessionId,
         context.sessions.get(envelope.sessionId)?.journal
       )
