@@ -17159,7 +17159,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome eklentileri",
+                        "title": "Chrome uzantılarınızı getirin",
+                        "everydayTitle": "Her gün kullandığınız tarayıcı araçları, Orca'da",
                         "body": "Eklentileri Chrome Web Store’dan yükleyin ve adres çubuğunun yanına sabitleyin.",
                         "action": "Chrome Web Store’u aç",
                         "secondaryAction": "Anladım"

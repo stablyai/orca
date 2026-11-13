@@ -16767,7 +16767,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 扩展程序",
+                        "title": "带上你的 Chrome 扩展程序",
+                        "everydayTitle": "你常用的浏览器工具，尽在 Orca",
                         "body": "从 Chrome 应用商店安装扩展程序，并将其固定在地址栏旁。",
                         "action": "打开应用商店",
                         "secondaryAction": "知道了"

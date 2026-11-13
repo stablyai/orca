@@ -18,6 +18,7 @@ import type {
   BrowserExtensionToolbarAction,
   BrowserExtensionToolbarState
 } from '../../../../../shared/browser/extensions/browser-extension-toolbar-types'
+import { trackBrowserExtensionsWebStoreOpened } from '@/diagnostics/telemetry/browser-extensions-telemetry'
 import { CHROME_WEB_STORE_HOME_URL } from '../../../../../shared/browser/extensions/browser-extension-webstore'
 import {
   BrowserExtensionContextEntries,
@@ -285,7 +286,15 @@ export function BrowserExtensionsMenuSub({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           // Why this profile: an install from the store page lands where the store was opened.
-          onSelect={() => void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId)}
+          onSelect={() =>
+            void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId).then(
+              (opened) => {
+                if (opened) {
+                  trackBrowserExtensionsWebStoreOpened('toolbar_menu')
+                }
+              }
+            )
+          }
         >
           <Store className="size-3.5" />
           {t('browser.extensions.visitWebStore', 'Visit Chrome Web Store')}

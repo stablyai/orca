@@ -110,6 +110,7 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { pluginInstalledSchema } from './telemetry-plugin-event-schemas'
+import { browserExtensionsEventSchemas } from './browser/extensions/browser-extensions-banner'
 import {
   firstAgentInteractionSchema,
   meaningfulActivityDaySchema
@@ -257,5 +258,7 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
-  plugin_installed: pluginInstalledSchema
+  plugin_installed: pluginInstalledSchema,
+
+  ...browserExtensionsEventSchemas
 } as const

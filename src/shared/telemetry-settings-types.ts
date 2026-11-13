@@ -1,3 +1,4 @@
+import type { BrowserExtensionsBannerAssignment } from './browser/extensions/browser-extensions-banner'
 import type { AgentDashboardSurface } from './telemetry-agent-dashboard-event-schemas'
 import type { MilestoneInstallCohort } from './telemetry-protected-milestone-schemas'
 
@@ -29,6 +30,8 @@ export type TelemetrySettings = {
   /** Treatment cards split equally by eligibility; frozen locally from settings, never usage history. */
   chatUiLaunchTipButtonEmphasis?: 'normal' | 'swapped'
   chatUiLaunchTipTargeting?: ChatUiLaunchTipTargeting
+  /** Written by main only; picks the browser extensions banner this install follows. */
+  browserExtensionsBanner?: BrowserExtensionsBannerAssignment
   /** Local UTC-day cursors cap dashboard observations across restarts; at most two writes a day. */
   agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>
   /** UTC-day cursors written only after the SDK accepted the milestone capture; at most two writes a day. */

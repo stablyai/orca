@@ -1,3 +1,4 @@
+import { recordBrowserExtensionInstalled } from '../../telemetry/browser-extensions-banner'
 import { isAbsolute } from 'node:path'
 import type {
   BrowserExtensionActionResult,
@@ -243,6 +244,9 @@ export function addUnpackedBrowserExtension(
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )
+      if (!existing) {
+        recordBrowserExtensionInstalled('unpacked')
+      }
     })
     notifyBrowserExtensionListChanged()
   })

@@ -17675,7 +17675,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Расширения Chrome",
+                        "title": "Перенесите свои расширения Chrome",
+                        "everydayTitle": "Ваши привычные инструменты браузера — в Orca",
                         "body": "Установите расширения из Chrome Web Store и закрепите их рядом с адресной строкой.",
                         "action": "Открыть Chrome Web Store",
                         "secondaryAction": "Понятно"

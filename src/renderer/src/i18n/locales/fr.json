@@ -17154,7 +17154,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Extensions Chrome",
+                        "title": "Apportez vos extensions Chrome",
+                        "everydayTitle": "Vos outils de navigation du quotidien, dans Orca",
                         "body": "Installez des extensions depuis le Chrome Web Store et épinglez-les à côté de la barre d’adresse.",
                         "action": "Ouvrir le Web Store",
                         "secondaryAction": "Compris"

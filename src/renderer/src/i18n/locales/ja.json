@@ -16479,7 +16479,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 拡張機能",
+                        "title": "Chrome 拡張機能をそのまま使おう",
+                        "everydayTitle": "いつものブラウザツールを Orca で",
                         "body": "Chrome ウェブストアからインストールし、アドレスバーの横に固定できます。",
                         "action": "ウェブストアを開く",
                         "secondaryAction": "了解"

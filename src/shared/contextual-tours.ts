@@ -13,9 +13,9 @@ export type ContextualTourId =
   | 'workspace-creation'
   | 'projects-collapse-all'
 
-export type ContextualTourStepControl = {
-  kind: 'auto-rename-branch-from-work'
-}
+export type ContextualTourStepControl =
+  | { kind: 'auto-rename-branch-from-work' }
+  | { kind: 'browser-extension-icons'; colored: boolean }
 
 export type ContextualTourStepActionKind =
   | 'next'

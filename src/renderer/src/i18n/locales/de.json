@@ -17182,7 +17182,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome-Erweiterungen",
+                        "title": "Bring deine Chrome-Erweiterungen mit",
+                        "everydayTitle": "Deine täglichen Browser-Tools, in Orca",
                         "body": "Installiere Erweiterungen aus dem Chrome Web Store und hefte sie neben der Adressleiste an.",
                         "action": "Web Store öffnen",
                         "secondaryAction": "Verstanden"

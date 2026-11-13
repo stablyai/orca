@@ -19555,7 +19555,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Extensões do Chrome",
+                        "title": "Traga suas extensões do Chrome",
+                        "everydayTitle": "Suas ferramentas de navegador do dia a dia, no Orca",
                         "body": "Instale extensões pela Chrome Web Store e fixe-as ao lado da barra de endereços.",
                         "action": "Abrir Web Store",
                         "secondaryAction": "Entendi"

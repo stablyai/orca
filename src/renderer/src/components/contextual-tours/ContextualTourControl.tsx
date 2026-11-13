@@ -1,4 +1,6 @@
 import type { JSX } from 'react'
+import { Code2, Highlighter, KeyRound, Languages, Pipette, Puzzle, ShieldCheck } from 'lucide-react'
+import { cn } from '@/lib/class-names'
 import { Switch } from '@/components/ui/switch'
 import { useAppStore } from '@/store'
 import type { ContextualTourStepControl } from '../../../../shared/contextual-tours'
@@ -13,6 +15,8 @@ export function ContextualTourControl({
   switch (control.kind) {
     case 'auto-rename-branch-from-work':
       return <AutoRenameBranchFromWorkControl />
+    case 'browser-extension-icons':
+      return <BrowserExtensionIcons colored={control.colored} />
   }
 }
 
@@ -58,6 +62,42 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
             })
           }}
         />
+      </div>
+    </div>
+  )
+}
+
+// Why fixed hues: the strip stands in for real extension icons, which are brand-colored.
+const EXTENSION_ICON_TILES = [
+  { Icon: KeyRound, tile: 'bg-sky-500' },
+  { Icon: ShieldCheck, tile: 'bg-emerald-500' },
+  { Icon: Code2, tile: 'bg-violet-500' },
+  { Icon: Languages, tile: 'bg-blue-500' },
+  { Icon: Pipette, tile: 'bg-pink-500' },
+  { Icon: Highlighter, tile: 'bg-amber-500' }
+] as const
+
+/** Decorative toolbar strip: extensions pinned left of the puzzle menu. */
+function BrowserExtensionIcons({ colored }: { colored: boolean }): JSX.Element {
+  return (
+    <div
+      aria-hidden="true"
+      className="mt-3 flex justify-center rounded-lg border border-border bg-muted/35 px-3 py-3.5"
+    >
+      <div className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 shadow-xs">
+        {EXTENSION_ICON_TILES.map(({ Icon, tile }, index) => (
+          <span
+            key={index}
+            className={cn(
+              'flex size-6 items-center justify-center rounded-md',
+              colored ? `${tile} text-white` : 'bg-muted text-muted-foreground'
+            )}
+          >
+            <Icon className="size-3.5" strokeWidth={2.25} />
+          </span>
+        ))}
+        <span className="mx-0.5 h-5 w-px bg-border" />
+        <Puzzle className="size-4 text-foreground" />
       </div>
     </div>
   )

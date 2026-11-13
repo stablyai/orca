@@ -1,3 +1,4 @@
+import type { BrowserExtensionsBannerAssignmentReply } from '../../../shared/browser/extensions/browser-extensions-banner'
 import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'
 import type { TelemetryConsentState } from '../../../shared/telemetry-consent-types'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
@@ -54,6 +55,8 @@ export type TelemetryApi = {
   /** Main retains upload payloads so the renderer cannot read or substitute arbitrary bytes. */
   diagnostics: DiagnosticsApi
   telemetryGetConsentState: () => Promise<TelemetryConsentState>
+  /** Asks main which browser extensions banner this install follows. */
+  telemetryAssignBrowserExtensionsBanner: () => Promise<BrowserExtensionsBannerAssignmentReply>
   /** Banner dismissal opts in without emitting telemetry_opted_in; shares the consent rate limit. */
   telemetryAcknowledgeBanner: () => Promise<void>
   stats: StatsApi

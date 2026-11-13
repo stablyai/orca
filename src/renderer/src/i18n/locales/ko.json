@@ -16476,7 +16476,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 확장 프로그램",
+                        "title": "Chrome 확장 프로그램을 그대로 가져오세요",
+                        "everydayTitle": "매일 쓰는 브라우저 도구를 Orca에서",
                         "body": "Chrome 웹 스토어에서 설치하고 주소 표시줄 옆에 고정하세요.",
                         "action": "웹 스토어 열기",
                         "secondaryAction": "확인"

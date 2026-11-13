@@ -18129,7 +18129,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome extensions",
+                        "title": "Bring your Chrome extensions",
+                        "everydayTitle": "Your everyday browser tools, in Orca",
                         "body": "Install from the Chrome Web Store and pin them next to the address bar.",
                         "action": "Open Web Store",
                         "secondaryAction": "Got it"

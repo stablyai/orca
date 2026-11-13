@@ -33,6 +33,7 @@ import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { useBrowserExtensionsBanner } from './browser-extensions-banner-look'
 import { CHROME_WEB_STORE_HOME_URL } from '../../../../shared/browser/extensions/browser-extension-webstore'
 
 export function ContextualTourOverlay(): JSX.Element | null {
@@ -75,6 +76,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
   const [renderState, setRenderState] = useState<ActiveTourRenderState | null>(null)
+  const extensionsBanner = useBrowserExtensionsBanner(activeTourId, renderState)
   const panelRef = useRef<HTMLElement | null>(null)
   const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
   const markedTourIdRef = useRef<string | null>(null)
@@ -352,6 +354,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   }
 
   const handleStepAction = (action: ContextualTourStepAction): void => {
+    extensionsBanner.trackStep(action.kind)
     performContextualTourStepAction({
       action,
       activeTabId,
@@ -402,10 +405,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
   return (
     <ContextualTourOverlaySurface
       activeTourId={activeTourId}
-      renderState={renderState}
+      renderState={extensionsBanner.renderState ?? renderState}
       panelRef={panelRef}
       panelHost={renderState.panelHost}
       onSkip={(id) => {
+        extensionsBanner.trackStep('close')
         emitContextualTourOutcome('skipped')
         dismissContextualTour(id)
       }}

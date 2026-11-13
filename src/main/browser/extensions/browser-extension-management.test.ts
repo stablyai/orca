@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
     records,
     forgetDnrState: vi.fn(),
     sessions: [{ name: 'default' }, { name: 'work' }],
+    recordInstalled: vi.fn(),
     store: {
       get: (id: string) => records.get(id) ?? null,
       save: vi.fn((record: Record<string, unknown>) => records.set(String(record.id), record)),
@@ -22,6 +23,9 @@ vi.mock('../sessions/profiles/browser-session-registry', () => ({
     updateEnabledExtensionIds: vi.fn(),
     getProfile: () => ({ id: 'default' })
   }
+}))
+vi.mock('../../telemetry/browser-extensions-banner', () => ({
+  recordBrowserExtensionInstalled: mocks.recordInstalled
 }))
 vi.mock('./tabs-and-windows/browser-extension-options-page', () => ({
   openBrowserExtensionOptionsPage: vi.fn()
@@ -99,6 +103,16 @@ describe('addUnpackedBrowserExtension', () => {
       error: 'native load failed'
     })
     expect(mocks.records.has(ID)).toBe(false)
+    expect(mocks.recordInstalled).not.toHaveBeenCalled()
+  })
+
+  it('reports a newly loaded folder once, and not when the same folder is loaded again', async () => {
+    expect(await addUnpackedBrowserExtension('default', '/dev/vault')).toEqual({ ok: true })
+    expect(mocks.recordInstalled).toHaveBeenCalledTimes(1)
+    expect(mocks.recordInstalled).toHaveBeenCalledWith('unpacked')
+
+    expect(await addUnpackedBrowserExtension('default', '/dev/vault')).toEqual({ ok: true })
+    expect(mocks.recordInstalled).toHaveBeenCalledTimes(1)
   })
 
   it('holds off a removal until its load is recorded, so removal cannot be undone', async () => {
