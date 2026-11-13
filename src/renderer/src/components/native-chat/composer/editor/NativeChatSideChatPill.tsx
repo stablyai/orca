@@ -13,7 +13,7 @@ export function NativeChatSideChatPill({ node, selected }: NodeViewProps): React
         label={t('components.native-chat.sideChat.pill', 'Side chat')}
         selected={selected}
         data-native-chat-side-chat={String(node.attrs.token).trimEnd()}
-        className="me-1"
+        className="me-1 select-none"
       />
     </NodeViewWrapper>
   )

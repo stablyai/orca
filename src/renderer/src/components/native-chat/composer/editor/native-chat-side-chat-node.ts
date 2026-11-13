@@ -55,6 +55,11 @@ function pillsToText(state: EditorState, keep: (pos: number) => boolean): Transa
   return tr
 }
 
+function pillAlone({ doc }: EditorState): boolean {
+  const only = doc.childCount === 1 ? doc.firstChild : null
+  return only?.childCount === 1 && only.firstChild?.type.name === SIDE_CHAT_NODE
+}
+
 /** A picked `/btw` or `/side` row: its completed text becomes the pill. */
 export function pillLeadingSideChatCommand(editor: Editor): Transaction | null {
   return sideChatEnabled(editor) ? leadingCommandPill(editor.state) : null
@@ -158,22 +163,21 @@ export const NativeChatSideChat = Node.create<{ placeholder: () => string }, Sid
     const { placeholder } = this.options
     return [
       new Plugin({
-        // Text typed or dropped before the pill would send a plain message under a side-chat label.
+        // A pill stays only first in the draft and only while Send opens it as a side chat: text
+        // typed or dropped before it, and undo or redo after side chat went away, return it to text.
         appendTransaction: (transactions, _old, state) =>
           transactions.some((tr) => tr.docChanged)
-            ? pillsToText(state, (pos) => pos === PILL_POSITION)
+            ? pillsToText(state, (pos) => storage.enabled && pos === PILL_POSITION)
             : null,
         props: {
+          // The visible hint is decoration only; screen readers get the same prompt from the box.
+          attributes: (state): Record<string, string> =>
+            storage.enabled && pillAlone(state) ? { 'aria-placeholder': placeholder() } : {},
           decorations: (state) => {
-            const { doc } = state
-            const only = doc.childCount === 1 ? doc.firstChild : null
-            if (
-              !storage.enabled ||
-              only?.childCount !== 1 ||
-              only.firstChild?.type.name !== SIDE_CHAT_NODE
-            ) {
+            if (!storage.enabled || !pillAlone(state)) {
               return null
             }
+            const { doc } = state
             const text = placeholder()
             // After the caret, as the composer's own placeholder reads; the pill already says side chat.
             return DecorationSet.create(doc, [
