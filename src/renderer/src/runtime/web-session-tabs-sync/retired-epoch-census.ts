@@ -1,3 +1,7 @@
+import {
+  captureBrowserInitializationDelivery,
+  recordBrowserInitializationReceipt
+} from './browser-initialization-presentation'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
@@ -60,6 +64,7 @@ async function runCensus(
     return
   }
   const requestFrame = nextReceivedSessionTabsFrame()
+  const delivery = captureBrowserInitializationDelivery(args.environmentId)
   const response = await window.api.runtimeEnvironments.call({
     selector: args.environmentId,
     method: 'session.tabs.listAll',
@@ -83,6 +88,7 @@ async function runCensus(
   if (!snapshot) {
     return
   }
+  recordBrowserInitializationReceipt(args.environmentId, snapshot, requestFrame, delivery)
   admitRetiredValueUnderAuthority(
     sessionTabsPublicationEpochHistoryByWorktree.get(key),
     snapshot.publicationEpoch,

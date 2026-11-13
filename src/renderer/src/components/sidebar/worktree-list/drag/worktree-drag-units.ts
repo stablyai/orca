@@ -1,6 +1,9 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
-import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folder-workspace-occurrences'
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folders/folder-workspace-occurrences'
+import {
+  ALL_GROUP_KEY,
+  PINNED_GROUP_KEY
+} from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

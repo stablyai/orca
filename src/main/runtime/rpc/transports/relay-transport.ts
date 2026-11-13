@@ -27,6 +27,16 @@ type CloudRelayTransportOptions = {
   generation: number
   createSocket?: (url: string) => WebSocket
   onConnectionClosed?: (connectionId: string) => void
+  /**
+   * Once per data socket, when its attach ends: how long this host's dial took to reach the cell
+   * (WS open, null if never), and whether the relay's first frame arrived. The owner decides what
+   * is path evidence; a close or deadline after open is usually phone behaviour.
+   */
+  onDataDialSettled?: (
+    connectionId: string,
+    openedAfterMs: number | null,
+    attached: boolean
+  ) => void
 }
 
 function relayWebSocketOrigin(cellUrl: string): string {
@@ -50,6 +60,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   private generation: number
   private readonly createSocket: (url: string) => WebSocket
   private readonly onConnectionClosed: ((connectionId: string) => void) | undefined
+  private readonly onDataDialSettled: CloudRelayTransportOptions['onDataDialSettled']
   private readonly socketsByConnectionId = new Map<string, WebSocket>()
   private readonly metadataBySocket = new Map<WebSocket, MobileSocketTransportMetadata>()
   private readonly clientIds = new Map<WebSocket, string>()
@@ -64,6 +75,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.relayHostId = options.relayHostId
     this.generation = options.generation
     this.onConnectionClosed = options.onConnectionClosed
+    this.onDataDialSettled = options.onDataDialSettled
     this.createSocket =
       options.createSocket ??
       ((url) =>
@@ -155,6 +167,8 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       let opened = false
       let attached = false
       let finalized = false
+      const dialStartedAt = Date.now()
+      let openedAfterMs: number | null = null
       const deadline = setTimeout(() => {
         socket.terminate()
         // Expired attaches are unusable; release even if terminate never emits close.
@@ -170,6 +184,10 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         }
         finalized = true
         clearTimeout(deadline)
+        // Every path that ends an attach without a first frame (deadline, error, close) lands here.
+        if (!attached) {
+          this.onDataDialSettled?.(connection.connId, openedAfterMs, false)
+        }
         this.finalizeConnection(connection.connId, socket)
       }
       const onMessage = (raw: RawData, isBinary: boolean): void => {
@@ -179,6 +197,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         if (!attached) {
           attached = true
           clearTimeout(deadline)
+          this.onDataDialSettled?.(connection.connId, openedAfterMs, true)
         }
         const message: RelayMessagePayload = isBinary
           ? new Uint8Array(raw as Buffer)
@@ -195,6 +214,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       }
       const onOpen = (): void => {
         opened = true
+        openedAfterMs = Date.now() - dialStartedAt
         const networkSocket = (
           socket as unknown as { _socket?: { setNoDelay(value: boolean): void } }
         )._socket

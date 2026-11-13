@@ -19067,7 +19067,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
+            "openWith": "Ouvrir avec (sauf pendant la saisie dans un champ de texte d’Orca)"
           }
         },
         "pluginInstallCount": {
@@ -19911,8 +19911,7 @@
         "stateMonitoringCount": "{{value0}} en surveillance",
         "stateUnverifiableCount": "{{value0}} au statut indisponible",
         "stateWaitingCount": "{{value0}} en attente",
-        "stateWorkingCount": "{{value0}} en cours",
-        "showAgent": "Afficher {{value0}} dans la conversation"
+        "stateWorkingCount": "{{value0}} en cours"
       },
       "railLabel": "Vos messages",
       "railImageMessage": "Image jointe",

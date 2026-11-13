@@ -3,7 +3,7 @@ import { getDetachedWorkspaceReviewRequest } from '../review/workspace-detached-
 import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 import { getWorkspaceAttachmentSourceContext } from '../review/workspace-attachment-source-result'
 import { getWorkspaceReferenceLinearWorkspaceId } from '../review/workspace-reference-details'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'

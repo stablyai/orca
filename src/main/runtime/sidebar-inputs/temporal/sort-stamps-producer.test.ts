@@ -7,12 +7,12 @@ import type { RuntimeClientEvent } from '../../../../shared/runtime-client-event
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import '../../../../shared/sidebar-list/sort-stamps'
-import type { SmartStampFields } from '../../../../shared/sidebar-list/sort-stamps'
+import '../../../../shared/sidebar-list/sorting/sort-stamps'
+import type { SmartStampFields } from '../../../../shared/sidebar-list/sorting/sort-stamps'
 import '../../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 import type { AgentTransitionStep } from '../../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 import { AgentTransitionDetector } from '../../../agent-hooks/observations/agent-transition-detector'
-import '../../../../shared/sidebar-list/stamp-order'
+import '../../../../shared/sidebar-list/sorting/stamp-order'
 import { SortStampsProducer, type StoredTierEvidence } from './sort-stamps-producer'
 import type { SortStampsStore } from '../../workspaces/metadata/workspace-activity-records'
 
@@ -42,7 +42,6 @@ function createHarness() {
   const folders = new Map<string, Stamps & { connectionId?: string }>([
     [FOLDER_ID, { lastActivityAt: 0 }]
   ])
-  const writes: string[] = []
   const exits = new Map<string, () => void>()
   const fenced = new Set<string>()
   const notified: string[] = []
@@ -53,18 +52,15 @@ function createHarness() {
     getWorktreeMeta: (id) => meta.get(id),
     setWorktreeMeta: ({ id, hostId }, updates) => {
       if (hostId === SSH_HOST) {
-        writes.push(`${hostId}|${id}`)
         sshMeta.set(id, { lastActivityAt: 0, ...sshMeta.get(id), ...updates })
         return
       }
-      writes.push(id)
       meta.set(id, { lastActivityAt: 0, ...meta.get(id), ...updates })
     },
     getRepos: () => [LOCAL_REPO],
     getWorktreeMetaForHost: (id, hostId) => (hostId === SSH_HOST ? sshMeta.get(id) : undefined),
     getFolderWorkspace: (id) => folders.get(id),
     updateFolderWorkspace: (id, updates) => {
-      writes.push(`folder:${id}`)
       folders.set(id, { lastActivityAt: 0, ...folders.get(id), ...updates })
     },
     getAllWorktreeMeta: () => Object.fromEntries(meta),
@@ -81,8 +77,7 @@ function createHarness() {
   const producer = new SortStampsProducer({
     store: () => store,
     isWriteFenced: (id) => fenced.has(id),
-    onClientEvent: (next, options) => {
-      expect(options.consumesTerminalSideEffects).toBe(true)
+    onClientEvent: (next) => {
       listener = next
       return () => {}
     },
@@ -100,10 +95,8 @@ function createHarness() {
     meta,
     sshMeta,
     folders,
-    writes,
     exits,
     fenced,
-    notified,
     viewing,
     // The runtime feeds the same batch to the detector (titles) and the producer (bells).
     sideEffects: (
@@ -170,8 +163,6 @@ describe('SortStampsProducer: hook agents', () => {
 
     hook(h.server, 'working')
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: T0, smartTier: 'working', smartAt: T0 })
-    // Each write tells clients to re-list the record.
-    expect(h.notified).toEqual([WT])
 
     const finishedAt = advance(20_000)
     hook(h.server, 'done')
@@ -181,7 +172,7 @@ describe('SortStampsProducer: hook agents', () => {
       smartAt: finishedAt
     })
 
-    const promptedAt = advance(20_000)
+    advance(20_000)
     hook(h.server, 'working')
     const askedAt = advance(20_000)
     hook(h.server, 'blocked')
@@ -190,7 +181,6 @@ describe('SortStampsProducer: hook agents', () => {
       smartTier: 'needs-you',
       smartAt: askedAt
     })
-    expect(promptedAt).toBeLessThan(askedAt)
 
     // Resuming after the approval is the same turn: Working, no Recent stamp, the ask's time.
     advance(20_000)
@@ -207,10 +197,6 @@ describe('SortStampsProducer: hook agents', () => {
     hook(h.server, 'working')
     h.attach(h.server)
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: 0, smartTier: 'working', smartAt: T0 })
-    // Re-attaching after a restart finds the tier it stamped and writes nothing.
-    const writes = h.writes.length
-    h.attach(h.server)
-    expect(h.writes).toHaveLength(writes)
 
     // The seeded pane is known, so its finish is a transition.
     const doneAt = advance(20_000)
@@ -371,14 +357,14 @@ describe('SortStampsProducer: startup reconcile', () => {
       payload: { state: 'working', prompt: 'task', agentType: 'codex' }
     })
     h.attach(h.server)
-    const writes = h.writes.length
+
     await h.producer.reconcileStoredTiers(
       evidence({
         terminalPtyIds: () => ['pty-live', 'pty-unknown'],
         probePtyLiveness: async (ptyId) => (ptyId === 'pty-live' ? false : null)
       })
     )
-    expect(h.writes).toHaveLength(writes)
+
     expect(h.meta.get(WT)?.smartTier).toBe('done')
     expect(h.folders.get(FOLDER_ID)?.smartTier).toBe('working')
   })

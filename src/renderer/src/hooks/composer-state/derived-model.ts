@@ -2,7 +2,7 @@ import type { FolderSetupSupport } from '@/lib/workspace/creation/setup/folder-s
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import type { RetiredNameRegistry } from '../../../../shared/worktree/retired-name-registry'
+import type { RetiredNameRegistry } from '../../../../shared/worktree/naming/retired-name-registry'
 import type { GitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
 import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
 

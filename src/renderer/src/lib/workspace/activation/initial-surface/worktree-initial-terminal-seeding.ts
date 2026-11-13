@@ -1,7 +1,7 @@
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../../../../shared/worktree/launch-types'
+} from '../../../../../../shared/worktree/creation/launch-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'

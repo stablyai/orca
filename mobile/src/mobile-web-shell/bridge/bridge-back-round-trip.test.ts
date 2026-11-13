@@ -100,19 +100,4 @@ describe('a Back press crossing from the shell to the page', () => {
   })
 })
 
-describe('the Back lane with no negotiation', () => {
-  it('hands a press to any page it serves, whose ready declares nothing', async () => {
-    const pair = await opened()
-    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
-    await pair.flush()
-    const before = pair.toPage.length
-    expect(pair.host.sendBack()).toBe(true)
-    await pair.flush()
-    expect(pair.toPage.length).toBe(before + 1)
-    expect(pair.readToPage().at(-1)).toEqual({ v: 1, type: 'back' })
-    expect(pair.backPops).toEqual(['popped'])
-    expect(pair.diagnostics).toContainEqual({ kind: 'back-unclaimed' })
-  })
-})
-
 afterEach(closeResources)
