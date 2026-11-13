@@ -120,6 +120,20 @@ describe('local Windows cmd prompt detection', () => {
 })
 
 describe('Ctrl+Backspace bytes', () => {
+  it('keeps Ctrl+W for child commands whose relative arguments end in cmd.exe', () => {
+    for (const title of [
+      `${CMD_IDLE_TITLE} - vim .\\cmd.exe`,
+      `${CMD_IDLE_TITLE} - python -i tools\\cmd.exe`
+    ]) {
+      expect(
+        resolveBackspace('win32', 'ctrlKey', () => cmdPrompt({ tab: 'cmd.exe', title }))
+      ).toEqual({
+        type: 'sendInput',
+        data: '\x17'
+      })
+    }
+  })
+
   it('uses the current PTY title and launch identity at each keypress, including replacement owners', async () => {
     const previousState = useAppStore.getState()
     vi.stubGlobal('window', {

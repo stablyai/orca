@@ -10,7 +10,12 @@ const CMD_IDLE_TITLE =
   /^(?:Administrator:\s*)?(?:[a-z]:[\\/](?:[^<>:"|?*\\/\r\n]+[\\/])*)?cmd\.exe$/i
 
 function isCmdIdleTitle(title: string | null | undefined): boolean {
-  return CMD_IDLE_TITLE.test(title?.trim() ?? '')
+  const value = title?.trim() ?? ''
+  // Earlier cmd.exe text is ambiguous with an appended child command, even if it is a real directory name.
+  return (
+    CMD_IDLE_TITLE.test(value) &&
+    value.toLowerCase().indexOf('cmd.exe') === value.length - 'cmd.exe'.length
+  )
 }
 
 /** A local ConPTY cmd prompt with no agent: cooked cmd erases a word on BS but echoes Ctrl+W as ^W (#40325). */
