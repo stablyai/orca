@@ -12,6 +12,10 @@ import {
 } from '../director/relay-http-client'
 import { RelayControlRotation } from './relay-control-rotation'
 
+// The director answered and only the cell connect failed: retry sooner. Director failures keep
+// the full backoff so a struggling director is not herded.
+const CELL_CONNECT_RETRY_MAX_MS = 60_000
+
 export class RelayOriginPool {
   private activeOrigin: RelayControlOrigin | null = null
   private readonly origins = new Set<RelayControlOrigin>()
@@ -164,6 +168,7 @@ export class RelayOriginPool {
     origin: RelayControlOrigin,
     message: RelayDrainMessage
   ): Promise<void> {
+    let directorAnswered = false
     try {
       if (!this.relayJwt) {
         throw new Error('relay_authorization_unavailable')
@@ -180,6 +185,7 @@ export class RelayOriginPool {
         isCurrent: () => this.isCurrent(),
         fetch: this.options.fetch
       })
+      directorAnswered = true
       this.assertCurrent()
       if (
         this.deferredAssignment &&
@@ -217,7 +223,11 @@ export class RelayOriginPool {
           error instanceof Error ? error.message : String(error)
         )
         const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
-        this.drainRetry.schedule(retryAfterMs, () => this.handleDrain(origin, message))
+        this.drainRetry.schedule(
+          retryAfterMs,
+          () => this.handleDrain(origin, message),
+          directorAnswered ? CELL_CONNECT_RETRY_MAX_MS : undefined
+        )
       }
     }
   }
