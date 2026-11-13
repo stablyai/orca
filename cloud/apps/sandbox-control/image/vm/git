@@ -93,15 +93,26 @@ no_access_line() {
   [ "$sub" = push ] || verb='read'
   printf '%s\n' "orca: Orca Cloud can't $verb $github_slug. Install the Orca GitHub App on $owner, or connect your GitHub in Settings › Account." >&2
 }
+# GitHub's "not found" is a typo'd name or a private repo it won't confirm: say which half fits whom.
+not_found_line() {
+  printf '%s\n' "orca: Orca Cloud can't find $github_slug. Check the name, or install the Orca GitHub App on ${github_slug%%/*} if it's private." >&2
+}
 # orca-git-as's own fallback line is replaced by the nudge; GitHub auth failures by the plain line.
 fallback_filter() {
   local line said=0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       'orca-git-as: no teammate identity'*) nudge_once ;;
+      'remote: Repository not found.'* | "fatal: repository 'https://github.com/"*"' not found"*)
+        if [ -n "$github_slug" ]; then
+          [ "$said" = 1 ] || not_found_line
+          said=1
+        else
+          printf '%s\n' "$line"
+        fi
+        ;;
       *"could not read Username for 'https://github.com'"* | *"could not read Password for 'https://"*"github.com'"* | \
         *"Authentication failed for 'https://github.com/"* | 'remote: Permission to '*' denied to '* | \
-        'remote: Repository not found.'* | "fatal: repository 'https://github.com/"*"' not found"* | \
         *"The requested URL returned error: 403"*)
         if [ -n "$github_slug" ]; then
           [ "$said" = 1 ] || no_access_line

@@ -27,7 +27,10 @@ case "$1" in
   config | symbolic-ref) exit 1 ;;
   push | pull | fetch)
     echo "GIT_TERMINAL_PROMPT=\${GIT_TERMINAL_PROMPT:-unset}" >&2
-    if [ "\${GIT_TERMINAL_PROMPT:-}" = 0 ]; then
+    if [ -n "\${FAKE_NOT_FOUND:-}" ]; then
+      echo "remote: Repository not found." >&2
+      echo "fatal: repository 'https://github.com/acme/typo.git/' not found" >&2
+    elif [ "\${GIT_TERMINAL_PROMPT:-}" = 0 ]; then
       echo "fatal: could not read Username for 'https://github.com': terminal prompts disabled" >&2
     else
       printf "Username for 'https://github.com': " >&2
@@ -44,10 +47,10 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true })
 })
 
-function git(args: string[], remoteUrl: string): string {
+function git(args: string[], remoteUrl: string, extra: NodeJS.ProcessEnv = {}): string {
   const result = spawnSync('bash', [SHIM, ...args], {
     cwd: home,
-    env: { PATH: '/usr/bin:/bin', HOME: home, ORCA_REAL_GIT: fakeGit, FAKE_REMOTE_URL: remoteUrl, ORCA_GIT_NUDGE_DIR: home },
+    env: { PATH: '/usr/bin:/bin', HOME: home, ORCA_REAL_GIT: fakeGit, FAKE_REMOTE_URL: remoteUrl, ORCA_GIT_NUDGE_DIR: home, ...extra },
     encoding: 'utf8'
   })
   return result.stderr
@@ -78,5 +81,12 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
   it('a push straight to a github.com URL is covered too', () => {
     const err = git(['push', 'https://github.com/acme/app', 'HEAD'], '')
     expect(err).toContain("orca: Orca Cloud can't push to acme/app.")
+  })
+
+  it("GitHub's not-found says to check the name, or install the App if it's private (once)", () => {
+    const err = git(['push', 'origin', 'HEAD'], 'https://github.com/acme/typo.git', { FAKE_NOT_FOUND: '1' })
+    expect(err).toContain("orca: Orca Cloud can't find acme/typo. Check the name, or install the Orca GitHub App on acme if it's private.")
+    expect(err).not.toContain('Repository not found')
+    expect(err.split('\n').filter((l) => l.startsWith('orca:')).length).toBe(1)
   })
 })
