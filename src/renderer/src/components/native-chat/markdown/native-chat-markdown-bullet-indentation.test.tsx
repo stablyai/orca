@@ -5,6 +5,25 @@ import { NativeChatMarkdown } from './NativeChatMarkdown'
 
 afterEach(cleanup)
 
+it('preserves child indentation relative to Markdown list containers', () => {
+  const { container } = render(
+    <NativeChatMarkdown
+      variant="document"
+      preserveBulletIndentation
+      content={
+        '- Parent\n    • Child\n\n        • **Grandchild**\n\n10. Ordered parent\n      • Ordered child'
+      }
+    />
+  )
+  expect([...container.querySelectorAll('p')].map((paragraph) => paragraph.textContent)).toEqual([
+    'Parent\n  • Child',
+    '      • Grandchild'
+  ])
+  expect(container.querySelector('ol li')?.textContent).toBe('Ordered parent\n  • Ordered child')
+  expect(container.querySelector('strong')?.textContent).toBe('Grandchild')
+  expect(container.querySelector('pre')).toBeNull()
+})
+
 it('anchors indentation to authored lines across character references and inline formatting', () => {
   const { container } = render(
     <NativeChatMarkdown
@@ -29,7 +48,7 @@ it('keeps separated literal bullet items out of code blocks without reclassifyin
       variant="document"
       preserveBulletIndentation
       content={
-        '• Parent\n\n    • **Child**\n\n        • [Grandchild](https://example.com)\n\nCode sample:\n\n    • literal code\n\n• Another parent\n\n```text\n    • fenced code\n```\n\n• Code example\n\n    const value = 1'
+        '• Parent\n\n    • **Child**\n\n        • [Grandchild][child]\n\nCode sample:\n\n    • literal code\n\n• Another parent\n\n```text\n    • fenced code\n```\n\n• Code example\n\n    const value = 1\n\n> [child]: https://example.com'
       }
     />
   )

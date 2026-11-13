@@ -245,6 +245,7 @@
     "fflate": "0.8.3",
     "i18next": "^26.5.11",
     "jsonc-parser": "^3.3.1",
+    "mdast-util-to-markdown": "2.1.2",
     "micromark-util-decode-string": "2.0.1",
     "mime-types": "3.0.2",
     "node-pty": "^1.1.0",
