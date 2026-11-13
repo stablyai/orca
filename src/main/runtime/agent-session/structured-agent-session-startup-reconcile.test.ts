@@ -1,6 +1,6 @@
 // Newer records reconcile read-only in memory.
 
-import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -9,12 +9,17 @@ import { journalDomainDatabasePath } from '../../native-chat/agent-session-journ
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
+  openTestAgentSessionRecordStoreSlot,
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import {
+  recordStructuredAgentSessionHostInstallRefusal,
+  structuredAgentSessionHostRefusal
+} from './structured-agent-session-host-refusal'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 let root: string
@@ -24,6 +29,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  recordStructuredAgentSessionHostInstallRefusal(null)
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
@@ -79,4 +85,28 @@ it('finishes startup over records a newer Orca wrote, reads them, and writes not
   expect(host?.deps.store.getRecord(sessionId)?.lease.unreconciled).toBe(false)
   await stopStructuredAgentSessionRuntime()
   expect(await readFile(path)).toEqual(bytes)
+})
+
+it('does not boot the journal writer again before RPC after this startup refused it', async () => {
+  await writeFile(journalDomainDatabasePath(root), 'not a database')
+  const opened = openTestAgentSessionRecordStoreSlot({
+    stateDirectory: root,
+    legacySessionTabIds: [],
+    hostId: 'local',
+    logger: recordingStructuredAgentSessionLogger().logger
+  })
+  opened.catch(() => {})
+  const runtime = startupRuntime()
+  let installs = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's own protected install, counted to prove the refusal is not reopened.
+  const internal = runtime as unknown as { ensureStructuredAgentSessionHost(): Promise<unknown> }
+  internal.ensureStructuredAgentSessionHost = async () => {
+    installs += 1
+  }
+  runtime.beginStructuredAgentSessionStartupOpen({ persisted: true, opened })
+
+  await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
+
+  expect(structuredAgentSessionHostRefusal()).not.toBeNull()
+  expect(installs).toBe(0)
 })

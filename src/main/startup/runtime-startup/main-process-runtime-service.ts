@@ -164,6 +164,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
   app.once('will-quit', disposeIssueLinkTitleFill)
   state.runtime = runtime
+  // Boots the saved-chat writer while serve and the window start; their restoration consumes it.
+  runtime.beginStructuredAgentSessionStartupOpen()
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({
     state: (workspaceId, suspended) => runtime.workspaceVmState(workspaceId, suspended),

@@ -18,6 +18,8 @@ import { ORCAD_BUNDLED_LAUNCHER_ENV } from '../runtime-launch/orcad-bundled-runt
 import { resolveOrcadExitCode } from '../serve-startup/orcad-exit-code'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/single-instance-exit-code'
 import { recordAgentSessionRuntimeEnd } from '../../runtime/agent-session/records/agent-session-runtime-end-record'
+import type { collectLocalSavedStructuredAgentSessionIds } from '../../runtime/agent-session/lifecycle/saved-structured-agent-session-restoration'
+import type { AgentSessionRecordStoreStartupOpen } from '../../runtime/agent-session/records/local-agent-session-record-store-startup-open'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './managed-stop/orcad-stop-deadlines'
 import { holdOrcadTerminalAdmissionUntilExit } from './managed-stop/orcad-stop-terminal-admission'
 import {
@@ -107,6 +109,17 @@ export function installOrcadShutdownSignals(
     }
   }
   return shutdown
+}
+
+/** Starts the saved-chat writer from the profile's own tab snapshot; restoration consumes it. */
+export async function startOrcadAgentSessionRecordStoreOpen(
+  profileStore: Parameters<typeof collectLocalSavedStructuredAgentSessionIds>[0]
+): Promise<AgentSessionRecordStoreStartupOpen> {
+  const { startLocalAgentSessionRecordStoreOpen } =
+    await import('../../runtime/agent-session/records/local-agent-session-record-store-startup-open')
+  const { collectLocalSavedStructuredAgentSessionIds: collectIds } =
+    await import('../../runtime/agent-session/lifecycle/saved-structured-agent-session-restoration')
+  return startLocalAgentSessionRecordStoreOpen(collectIds(profileStore))
 }
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {

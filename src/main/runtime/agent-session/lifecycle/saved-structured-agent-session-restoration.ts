@@ -1,6 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** The chat a saved tab shows, when it is this host's. */
 export function savedSessionId(tab: Tab): string | null {
@@ -38,4 +39,15 @@ export function collectSavedStructuredAgentSessionIds(
     add(tab)
   }
   return selected
+}
+
+/** This host's saved chats: the runtime and an early record-store open must share one snapshot. */
+export function collectLocalSavedStructuredAgentSessionIds(
+  store: Pick<RuntimeStore, 'getWorkspaceSession'> | null
+): readonly string[] {
+  return Object.freeze(
+    collectSavedStructuredAgentSessionIds(
+      store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+    )
+  )
 }

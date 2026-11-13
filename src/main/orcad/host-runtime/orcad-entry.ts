@@ -8,6 +8,7 @@ import { prepareOrcadSecretStoreAndMigrate } from '../credentials/orcad-secret-s
 import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../../shared/orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
+  startOrcadAgentSessionRecordStoreOpen,
   startOrcadWithHost,
   stopOrcadStructuredAgentSessions
 } from '../host-lifecycle/orcad-lifecycle'
@@ -128,8 +129,7 @@ async function activateOrcadRuntime(
   })
   registerCleanup(stopOrcadStructuredAgentSessions)
   registerCleanup(() => disposeWatcherProcessAndWait())
-  const { DesktopPushService } = await import('../../runtime/push/desktop-push-service')
-  const { resolvePushGatewayOrigin } = await import('../../runtime/push/push-gateway-origin')
+  const { startOrcadDesktopPushService } = await import('./orcad-desktop-push')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   const { startEventLoopDelayProbe } = await import('../../diagnostics/event-loop-delay-probe')
@@ -167,6 +167,9 @@ async function activateOrcadRuntime(
     (enabled) => agentHookServer.setStatusHooksEnabled(enabled),
     registerCleanup
   )
+
+  // Boots the chat writer during the daemon wait, after login env; restoration consumes this attempt.
+  const agentSessionStartupOpen = await startOrcadAgentSessionRecordStoreOpen(profileStore)
 
   // Install the daemon provider before PTY handlers can route their first call.
   await daemonStartup
@@ -225,6 +228,7 @@ async function activateOrcadRuntime(
     }
   })
   paneGridsForShutdown = runtime
+  runtime.beginStructuredAgentSessionStartupOpen(agentSessionStartupOpen)
 
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =
@@ -331,13 +335,7 @@ async function activateOrcadRuntime(
   // The daemon has no window to wait for; its CI-line watches start with the runtime.
   runtime.startPullRequestWatches()
   startOrcadSchedulers(runtime, profileStore, registerCleanup)
-  const pushService = DesktopPushService.create({
-    runtime,
-    runtimeRpc: rpc,
-    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
-  })
-  pushService?.start()
-  getAppEnvironment().onWillQuit(() => pushService?.stop())
+  startOrcadDesktopPushService(runtime, rpc)
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const readiness = await buildOrcadServeReadiness({
