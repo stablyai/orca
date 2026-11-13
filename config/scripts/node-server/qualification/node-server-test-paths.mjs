@@ -44,7 +44,7 @@ export function nodeServerTestPaths({
           'tests/e2e/daemon-running-work-probe.unit.test.ts',
           'src/shared/terminal/pty/lifecycle/pty-running-work-probe.test.ts',
           'src/main/orcad/native-runtime/orcad-packaged-node-pty.integration.test.ts',
-          'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
+          'src/main/daemon/pty-subprocess/testing/agent-foreground-process-git-bash.win32.test.ts',
           'src/main/orcad/serve-startup/orcad-cli-launcher.integration.test.ts',
           'src/main/orcad/runtime-launch/orcad-launcher-isolation.integration.test.ts',
           'src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-shutdown.integration.test.ts',

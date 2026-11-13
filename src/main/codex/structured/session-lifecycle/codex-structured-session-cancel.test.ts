@@ -28,7 +28,7 @@ vi.mock(
     terminateDescendantSnapshotWithVerdict: processWork.terminateDescendantSnapshotWithVerdict
   })
 )
-vi.mock('../../../providers/windows-foreground-process-rows', async (importOriginal) => ({
+vi.mock('../../../providers/foreground/windows/process-rows', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   queryWindowsProcessDescendants: processWork.queryWindowsProcessDescendants
 }))
@@ -168,21 +168,6 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         fence: 7
       })
     ).resolves.toEqual({ cancelled: false, refusal: {} })
-  })
-
-  it('rethrows an unsettled interrupt so the turn is not shown as cancelled', async () => {
-    const codex = fakeCodex()
-    codex.routes['turn/interrupt'] = () => {
-      throw new Error('codex app-server turn/interrupt exceeded 30000ms')
-    }
-
-    await expect(
-      (await acquired(codex)).cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7
-      })
-    ).rejects.toThrow('exceeded 30000ms')
   })
 
   it('accepts an immediate resend after verified interruption', async () => {

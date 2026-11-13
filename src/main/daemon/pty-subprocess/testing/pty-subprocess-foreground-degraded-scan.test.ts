@@ -23,7 +23,7 @@ vi.mock('../../../pty/shell-startup/pwsh', () => ({ isPwshAvailable: isPwshAvail
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
-vi.mock('../../../providers/windows-powershell-executable', () => ({
+vi.mock('../../../providers/shell-launch/windows/powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
   resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
@@ -33,12 +33,12 @@ vi.mock('../../../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../../../providers/agent-foreground-process', () => ({
+vi.mock('../../../providers/foreground/agent-process', () => ({
   resolveAgentForegroundProcessWithAvailability: (...args: unknown[]) =>
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('../../../providers/windows-pty-job-membership', () => ({
+vi.mock('../../../providers/foreground/windows/pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: (...args: unknown[]) => readConptyMock(...args),
   isWindowsPtyJobReadable: () => jobReadableMock()
 }))
