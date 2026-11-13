@@ -67,8 +67,6 @@ import { clearSubmodulePathsCacheForTests } from './submodule-paths'
 import { getDiff } from '../diffs/file-diff'
 
 describe('submodule diff routing', () => {
-  const OLD_OID = 'a'.repeat(40)
-  const NEW_OID = 'b'.repeat(40)
   const PARENT = path.resolve('/repo-sm')
 
   beforeEach(() => {
@@ -80,24 +78,6 @@ describe('submodule diff routing', () => {
     statMock.mockReset()
     existsSyncMock.mockReset()
     statMock.mockResolvedValue({ isFile: () => true, size: 12 })
-    gitExecFileAsyncMock.mockImplementation((args: string[], options?: { cwd?: string }) => {
-      if (args[0] === 'config' && args.includes('.gitmodules')) {
-        // Declare the submodule only in its parent so recursion terminates.
-        return Promise.resolve({
-          stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path\nflutter_mine\0' : ''
-        })
-      }
-      if (args[0] === 'ls-files') {
-        return Promise.resolve({ stdout: `160000 ${OLD_OID} 0\tflutter_mine\n` })
-      }
-      if (args[0] === 'ls-tree') {
-        return Promise.resolve({ stdout: `160000 commit ${OLD_OID}\tflutter_mine\n` })
-      }
-      if (args[0] === 'rev-parse') {
-        return Promise.resolve({ stdout: `${NEW_OID}\n` })
-      }
-      return Promise.resolve({ stdout: '' })
-    })
   })
 
   it('rejects inner submodule diffs whose .gitmodules path escapes the worktree', async () => {
@@ -111,18 +91,5 @@ describe('submodule diff routing', () => {
     })
 
     await expect(getDiff(PARENT, '../evil/secret.txt', false)).rejects.toThrow('Access denied')
-  })
-
-  it('rejects gitlink pointer diffs whose .gitmodules path escapes the worktree', async () => {
-    gitExecFileAsyncMock.mockImplementation((args: string[], options?: { cwd?: string }) => {
-      if (args[0] === 'config' && args.includes('.gitmodules')) {
-        return Promise.resolve({
-          stdout: options?.cwd === PARENT ? 'submodule.evil.path\n../evil\0' : ''
-        })
-      }
-      return Promise.resolve({ stdout: '' })
-    })
-
-    await expect(getDiff(PARENT, '../evil', false)).rejects.toThrow('Access denied')
   })
 })

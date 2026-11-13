@@ -23,7 +23,7 @@ vi.mock('../../../git/command-runner/git-exec-file', async (importOriginal) => (
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: mocks.gitExecFileAsync
 }))
-vi.mock('../../../text-generation/pull-request-context', () => ({
+vi.mock('../../../text-generation/pull-request-context/pull-request-context', () => ({
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))
 vi.mock('../../../source-control/pull-request-linked-issue', () => ({
@@ -33,7 +33,7 @@ vi.mock('../../../source-control/pull-request-linked-issue', () => ({
     return linkedLookup.run()
   }
 }))
-vi.mock('../../../text-generation/commit-message-agent-environment', () => ({
+vi.mock('../../../text-generation/execution/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepareLocalCommitMessageAgentEnv
 }))
 vi.mock('../../../text-generation/commit-message-text-generation', () => ({

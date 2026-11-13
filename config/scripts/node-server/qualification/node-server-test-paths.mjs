@@ -35,10 +35,8 @@ export function nodeServerTestPaths({
     'src/main/daemon/pty-subprocess/spawn-environment.ts',
     'src/main/daemon/pty-subprocess/spawn-file-child-processes.ts',
     'src/main/daemon/pty-subprocess/spawn-file-foreground-process.ts',
-    'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
     'src/main/daemon/pty-subprocess/spawn-preflight.ts',
     'src/main/daemon/pty-subprocess/subprocess-handle.ts',
-    'src/main/daemon/pty-subprocess/testing/pty-subprocess-spawn-file-foreground.test.ts',
     ...(artifact
       ? [
           'tests/e2e/daemon-running-work-probe.unit.test.ts',

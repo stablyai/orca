@@ -1,20 +1,11 @@
-import type {
-  WorkspaceCleanupEvaluation,
-  WorkspaceCleanupKeepCause
-} from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
+import type { WorkspaceCleanupEvaluation } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import {
   WORKSPACE_CLEANUP_REPORT_ROW_LIMIT,
+  WORKSPACE_CLEANUP_UNWATCHED_CAUSES,
   type WorkspaceCleanupRun,
   type WorkspaceCleanupRunOutcome,
   type WorkspaceCleanupRunRow
 } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
-
-// Workspaces no rule watches are not part of a run's receipt.
-const UNWATCHED_CAUSES: ReadonlySet<WorkspaceCleanupKeepCause> = new Set([
-  'not-removable',
-  'project-off',
-  'rules-off'
-])
 
 export type WorkspaceCleanupKeptOutcome = Pick<
   WorkspaceCleanupRunRow,
@@ -56,7 +47,7 @@ export function summarizeWorkspaceCleanupRun(args: {
   error?: string
 }): WorkspaceCleanupRun {
   const rows = args.rows.filter(
-    (row) => row.keepCause === undefined || !UNWATCHED_CAUSES.has(row.keepCause)
+    (row) => row.keepCause === undefined || !WORKSPACE_CLEANUP_UNWATCHED_CAUSES.has(row.keepCause)
   )
   const counts: Record<WorkspaceCleanupRunOutcome, number> = {
     removed: 0,

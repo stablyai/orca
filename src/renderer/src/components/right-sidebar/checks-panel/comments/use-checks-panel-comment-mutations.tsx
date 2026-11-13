@@ -156,7 +156,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         return
       }
       const confirmed = await confirm({
-        title: translate('auto.components.right.sidebar.ChecksPanel.ea9b649ce3', 'Delete comment?'),
+        title: translate('common.delete', 'Delete'),
         description: translate(
           'auto.components.right.sidebar.ChecksPanel.3b203c62f8',
           'This will permanently remove the comment from the PR.'

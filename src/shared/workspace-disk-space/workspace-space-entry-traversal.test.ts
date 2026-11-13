@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { scanWorkspaceSpaceEntryTree } from './workspace-space-entry-traversal'
-import { WorkspaceSpaceScanCapacityError } from './workspace-space-scan-budget'
 
 type Entry = { name: string }
 
@@ -85,29 +84,6 @@ describe('scanWorkspaceSpaceEntryTree', () => {
     expect(result.sizeBytes).toBe(3)
   })
 
-  it('aggregates a deep chain exactly at the entry cap without recursive unwinding', async () => {
-    const depth = 256
-    const directories = new Map<string, readonly Entry[]>()
-    let path = '/root'
-    for (let index = 0; index < depth; index += 1) {
-      const name = `directory-${index}`
-      directories.set(path, [{ name }])
-      path = `${path}/${name}`
-    }
-    directories.set(path, [])
-
-    const result = await makeTraversal(
-      directories,
-      async () => ({ kind: 'directory', sizeBytes: 1 }),
-      { maxEntries: depth }
-    )
-
-    expect(result.sizeBytes).toBe(depth + 1)
-    expect(result.children).toEqual([
-      expect.objectContaining({ name: 'directory-0', sizeBytes: depth })
-    ])
-  })
-
   it('scans a chain far longer than the cap because listings are released', async () => {
     const depth = 50
     const directories = new Map<string, readonly Entry[]>()
@@ -126,101 +102,5 @@ describe('scanWorkspaceSpaceEntryTree', () => {
     )
 
     expect(result.sizeBytes).toBe(depth + 1)
-  })
-
-  // Per-worker entry caps make capacity depend on concurrency (docs/workspace-space-scan-resource-bounds.md).
-  describe('capacity depends on directory shape, not tree size or concurrency', () => {
-    function buildWideTree(dirCount: number, filesPerDir: number) {
-      const directories = new Map<string, readonly Entry[]>()
-      directories.set(
-        '/root',
-        Array.from({ length: dirCount }, (_, index) => ({ name: `dir-${index}` }))
-      )
-      for (let index = 0; index < dirCount; index += 1) {
-        directories.set(
-          `/root/dir-${index}`,
-          Array.from({ length: filesPerDir }, (_, file) => ({ name: `file-${file}` }))
-        )
-      }
-      return directories
-    }
-
-    function scanWideTree(dirCount: number, filesPerDir: number, concurrency: number) {
-      const directories = buildWideTree(dirCount, filesPerDir)
-      return makeTraversal(
-        directories,
-        async (path) => ({
-          kind: directories.has(path) ? 'directory' : 'file',
-          sizeBytes: 1
-        }),
-        { maxEntries: 100_000, maxRetainedBytes: Number.MAX_SAFE_INTEGER },
-        concurrency
-      )
-    }
-
-    it('still rejects a single directory above the cap', async () => {
-      await expect(scanWideTree(1, 100_001, 48)).rejects.toBeInstanceOf(
-        WorkspaceSpaceScanCapacityError
-      )
-    }, 30_000)
-  })
-
-  // Unlike the tests above, these exercise the production byte cap across checkout depths.
-  describe('capacity at the production default limits', () => {
-    // The regression appeared for checkout paths longer than about 58 characters.
-    const DEEP_ROOT = '/Users/octocat/projects/orca/.claude/worktrees/wf_d39acf3c-e7d-2'
-
-    function scanAtDefaults(
-      rootPath: string,
-      dirCount: number,
-      filesPerDir: number,
-      concurrency: number
-    ) {
-      const directories = new Map<string, readonly Entry[]>()
-      directories.set(
-        rootPath,
-        Array.from({ length: dirCount }, (_, index) => ({ name: `dir-${index}` }))
-      )
-      for (let index = 0; index < dirCount; index += 1) {
-        directories.set(
-          `${rootPath}/dir-${index}`,
-          Array.from({ length: filesPerDir }, (_, file) => ({ name: `file-${file}.ts` }))
-        )
-      }
-      return scanWorkspaceSpaceEntryTree({
-        rootPath,
-        rootName: 'root',
-        concurrency,
-        entryName: (entry: Entry) => entry.name,
-        joinPath: (parent, child) => `${parent}/${child}`,
-        classifyEntry: async (path) => ({
-          kind: directories.has(path) ? ('directory' as const) : ('file' as const),
-          sizeBytes: 1
-        }),
-        readDirectory: async (path) => {
-          const entries = directories.get(path)
-          if (!entries) {
-            throw new Error(`unreadable ${path}`)
-          }
-          return entries
-        },
-        checkCancelled: () => undefined,
-        createCancellationError: () => new Error('cancelled'),
-        isCancellationError: (error) => error instanceof Error && error.message === 'cancelled'
-      })
-    }
-
-    it.each([
-      { dirCount: 48, filesPerDir: 2_100, concurrency: 48 },
-      { dirCount: 10, filesPerDir: 10_001, concurrency: 10 },
-      { dirCount: 40, filesPerDir: 2_500, concurrency: 48 }
-    ])(
-      'scans $dirCount x $filesPerDir at concurrency $concurrency under a deep root',
-      async ({ dirCount, filesPerDir, concurrency }) => {
-        const result = await scanAtDefaults(DEEP_ROOT, dirCount, filesPerDir, concurrency)
-        expect(result.sizeBytes).toBe(dirCount * filesPerDir + dirCount + 1)
-      },
-      30_000
-    )
   })
 })

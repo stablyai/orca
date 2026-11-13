@@ -533,7 +533,7 @@
 3 src/main/startup/windows-startup/windows-user-data-acl.ts
 6 src/main/startup/linux-display/x-display-artifacts.ts
 2 src/main/stats/stats-file-loader.ts
-2 src/main/text-generation/source-control-prompt-files.ts
+2 src/main/text-generation/prompts/source-control-prompt-files.ts
 1 src/main/updater/lifecycle/windows-update-install-directory.ts
 9 src/main/updater/linux-package/appimage-runtime-identity.ts
 1 src/main/updater/linux-package/linux-package-install-command.ts

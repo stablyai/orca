@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Copy, ExternalLink, Globe } from 'lucide-react-native'
 import { ActionSheetModal, type ActionSheetAction } from '../../../components/ActionSheetModal'
-import { openExternalLink } from '../../../platform/external-link'
-import { useClipboardWriter } from '../../../platform/clipboard'
-import { triggerError, triggerSuccess } from '../../../platform/haptics'
+import { openExternalLink } from '../../../platform/external-links/external-link'
+import { useClipboardWriter } from '../../../platform/clipboard/clipboard'
+import { triggerError, triggerSuccess } from '../../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 // Choices for a tapped chat link: Orca's browser on the host, the phone's browser, or the clipboard.

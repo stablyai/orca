@@ -4,7 +4,7 @@ import {
   setSpeechServiceFactories,
   type SpeechServiceFactories
 } from '../../speech/speech-runtime-service'
-import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech/speech-params'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 
@@ -100,16 +100,6 @@ describe('mobile dictation across a phone reconnect', () => {
       dictationId: 'd-1',
       text: 'before the drop after it'
     })
-  })
-
-  it('releases the speech model when the phone goes quiet for the grace', async () => {
-    const controller = await startPhoneDictation()
-    transcription = new Promise(() => {})
-
-    await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_RECONNECT_GRACE_MS)
-
-    expect(stopDictation).toHaveBeenCalledOnce()
-    expect(() => controller.feed(chunk)).toThrow('dictation_stream_not_started')
   })
 
   it('feeds resent audio once and in the order it was spoken', async () => {

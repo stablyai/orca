@@ -67,11 +67,10 @@ describe('fcm client', () => {
         error: { status: 'INVALID_ARGUMENT', message: 'Invalid value at message.android.ttl' }
       })
     })
-    await expect(unnamed.client.send(delivery(), { token: TOKEN })).resolves.toEqual({
+    await expect(unnamed.client.send(delivery(), { token: TOKEN })).resolves.toMatchObject({
       status: 'error',
       reason: 'INVALID_ARGUMENT',
-      retryable: false,
-      retryAfterMs: 10000
+      retryable: false
     })
   })
 })

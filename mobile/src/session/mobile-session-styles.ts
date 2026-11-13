@@ -1,4 +1,4 @@
-import { mobileSessionCommandInputStyles } from '../terminal/session/mobile-session-command-input-styles'
+import { mobileSessionCommandInputStyles } from '../terminal/session/input-controls/mobile-session-command-input-styles'
 import { mobileSessionFrameStyles } from './mobile-session-frame-styles'
 import { mobileSessionReaderStyles } from '../files/session-documents/mobile-session-reader-styles'
 import { mobileSessionReviewCommentStyles } from '../source-control/review/mobile-session-review-comment-styles'
