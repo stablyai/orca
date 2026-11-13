@@ -103,7 +103,13 @@ export async function mintBillingToken(
     response = await post('{}')
   }
   if (!response.ok) {
-    throw new OrcaCloudRequestError(response.status, (await readErrorCode(response)) ?? undefined)
+    const code = (await readErrorCode(response)) ?? undefined
+    if (response.status === 403 && orgId && code === 'not_a_member') {
+      // This device shows a team the person is no longer on: a switch error, not a session one
+      // (refreshing the session would not help).
+      throw new BillingOrgMismatchError(orgId)
+    }
+    throw new OrcaCloudRequestError(response.status, code)
   }
   const body = TokenBody.safeParse(await response.json())
   if (!body.success) {

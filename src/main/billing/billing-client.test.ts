@@ -80,6 +80,12 @@ describe('billing client', () => {
       await expect(mintBillingToken(endpoints, 'a', null, fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
     })
 
+    it('treats 403 not_a_member as a team-switch error, not a session failure', async () => {
+      const fetchImpl: typeof fetch = async () =>
+        new Response(JSON.stringify({ error: 'not_a_member' }), { status: 403 })
+      await expect(mintBillingToken(endpoints, 'a', 'org_gone', fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
+    })
+
     it('falls back to the empty body on an older auth (400), still checking the claim', async () => {
       const bodies: Array<string | undefined> = []
       const fetchImpl: typeof fetch = async (_input, init) => {
