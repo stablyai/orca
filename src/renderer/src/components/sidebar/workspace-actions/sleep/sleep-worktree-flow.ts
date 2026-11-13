@@ -1,6 +1,9 @@
 import { toast } from 'sonner'
 import { toastCloudSleepFailure } from '@/lib/orca-cloud/cloud-sleep-failure-toast'
-import { sleepPairedCloudSandboxes } from '@/lib/orca-cloud/paired-cloud-sleep'
+import {
+  isPairedCloudSleepTarget,
+  sleepPairedCloudSandboxes
+} from '@/lib/orca-cloud/paired-cloud-sleep'
 import { isPairedCloudWorkspace } from '@/lib/orca-cloud/paired-cloud-wake'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -185,6 +188,45 @@ export type WorktreeSleepOutcome = {
 }
 
 /** The sleep without the toast, for callers that report failures themselves. */
+/** PAIRED-ARCHIVE-STALL: how long a PAIRED workspace's host-side Sleep may take before it is left behind. */
+export const PAIRED_HOST_SLEEP_TIMEOUT_MS = 30_000
+
+/**
+ * A paired workspace's host-side Sleep (its terminals, over the paired connection) can hang when that
+ * connection is slow or reconnecting; then neither the control-plane suspend (what stops billing) nor
+ * an Archive waiting on this Sleep ever ran (n40b). With a paired target in the batch, the host step
+ * is bounded: past the timeout a paired target gets no outcome (its sandbox is still put to sleep by
+ * the control plane next), and any other target reports the timeout as a failure.
+ */
+async function boundPairedHostSleep(
+  worktreeIds: readonly string[],
+  call: Promise<WorkspaceSleepOutcome[]>
+): Promise<WorkspaceSleepOutcome[]> {
+  if (!worktreeIds.some((id) => isPairedCloudSleepTarget(id))) {
+    return call
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), PAIRED_HOST_SLEEP_TIMEOUT_MS)
+  })
+  const outcome = await Promise.race([call, timedOut])
+  clearTimeout(timer)
+  if (outcome) {
+    return outcome
+  }
+  console.error(
+    '[sleep-worktree] host-side sleep timed out; paired sandboxes sleep via the control plane'
+  )
+  return worktreeIds
+    .filter((id) => !isPairedCloudSleepTarget(id))
+    .map((worktreeId) => ({
+      worktreeId,
+      failure: 'The host did not finish putting this workspace to sleep in time.',
+      chatFailed: false,
+      receipts: []
+    }))
+}
+
 export async function sleepWorktreesReportingFailures(
   requestedWorktreeIds: readonly string[],
   // Why: only the user's Sleep hides its chats; a project move pauses through this core too.
@@ -216,16 +258,19 @@ export async function sleepWorktreesReportingFailures(
   })
   const outcomes =
     targets.length > 0
-      ? await window.api.worktrees
-          .sleep({ targets, markChatsAsleep: options.markChatsAsleep === true })
-          .catch((error: unknown): WorkspaceSleepOutcome[] =>
-            targets.map(({ worktreeId }) => ({
-              worktreeId,
-              failure: error instanceof Error ? error.message : String(error),
-              chatFailed: false,
-              receipts: []
-            }))
-          )
+      ? await boundPairedHostSleep(
+          targets.map(({ worktreeId }) => worktreeId),
+          window.api.worktrees
+            .sleep({ targets, markChatsAsleep: options.markChatsAsleep === true })
+            .catch((error: unknown): WorkspaceSleepOutcome[] =>
+              targets.map(({ worktreeId }) => ({
+                worktreeId,
+                failure: error instanceof Error ? error.message : String(error),
+                chatFailed: false,
+                receipts: []
+              }))
+            )
+        )
       : []
   const results: WorkspaceSleepResult[] = []
   const vmStillRunningIds: string[] = []
