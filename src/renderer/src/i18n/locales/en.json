@@ -28009,7 +28009,12 @@
       "value": "Value",
       "shadowed": "Overrides",
       "overrides": "Overrides {{scopes}}",
-      "description": "What a new cloud workspace gets, and which scope each value comes from."
+      "description": "What a new cloud workspace gets, and which scope each value comes from.",
+      "workspaceLabel": "Workspace",
+      "workspacePrivate": "Not shared",
+      "workspaceShared": "Shared with your team",
+      "sharedNote": "Workspaces shared with your team don’t get personal secrets, so only shared and repository values are listed.",
+      "privateNote": "Personal values apply only to workspaces you haven’t shared. Once you share one, it gets only shared and repository values."
     },
     "repo": {
       "label": "Repository",

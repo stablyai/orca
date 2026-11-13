@@ -127,6 +127,37 @@ export const effective = defineFixture({
   )
 })
 
+export const effectiveShared = defineFixture({
+  width: 760,
+  render: () => (
+    <Frame>
+      <CloudSecretsPane
+        api={fixtureCloudSecretsApi({})}
+        repos={REPOS}
+        people={people}
+        onSetUpAgent={noop}
+        initialTab="effective"
+        initialWorkspaceMode="shared"
+      />
+    </Frame>
+  )
+})
+
+export const effectiveSolo = defineFixture({
+  width: 760,
+  render: () => (
+    <Frame>
+      <CloudSecretsPane
+        api={fixtureCloudSecretsApi({ caller: FIXTURE_SOLO })}
+        repos={REPOS}
+        people={people}
+        onSetUpAgent={noop}
+        initialTab="effective"
+      />
+    </Frame>
+  )
+})
+
 export const effectiveEmpty = defineFixture({
   width: 760,
   render: () => (

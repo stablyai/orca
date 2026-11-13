@@ -411,15 +411,26 @@ export const PRECEDENCE: Record<SecretKind, SecretScope[]> = {
   agent_key: ['org', 'repo', 'personal']
 }
 
-/** What a session of this caller (in `repo`) would receive, by name and winning scope; no values. */
-export async function effectiveSecrets(db: D1Database, caller: SandboxCaller, repoParam: string | null): Promise<EffectiveSecret[]> {
-  const pairs: [SecretScope, string][] = [['personal', personalOwner(caller.userId, caller.dev === true)]]
+/**
+ * What a session of this caller (in `repo`) would receive, by name and winning scope; no values.
+ * `shared`: a workspace shared with teammates, which gets no personal secrets (SEC-5, ownersForSandbox).
+ */
+export async function effectiveSecrets(
+  db: D1Database,
+  caller: SandboxCaller,
+  repoParam: string | null,
+  options: { shared?: boolean } = {}
+): Promise<EffectiveSecret[]> {
+  const pairs: [SecretScope, string][] = options.shared ? [] : [['personal', personalOwner(caller.userId, caller.dev === true)]]
   if (caller.orgId) {
     pairs.push(['org', caller.accountId])
   }
   const repo = normalizeRepo(repoParam)
   if (repo) {
     pairs.push(['repo', repoOwner(caller.accountId, repo)])
+  }
+  if (pairs.length === 0) {
+    return []
   }
   const where = pairs.map(() => '(scope = ? AND owner_id = ?)').join(' OR ')
   const { results } = await db
@@ -498,8 +509,13 @@ export async function handleSecretsRoute(
     if (request.method !== 'GET') {
       return json({ error: 'not_found' }, 404)
     }
+    const workspace = url.searchParams.get('workspace') ?? 'private'
+    if (workspace !== 'private' && workspace !== 'shared') {
+      return json({ error: 'invalid_request', reason: 'invalid_workspace' }, 400)
+    }
     const admin = isOrgAdmin(caller)
     return json({
+      workspace,
       caller: {
         userId: caller.userId,
         orgId: caller.orgId ?? null,
@@ -507,7 +523,7 @@ export async function handleSecretsRoute(
         canWrite: { personal: true, org: Boolean(caller.orgId) && admin, repo: !caller.orgId || admin }
       },
       precedence: PRECEDENCE,
-      secrets: await effectiveSecrets(db, caller, repoQuery)
+      secrets: await effectiveSecrets(db, caller, repoQuery, { shared: workspace === 'shared' })
     })
   }
   if (url.pathname === '/v1/secrets/activity') {

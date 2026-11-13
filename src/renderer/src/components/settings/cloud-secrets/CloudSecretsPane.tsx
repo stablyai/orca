@@ -119,15 +119,81 @@ function ScopeTab({
   )
 }
 
+type WorkspaceMode = 'private' | 'shared'
+
+function WorkspacePicker({
+  value,
+  onChange
+}: {
+  value: WorkspaceMode
+  onChange: (mode: WorkspaceMode) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const id = useId()
+  return (
+    <div className="flex items-center gap-2">
+      <Label htmlFor={id} variant="settings" className="shrink-0">
+        {t('cloudSecrets.effective.workspaceLabel', 'Workspace')}
+      </Label>
+      <Select
+        value={value}
+        onValueChange={(next) => (next === 'private' || next === 'shared') && onChange(next)}
+      >
+        <SelectTrigger id={id} size="sm" className="w-52">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="private">
+            {t('cloudSecrets.effective.workspacePrivate', 'Not shared')}
+          </SelectItem>
+          <SelectItem value="shared">
+            {t('cloudSecrets.effective.workspaceShared', 'Shared with your team')}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 function EffectiveTab({
   api,
-  repo
+  repo,
+  mode,
+  inTeam
 }: {
   api: CloudSecretsApi
   repo: string | null
+  mode: WorkspaceMode
+  /** Only team accounts share workspaces, so only they need the shared-workspace note. */
+  inTeam: boolean
 }): React.JSX.Element {
-  const { effective, reload } = useCloudSecretsEffective(api, repo)
-  return <CloudSecretsEffectiveView effective={effective} onRetry={reload} />
+  const t = useTranslate()
+  const { effective, reload } = useCloudSecretsEffective(api, repo, mode === 'shared')
+  // SEC-5: a shared workspace gets no personal secrets. Say so where a personal value would matter.
+  const personalInPlay =
+    effective.status === 'ready' &&
+    effective.value.secrets.some(
+      (secret) =>
+        secret.scope === 'personal' || secret.shadowed.some((entry) => entry.scope === 'personal')
+    )
+  const note =
+    mode === 'shared'
+      ? t(
+          'cloudSecrets.effective.sharedNote',
+          'Workspaces shared with your team don’t get personal secrets, so only shared and repository values are listed.'
+        )
+      : inTeam && personalInPlay
+        ? t(
+            'cloudSecrets.effective.privateNote',
+            'Personal values apply only to workspaces you haven’t shared. Once you share one, it gets only shared and repository values.'
+          )
+        : null
+  return (
+    <div className="space-y-3">
+      {note ? <ReadOnlyNotice text={note} /> : null}
+      <CloudSecretsEffectiveView effective={effective} onRetry={reload} />
+    </div>
+  )
 }
 
 /** Orca Cloud secrets by scope, plus which scope wins. Values are write-only. */
@@ -137,7 +203,8 @@ export function CloudSecretsPane({
   people,
   onSetUpAgent,
   onAddProject,
-  initialTab = 'personal'
+  initialTab = 'personal',
+  initialWorkspaceMode = 'private'
 }: {
   api: CloudSecretsApi
   repos: readonly CloudSecretRepoChoice[]
@@ -146,17 +213,22 @@ export function CloudSecretsPane({
   /** Opens the app's Add project flow, the way to get a GitHub repository here. */
   onAddProject?: () => void
   initialTab?: Tab
+  /** Fixtures: start the effective view on a shared workspace. */
+  initialWorkspaceMode?: WorkspaceMode
 }): React.JSX.Element {
   const t = useTranslate()
   const [tab, setTab] = useState<Tab>(initialTab)
   // Undefined until the user picks, so a repo list that loads after mount still preselects its first entry.
   const [pickedRepo, setRepo] = useState<string | null | undefined>(undefined)
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(initialWorkspaceMode)
   const repo = pickedRepo === undefined ? (repos[0]?.key ?? null) : pickedRepo
   const repoTabRepo = repo ?? repos[0]?.key ?? null
   const { effective: callerView } = useCloudSecretsEffective(api, null)
   const caller = callerView.status === 'ready' ? callerView.value.caller : null
   // Until the caller is known, keep the Shared tab so the tab row does not shift when it loads.
   const inTeam = callerView.status === 'loading' || (caller !== null && caller.orgId !== null)
+  // Known team member: personal accounts have no teammates to share a workspace with.
+  const teamCaller = caller !== null && caller.orgId !== null
   const withViewer: CloudSecretPeople = { ...people, viewerUserId: caller?.userId ?? null }
   const adminNotice = t(
     'cloudSecrets.readOnly.shared',
@@ -316,10 +388,22 @@ export function CloudSecretsPane({
                 'What a new cloud workspace gets, and which scope each value comes from.'
               )}
             </p>
-            {repos.length > 0 ? (
-              <RepoPicker repos={repos} value={repo} onChange={setRepo} allowNone />
+            {repos.length > 0 || teamCaller ? (
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                {repos.length > 0 ? (
+                  <RepoPicker repos={repos} value={repo} onChange={setRepo} allowNone />
+                ) : null}
+                {teamCaller ? (
+                  <WorkspacePicker value={workspaceMode} onChange={setWorkspaceMode} />
+                ) : null}
+              </div>
             ) : null}
-            <EffectiveTab api={api} repo={repo} />
+            <EffectiveTab
+              api={api}
+              repo={repo}
+              mode={teamCaller ? workspaceMode : 'private'}
+              inTeam={teamCaller}
+            />
           </div>
         </TabsContent>
       </Tabs>
