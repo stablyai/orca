@@ -31,6 +31,7 @@ type KiroCreditBreakdown = {
   currentOveragesWithPrecision?: unknown
   overageCapWithPrecision?: unknown
   nextDateReset?: unknown
+  bonuses?: unknown
 }
 
 export type KiroUsageFetchOptions = {
@@ -166,14 +167,19 @@ function mapUsageLimits(payload: unknown, authProvenance: string): ProviderRateL
     return parseFailure('Kiro usage response contained no usable credit limit')
   }
   const resetsAt = toResetMs(credit.nextDateReset ?? payload.nextDateReset)
-  // Plan usage excludes overage; bonus spend can still push it past the plan, so clamp.
+  // A non-empty bonuses[] folds bonus spend into currentUsage, which then cannot be split from plan
+  // usage. No plan gauge is better than one that reads full while plan credits remain.
+  const hasUnseparatedBonus = Array.isArray(credit.bonuses) && credit.bonuses.length > 0
+  // Plan usage excludes overage.
   const planUsed = totalUsed - overageUsed
-  const monthly: RateLimitWindow = {
-    usedPercent: Math.min(100, (planUsed / limit) * 100),
-    windowMinutes: MONTHLY_WINDOW_MINUTES,
-    resetsAt,
-    resetDescription: null
-  }
+  const monthly: RateLimitWindow | null = hasUnseparatedBonus
+    ? null
+    : {
+        usedPercent: Math.min(100, (planUsed / limit) * 100),
+        windowMinutes: MONTHLY_WINDOW_MINUTES,
+        resetsAt,
+        resetDescription: null
+      }
   const overageConfiguration = isRecord(payload.overageConfiguration)
     ? payload.overageConfiguration
     : null

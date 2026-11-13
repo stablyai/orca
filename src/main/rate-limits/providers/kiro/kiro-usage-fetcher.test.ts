@@ -158,14 +158,21 @@ describe('fetchKiroRateLimits', () => {
     })
   })
 
-  it('clamps plan usage that bonus spend pushes past the plan limit', async () => {
+  it('drops the plan gauge but keeps overage when bonus spend is in the total', async () => {
     vi.mocked(fetch).mockResolvedValue(
-      jsonResponse(usageLimitsPayload({ currentUsageWithPrecision: 1200, bonuses: [{}] }))
+      jsonResponse(
+        usageLimitsPayload(
+          { currentUsageWithPrecision: 1200, currentOveragesWithPrecision: 100, bonuses: [{}] },
+          'ENABLED'
+        )
+      )
     )
 
     const result = await fetchKiroRateLimits({ dbPath: 'unused', readCredentials: signedIn() })
 
-    expect(result.monthly?.usedPercent).toBe(100)
+    expect(result.status).toBe('ok')
+    expect(result.monthly).toBeNull()
+    expect(result.extraUsage?.balance).toBe(900)
   })
 
   it('asks kiro-cli to refresh an expired token without calling the service', async () => {

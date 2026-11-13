@@ -77,7 +77,7 @@ export function getProviderUsageStatusLabel(
     return t('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
   }
   if (delegatedCliProvider === 'kiro') {
-    return translate('auto.components.status.bar.tooltip.kiro.refresh.label', 'Run Kiro to refresh')
+    return t('auto.components.status.bar.tooltip.kiro.refresh.label', 'Run Kiro to refresh')
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -162,7 +162,7 @@ export function getProviderUsageErrorMessage(
     )
   }
   if (delegatedCliProvider === 'kiro') {
-    return translate(
+    return t(
       'auto.components.status.bar.tooltip.kiro.refresh.message',
       'Run kiro-cli in a terminal on the computer running Orca and wait for it to start. If prompted, sign in, then retry usage.'
     )
