@@ -214,7 +214,7 @@ function scanPane(
   if (isClaudePaneOnAccount(folder, args.toAccountId, args.host)) {
     return null
   }
-  const resumable = resolveAgentAccountRestartResumeStartup('claude', {
+  const resumable = resolveAgentAccountRestartResumeStartup(useAppStore.getState(), 'claude', {
     tabId: pane.tabId,
     leafId: pane.leafId,
     worktreeId: pane.worktreeId,

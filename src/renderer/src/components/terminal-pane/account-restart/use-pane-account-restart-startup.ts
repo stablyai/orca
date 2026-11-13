@@ -9,15 +9,16 @@ export function usePaneAccountRestartStartup({
   worktreeId
 }: Pick<TerminalPaneCloseController, 'tabId' | 'worktreeId'>) {
   const buildAccountRestartStartup = useCallback(
-    (agent: AccountRestartAgent, leafId: string) =>
-      buildPaneAccountRestartStartup(agent, {
+    (agent: AccountRestartAgent, leafId: string) => {
+      const state = useAppStore.getState()
+      return buildPaneAccountRestartStartup(state, agent, {
         tabId,
         worktreeId,
         leafId,
-        shellOverride: useAppStore
-          .getState()
-          .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.shellOverride
-      }),
+        shellOverride: state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+          ?.shellOverride
+      })
+    },
     [tabId, worktreeId]
   )
   return { buildAccountRestartStartup }

@@ -158,7 +158,7 @@ async function executeDetachedCodexPaneRestart(
     return
   }
   const { worktreeId, tab, leafId } = located
-  const startup = buildPaneAccountRestartStartup(agent, {
+  const startup = buildPaneAccountRestartStartup(state, agent, {
     worktreeId,
     tabId: tab.id,
     leafId,

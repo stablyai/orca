@@ -50,12 +50,13 @@ export function createCodexAccountRestartActions(
           let error: string | undefined
           try {
             if (pane.leafId) {
-              startupInput = captureAgentAccountRestartResumeInput('codex', {
+              startupInput = captureAgentAccountRestartResumeInput(s, 'codex', {
                 ...pane,
                 leafId: pane.leafId
               })
               startup = structuredClone(
                 buildPaneAccountRestartStartup(
+                  s,
                   'codex',
                   { ...pane, leafId: pane.leafId },
                   startupInput
@@ -221,9 +222,9 @@ export function createCodexAccountRestartActions(
           }
           const input = request.leafId
             ? request.startupInput
-            : captureAgentAccountRestartResumeInput('codex', { ...pane, leafId: pane.leafId })
+            : captureAgentAccountRestartResumeInput(s, 'codex', { ...pane, leafId: pane.leafId })
           const startup = structuredClone(
-            buildPaneAccountRestartStartup('codex', { ...pane, leafId: pane.leafId }, input)
+            buildPaneAccountRestartStartup(s, 'codex', { ...pane, leafId: pane.leafId }, input)
           )
           if (!startup) {
             return s

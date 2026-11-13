@@ -1,5 +1,4 @@
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
@@ -50,10 +49,10 @@ export type AgentAccountRestartResumeInput = {
 } | null
 
 export function captureAgentAccountRestartResumeInput(
+  state: AppState,
   agent: AccountRestartAgent,
   args: AccountRestartPane
 ): AgentAccountRestartResumeInput {
-  const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const entry = state.agentStatusByPaneKey[paneKey]
   const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
@@ -76,12 +75,13 @@ export function captureAgentAccountRestartResumeInput(
 
 /** Capture before teardown; retry a build error using the same conversation inputs. */
 export function resolveAgentAccountRestartResumeStartup(
+  state: AppState,
   agent: AccountRestartAgent,
   args: AccountRestartPane,
   input?: AgentAccountRestartResumeInput
 ): AgentAccountRestartStartup | null {
-  const state = useAppStore.getState()
-  const captured = input === undefined ? captureAgentAccountRestartResumeInput(agent, args) : input
+  const captured =
+    input === undefined ? captureAgentAccountRestartResumeInput(state, agent, args) : input
   if (!captured) {
     return null
   }
@@ -131,11 +131,12 @@ export function resolveAgentAccountRestartResumeStartup(
 
 /** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
 export function buildPaneAccountRestartStartup(
+  state: AppState,
   agent: AccountRestartAgent,
   args: AccountRestartPane,
   input?: AgentAccountRestartResumeInput
 ): AgentAccountRestartStartup | null {
-  const resume = resolveAgentAccountRestartResumeStartup(agent, args, input)
+  const resume = resolveAgentAccountRestartResumeStartup(state, agent, args, input)
   if (input && !resume) {
     throw new Error('terminal_account_restart_resume_unavailable')
   }
@@ -144,21 +145,17 @@ export function buildPaneAccountRestartStartup(
   if (
     agent === 'claude' &&
     sessionId &&
-    isSessionHeldByAnotherPane(
-      useAppStore.getState(),
-      makePaneKey(args.tabId, args.leafId),
-      sessionId
-    )
+    isSessionHeldByAnotherPane(state, makePaneKey(args.tabId, args.leafId), sessionId)
   ) {
     return null
   }
-  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(state, args) : null)
 }
 
 export function buildCodexAccountRestartStartup(
+  state: AppState,
   args: AccountRestartTarget
 ): AgentAccountRestartStartup {
-  const state = useAppStore.getState()
   const target = resolveAccountRestartLaunchTarget(
     state,
     args,
