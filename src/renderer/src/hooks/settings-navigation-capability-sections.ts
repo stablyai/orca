@@ -177,17 +177,21 @@ export function buildSetupSettingsSections(
       searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isLocalWindowsHost }),
       group: 'setup'
     },
-    {
-      id: 'workspace-cleanup',
-      title: t('components.settings.workspaceCleanup.title', 'Workspace Cleanup'),
-      description: t(
-        'components.settings.workspaceCleanup.description',
-        "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work."
-      ),
-      icon: BrushCleaning,
-      searchEntries: getWorkspaceCleanupSettingsSearchEntries(),
-      group: 'setup'
-    },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'workspace-cleanup',
+            title: t('components.settings.workspaceCleanup.title', 'Workspace Cleanup'),
+            description: t(
+              'components.settings.workspaceCleanup.description',
+              "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work."
+            ),
+            icon: BrushCleaning,
+            searchEntries: getWorkspaceCleanupSettingsSearchEntries(),
+            group: 'setup'
+          }
+        ]
+      : []),
     {
       id: 'integrations',
       title: t('auto.hooks.useSettingsNavigationMetadata.2b043783ef', 'Integrations'),

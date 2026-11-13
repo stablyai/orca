@@ -242,9 +242,10 @@ export function renderSessionHistorySettingsSection(
 export function renderWorkspaceCleanupSettingsSection(
   context: SettingsRenderContext,
   t: Translate = translate
-): React.JSX.Element {
+): React.JSX.Element | null {
   const { model, navigation, view } = context
-  return (
+  // A paired browser's settings are its own; the cleanup rules live on the host it pairs with.
+  return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="workspace-cleanup"
       title={t('components.settings.workspaceCleanup.title', 'Workspace Cleanup')}
@@ -264,5 +265,5 @@ export function renderWorkspaceCleanupSettingsSection(
         />
       ) : null}
     </SettingsSection>
-  )
+  ) : null
 }

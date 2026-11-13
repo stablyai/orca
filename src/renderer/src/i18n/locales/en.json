@@ -22189,7 +22189,7 @@
         "title": "Workspace Cleanup",
         "description": "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work.",
         "unsupportedHost": "This host runs an Orca version without automatic cleanup. Update Orca on it to use these settings.",
-        "previewFailed": "Couldn't check which workspaces this rule matches.",
+        "previewFailed": "Couldn't check which workspaces this change matches.",
         "pinFailed": "Couldn't keep {{name}}.",
         "rules": {
           "title": "Rules",

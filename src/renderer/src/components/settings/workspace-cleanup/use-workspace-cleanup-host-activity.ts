@@ -48,8 +48,11 @@ export function useWorkspaceCleanupHostActivity(
     ownerKey: string
     hostReport: WorkspaceCleanupHostReport
   } | null>(null)
+  // Keyed by the rules it evaluated, so a rule change never shows the old rules' matches.
   const [previewState, setPreviewState] = useState<{
     ownerKey: string
+    rulesKey: string
+    revision: number
     preview: WorkspaceCleanupPreview
   } | null>(null)
   const [cleaningUp, setCleaningUp] = useState(false)
@@ -95,8 +98,13 @@ export function useWorkspaceCleanupHostActivity(
     // A rule change reschedules the next run, so the report is read again with the rules.
   }, [environmentId, ownerKey, rulesKey, revision])
 
+  const previewIsCurrent =
+    previewState?.ownerKey === ownerKey &&
+    previewState.rulesKey === rulesKey &&
+    previewState.revision === revision
   useEffect(() => {
-    if (!anyRuleOn) {
+    // A rule change already previewed its rules before saving them.
+    if (!anyRuleOn || !rulesKey || previewIsCurrent) {
       return
     }
     let current = true
@@ -113,7 +121,7 @@ export function useWorkspaceCleanupHostActivity(
     ).then(
       (preview) => {
         if (current) {
-          setPreviewState({ ownerKey, preview })
+          setPreviewState({ ownerKey, rulesKey, revision, preview })
         }
       },
       (error: unknown) => console.warn('[workspace-cleanup] preview failed', error)
@@ -121,7 +129,7 @@ export function useWorkspaceCleanupHostActivity(
     return () => {
       current = false
     }
-  }, [anyRuleOn, environmentId, ownerKey, rulesKey, revision])
+  }, [anyRuleOn, environmentId, ownerKey, rulesKey, revision, previewIsCurrent])
 
   const cleanUpNow = useCallback(async () => {
     setCleaningUp(true)
@@ -144,19 +152,25 @@ export function useWorkspaceCleanupHostActivity(
   }, [owner, t])
 
   const previewRules = useCallback(
-    (nextRules: WorkspaceCleanupRules): Promise<WorkspaceCleanupPreview> =>
-      callRuntimeRpc<WorkspaceCleanupPreview>(
+    async (nextRules: WorkspaceCleanupRules): Promise<WorkspaceCleanupPreview> => {
+      const preview = await callRuntimeRpc<WorkspaceCleanupPreview>(
         owner,
         'workspaceCleanup.preview',
         { rules: nextRules },
         { timeoutMs: EVALUATE_TIMEOUT_MS }
-      ),
-    [owner]
+      )
+      setPreviewState({ ownerKey, rulesKey: JSON.stringify(nextRules), revision, preview })
+      return preview
+    },
+    [owner, ownerKey, revision]
   )
 
   return {
     hostReport: reportState?.ownerKey === ownerKey ? reportState.hostReport : { state: 'loading' },
-    preview: anyRuleOn && previewState?.ownerKey === ownerKey ? previewState.preview : null,
+    preview:
+      anyRuleOn && previewState?.ownerKey === ownerKey && previewState.rulesKey === rulesKey
+        ? previewState.preview
+        : null,
     cleaningUp,
     cleanUpNow,
     previewRules

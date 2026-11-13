@@ -135,6 +135,7 @@ export function WorkspaceCleanupRuleChangeDialog({
                 <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                   <Checkbox
                     checked={keep}
+                    disabled={confirming}
                     onCheckedChange={() => toggleKeep(row)}
                     aria-label={t(
                       'components.settings.workspaceCleanup.enable.keepNamed',
