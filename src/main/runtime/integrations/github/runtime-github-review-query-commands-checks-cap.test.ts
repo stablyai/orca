@@ -17,12 +17,6 @@ const provider = vi.hoisted(() => {
   const calls: ProviderCall[] = []
   return { calls, offline: false }
 })
-// Command slots only bound how many provider commands run at once; the reads under test are live
-// either way, so each gh call here reaches the fake provider as soon as it starts.
-vi.mock('../../../github/execution/github-operation-slots', () => ({
-  acquire: async () => {},
-  release: () => {}
-}))
 vi.mock('../../../git/command-runner/hosted-cli/gh-exec-file', () => ({
   ghExecFileAsync: () =>
     new Promise((resolve, reject) =>
@@ -111,12 +105,14 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     _resetPacedPRChecksForTests()
     __resetHostedReviewScopeGenerationsForTests()
   })
-  afterEach(() => {
-    // Settle whatever a failed case left running, so no read carries into the next case.
+  afterEach(async () => {
+    // Settle whatever a failed case left running: each failed call releases its command slot, so
+    // reads still queued for a slot run too (failing at once, offline) until none is left.
     provider.offline = true
     for (const call of provider.calls.splice(0)) {
       call.fail()
     }
+    await vi.waitFor(() => expect(_prChecksResultCountForTests().running).toBe(0))
     setPRAutoRefreshCadence('default')
     vi.useRealTimers()
   })
@@ -254,20 +250,26 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
       provider.calls.shift()!.answer(head)
       await cached
     }
+    // All 256 are read again at once; only four gh commands may run at a time, the rest wait for
+    // a command slot while their reads are already live.
     const rereads = heads.map((head) => read({ noCache: true }, head))
-    await vi.waitFor(() => expect(provider.calls).toHaveLength(256), { interval: 1 })
-    const fresh = read({ noCache: true, userRefresh: true }, 'new-head')
-    await vi.waitFor(() => expect(provider.calls).toHaveLength(257), { interval: 1 })
-    provider.calls.pop()!.answer('new')
-    expect(await names(fresh)).toEqual(['new'])
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(4), { interval: 1 })
     expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 256 })
 
-    // Failed reads end their running state as well.
-    provider.offline = true
-    for (const call of provider.calls.splice(0)) {
-      call.fail()
+    // A new manual read of another PR head waits its turn for a slot behind them, then reads.
+    const fresh = read({ noCache: true, userRefresh: true }, 'new-head')
+    let answered = 0
+    while (answered < heads.length + 1) {
+      await vi.waitFor(() => expect(provider.calls.length).toBeGreaterThan(0), { interval: 1 })
+      const admitted = provider.calls.splice(0)
+      expect(admitted.length).toBeLessThanOrEqual(4)
+      for (const call of admitted) {
+        call.answer(answered === heads.length ? 'new' : 'reread')
+        answered += 1
+      }
     }
-    await Promise.allSettled(rereads)
+    expect(await names(fresh)).toEqual(['new'])
+    await Promise.all(rereads)
     expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
   })
 
