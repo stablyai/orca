@@ -38,8 +38,8 @@ on:
       - '!src/main/daemon/executable-host/windows/testing/daemon-host-relocation.test-fixture.ts'
       - '!src/main/daemon/endpoint/publication/testing/daemon-endpoint-reachability-test-harness.ts'
       - 'src/main/providers/local-pty/local-pty-provider.ts'
-      - 'src/main/providers/windows-shell-args.ts'
-      - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
+      - 'src/main/providers/shell-launch/windows/shell-args.ts'
+      - 'src/main/providers/shell-launch/windows/shell-preflight-runtime.windows.test.ts'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
@@ -53,7 +53,8 @@ on:
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
-      - 'tests/e2e/computer-windows-store.e2e.ts'
+      - 'tests/e2e/computer-windows-background.e2e.ts'
+      - 'tests/e2e/helpers/windows-semantic-controls-fixture.*'
       - 'tests/e2e/helpers/computer-cli-driver.ts'
       - 'tests/e2e/helpers/computer-driver.ts'
       - 'tests/e2e/vitest.config.ts'
@@ -95,11 +96,10 @@ jobs:
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
           src/main/computer/sidecar-transport/sidecar-client.test.ts
           src/main/computer/macos-native/macos-native-provider-client.test.ts
-          src/main/providers/windows-shell-preflight-runtime.windows.test.ts
+          src/main/providers/shell-launch/windows/shell-preflight-runtime.windows.test.ts
           src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts
-          src/cli/format.test.ts
-          src/cli/handlers/computer-action-validation.test.ts
-          src/cli/handlers/computer-state-formatting.test.ts
+          src/cli/output/command-result-output.test.ts
+          src/cli/computer/computer-state-formatting.test.ts
           src/cli/index.test.ts
           src/cli/runtime/envelope-schema.test.ts
           src/shared/remote-runtime/remote-runtime-client.test.ts
@@ -152,4 +152,4 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-background.e2e.ts

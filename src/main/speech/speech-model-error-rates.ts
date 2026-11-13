@@ -18,6 +18,8 @@ const MEASURED = {
     ['pt', 11.3, '2026-11-09'],
     ['ru', 3.4, '2026-11-06']
   ],
+  // Streamed, as dictation decodes it; one whole-clip decode scores 2.35.
+  'parakeet-unified-en-0.6b': [['en', 2.8, '2026-11-12']],
   'parakeet-tdt-0.6b-v2-int8': [['en', 2.8, '2026-11-06']],
   'whisper-tiny': [
     ['en', 13, '2026-11-09'],

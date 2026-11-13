@@ -16,7 +16,7 @@ import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { HostHistoryBinding, ShutdownOptions } from './daemon-pty-host-history'
 import type { InventoryRequest } from './daemon-pty-inventory-observation'
 import { sleepHostTarget } from './daemon-pty-host-sleep'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 

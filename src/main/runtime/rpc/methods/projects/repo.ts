@@ -1,4 +1,6 @@
 import { defineMethod } from '../../core'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { isRepoHidden } from '../../../../../shared/hidden-projects'
 import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
@@ -11,7 +13,7 @@ import {
   RepoIssueCommandRead,
   RepoSelector,
   RepoShow
-} from '../../../../../shared/rpc-contract/github-repo-target-params'
+} from '../../../../../shared/rpc-contract/github/github-repo-target-params'
 import { hostQualifiedRepoSelector } from '../../../workspaces/catalog/runtime-repo-selector'
 import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-check-wake'
 import {
@@ -28,10 +30,11 @@ import {
   RepoReorder,
   RepoSearchRefs,
   RepoSetBaseRef,
+  RepoSetHidden,
   RepoSparsePresetSave,
   RepoUpdate
-} from '../../../../../shared/rpc-contract/repo-params'
-import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh-params'
+} from '../../../../../shared/rpc-contract/projects/repo-params'
+import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh/ssh-params'
 
 export const REPO_METHODS = [
   defineMethod({
@@ -153,6 +156,22 @@ export const REPO_METHODS = [
         context
       )
     })
+  }),
+  defineMethod({
+    name: 'repo.setHidden',
+    permission: 'workspace',
+    params: RepoSetHidden,
+    handler: async (params, context) => {
+      const repo = await context.runtime.setRepoHidden(
+        hostQualifiedRepoSelector(params.repo, params.repoHostId),
+        params.hidden
+      )
+      return {
+        repo: projectRepoVisibilityForClient(repo, context),
+        hostId: getRepoExecutionHostId(repo),
+        hidden: isRepoHidden(repo)
+      }
+    }
   }),
   defineMethod({
     name: 'repo.rm',

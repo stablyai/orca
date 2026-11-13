@@ -6,10 +6,10 @@ import {
 } from '../../../git/worktrees/removal/windows-worktree-removal'
 import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
+import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import type { Repo } from '../../../../shared/repo-types'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
@@ -34,7 +34,8 @@ import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-s
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval,
-  waitForPendingWorktreeRemoval
+  waitForPendingWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
 
@@ -44,11 +45,14 @@ export function removeRuntimeRegisteredLocalWorktree(
 ): Promise<RemoveWorktreeResult & { warning?: string }> {
   return runSerializedWorktreeRemovalAcceptance(
     args.repo.path,
-    async (): Promise<RemoveWorktreeResult & { warning?: string }> =>
+    async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
       // Recheck after queue wait: another client may already have accepted this deletion.
-      waitForPendingWorktreeRemoval(args.target.id, undefined, args.requestedDeleteBranch)
-        ? { removing: true }
-        : acceptRuntimeRegisteredLocalWorktreeRemoval(args)
+      if (waitForPendingWorktreeRemoval(args.target.id, undefined, args.requestedDeleteBranch)) {
+        await waitForWorktreeRemovalAcceptance(args.target.id)
+        return { removing: true }
+      }
+      return acceptRuntimeRegisteredLocalWorktreeRemoval(args)
+    }
   )
 }
 
@@ -70,6 +74,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   requestedDeleteBranch?: boolean
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
   stopPtys: () => Promise<void>
+  /** Runs after every refusal and the teardown, before any checkout file is deleted. */
+  beforeCheckoutDelete?: (worktree: GitWorktreeInfo) => Promise<void>
   closeWatchers: (path: string) => Promise<void>
   preserveBranchHead: (
     result: RemoveWorktreeResult | undefined,
@@ -174,6 +180,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   let accepted = false
   try {
     await args.stopPtys()
+    await args.beforeCheckoutDelete?.(refreshed)
     if (!markerMissing && linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
@@ -208,8 +215,10 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       return result
     },
     publish: () => args.publish(),
+    admissionFailed: () => gate.finish(false),
     cleanupPushTargetRemote: () => cleanupRemovedWorktreePushTarget(args)
   })
+  await waitForWorktreeRemovalAcceptance(args.target.id)
   return { removing: true, ...acceptedFields }
 }
 

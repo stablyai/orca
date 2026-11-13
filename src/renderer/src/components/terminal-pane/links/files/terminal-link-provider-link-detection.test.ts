@@ -158,6 +158,27 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
   })
 
+  it('maps Git Bash drive paths to the Windows drive only in Windows-drive workspaces', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(
+      async (pathValue) =>
+        pathValue === 'C:\\Users\\foo\\.claude\\CLAUDE.md' || pathValue === 'C:\\'
+    )
+    const line = 'Read /c/Users/foo/.claude/CLAUDE.md via cmd /c dir'
+    const collect = (worktreePath: string): Promise<ILink[]> => {
+      const { provider } = createProviderSetup([makeBufferLine(line)], makeExistsCache(), {
+        worktreePath,
+        startupCwd: worktreePath
+      })
+      return new Promise((resolve) => provider.provideLinks(1, (links) => resolve(links ?? [])))
+    }
+
+    expect((await collect('C:\\repo')).map((link) => link.text)).toEqual([
+      '/c/Users/foo/.claude/CLAUDE.md'
+    ])
+    expect(await collect('/repo')).toEqual([])
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/c/Users/foo/.claude/CLAUDE.md')
+  })
+
   it('returns a wrapped file link when hovering the first physical row', async () => {
     const rows = [
       makeBufferLine('open src/components/'),

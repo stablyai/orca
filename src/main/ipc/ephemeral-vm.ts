@@ -39,7 +39,7 @@ import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handl
 import type { PluginService } from '../plugins/plugin-service'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
 import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 import {
   ephemeralVmFailure,
   pickEphemeralVmFailureCode,

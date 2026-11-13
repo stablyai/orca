@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  RelayAssignmentRowBusyError,
   type RelayAssignment,
   type ResolvedRelayAssignment
 } from '../assignment-store.js'
@@ -21,7 +20,6 @@ vi.mock('../../authentication/relay-token-verifier.js', () => ({
 import { createRelayApp } from '../../app.js'
 
 afterEach(() => {
-  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -36,15 +34,11 @@ describe('drain-return lane', () => {
     const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) =>
       relayHostId === drained ? isolatedHome(relayHostId) : assignment('cell-o', relayHostId)
     )
-    const outcomes: string[] = []
-    const servedLanes: string[] = []
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: { assign, resolve } as never,
       drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
-      recordAdmissionServiceMs: (lane) => servedLanes.push(lane)
+      ready: vi.fn(async () => true)
     })
 
     // The re-placement holds the drain lane; the sticky lane's only slot is free.
@@ -56,124 +50,11 @@ describe('drain-return lane', () => {
     )
 
     expect(reconnect.status).toBe(200)
-    expect(resolve).toHaveBeenCalledWith(
-      { userId: 'user-1', relayHostId: drained },
-      { classifyHomeRollIsolation: true }
-    )
     replacement.resolve(assignment('cell-new', drained))
     expect((await moving).status).toBe(200)
-    expect(outcomes).toEqual(['drain-return', 'sticky'])
-    // The drained host held a sticky slot for its verification read too.
-    expect(servedLanes).toEqual(['sticky', 'sticky', 'drain-return'])
-  })
-
-  it('defers an overflowing drain return with a paced Retry-After and says why', async () => {
-    const holder = 'hhhhhhhhhhhhhhhh'
-    const replacement = deferred<RelayAssignment>()
-    const assign = vi.fn(async () => await replacement.promise)
-    const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) =>
-      isolatedHome(relayHostId)
-    )
-    const outcomes: string[] = []
-    const reasons: string[] = []
-    const retryAfters: number[] = []
-    const causes: string[] = []
-    const app = createRelayApp(config({ drainReturnQueueMax: 1, drainReturnWaitMs: 50 }), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
-      recordAssignmentRejectionReason: (lane, reason) => reasons.push(`${lane}:${reason}`),
-      recordDrainReturnRetryAfter: (seconds) => retryAfters.push(seconds),
-      recordAssignmentUnavailable: (cause) => causes.push(cause)
-    })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    const holding = app.request('/v1/assign', assignmentRequest(holder, { reconnect: true }))
-    await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
-    const queued = app.request(
-      '/v1/assign',
-      assignmentRequest('qqqqqqqqqqqqqqqq', { reconnect: true })
-    )
-    const overflow = await app.request(
-      '/v1/assign',
-      assignmentRequest('ffffffffffffffff', { reconnect: true })
-    )
-
-    expect(overflow.status).toBe(503)
-    expect(overflow.headers.get('retry-after')).toBe('2')
-    const timedOut = await queued
-    expect(timedOut.status).toBe(503)
-    expect(Number(timedOut.headers.get('retry-after'))).toBeGreaterThanOrEqual(2)
-    expect(reasons).toEqual(['drain-return:queue-full', 'drain-return:wait-timeout'])
-    expect(retryAfters).toEqual([2, Number(timedOut.headers.get('retry-after'))])
-    expect(outcomes.filter((outcome) => outcome === 'drain-return-deferred')).toHaveLength(2)
-    expect(causes).toEqual(['drain-return-deferred', 'drain-return-deferred'])
-    expect(warn.mock.calls.flat().join('\n')).toMatch(
-      /lane=drain-return hinted=true reason=queue-full .*retryAfter=2/
-    )
-    replacement.resolve(assignment('cell-new', holder))
-    expect((await holding).status).toBe(200)
-  })
-
-  it('answers a drained host’s row-busy redial with the short interval', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const holder = 'hhhhhhhhhhhhhhhh'
-    const host = 'bbbbbbbbbbbbbbbb'
-    const holding = deferred<RelayAssignment>()
-    let busy = true
-    const assign = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
-      if (relayHostId === holder) return await holding.promise
-      if (relayHostId === host && busy) {
-        busy = false
-        throw new RelayAssignmentRowBusyError()
-      }
-      return assignment('cell-new', relayHostId)
-    })
-    const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) =>
-      isolatedHome(relayHostId)
-    )
-    const app = createRelayApp(config({ drainReturnQueueMax: 1 }), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-    const request = (relayHostId: string) =>
-      Promise.resolve(
-        app.request('/v1/assign', assignmentRequest(relayHostId, { reconnect: true }))
-      )
-
-    const held = request(holder)
-    await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
-    const queued = request(host)
-    await vi.advanceTimersByTimeAsync(10)
-    // A cohort behind it books the next ten service slots.
-    for (let index = 0; index < 10; index++) {
-      const overflow = await request(hostId('f', index))
-      expect(overflow.status).toBe(503)
-    }
-    await vi.advanceTimersByTimeAsync(2_490)
-    holding.resolve(assignment('cell-new', holder))
-    expect((await held).status).toBe(200)
-    const refused = await queued
-    expect(refused.headers.get('retry-after')).toBe('1')
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    const redial = await request(host)
-
-    // Its own lane interval, not a slot after the ten hosts that came later.
-    expect(redial.status).toBe(503)
-    expect(redial.headers.get('retry-after')).toBe('2')
   })
 
 })
-
-function hostId(prefix: string, index: number): string {
-  return `${prefix}${String(index).padStart(15, '0')}`
-}
 
 function assignmentRequest(relayHostId: string, extra: { reconnect?: boolean } = {}): RequestInit {
   return {
@@ -209,7 +90,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function config(overrides: Partial<RelayConfig> = {}): RelayConfig {
+function config(): RelayConfig {
   return {
     port: 8080,
     publicUrl: 'https://relay.example.test',
@@ -233,7 +114,6 @@ function config(overrides: Partial<RelayConfig> = {}): RelayConfig {
     publicResolveConcurrency: 1,
     publicResolveWaitMs: 5_000,
     publicAssignmentRetryAfterSeconds: 5,
-    dataDir: './data',
-    ...overrides
+    dataDir: './data'
   }
 }

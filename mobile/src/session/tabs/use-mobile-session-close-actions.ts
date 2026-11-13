@@ -9,7 +9,7 @@ import {
   sessionTerminalRename
 } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileSessionTab } from './mobile-session-tabs'
-import type { Terminal } from '../../terminal/session/mobile-terminal-model'
+import type { TerminalRecord as Terminal } from '../../terminal/session/inventory/mobile-terminal-records'
 import type { MobileSessionContentCreateActionsModel } from '../use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from '../native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from '../native-chat/composer/mobile-native-chat-draft-store'

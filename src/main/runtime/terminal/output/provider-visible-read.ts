@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './provider-buffer-capture'
 import type { RuntimeVisibleTerminalState } from '../records/runtime-terminal-state-records'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { RuntimeTerminalProjection } from './terminal-projection'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { withTimeout, withTimeoutResult } from '../../../../shared/promise-timeout-fallback'

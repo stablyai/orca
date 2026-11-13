@@ -6,12 +6,12 @@ import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoi
 import { focusLossReportSupport } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { CapturedHistoryWriter } from '../../history/storage/history-manager'
 import { readHostHistorySnapshot, type ShutdownOptions } from '../adapter/daemon-pty-host-history'
 import { FinalCheckpointWaitExpiredError } from '../adapter/daemon-pty-lifecycle-errors'
 import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
-import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
+import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 

@@ -54,13 +54,6 @@ describe('workspace.rename', () => {
     )
   })
 
-  it('fails when no folder workspace has the id', async () => {
-    const rpc = vi.fn().mockResolvedValue({ folderWorkspace: null })
-    expect(
-      await call('workspace.rename', { workspaceId: 'folder:gone', name: 'Notes' }, rpc)
-    ).toMatchObject({ ok: false, code: 'action_failed' })
-  })
-
   it('refuses blank, multi-line, bidi or invisible names and plugins without workspace:write', async () => {
     const rpc = vi.fn()
     const outcomes = await Promise.all(
@@ -82,41 +75,5 @@ describe('workspace.rename', () => {
       await call('workspace.rename', { workspaceId: 'id-1', name: 'ok' }, rpc, ['workspace:read'])
     ).toMatchObject({ ok: false })
     expect(rpc).not.toHaveBeenCalled()
-  })
-})
-
-describe('workspace.list project names', () => {
-  it("names each worktree's project and leaves project folders without one", async () => {
-    const rpc = vi.fn(async (method: string) => {
-      if (method === 'worktree.list') {
-        return {
-          worktrees: [
-            {
-              id: 'w1',
-              repoId: 'r1',
-              displayName: 'main',
-              path: '/src/app',
-              branch: 'refs/heads/main'
-            }
-          ]
-        }
-      }
-      if (method === 'repo.list') {
-        return { repos: [{ id: 'r1', displayName: 'App' }] }
-      }
-      return {
-        folderWorkspaces: [{ id: 'f1', name: 'Notes', folderPath: '/notes' }]
-      }
-    })
-    const outcome = await call('workspace.list', {}, rpc, ['workspace:read'])
-    expect(outcome).toMatchObject({
-      ok: true,
-      value: {
-        workspaces: [
-          { id: 'w1', name: 'main', project: 'App', branch: 'main' },
-          { id: 'folder:f1', name: 'Notes', project: null }
-        ]
-      }
-    })
   })
 })

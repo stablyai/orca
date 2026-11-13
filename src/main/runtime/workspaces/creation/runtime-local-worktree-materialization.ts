@@ -147,10 +147,25 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     hostId: meta.hostId ?? getRepoExecutionHostId(repo)
   }
   const metadataResult = args.onMetadataPersisted(worktree)
+  const { includeCopyWarning } = await materializeWorktreeContentPaths(
+    repo,
+    created.path,
+    localWorktreeGitOptions,
+    timing
+  )
+  return { worktree, metadataResult, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
+}
 
+/** Repo-configured files a fresh checkout lacks: symlinks, shared directories and .worktreeinclude copies. */
+export async function materializeWorktreeContentPaths(
+  repo: Repo,
+  worktreePath: string,
+  localWorktreeGitOptions: LocalGitExecOptions,
+  timing: Pick<WorktreeCreateTimingRecorder, 'time'>
+): Promise<{ includeCopyWarning?: string }> {
   if ((repo.symlinkPaths ?? []).length > 0) {
     await timing.time('create_symlinks', () =>
-      createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths ?? [])
+      createWorktreeLinkedPaths(repo.path, worktreePath, repo.symlinkPaths ?? [])
     )
   }
   // These discoveries are read-only; overlap them, but keep the shared-path
@@ -165,18 +180,18 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   ])
   if (sharedDirectories.length > 0) {
     await timing.time('create_shared_directories', () =>
-      createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+      createWorktreeSharedPaths(repo.path, worktreePath, sharedDirectories)
     )
   }
   if (worktreeIncludePaths.length === 0) {
-    return { worktree, metadataResult }
+    return {}
   }
   const skippedIncludePaths = await timing.time('copy_worktreeinclude', () =>
-    createWorktreeCopiedPaths(repo.path, created.path, worktreeIncludePaths)
+    createWorktreeCopiedPaths(repo.path, worktreePath, worktreeIncludePaths)
   )
   const includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
   if (includeCopyWarning) {
     console.warn(`[worktree-include] ${includeCopyWarning}`)
   }
-  return { worktree, metadataResult, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
+  return includeCopyWarning ? { includeCopyWarning } : {}
 }

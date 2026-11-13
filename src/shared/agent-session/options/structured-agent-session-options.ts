@@ -75,7 +75,6 @@ export type StructuredAgentSessionOptionState = {
   interactionModeSupported?: boolean
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
-  reportedModel?: string
   reportedEffort?: string
   /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
@@ -215,7 +214,6 @@ export function applyStructuredAgentSessionOptions(
     optionsAnswerPresent: true,
     interactionModeSupported: current.interactionMode !== undefined,
     sessionNeverStarted: result.sessionNeverStarted,
-    reportedModel: current.reportedModel,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     catalog: keepCatalog ? state.catalog : answeredCatalog,
     fastModeRestricted:
@@ -249,9 +247,6 @@ export function commitStructuredAgentSessionOption(
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
-  if (id === 'model') {
-    state = { ...state, reportedModel: undefined }
-  }
   if (id === 'model' || id === 'effort') {
     state = { ...state, reportedEffort: undefined }
   }

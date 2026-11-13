@@ -1,15 +1,15 @@
 import type { Repo } from '../../../../../shared/repo-types'
-import type { ListWorkItemsResult } from '../../../../../shared/github/work-item-types'
+import type { ListWorkItemsResult } from '../../../../../shared/github/work-items/work-item-types'
 import type { WorkItemsCacheSources } from '../cache/cache-model'
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { bindingKey } from '../task-records/task-record-model'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import { withBoundedCacheEntry, evictStaleEntries } from '../cache/cache-policy'
 import { foldReportedCandidates } from './source-candidate-evidence'
 import { workItemsCacheKey } from '../cache/cache-identity'
-import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
+import { taskPageGitHubResumeCache } from '@/components/task-page/github/cache/task-page-github-resume-cache'
 import {
   GitHubSourceOwnership,
   githubCollectionScope,

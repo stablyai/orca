@@ -7,7 +7,7 @@ import {
   type TerminalHistoryOutcome
 } from '../../protocol/daemon-history-protocol'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { TerminalHistoryAuthority } from '../../../providers/pty-provider-contract'
+import type { TerminalHistoryAuthority } from '../../../providers/pty/provider-contract'
 import { normalizeDesktopTerminalSnapshotRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import {
   awaitDaemonWorkWithinCallerDeadline,

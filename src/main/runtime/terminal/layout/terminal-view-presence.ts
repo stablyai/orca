@@ -1,7 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 

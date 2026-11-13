@@ -1,7 +1,8 @@
+import { TerminalRestoringPlaceholder } from '../mounting/TerminalRestoringPlaceholder'
 import { TerminalCrewPortals } from '../../orchestration-crew/TerminalCrewPortals'
+import { terminalPaneMenuAgentIdProps } from '../context-menu/terminal-pane-menu-agent-session-actions'
 import { createPortal } from 'react-dom'
-import { TerminalPaneFileDropOwner } from '../input/file-drop/TerminalPaneFileDropOwner'
-import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { TerminalPaneFileDropOwners } from '../input/file-drop/TerminalPaneFileDropOwner'
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
@@ -83,7 +84,7 @@ export function TerminalPaneSurface({
     keybindings,
     managedPanes,
     managerRef,
-    menuAgentSessionId,
+    menuAgentIds,
     menuPaneHasCustomTitle,
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
@@ -120,6 +121,8 @@ export function TerminalPaneSurface({
     showSshReconnectOverlay,
     splitTerminalPaneFromHeader,
     tabId,
+    terminalMountPhase,
+    terminalManager,
     terminalContainerStyle,
     terminalContentVisible,
     terminalLinkActionRequest,
@@ -148,7 +151,12 @@ export function TerminalPaneSurface({
         data-terminal-chat-pane={effectiveChatViewMode && chatPane ? '' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
-        style={terminalContainerStyle}
+        inert={!terminalManager}
+        style={
+          terminalManager
+            ? terminalContainerStyle
+            : { ...terminalContainerStyle, visibility: 'hidden' }
+        }
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={(event) => {
           contextMenu.onMouseDownCapture(event)
@@ -182,17 +190,8 @@ export function TerminalPaneSurface({
           })
         }}
       />
-      {managedPanes.map((pane) => (
-        <TerminalPaneFileDropOwner
-          key={makePaneKey(tabId, pane.leafId)}
-          pane={pane}
-          tabId={tabId}
-          worktreeId={worktreeId}
-          cwd={cwd}
-          managerRef={managerRef}
-          paneTransportsRef={paneTransportsRef}
-        />
-      ))}
+      {terminalMountPhase === 'host' && <TerminalRestoringPlaceholder />}
+      <TerminalPaneFileDropOwners controller={controller} />
       <TerminalCrewPortals controller={controller} />
       <TerminalPaneCodexRestartPortals controller={controller} />
       <AgentLaunchPaneNoticePortal
@@ -211,11 +210,11 @@ export function TerminalPaneSurface({
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError.error}
-              resourceLimit={visibleTerminalError.resourceLimit}
               agentId={activeAgentId}
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onRestoreTerminalFocus={() => activePane.terminal.focus()}
               onRetry={
                 isReattachRetryError(visibleTerminalError.error)
                   ? () =>
@@ -256,7 +255,7 @@ export function TerminalPaneSurface({
       <SessionRestoredBannerPortals panes={managedPanes} paneIds={sessionRestoredBannerPaneIds} />
       <TerminalPaneNativeChatPortal controller={controller} />
       <TerminalContextMenu
-        open={contextMenu.open}
+        open={Boolean(terminalManager) && contextMenu.open}
         onOpenChange={contextMenu.setOpen}
         onRestoreTerminalFocus={contextMenu.onRestoreTerminalFocus}
         menuPoint={contextMenu.point}
@@ -310,10 +309,12 @@ export function TerminalPaneSurface({
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
-        canCopyAgentSessionId={menuAgentSessionId !== null}
-        onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
+        {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentIds)}
       />
-      <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
+      <LinkActionPopover
+        request={terminalManager ? terminalLinkActionRequest : null}
+        onClose={closeTerminalLinkActions}
+      />
       {quickCommandEditorOpen ? (
         <TerminalQuickCommandEditorDialog
           command={quickCommandDraft}

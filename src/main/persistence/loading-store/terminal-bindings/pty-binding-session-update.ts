@@ -5,7 +5,7 @@ import { cloneLayoutNode } from '../../restoring-sessions/terminal-layout-normal
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { createMinimalPersistedTerminalTab } from '../../restoring-sessions/session-owner-fields'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { placedSplitRoot } from '../../terminal-topology/terminal-pane-placement-graft'
+import { placedSplitRoot } from '../../terminal-topology/pane-admission/terminal-pane-placement-graft'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 import { reusedTerminalIdUnbinding } from './reused-terminal-id-unbind'

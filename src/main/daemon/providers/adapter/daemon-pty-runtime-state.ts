@@ -34,7 +34,7 @@ import { HistoryManager } from '../../history/storage/history-manager'
 import type { HistoryCheckpointResult } from '../../history/storage/terminal-history-manager-options'
 import { HistoryReader } from '../../history/restoration/history-reader'
 import { DaemonPtyHostHistoryBindings } from './daemon-pty-host-history'
-import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
+import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import type {
   DaemonPtyRouterDataEvent,
   DaemonPtyRouterExitEvent

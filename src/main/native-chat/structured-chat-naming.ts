@@ -1,19 +1,16 @@
 import type {
   StructuredChatNameGeneration,
   StructuredChatNamingDeps
-} from './structured-chat-naming-types'
-export type {
-  StructuredChatNameGeneration,
-  StructuredChatNamingDeps
-} from './structured-chat-naming-types'
-import { runStructuredChatNameGeneration } from './structured-chat-name-publication'
+} from './conversation-naming/structured-chat-naming-types'
+
+import { runStructuredChatNameGeneration } from './conversation-naming/structured-chat-name-publication'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import {
   automaticChatNamingRequest,
   createStructuredChatNamingWork,
   namingRequestOwnsRecord,
   type NamingRequest
-} from './structured-chat-naming-work'
+} from './conversation-naming/structured-chat-naming-work'
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/observations/structured-agent-session-status-observation'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
@@ -26,7 +23,7 @@ import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
-} from '../text-generation/agent-failure-output'
+} from '../text-generation/failures/agent-failure-output'
 import type {
   StructuredAgentSessionConversationNaming,
   StructuredChatNamingFailure

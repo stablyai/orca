@@ -5,7 +5,7 @@ import '../orca-runtime-test-mocks/setup.spec'
 import '../rpc/dispatcher'
 import '../rpc/methods/terminal/terminal'
 import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
-import type { PtyProviderBufferSnapshot } from '../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../providers/pty/provider-contract'
 import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 import type { RuntimeProviderSnapshotReadOptions } from '../terminal/output/provider-snapshot-read-options'
 

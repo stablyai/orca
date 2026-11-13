@@ -31,6 +31,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 }))
 
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { _resetWorktreeCatalogOwnerForTests } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import { WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS } from './worktree-scan-admin-budget'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
@@ -166,6 +167,8 @@ function stallProbeOnce(): (fingerprint: string | null) => void {
 
 describe('worktree scan admin-fingerprint gate', () => {
   beforeEach(() => {
+    // The catalog owner is process-wide, like production's single runtime; each case starts unobserved.
+    _resetWorktreeCatalogOwnerForTests()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
@@ -247,6 +250,8 @@ describe('worktree scan admin-fingerprint gate', () => {
 
 describe('scoped explicit worktree-id resolution', () => {
   beforeEach(() => {
+    // The catalog owner is process-wide, like production's single runtime; each case starts unobserved.
+    _resetWorktreeCatalogOwnerForTests()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockImplementation(async (repoPath: string) => [
       { path: repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },

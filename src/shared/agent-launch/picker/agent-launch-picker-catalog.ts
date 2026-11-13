@@ -17,7 +17,7 @@ import {
 } from '../permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
-import { legacyAgentModelIds } from '../../legacy-agent-models'
+import { classifyAgentModels } from '../../legacy-agent-models'
 
 type ModelMenuEntry = Pick<AgentPickerEntry, 'agent' | 'catalog'> &
   Partial<
@@ -176,8 +176,14 @@ export function agentPickerModelFromCatalogModel(model: CatalogModel): AgentPick
 }
 
 function withLegacyModels(agent: TuiAgent, models: AgentPickerModel[]): AgentPickerModel[] {
-  const legacy = legacyAgentModelIds(agent, models)
-  return legacy.size
-    ? models.map((model) => (legacy.has(model.id) ? { ...model, isLegacy: true } : model))
+  const { legacy, hidden } = classifyAgentModels(agent, models)
+  return legacy.size || hidden.size
+    ? models.map((model) =>
+        hidden.has(model.id)
+          ? { ...model, hidden: true }
+          : legacy.has(model.id)
+            ? { ...model, isLegacy: true }
+            : model
+      )
     : models
 }

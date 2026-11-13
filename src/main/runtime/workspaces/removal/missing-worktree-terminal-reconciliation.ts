@@ -1,5 +1,5 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { Repo } from '../../../../shared/repo-types'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'

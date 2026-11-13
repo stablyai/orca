@@ -9,7 +9,7 @@ import type { ExecutionHostId } from '../execution-host'
 import {
   getHostContextLabel,
   getMixedHostContextLabels as getSharedMixedHostContextLabels
-} from '../worktree/host-context-labels'
+} from '../worktree/row-display/host-context-labels'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { getProjectGroupingForRepo, type ProjectGroupingIndex } from '../project-section-grouping'
 import type { WorktreeGroupEntry } from './worktree-group-entry'

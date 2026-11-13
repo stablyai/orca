@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { captureStructuredAgentCliSource } from '../../../native-chat/structured-agent-cli-source'
+import { captureStructuredAgentCliSource } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { OrchestrationEntryCaller } from '../../orchestration/addressing/orchestration-caller-identity'
 import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } from '../core'
 import { resolveRpcCallerIdentity } from '../callers/rpc-caller-identity'
@@ -14,6 +14,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'pairedDeviceId'
   | 'pairedDeviceParentId'
   | 'caller'
+  | 'plugin'
   | 'clientKind'
   | 'clientCapabilities'
   | 'capabilitySource'
@@ -35,6 +36,8 @@ export type RpcDispatchStreamingOptions = Pick<
   /** In-process callers: runs after admission and feature waits, just before the handler; a throw
    *  refuses the call (a plugin revoked while its call waited). */
   beforeInvoke?: () => void
+  /** In-process callers: sees a unary handler's own throw before it becomes an error answer. */
+  onHandlerError?: (error: unknown) => void
 }
 
 export function rpcContextFromTransport(
@@ -66,6 +69,7 @@ export function rpcContextFromTransport(
     pairedDeviceId: options?.pairedDeviceId,
     pairedDeviceParentId: options?.pairedDeviceParentId,
     caller: resolveRpcCallerIdentity(options),
+    plugin: options?.plugin,
     clientKind: options?.clientKind,
     clientCapabilities: options?.clientCapabilities,
     capabilitySource: options?.capabilitySource,

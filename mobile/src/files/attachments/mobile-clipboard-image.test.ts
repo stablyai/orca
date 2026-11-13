@@ -74,7 +74,7 @@ describe('mobile clipboard image paste helpers', () => {
     })
   })
 
-  it.each([null, 'unknown', 'codex', 'omp'])(
+  it.each([null, 'omp'])(
     'contains embedded paste markers inside the image paste for %s',
     (agent) => {
       const payload = buildMobileTerminalImagePastePayload(

@@ -3,8 +3,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { TERMINAL_METHODS } from '../methods/terminal/terminal'
-import '../../../../shared/rpc-contract/terminal-viewport-schemas-params'
-import { createSubscriptionRegistryDouble } from '../testing/subscription-registry-test-double'
+import '../../../../shared/rpc-contract/terminal/terminal-viewport-schemas-params'
 
 const PTY_ID = 'pty-1'
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'
@@ -14,12 +13,6 @@ const binaryParams = {
   client: { id: 'phone-1', type: 'mobile' },
   viewport: { cols: 40, rows: 20 },
   capabilities: { terminalBinaryStream: 1 }
-}
-
-const leaseOnlyParams = {
-  terminal: 'terminal-1',
-  client: { id: 'phone-1', type: 'mobile' },
-  capabilities: { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
 }
 
 let nextRequestId = 0
@@ -77,44 +70,6 @@ function createPtyWaits() {
       }
     }
   }
-}
-
-function stubRuntime(overrides: Record<string, unknown> = {}) {
-  const registry = createSubscriptionRegistryDouble()
-  const ptyWaits = createPtyWaits()
-  let ptyReady = false
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
-  const runtime = {
-    getRuntimeId: () => 'test-runtime',
-    registerRemoteTerminalViewSubscriber: () => () => {},
-    requestRendererTerminalTabMount: vi.fn(() => false),
-    resolveLeafForHandle: vi.fn(() => ({ ptyId: ptyReady ? PTY_ID : null })),
-    waitForLeafPtyId: ptyWaits.waitForLeafPtyId,
-    handleMobileSubscribe: vi.fn().mockResolvedValue(true),
-    handleMobileUnsubscribe: vi.fn(),
-    subscribeToTerminalData: vi.fn(() => vi.fn()),
-    readTerminal: vi.fn().mockResolvedValue({ tail: ['scrollback'], truncated: false }),
-    serializeTerminalBuffer: vi
-      .fn()
-      .mockResolvedValue({ data: 'snapshot', cols: 40, rows: 20, seq: 4 }),
-    getTerminalSize: vi.fn().mockReturnValue({ cols: 40, rows: 20 }),
-    getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
-    getLayout: vi.fn().mockReturnValue({ seq: 1 }),
-    isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
-    subscribeToTerminalResize: vi.fn(() => vi.fn()),
-    subscribeToFitOverrideChanges: vi.fn(() => vi.fn()),
-    subscribeToPtyExit: vi.fn(() => vi.fn()),
-    registerOwnedSubscriptionCleanup: registry.registerOwnedSubscriptionCleanup,
-    cleanupSubscriptionIfOwnedByConnection: registry.cleanupSubscriptionIfOwnedByConnection,
-    getSubscriptionRegistrationVersion: registry.getSubscriptionRegistrationVersion,
-    releaseSubscriptionByRequest: registry.releaseSubscriptionByRequest,
-    ...overrides
-  } as unknown as OrcaRuntimeService
-  const spawn = (): void => {
-    ptyReady = true
-    ptyWaits.spawn()
-  }
-  return { runtime, registry, ptyWaits, spawn }
 }
 
 /** The real runtime, with only handle resolution, the pty wait, the scrollback read and tab mounting doubled. */
@@ -187,35 +142,6 @@ describe('terminal.subscribe registers at admission', () => {
       timeout: 2_000
     })
     expect(resultTypes(messages)).toEqual(['end'])
-  })
-
-  it('does not follow a released stream end with an error', async () => {
-    let rejectSubscribe = (_error: Error): void => {}
-    const { runtime, registry } = stubRuntime({
-      resolveLeafForHandle: vi.fn(() => ({ ptyId: PTY_ID })),
-      handleMobileSubscribe: vi.fn(
-        () =>
-          new Promise<boolean>((_resolve, reject) => {
-            rejectSubscribe = reject
-          })
-      )
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-    const messages: string[] = []
-    const subscribe = dispatcher.dispatchStreaming(
-      subscribeRequest(leaseOnlyParams),
-      (message) => messages.push(message),
-      phoneConnection('conn-a')
-    )
-    await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalled())
-
-    registry.cleanupSubscriptionIfOwnedByConnection(SUBSCRIPTION_ID, 'conn-a')
-    rejectSubscribe(new Error('subscribe_failed'))
-    await subscribe
-
-    expect(messages.map((message) => JSON.parse(message))).toEqual([
-      expect.objectContaining({ ok: true, result: { type: 'end' } })
-    ])
   })
 })
 

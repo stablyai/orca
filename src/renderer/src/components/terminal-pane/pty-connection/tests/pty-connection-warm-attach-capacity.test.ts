@@ -31,7 +31,7 @@ import { answerDaemonControlRequest } from '../../../../../../main/daemon/server
 import { answerDaemonHistoryRequest } from '../../../../../../main/daemon/server/daemon-history-requests'
 import { HISTORY_READ_CONSUMERS } from '../../../../../../main/daemon/history/journal/terminal-history-read-admission'
 import type { GetSnapshotRequest } from '../../../../../../main/daemon/protocol/daemon-rpc-contract'
-import type { PtySpawnResult } from '../../../../../../main/providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../../../../main/providers/pty/spawn-result'
 import type * as PtyTransportModule from '../../pty-transport/ipc/pty-transport'
 
 type LiveTransport = ReturnType<typeof PtyTransportModule.createIpcPtyTransport>

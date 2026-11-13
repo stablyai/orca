@@ -1,4 +1,4 @@
-import { AgentConversationCopyError } from '../../native-chat/agent-conversation-copy-error'
+import { AgentConversationCopyError } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'

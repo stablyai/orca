@@ -11,7 +11,7 @@
 17 src/main/ai-vault-search/storage/session-search-index-writer.ts
 10 src/main/ai-vault-search/storage/session-search-message-rows.ts
 3 src/main/ai-vault-search/storage/session-search-query-schema.ts
-17 src/main/ai-vault-search/storage/session-search-retention-delete.ts
+22 src/main/ai-vault-search/storage/session-search-retention-delete.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 16 src/main/ai-vault-search/storage/session-search-store.ts
 26 src/main/ai-vault-search/storage/session-search-tool-purge.ts
@@ -50,9 +50,9 @@
 1 src/main/native-chat/agent-session-journal/writing/command-receipt-schema.ts
 8 src/main/native-chat/agent-session-journal/writing/command-receipt-table.ts
 2 src/main/native-chat/agent-session-journal/writing/journal-goal-attachment-inverse.ts
-10 src/main/native-chat/transcript-opencode-sqlite-query.ts
-14 src/main/native-chat/transcript-opencode2-fork-coverage.ts
-10 src/main/native-chat/transcript-opencode2-sqlite.ts
+10 src/main/native-chat/transcript-history/opencode/transcript-opencode-sqlite-query.ts
+14 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
+10 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
 10 src/main/opencode-usage/opencode-usage-row-queries.ts
 1 src/main/opencode-usage/scanner.ts
 12 src/main/persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite.ts
