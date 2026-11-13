@@ -769,6 +769,32 @@ class RuntimeRenderTest(unittest.TestCase):
         self.assertEqual(scrolled, [("Item 2", "top"), ("Item 4", "top")])
         self.assertEqual(result["action"]["actionName"], "scrollTo")
 
+    def test_background_scroll_moves_the_inner_scroller_before_the_page(self):
+        inner_items = [FakeAccessible("list item", f"Message {index}") for index in range(4)]
+        log = FakeAccessible("panel", "Chat log", children=inner_items)
+        page_items = [FakeAccessible("paragraph", f"Section {index}") for index in range(4)]
+        document = FakeAccessible("document web", "Page", children=[log, *page_items])
+        scrolled = []
+        with SnapshotFixture(FakeAccessible("frame", "Browser", children=[document])) as fixture:
+            fixture.bounds[fixture.root] = runtime.Rect(0, 0, 400, 400)
+            fixture.bounds[document] = runtime.Rect(0, 0, 400, 400)
+            fixture.bounds[log] = runtime.Rect(0, 0, 400, 100)
+            for index, item in enumerate(inner_items):
+                fixture.bounds[item] = runtime.Rect(0, index * 60, 400, 60)
+            for index, item in enumerate(page_items):
+                fixture.bounds[item] = runtime.Rect(0, 100 + index * 150, 400, 150)
+            element = next(item for item in runtime.make_snapshot("Fixture", False)["elements"] if item["name"] == "Message 0")
+            def scroll_to(item, _):
+                scrolled.append(item.name)
+                fixture.bounds[item] = runtime.Rect(0, 0, 400, 60)
+                return True
+            with patch.object(runtime.Atspi.Component, "scroll_to", scroll_to, create=True), \
+                 patch.object(runtime.Atspi, "ScrollType", types.SimpleNamespace(TOP_EDGE="top"), create=True):
+                runtime.run_operation({"tool": "scroll", "app": "Fixture", "element": element, "direction": "down",
+                                       "pages": 1, "noScreenshot": True})
+        # Why Message 1: it spans 60-120 and the chat log's own box ends at 100, so the log scrolls, not the page.
+        self.assertEqual(scrolled, ["Message 1"])
+
     def test_click_without_an_action_selects_the_row_only_when_its_index_is_proven(self):
         cases = (
             ("Qt", "6.6", None, "selected"),

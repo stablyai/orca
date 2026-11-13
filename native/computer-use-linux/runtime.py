@@ -215,13 +215,23 @@ class Placement:
         return Rect(rect.x - self.base.x, rect.y - self.base.y, rect.width, rect.height)
 
 
+# Why per operation: list-windows places every window of an app, and each lookup is a subprocess.
+_x11_windows_by_pid = {}
+
+
 def gtk4_client_origin(app, window):
     xdotool = shutil.which("xdotool")
-    ids = x11_window_ids(app, xdotool) if xdotool else None
-    if ids and len(ids) > 1:
+    if not xdotool:
+        return None
+    pid = pid_of(app)
+    if pid not in _x11_windows_by_pid:
+        ids = x11_window_ids(app, xdotool) or []
+        _x11_windows_by_pid[pid] = [(value, x11_window_name(xdotool, value) if len(ids) > 1 else None) for value in ids]
+    windows = _x11_windows_by_pid[pid]
+    if len(windows) > 1:
         title = name_of(window)
-        ids = [value for value in ids if x11_window_name(xdotool, value) == title]
-    return x11_client_origin(int(ids[0])) if ids and len(ids) == 1 else None
+        windows = [item for item in windows if item[1] == title]
+    return x11_client_origin(int(windows[0][0])) if len(windows) == 1 else None
 
 
 def x11_window_name(xdotool, window_id):
@@ -1826,6 +1836,7 @@ def drag_between(start, end):
 
 SCROLL_DIRECTIONS = {"up": ("vertical", -1), "down": ("vertical", 1), "left": ("horizontal", -1), "right": ("horizontal", 1)}
 DOCUMENT_ROLES = {"document web", "document frame", "scroll pane"}
+MAX_SCROLL_BAR_SIBLINGS = 8
 MAX_SCROLL_TO_PAGES = 10
 SCROLL_SETTLE_SECONDS = 1
 
@@ -1844,51 +1855,62 @@ def scroll_without_pointer(window, node, placed, x, y, direction, pages):
     (agent-desktop actions/scroll/scroll_bus.rs; FINDINGS L4-22)."""
     axis, sign = scroll_direction(direction)
     pages = require_positive_number(1 if pages is None else pages, "pages")
-    at_limit = None
-    for container in scroll_containers(window, node, placed, x, y):
+    if node is None and x is not None and y is not None:
+        node = node_at(window, placed, float(x), float(y), [MAX_NODES])
+    at_limit, budget = None, [MAX_NODES]
+    # Why innermost first: like a wheel, the nearest view that can move takes the scroll, and one at its end hands it out.
+    for container in ancestors_to(node, window):
         bar = scroll_bar(container, axis)
         if bar is not None:
             action = write_scroll_bar(container, bar, axis, sign, pages)
-        elif role_of(container).lower() in DOCUMENT_ROLES and float(pages).is_integer():
-            action = scroll_to_pages(container, placed, axis, sign, int(pages))
+        elif float(pages).is_integer():
+            action = scroll_to_pages(container, placed, axis, sign, int(pages), budget)
         else:
             continue
         if action is not None and action["verification"].get("reason") != "suspected_noop":
             return action
-        # Why outward: like a wheel, a nested view at its end hands the scroll to the view around it.
         at_limit = at_limit or action
     return at_limit
 
 
-def scroll_containers(window, node, placed, x, y):
-    if node is not None:
-        found, current = [], node
-        for _ in range(MAX_DEPTH):
-            if current is None:
+def ancestors_to(node, window):
+    found, current = [], node
+    for _ in range(MAX_DEPTH):
+        if current is None:
+            break
+        found.append(current)
+        if current is window or current == window:
+            break
+        current = attempt(lambda current=current: current.get_parent())
+    return found
+
+
+def node_at(window, placed, x, y, budget):
+    """The deepest node whose window-relative frame holds the point, preferring later (topmost) siblings."""
+    node = window
+    for _ in range(MAX_DEPTH):
+        hit = None
+        count = int(attempt(lambda node=node: node.get_child_count(), 0) or 0)
+        for index in range(count - 1, -1, -1):
+            budget[0] -= 1
+            if budget[0] < 0:
+                return node
+            child = attempt(lambda node=node, index=index: node.get_child_at_index(index))
+            frame = placed.frame(child) if child is not None else None
+            if frame is not None and frame.x <= x < frame.x + frame.width and frame.y <= y < frame.y + frame.height:
+                hit = child
                 break
-            found.append(current)
-            if current is window:
-                break
-            current = attempt(lambda current=current: current.get_parent())
-        return found
-    if x is None or y is None:
-        return []
-    candidates = []
-    for candidate in all_nodes(window):
-        role = role_of(candidate).lower()
-        container = attempt(lambda candidate=candidate: candidate.get_parent()) if role == "scroll bar" else candidate
-        if container is None or (role != "scroll bar" and role not in DOCUMENT_ROLES):
-            continue
-        frame = placed.frame(container)
-        if (frame is not None and frame.x <= float(x) < frame.x + frame.width
-                and frame.y <= float(y) < frame.y + frame.height
-                and all(container is not seen for seen, _ in candidates)):
-            candidates.append((container, frame.width * frame.height))
-    return [container for container, _ in sorted(candidates, key=lambda item: item[1])]
+        if hit is None:
+            return node
+        node = hit
+    return node
 
 
 def scroll_bar(container, axis):
     vertical, horizontal = (getattr(Atspi.StateType, name, None) for name in ("VERTICAL", "HORIZONTAL"))
+    # Why capped: scroll bars sit beside one viewport child, and reading every row of a big list costs the app memory.
+    if int(attempt(lambda: container.get_child_count(), 0) or 0) > MAX_SCROLL_BAR_SIBLINGS:
+        return None
     for _, child in children(container):
         if role_of(child).lower() != "scroll bar":
             continue
@@ -1930,19 +1952,21 @@ def write_scroll_bar(container, bar, axis, sign, pages):
     return action
 
 
-def scroll_to_pages(container, placed, axis, sign, pages):
+def scroll_to_pages(container, placed, axis, sign, pages, budget):
     edges = {("vertical", 1): "TOP_EDGE", ("vertical", -1): "BOTTOM_EDGE",
              ("horizontal", 1): "LEFT_EDGE", ("horizontal", -1): "RIGHT_EDGE"}
     scroll_type = getattr(getattr(Atspi, "ScrollType", None), edges[(axis, sign)], None)
     if scroll_type is None:
         return None
     moved = accepted = 0
+    at_end = False
     for _ in range(min(pages, MAX_SCROLL_TO_PAGES)):
         viewport = placed.frame(container)
         if viewport is None:
             break
         start, length = (viewport.y, viewport.height) if axis == "vertical" else (viewport.x, viewport.width)
-        item = item_past_edge(container, placed, axis, sign, start, start + length, MAX_DEPTH, [MAX_NODES])
+        item = item_past_edge(container, placed, axis, sign, start, start + length, MAX_DEPTH, budget)
+        at_end = item is None and budget[0] >= 0
         component = attempt(lambda: item.get_component_iface()) if item is not None else None
         before = placed.frame(item) if component is not None else None
         if before is None or not attempt(lambda: Atspi.Component.scroll_to(component, scroll_type), False):
@@ -1952,6 +1976,10 @@ def scroll_to_pages(container, placed, axis, sign, pages):
             break
         moved += 1
     if not accepted:
+        # Why only documents: a document with nothing past its edge is at its end, while other nodes may not scroll.
+        if at_end and role_of(container).lower() in DOCUMENT_ROLES:
+            return {"path": "accessibility", "actionName": "scrollTo", "fallbackReason": None,
+                    "verification": {"state": "unverified", "reason": "suspected_noop"}}
         return None
     # Why an action after any page: once the document moved, falling back to the pointer would scroll it twice.
     verification = ({"state": "unverified", "reason": "accessibility_action_unasserted"} if moved
@@ -1981,7 +2009,8 @@ def item_past_edge(node, placed, axis, sign, viewport_start, viewport_end, depth
             inner = item_past_edge(child, placed, axis, sign, viewport_start, viewport_end, depth - 1, budget)
             # Why the cut item itself: its hidden part leads the next page, unless it already fills the viewport.
             leads = start > viewport_start + 1 if sign > 0 else end < viewport_end - 1
-            return inner if inner is not None else child if leads else None
+            if inner is not None or leads:
+                return inner if inner is not None else child
     return None
 
 
@@ -2469,6 +2498,7 @@ def set_value(node, value):
 
 
 def run_operation(operation):
+    _x11_windows_by_pid.clear()
     tool = operation.get("tool")
     include_screenshot = not bool(operation.get("noScreenshot"))
     if tool == "handshake":
