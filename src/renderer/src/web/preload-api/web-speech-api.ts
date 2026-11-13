@@ -1,4 +1,4 @@
-import type { SpeechApi } from '../../../../preload/api/speech-api'
+import type { SpeechApi } from '../../../../preload/api/speech/speech-api'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type {
