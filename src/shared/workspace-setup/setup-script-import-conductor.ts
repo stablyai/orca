@@ -7,6 +7,7 @@ import {
   parseTomlObject
 } from './setup-script-import-parsers'
 import { parseOrcaRunScripts, type OrcaRunScripts } from '../orca-yaml-run-actions'
+import { dnfLinesIn, referencedScriptPaths, translateDnfInstalls } from './setup-script-dnf'
 
 const CONDUCTOR_SETTINGS_PATH = '.conductor/settings.toml'
 const CONDUCTOR_LOCAL_SETTINGS_PATH = '.conductor/settings.local.toml'
@@ -29,7 +30,32 @@ export async function inspectConductorConfig(
   const candidate =
     settings || localSettings ? buildSettingsTomlCandidate(settings, localSettings) : null
   // Conductor ignores conductor.json once settings.toml exists, so mirror that precedence.
-  return candidate ?? (settings ? null : inspectLegacyConductorJson(readFile))
+  const found = candidate ?? (settings ? null : await inspectLegacyConductorJson(readFile))
+  return found ? withUbuntuSetup(found, readFile) : null
+}
+
+/**
+ * PARITY-DNF: Conductor's cloud runs Amazon Linux, Orca's sandboxes Ubuntu. The setup's own dnf/yum
+ * install lines become apt-get where every package maps clearly; a script file it runs is only read
+ * (never changed or run) to list the lines that still use dnf.
+ */
+async function withUbuntuSetup(
+  candidate: SetupScriptImportCandidate,
+  readFile: SetupScriptImportFileRead
+): Promise<SetupScriptImportCandidate> {
+  const { setup, translated, unresolved } = translateDnfInstalls(candidate.setup)
+  const fileLines: string[] = []
+  for (const path of referencedScriptPaths(candidate.setup)) {
+    const content = await readFile(path)
+    if (content) {
+      fileLines.push(...dnfLinesIn(content).map((line) => `${path}: ${line}`))
+    }
+  }
+  const checkLines = [...unresolved, ...fileLines]
+  if (translated === 0 && checkLines.length === 0) {
+    return candidate
+  }
+  return { ...candidate, setup, ubuntuNote: { translated, checkLines } }
 }
 
 function buildSettingsTomlCandidate(
