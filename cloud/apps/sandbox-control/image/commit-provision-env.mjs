@@ -25,6 +25,11 @@ export function commitProvisionEnv(imageDir) {
     env.CURSOR_AGENT_VERSION = manifest.cursorAgent.version
     env.CURSOR_AGENT_SHA256 = manifest.cursorAgent.sha256
   }
+  if (manifest.docker && Object.keys(manifest.docker).length > 0) {
+    env.DOCKER_APT_PACKAGES = Object.entries(manifest.docker)
+      .map(([name, version]) => `${name}=${version}`)
+      .join(' ')
+  }
   if (manifest.desktop) {
     env.NOVNC_VERSION = manifest.desktop.novnc.version
     env.NOVNC_SHA256 = manifest.desktop.novnc.sha256
