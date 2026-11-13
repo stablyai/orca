@@ -154,7 +154,7 @@ export function NativeChatNoticeRow({
     return (
       <p className="flex min-w-0 items-center justify-center gap-1.5 select-text text-xs text-chat-foreground-faint">
         <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">
+        <span className="whitespace-normal">
           {t(
             'components.native-chat.notices.modelSwitched',
             'Model switched: {{from}} → {{to}}',

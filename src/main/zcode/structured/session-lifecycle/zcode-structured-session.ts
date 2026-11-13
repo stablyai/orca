@@ -136,6 +136,8 @@ export class ZcodeStructuredSession {
     }
     if (patch?.mode) {
       this.options.adoptMode(readRecord(patch.mode)?.current)
+      // Mode-only pushes also change the permission/interaction read; republish without a model.
+      this.publishOptions()
     }
     if (this.compactionTurnId && reason.startsWith('session_compact_')) {
       const turnId = this.compactionTurnId

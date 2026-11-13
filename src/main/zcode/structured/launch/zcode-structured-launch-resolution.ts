@@ -66,42 +66,39 @@ export function zcodeStructuredLaunchPart(
   return async (basis) => {
     const { record } = basis
     const environment = await basis.environment()
-    const resolved = deps.resolveCommand
-      ? deps.resolveCommand({
-          pathEnv: environment.PATH ?? environment.Path ?? null,
-          ...(environment.HOME ? { homePath: environment.HOME } : {})
-        })
-      : resolveStructuredAgentCommand('zcode', basis.commandSettings(), {
-          pathEnv: environment.PATH ?? environment.Path ?? null,
-          ...(environment.HOME ? { homePath: environment.HOME } : {})
-        })
     const args = [
       ...zcodeStructuredLaunchArgs(await deps.resolveLaunchArgs()),
       ...ZCODE_APP_SERVER_ARGS
     ]
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // The desktop bundle's runtime is the primary chat backend (it accepts the host's account
-    // push); the resolved CLI serves only where no bundle is installed.
+    // push); resolve the CLI only where no bundle is installed — a WSL host can lack the CLI
+    // while the bundle still works, and CLI resolution throws cliMissing there.
     const bundled = zcodeBundledLaunch(environment.PATH ?? environment.Path)
-    const cliFallback = bundled
+    const resolved = bundled
       ? null
-      : {
-          command: resolved.command,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
-          args: [] as string[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
-          env: {} as Record<string, string>
-        }
+      : deps.resolveCommand
+        ? deps.resolveCommand({
+            pathEnv: environment.PATH ?? environment.Path ?? null,
+            ...(environment.HOME ? { homePath: environment.HOME } : {})
+          })
+        : resolveStructuredAgentCommand('zcode', basis.commandSettings(), {
+            pathEnv: environment.PATH ?? environment.Path ?? null,
+            ...(environment.HOME ? { homePath: environment.HOME } : {})
+          })
+    // A refusal to be retried on the same binary is not a fallback; only the bundle's CLI
+    // sibling (which accepts host pushes the wrapper refuses) is one.
+    const cliFallback = null
     // The provider tables follow the runtime that actually boots: the bundle's own table for a
     // bundled launch, the CLI's for a CLI launch.
     const providerEnv = zcodeProviderEnv(
-      bundled ? (bundled.args[0] ?? resolved.command) : resolved.command
+      bundled ? (bundled.args[0] ?? resolved?.command ?? 'zcode') : (resolved?.command ?? 'zcode')
     )
     if (providerEnv.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE === undefined) {
       // A .cjs runtime without a builtin table next to it still needs an app version for the
       // gateway's User-Agent check; the entry name itself is the identity here.
       const version = readBundledZcodeAppVersion(
-        bundled ? (bundled.args[0] ?? resolved.command) : resolved.command
+        bundled ? (bundled.args[0] ?? resolved?.command) : (resolved?.command ?? 'zcode')
       )
       if (version) {
         providerEnv.ZCODE_APP_VERSION = version
@@ -122,9 +119,9 @@ export function zcodeStructuredLaunchPart(
           args: [...bundled.args, ...args]
         }
       : {
-          command: resolved.command,
-          prefixArgs: resolved.prefixArgs,
-          args: [...resolved.prefixArgs, ...args]
+          command: resolved!.command,
+          prefixArgs: resolved!.prefixArgs,
+          args: [...resolved!.prefixArgs, ...args]
         }
     return {
       launch: {
@@ -154,7 +151,7 @@ export function zcodeStructuredLaunchPart(
         NATIVE_CHAT_SCRATCH_DIR_ENV,
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ],
-      cliRuntimeCommand: resolved.command
+      cliRuntimeCommand: resolved?.command
     }
   }
 }

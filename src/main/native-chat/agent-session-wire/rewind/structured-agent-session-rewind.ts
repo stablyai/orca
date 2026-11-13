@@ -120,7 +120,9 @@ export async function rewindStructuredAgentSession(
             ? structuredRewindCut(ctx.journal, {
                 itemId: params.itemId,
                 provider: record.provider,
-                nativeId: head.nativeId
+                nativeId: head.nativeId,
+                // Retained rows keep the session a rewind fork was cut from.
+                ancestorNativeIds: record.providerHandleChain.map((link) => link.handle.nativeId)
               })
             : null
           if (!cut) {

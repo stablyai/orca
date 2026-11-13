@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { AgentConversationCopyError } from '../../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
 import {
   copyZcodeConversation,
@@ -15,14 +16,17 @@ import {
 /** The plan credentials runtime-header asks are answered with; null declines them. */
 type ZcodeForkDeps = {
   resolveChatCredentials: () => ZcodeChatCredentials | null
+  resolveCommandSettings?: () => StructuredAgentCommandSettings
+  resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
 }
 
-export function zcodeCopyConversation(
+export async function zcodeCopyConversation(
   deps: ZcodeForkDeps,
   input: Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]
 ): ReturnType<NonNullable<StructuredAgentSessionAdapter['copyConversation']>> {
   return copyZcodeConversation({
-    environment: process.env,
+    environment: (await deps.resolveEnvironment?.()) ?? process.env,
+    commandSettings: deps.resolveCommandSettings?.(),
     credentials: deps.resolveChatCredentials(),
     providerSessionId: input.providerSessionId,
     throughMessageId:
@@ -39,12 +43,13 @@ export function zcodeCopyConversation(
   })
 }
 
-export function zcodeForkForRewind(
+export async function zcodeForkForRewind(
   deps: ZcodeForkDeps,
   input: Parameters<NonNullable<StructuredAgentSessionAdapter['forkForRewind']>>[0]
 ): ReturnType<NonNullable<StructuredAgentSessionAdapter['forkForRewind']>> {
   return forkZcodeForRewind({
-    environment: process.env,
+    environment: (await deps.resolveEnvironment?.()) ?? process.env,
+    commandSettings: deps.resolveCommandSettings?.(),
     credentials: deps.resolveChatCredentials(),
     providerSessionId: input.beforeMessage.sessionId,
     cutMessageId: input.beforeMessage.uuid,

@@ -1,6 +1,7 @@
 import { close as closeFd, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
-import { dirname, join, resolve as resolvePath } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { dirname, join, delimiter, resolve as resolvePath } from 'node:path'
 import type { StructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 
 // zcode's own app-server is the only official chat transport, but which binary to run matters:
@@ -194,44 +195,55 @@ export function zcodeBundledLaunch(pathEnv: string | null | undefined): {
   }
   const version = readBundledZcodeAppVersion(runtimePath)
   // The bundle's runtime needs a real Node (>= 22, with node:sqlite); Electron-as-Node cannot
-  // resolve its @zcode/tui import and exits at boot. System installs come first.
+  // resolve its @zcode/tui import and exits at boot. Report no bundled launch rather than start
+  // one that cannot boot; the caller falls back to the resolved CLI.
   const node = resolveSystemNode(pathEnv)
+  if (!node) {
+    return null
+  }
   return {
-    command: node ?? process.execPath,
+    command: node,
     prefixArgs: [],
     args: [runtimePath],
-    env: node
-      ? version
-        ? { ZCODE_APP_VERSION: version }
-        : {}
-      : {
-          ELECTRON_RUN_AS_NODE: '1',
-          ...(version ? { ZCODE_APP_VERSION: version } : {})
-        }
+    env: version ? { ZCODE_APP_VERSION: version } : {}
   }
 }
 
 /** The newest-shaped Node a chat backend can run under, exactly as the wrapper resolves its own. */
 function resolveSystemNode(pathEnv: string | null | undefined): string | null {
   const override = process.env.ZCODE_NODE?.trim()
-  if (override && existsSync(override)) {
+  if (override && isRunnableNode22(override)) {
     return override
   }
   for (const candidate of ['/opt/homebrew/bin/node', '/usr/local/bin/node']) {
-    if (existsSync(candidate)) {
+    if (isRunnableNode22(candidate)) {
       return candidate
     }
   }
-  for (const dir of (pathEnv ?? '').split(':')) {
+  for (const dir of (pathEnv ?? '').split(delimiter)) {
     if (!dir) {
       continue
     }
     const candidate = join(dir, 'node')
-    if (existsSync(candidate)) {
+    if (isRunnableNode22(candidate)) {
       return candidate
     }
   }
   return null
+}
+
+/** The bundle needs >= 22 for node:sqlite; probe `-v` so stale installs never win the pick. */
+function isRunnableNode22(candidate: string): boolean {
+  if (!existsSync(candidate)) {
+    return false
+  }
+  try {
+    const reported = execFileSync(candidate, ['-v'], { timeout: 5000 }).toString().trim()
+    const major = Number.parseInt(reported.replace(/^v/u, ''), 10)
+    return Number.isSafeInteger(major) && major >= 22
+  } catch {
+    return false
+  }
 }
 
 /** The resolved-CLI launch, used when no desktop bundle is installed. */

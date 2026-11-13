@@ -209,6 +209,8 @@ function createAcpAdapter(
 function createZcodeAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new ZcodeStructuredSessionAdapter({
+    resolveCommandSettings: deps.resolveAgentCommandSettings,
+    resolveEnvironment: context.environment.resolveBaseEnvironment,
     resolveLaunch: composeStructuredLaunch(
       ZCODE_STRUCTURED_AGENT,
       structuredAgentLaunchSources(context),

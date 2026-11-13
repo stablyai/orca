@@ -95,11 +95,11 @@ export async function openZcodeSession(
     providerSessionId,
     logger: session.deps.logger ?? createStructuredAgentSessionLogger(),
     now: session.deps.now,
-    onInputAccepted: (clientMessageId, providerTurnId) =>
+    onInputAccepted: (clientMessageId, providerTurnId, providerMessageId) =>
       session.turns.accept(
         clientMessageId,
         providerTurnId,
-        session.lane?.translator.inputMessageIdOf(providerTurnId) ?? null
+        providerMessageId ?? session.lane?.translator.inputMessageIdOf(providerTurnId) ?? null
       ),
     onFailed: (reason) =>
       session.deps.forceClose(
@@ -108,6 +108,8 @@ export async function openZcodeSession(
       )
   })
   adoptSnapshot(session, subscription?.snapshot)
+  // Queued frames land before any live event can arrive during the model-write await.
+  session.drainEarly()
   // The person's saved model applies to new and resumed sessions alike: zcode's resumed
   // conversations keep their history but re-open on the backend's own last-used model.
   if (session.deps.launch.model) {
@@ -127,7 +129,6 @@ export async function openZcodeSession(
         .catch(() => undefined)
     }
   }
-  session.drainEarly()
   session.publishOptionsFromOpen()
   return {
     link: {
@@ -160,9 +161,15 @@ async function resumeSession(
       { timeoutMs: session.deps.requestTimeoutMs, onReply: () => signal.throwIfAborted() }
     )) as { session?: unknown } | null
     return readString(readRecord(readRecord(resumed)?.session)?.sessionId)
-  } catch {
-    // A session this backend does not know restarts the conversation fresh.
-    return null
+  } catch (error) {
+    signal.throwIfAborted()
+    const message = error instanceof Error ? error.message : String(error)
+    // Only an unknown/ended session restarts the conversation fresh; a timeout or lost
+    // connection must not silently replace the provider history.
+    if (/Session is not active|not found|Unknown session/u.test(message)) {
+      return null
+    }
+    throw error
   }
 }
 

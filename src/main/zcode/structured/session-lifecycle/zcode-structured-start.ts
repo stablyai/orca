@@ -65,6 +65,8 @@ export async function startZcodeStructuredSession(input: {
   const table = readZcodeBuiltinTable(
     child.launch.providerEnv.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE ?? null
   )
+  // The child already exists before readiness settles: cancellation or a readiness failure
+  // must close it here, while this function is still its only owner.
   const probe = await awaitStorageReady(
     child.connection,
     child.whenServerAsks,
@@ -76,7 +78,10 @@ export async function startZcodeStructuredSession(input: {
         STORAGE_READY_ATTEMPT_TIMEOUT_MS
       ),
     acquire.signal
-  )
+  ).catch(async (error: unknown) => {
+    await child.connection.close().catch(() => undefined)
+    throw error
+  })
   child.session.declareModels(probe.declaredModels)
   if (probe.refusedStandaloneAccount && input.launch.fallbackRuntime) {
     logger.warn('zcode CLI refused the account push; retrying on the desktop runtime', {
@@ -108,7 +113,10 @@ export async function startZcodeStructuredSession(input: {
           STORAGE_READY_ATTEMPT_TIMEOUT_MS
         ),
       acquire.signal
-    )
+    ).catch(async (error: unknown) => {
+      await child.connection.close().catch(() => undefined)
+      throw error
+    })
     child.session.accountPushed = retry.pushed
     child.session.declareModels(retry.declaredModels)
   } else {

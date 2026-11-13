@@ -101,7 +101,9 @@ export function createZcodeModelCatalogProbe(
                 table,
                 deps.resolveChatCredentials()
               )
-              declaredModels = push.declaredModels
+              // A refused push leaves only third-party models; advertising account ids the
+              // backend cannot select would fake a complete catalog.
+              declaredModels = push.pushed ? push.declaredModels : []
               assertStructuredAgentResolutionCurrent(runOperation)
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
               const created = (await connection.request(

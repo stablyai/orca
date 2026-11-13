@@ -1,5 +1,3 @@
-import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { supportsSupervisedProviderChildLocation } from '../../../provider-process/supervised-provider-child-location'
 import { ProviderAcquisitionStarts } from '../../../provider-process/provider-acquisition-starts'
@@ -26,8 +24,8 @@ import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-sess
 import { stopAgentSessionProviderRoot } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import type { ZcodeStructuredSession } from './zcode-structured-session'
 import { startZcodeStructuredSession, zcodeStartFailure } from './zcode-structured-start'
-import { readMessageText } from '../turns/zcode-message-text'
 import { zcodeCopyConversation, zcodeForkForRewind } from './zcode-structured-session-fork'
+import { dispatchZcodeTurn } from './zcode-structured-session-dispatch'
 import { mintZcodeAcquisitionGeneration } from './zcode-structured-session-state'
 import { ZcodeAppServerRequestError } from '../../app-server/zcode-app-server-errors'
 
@@ -117,23 +115,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
     const session = this.live(input.sessionId)
-    session.dispatchPending = true
-    try {
-      const text = readMessageText(input.body)
-      if (!text) {
-        return {
-          state: 'rejected' as const,
-          ...agentSessionFailureWords(agentSessionFailureFact('emptyMessage'), {
-            surface: 'rejection',
-            agentName: 'ZCode'
-          })
-        }
-      }
-      input.beforeDispatch?.()
-      return session.turns.dispatch({ clientMessageId: input.clientMessageId, text })
-    } finally {
-      session.dispatchPending = false
-    }
+    return dispatchZcodeTurn(session, input, this.deps.requestTimeoutMs ?? null)
   }
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = async (input) => {
@@ -214,6 +196,8 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
     await session.turns.stop()
+    // The backend declines cancelled prompts itself; open cards stop being actionable here.
+    session.prompts.withdrawAll()
     return { cancelled: true, turnId: liveTurnId }
   }
 
@@ -283,10 +267,19 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (!session?.ended) {
       return
     }
-    const retirement = Promise.resolve(session.close().then(() => undefined))
+    // Ownership survives until close proves the child exited; release then reports honestly.
+    const retirement = Promise.resolve(
+      session
+        .close()
+        .catch(() => false)
+        .then((stopped) => {
+          if (stopped) {
+            this.sessions.delete(sessionId)
+          }
+        })
+    )
     this.retiring.add(retirement)
     void retirement.then(() => this.retiring.delete(retirement))
-    this.sessions.delete(sessionId)
   }
 
   async closeAll(): Promise<void> {
@@ -318,8 +311,10 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     session.failureClose = reason
     session.markJournalClosed(reason)
     session.markEnded(Date.now())
-    await session.close().catch(() => false)
-    this.sessions.delete(sessionId)
+    const stopped = await session.close().catch(() => false)
+    if (stopped) {
+      this.sessions.delete(sessionId)
+    }
   }
 
   private live(sessionId: string): ZcodeStructuredSession {

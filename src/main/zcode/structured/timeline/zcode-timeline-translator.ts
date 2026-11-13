@@ -167,6 +167,7 @@ export class ZcodeTimelineTranslator {
           type: 'input.accepted',
           clientMessageId: settled,
           requestedAt: at,
+          providerMessageId: readString(payload.messageId) ?? undefined,
           join: this.join(turn)
         })
       }
@@ -230,8 +231,7 @@ export class ZcodeTimelineTranslator {
       }
     ]
     this.openTurnKey = null
-    // The failed turn carried its send to the provider; nothing is held anymore.
-    this.inFlight.length = 0
+    // Queued sends the failed turn carried stay in flight: a later echo still settles them.
     return events
   }
 
@@ -259,6 +259,8 @@ export class ZcodeTimelineTranslator {
           type: 'input.accepted',
           clientMessageId: settled,
           requestedAt: at,
+          // A steering send's own anchor differs from the turn's original input.
+          providerMessageId: readString(item?.messageId) ?? undefined,
           join: this.join(this.openTurnKey)
         })
       }

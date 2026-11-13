@@ -10,6 +10,7 @@ import {
   pushZcodeAccountConfig,
   readZcodeBuiltinTable
 } from '../credentials/zcode-account-config-push'
+import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
 import { zcodeHeadlessLaunch } from '../launch/zcode-headless-launch'
 
@@ -42,12 +43,15 @@ type HeadlessRun = {
  */
 async function withZcodeHeadlessConnection<T>(input: {
   environment: NodeJS.ProcessEnv
+  commandSettings?: StructuredAgentCommandSettings
   credentials: ZcodeChatCredentials | null
   providerSessionId: string
   signal?: AbortSignal
   run: (headless: HeadlessRun) => Promise<T>
 }): Promise<T> {
-  const launch = zcodeHeadlessLaunch(input.environment)
+  const launch = zcodeHeadlessLaunch(input.environment, {
+    commandSettings: input.commandSettings
+  })
   const connection = await spawnZcodeAppServerConnection(
     {
       command: launch.command,
@@ -168,6 +172,7 @@ async function forkZcodeSession(
  */
 export async function copyZcodeConversation(input: {
   environment: NodeJS.ProcessEnv
+  commandSettings?: StructuredAgentCommandSettings
   credentials: ZcodeChatCredentials | null
   providerSessionId: string
   /** The selected turn's opener input message id (checkpoint.rootMessage.uuid). */
@@ -177,6 +182,7 @@ export async function copyZcodeConversation(input: {
   try {
     return await withZcodeHeadlessConnection({
       environment: input.environment,
+      ...(input.commandSettings ? { commandSettings: input.commandSettings } : {}),
       credentials: input.credentials,
       providerSessionId: input.providerSessionId,
       ...(input.signal ? { signal: input.signal } : {}),
@@ -216,6 +222,7 @@ export async function copyZcodeConversation(input: {
  */
 export async function forkZcodeForRewind(input: {
   environment: NodeJS.ProcessEnv
+  commandSettings?: StructuredAgentCommandSettings
   credentials: ZcodeChatCredentials | null
   providerSessionId: string
   /** The removed prompt's input message id (beforeMessage.uuid from the host's rewind cut). */
@@ -229,6 +236,7 @@ export async function forkZcodeForRewind(input: {
   try {
     return await withZcodeHeadlessConnection({
       environment: input.environment,
+      ...(input.commandSettings ? { commandSettings: input.commandSettings } : {}),
       credentials: input.credentials,
       providerSessionId: input.providerSessionId,
       ...(input.signal ? { signal: input.signal } : {}),

@@ -1,4 +1,5 @@
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
+import { contextUsageField, readAvailabilityRow } from './zcode-options-wire-shapes'
 import type { ZcodeAppServerConnection } from '../../../zcode/app-server/zcode-app-server-connection-types'
 import type { ZcodeStructuredSessionLiveOptions } from './zcode-live-options'
 import {
@@ -25,6 +26,8 @@ export class ZcodeStructuredOptions {
   private thoughtLevels: { value: string; label: string }[] = []
   private currentModelId: string | null = null
   private currentMode: string | null = null
+  /** The level a completed write or the projection last accepted for the current model. */
+  private selectedEffort: { modelId: string; level: string } | null = null
 
   /**
    * The models the account push declared. The backend's `model.available` lists only the live
@@ -44,46 +47,19 @@ export class ZcodeStructuredOptions {
   /** The model registry snapshot a `state.updated` push carried. */
   adoptAvailability(available: unknown, current: unknown): void {
     const entries = Array.isArray(available) ? available : []
-    this.models = entries.flatMap((entry) => {
-      const record = readRecord(entry)
-      const ref = readRecord(record?.ref)
-      const providerId = readString(ref?.providerId)
-      const modelId = readString(ref?.modelId)
-      if (!providerId || !modelId) {
-        return []
-      }
-      const reasoning = readRecord(record?.reasoning)
-      const levels = Array.isArray(reasoning?.levels)
-        ? reasoning.levels.flatMap((level) => {
-            const item = readRecord(level)
-            const value = readString(item?.value)
-            return value ? [{ value, label: readString(item?.label) ?? value }] : []
-          })
-        : []
-      return [
-        {
-          id: formatZcodeModelOption({ providerId, modelId }),
-          label: readString(record?.label) ?? modelId,
-          ...(readString(record?.providerLabel)
-            ? { providerLabel: readString(record?.providerLabel)! }
-            : {}),
-          ...(typeof record?.contextWindow === 'number'
-            ? { contextWindow: record.contextWindow }
-            : {}),
-          reasoningLevels: levels,
-          ...(readString(reasoning?.defaultLevel)
-            ? { defaultLevel: readString(reasoning?.defaultLevel)! }
-            : {})
-        }
-      ]
-    })
-    const currentRef = readRecord(readRecord(current)?.ref)
-    const currentProvider = readString(currentRef?.providerId)
-    const currentModel = readString(currentRef?.modelId)
-    this.currentModelId =
-      currentProvider && currentModel
-        ? formatZcodeModelOption({ providerId: currentProvider, modelId: currentModel })
-        : null
+    this.models = entries.flatMap(readAvailabilityRow)
+    // `state.updated` names the current model with a `ref` wrapper or directly (probe shape).
+    const currentRecord = readRecord(current)
+    const currentRef = readRecord(currentRecord?.ref)
+    const currentProvider =
+      readString(currentRef?.providerId) ?? readString(currentRecord?.providerId)
+    const currentModel = readString(currentRef?.modelId) ?? readString(currentRecord?.modelId)
+    if (currentProvider && currentModel) {
+      this.currentModelId = formatZcodeModelOption({
+        providerId: currentProvider,
+        modelId: currentModel
+      })
+    }
     this.rebuildModels()
   }
 
@@ -99,7 +75,13 @@ export class ZcodeStructuredOptions {
       })
     }
     for (const model of this.models) {
-      merged.set(model.id, model)
+      // A refreshed row must not lose its levels to an older placeholder for the same id.
+      const existing = merged.get(model.id)
+      const richer =
+        (model.reasoningLevels.length ?? 0) >= (existing?.reasoningLevels.length ?? 0)
+          ? model
+          : (existing ?? model)
+      merged.set(model.id, richer)
     }
     this.models = [...merged.values()]
   }
@@ -121,6 +103,9 @@ export class ZcodeStructuredOptions {
     } else if (modelId && providerId) {
       this.currentModelId = formatZcodeModelOption({ providerId, modelId })
     }
+    const level = readString(readRecord(model?.options)?.reasoningLevel)
+    this.selectedEffort =
+      level && this.currentModelId ? { modelId: this.currentModelId, level } : this.selectedEffort
     const mode = readRecord(record?.mode)
     this.adoptMode(readString(mode?.current))
   }
@@ -146,6 +131,14 @@ export class ZcodeStructuredOptions {
     return found?.defaultLevel
   }
 
+  /** The level the session last accepted for this model, else the model's default. */
+  private effortFor(modelId: string | null): string | undefined {
+    if (modelId && this.selectedEffort?.modelId === modelId) {
+      return this.selectedEffort.level
+    }
+    return this.effortOf(modelId)
+  }
+
   /** Reads the session's options as the wire result. */
   live(contextUsage: { used?: number; window?: number } | null): ZcodeStructuredSessionLiveOptions {
     const models: AgentSessionModelOption[] = this.models.map((model) => ({
@@ -164,8 +157,8 @@ export class ZcodeStructuredOptions {
       ...(models.length === 0 ? { modelsKnown: false as const } : {}),
       current: {
         ...(this.currentModelId ? { model: this.currentModelId } : {}),
-        ...(this.effortOf(this.currentModelId)
-          ? { effort: this.effortOf(this.currentModelId) }
+        ...(this.effortFor(this.currentModelId)
+          ? { effort: this.effortFor(this.currentModelId) }
           : {}),
         // Build/Plan is zcode's own mode switch; the permission modes ride the same setting.
         interactionMode: this.currentMode === 'plan' ? 'plan' : 'default',
@@ -221,6 +214,7 @@ export class ZcodeStructuredOptions {
           `zcode model options are provider/model pairs, not ${JSON.stringify(value)}`
         )
       }
+      const level = this.levelForSwitch(value)
       await connection.request(
         'session/setModel',
         {
@@ -230,13 +224,14 @@ export class ZcodeStructuredOptions {
             modelId: model.modelId,
             // Models whose menu demands a level (GLM-5.3-Flash) refuse a bare switch; the
             // follow-up effort write carries the person's real pick.
-            options: { reasoningLevel: this.levelForSwitch(value) }
+            options: { reasoningLevel: level }
           },
           persistAsWorkspaceLastUsed: false
         },
         { timeoutMs }
       )
       this.currentModelId = value
+      this.selectedEffort = { modelId: value, level }
       return { model: value }
     }
     if (key === 'effort') {
@@ -257,6 +252,7 @@ export class ZcodeStructuredOptions {
         },
         { timeoutMs }
       )
+      this.selectedEffort = { modelId: this.currentModelId ?? '', level: value }
       return { effort: value }
     }
     if (key === 'interactionMode') {
@@ -290,33 +286,6 @@ export class ZcodeStructuredOptions {
       return { permissionMode: value }
     }
     throw new Error(`zcode offers no session option named ${key}`)
-  }
-}
-
-function contextUsageField(contextUsage: { used?: number; window?: number }) {
-  const at = Date.now()
-  return {
-    current: {
-      ...(typeof contextUsage.window === 'number'
-        ? { window: { tokens: contextUsage.window, capturedAt: at } }
-        : {}),
-      ...(typeof contextUsage.used === 'number'
-        ? {
-            used: {
-              kind: 'report' as const,
-              model: '',
-              usedTokens: contextUsage.used,
-              windowTokens: contextUsage.window ?? 0,
-              percentage:
-                contextUsage.window && contextUsage.window > 0
-                  ? (contextUsage.used / contextUsage.window) * 100
-                  : 0,
-              categories: [],
-              capturedAt: at
-            }
-          }
-        : {})
-    }
   }
 }
 

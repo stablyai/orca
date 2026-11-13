@@ -33,7 +33,13 @@ export type StructuredRewindCut = {
 
 export function structuredRewindCut(
   journal: AgentSessionJournal,
-  target: { itemId: string; provider: string; nativeId: string }
+  target: {
+    itemId: string
+    provider: string
+    nativeId: string
+    /** Earlier chain roots: a rewind fork keeps retained rows under the session it forked from. */
+    ancestorNativeIds?: readonly string[]
+  }
 ): StructuredRewindCut | null {
   const snapshot = journal.currentRead()
   const floor = journal.context.floor()
@@ -49,7 +55,8 @@ export function structuredRewindCut(
       key !== null &&
       (key.provider === 'claude' || key.provider === 'zcode') &&
       key.provider === target.provider &&
-      key.sessionId === target.nativeId
+      (key.sessionId === target.nativeId ||
+        (key.provider === 'zcode' && target.ancestorNativeIds?.includes(key.sessionId) === true))
     )
   // Fork-cut providers rewind by resuming a fork the provider built; the cut token rides the uuid
   // slot (claude's parent uuid, zcode's turn key) and the session must match the head.
@@ -256,7 +263,8 @@ export function rewindJournalCut(
       : structuredRewindCut(journal, {
           itemId: rewind.itemId,
           provider: record.provider,
-          nativeId: head.nativeId
+          nativeId: head.nativeId,
+          ancestorNativeIds: record.providerHandleChain.map((link) => link.handle.nativeId)
         })
   return { alreadyReplaced, cut }
 }

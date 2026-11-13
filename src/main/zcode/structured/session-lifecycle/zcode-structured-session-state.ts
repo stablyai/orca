@@ -7,6 +7,7 @@ import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent
 import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { StructuredLaunchRequest } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
+import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
 
 // How a durable session record becomes a zcode app-server process launch.
@@ -58,6 +59,10 @@ export type ZcodeStructuredSessionEvent =
 
 export type ZcodeStructuredSessionAdapterDeps = {
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<ZcodeStructuredLaunch>
+  /** Command settings the chat launch honors; disposable forks launch with the same program. */
+  resolveCommandSettings?: () => StructuredAgentCommandSettings
+  /** The resolved agent environment disposable forks run under (base + per-agent overlay). */
+  resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   onEvent?: (event: ZcodeStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
   /** The plan credentials runtime-header asks are answered with; null declines them. */

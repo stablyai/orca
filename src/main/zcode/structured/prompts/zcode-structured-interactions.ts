@@ -140,21 +140,14 @@ function askUserPresentation(
         ]
       : []
   })
-  const single = journalQuestions.length === 1 ? journalQuestions[0] : null
-  const body: AgentJournalQuestionItem = single
-    ? {
-        kind: 'question',
-        question: single.question,
-        options: single.options,
-        resolution: pendingResolution()
-      }
-    : {
-        kind: 'question',
-        question: journalQuestions.map((question) => question.question).join(' '),
-        options: [],
-        questions: journalQuestions,
-        resolution: pendingResolution()
-      }
+  // Always grouped: the presented question ids (q_0…) must match the reply mapper's lookup.
+  const body: AgentJournalQuestionItem = {
+    kind: 'question',
+    question: journalQuestions.map((question) => question.question).join(' '),
+    options: [],
+    questions: journalQuestions,
+    resolution: pendingResolution()
+  }
   return {
     body,
     requestId,

@@ -27,13 +27,16 @@ export function zcodeHeadlessLaunch(
   }
 ): ZcodeHeadlessLaunch {
   const pathEnv = environment.PATH ?? environment.Path ?? null
-  const resolved = resolveStructuredAgentCommand('zcode', overrides?.commandSettings ?? {}, {
-    pathEnv,
-    ...(environment.HOME ? { homePath: environment.HOME } : {})
-  })
-  const configuredArgs = zcodeStructuredLaunchArgs(overrides?.launchArgs ?? [])
+  // Bundle first: a WSL host without the CLI must still reach the desktop bundle.
   const bundled = zcodeBundledLaunch(pathEnv)
-  const runtime = bundled ? (bundled.args[0] ?? resolved.command) : resolved.command
+  const resolved = bundled
+    ? null
+    : resolveStructuredAgentCommand('zcode', overrides?.commandSettings ?? {}, {
+        pathEnv,
+        ...(environment.HOME ? { homePath: environment.HOME } : {})
+      })
+  const configuredArgs = zcodeStructuredLaunchArgs(overrides?.launchArgs ?? [])
+  const runtime = bundled ? (bundled.args[0] ?? resolved?.command) : (resolved?.command ?? 'zcode')
   const providerEnv = zcodeProviderEnv(runtime)
   if (providerEnv.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE === undefined) {
     const version = readBundledZcodeAppVersion(runtime)
@@ -49,9 +52,9 @@ export function zcodeHeadlessLaunch(
     }
   }
   return {
-    command: bundled?.command ?? resolved.command,
+    command: bundled?.command ?? resolved!.command,
     args: [
-      ...(bundled ? [...bundled.prefixArgs, ...bundled.args] : [...resolved.prefixArgs]),
+      ...(bundled ? [...bundled.prefixArgs, ...bundled.args] : [...resolved!.prefixArgs]),
       ...configuredArgs,
       ...ZCODE_APP_SERVER_ARGS
     ],

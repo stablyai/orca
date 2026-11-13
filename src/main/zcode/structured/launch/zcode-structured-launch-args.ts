@@ -35,6 +35,10 @@ export function zcodeStructuredLaunchArgs(tokens: readonly string[]): string[] {
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]!
     if (token === '--') {
+      // A trailing positional after -- is the saved prompt this transport cannot deliver.
+      if (tokens.slice(index + 1).some((t) => t.trim().length > 0)) {
+        throw new Error('zcode launch arguments cannot carry a prompt after --')
+      }
       break
     }
     const option = optionName(token)

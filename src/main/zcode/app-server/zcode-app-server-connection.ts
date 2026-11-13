@@ -74,7 +74,13 @@ export function spawnZcodeAppServerConnection(
     }
     if (managed.rootVerdict === 'exited' && closesInFlight === 0 && !exitReported) {
       exitReported = true
-      handlers.onExit?.(terminalError, { expected: closing })
+      const exitError = terminalError ?? buildExitError()
+      // Replies still in the stdout buffer dispatch after their sends settle otherwise.
+      afterProviderOutputDrains(
+        child.stdout,
+        () => handlers.onExit?.(exitError, { expected: closing }),
+        child
+      )
     }
   }
 
@@ -189,7 +195,7 @@ export function spawnZcodeAppServerConnection(
           handlers.onExit?.(terminalError ?? buildExitError(), { expected: closing })
         }
         dispatcher.failPending(new Error('zcode app-server connection closed'))
-        return result.root === 'exited' || result.killDelivered === true
+        return result.root === 'exited'
       })
       .finally(() => {
         closesInFlight -= 1

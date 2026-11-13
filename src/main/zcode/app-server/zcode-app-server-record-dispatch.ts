@@ -74,7 +74,13 @@ export function createZcodeAppServerRecordDispatcher(input: {
     pending.delete(message.id)
     clearTimeout(waiter.timer)
     const error = message.error
-    waiter.onReply?.(isProviderRecord(error) ? undefined : message.result)
+    try {
+      waiter.onReply?.(isProviderRecord(error) ? undefined : message.result)
+    } catch (replyError) {
+      // An throwing ask callback (abort checks) must still settle the removed waiter.
+      waiter.reject(replyError instanceof Error ? replyError : new Error(String(replyError)))
+      return
+    }
     if (isProviderRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'
       waiter.reject(
