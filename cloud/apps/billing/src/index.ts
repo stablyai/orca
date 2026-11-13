@@ -53,6 +53,7 @@ import { CatalogUnavailableError, loadCatalog, policyFor } from './catalog'
 import { backfillGrants } from './entitlements-backfill'
 import { entitlementsView, offersFor, plansView } from './plans-api'
 import { reconcile } from './reconcile'
+import { cancelTeamSubscriptionNow, teamSubscriptionView } from './team-delete'
 import type { Env } from './env'
 import { MACHINE_SIZES, PlanConfigError, planCatalog, publicOffers } from './plans'
 import { SetupPagesConfigError } from './cloud-setup-urls'
@@ -91,8 +92,9 @@ import { grantTrial, isTeamAccount, recordTrialGithub, trialOffer, type TrialInp
 import type { BillingCaller } from './auth'
 
 // Orca Cloud auth (MEMBERSHIP_SYNC_TOKEN), deleting a team:
-//   GET /v1/internal/accounts/:accountId/subscription -> {status, open}
-const TEAM_SUBSCRIPTION_PATH = /^\/v1\/internal\/accounts\/(org:[A-Za-z0-9_.:-]{1,150})\/subscription$/
+//   GET  /v1/internal/accounts/:accountId/subscription -> {status, open, cancelling, endsAt, periodEnd}
+//   POST /v1/internal/accounts/:accountId/subscription/cancel-now -> {canceled} (EP-10, team delete)
+const TEAM_SUBSCRIPTION_PATH = /^\/v1\/internal\/accounts\/(org:[A-Za-z0-9_.:-]{1,150})\/subscription(\/cancel-now)?$/
 const MAX_JSON_BYTES = 16 * 1024
 
 const StartCheckSchema = z
@@ -313,15 +315,20 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
   const route = `${request.method} ${url.pathname}`
   try {
     const subscriptionMatch = TEAM_SUBSCRIPTION_PATH.exec(url.pathname)
-    if (subscriptionMatch && request.method === 'GET') {
+    if (subscriptionMatch && request.method === 'GET' && !subscriptionMatch[2]) {
       // Auth, before deleting a team: a team with an open subscription can't be deleted, or Stripe
-      // would keep charging an account nobody can reach.
+      // would keep charging an account nobody can reach, unless it is already set to end (EP-10).
       if (!(await authenticateMembershipSync(env, request))) {
         return json({ error: 'unauthorized' }, 401)
       }
-      const subscription = await currentSubscription(env.BILLING_DB, subscriptionMatch[1]!)
-      const status = subscription?.status ?? null
-      return json({ status, open: status !== null && OPEN_STATUSES.has(status) })
+      return json(await teamSubscriptionView(env, subscriptionMatch[1]!))
+    }
+    if (subscriptionMatch && request.method === 'POST' && subscriptionMatch[2]) {
+      if (!(await authenticateMembershipSync(env, request))) {
+        return json({ error: 'unauthorized' }, 401)
+      }
+      const outcome = await cancelTeamSubscriptionNow(env, stripe, subscriptionMatch[1]!, now)
+      return outcome.ok ? json({ canceled: true }) : json({ error: outcome.error }, outcome.status)
     }
     if (url.pathname.startsWith('/v1/cloud-setup/') || url.pathname.startsWith('/v1/internal/cloud-setup/')) {
       const handled = await handleCloudSetup(request, env, url, now, {
