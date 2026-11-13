@@ -612,6 +612,8 @@ module.exports = {
     // Set for ONNX Runtime (#22690, #39135), now gone; transcribe-cpp needs 11.0, Electron 12.0. Kept until
     // Kelvin decides. The update-manifest gate reads this from Info.plist.
     minimumSystemVersion: '13.4',
+    // LSApplicationCategoryType; also what electron-builder maps to the Linux category when none is set.
+    category: 'public.app-category.developer-tools',
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
@@ -691,7 +693,10 @@ module.exports = {
       entry: {
         // Why: Electron reports WM_CLASS=orca for the visible Linux window;
         // GNOME docks need an exact match to group it with orca-ide.desktop.
-        StartupWMClass: 'orca'
+        StartupWMClass: 'orca',
+        // Launchers search Keywords and show GenericName next to the name; "Orca" alone also names the GNOME screen reader.
+        GenericName: 'IDE',
+        Keywords: 'IDE;agent;agents;AI;coding;terminal;git;worktree;'
       }
     },
     extraResources: [
@@ -718,7 +723,8 @@ module.exports = {
     // Keep local artifacts aligned with the release pipeline.
     target: ['AppImage', 'deb', 'rpm'],
     maintainer: 'stablyai',
-    category: 'Utility'
+    // Menus file Utility under Accessories; an IDE belongs with the other editors under Development.
+    category: 'Development;IDE'
   },
   appImage: {
     artifactName: isLinuxArm64Release ? 'orca-linux-arm64.${ext}' : 'orca-linux.${ext}'
