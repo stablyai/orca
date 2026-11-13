@@ -50,6 +50,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   // What the frame is known to hold, so its own edits are never echoed back.
   let frameText: string | null = null
   let frameReadOnly: boolean | null = null
+  let frameOriginal: string | undefined
   let frameBinary: CustomEditorBinaryDocument | null = null
   // The version of the last document sent; edits against an older one are refused.
   let version = 0
@@ -119,14 +120,20 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       pushBinaryDocument(force, options.getBinaryDocument())
       return
     }
-    const { text, readOnly } = options.getDocument()
-    if (!force && text === frameText && readOnly === frameReadOnly) {
+    const { text, readOnly, original } = options.getDocument()
+    if (!force && text === frameText && readOnly === frameReadOnly && original === frameOriginal) {
       return
     }
     frameText = text
     frameReadOnly = readOnly
+    frameOriginal = original
     version += 1
-    postDocument({ version, readOnly, content: { kind: 'text', text } })
+    postDocument({
+      version,
+      readOnly,
+      content: { kind: 'text', text },
+      ...(original === undefined ? {} : { diff: { original: { kind: 'text', text: original } } })
+    })
   }
 
   const applyEdit = ({ content, baseVersion }: CustomEditorEdit): PluginError | null => {
@@ -311,6 +318,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       outsideMerge.cancel()
       frameText = null
       frameReadOnly = null
+      frameOriginal = undefined
       frameBinary = null
       heldEdit = null
       heldId = null

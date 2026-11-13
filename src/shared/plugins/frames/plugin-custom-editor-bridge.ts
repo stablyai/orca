@@ -35,6 +35,9 @@ export type CustomEditorDocument = {
   /** Sent only to a session that merges: the file changed on disk while the tab held unsaved
    *  edits. `content` is the new disk text and `ancestor` the disk text those edits started from. */
   ancestor?: CustomEditorContent
+  /** Sent only in a diff tab, where the document is read-only: `content` is the changed side and
+   *  `original` the side the change started from. */
+  diff?: { original: CustomEditorContent }
 }
 
 const customEditorEditSchema = z.strictObject({

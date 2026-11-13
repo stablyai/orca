@@ -7,11 +7,15 @@ import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-view
 import { ExternalFileChangeBanner } from './external-changes/ExternalFileChangeBanner'
 import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
 import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
+import PluginCustomEditorFrame from './PluginCustomEditorFrame'
+import { noopEditorContentChange, noopEditorSave } from './noop-editor-handlers'
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
 
 export function EditorDiffFileSurface({
   activeFile,
+  customEditor = null,
   diffContent,
   editBuffer,
   resolvedLanguage,
@@ -29,6 +33,7 @@ export function EditorDiffFileSurface({
   reloadContent
 }: {
   activeFile: OpenFile
+  customEditor?: ActivePluginCustomEditor | null
   diffContent: GitDiffResult | undefined
   editBuffer: string | undefined
   resolvedLanguage: string
@@ -106,6 +111,26 @@ export function EditorDiffFileSurface({
         reloadContent={reloadContent}
       />
     ) : null
+
+  if (customEditor) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        {externalChangeBanner}
+        <div className="min-h-0 flex-1">
+          {/* No fileId: this read-only view saves, merges and captures nothing for the tab. */}
+          <PluginCustomEditorFrame
+            key={`${activeFile.id}\u0000${customEditor.key}`}
+            editor={customEditor}
+            content={modifiedDiffContent}
+            original={diffContent.originalContent}
+            readOnly
+            onContentChange={noopEditorContentChange}
+            onSave={noopEditorSave}
+          />
+        </div>
+      </div>
+    )
+  }
 
   if (
     isMarkdown &&

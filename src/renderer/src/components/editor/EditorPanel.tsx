@@ -236,7 +236,8 @@ function EditorPanelInner({
     markdownRichModeSizeOverridden,
     isChangesMode,
     canOpenWorkspaceFileBrowser,
-    ...customEditors
+    ...customEditors,
+    diffContent: diffContents[activeFile.id]
   })
 
   const { handleOpenDiffTargetFile, handleOpenMarkdownPreview } = editorPanelFileActions(

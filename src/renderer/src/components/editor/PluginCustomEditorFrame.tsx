@@ -39,6 +39,8 @@ type PluginCustomEditorFrameProps = {
   /** The tab's file id; every save of it first flushes this frame. */
   fileId?: string
   content: string
+  /** Diff tabs only: the side the change started from. */
+  original?: string
   readOnly: boolean
   onContentChange: (content: string) => void
   onSave: (content: string) => Promise<boolean>
@@ -62,6 +64,7 @@ export default function PluginCustomEditorFrame({
   editor,
   fileId,
   content,
+  original,
   readOnly,
   onContentChange,
   onSave,
@@ -80,6 +83,7 @@ export default function PluginCustomEditorFrame({
   // Why refs: the host is built once per frame; props change on every keystroke.
   const latestRef = useRef({
     content,
+    original,
     readOnly,
     onContentChange,
     onSave,
@@ -90,6 +94,7 @@ export default function PluginCustomEditorFrame({
   useLayoutEffect(() => {
     latestRef.current = {
       content,
+      original,
       readOnly,
       onContentChange,
       onSave,
@@ -101,7 +106,8 @@ export default function PluginCustomEditorFrame({
   const isBinary = binaryDocument !== undefined
   // Why code units for text: a byte count would re-encode the whole document on every edit.
   const isLarge =
-    (binaryDocument?.bytes.byteLength ?? content.length) > CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES
+    (binaryDocument?.bytes.byteLength ?? content.length + (original?.length ?? 0)) >
+    CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES
 
   const {
     entry: liveEntry,
@@ -117,7 +123,8 @@ export default function PluginCustomEditorFrame({
       getFrameWindow: () => pluginFrameWindowOf(frameRef.current),
       getDocument: () => ({
         text: latestRef.current.content,
-        readOnly: latestRef.current.readOnly
+        readOnly: latestRef.current.readOnly,
+        original: latestRef.current.original
       }),
       ...(isBinary ? { getBinaryDocument: () => latestRef.current.binaryDocument ?? null } : {}),
       onEdit: (text) => {
@@ -211,7 +218,7 @@ export default function PluginCustomEditorFrame({
 
   useEffect(() => {
     host.syncDocument()
-  }, [content, readOnly, binaryDocument, host])
+  }, [content, original, readOnly, binaryDocument, host])
 
   useEffect(() => {
     if (fileId === undefined) {

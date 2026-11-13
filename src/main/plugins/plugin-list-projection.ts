@@ -200,6 +200,7 @@ export async function buildPluginList(
           priority: editor.priority ?? 'default',
           contentKind: customEditorContentKind(editor),
           frame: customEditorFrame(editor),
+          diff: editor.diff === true,
           ...contributionIcon(`editor-${index}`, editor.icon)
         })),
         newFiles: plugin.manifest.contributes.newFiles.map((newFile, index) => ({

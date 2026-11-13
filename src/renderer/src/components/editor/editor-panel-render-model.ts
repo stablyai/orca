@@ -12,7 +12,11 @@ import {
 } from './view-mode/markdown-preview-controls'
 import { getEditorHeaderOpenFileState } from './editor-header'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
-import type { FileContent } from './editor-panel-content-types'
+import type { DiffContent, FileContent } from './editor-panel-content-types'
+import {
+  customEditorsForDiffTab,
+  customEditorsForEditTab
+} from './view-mode/custom-editor-eligibility'
 import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import {
   getMarkdownRenderMode,
@@ -46,6 +50,8 @@ type EditorPanelRenderModelParams = {
   /** Enabled plugins' editors for this file, in priority order. */
   customEditors?: readonly ActivePluginCustomEditor[]
   customEditorChoice?: CustomEditorViewChoice
+  /** The loaded diff of a diff tab. */
+  diffContent?: DiffContent
 }
 
 export function getEditorPanelRenderModel({
@@ -60,7 +66,8 @@ export function getEditorPanelRenderModel({
   isChangesMode,
   canOpenWorkspaceFileBrowser,
   customEditors = [],
-  customEditorChoice
+  customEditorChoice,
+  diffContent
 }: EditorPanelRenderModelParams) {
   const isSingleDiff =
     activeFile.mode === 'diff' &&
@@ -139,21 +146,12 @@ export function getEditorPanelRenderModel({
       ? editorToggleModes.filter((mode) => mode !== 'changes')
       : editorToggleModes
   const inlineFileContent = activeFile.mode === 'edit' ? fileContents[activeFile.id] : undefined
-  const customEditorContentReady =
-    activeFile.mode === 'edit' &&
-    inlineFileContent !== undefined &&
-    !inlineFileContent.loadError &&
-    inlineFileContent.csvPreview === undefined &&
-    activeFile.conflict === undefined
-  // Read-only tabs keep raw source, as for every other rich view.
-  const textEditorEligible =
-    customEditorContentReady && !rawReadOnly && inlineFileContent?.isBinary !== true
-  // Bytes editors honor read-only themselves, so they open read-only tabs too; they need a pageable route.
-  const bytesEditorEligible =
-    customEditorContentReady && inlineFileContent?.byteSource !== undefined
-  const eligibleCustomEditors = customEditors.filter((editor) =>
-    editor.contentKind === 'bytes' ? bytesEditorEligible : textEditorEligible
-  )
+  const eligibleCustomEditors =
+    activeFile.mode === 'edit'
+      ? customEditorsForEditTab(customEditors, activeFile, inlineFileContent, rawReadOnly)
+      : isSingleDiff
+        ? customEditorsForDiffTab(customEditors, activeFile, diffContent)
+        : []
   const customEditorToggle: CustomEditorToggle | null = resolveCustomEditorToggle({
     editors: eligibleCustomEditors,
     choice: customEditorChoice,
@@ -229,7 +227,8 @@ export function getEditorPanelRenderModel({
         activeFile.conflict?.conflictStatus !== 'unresolved'))
   return {
     isSingleDiff,
-    isDiffSurface: isSingleDiff || isChangesMode,
+    // A plugin editor in a diff tab has none of the diff's controls.
+    isDiffSurface: (isSingleDiff && activeCustomEditor === null) || isChangesMode,
     isCombinedDiff,
     worktreeEntries,
     resolvedLanguage,
