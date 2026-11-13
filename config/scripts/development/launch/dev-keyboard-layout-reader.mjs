@@ -32,7 +32,7 @@ export function buildDevKeyboardLayoutReader(resourcesDir) {
     })
   } catch (error) {
     console.warn(
-      `[orca-dev] keyboard layout reader build failed (shifted Option composition stays conservative; to retry, quit this dev instance and delete its out/electron-dev bundle): ${error?.message ?? error}`
+      `[orca-dev] keyboard layout reader build failed (shifted Option composition stays conservative; to retry, quit this dev instance and delete ${path.resolve(resourcesDir, '../../..')}): ${error?.message ?? error}`
     )
   }
 }
