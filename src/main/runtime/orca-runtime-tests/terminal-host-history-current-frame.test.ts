@@ -549,8 +549,13 @@ describe('terminal frame across a grid change or lifecycle reset', () => {
       // D's complete normal-screen cut: its history marker sits more than a screen above the end.
       const history = Array.from({ length: 30 }, (_, index) => `HISTORY_${index}`)
       const deepAnswer = t.frame(['DEEP_HISTORY_ROW', ...history].join('\r\n'), 80, 25, false)
-      // A adopts D's pending capture instead of asking for its own.
+      // Let the public read pass its structured-worker await before changing the grid.
       const late = t.screen()
+      const lateSettled = settledFlag(late)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(lateSettled()).toBe(false)
+      expect(t.frames).toHaveLength(0)
+      expect(t.deep).toHaveLength(1)
       t.resize(40, 10)
       t.resize(80, 25)
       t.output('PROMPT$ ')
@@ -563,7 +568,9 @@ describe('terminal frame across a grid change or lifecycle reset', () => {
       const recovered = await deepRead
       expect(recovered?.data).toContain('DEEP_HISTORY_ROW')
       expect(recovered?.data).toContain('HISTORY_29')
-      expect(await late).not.toContain('DEEP_HISTORY_ROW')
+      const lateRows = await late
+      expect(lateRows).not.toContain('DEEP_HISTORY_ROW')
+      expect(lateRows).not.toContain('HISTORY_29')
       const after = await t.screen()
       expect(after).toContain('SUCCESSOR_ROW')
       expect(after).not.toContain('MAIN_ONLY_ROW')
