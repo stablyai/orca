@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { CloudWorkspace } from '../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { workspace } from '../../cloud-workspaces/cloud-workspaces.test-fixture'
+import { FIXTURE_NOW, workspace } from '../../cloud-workspaces/cloud-workspaces.test-fixture'
 import type * as OpenCloudWorkspaceNs from '../../cloud-workspaces/open-cloud-workspace'
 import type * as ArchiveNs from '../../cloud-workspaces/cloud-workspace-home-archive'
 
@@ -63,7 +63,7 @@ const RUNNING = workspace({
   ownerUserId: 'user_grace',
   createdBy: 'user_grace',
   access: 'can_open',
-  lastActivityAt: Date.now() - 60_000
+  lastActivityAt: FIXTURE_NOW - 60_000
 })
 const ARCHIVED = workspace({
   title: 'Old spike',
@@ -72,13 +72,13 @@ const ARCHIVED = workspace({
   access: 'can_open',
   archivedAt: 1,
   status: 'suspended',
-  lastActivityAt: Date.now() - 86_400_000
+  lastActivityAt: FIXTURE_NOW - 86_400_000
 })
 const PRIVATE = workspace({
   title: 'Ada’s private notes',
   visibility: 'private',
   status: 'suspended',
-  lastActivityAt: Date.now() - 3_600_000
+  lastActivityAt: FIXTURE_NOW - 3_600_000
 })
 
 let list: CloudWorkspace[]
