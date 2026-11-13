@@ -2,6 +2,7 @@ import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descen
 import { excludeShellBackgroundJobs } from '../../pty/process-retirement/pty-shell-job-preservation'
 import { terminateShutdownDescendants } from '../sessions/terminal-descendant-shutdown'
 import type { Session } from '../sessions/session'
+import type { TerminalJournalSession } from '../history/journal/terminal-session-journal-contract'
 
 export type TerminalHostKillOptions = {
   immediate?: boolean
@@ -38,7 +39,7 @@ export class TerminalSessionTeardown {
   }
 
   // Exact identity: the operation for this ID must be this Session's, not a successor's.
-  isTracked(sessionId: string, session: Session): boolean {
+  isTracked(sessionId: string, session: TerminalJournalSession): boolean {
     return this.operations.get(sessionId)?.session === session
   }
 
