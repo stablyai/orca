@@ -87,6 +87,14 @@ export function WorkspaceCleanupConfirmRemove({
                 : t('common.delete', 'Delete')}
             </DialogTitle>
             <DialogDescription className="mt-1.5 text-xs leading-5">
+              {!deleting && (
+                <span className="block">
+                  {t('components.workspace.cleanup.browse.workspaceCount', '{{count}} workspaces', {
+                    count,
+                    defaultValue_one: '{{count}} workspace'
+                  })}
+                </span>
+              )}
               {deleting
                 ? t(
                     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1d3503357d',

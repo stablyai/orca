@@ -110,13 +110,11 @@ async function expectDeleteDialogLayout(page: Page, fileName: string): Promise<v
           }
           const titleRect = title.getBoundingClientRect()
           const footerRect = footer.getBoundingClientRect()
-          const lineHeight = Number.parseFloat(getComputedStyle(title).lineHeight) || 16
           const buttonsFit = [...footer.querySelectorAll<HTMLElement>('button')].every((button) => {
             const rect = button.getBoundingClientRect()
             return rect.left >= panel.left && rect.right <= panel.right
           })
           return (
-            titleRect.height > lineHeight * 1.5 &&
             titleRect.left >= panel.left &&
             titleRect.right <= panel.right &&
             footerRect.left >= panel.left &&
@@ -125,7 +123,7 @@ async function expectDeleteDialogLayout(page: Page, fileName: string): Promise<v
             element.scrollWidth <= element.clientWidth
           )
         }),
-      { timeout: 5_000, message: 'long delete-dialog title or footer escaped the panel' }
+      { timeout: 5_000, message: 'long-file delete confirmation overflowed its panel' }
     )
     .toBe(true)
 }

@@ -762,6 +762,7 @@
     "components.workspace.cleanup.browse.gitStatusCheckFailed",
     "components.workspace.cleanup.browse.gitStatusUnverified",
     "components.workspace.cleanup.browse.projectNamed",
+    "components.workspace.cleanup.browse.workspaceCount",
     "components.workspace.cleanup.confirm.deletingTitle",
     "components.workspace.cleanup.host.candidateName",
     "components.workspace.cleanup.host.label",

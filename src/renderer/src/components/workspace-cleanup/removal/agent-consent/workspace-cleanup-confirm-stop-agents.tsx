@@ -36,6 +36,12 @@ export function WorkspaceCleanupConfirmStopAgents({
             <div className="min-w-0">
               <DialogTitle>{t('common.delete', 'Delete')}</DialogTitle>
               <DialogDescription className="mt-1.5">
+                <span className="block">
+                  {t('components.workspace.cleanup.browse.workspaceCount', '{{count}} workspaces', {
+                    count,
+                    defaultValue_one: '{{count}} workspace'
+                  })}
+                </span>
                 {count === 1
                   ? t(
                       'components.workspace.cleanup.stopAgents.descriptionOne',
