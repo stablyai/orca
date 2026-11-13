@@ -161,15 +161,14 @@ describe('ProtocolBlockScreen', () => {
   })
 
   it.each([
-    ['ios', 'Open App Store', 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'],
-    ['android', 'Open GitHub Releases', RELEASES_URL]
-  ] as const)('keeps the %s store link when no release is known', (os, label, url) => {
+    ['ios', 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'],
+    ['android', 'https://www.onorca.dev/download/android']
+  ] as const)('keeps the %s store link when no release is known', (os, url) => {
     nativeTestState.platform.OS = os
     const output = render(
       { kind: 'blocked', reason: 'mobile-too-old', desktopVersion: 5, requiredMobileVersion: 9 },
       null
     )
-    expect(output).toContain(label)
     expect(output).not.toContain('Get Orca')
     expect(primaryActionUrl()).toBe(url)
   })

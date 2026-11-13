@@ -942,6 +942,7 @@
       "mobileTooOldGitHubReleases": "此桌面需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机",
       "openAppStore": "打开 App Store",
       "openGitHubReleases": "打开 GitHub Releases",
+      "downloadOrcaMobile": "下载 Orca Mobile",
       "refreshRecoveryNote": "如果仍显示此消息，请移除此主机并重新配对",
       "refreshWorkspaceBody": "此主机的工作区缓存版本低于桌面要求。请重新连接此主机，下载当前版本",
       "refreshWorkspaceTitle": "刷新移动端工作区",

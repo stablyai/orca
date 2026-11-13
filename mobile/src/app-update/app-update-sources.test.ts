@@ -41,13 +41,16 @@ describe('GitHub release source (Android sideload)', () => {
     ).resolves.toEqual({
       kind: 'available',
       version: '0.0.50',
-      url: 'https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.50'
+      url: 'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.50/app-release.apk'
     })
     expect(requested).toEqual([REFS_URL, releaseUrl('0.0.50')])
   })
 
   it('falls back past a tag whose build never published a release', async () => {
-    const release048 = { ...Object(release050), html_url: 'https://example.test/048' }
+    const release048 = {
+      ...Object(release050),
+      assets: [{ name: 'app-release.apk', browser_download_url: 'https://example.test/048.apk' }]
+    }
     const { fetchImpl } = fakeFetch({
       [REFS_URL]: { status: 200, body: tagRefs },
       [releaseUrl('0.0.50')]: { status: 404 },
@@ -58,7 +61,7 @@ describe('GitHub release source (Android sideload)', () => {
     ).resolves.toEqual({
       kind: 'available',
       version: '0.0.48',
-      url: 'https://example.test/048'
+      url: 'https://example.test/048.apk'
     })
   })
 
