@@ -7283,7 +7283,6 @@
       "tests/e2e/settings-agent-awake.spec.ts": 33400,
       "tests/e2e/settings-display-name-ime.spec.ts": 18100,
       "tests/e2e/settings-search-responsiveness.spec.ts": 15600,
-      "tests/e2e/settings-search-shortcuts-pane.spec.ts": 15800,
       "tests/e2e/settings-skill-detection.spec.ts": 21800,
       "tests/e2e/settled-worker-tab-survives-restart.spec.ts": 62400,
       "tests/e2e/setup-guide-sidebar.spec.ts": 6800,
