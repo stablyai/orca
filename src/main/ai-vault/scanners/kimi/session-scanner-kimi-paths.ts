@@ -2,15 +2,21 @@ import {
   currentSessionDiscovery,
   type SessionDiscoveryDependency
 } from '../../session-discovery-context'
-import { wslGatedReadFile, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
+import {
+  wslGatedReadFile,
+  wslGatedStat
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createSessionJsonlDependency } from '../../session-jsonl-dependency'
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
 import { readSessionIndexJsonl, type SessionIndexJsonlRead } from '../../session-index-jsonl-read'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'
 
 export function resolveKimiSessionsDir(override?: string): string {

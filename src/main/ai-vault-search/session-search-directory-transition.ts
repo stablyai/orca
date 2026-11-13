@@ -3,7 +3,6 @@ import {
   newerSessionSearchInput
 } from './session-search-observation-authority'
 import type { SessionSearchCatalog } from './session-search-catalog'
-import { dirname } from 'node:path'
 import { transitionSessionSearchInventory } from './session-search-inventory-transition'
 
 export type SessionSearchDirectoryCommand = {
@@ -31,23 +30,13 @@ export function transitionSessionSearchDirectory(
   if (!epoch?.sealed || epoch.revision !== command.epoch) {
     return { invalidProof: true }
   }
-  const entries = `${command.scope}:directory-input`
-  const files = `${command.scope}:files`
-  const directories = `${command.scope}:directories`
-  const page = (scope: string) =>
-    catalog.execute({ kind: 'page', scope, parent: command.path, after: command.after })
-  const get = (scope: string, key: string) => catalog.execute({ kind: 'get', scope, key }).rows?.[0]
-  const incoming = (key: string): { file?: boolean; directory?: boolean } => {
-    const row = get(entries, key)
-    const value: { file?: boolean; directory?: boolean } =
-      row?.group === String(command.epoch) ? JSON.parse(row.value) : {}
-    return value
-  }
+  const observation = catalog.inventoryObservation(command.scope)
   if (command.phase === 'files' || command.phase === 'remove-files') {
-    const result = page(files)
-    const removed = (result.rows ?? [])
-      .filter(({ key }) => command.phase === 'remove-files' || !incoming(key).file)
-      .map(({ key }) => key)
+    const paths = observation.filesPage(command.path, command.after)
+    const incoming = observation.staged(paths, command.epoch)
+    const removed = paths.filter(
+      (key) => command.phase === 'remove-files' || !incoming.get(key)?.file
+    )
     const accepted = transitionSessionSearchInventory(catalog, {
       kind: 'forget-files',
       scope: command.scope,
@@ -64,17 +53,18 @@ export function transitionSessionSearchDirectory(
         trailing: true
       })
     }
-    return { removedFiles: accepted.removedFiles, after: result.after }
+    return { removedFiles: accepted.removedFiles, after: paths.at(-1) }
   }
   if (command.phase === 'children' || command.phase === 'remove-children') {
-    const result = page(directories)
-    for (const row of result.rows ?? []) {
-      if (command.phase === 'remove-children' || !incoming(row.key).directory) {
-        if (newerSessionSearchInput(catalog, command.scope, row.key, epoch.cutoff)) {
+    const paths = observation.directoryChildren(command.path, command.after)
+    const incoming = observation.staged(paths, command.epoch)
+    for (const key of paths) {
+      if (command.phase === 'remove-children' || !incoming.get(key)?.directory) {
+        if (newerSessionSearchInput(catalog, command.scope, key, epoch.cutoff)) {
           catalog.execute({
             kind: 'directory-schedule',
             scope: command.scope,
-            path: row.key,
+            path: key,
             depth: command.depth + 1,
             reconcile: true,
             trailing: true
@@ -84,7 +74,7 @@ export function transitionSessionSearchDirectory(
         catalog.execute({
           kind: 'directory-schedule',
           scope: command.scope,
-          path: row.key,
+          path: key,
           depth: command.depth + 1,
           reconcile: false,
           remove: true,
@@ -92,34 +82,16 @@ export function transitionSessionSearchDirectory(
         })
       }
     }
-    return { after: result.after }
+    return { after: paths.at(-1) }
   }
 
-  const result = page(entries)
+  const entries = observation.stagedPage(command.path, command.epoch, command.after)
   const output: NonNullable<SessionSearchDirectoryResult['directoryPage']> = []
-  for (const row of result.rows ?? []) {
-    if (row.group !== String(command.epoch)) {
-      continue
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this page contains this epoch's staged directory entries.
-    const value = JSON.parse(row.value) as { file?: boolean; directory?: boolean }
-    if (value.directory) {
-      const known = get(directories, row.key)
+  for (const row of entries) {
+    if (row.directory) {
+      const known = observation.directory(row.key)
       if (!known) {
-        catalog.execute({
-          kind: 'put',
-          scope: directories,
-          rows: [
-            {
-              key: row.key,
-              value: 'true',
-              parent: dirname(row.key),
-              group: '',
-              rank: 0,
-              ready: 0
-            }
-          ]
-        })
+        observation.ensureDirectory(row.key)
       }
       if (command.reconcile || !known) {
         catalog.execute({
@@ -130,9 +102,9 @@ export function transitionSessionSearchDirectory(
           reconcile: command.reconcile
         })
       }
-    } else if (value.file && (command.reconcile || !get(files, row.key))) {
+    } else if (row.file && (command.reconcile || !observation.file(row.key))) {
       output.push({ key: row.key, directory: false })
     }
   }
-  return { directoryPage: output, after: result.after }
+  return { directoryPage: output, after: entries.at(-1)?.key }
 }

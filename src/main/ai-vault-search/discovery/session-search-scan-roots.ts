@@ -1,9 +1,9 @@
 import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { AI_VAULT_AGENT_SOURCES } from '../../ai-vault/session-scanner-agent-sources'
-import { normalizedWslHomeDirs } from '../../ai-vault/session-scanner-roots'
-import { sessionCandidatesFromDiscoveries } from '../../ai-vault/session-scanner-candidates'
-import { discoverAiVaultSessionSources } from '../../ai-vault/session-scanner-source-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../ai-vault/discovery/session-scanner-agent-sources'
+import { normalizedWslHomeDirs } from '../../ai-vault/discovery/session-scanner-roots'
+import { sessionCandidatesFromDiscoveries } from '../../ai-vault/discovery/session-scanner-candidates'
+import { discoverAiVaultSessionSources } from '../../ai-vault/discovery/session-scanner-source-discovery'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,

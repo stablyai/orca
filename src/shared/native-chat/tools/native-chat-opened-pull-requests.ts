@@ -1,4 +1,4 @@
-import { parseGitHubIssueOrPRLink, type RepoSlug } from '../../github/links'
+import { parseGitHubIssueOrPRLink, type RepoSlug } from '../../github/repositories/links'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../new-workspace/gitlab-links'
 import type { NativeChatMessage } from '../native-chat-types'
 import { nativeChatToolCallScript } from './native-chat-tool-call-script'

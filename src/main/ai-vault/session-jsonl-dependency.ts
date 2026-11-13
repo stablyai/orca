@@ -1,7 +1,7 @@
 import { createSessionSearchJsonlDependency } from '../ai-vault-search/session-search-jsonl-dependency'
 import type { SessionSearchCatalogRequest } from '../ai-vault-search/session-search-catalog-client'
 import type { SessionDiscoveryDependencyObserver } from './session-discovery-context'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { wslGatedStat } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { isMissingTranscriptPathError } from './session-file-observation'
 import { readSessionIndexJsonl, type SessionIndexJsonlRead } from './session-index-jsonl-read'
 

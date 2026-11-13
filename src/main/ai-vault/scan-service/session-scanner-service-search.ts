@@ -59,6 +59,7 @@ export class SessionScannerServiceSearch {
     this.databasePath = init.databasePath
     this.roots = init.roots
     this.instance ??= new SessionSearchInstance({
+      discoveryPolicy: 'event-led',
       watcherEntryPath: this.watcherEntryPath,
       databasePath: init.databasePath,
       roots: init.roots,

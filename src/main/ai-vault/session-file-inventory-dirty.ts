@@ -1,12 +1,14 @@
+import type { SessionSearchPreparedObservation } from '../ai-vault-search/session-search-observation-types'
+import type { SessionInventoryFiles } from './session-file-inventory-files'
 import { SessionInventoryDirectoryWalks } from './session-file-inventory-walk'
 import { dirname } from 'node:path'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
-import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { wslGatedStat } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { throwIfAiVaultScanCancelled } from './scan-lifecycle/ai-vault-scan-cancellation'
 import {
   isMissingTranscriptPathError,
   type DiscoverSessionFilesArgs
-} from './session-scanner-discovery'
-import { isInsideSessionRoot } from './session-file-discovery'
+} from './discovery/session-scanner-discovery'
+import { isInsideSessionRoot } from './discovery/session-file-discovery'
 
 type DirtyInput = { path: string; force: boolean; dirtyRevision: number }
 type Probe = {
@@ -21,8 +23,60 @@ type Probe = {
 
 /** A successful probe retains its next handoff across catalog failures. */
 export class SessionInventoryDirtyInputs extends SessionInventoryDirectoryWalks {
+  async observeForRead(
+    path: string,
+    args: DiscoverSessionFilesArgs,
+    limit: number,
+    metadataOnly = false,
+    metadataOwed = false,
+    dependencyOwners?: { scope: string; key: string }[],
+    prepared?: SessionSearchPreparedObservation
+  ) {
+    return this.observations.readForIndex(
+      path,
+      args,
+      limit,
+      metadataOnly,
+      metadataOwed,
+      dependencyOwners,
+      prepared
+    )
+  }
+
+  readPreparation(...args: Parameters<SessionInventoryFiles['readPreparation']>) {
+    return this.observations.readPreparation(...args)
+  }
   private probeSequence = 0
   private probe: Probe | undefined
+  protected releaseProbe(): void {
+    this.probe = undefined
+  }
+  protected async completeReactivation(): Promise<void> {
+    await this.request({ kind: 'authority-open', scope: this.scope, root: this.root })
+    await this.observations.resume(0)
+    const probe = this.probe
+    if (!probe) {
+      return
+    }
+    if (probe.revision === undefined) {
+      probe.revision = (
+        await this.request({
+          kind: 'authority-probe',
+          scope: this.scope,
+          path: probe.input.path,
+          receipt: { consumer: 'dirty-probe:begin', revision: probe.serial }
+        })
+      ).observationEpoch!
+    }
+    await this.request({
+      kind: 'authority-probe-end',
+      scope: this.scope,
+      path: probe.input.path,
+      revision: probe.revision,
+      receipt: { consumer: 'dirty-probe:end', revision: probe.serial }
+    })
+    this.probe = undefined
+  }
   protected get dirtyProbing(): boolean {
     return this.probe !== undefined
   }

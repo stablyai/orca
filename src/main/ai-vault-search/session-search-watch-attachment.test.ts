@@ -2,7 +2,7 @@ import './worker/session-search-worker.test-fixture'
 import { appendFile, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { FakeWatcherChild } from '../ipc/filesystem/watcher-process/parcel-watcher-process-test-child'
+import { FakeWatcherChild } from '../ipc/filesystem/watcher-process/supervision/parcel-watcher-process-test-child'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   claudeLines,
@@ -60,6 +60,7 @@ it('keeps indexing after a native crawl never becomes ready and retires its chil
   vi.stubEnv('VITEST', '')
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,

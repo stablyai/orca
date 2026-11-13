@@ -1,6 +1,6 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { recordSessionScanIssue } from './session-scan-issues'
-import { isInsideSessionRoot } from './session-file-discovery'
+import { recordSessionScanIssue } from './parsing/session-scan-issues'
+import { isInsideSessionRoot } from './discovery/session-file-discovery'
 
 export const SESSION_INPUT_FAILURES_BEFORE_HELD_OUT = 3
 

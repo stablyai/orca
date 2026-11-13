@@ -1,3 +1,6 @@
+import type SyncDatabase from '../sqlite/sync-database'
+import { boundedSessionSearchPage } from './session-search-catalog-pages'
+import type { SessionSearchCatalogRow } from './session-search-catalog-types'
 import type { SessionSearchInventoryStorage } from './session-search-inventory-storage'
 import type { SessionSearchObservedFacts } from './session-search-observation-types'
 import {
@@ -23,6 +26,98 @@ export class SessionSearchInventoryObservation {
     readonly source: number,
     readonly root: string
   ) {}
+  directory(path: string): boolean {
+    return this.storage.readPhysical('search_inventory_entries', this.source, path).directory === 1
+  }
+  removeDirectory(path: string): void {
+    this.storage.writePhysical('search_inventory_entries', this.source, path, { directory: 0 })
+  }
+  private paths(sql: string, values: SyncDatabase.BindValue[]): string[] {
+    this.storage.flush()
+    return boundedSessionSearchPage(this.storage.db.prepare(sql).iterate(...values), (row) =>
+      String(row.path)
+    )
+  }
+  filesPage(parent: string, after = ''): string[] {
+    return this.paths(
+      `SELECT path FROM temp.search_inventory_entries
+      WHERE source=? AND parent=? AND path>? AND file_revision IS NOT NULL ORDER BY path LIMIT 256`,
+      [this.source, parent, after]
+    )
+  }
+  filesByDependency(dependency: string, after = '', limit = 256): string[] {
+    return this.paths(
+      `SELECT path FROM temp.search_inventory_entries
+      WHERE source=? AND dependency=? AND path>? AND file_revision IS NOT NULL ORDER BY path LIMIT ?`,
+      [this.source, dependency, after, Math.min(limit, 256)]
+    )
+  }
+  directoryChildren(parent: string, after = ''): string[] {
+    return this.paths(
+      `SELECT path FROM temp.search_inventory_entries
+      WHERE source=? AND parent=? AND path>? AND directory=1 ORDER BY path LIMIT 256`,
+      [this.source, parent, after]
+    )
+  }
+  readyAuthority(beforeRank: number): string[] {
+    return this.paths(
+      `SELECT path FROM temp.search_inventory_activity
+      WHERE source=? AND reclaimable=1 AND authority_tree<=? AND authority_self IS NOT NULL
+      ORDER BY authority_tree,path LIMIT 256`,
+      [this.source, beforeRank]
+    )
+  }
+  staged(paths: string[], epoch: number): Map<string, { file: boolean; directory: boolean }> {
+    const rows = this.storage.db
+      .prepare(`SELECT path,file,directory FROM temp.search_inventory_staging
+      WHERE source=? AND epoch=? AND path IN (SELECT value FROM json_each(?))`)
+      .all(this.source, String(epoch), JSON.stringify(paths))
+    return new Map(
+      rows.map((row) => [
+        String(row.path),
+        { file: row.file === 1, directory: row.directory === 1 }
+      ])
+    )
+  }
+  stagedPage(parent: string, epoch: number, after = '', limit = 256) {
+    const rows = this.storage.db
+      .prepare(`SELECT path,file,directory FROM temp.search_inventory_staging
+      WHERE source=? AND parent=? AND epoch=? AND path>? ORDER BY path LIMIT ?`)
+      .iterate(this.source, parent, String(epoch), after, limit)
+    return boundedSessionSearchPage(rows, (row) => ({
+      key: String(row.path),
+      file: row.file === 1,
+      directory: row.directory === 1
+    }))
+  }
+  stage(parent: string, epoch: number, rows: SessionSearchCatalogRow[]): void {
+    const values = rows.map((row) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing directory transport encodes these two entry flags.
+      const value = JSON.parse(row.value) as { file?: boolean; directory?: boolean }
+      return [
+        row.key,
+        value.file === undefined ? null : Number(value.file),
+        value.directory === undefined ? null : Number(value.directory)
+      ]
+    })
+    this.storage.db
+      .prepare(`INSERT INTO temp.search_inventory_staging(source,parent,epoch,path,file,directory)
+      SELECT ?,?,?,json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]') FROM json_each(?)
+      WHERE true ON CONFLICT(source,path) DO UPDATE SET parent=excluded.parent,epoch=excluded.epoch,file=excluded.file,directory=excluded.directory`)
+      .run(this.source, parent, String(epoch), JSON.stringify(values))
+  }
+  directoryEpoch(path: string) {
+    return this.storage.directoryEpoch(this.source, path)
+  }
+  putDirectoryEpoch(
+    path: string,
+    value?: { revision: number; cutoff: number; sealed: boolean }
+  ): void {
+    this.storage.putDirectoryEpoch(this.source, path, value)
+  }
+  removalEpoch(path: string, cutoff?: number): void {
+    this.storage.removalEpoch(this.source, path, cutoff)
+  }
   file(path: string): SessionSearchObservedFacts | undefined {
     const row = this.storage.readPhysical('search_inventory_entries', this.source, path)
     return row.file_revision == null

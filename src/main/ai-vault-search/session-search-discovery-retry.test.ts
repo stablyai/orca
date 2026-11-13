@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import * as filesystem from '../native-chat/wsl-transcript-fs-access'
+import * as filesystem from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { SessionSearchCatalog } from './session-search-catalog'
 import { openSessionSearchIndexerHarness } from './indexing/session-search-indexer-test-fixture'
 

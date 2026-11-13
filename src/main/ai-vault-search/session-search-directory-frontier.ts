@@ -34,6 +34,7 @@ export function transitionSessionSearchDirectoryFrontier(
   catalog: SessionSearchCatalog,
   command: SessionSearchDirectoryFrontierCommand
 ) {
+  const observation = catalog.inventoryObservation(command.scope)
   const walks = `${command.scope}:walks`,
     cancellations = `${command.scope}:cancellations`
   const get = (scope: string, key: string) => catalog.execute({ kind: 'get', scope, key }).rows?.[0]
@@ -43,7 +44,7 @@ export function transitionSessionSearchDirectoryFrontier(
     if (command.remove) {
       if (!get(cancellations, command.path)) {
         const cutoff = command.cutoff ?? catalog.nextRevision()
-        putAuthorityValue(catalog, `${command.scope}:removal-epochs`, command.path, true, cutoff)
+        observation.removalEpoch(command.path, cutoff)
         set(cancellations, command.path, {
           path: command.path,
           depth: command.depth,
@@ -60,14 +61,10 @@ export function transitionSessionSearchDirectoryFrontier(
     }
     let child = command.path
     for (let depth = command.depth; depth >= 0; depth--) {
-      if (get(`${command.scope}:directories`, child)) {
+      if (observation.directory(child)) {
         break
       }
-      catalog.execute({
-        kind: 'put',
-        scope: `${command.scope}:directories`,
-        rows: [{ key: child, value: 'true', parent: dirname(child), group: '', rank: 0, ready: 0 }]
-      })
+      observation.ensureDirectory(child)
       child = dirname(child)
     }
     set(walks, command.path, {
@@ -92,7 +89,7 @@ export function transitionSessionSearchDirectoryFrontier(
   }
   if (newerSessionSearchInput(catalog, command.scope, state.path, state.cutoff)) {
     catalog.execute({ kind: 'delete', scope: cancellations, key: first.key })
-    catalog.execute({ kind: 'delete', scope: `${command.scope}:removal-epochs`, key: first.key })
+    observation.removalEpoch(first.key)
     transitionSessionSearchDirectoryFrontier(catalog, {
       kind: 'directory-schedule',
       scope: command.scope,
@@ -148,7 +145,7 @@ export function transitionSessionSearchDirectoryFrontier(
         origin: state.cutoff
       })
     } else {
-      catalog.execute({ kind: 'delete', scope: `${command.scope}:removal-epochs`, key: first.key })
+      observation.removalEpoch(first.key)
     }
   }
   return { processed: (page.rows?.length ?? 0) + Number(state.after === undefined) }

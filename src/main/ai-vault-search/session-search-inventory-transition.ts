@@ -30,6 +30,9 @@ export function transitionSessionSearchInventory(
   catalog: SessionSearchCatalog,
   command: SessionSearchInventoryCommand
 ): SessionSearchInventoryResult {
+  if (command.kind === 'forget-files' && !command.paths.length) {
+    return { removedFiles: [] }
+  }
   if (command.kind === 'observe-prepare') {
     return prepareSessionSearchObservations(catalog, command)
   }

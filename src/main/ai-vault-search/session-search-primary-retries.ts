@@ -1,7 +1,7 @@
 import { invalidateSessionSearchPhysical } from './session-search-dirty-transition'
 import type { SessionSearchCatalog } from './session-search-catalog'
 import { authorityRow } from './session-search-observation-authority'
-import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
+import { isInsideSessionRoot } from '../ai-vault/discovery/session-file-discovery'
 
 export const PRIMARY_FAILURE_SCOPE = 'primary-read-failures'
 

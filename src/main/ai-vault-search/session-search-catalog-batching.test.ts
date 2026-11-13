@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
-import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
+import type { DiscoverSessionFilesArgs } from '../ai-vault/discovery/session-scanner-discovery'
 import { SessionSearchCatalog } from './session-search-catalog'
 import type { SessionSearchCatalogCommand } from './session-search-catalog'
 import { createSessionSearchJsonlDependency } from './session-search-jsonl-dependency'
@@ -13,7 +13,7 @@ import {
   writeClaudeTranscript
 } from './indexing/session-search-indexer-test-fixture'
 import { SessionSearchWorkerClient } from './worker/session-search-worker-client'
-import * as filesystem from '../native-chat/wsl-transcript-fs-access'
+import * as filesystem from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import { SessionSearchWorkerStore } from './worker/session-search-worker-store'
 import { SessionSearchWorkQueue } from './session-search-work-queue'
@@ -214,6 +214,7 @@ it.each([40, 400])(
     const clock = new FakeSessionSearchClock()
     clock.costPerNowMs = 1000
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -385,6 +386,7 @@ it.each([40, 400])(
     const harness = await openSessionSearchIndexerHarness('ss-release-pages')
     const clock = new FakeSessionSearchClock()
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -450,6 +452,7 @@ it.each([40, 400])(
       'claude-projects'
     )
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -608,6 +611,86 @@ it.each([40, 400])(
       traffic.mockRestore()
       await store.flush()
       store.close()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each(['observation apply', 'probe end', 'probe begin reply'])(
+  'settles a returned inventory after partial retirement interrupts %s',
+  async (cut) => {
+    const harness = await openSessionSearchIndexerHarness('ss-returned-observation')
+    const db = new SyncDatabase('')
+    const catalog = new SessionSearchCatalog(db)
+    const root = join(harness.root, 'returning')
+    const path = join(root, 'session.jsonl')
+    let refuse = false
+    const request = async (command: SessionSearchCatalogCommand) => {
+      const selected =
+        cut === 'observation apply'
+          ? 'observe-apply'
+          : cut === 'probe end'
+            ? 'authority-probe-end'
+            : 'authority-probe'
+      if (refuse && command.kind === selected) {
+        refuse = false
+        if (command.kind === 'authority-probe') {
+          catalog.response(command)
+        }
+        throw new Error('fixture retained observation interruption')
+      }
+      return catalog.response(command)
+    }
+    const inventory = new SessionFileInventory(root, request, 'physical:returning-observation')
+    const args: DiscoverSessionFilesArgs = {
+      rootDir: root,
+      agent: 'claude',
+      limit: 0,
+      issues: [],
+      extensions: ['.jsonl']
+    }
+    const drain = async () => {
+      const paths = new Set<string>()
+      for (let pass = 0; pass < 100 && inventory.pending; pass++) {
+        await inventory.retryFailures()
+        const delta = await inventory.drain(args, () => false, 0)
+        for (const change of delta.changes) {
+          paths.add(change.file.path)
+        }
+        await inventory.acknowledge(delta.receipts)
+      }
+      expect(inventory.pending).toBe(false)
+      return [...paths]
+    }
+    try {
+      await mkdir(root)
+      await writeFile(path, '{}\n')
+      await inventory.begin(false, args)
+      expect(await drain()).toEqual([path])
+      refuse = true
+      await inventory.invalidate(cut === 'observation apply' ? path : root)
+      await expect(inventory.drain(args, () => false, 0)).rejects.toThrow(
+        'fixture retained observation interruption'
+      )
+      const interruptions = cut === 'probe begin reply' ? 125 : 300
+      for (let index = 0; index < interruptions; index++) {
+        await inventory.invalidate(join(root, `unavailable-${index}`))
+      }
+      expect(await inventory.releasePage()).toBe(false)
+      await inventory.reactivate()
+      await inventory.begin(false, args)
+      const changes = await drain()
+      if (cut === 'observation apply') {
+        expect(changes).toEqual([path])
+      }
+      const currentPaths = []
+      for await (const currentPath of inventory.paths()) {
+        currentPaths.push(currentPath)
+      }
+      expect(currentPaths).toEqual([path])
+      expect(args.issues).toEqual([])
+    } finally {
+      db.close()
       await harness.cleanup()
     }
   }

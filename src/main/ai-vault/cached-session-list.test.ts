@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { scanAiVaultSessions } from './session-scanner'
-import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
+import { isolatedScanRoots, writeJsonlFile } from './scanner-fixtures/session-scanner-test-fixtures'
 
 const { scan } = vi.hoisted(() => ({ scan: vi.fn() }))
 vi.mock('./scan-service/session-scanner-background', () => ({
@@ -17,7 +17,10 @@ vi.mock('../wsl/discovery/distro-catalog', () => ({
   getCachedWslDistros: () => []
 }))
 
-import { listAiVaultSessions, resetAiVaultSessionListCacheForTests } from './cached-session-list'
+import {
+  listAiVaultSessions,
+  resetAiVaultSessionListCacheForTests
+} from './listing/cached-session-list'
 
 let root: string | undefined
 

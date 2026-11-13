@@ -9,6 +9,7 @@ export const DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION = 4
 export const DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES = 15
 
 export type SessionSearchIndexerOptions = {
+  discoveryPolicy?: 'periodic' | 'event-led'
   watcherEntryPath?: string
   databasePath: string
   roots: SessionSearchScanRoots

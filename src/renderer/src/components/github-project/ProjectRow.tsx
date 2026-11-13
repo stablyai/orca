@@ -12,7 +12,7 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =

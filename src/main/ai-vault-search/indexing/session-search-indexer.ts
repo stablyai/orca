@@ -1,5 +1,6 @@
+import { resolve } from 'node:path'
 import { systemSessionSearchClock, type SessionSearchClock } from './session-search-clock'
-import { waitForAiVaultScan } from '../../ai-vault/ai-vault-scan-cancellation'
+import { waitForAiVaultScan } from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import {
   DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES,
   DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION,
@@ -14,28 +15,19 @@ import { sessionSearchHistoryCutoffMs } from '../session-search-retention-policy
 import type { SessionSearchStateCounts } from '../storage/session-search-store-types'
 import { SessionSearchWorkerStore } from '../worker/session-search-worker-store'
 import type { SessionSearchDegradedRoot } from '../discovery/session-search-degraded-roots'
+import {
+  sessionSearchIndexStatus,
+  type SessionSearchIndexStatus
+} from './session-search-indexer-status'
+export type {
+  SessionSearchIndexPhase,
+  SessionSearchIndexStatus
+} from './session-search-indexer-status'
+import { runSessionSearchPeriodicPass } from './session-search-periodic-pass'
 import { SessionSearchWorkLoop } from './session-search-work-loop'
 
 // Duplicate indexers would register competing consumers and fence each other’s writes.
 const liveIndexerPaths = new Set<string>()
-
-export type SessionSearchIndexPhase = 'idle' | 'indexing' | 'current' | 'degraded' | 'closed'
-
-export type SessionSearchIndexStatus = {
-  phase: SessionSearchIndexPhase
-  /** Rows indexed through the file stat they record. */
-  filesIndexed: number
-  /** Due rows plus unread candidates deferred by the last pass, which may have no row yet. */
-  filesDue: number
-  /** Rows whose last read did not commit. */
-  filesFailed: number
-  messagesIndexed: number
-  degradedRoots: SessionSearchDegradedRoot[]
-  lastReconcileAt: number | null
-  /** Last full sweep with no deferred reads; null until one completes. */
-  lastSweepCompletedAt: number | null
-  sessionsByAgent: Record<string, number>
-}
 
 /** Reconfigure by closing and constructing anew; persisted file rows determine which reads are owed. */
 export class SessionSearchIndexer {
@@ -67,7 +59,7 @@ export class SessionSearchIndexer {
   private primaryWakeRevision = 0
   private sweepInProgress = false
   private retirement: Promise<void> | null = null
-  private readonly work: SessionSearchPassState
+  private readonly work: SessionSearchPassState | undefined
   private started = false
   private closed = false
 
@@ -97,7 +89,10 @@ export class SessionSearchIndexer {
       )
     }
     // Claim ownership before async initialization so another indexer cannot race the writer open.
-    this.work = new SessionSearchPassState(options.watcherEntryPath)
+    this.work =
+      options.discoveryPolicy === 'event-led'
+        ? new SessionSearchPassState(options.watcherEntryPath)
+        : undefined
     this.store = new SessionSearchWorkerStore(
       options.databasePath,
       onError,
@@ -106,12 +101,12 @@ export class SessionSearchIndexer {
       },
       (path) => {
         const row = this.store.fileRow(path)
-        this.work.candidates.rowChanged(path, row)
+        this.work?.candidates.rowChanged(path, row)
       }
     )
     liveIndexerPaths.add(this.ownershipPath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
-    this.unregister = registerSessionSearchIndexConsumer(this.store, this.work.candidates)
+    this.unregister = registerSessionSearchIndexConsumer(this.store, this.work?.candidates)
   }
 
   /** Begin inventory capture, then consume changes and retained debt at the normal cadence. */
@@ -146,25 +141,15 @@ export class SessionSearchIndexer {
   }
 
   status(): SessionSearchIndexStatus {
-    // Use cached counts after close to avoid reading a shut database.
-    const settled = (this.closed ? this.lastCounts : this.readCounts()) ?? {
-      current: 0,
-      due: 0,
-      failed: 0,
-      sessionsByAgent: {},
-      messages: 0
-    }
-    return {
-      phase: this.phase(settled),
-      filesIndexed: settled.current,
-      filesDue: settled.due + this.left,
-      filesFailed: settled.failed,
-      messagesIndexed: settled.messages,
-      degradedRoots: this.degradedRoots.map((root) => ({ ...root })),
+    return sessionSearchIndexStatus(this.closed ? this.lastCounts : this.readCounts(), {
+      closed: this.closed,
+      started: this.started,
+      left: this.left,
+      pending: () => this.left > 0 || !!this.work?.pending,
+      degradedRoots: this.degradedRoots,
       lastReconcileAt: this.lastReconcileAt,
-      lastSweepCompletedAt: this.lastSweepCompletedAt,
-      sessionsByAgent: { ...settled.sessionsByAgent }
-    }
+      lastSweepCompletedAt: this.lastSweepCompletedAt
+    })
   }
 
   close(): Promise<void> {
@@ -180,7 +165,7 @@ export class SessionSearchIndexer {
     this.store.close()
     this.retirement = Promise.all([
       this.store.retired(),
-      this.work.close(),
+      this.work?.close(),
       this.loop.settled
     ]).then(() => {
       liveIndexerPaths.delete(this.ownershipPath)
@@ -216,23 +201,6 @@ export class SessionSearchIndexer {
     }
   }
 
-  private phase(counts: SessionSearchStateCounts): SessionSearchIndexPhase {
-    if (this.closed) {
-      return 'closed'
-    }
-    if (!this.started) {
-      return 'idle'
-    }
-    if (this.degradedRoots.length > 0 || counts.failed > 0) {
-      return 'degraded'
-    }
-    // Deferred candidates may have no rows, so due-row counts alone cannot prove completion.
-    if (this.left > 0 || this.work.pending) {
-      return 'indexing'
-    }
-    return counts.due === 0 && this.lastSweepCompletedAt !== null ? 'current' : 'indexing'
-  }
-
   private tick(): Promise<void> {
     return this.loop.queue(
       (signal) => this.pass(signal),
@@ -240,7 +208,59 @@ export class SessionSearchIndexer {
     )
   }
 
-  private async pass(signal: AbortSignal): Promise<void> {
+  private pass(signal: AbortSignal): Promise<void> {
+    return this.work ? this.eventPass(signal, this.work) : this.periodicPass(signal)
+  }
+
+  private async periodicPass(signal: AbortSignal): Promise<void> {
+    this.store.setRetentionCutoffMs(this.cutoffMs())
+    const startedAt = this.clock.now()
+    const full = this.sweepNext
+    this.sweepNext = false
+    try {
+      if (full && this.options.resolveRoots) {
+        const roots = await waitForAiVaultScan(this.options.resolveRoots(signal), signal)
+        if (signal.aborted) {
+          return
+        }
+        this.roots = roots
+      }
+      const result = await runSessionSearchPeriodicPass({
+        store: this.store,
+        roots: this.roots,
+        full,
+        recentPerAgent: this.recentPerAgent,
+        previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
+        overdue: () => this.clock.now() - startedAt >= this.passDeadlineMs,
+        listings: new SessionSearchDirectoryListings(),
+        signal
+      })
+      if (!result.completed) {
+        this.sweepNext ||= full
+        return
+      }
+      this.degradedRoots = result.degradedRoots
+      this.previousRootsWithFiles = result.rootsWithFiles
+      this.lastReconcileAt = this.clock.now()
+      this.left = result.left
+      this.sweepNext ||= result.outOfTime
+      if (full) {
+        if (!result.outOfTime) {
+          this.lastSweepCompletedAt = this.lastReconcileAt
+        }
+        this.cyclesSinceSweep = 0
+        return
+      }
+      if (++this.cyclesSinceSweep >= this.fullSweepEveryCycles) {
+        this.sweepNext = true
+      }
+    } catch (error) {
+      this.sweepNext ||= full
+      throw error
+    }
+  }
+
+  private async eventPass(signal: AbortSignal, work: SessionSearchPassState): Promise<void> {
     this.store.setRetentionCutoffMs(this.cutoffMs())
     const primaryWake = this.primaryWakeNext
     const full = this.sweepNext
@@ -259,7 +279,7 @@ export class SessionSearchIndexer {
       const discoveryStarted = this.clock.now()
       const result = await runSessionSearchPass({
         store: this.store,
-        state: this.work,
+        state: work,
         roots: this.roots,
         full,
         primaryWake,
@@ -311,4 +331,3 @@ export class SessionSearchIndexer {
     return sessionSearchHistoryCutoffMs(this.options.historyDays, this.clock.now())
   }
 }
-import { resolve } from 'node:path'

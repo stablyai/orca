@@ -1,3 +1,5 @@
+import { createAiVaultScanCancelledError } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
+import { SESSION_SEARCH_INVENTORY_MEMBERS } from './session-search-inventory-relation'
 import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import type SyncDatabase from '../sqlite/sync-database'
 import type {
@@ -32,31 +34,17 @@ export abstract class SessionSearchCatalogStorage {
     }
   }
   inventoryObservation(scope: string) {
-    for (const suffix of [
-      'files',
-      'directories',
-      'authority',
-      'observing',
-      'delivery',
-      'observation-epochs'
-    ]) {
+    for (const suffix of SESSION_SEARCH_INVENTORY_MEMBERS) {
       this.touched.add(`${scope}:${suffix}`)
     }
-    return this.inventory.observation(scope)
+    const observation = this.inventory.observation(scope)
+    if (!observation) {
+      throw createAiVaultScanCancelledError()
+    }
+    return observation
   }
   minimumFloor(scope: string): number {
-    return (
-      this.inventory.minimumFloor(scope) ??
-      Math.min(
-        ...['epochs', 'observation-epochs', 'removal-epochs'].map((suffix) => {
-          const row = this.db
-            .prepare(`SELECT rank FROM temp.search_catalog
-        WHERE scope=? AND group_key='' ORDER BY rank LIMIT 1`)
-            .get(`${scope}:${suffix}`)
-          return Number(row?.rank ?? Infinity)
-        })
-      )
-    )
+    return this.inventory.minimumFloor(scope) ?? Infinity
   }
   readonly inventory: ReturnType<typeof sessionSearchInventoryStorage>
   constructor(protected readonly db: SyncDatabase) {

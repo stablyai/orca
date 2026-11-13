@@ -5,7 +5,7 @@ import {
 } from '../../ai-vault/parse-cache/session-parse-cache-store'
 import { SessionSearchIndexConsumer } from './session-search-index-consumer'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault/ai-vault-scan-cancellation'
+import { throwIfAiVaultScanCancelled } from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,

@@ -4,11 +4,12 @@ import type {
   GitHubProjectSort,
   GitHubProjectView,
   GitHubProjectViewLayout
-} from '../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
+} from '../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
 import { driftError, extractGraphqlErrors } from './project-error-classification'
-import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
 import { normalizeField, type RawProjectV2Field } from './project-view-field-normalization'
 import { FIELD_CONFIG_FRAGMENT } from './project-view-query-fragments'
 

@@ -12,7 +12,7 @@ import { SessionSearchCandidatePublications } from './session-search-candidate-p
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import { basename } from 'node:path'
 import { sessionSearchCandidateGroup } from './session-search-candidate-group'
-import { discoveryFileCandidates } from '../ai-vault/session-scanner-candidates'
+import { discoveryFileCandidates } from '../ai-vault/discovery/session-scanner-candidates'
 import { readCodexRolloutSessionMetaId } from '../codex/history/rollouts/codex-rollout-session-meta'
 import {
   codexRolloutHardlinkIdentity,

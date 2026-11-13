@@ -1,3 +1,4 @@
+import { createAiVaultScanCancelledError } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import type { SessionSearchPreparedObservation } from './session-search-observation-types'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import type { SessionSearchCandidateInput } from './session-search-catalog-candidate-types'
@@ -10,7 +11,7 @@ import type { SessionSearchDependencyInventory } from './session-search-dependen
 import { SessionSearchRootWatchers } from './session-search-root-watchers'
 import { SessionSearchContainerInventory } from './session-search-container-inventory'
 import type { SessionFileInventory } from '../ai-vault/session-file-inventory'
-import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
+import type { DiscoverSessionFilesArgs } from '../ai-vault/discovery/session-scanner-discovery'
 import type { SessionFileCandidate, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
 import {
   sessionSearchPhysicalRoot,
@@ -25,6 +26,7 @@ type Root = {
   unwatched?: boolean
   wake?: number
   retiring?: boolean
+  physicalReleased?: boolean
   dependencies: Map<string, SessionSearchDependencyInventory>
 }
 
@@ -172,8 +174,8 @@ export class SessionSearchDiscoverySources {
       return null
     }
     const owner = rootDir === undefined ? undefined : this.roots.get(`${agent}:${rootDir}`)
-    if (!owner) {
-      throw new Error('Session search read has no physical inventory owner')
+    if (!owner || owner.physicalReleased) {
+      throw createAiVaultScanCancelledError()
     }
     return owner
   }
@@ -261,26 +263,27 @@ export class SessionSearchDiscoverySources {
         const root = this.roots.get(key)!
         root.retiring = true
         do {
-          const paths = await root.inventory.removePage()
-          if (this.acceptRemoved) {
-            await this.acceptRemoved(paths)
-          } else {
-            for (const path of paths) {
-              this.removed.add(path)
+          if (!root.physicalReleased) {
+            const paths = await root.inventory.removePage()
+            if (this.acceptRemoved) {
+              await this.acceptRemoved(paths)
+            } else {
+              for (const path of paths) {
+                this.removed.add(path)
+              }
+            }
+            await root.inventory.retirePage(paths)
+            if (paths.length || !(await root.inventory.releasePage())) {
+              continue
+            }
+            root.physicalReleased = true
+          }
+          for (const [path, dependency] of root.dependencies) {
+            if (await dependency.release()) {
+              root.dependencies.delete(path)
             }
           }
-          await root.inventory.retirePage(paths)
-          if (paths.length) {
-            continue
-          }
-          if (!(await root.inventory.releasePage())) {
-            continue
-          }
-          let released = true
-          for (const dependency of root.dependencies.values()) {
-            released = (await dependency.release()) && released
-          }
-          if (released) {
+          if (!root.dependencies.size) {
             this.roots.delete(key)
             break
           }

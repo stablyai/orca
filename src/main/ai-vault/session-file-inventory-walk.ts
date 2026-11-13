@@ -7,14 +7,14 @@ import {
 import { SessionSearchCatalogFrontier } from '../ai-vault-search/session-search-catalog-frontier'
 import { SessionSearchCatalogRetries } from '../ai-vault-search/session-search-catalog-retries'
 import { dirname, join, relative } from 'node:path'
-import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
-import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { wslGatedReaddir } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { throwIfAiVaultScanCancelled } from './scan-lifecycle/ai-vault-scan-cancellation'
 import {
   isMissingTranscriptPathError,
   type DiscoverSessionFilesArgs
-} from './session-scanner-discovery'
-import { isDiscoverableSessionFile, isInsideSessionRoot } from './session-file-discovery'
-import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
+} from './discovery/session-scanner-discovery'
+import { isDiscoverableSessionFile, isInsideSessionRoot } from './discovery/session-file-discovery'
+import { recordSessionScanIssue, scanIssueTextFromError } from './parsing/session-scan-issues'
 import type { SessionSearchInputReceipt } from '../ai-vault-search/session-search-catalog-types'
 import { SessionInventoryFiles } from './session-file-inventory-files'
 
@@ -52,7 +52,7 @@ export class SessionInventoryDirectoryWalks {
   ) {
     this.request = async (command) => {
       const result = await request(command)
-      recordSessionSearchCatalogCounts(this.request, result)
+      recordSessionSearchCatalogCounts(this.request, result, command)
       return result
     }
     shareSessionSearchCatalogCounts(this.request, request)

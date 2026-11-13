@@ -12,7 +12,7 @@ import type {
 import {
   createAiVaultScanCancelledError,
   abandonRemoteSessionScanOnCancel
-} from '../../ai-vault/ai-vault-scan-cancellation'
+} from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import { EMPTY_CONTENT_HASH, foldContentHash } from '../storage/session-search-content-hash'
 import { searchMessageRows } from '../storage/session-search-message-rows'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
@@ -27,6 +27,26 @@ const TRANSFER_BYTES = 8 * 1024 * 1024
 const BATCH_BYTES = 64 * 1024
 
 export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
+  async removeFile(path: string): Promise<boolean> {
+    if (!this.acceptingReads) {
+      return false
+    }
+    const epoch = this.client.epoch,
+      snapshotEpoch = this.snapshotEpoch
+    try {
+      const response = await this.send({ op: 'remove', path })
+      return (
+        this.acceptingReads &&
+        epoch === this.client.epoch &&
+        snapshotEpoch === this.snapshotEpoch &&
+        response.accepted === true &&
+        !response.failure &&
+        !this.coverage.has(path)
+      )
+    } catch {
+      return false
+    }
+  }
   beginUnpreparedWrite(start: TranscriptReadStart): SessionSearchFileWrite | null {
     if (!this.acceptingReads || this.bytes >= TRANSFER_BYTES) {
       return null

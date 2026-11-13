@@ -3,7 +3,7 @@ import './worker/session-search-worker.test-fixture'
 import { appendFile, mkdir, readFile, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import * as filesystem from '../native-chat/wsl-transcript-fs-access'
+import * as filesystem from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   codexFixture,
   CODEX_FIXTURE_SESSION_ID
@@ -28,6 +28,7 @@ it('resumes an interrupted multi-page recovery without retrying accepted files',
   const root = harness.roots.claudeProjectsDir!
   const clock = new FakeSessionSearchClock()
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -148,6 +149,7 @@ it.each([40, 400])(
         )
       }, 0)
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -289,6 +291,7 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
   const indexPath = join(dirname(harness.roots.codexSessionsDir!), 'session_index.jsonl')
   let restore: () => void = () => undefined
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -409,6 +412,7 @@ it('retains title-only work through admission refusal and wakes held-out publica
   const path = join(root, fixture.fileName)
   const index = join(dirname(root), 'session_index.jsonl')
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -565,6 +569,7 @@ it.each(['commit', 'open', 'observation'] as const)(
     const path = join(root, fixture.fileName)
     const index = join(dirname(root), 'session_index.jsonl')
     let subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -683,6 +688,7 @@ it.each(['commit', 'open', 'observation'] as const)(
       if (failure === 'open') {
         await subject.close()
         subject = new SessionSearchIndexer({
+          discoveryPolicy: 'event-led',
           databasePath: harness.databasePath,
           roots: harness.roots,
           historyDays: null,

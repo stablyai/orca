@@ -45,6 +45,7 @@ function newIndexer(
   overrides: Partial<ConstructorParameters<typeof SessionSearchIndexer>[0]> = {}
 ) {
   indexer = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -149,4 +150,23 @@ it('retains a deferred recent file after it leaves the top-N window', async () =
   await nextCycle()
   await nextCycle()
   expect(sessionsMatching('deferredreviewneedle')).toEqual([ids[0]])
+})
+
+it('keeps ordinary hosts on newest-session polling until their next full sweep', async () => {
+  const older = transcriptPath('older')
+  const newest = transcriptPath('newest')
+  await writeClaudeTranscript(older, ['older original'], 'older')
+  await writeClaudeTranscript(newest, ['newest original'], 'newest')
+  const at = Date.now()
+  await utimes(older, new Date(at - 20000), new Date(at - 20000))
+  await utimes(newest, new Date(at), new Date(at))
+  await newIndexer({ discoveryPolicy: 'periodic', recentPerAgent: 1 }).start()
+  await writeClaudeTranscript(older, ['older changed'], 'older')
+  await utimes(older, new Date(at - 10000), new Date(at - 10000))
+  await nextCycle()
+  expect(sessionsMatching('changed')).toEqual([])
+  await indexer!.reconcile({ full: true })
+  expect(sessionsMatching('changed')).toEqual(['older'])
+  expect(indexer!.status().phase).toBe('current')
+  expect(errors).toEqual([])
 })

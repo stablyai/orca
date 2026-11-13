@@ -17,11 +17,10 @@ export function acceptSessionSearchDiscoveryPage(
       if (!row.input) {
         return true
       }
-      const current = store.catalogStorage.valueRow(
-        `${row.input.scope}:delivery`,
-        row.candidate.file.path
-      )
-      return authorityValue<{ revision: number }>(current)?.revision === row.input.revision
+      const current = store.catalogStorage
+        .inventoryObservation(row.input.scope)
+        .delivery(row.candidate.file.path)
+      return current?.revision === row.input.revision
     })
     store.catalogCandidates.execute({ kind: 'batch', rows: accepted })
     const dependencyScopes = new Set<string>()

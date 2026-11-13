@@ -5,7 +5,7 @@ import {
 } from './session-search-container-sources'
 import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import { SessionSearchOperationError } from './worker/session-search-worker-client'
-import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
+import { throwIfAiVaultScanCancelled } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 
 type Owner = {
   key: string

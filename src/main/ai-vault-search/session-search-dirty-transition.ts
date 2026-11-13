@@ -136,31 +136,23 @@ export function transitionSessionSearchDirty(
       }
       continue
     }
-    const owners = catalog.execute({
-      kind: 'page',
-      scope: `${command.scope}:files`,
-      group: row.key,
-      after: cursor?.revision === fact.revision ? cursor.after : undefined,
-      limit: remaining
-    })
-    for (const owner of owners.rows ?? []) {
-      invalidateSessionSearchPhysical(catalog, command.scope, owner.key, fact.value)
+    const inventory = catalog.inventoryObservation(command.scope)
+    const owners = inventory.filesByDependency(
+      row.key,
+      cursor?.revision === fact.revision ? cursor.after : undefined,
+      remaining
+    )
+    for (const path of owners) {
+      invalidateSessionSearchPhysical(catalog, command.scope, path, fact.value)
     }
-    remaining -= owners.rows?.length ?? 0
-    const more =
-      owners.after !== undefined &&
-      catalog.execute({
-        kind: 'page',
-        scope: `${command.scope}:files`,
-        group: row.key,
-        after: owners.after,
-        limit: 1
-      }).rows?.length
+    remaining -= owners.length
+    const after = owners.at(-1)
+    const more = after !== undefined && inventory.filesByDependency(row.key, after, 1).length > 0
     if (more) {
       catalog.execute({
         kind: 'put',
         scope: expansion,
-        rows: [{ ...row, value: JSON.stringify({ revision: fact.revision, after: owners.after }) }]
+        rows: [{ ...row, value: JSON.stringify({ revision: fact.revision, after }) }]
       })
     } else if (
       entry(catalog.execute({ kind: 'get', scope, key: row.key }).rows?.[0])?.revision ===

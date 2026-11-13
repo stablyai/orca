@@ -1,5 +1,8 @@
 import type { SessionSearchReadContext } from '../../ai-vault-search/session-search-work-queue'
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { createQoderSessionResumeState } from '../scanners/qoder/session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'

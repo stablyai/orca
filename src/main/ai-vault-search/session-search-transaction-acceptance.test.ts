@@ -58,6 +58,7 @@ it('keeps accepted searchable content and retries bookkeeping without charging a
   })
   const errors: unknown[] = []
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -215,6 +216,7 @@ it.each(['dirty', 'input-receipts'])(
       }
     })
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -724,4 +726,39 @@ describe('retirement handoff acceptance', () => {
       await state.close()
     }
   })
+})
+
+it('cancels an obsolete released inventory request without reporting a background failure', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-released-worker-request')
+  const errors: unknown[] = []
+  const store = new SessionSearchWorkerStore(harness.databasePath, (error) => errors.push(error))
+  try {
+    await store.prepare()
+    await store.catalog({
+      kind: 'authority-open',
+      scope: 'physical:released-worker',
+      root: harness.root
+    })
+    let released = false
+    while (!released) {
+      released =
+        (await store.catalog({ kind: 'release-scopes-page', scope: 'physical:released-worker' }))
+          .count === 0
+    }
+    await expect(
+      store.catalog({
+        kind: 'get',
+        scope: 'physical:released-worker:files',
+        key: join(harness.root, 'gone.jsonl')
+      })
+    ).rejects.toMatchObject({
+      name: 'AbortError',
+      message: 'Agent Session History scan was cancelled'
+    })
+    await store.flush()
+    expect(errors).toEqual([])
+  } finally {
+    store.close()
+    await harness.cleanup()
+  }
 })

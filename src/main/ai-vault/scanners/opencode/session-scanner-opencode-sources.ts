@@ -5,19 +5,19 @@ import {
 } from '../../session-discovery-context'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { resolveOpenCodeStorageDirectory } from '../../../opencode/opencode-data-directory'
+import type { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
+import { resolveOpenCodeStorageDirectory } from '../../../opencode/accounts/opencode-data-directory'
 import {
   listOpenCodeDatabases,
   listOpenCodeDatabasesInDirectory
 } from '../../../opencode-usage/opencode-database-discovery'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import { discoverOpenCodeSessions } from './sqlite/session-scanner-opencode-sqlite-discovery'
 import { listOpenCode2SqliteSessionsViaWorker } from './reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { isOpenCodeV2DatabaseName } from '../../../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
-import { isMissingTranscriptPathError } from '../../session-scanner-discovery'
-import { scopeWalksAgentFiles } from '../../session-scope-cwd'
+import { isMissingTranscriptPathError } from '../../discovery/session-scanner-discovery'
+import { scopeWalksAgentFiles } from '../../scope/session-scope-cwd'
 
 type OpenCodeSource = {
   storageDir: string

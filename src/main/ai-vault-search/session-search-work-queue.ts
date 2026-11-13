@@ -58,6 +58,7 @@ export type SessionSearchWorkResult = {
 /** Only active reads cross the boundary; the writer owns ready work and its transitions. */
 export class SessionSearchWorkQueue {
   private store: SessionSearchIndexStore | undefined
+  private epoch: number | undefined
   private count = 0
   private remaining = 0
   private page: SessionSearchWork[] = []
@@ -74,7 +75,10 @@ export class SessionSearchWorkQueue {
     return current
   }
   attach(store: SessionSearchIndexStore): void {
-    this.store ??= store
+    if (!this.store) {
+      this.store = store
+      this.epoch = store.catalogEpoch ?? 0
+    }
   }
   get size(): number {
     return this.count
@@ -94,7 +98,7 @@ export class SessionSearchWorkQueue {
     this.remaining = result.left
   }
   private async request(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {
-    const result = await this.store!.work(command)
+    const result = await this.store!.work(command, this.epoch)
     this.update(result)
     return result
   }

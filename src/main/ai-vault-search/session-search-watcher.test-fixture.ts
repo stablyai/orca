@@ -13,7 +13,7 @@ const watchers = vi.hoisted(
       { path: string; callback: WatcherProcessCallback; hooks: WatcherProcessHooks }
     >()
 )
-vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process-supervisor', () => ({
+vi.mock('../ipc/filesystem/watcher-process/supervision/parcel-watcher-process-supervisor', () => ({
   WatcherProcessSupervisor: class {
     async subscribe(
       path: string,

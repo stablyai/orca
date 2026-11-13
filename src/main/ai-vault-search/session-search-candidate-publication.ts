@@ -29,8 +29,9 @@ export abstract class SessionSearchCandidatePublications {
 
   attach(store: SessionSearchIndexStore): void {
     this.boundStore ??= store
+    const epoch = store.catalogEpoch ?? 0
     this.request ??= async (command) => {
-      const result = await store.candidates(command)
+      const result = await store.candidates(command, epoch)
       this.changed = result.pending
       this.publications = result.pendingPublications
       return result

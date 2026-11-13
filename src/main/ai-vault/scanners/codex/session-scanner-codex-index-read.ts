@@ -1,7 +1,8 @@
 import type { Stats } from 'node:fs'
 import { readSessionIndexJsonl, type SessionIndexJsonlRead } from '../../session-index-jsonl-read'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 export type CodexIndexRead = SessionIndexJsonlRead & { titles: Map<string, string> }
 export async function readCodexIndexUpdate(

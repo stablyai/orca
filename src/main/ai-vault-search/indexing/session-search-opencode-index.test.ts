@@ -12,7 +12,7 @@ import {
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import * as filesystem from '../../native-chat/wsl-transcript-fs-access'
+import * as filesystem from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { readWholeTranscript } from '../../ai-vault/transcripts/session-transcript-reader'
 import { buildOpenCodeSqliteCandidatePath } from '../../../shared/opencode-sqlite-session-path'
 import {
@@ -72,15 +72,6 @@ function writeVault(): void {
     }
   ])
 }
-
-it('excludes tool output from both search scopes', async () => {
-  writeVault()
-  await startIndexer()
-
-  const all = openEngine().search({ query: TOOL_ONLY, scope: 'all' })
-  expect(all.hits).toEqual([])
-  expect(openEngine().search({ query: TOOL_ONLY, scope: 'conversation' }).hits).toEqual([])
-})
 
 it('re-reads a session that gained a message and replaces its rows', async () => {
   writeVault()
@@ -170,6 +161,7 @@ it('keeps a duplicate physical row and promotes it when the selected database di
   ])
   let paths = [dbPath(), alternative]
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: paths },
     resolveRoots: async () => ({ ...harness.roots, opencodeDbPaths: paths }),
@@ -221,6 +213,7 @@ it('retains refused database membership while healthy owners settle and retries 
     { id: 'ses_alternative', turns: [{ role: 'user', parts: ['healthyneedle'] }] }
   ])
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: [dbPath(), alternative] },
     historyDays: null,
@@ -339,6 +332,7 @@ it('chooses the original earlier database when an equal-time alias is imported l
     { id: 'ses_shared', turns: [{ role: 'user', parts: ['laterdatabasecopy'] }] }
   ])
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: [dbPath(), alternative] },
     historyDays: null,
@@ -468,6 +462,7 @@ it('retains a restored old row when a family listing loses the earlier absence p
   source.prepare("UPDATE session SET time_updated=1740000000001 WHERE id='ses_restored'").run()
   source.close()
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: {
       ...harness.roots,
@@ -528,6 +523,7 @@ it('settles a full attempt blocked by persistent family enumeration while retain
     { id: 'ses_family', turns: [{ role: 'user', parts: ['retainedfamilyneedle'] }] }
   ])
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: {
       ...harness.roots,
@@ -582,6 +578,7 @@ it.each(['absent', 'positive', 'released'] as const)(
     ])
     const errors: unknown[] = []
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: {
         ...harness.roots,

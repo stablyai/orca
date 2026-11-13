@@ -5,10 +5,13 @@ import {
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
 import { SessionObservationRetries } from '../ai-vault/session-observation-retries'
-import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../ai-vault/session-scan-issues'
+import { throwIfAiVaultScanCancelled } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
+import {
+  recordSessionScanIssue,
+  scanIssueTextFromError
+} from '../ai-vault/parsing/session-scan-issues'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
-import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
+import type { DiscoverSessionFilesArgs } from '../ai-vault/discovery/session-scanner-discovery'
 import type {
   SessionDiscoveryDependency,
   SessionDiscoveryDependencyObserver
@@ -18,7 +21,7 @@ import type { SessionSearchRootWatch } from './session-search-root-watchers'
 /** Losing a subscription invalidates the input observation, not every transcript using that input. */
 export class SessionSearchDependencyInventory {
   private readonly inventory: SessionFileInventory | undefined
-  private readonly observe: SessionDiscoveryDependencyObserver | undefined
+  private observe: SessionDiscoveryDependencyObserver | undefined
   private readonly retries = new SessionObservationRetries()
   private readonly delivered: SessionSearchCatalogClient<{ after?: string }>
   private staging:
@@ -54,7 +57,27 @@ export class SessionSearchDependencyInventory {
     )
   }
   async release(): Promise<boolean> {
-    return (await this.request({ kind: 'release-scopes-page', scope: this.scope })).count === 0
+    const released = this.inventory
+      ? await this.inventory.releasePage()
+      : (await this.keys.transition({ kind: 'release-scopes-page', scope: this.scope })).count === 0
+    if (released) {
+      this.staging = undefined
+      this.inventoryAck = undefined
+      this.discardAfter = undefined
+      this.deliveryAfter = undefined
+      this.retries.clear()
+    }
+    return released
+  }
+  async reactivate(): Promise<void> {
+    await this.inventory?.reactivate()
+    this.observe = this.dependency.observe?.({ request: this.request, scope: this.scope })
+    if (this.staging) {
+      this.staging.iterator = undefined
+      this.staging.done = false
+    }
+    this.deliveryAfter = undefined
+    this.discardAfter = undefined
   }
   async begin(wake: boolean, args: DiscoverSessionFilesArgs): Promise<void> {
     this.retries.begin(wake)

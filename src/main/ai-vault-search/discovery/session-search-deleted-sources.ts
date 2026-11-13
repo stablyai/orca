@@ -43,6 +43,7 @@ export type SessionSearchRetirementArgs = {
   listings: SessionSearchDirectoryReader
   /** Bound directory work rather than rows so one unreadable directory cannot starve later rows. */
   directoryLimit?: number
+  directoryBudget?: { asked: Set<string>; exhausted: boolean }
   signal?: AbortSignal
 }
 
@@ -59,7 +60,7 @@ export async function retireDeletedSessionSearchSources(
   const emptiedRoots = args.emptiedRoots ?? new Set<string>()
   const directoryLimit = args.directoryLimit ?? Number.POSITIVE_INFINITY
   // Count distinct directories, including any already cached by this pass.
-  const asked = new Set<string>()
+  const asked = args.directoryBudget?.asked ?? new Set<string>()
   const listings: SessionSearchDirectoryReader = {
     namesIn: (directory, signal) => {
       asked.add(directory)
@@ -88,7 +89,11 @@ export async function retireDeletedSessionSearchSources(
     const synthetic = splitSyntheticSessionSource(path)
     const filePath = synthetic?.container ?? path
     // After the budget, finish cached directories so row ordering cannot monopolize the next pass.
-    if (signal?.aborted || (asked.size >= directoryLimit && !asked.has(dirname(filePath)))) {
+    const exhausted = asked.size >= directoryLimit && !asked.has(dirname(filePath))
+    if (signal?.aborted || exhausted) {
+      if (exhausted && args.directoryBudget) {
+        args.directoryBudget.exhausted = true
+      }
       retirement.unchecked = paths.slice(index)
       break
     }

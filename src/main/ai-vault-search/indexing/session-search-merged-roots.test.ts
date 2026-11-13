@@ -64,6 +64,7 @@ it.skipIf(!CAN_DENY_READ)('fences one merged root without taking its partner dow
   await writeMessageGraphTranscript(local, ['a conversation on local disk'])
 
   indexer = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -101,6 +102,7 @@ it('retires from one merged root while its partner is healthy', async () => {
   ])
 
   indexer = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,

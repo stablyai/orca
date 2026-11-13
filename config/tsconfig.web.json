@@ -6,12 +6,11 @@
     "../src/renderer/src/**/*.tsx",
     "../src/preload/api-types.ts",
     "../src/preload/api/**/*",
-    "../src/main/pi/rpc-model-schema.ts",
-    "../src/main/pi/rpc-model-options.ts",
+    "../src/main/pi/rpc/options/rpc-model-schema.ts",
+    "../src/main/pi/rpc/options/rpc-model-options.ts",
     "../src/shared/**/*"
   ],
   "exclude": [
-    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {

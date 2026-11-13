@@ -2,7 +2,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { SessionSearchResumableCursor } from './storage/session-search-store-types'
 import { fileIdentity } from './storage/session-search-file-cursor'
-import { asRecord } from '../ai-vault/session-scanner-record-value'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
 
 /** A cold list read must not rewrite a complete, unchanged search entry. */
 export function coversSessionSearchTranscript(

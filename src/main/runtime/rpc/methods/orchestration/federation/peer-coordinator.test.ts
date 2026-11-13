@@ -144,6 +144,20 @@ describe('a paired Orca coordinating its Run on this server', () => {
     ])
   })
 
+  it('leaves out the conversations a pull holds back, and returns the others', async () => {
+    const held = conversationId
+    const other = generateId('peerconv')
+    await peerCall('orchestration.runCurrent', {})
+    await peerCall('orchestration.runCurrent', {}, { conversation: other })
+    for (const conversation of [held, other]) {
+      const runId = db.getPeerRunForConversation(conversation)!.run_id
+      db.insertMessage({ from: 'term_w', to: `run:${runId}`, subject: 'mail', runId })
+    }
+
+    const items = await pull('pull', { holdBack: [held] })
+    expect(items.items.map((item) => item.conversationId)).toEqual([other])
+  })
+
   it('rotates the page when more conversations are pending than it holds, so none starves', async () => {
     const conversations = Array.from({ length: 51 }, () => generateId('peerconv'))
     for (const conversation of conversations) {

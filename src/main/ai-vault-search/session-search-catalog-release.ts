@@ -44,13 +44,20 @@ export function releaseSessionSearchCatalog(
   >
 ): { count: number } {
   let count = 0
+  const receipts = catalog.inventory.observation(command.scope)
+    ? `${command.scope}:input-receipts`
+    : ''
   do {
     catalog.inventory.flush()
     const next = catalog.connection
       .prepare(`SELECT scope FROM temp.search_catalog_counts
-      WHERE n>0 AND (scope=? OR (scope>=? AND scope<?)) ORDER BY scope LIMIT 1`)
-      .get(command.scope, `${command.scope}:`, `${command.scope}:\uffff`)
+      WHERE n>0 AND (scope=? OR (scope>=? AND scope<?))
+      ORDER BY CASE WHEN scope=? THEN 1 ELSE 0 END,scope LIMIT 1`)
+      .get(command.scope, `${command.scope}:`, `${command.scope}:\uffff`, receipts)
     if (!next) {
+      if (command.kind === 'release-scopes-page' && count > 0) {
+        break
+      }
       catalog.inventory.invalidate()
       catalog.connection
         .prepare(`DELETE FROM temp.search_inventory_sources WHERE scope=?

@@ -5,7 +5,7 @@ import {
 import './worker/session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
-import * as filesystem from '../native-chat/wsl-transcript-fs-access'
+import * as filesystem from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { expect, it, vi } from 'vitest'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
@@ -44,6 +44,7 @@ it.each([
   const clock = new FakeSessionSearchClock()
   const errors: unknown[] = []
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -135,6 +136,7 @@ it.each(['before', 'after'] as const)(
     const path = join(harness.claudeProjectDir, 'session.jsonl')
     const clock = new FakeSessionSearchClock()
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -210,6 +212,7 @@ it.each(['acknowledgement', 'accepted-refusal'] as const)(
     const path = join(directory, 'session.jsonl')
     const clock = new FakeSessionSearchClock()
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,

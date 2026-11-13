@@ -3,8 +3,8 @@ import type { Stats } from 'node:fs'
 import {
   openTranscriptReadStream,
   readTranscriptSlice
-} from '../native-chat/wsl-transcript-fs-access'
-import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
+} from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { consumeCompleteJsonlLines } from './parsing/session-scanner-jsonl-reader'
 
 export type SessionIndexJsonlRead = {
   values: Map<string, string>

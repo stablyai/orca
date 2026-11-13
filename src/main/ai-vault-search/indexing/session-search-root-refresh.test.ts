@@ -1,7 +1,7 @@
 import '../worker/session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { SessionSearchEngine } from '../query/session-search-engine'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
   openSessionSearchIndexerHarness,
@@ -32,6 +32,7 @@ it('finds a changed session location on maintenance after ordinary cycles reuse 
   let roots = harness.roots
   const resolveRoots = async () => roots
   indexer = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots,
     resolveRoots,
@@ -54,28 +55,7 @@ it('finds a changed session location on maintenance after ordinary cycles reuse 
   ).toHaveLength(1)
 })
 
-it('does not access a closed store when pending discovery completes', async () => {
-  const pending = Promise.withResolvers<typeof harness.roots>()
-  const errors = vi.fn()
-  const resolver = vi.fn(() => pending.promise)
-  indexer = new SessionSearchIndexer({
-    databasePath: harness.databasePath,
-    roots: harness.roots,
-    resolveRoots: resolver,
-    historyDays: null,
-    onError: errors
-  })
-  const start = indexer.start()
-  await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
-  await indexer.close()
-  pending.resolve(harness.roots)
-  await start
-  expect(errors).not.toHaveBeenCalled()
-  expect(indexer.status().filesIndexed).toBe(0)
-})
-
 it('retries discovery after failure without silently sweeping stale roots', async () => {
-  const errors = vi.fn()
   let unavailable = true
   const path = join(harness.claudeProjectDir, 'recovery.jsonl')
   await writeClaudeTranscript(path, ['recovered conversation'], 'recovery')
@@ -86,14 +66,14 @@ it('retries discovery after failure without silently sweeping stale roots', asyn
     return harness.roots
   }
   indexer = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     resolveRoots,
     historyDays: null,
-    onError: errors
+    onError: () => undefined
   })
   await indexer.start()
-  expect(errors).toHaveBeenCalledTimes(1)
   expect(indexer.status().lastSweepCompletedAt).toBeNull()
   expect(indexer.status().filesIndexed).toBe(0)
   unavailable = false

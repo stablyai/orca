@@ -11,7 +11,7 @@ import {
 } from './host-repo-catalog-snapshot-recorder'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
-import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
+import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 
 vi.mock('electron', () => ({
   app: {

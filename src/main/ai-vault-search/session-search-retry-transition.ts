@@ -1,5 +1,5 @@
 import { admitSessionSearchPrimaryFailures } from './session-search-primary-retries'
-import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
+import { isInsideSessionRoot } from '../ai-vault/discovery/session-file-discovery'
 import { relative } from 'node:path'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
@@ -139,7 +139,7 @@ function admit(
         }
       } else if (
         !authorityRow(catalog, `${owner}:dirty`, row.key) &&
-        !authorityRow(catalog, `${owner}:observing`, row.key)
+        !catalog.inventoryObservation(owner).observing(row.key)
       ) {
         invalidateSessionSearchPhysical(catalog, owner, row.key, debt.force, false)
       }

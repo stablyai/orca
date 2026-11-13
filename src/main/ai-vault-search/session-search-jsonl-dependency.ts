@@ -3,9 +3,9 @@ import {
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
 import type { SessionDiscoveryDependencyObserver } from '../ai-vault/session-discovery-context'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { wslGatedStat } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { isMissingTranscriptPathError } from '../ai-vault/session-file-observation'
-import { consumeCompleteJsonlLines } from '../ai-vault/session-scanner-jsonl-reader'
+import { consumeCompleteJsonlLines } from '../ai-vault/parsing/session-scanner-jsonl-reader'
 import {
   canAppendSessionIndexJsonl,
   firstRecordSignature,

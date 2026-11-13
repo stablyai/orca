@@ -14,7 +14,7 @@ import type {
 import {
   createAiVaultScanCancelledError,
   abandonRemoteSessionScanOnCancel
-} from '../../ai-vault/ai-vault-scan-cancellation'
+} from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import {
   SessionSearchWorkerClient,
   SessionSearchOperationError
@@ -147,6 +147,9 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     this.transfers.add(promise)
     void promise
       .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return
+        }
         if (error instanceof SessionSearchOperationError) {
           reportSessionSearchBackgroundError(this.onError, error)
           return
@@ -219,8 +222,14 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       after = rows.at(-1)?.path
     } while (after !== undefined)
   }
-  async candidates(command: SessionSearchCandidateCommand): Promise<SessionSearchCandidateResult> {
-    const response = await this.catalogTransport.request({ op: 'candidates', command })
+  async candidates(
+    command: SessionSearchCandidateCommand,
+    runtimeEpoch?: number
+  ): Promise<SessionSearchCandidateResult> {
+    const response = await this.catalogTransport.request(
+      { op: 'candidates', command },
+      runtimeEpoch
+    )
     if (!response.candidates) {
       throw new Error('Session search candidate catalog unavailable')
     }
@@ -230,15 +239,21 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     }
     return response.candidates
   }
-  async work(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {
-    const response = await this.catalogTransport.request({ op: 'work', command })
+  async work(
+    command: SessionSearchWorkCommand,
+    runtimeEpoch?: number
+  ): Promise<SessionSearchWorkResult> {
+    const response = await this.catalogTransport.request({ op: 'work', command }, runtimeEpoch)
     if (!response.work) {
       throw new Error('Session search work catalog unavailable')
     }
     return response.work
   }
-  async catalog(command: SessionSearchCatalogCommand): Promise<SessionSearchCatalogResult> {
-    const response = await this.catalogTransport.request({ op: 'catalog', command })
+  async catalog(
+    command: SessionSearchCatalogCommand,
+    runtimeEpoch?: number
+  ): Promise<SessionSearchCatalogResult> {
+    const response = await this.catalogTransport.request({ op: 'catalog', command }, runtimeEpoch)
     if (!response.catalog) {
       throw new Error('Session search catalog unavailable')
     }
@@ -259,26 +274,6 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   setFileState(path: string, state: SessionSearchFileState, mtime?: number): void {
     if (this.acceptingReads) {
       void this.send({ op: 'state', path, state, mtime })
-    }
-  }
-  async removeFile(path: string): Promise<boolean> {
-    if (!this.acceptingReads) {
-      return false
-    }
-    const epoch = this.client.epoch,
-      snapshotEpoch = this.snapshotEpoch
-    try {
-      const response = await this.send({ op: 'remove', path })
-      return (
-        this.acceptingReads &&
-        epoch === this.client.epoch &&
-        snapshotEpoch === this.snapshotEpoch &&
-        response.accepted === true &&
-        !response.failure &&
-        !this.coverage.has(path)
-      )
-    } catch {
-      return false
     }
   }
   async purgeOlderThan(cutoff: number | null, signal?: AbortSignal): Promise<void> {

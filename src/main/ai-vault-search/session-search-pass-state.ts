@@ -1,3 +1,4 @@
+import { createAiVaultScanCancelledError } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import type {
   SessionSearchIndexStore,
   SessionSearchFileRow
@@ -23,8 +24,9 @@ export class SessionSearchPassState {
     exhausted: boolean
   } | null = null
   retirementTurn: 'queued' | 'sweep' = 'queued'
-  private catalog: SessionSearchCatalogRequest | undefined
-  private readonly request: SessionSearchCatalogRequest = (command) => this.catalog!(command)
+  private request: SessionSearchCatalogRequest = async () => {
+    throw createAiVaultScanCancelledError()
+  }
   retire = this.retirementFrontier('retirement')
   parkedRetire = this.retirementFrontier('parked-retirement')
   private retirementFrontier(scope: string) {
@@ -51,16 +53,18 @@ export class SessionSearchPassState {
       this.queue = new SessionSearchWorkQueue()
       this.retirement = null
       this.retirementTurn = 'queued'
-      this.retire = this.retirementFrontier('retirement')
-      this.parkedRetire = this.retirementFrontier('parked-retirement')
       this.needsRetirement = true
       this.recovering = true
     }
-    this.catalog = (command) => store.catalog(command)
-    this.epoch = epoch
+    if (this.epoch !== epoch) {
+      this.request = (command) => store.catalog(command, epoch)
+      this.retire = this.retirementFrontier('retirement')
+      this.parkedRetire = this.retirementFrontier('parked-retirement')
+      this.epoch = epoch
+    }
     this.candidates.attach(store)
     this.queue.attach(store)
-    this.discovery.attach((command) => store.catalog(command))
+    this.discovery.attach(this.request)
   }
   acceptCounts(scopeCounts: [string, number, number][]): void {
     recordSessionSearchCatalogCounts(this.request, { scopeCounts })

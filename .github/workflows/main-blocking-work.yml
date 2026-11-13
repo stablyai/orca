@@ -1,0 +1,26 @@
+name: Main blocking work guards
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: main-blocking-work-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  ratchets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/install-node-dependencies
+      # Run the blocking-work ratchets over the full tree after every main merge.
+      - name: Enforce ratchets
+        run: |
+          node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-sync-fs-ratchet.mjs
+          node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-api-ratchet.mjs
+      # The PR preflight runs spawn separately, so the discovery runner intentionally excludes it.
+      - name: Enforce synchronous launches
+        if: '!cancelled()'
+        run: node config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs

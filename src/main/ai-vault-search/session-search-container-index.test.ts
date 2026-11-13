@@ -41,6 +41,7 @@ it.each(['refused', 'lost response'] as const)(
     ])
     const errors: unknown[] = []
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: { ...harness.roots, opencodeDbPaths: [dbPath()] },
       historyDays: null,
@@ -157,6 +158,7 @@ it('indexes every session from a long database path through bounded expanded req
   writeOpenCodeSqliteDatabase(physical, sessions)
   const traffic = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: [physical] },
     historyDays: null,
@@ -209,6 +211,7 @@ it('resumes interrupted omission work fairly without repeating either full obser
     ])
   }
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: [dbPath(), other] },
     historyDays: null,

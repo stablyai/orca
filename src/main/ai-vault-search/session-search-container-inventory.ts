@@ -3,7 +3,7 @@ import { SessionSearchOperationError } from './worker/session-search-worker-clie
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import { SessionSearchContainerRetirements } from './session-search-container-retirements'
 import { SessionSearchCatalogClient } from './session-search-catalog-client'
-import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
+import { throwIfAiVaultScanCancelled } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
 import { splitSyntheticSessionSource } from './discovery/session-search-synthetic-sources'

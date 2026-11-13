@@ -1,3 +1,4 @@
+import { createAiVaultScanCancelledError } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import type { SessionSearchValueRow } from './session-search-value-row'
 import { SessionSearchInventoryObservation } from './session-search-inventory-observation'
 import type {
@@ -80,6 +81,9 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
       : this.db
           .prepare('SELECT id,root FROM temp.search_inventory_sources WHERE scope=?')
           .get(sourceScope)
+    if (!row && (sourceScope.startsWith('physical:') || sourceScope.startsWith('dependency:'))) {
+      throw createAiVaultScanCancelledError()
+    }
     return row ? { source: Number(row.id), member } : undefined
   }
 
@@ -126,6 +130,55 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
     if (!this.page) {
       page.flush()
     }
+  }
+  directoryEpoch(source: number, path: string) {
+    this.page?.flushEpochs()
+    const row = this.db
+      .prepare(`SELECT revision,cutoff,sealed FROM temp.search_inventory_epochs
+      WHERE source=? AND kind='epochs' AND path=?`)
+      .get(source, path)
+    return (
+      row && {
+        revision: Number(row.revision),
+        cutoff: Number(row.cutoff),
+        sealed: row.sealed === 1
+      }
+    )
+  }
+  putDirectoryEpoch(
+    source: number,
+    path: string,
+    value?: { revision: number; cutoff: number; sealed: boolean }
+  ): void {
+    this.writeEpoch(source, 'epochs', path, value)
+  }
+  removalEpoch(source: number, path: string, cutoff?: number): void {
+    this.writeEpoch(
+      source,
+      'removal-epochs',
+      path,
+      cutoff === undefined ? undefined : { revision: cutoff, cutoff, sealed: false }
+    )
+  }
+  private writeEpoch(
+    source: number,
+    kind: 'epochs' | 'removal-epochs',
+    path: string,
+    value?: { revision: number; cutoff: number; sealed: boolean }
+  ): void {
+    this.page?.changeFloor(source)
+    this.page?.flushEpochs()
+    if (!value) {
+      this.db
+        .prepare('DELETE FROM temp.search_inventory_epochs WHERE source=? AND kind=? AND path=?')
+        .run(source, kind, path)
+      return
+    }
+    this.db
+      .prepare(`INSERT INTO temp.search_inventory_epochs(source,kind,path,revision,cutoff,sealed)
+      VALUES (?,?,?,?,?,?) ON CONFLICT(source,kind,path) WHERE kind<>'observation-epochs'
+      DO UPDATE SET revision=excluded.revision,cutoff=excluded.cutoff,sealed=excluded.sealed`)
+      .run(source, kind, path, value.revision, value.cutoff, Number(value.sealed))
   }
   select(owner: SessionSearchInventoryOwner): string {
     const relation = sessionSearchInventoryRelation(owner.member)
@@ -187,16 +240,16 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
     }
     return this.page ? this.page.floor(owner.source, read) : read().cutoff
   }
-  reclaimAuthority(scope: string, rows: SessionSearchCatalogRow[]): boolean {
+  reclaimAuthority(scope: string, paths: string[]): boolean {
     this.invalidate()
     const owner = this.owner(`${scope}:authority`)
     if (!owner) {
       return false
     }
-    if (!rows.length) {
+    if (!paths.length) {
       return true
     }
-    const keys = JSON.stringify(rows.map((row) => row.key))
+    const keys = JSON.stringify(paths)
     this.db
       .prepare(`WITH live AS MATERIALIZED (
       SELECT a.path,(a.observation_authority IS NOT NULL OR a.delivery_revision IS NOT NULL

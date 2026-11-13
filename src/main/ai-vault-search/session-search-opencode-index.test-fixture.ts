@@ -123,6 +123,7 @@ export async function startIndexer(
   options: { fullSweepEveryCycles?: number; degraded?: boolean } = {}
 ): Promise<SessionSearchIndexer> {
   const started = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: { ...harness.roots, opencodeDbPaths: [dbPath()] },
     historyDays: null,

@@ -1,7 +1,8 @@
+import { admitSessionSearchPrimarySeed } from './session-search-discovery-seed'
 import { SessionSearchDiscoverySources } from './session-search-discovery-sources'
 import { SessionSearchDependencyInventory } from './session-search-dependency-inventory'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
-import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
+import type { DiscoverSessionFilesArgs } from '../ai-vault/discovery/session-scanner-discovery'
 import type { SessionFileDiscovery } from '../ai-vault/session-scanner-types'
 import type { SessionDiscoveryContext } from '../ai-vault/session-discovery-context'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
@@ -28,9 +29,18 @@ export class SessionSearchDiscoveryInventory
       }
       this.roots.set(key, root)
     }
+    if (root.retiring) {
+      await root.inventory.reactivate()
+      if (root.physicalReleased) {
+        for (const observer of root.dependencies.values()) {
+          await observer.reactivate()
+        }
+      }
+    }
     root.retiring = false
     root.args = args
     await root.inventory.begin(this.force || this.maintenance, args)
+    root.physicalReleased = false
     const wake = this.primaryWake !== undefined && root.wake !== this.primaryWake
     if (wake) {
       if (!root.inventory.empty) {
@@ -38,17 +48,8 @@ export class SessionSearchDiscoveryInventory
       }
       root.wake = this.primaryWake
     }
-    const admitPrimary = async () => {
-      if (
-        root.inventory.primarySeedWaiting &&
-        root.inventory.seedDelivered &&
-        (!this.admitSeed || (await this.admitSeed(args.rootDir, args.agent)))
-      ) {
-        await root.inventory.retryFailures()
-        return true
-      }
-      return false
-    }
+    const admitPrimary = () =>
+      admitSessionSearchPrimarySeed(root.inventory, args.rootDir, args.agent, this.admitSeed)
     await admitPrimary()
     let watching = false
     if (this.maintenance) {

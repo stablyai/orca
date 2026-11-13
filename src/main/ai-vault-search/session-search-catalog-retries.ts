@@ -1,7 +1,7 @@
 import type { SessionSearchInputReceipt } from './session-search-catalog-types'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
-import { recordSessionScanIssue, SCAN_ISSUE_LIMIT } from '../ai-vault/session-scan-issues'
+import { recordSessionScanIssue, SCAN_ISSUE_LIMIT } from '../ai-vault/parsing/session-scan-issues'
 import { SessionSearchCatalogClient } from './session-search-catalog-client'
 
 type Debt = { failures: number; attempted: number; force: boolean; issue?: AiVaultScanIssue }

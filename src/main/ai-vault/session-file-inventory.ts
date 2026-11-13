@@ -1,10 +1,9 @@
 import type { SessionSearchInputReceipt } from '../ai-vault-search/session-search-catalog-types'
 import type { SessionSearchRemovalReceipt } from '../ai-vault-search/session-search-observation-authority'
 import { SessionInventoryDirtyInputs } from './session-file-inventory-dirty'
-import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import type { DiscoverSessionFilesArgs } from './session-scanner-discovery'
-import type { SessionInventoryFiles, SessionFileChange } from './session-file-inventory-files'
-import type { SessionSearchPreparedObservation } from '../ai-vault-search/session-search-observation-types'
+import { throwIfAiVaultScanCancelled } from './scan-lifecycle/ai-vault-scan-cancellation'
+import type { DiscoverSessionFilesArgs } from './discovery/session-scanner-discovery'
+import type { SessionFileChange } from './session-file-inventory-files'
 export type { SessionFileChange } from './session-file-inventory-files'
 
 /** The writer retains queued directories, observations and membership across bounded passes. */
@@ -24,7 +23,24 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
     return this.initialized && !this.pending && !this.refused && !this.hasMembership
   }
   async releasePage(): Promise<boolean> {
-    return (await this.request({ kind: 'release-scopes-page', scope: this.scope })).count === 0
+    if ((await this.request({ kind: 'release-scopes-page', scope: this.scope })).count !== 0) {
+      return false
+    }
+    this.resetAfterRelease()
+    return true
+  }
+  async reactivate(): Promise<void> {
+    await this.completeReactivation()
+    this.resetAfterRelease()
+  }
+  private resetAfterRelease(): void {
+    this.initialized = false
+    this.reconciling = false
+    this.reconcileAgain = false
+    this.waking = undefined
+    this.releaseProbe()
+    this.observations.released()
+    this.removedDirectories.clear()
   }
   async removePage(): Promise<string[]> {
     const page = await this.observations.files.page()
@@ -154,29 +170,6 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
         await this.observations.observe(path, args, false, limit)
       }
     }
-  }
-  async observeForRead(
-    path: string,
-    args: DiscoverSessionFilesArgs,
-    limit: number,
-    metadataOnly = false,
-    metadataOwed = false,
-    dependencyOwners?: { scope: string; key: string }[],
-    prepared?: SessionSearchPreparedObservation
-  ) {
-    return this.observations.readForIndex(
-      path,
-      args,
-      limit,
-      metadataOnly,
-      metadataOwed,
-      dependencyOwners,
-      prepared
-    )
-  }
-
-  readPreparation(...args: Parameters<SessionInventoryFiles['readPreparation']>) {
-    return this.observations.readPreparation(...args)
   }
   async drain(
     args: DiscoverSessionFilesArgs,

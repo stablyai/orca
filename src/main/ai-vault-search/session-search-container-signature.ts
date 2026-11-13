@@ -1,6 +1,6 @@
-import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
-import { isMissingTranscriptPathError } from '../ai-vault/session-scanner-discovery'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { throwIfAiVaultScanCancelled } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
+import { isMissingTranscriptPathError } from '../ai-vault/discovery/session-scanner-discovery'
+import { wslGatedStat } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 
 export async function sessionSearchContainerSignature(path: string, signal?: AbortSignal) {
   let known = true

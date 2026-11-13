@@ -3,7 +3,6 @@ import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-se
 
 export { authorityValue } from './session-search-authority-page'
 
-type Authority = { self: number; tree: number }
 export type SessionSearchRemovalReceipt = { scope: string; revision: number; authority: number }
 export function authorityRow(catalog: SessionSearchCatalog, scope: string, key: string) {
   return catalog.execute({ kind: 'get', scope, key }).rows?.[0]
@@ -25,7 +24,7 @@ export function sessionSearchInputAuthority(
   scope: string,
   path: string
 ): number {
-  return authorityValue<Authority>(authorityRow(catalog, `${scope}:authority`, path))?.self ?? 0
+  return catalog.inventoryObservation(scope).authority(path)?.self ?? 0
 }
 export function recordSessionSearchInput(
   catalog: SessionSearchCatalog,
@@ -57,9 +56,10 @@ export function rearmSessionSearchAuthority(
   scope: string,
   path: string
 ): void {
-  const row = authorityRow(catalog, `${scope}:authority`, path)
+  const observation = catalog.inventoryObservation(scope)
+  const row = observation.authority(path)
   if (row && !row.ready) {
-    catalog.execute({ kind: 'put', scope: `${scope}:authority`, rows: [{ ...row, ready: 1 }] })
+    observation.putAuthority(path, { ...row, ready: 1 })
   }
 }
 export function validSessionSearchRemoval(
@@ -67,9 +67,7 @@ export function validSessionSearchRemoval(
   path: string,
   receipt: SessionSearchRemovalReceipt
 ): boolean {
-  const current = authorityValue<{ removed?: boolean; revision: number; authority: number }>(
-    authorityRow(catalog, `${receipt.scope}:delivery`, path)
-  )
+  const current = catalog.inventoryObservation(receipt.scope).delivery(path)
   return (
     current?.removed === true &&
     current.revision === receipt.revision &&
@@ -99,7 +97,7 @@ export function sessionSearchDirectoryEpoch(
   scope: string,
   path: string
 ) {
-  return authorityValue<SessionSearchDirectoryEpoch>(authorityRow(catalog, `${scope}:epochs`, path))
+  return catalog.inventoryObservation(scope).directoryEpoch(path)
 }
 export function endSessionSearchDirectory(
   catalog: SessionSearchCatalog,
@@ -110,57 +108,40 @@ export function endSessionSearchDirectory(
   if (sessionSearchDirectoryEpoch(catalog, scope, path)?.revision !== epoch) {
     return
   }
-  catalog.execute({ kind: 'delete', scope: `${scope}:epochs`, key: path })
+  catalog.inventoryObservation(scope).putDirectoryEpoch(path)
   putAuthorityValue(catalog, `${scope}:authority-garbage`, `${epoch}:${path}`, { path, epoch })
 }
 export function transitionSessionSearchAuthority(
   catalog: SessionSearchCatalog,
   command: SessionSearchAuthorityCommand
 ) {
-  const epochs = `${command.scope}:epochs`
+  if (command.kind === 'authority-open') {
+    catalog.inventory.open(command.scope, command.root)
+    return {}
+  }
+  const observation = catalog.inventoryObservation(command.scope)
   if (command.kind === 'authority-probe') {
     const revision = recordSessionSearchInput(catalog, command.scope, command.path)
-    putAuthorityValue(
-      catalog,
-      `${command.scope}:observation-epochs`,
-      String(revision),
-      command.path,
-      revision
-    )
+    observation.epoch(revision, command.path)
     return { observationEpoch: revision }
   }
   if (command.kind === 'authority-probe-end') {
-    catalog.execute({
-      kind: 'delete',
-      scope: `${command.scope}:observation-epochs`,
-      key: String(command.revision)
-    })
+    observation.epoch(command.revision)
     rearmSessionSearchAuthority(catalog, command.scope, command.path)
     return {
       invalidProof: newerSessionSearchInput(catalog, command.scope, command.path, command.revision)
     }
   }
-  if (command.kind === 'authority-open') {
-    catalog.inventory.open(command.scope, command.root)
-    putAuthorityValue(catalog, `${command.scope}:authority-root`, 'root', command.root)
-    return {}
-  }
   if (command.kind === 'directory-begin') {
     const revision = catalog.nextRevision()
     const cutoff = command.cutoff ?? revision
-    putAuthorityValue(
-      catalog,
-      epochs,
-      command.path,
-      { revision, cutoff, sealed: command.cutoff !== undefined },
-      cutoff
-    )
+    observation.putDirectoryEpoch(command.path, {
+      revision,
+      cutoff,
+      sealed: command.cutoff !== undefined
+    })
     if (command.cutoff !== undefined) {
-      catalog.execute({
-        kind: 'delete',
-        scope: `${command.scope}:removal-epochs`,
-        key: command.path
-      })
+      observation.removalEpoch(command.path)
     }
     return { observationEpoch: revision }
   }
@@ -170,13 +151,9 @@ export function transitionSessionSearchAuthority(
       return { invalidProof: true }
     }
     if (command.kind === 'directory-stage') {
-      catalog.execute({
-        kind: 'put',
-        scope: `${command.scope}:directory-input`,
-        rows: command.rows.map((row) => ({ ...row, group: String(command.epoch) }))
-      })
+      observation.stage(command.path, command.epoch, command.rows)
     } else {
-      putAuthorityValue(catalog, epochs, command.path, { ...epoch, sealed: true }, epoch.cutoff)
+      observation.putDirectoryEpoch(command.path, { ...epoch, sealed: true })
     }
     return {}
   }
@@ -185,7 +162,7 @@ export function transitionSessionSearchAuthority(
     const directoryProtected =
       !!epoch && newerSessionSearchInput(catalog, command.scope, command.path, epoch.cutoff)
     if (command.remove && epoch?.revision === command.epoch && !directoryProtected) {
-      catalog.execute({ kind: 'delete', scope: `${command.scope}:directories`, key: command.path })
+      observation.removeDirectory(command.path)
     }
     endSessionSearchDirectory(catalog, command.scope, command.path, command.epoch)
     return { directoryProtected: command.remove && directoryProtected }
@@ -194,64 +171,27 @@ export function transitionSessionSearchAuthority(
 }
 
 export function cleanupSessionSearchAuthority(catalog: SessionSearchCatalog, scope: string) {
+  const observation = catalog.inventoryObservation(scope)
   const garbageScope = `${scope}:authority-garbage`
   const garbage = catalog.execute({ kind: 'page', scope: garbageScope, limit: 1 }).rows?.[0]
   if (garbage) {
     const value = authorityValue<{ path: string; epoch: number }>(garbage)!
-    const page = catalog.execute({
-      kind: 'page',
-      scope: `${scope}:directory-input`,
-      parent: value.path,
-      group: String(value.epoch)
-    })
-    const keys = (page.rows ?? []).map((row) => row.key)
-    if (
-      !catalog.inventory.deleteStaged(
-        `${scope}:directory-input`,
-        value.path,
-        String(value.epoch),
-        keys
-      )
-    ) {
-      catalog.execute({ kind: 'delete-page', scope: `${scope}:directory-input`, keys })
-    }
-    if (
-      !catalog.execute({
-        kind: 'page',
-        scope: `${scope}:directory-input`,
-        parent: value.path,
-        group: String(value.epoch),
-        limit: 1
-      }).rows?.length
-    ) {
+    const keys = observation.stagedPage(value.path, value.epoch).map((row) => row.key)
+    catalog.inventory.deleteStaged(
+      `${scope}:directory-input`,
+      value.path,
+      String(value.epoch),
+      keys
+    )
+    if (!observation.stagedPage(value.path, value.epoch, '', 1).length) {
       catalog.execute({ kind: 'delete', scope: garbageScope, key: garbage.key })
     }
     return {}
   }
   const floor = catalog.minimumFloor(scope)
-  const page = catalog.execute({
-    kind: 'page',
-    scope: `${scope}:authority`,
-    ready: 1,
-    orderRank: true,
-    beforeRank: floor === Infinity ? catalog.nextRevision() : floor
-  })
-  if (catalog.inventory.reclaimAuthority(scope, page.rows ?? [])) {
-    return {}
-  }
-  for (const row of page.rows ?? []) {
-    const live = ['dirty', 'observing', 'refusals', 'file-refusals', 'delivery'].some(
-      (suffix) => !!authorityRow(catalog, `${scope}:${suffix}`, row.key)
-    )
-    if (live) {
-      catalog.execute({
-        kind: 'put',
-        scope: `${scope}:authority`,
-        rows: [{ ...row, ready: 0 }]
-      })
-    } else {
-      catalog.execute({ kind: 'delete', scope: `${scope}:authority`, key: row.key })
-    }
-  }
+  catalog.inventory.reclaimAuthority(
+    scope,
+    observation.readyAuthority(floor === Infinity ? catalog.nextRevision() : floor)
+  )
   return {}
 }

@@ -8,7 +8,7 @@ import {
   type SessionSearchCatalogClient,
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
-import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
+import { recordSessionScanIssue } from '../ai-vault/parsing/session-scan-issues'
 import { SessionObservationRetries } from '../ai-vault/session-observation-retries'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionFileDiscovery } from '../ai-vault/session-scanner-types'

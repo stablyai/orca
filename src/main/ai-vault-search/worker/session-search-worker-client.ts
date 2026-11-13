@@ -1,3 +1,5 @@
+import { AI_VAULT_SCAN_CANCELLED_MESSAGE } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { createAiVaultScanCancelledError } from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import { recordRelayedSpan } from '../../observability/tracer'
 import { existsSync } from 'node:fs'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
@@ -58,7 +60,9 @@ export class SessionSearchWorkerClient {
         }
         this.pending.delete(value.id)
         this.postHeld()
-        if (value.error && !value.failure) {
+        if (value.error === AI_VAULT_SCAN_CANCELLED_MESSAGE) {
+          call.reject(createAiVaultScanCancelledError())
+        } else if (value.error && !value.failure) {
           call.reject(new SessionSearchOperationError(value.error))
         } else {
           call.resolve(value)

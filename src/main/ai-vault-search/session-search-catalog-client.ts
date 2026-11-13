@@ -30,10 +30,18 @@ export function shareSessionSearchCatalogCounts(
 
 export function recordSessionSearchCatalogCounts(
   send: SessionSearchCatalogRequest,
-  result: SessionSearchCatalogResult
+  result: SessionSearchCatalogResult,
+  command?: SessionSearchCatalogCommand
 ): void {
   if (!counts.has(send)) {
     counts.set(send, new Map())
+  }
+  if (command?.kind === 'release-scopes-page' && result.count === 0) {
+    for (const scope of counts.get(send)!.keys()) {
+      if (scope === command.scope || scope.startsWith(`${command.scope}:`)) {
+        counts.get(send)!.delete(scope)
+      }
+    }
   }
   for (const [scope, count, runnable] of result.scopeCounts ?? []) {
     if (count) {
@@ -56,7 +64,7 @@ export class SessionSearchCatalogClient<T> {
   }
   private async request(command: SessionSearchCatalogCommand): Promise<SessionSearchCatalogResult> {
     const result = await this.send(command)
-    recordSessionSearchCatalogCounts(this.send, result)
+    recordSessionSearchCatalogCounts(this.send, result, command)
     return result
   }
   get size(): number {

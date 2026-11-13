@@ -4,11 +4,11 @@ import {
 } from '../../../session-discovery-context'
 import { basename, extname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { discoverFiles } from '../../../session-scanner-discovery'
+import { discoverFiles } from '../../../discovery/session-scanner-discovery'
 import { splitOpenCodeSqliteCandidate } from '../../../../../shared/opencode-sqlite-session-path'
 import { listOpenCodeSqliteSessionsViaWorker } from '../reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { FileWithMtime, SessionFileDiscovery } from '../../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../../session-scope-cwd'
+import { scopeWalksAgentFiles } from '../../../scope/session-scope-cwd'
 
 function sessionIdFromLegacyFilePath(filePath: string): string {
   return basename(filePath, extname(filePath))

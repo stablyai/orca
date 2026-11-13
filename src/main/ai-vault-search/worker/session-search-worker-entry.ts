@@ -242,7 +242,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
       break
     case 'purge': {
       store.setRetentionCutoffMs(c.cutoff)
-      await withSpan('aiVault.search.purge', () => store!.purgeOlderThan(c.cutoff))
+      await withSpan('aiVault.search.retentionPurge', () => store!.purgeOlderThan(c.cutoff))
       counts = store.stateCounts()
       return {
         id,

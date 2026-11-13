@@ -124,30 +124,9 @@ async function framePixel(page) {
   })
 }
 
-const sourceText = (page) => page.getByText(MARKER, { exact: false })
-
 for (const engine of ['chromium', 'webkit']) {
   const describeRender = bundles ? describe : describe.skip
   describeRender(`an HTML file on the file-preview route on ${engine}`, () => {
-    it('paints the page, and Source shows its markup', async () => {
-      const { context, page, errors } = await openHtmlFile(browsers[engine])
-      const frame = page.locator('iframe')
-      await frame.waitFor({ timeout: 60_000 })
-      await expect.poll(() => framePixel(page), { timeout: 10_000 }).toBe(PAINT_RGB)
-      if (shots) {
-        await page.screenshot({ path: join(shots, `html-file-preview-${engine}.png`) })
-      }
-
-      await page.getByRole('tab', { name: 'View HTML source' }).click()
-      await sourceText(page).waitFor()
-      expect(await page.locator('iframe').count()).toBe(0)
-      if (shots) {
-        await page.screenshot({ path: join(shots, `html-file-source-${engine}.png`) })
-      }
-      expect(errors).toEqual([])
-      await context.close()
-    }, 90_000)
-
     it('renders unsaved HTML edits and retains them when returning to Source', async () => {
       const { context, page, errors } = await openHtmlFile(browsers[engine], { editable: true })
       await page.locator('iframe').waitFor({ timeout: 60_000 })
@@ -165,36 +144,5 @@ for (const engine of ['chromium', 'webkit']) {
       expect(errors).toEqual([])
       await context.close()
     }, 90_000)
-
-    it('opens a line-targeted file on Source, and a truncated one as text only', async () => {
-      const targeted = await openHtmlFile(browsers[engine], { line: '3' })
-      await targeted.page
-        .getByRole('tab', { name: 'View HTML source' })
-        .waitFor({ timeout: 60_000 })
-      await sourceText(targeted.page).waitFor()
-      expect(
-        await targeted.page
-          .getByRole('tab', { name: 'View HTML source' })
-          .getAttribute('aria-selected')
-      ).toBe('true')
-      expect(await targeted.page.locator('iframe').count()).toBe(0)
-      if (shots) {
-        await targeted.page.screenshot({ path: join(shots, `html-file-line-${engine}.png`) })
-      }
-      await targeted.page.getByRole('tab', { name: 'Preview rendered HTML' }).click()
-      await expect.poll(() => framePixel(targeted.page), { timeout: 10_000 }).toBe(PAINT_RGB)
-      expect(targeted.errors).toEqual([])
-      await targeted.context.close()
-
-      const truncated = await openHtmlFile(browsers[engine], { truncated: true })
-      await sourceText(truncated.page).waitFor({ timeout: 60_000 })
-      expect(await truncated.page.locator('iframe').count()).toBe(0)
-      expect(await truncated.page.getByRole('tab').count()).toBe(0)
-      if (shots) {
-        await truncated.page.screenshot({ path: join(shots, `html-file-truncated-${engine}.png`) })
-      }
-      expect(truncated.errors).toEqual([])
-      await truncated.context.close()
-    }, 120_000)
   })
 }

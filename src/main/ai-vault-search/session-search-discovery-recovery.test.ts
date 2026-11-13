@@ -6,7 +6,7 @@ import {
 import { appendFile, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import * as filesystem from '../native-chat/wsl-transcript-fs-access'
+import * as filesystem from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import * as parser from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import * as policy from './session-search-filesystem'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
@@ -29,6 +29,7 @@ it.each([100, 1000])(
     const clock = new FakeSessionSearchClock()
     const path = join(harness.claudeProjectDir, 'active.jsonl')
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -99,6 +100,7 @@ it('retries a refused first observation after settlement without another filesys
     return actual(observed, ...rest)
   })
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -133,6 +135,7 @@ it('advances the discovery suffix during continuous updates and repeated overflo
   const active = join(harness.claudeProjectDir, 'active.jsonl')
   const listings = vi.spyOn(filesystem, 'wslGatedReaddir')
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -189,6 +192,7 @@ it.each([40, 400])(
     const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(true)
     const reads = vi.spyOn(parser, 'parseAgentSessionFileCached')
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -252,6 +256,7 @@ it.each([200, 2000])(
     const messages = join(storage, 'message', 'ses_remote')
     const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(true)
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -337,6 +342,7 @@ it.each(['first-file', 'accepted-file', 'directory'] as const)(
     const directory = join(harness.roots.claudeProjectsDir ?? '', 'refused')
     const path = join(directory, 'history.jsonl')
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -438,6 +444,7 @@ it.each([false, true])(
       return actual(input, ...rest)
     })
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: { ...harness.roots, kimiSessionsDir: root },
       historyDays: null,
@@ -582,6 +589,7 @@ it.each([
       return actualStat(path, ...rest)
     })
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -670,6 +678,7 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     return actualStat(path, ...rest)
   })
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots,
     historyDays: null,

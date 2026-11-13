@@ -11,7 +11,7 @@ import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
 } from '../../ai-vault/scanners/cursor/session-scanner-cursor-chat-meta'
-import { recordSessionScanIssue } from '../../ai-vault/session-scan-issues'
+import { recordSessionScanIssue } from '../../ai-vault/parsing/session-scan-issues'
 import { withSessionDiscovery } from '../../ai-vault/session-discovery-context'
 import {
   mergeDegradedRoots,

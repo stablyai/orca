@@ -4,11 +4,11 @@ import { LoaderCircle } from 'lucide-react'
 import { LinearIcon } from '@/components/task-page/task-page-localized-options'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { TaskPageLinearProjectOverview } from './ProjectOverview'
-import { TaskPageLinearProjectList } from './ProjectList'
-import { TaskPageLinearCustomViewList } from './CustomViewList'
-import { TaskPageLinearCustomViewProjects } from './CustomViewProjects'
-import { TaskPageLinearIssueList } from './IssueList'
+import { TaskPageLinearProjectOverview } from './projects/ProjectOverview'
+import { TaskPageLinearProjectList } from './projects/ProjectList'
+import { TaskPageLinearCustomViewList } from './views/CustomViewList'
+import { TaskPageLinearCustomViewProjects } from './views/CustomViewProjects'
+import { TaskPageLinearIssueList } from './issues/IssueList'
 export function TaskPageLinearContent({
   model
 }: {

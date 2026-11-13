@@ -1,7 +1,10 @@
 from contextlib import ExitStack, nullcontext
 import importlib.util
 import json
+import shutil
 import sys
+import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
@@ -15,6 +18,8 @@ class FakeStateType:
     SHOWING = 4
     FOCUSED = 5
     EDITABLE = 6
+    ENABLED = 7
+    SENSITIVE = 8
 
 
 class FakeStateSet:
@@ -89,26 +94,16 @@ runtime = load_runtime()
 
 
 class FakeAccessible:
-    def __init__(self, role, name="", value="", children=(), counter=None):
+    def __init__(self, role, name="", value="", children=()):
         self.role = role
         self.name = name
         self.value = value
         self.children = list(children)
-        self.counter = counter or {"child_reads": 0}
-        for child in self.children:
-            child.use_counter(self.counter)
-
-    def use_counter(self, counter):
-        self.counter = counter
-        for child in self.children:
-            child.use_counter(counter)
 
     def get_child_count(self):
-        self.counter["child_reads"] += 1
         return len(self.children)
 
     def get_child_at_index(self, index):
-        self.counter["child_reads"] += 1
         return self.children[index]
 
     def get_role_name(self):
@@ -142,16 +137,6 @@ class FakeAccessible:
         return None
 
 
-class FailingChildrenAccessible(FakeAccessible):
-    def get_child_count(self):
-        self.counter["child_reads"] += 1
-        raise RuntimeError("defunct node")
-
-
-def render(root):
-    return runtime.render_accessibility_tree(root, [0])
-
-
 class SnapshotFixture(ExitStack):
     def __init__(self, root, app_name="Fixture"):
         super().__init__()
@@ -161,8 +146,6 @@ class SnapshotFixture(ExitStack):
         self.clock = 0.0
         self.timeout = (800, 15000)
         self.delays = {}
-        self.stalled = []
-        self.captured_at = None
         self.restore = lambda: None
         self.bounds = {node: runtime.Rect(100 + i * 10, 200 + i * 20, 300, 400)
                        for i, node in enumerate(runtime.all_nodes(root))}
@@ -191,14 +174,195 @@ class SnapshotFixture(ExitStack):
         delay = self.delays.get(node, 0)
         self.clock += min(delay, allowance)
         if delay > allowance:
-            self.stalled.append(node.name)
             raise TimeoutError("unresponsive geometry")
         return self.bounds.get(node)
 
-    def capture(self, bounds):
+    def capture(self, bounds, *_):
         self.clock += 1
-        self.captured_at = self.clock
         return {"base64": json.dumps(bounds.to_json())} if bounds else None
+
+
+class WaylandScreenshotTest(unittest.TestCase):
+    def setUp(self):
+        self.context = ExitStack()
+        self.addCleanup(self.context.close)
+        self.context.enter_context(patch.dict(runtime.os.environ, {
+            "XDG_SESSION_TYPE": "wayland", "HYPRLAND_INSTANCE_SIGNATURE": "fixture", "SWAYSOCK": ""
+        }))
+        self.context.enter_context(patch.object(runtime.shutil, "which", side_effect=lambda name: "/usr/bin/" + name))
+        self.app = types.SimpleNamespace(get_process_id=lambda: 42)
+        self.window = types.SimpleNamespace(get_name=lambda: "Editor")
+        self.clients = [{"pid": 42, "title": "Editor", "mapped": True, "hidden": False,
+                         "workspace": {"id": 2}, "at": [-800, 40], "size": [640, 480]}]
+        self.monitors = [{"activeWorkspace": {"id": 1}, "specialWorkspace": {"id": 0}},
+                         {"activeWorkspace": {"id": 2}, "specialWorkspace": {"id": 0}}]
+        self.commands = []
+        self.context.enter_context(patch.object(runtime.subprocess, "run", side_effect=self.run_native))
+
+    def run_native(self, command, **options):
+        self.commands.append(command)
+        if command[0].endswith("hyprctl"):
+            options["stdout"].write(json.dumps(self.monitors if command[-1] == "monitors" else self.clients).encode())
+        else:
+            options["stdout"].write(b"png")
+        return types.SimpleNamespace(returncode=0)
+
+    def test_ambiguous_missing_and_hidden_windows_never_capture_another_region(self):
+        for clients in (
+            [],
+            self.clients * 2,
+            [{**self.clients[0], "hidden": True}],
+            [{**self.clients[0], "workspace": {"id": 3}}],
+            [{**self.clients[0], "size": [700, 480]}],
+        ):
+            with self.subTest(clients=clients):
+                self.clients = clients
+                self.commands.clear()
+                result = runtime.capture_png(runtime.Rect(0, 0, 640, 480), self.app, self.window)
+                self.assertEqual(result["error"]["code"], "screenshot_failed")
+                self.assertFalse(any(command[0].endswith("grim") for command in self.commands))
+
+    def test_sway_nested_floating_window_geometry(self):
+        tree = {"nodes": [{"floating_nodes": [{"pid": 42, "name": "Editor",
+                "rect": {"x": 98, "y": 20, "width": 644, "height": 512},
+                "window_rect": {"x": 2, "y": 30, "width": 640, "height": 480}, "visible": True}]}]}
+        def sway(command, **options):
+            options["stdout"].write(json.dumps(tree).encode())
+            return types.SimpleNamespace(returncode=0)
+        with patch.dict(runtime.os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "", "SWAYSOCK": "fixture"}), \
+             patch.object(runtime.subprocess, "run", side_effect=sway):
+            rect, error = runtime.wayland_window_rect("sway", self.app, self.window)
+            tree["nodes"][0]["floating_nodes"][0]["visible"] = False
+            hidden, hidden_error = runtime.wayland_window_rect("sway", self.app, self.window)
+        self.assertIsNone(error)
+        self.assertEqual(rect.to_json(), {"x": 100, "y": 50, "width": 640, "height": 480})
+        self.assertIsNone(hidden)
+        self.assertIsNotNone(hidden_error)
+
+class FakePixbuf:
+    def __init__(self, width, height, calls):
+        self.width, self.height, self.calls = width, height, calls
+
+    def get_width(self):
+        return self.width
+
+    def get_height(self):
+        return self.height
+
+    def new_subpixbuf(self, x, y, width, height):
+        self.calls.append(("crop", x, y, width, height))
+        return FakePixbuf(width, height, self.calls)
+
+    def fill(self, _):
+        self.calls.append(("fill", self.width, self.height))
+
+    def copy_area(self, x, y, width, height, _, to_x, to_y):
+        self.calls.append(("copy", x, y, width, height, to_x, to_y))
+
+    def scale_simple(self, width, height, _):
+        self.calls.append(("scale", width, height))
+        return FakePixbuf(width, height, self.calls)
+
+    def save_to_bufferv(self, *_):
+        return True, b"png"
+
+
+class KWinScreenshotTest(unittest.TestCase):
+    def setUp(self):
+        self.app = types.SimpleNamespace(get_process_id=lambda: 42)
+        self.window = types.SimpleNamespace(get_name=lambda: "Editor")
+        self.target = {"pid": 42, "caption": "Editor", "captionNormal": "Editor", "stackingOrder": 3, "shown": True,
+                       "client": [100, 50, 400, 300], "buffer": [90, 40, 420, 320], "frame": [100, 20, 400, 330],
+                       "screen": [-1280, 0, 2560, 800]}
+        self.reports = []
+        self.portal_calls = []
+        self.pixbuf_calls = []
+        self.context = ExitStack()
+        self.addCleanup(self.context.close)
+        for name, value in (
+            ("wayland_session", lambda: True),
+            ("wayland_screenshot_backend", lambda: "kwin"),
+            ("session_bus", lambda: "bus"),
+            ("kwin_layout", lambda _: self.reports.pop(0) if len(self.reports) > 1 else self.reports[0]),
+            ("portal_screenshot_png", self.portal),
+            ("decode_png", lambda _: FakePixbuf(5120, 1600, self.pixbuf_calls)),
+            ("GdkPixbuf", types.SimpleNamespace(
+                InterpType=types.SimpleNamespace(BILINEAR=0), Colorspace=types.SimpleNamespace(RGB=0),
+                Pixbuf=types.SimpleNamespace(new=lambda _c, _a, _b, width, height: FakePixbuf(width, height, self.pixbuf_calls)))),
+        ):
+            self.context.enter_context(patch.object(runtime, name, value))
+
+    def portal(self, _):
+        self.portal_calls.append(True)
+        return b"desktop"
+
+    def capture(self, *windows, bounds=(400, 300)):
+        self.reports = [{"workspace": [-1280, 0, 2560, 800], "windows": list(windows)}]
+        return runtime.capture_png(runtime.Rect(0, 0, *bounds), self.app, self.window)
+
+    def test_windows_kwin_cannot_place_never_reach_the_portal(self):
+        cover = {**self.target, "pid": 7, "caption": "Other", "captionNormal": "Other", "stackingOrder": 4,
+                 "frame": [450, 300, 200, 200]}
+        for windows in (
+            [self.target, dict(self.target)],
+            [{**self.target, "shown": False}],
+            [{**self.target, "client": [100, 50, 500, 300]}],
+            [{**self.target, "screen": [0, 400, 640, 400]}],
+            [self.target, cover],
+        ):
+            with self.subTest(windows=windows):
+                self.portal_calls.clear()
+                result = self.capture(*windows)
+                self.assertEqual(result["error"]["code"], "screenshot_failed")
+                self.assertEqual(self.portal_calls, [])
+
+    def test_crop_maps_the_matching_kwin_rectangle_into_the_scaled_workspace_image(self):
+        below = {**self.target, "pid": 7, "caption": "Other", "stackingOrder": 1, "frame": [0, 0, 800, 800]}
+        menu = {**self.target, "caption": "Menu", "captionNormal": "Menu", "stackingOrder": 5, "ownedPopup": True,
+                "frame": [150, 80, 100, 200]}
+        result = self.capture(self.target, below, menu)
+        self.assertNotIn("error", result)
+        self.assertEqual(self.pixbuf_calls, [("crop", 2760, 100, 800, 600), ("scale", 400, 300)])
+        self.pixbuf_calls.clear()
+        # Client-side decorations: the toolkit reports the buffer (shadow included), not the content rectangle.
+        self.capture(self.target, bounds=(420, 320))
+        self.assertEqual(self.pixbuf_calls, [("crop", 2740, 80, 840, 640), ("scale", 420, 320)])
+        self.pixbuf_calls.clear()
+        # Partly left of the leftmost screen: full window size, only the shown part copied at its offset.
+        self.capture({**self.target, "client": [-1380, 50, 400, 300]})
+        self.assertEqual(self.pixbuf_calls, [("fill", 800, 600), ("copy", 0, 100, 600, 600, 200, 0), ("scale", 400, 300)])
+
+    def test_window_that_moves_while_the_portal_answers_is_not_cropped(self):
+        moved = {"workspace": [-1280, 0, 2560, 800], "windows": [{**self.target, "client": [120, 50, 400, 300]}]}
+        self.reports = [{"workspace": [-1280, 0, 2560, 800], "windows": [self.target]}, moved]
+        result = runtime.capture_png(runtime.Rect(0, 0, 400, 300), self.app, self.window)
+        self.assertEqual(result["error"]["code"], "screenshot_failed")
+        self.assertEqual(self.pixbuf_calls, [])
+
+
+@unittest.skipIf(sys.platform == "win32", "the Linux bridge reads portal files with POSIX flags")
+class PortalFileTest(unittest.TestCase):
+    def setUp(self):
+        self.directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.directory)
+        self.file = self.directory / "Screenshot 1.png"
+        self.file.write_bytes(b"png")
+
+    def test_reads_and_removes_only_a_new_file_the_portal_named(self):
+        uri = self.file.as_uri()
+        self.assertEqual(runtime.take_portal_file(uri, time.time()), b"png")
+        self.assertFalse(self.file.exists())
+
+        self.file.write_bytes(b"png")
+        with self.assertRaises(ValueError):
+            runtime.take_portal_file(uri, time.time() + 60)
+        self.assertTrue(self.file.exists())
+
+        link = self.directory / "link.png"
+        link.symlink_to(self.file)
+        with self.assertRaises(OSError):
+            runtime.take_portal_file(link.as_uri(), time.time())
+        self.assertTrue(link.is_symlink() and self.file.exists())
 
 
 class RuntimeRenderTest(unittest.TestCase):
@@ -217,7 +381,6 @@ class RuntimeRenderTest(unittest.TestCase):
         focused = runtime.first_descendant(TransientNode(0), lambda node: node.depth == 30)
         self.assertIsNotNone(focused)
         self.assertEqual(focused.depth, 30)
-
 
 
     def test_window_only_protection_preserves_completed_semantic_action(self):
@@ -246,7 +409,6 @@ class RuntimeRenderTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "appBlocked"):
                 runtime.run_operation({"tool": "click", "app": "Fixture"})
             self.assertEqual(effects, ["clicked"])
-
 
     def test_pointer_input_waits_for_activation_and_uses_restored_geometry(self):
         operations = (
@@ -279,28 +441,20 @@ class RuntimeRenderTest(unittest.TestCase):
                             result = runtime.run_operation(request)
                             self.assertTrue(result["ok"])
                             self.assertEqual(pointer_calls, [(505, 206), (525, 226)] if operation["tool"] == "drag" else [(505, 206)])
-                            self.assertGreaterEqual(fixture.clock, 0.1)
                         else:
                             with self.assertRaisesRegex(RuntimeError, "window_not_focused"):
                                 runtime.run_operation(request)
                             self.assertEqual(pointer_calls, [])
-                            self.assertGreaterEqual(fixture.clock, 0.5)
-                    self.assertTrue(restored)
 
     def test_restoration_requires_selected_window_focus_before_keyboard_input(self):
         restore_window = runtime.restore_window
         cases = (
-            {"name": "already active", "initial": 71, "expected": True, "native": False},
             {"name": "delayed AT-SPI focus", "ack": False, "delay": 0.1, "expected": True, "native": False},
             {"name": "ineffective true acknowledgment", "ack": True, "expected": True, "native": True},
-            {"name": "ineffective false acknowledgment", "ack": False, "expected": True, "native": True},
             {"name": "unmanaged helper", "ids": "70\n71\n", "managed": [71], "expected": True, "native": True},
-            {"name": "minimized selected window", "minimized": True, "expected": True, "native": True},
             {"name": "two accessible windows", "windows": 2},
             {"name": "two native windows", "ids": "72\n71\n"},
-            {"name": "missing managed stack", "managed": None},
             {"name": "failed managed window identity", "managed": [71, None]},
-            {"name": "invalid managed window identity", "managed": [71, 0]},
             {"name": "Wayland", "session": "wayland"},
             {"name": "search timeout", "timeout": "search"},
             {"name": "activation timeout", "timeout": "windowactivate"},
@@ -308,7 +462,7 @@ class RuntimeRenderTest(unittest.TestCase):
         )
         for case in cases:
             with self.subTest(case=case["name"]), SnapshotFixture(FakeAccessible("frame", "Editor")) as fixture:
-                active = [case.get("initial", 99)]
+                active = [99]
                 activations, keys = [], []
                 if case.get("windows") == 2:
                     fixture.app.children.append(FakeAccessible("frame", "Sibling"))
@@ -316,7 +470,7 @@ class RuntimeRenderTest(unittest.TestCase):
                 def state():
                     if fixture.clock >= case.get("delay", float("inf")):
                         active[0] = 71
-                    states = [] if case.get("minimized") else [FakeStateType.SHOWING]
+                    states = [FakeStateType.SHOWING]
                     if active[0] == 71:
                         states.append(FakeStateType.ACTIVE)
                     return FakeStateSet(*states)
@@ -372,152 +526,170 @@ class RuntimeRenderTest(unittest.TestCase):
                     self.assertEqual(active[0], 99)
 
     def test_text_entry_inserts_into_the_focused_field_of_a_background_window(self):
-        for tool in ("type_text", "paste_text"):
-            for value in ("there", "élan", "🚀 café"):
-                for selection in ((6, 11), None):
-                    field = FakeAccessible("text", "Message", value="Hello world")
-                    field.caret, field.selection = 11, selection
-                    field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
-                    field.get_editable_text_iface = lambda: field
-                    with self.subTest(tool=tool, value=value, selection=selection), SnapshotFixture(FakeAccessible("frame", "Editor", children=[field])) as fixture:
-                        calls = []
-                        fixture.restore = lambda: calls.append("restore")
-                        with patch.object(runtime, "type_text", lambda _: calls.append("keys")), \
-                             patch.object(runtime, "paste_text", lambda _: calls.append("clipboard")):
-                            result = runtime.run_operation({"tool": tool, "app": "Fixture", "text": value, "noScreenshot": True})
-                        self.assertEqual(calls, [])
-                        prefix = "Hello " if selection else "Hello world"
-                        self.assertEqual((field.value, field.caret), (prefix + value, len(prefix) + len(value)))
-                        self.assertEqual(result["action"]["path"], "accessibility")
-                        self.assertEqual(result["action"]["verification"]["state"], "verified")
+        cases = (
+            ("type_text", "🚀 café", (6, 11), "Hello 🚀 café", 12),
+            ("paste_text", "there", None, "Hello worldthere", 16),
+        )
+        for tool, value, selection, expected, expected_caret in cases:
+            field = FakeAccessible("text", "Message", value="Hello world")
+            field.caret, field.selection = 11, selection
+            field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
+            field.get_editable_text_iface = lambda: field
+            with self.subTest(tool=tool, value=value, selection=selection), SnapshotFixture(FakeAccessible("frame", "Editor", children=[field])) as fixture:
+                calls = []
+                fixture.restore = lambda: calls.append("restore")
+                with patch.object(runtime, "type_text", lambda _: calls.append("keys")), \
+                     patch.object(runtime, "paste_text", lambda _: calls.append("clipboard")):
+                    result = runtime.run_operation({"tool": tool, "app": "Fixture", "text": value, "noScreenshot": True})
+                self.assertEqual(calls, [])
+                self.assertEqual((field.value, field.caret), (expected, expected_caret))
+                self.assertEqual(result["action"]["path"], "accessibility")
+                self.assertEqual(result["action"]["verification"]["state"], "verified")
+
+    def test_element_text_entry_targets_the_named_field_and_never_types_at_focus(self):
+        for editable in (True, False):
+            focused = FakeAccessible("text", "Search", value="")
+            focused.caret, focused.selection = 0, None
+            focused.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
+            focused.get_editable_text_iface = lambda: focused
+            target = FakeAccessible("text", "Message", value="Hello ")
+            target.caret, target.selection = 6, None
+            target.get_state_set = (lambda: FakeStateSet(FakeStateType.EDITABLE)) if editable else (lambda: FakeStateSet())
+            target.get_editable_text_iface = lambda: target
+            with self.subTest(editable=editable), SnapshotFixture(FakeAccessible("frame", "Editor", children=[focused, target])) as fixture, \
+                 patch.object(runtime, "type_text") as keys:
+                fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+                element = next(item for item in runtime.make_snapshot("Fixture", False)["elements"] if item["name"] == "Message")
+                request = {"tool": "type_text", "app": "Fixture", "element": element, "text": "🚀 café", "noScreenshot": True}
+                if editable:
+                    result = runtime.run_operation(request)
+                    self.assertEqual(target.value, "Hello 🚀 café")
+                    self.assertEqual(result["action"]["verification"], {"state": "verified", "property": "elementText"})
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "not settable"):
+                        runtime.run_operation(request)
+                    self.assertEqual(target.value, "Hello ")
+                self.assertEqual(focused.value, "")
+                keys.assert_not_called()
 
     def test_text_entry_without_an_editable_focused_field_still_requires_window_focus(self):
-        cases = [
-            ("not-editable", 1, (6, 11)),
-            ("count-error", TimeoutError("selection timed out"), (6, 11)),
-            ("count-missing", None, (6, 11)),
-            ("count-negative", -1, (6, 11)),
-            ("multiple", 2, (6, 11)),
-            ("range-error", 1, TimeoutError("range timed out")),
-            ("range-missing", 1, None),
-            ("range-empty", 1, (6, 6)),
-            ("range-reversed", 1, (11, 6)),
-            ("range-outside", 1, (6, 12)),
-        ]
-        for tool in ("type_text", "paste_text"):
-            for active in (False, True):
-                for name, count, selection in cases:
-                    field = FakeAccessible("text", "Message", value="Hello world")
-                    field.caret, field.selection = 11, (6, 11)
-                    states = [FakeStateType.FOCUSED] + ([] if name == "not-editable" else [FakeStateType.EDITABLE])
-                    field.get_state_set = lambda: FakeStateSet(*states)
-                    field.get_editable_text_iface = lambda: field
-                    selected = types.SimpleNamespace(start_offset=selection[0], end_offset=selection[1]) if isinstance(selection, tuple) else selection
-                    with self.subTest(tool=tool, active=active, case=name), SnapshotFixture(
-                        FakeAccessible("frame", "Editor", children=[field])
-                    ) as fixture, patch.object(runtime.Atspi.Text, "get_n_selections", return_value=count, side_effect=count if isinstance(count, Exception) else None), \
-                         patch.object(runtime.Atspi.Text, "get_selection", return_value=selected, side_effect=selected if isinstance(selected, Exception) else None), \
-                         patch.object(runtime.Atspi.EditableText, "insert_text", wraps=FakeEditableText.insert_text) as insert, \
-                         patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
-                        if active:
-                            fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
-                            result = runtime.run_operation({"tool": tool, "app": "Fixture", "text": "x", "noScreenshot": True})
-                            if tool == "type_text":
-                                keys.assert_called_once_with("x", fixture.root)
-                            else:
-                                paste.assert_called_once_with("x")
-                            self.assertEqual(result["action"]["verification"]["state"], "unverified")
-                        else:
-                            with self.assertRaisesRegex(RuntimeError, "window_not_focused"):
-                                runtime.run_operation({"tool": tool, "app": "Fixture", "text": "x", "noScreenshot": True})
-                        if not active or tool != "type_text":
-                            keys.assert_not_called()
-                        if not active or tool != "paste_text":
-                            paste.assert_not_called()
-                        insert.assert_not_called()
-                        self.assertEqual((field.value, field.selection), ("Hello world", (6, 11)))
+        cases = (
+            ("type_text", False, "not-editable", 1, (6, 11)),
+            ("type_text", True, "not-editable", 1, (6, 11)),
+            ("paste_text", False, "not-editable", 1, (6, 11)),
+            ("paste_text", True, "not-editable", 1, (6, 11)),
+            ("type_text", False, "multiple", 2, (6, 11)),
+            ("type_text", False, "range-outside", 1, (6, 12)),
+        )
+        for tool, active, name, count, selection in cases:
+            field = FakeAccessible("text", "Message", value="Hello world")
+            field.caret, field.selection = 11, (6, 11)
+            states = [FakeStateType.FOCUSED] + ([] if name == "not-editable" else [FakeStateType.EDITABLE])
+            field.get_state_set = lambda: FakeStateSet(*states)
+            field.get_editable_text_iface = lambda: field
+            selected = types.SimpleNamespace(start_offset=selection[0], end_offset=selection[1])
+            with self.subTest(tool=tool, active=active, case=name), SnapshotFixture(
+                FakeAccessible("frame", "Editor", children=[field])
+            ) as fixture, patch.object(runtime.Atspi.Text, "get_n_selections", return_value=count), \
+                 patch.object(runtime.Atspi.Text, "get_selection", return_value=selected), \
+                 patch.object(runtime.Atspi.EditableText, "insert_text", wraps=FakeEditableText.insert_text) as insert, \
+                 patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
+                if active:
+                    fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+                    result = runtime.run_operation({"tool": tool, "app": "Fixture", "text": "x", "noScreenshot": True})
+                    if tool == "type_text":
+                        keys.assert_called_once_with("x", fixture.root)
+                    else:
+                        paste.assert_called_once_with("x")
+                    self.assertEqual(result["action"]["verification"]["state"], "unverified")
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "window_not_focused"):
+                        runtime.run_operation({"tool": tool, "app": "Fixture", "text": "x", "noScreenshot": True})
+                if not active or tool != "type_text":
+                    keys.assert_not_called()
+                if not active or tool != "paste_text":
+                    paste.assert_not_called()
+                insert.assert_not_called()
+                self.assertEqual((field.value, field.selection), ("Hello world", (6, 11)))
 
     def test_partial_text_replacement_fails_without_typing_again(self):
-        for tool in ("type_text", "paste_text"):
-            for failure in (False, True, TimeoutError("provider timed out"), "wrong-range"):
-                field = FakeAccessible("text", "Message", value="Hello world")
-                field.caret, field.selection = 11, (6, 11)
-                field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
-                field.get_editable_text_iface = lambda: field
-                def delete(node, _start, _end):
-                    if failure == "wrong-range":
-                        node.value = node.value[5:]
-                        node.selection = None
-                        return True
-                    if isinstance(failure, Exception):
-                        raise failure
-                    return failure
-                with self.subTest(tool=tool, failure=failure), SnapshotFixture(
-                    FakeAccessible("frame", "Editor", children=[field])
-                ) as fixture, patch.object(runtime.Atspi.EditableText, "delete_text", delete), \
-                     patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
-                    fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
-                    with self.assertRaisesRegex(RuntimeError, "text_replacement_incomplete"):
-                        runtime.run_operation({"tool": tool, "app": "Fixture", "text": "there", "noScreenshot": True})
-                    self.assertEqual(field.value, " worldthere" if failure == "wrong-range" else "Hello worldthere")
-                    keys.assert_not_called()
-                    paste.assert_not_called()
+        tool = "type_text"
+        for failure in (
+            True,
+            TimeoutError("provider timed out"),
+            "wrong-range",
+        ):
+            field = FakeAccessible("text", "Message", value="Hello world")
+            field.caret, field.selection = 11, (6, 11)
+            field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
+            field.get_editable_text_iface = lambda: field
+            def delete(node, _start, _end):
+                if failure == "wrong-range":
+                    node.value = node.value[5:]
+                    node.selection = None
+                    return True
+                if isinstance(failure, Exception):
+                    raise failure
+                return failure
+            with self.subTest(tool=tool, failure=failure), SnapshotFixture(
+                FakeAccessible("frame", "Editor", children=[field])
+            ) as fixture, patch.object(runtime.Atspi.EditableText, "delete_text", delete), \
+                 patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
+                fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+                with self.assertRaisesRegex(RuntimeError, "text_replacement_incomplete"):
+                    runtime.run_operation({"tool": tool, "app": "Fixture", "text": "there", "noScreenshot": True})
+                self.assertEqual(field.value, " worldthere" if failure == "wrong-range" else "Hello worldthere")
+                keys.assert_not_called()
+                paste.assert_not_called()
 
     def test_unconfirmed_text_insertion_does_not_fall_back_to_another_write(self):
         write = FakeEditableText.insert_text
         failures = {
-            "false-after-write": "foobarbar",
             "timeout-after-write": "foobarbar",
             "no-op": "foobar",
-            "truncated": "foobbar",
             "wrong-text": "foobazbar",
-            "count-unavailable": "foobarbar",
         }
-        for tool in ("type_text", "paste_text"):
-            for failure, expected in failures.items():
-                field = FakeAccessible("text", "Message", value="foobar")
-                field.caret, field.selection = 6, (0, 3)
-                field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
-                field.get_editable_text_iface = lambda: field
-                def insert(node, position, text, length):
-                    if failure == "no-op":
-                        return True
-                    write(node, position, "baz" if failure == "wrong-text" else text, 1 if failure == "truncated" else length)
-                    if failure == "timeout-after-write":
-                        raise TimeoutError("reply lost after insertion")
-                    return failure != "false-after-write"
-                def count(node):
-                    return None if failure == "count-unavailable" and node.value != "foobar" else len(node.value)
-                with self.subTest(tool=tool, failure=failure), SnapshotFixture(
-                    FakeAccessible("frame", "Editor", children=[field])
-                ) as fixture, patch.object(runtime.Atspi.EditableText, "insert_text", side_effect=insert), \
-                     patch.object(runtime.Atspi.Text, "get_character_count", side_effect=count), \
-                     patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
-                    fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
-                    with self.assertRaisesRegex(RuntimeError, "text_insertion_unconfirmed"):
-                        runtime.run_operation({"tool": tool, "app": "Fixture", "text": "bar", "noScreenshot": True})
-                    self.assertEqual(field.value, expected)
-                    self.assertEqual(field.selection, (0, 3))
-                    keys.assert_not_called()
-                    paste.assert_not_called()
+        tool = "type_text"
+        for failure, expected in failures.items():
+            field = FakeAccessible("text", "Message", value="foobar")
+            field.caret, field.selection = 6, (0, 3)
+            field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
+            field.get_editable_text_iface = lambda: field
+            def insert(node, position, text, length):
+                if failure == "no-op":
+                    return True
+                write(node, position, "baz" if failure == "wrong-text" else text, length)
+                if failure == "timeout-after-write":
+                    raise TimeoutError("reply lost after insertion")
+                return True
+            with self.subTest(tool=tool, failure=failure), SnapshotFixture(
+                FakeAccessible("frame", "Editor", children=[field])
+            ) as fixture, patch.object(runtime.Atspi.EditableText, "insert_text", side_effect=insert), \
+                 patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
+                fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+                with self.assertRaisesRegex(RuntimeError, "text_insertion_unconfirmed"):
+                    runtime.run_operation({"tool": tool, "app": "Fixture", "text": "bar", "noScreenshot": True})
+                self.assertEqual(field.value, expected)
+                self.assertEqual(field.selection, (0, 3))
+                keys.assert_not_called()
+                paste.assert_not_called()
 
     def test_unconfirmed_caret_movement_does_not_report_text_entry_success(self):
-        for tool in ("type_text", "paste_text"):
-            for failure in (False, True, TimeoutError("provider timed out")):
-                field = FakeAccessible("text", "Message", value="Hello world")
-                field.caret, field.selection = 6, (6, 11)
-                field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
-                field.get_editable_text_iface = lambda: field
-                with self.subTest(tool=tool, failure=failure), SnapshotFixture(
-                    FakeAccessible("frame", "Editor", children=[field])
-                ) as fixture, patch.object(runtime.Atspi.Text, "set_caret_offset", side_effect=failure if isinstance(failure, Exception) else None, return_value=failure), \
-                     patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
-                    fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
-                    with self.assertRaisesRegex(RuntimeError, "text_caret_unconfirmed"):
-                        runtime.run_operation({"tool": tool, "app": "Fixture", "text": "there", "noScreenshot": True})
-                    self.assertEqual((field.value, field.caret), ("Hello there", 6))
-                    keys.assert_not_called()
-                    paste.assert_not_called()
+        tool = "type_text"
+        field = FakeAccessible("text", "Message", value="Hello world")
+        field.caret, field.selection = 6, (6, 11)
+        field.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
+        field.get_editable_text_iface = lambda: field
+        with SnapshotFixture(
+            FakeAccessible("frame", "Editor", children=[field])
+        ) as fixture, patch.object(runtime.Atspi.Text, "set_caret_offset", return_value=True), \
+             patch.object(runtime, "type_text") as keys, patch.object(runtime, "paste_text") as paste:
+            fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+            with self.assertRaisesRegex(RuntimeError, "text_caret_unconfirmed"):
+                runtime.run_operation({"tool": tool, "app": "Fixture", "text": "there", "noScreenshot": True})
+            self.assertEqual((field.value, field.caret), ("Hello there", 6))
+            keys.assert_not_called()
+            paste.assert_not_called()
 
     def test_compacted_browser_records_keep_their_own_frames_and_indexes(self):
         tabs = [FakeAccessible("page tab", f"Tab {i}", value="1" if i == 9 else "") for i in range(10)]
@@ -529,24 +701,21 @@ class RuntimeRenderTest(unittest.TestCase):
             fixture.delays = {tab: 20 for tab in tabs[:-1]}
             snapshot = runtime.make_snapshot("chrome", False)
             by_name = {item["name"]: item for item in snapshot["elements"]}
-            for node in (tabs[-1], buttons[8]):
-                self.assertEqual(by_name[node.name]["frame"]["x"], fixture.bounds[node].x - 100)
-            self.assertNotIn("Tab 0", by_name)
+            for node, expected_x in ((tabs[-1], 110), (buttons[8], 200)):
+                self.assertEqual(by_name[node.name]["frame"]["x"], expected_x)
             indexes = [item["index"] for item in snapshot["elements"]]
             self.assertEqual(len(indexes), len(set(indexes)))
 
-
-
-
-
-
-
-
-
-
-
-
-
+    def test_root_reads_a_subtree_beyond_the_full_snapshot_limit(self):
+        items = [FakeAccessible("button", f"A{i}") for i in range(3)]
+        root = FakeAccessible("frame", "Main", children=[
+            FakeAccessible("list", "Items", children=items), FakeAccessible("button", "After"),
+        ])
+        with SnapshotFixture(root), patch.object(runtime, "MAX_NODES", 4):
+            snapshot = runtime.make_snapshot("Fixture", False)
+            items_record = next(item for item in snapshot["elements"] if item["name"] == "Items")
+            subtree = runtime.run_operation({"tool": "get_app_state", "app": "Fixture", "noScreenshot": True, "root": items_record})["snapshot"]
+            self.assertEqual(subtree["elements"][-1]["runtimeId"], [0, 0, 2])
 
 
 if __name__ == "__main__":

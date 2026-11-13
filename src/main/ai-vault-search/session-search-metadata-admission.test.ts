@@ -9,7 +9,7 @@ import { resetDevinSessionsIndexCacheForTests } from '../ai-vault/scanners/devin
 import {
   writeAntigravityHistory,
   writeAntigravityTranscript
-} from '../ai-vault/session-scanner-test-fixtures'
+} from '../ai-vault/scanner-fixtures/session-scanner-test-fixtures'
 import SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
@@ -35,6 +35,7 @@ it('does not add a database-only Devin search wake and still enriches an admitte
       JSON.stringify({ session_id: 'shown', steps: [{ source: 'user', message: text }] })
     )
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -90,6 +91,7 @@ it('does not fan out search reads for history metadata outside the Antigravity s
   const root = harness.roots.antigravityBrainDir!
   const id = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
@@ -148,6 +150,7 @@ it('refreshes a deferred physical transcript beneath a merged Devin discovery', 
   const later = join(harness.claudeProjectDir, 'newer.jsonl')
   const roots = { ...harness.roots, wslHomeDirs: [join(harness.root, 'alternate-home')] }
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots,
     historyDays: null,

@@ -6,7 +6,7 @@ import type {
 } from './worker/session-search-worker-protocol'
 import type { SessionSearchReadEvent } from './session-search-foreground-write'
 import { EMPTY_CONTENT_HASH } from './storage/session-search-content-hash'
-import { createAiVaultScanCancelledError } from '../ai-vault/ai-vault-scan-cancellation'
+import { createAiVaultScanCancelledError } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 
 export type SessionSearchForegroundTransport = {
   send(command: SearchWorkerCommand): Promise<SearchWorkerResponse>

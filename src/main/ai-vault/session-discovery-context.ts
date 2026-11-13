@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { DiscoverSessionFilesArgs } from './session-scanner-discovery'
+import type { DiscoverSessionFilesArgs } from './discovery/session-scanner-discovery'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionFileDiscovery } from './session-scanner-types'
 

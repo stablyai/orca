@@ -10,9 +10,12 @@ import {
 } from '../ai-vault-search/session-search-catalog-client'
 import { SessionSearchCatalogRetries } from '../ai-vault-search/session-search-catalog-retries'
 import type { FileWithMtime } from './session-scanner-types'
-import { observeSessionFile, type DiscoverSessionFilesArgs } from './session-scanner-discovery'
-import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import { recordSessionScanIssue } from './session-scan-issues'
+import {
+  observeSessionFile,
+  type DiscoverSessionFilesArgs
+} from './discovery/session-scanner-discovery'
+import { throwIfAiVaultScanCancelled } from './scan-lifecycle/ai-vault-scan-cancellation'
+import { recordSessionScanIssue } from './parsing/session-scan-issues'
 import { retainRecentSessionFile } from './session-file-observation'
 import { sidecarEnrichesWithoutReparse } from './parse-cache/session-scanner-sidecar-enrichment'
 
@@ -56,6 +59,13 @@ export class SessionInventoryFiles {
     this.failures = new SessionSearchCatalogRetries(
       new SessionSearchCatalogClient(`${scope}:file-refusals`, request)
     )
+  }
+  released(): void {
+    this.pending = undefined
+    this.changes.clear()
+    this.removed.clear()
+    this.handoffs.clear()
+    this.recent.clear()
   }
   async observe(
     path: string,

@@ -1,5 +1,5 @@
 import { SessionSearchCatalogCredit } from './session-search-catalog-credit'
-import { createAiVaultScanCancelledError } from '../ai-vault/ai-vault-scan-cancellation'
+import { createAiVaultScanCancelledError } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import type {
   SearchWorkerCommand,
   SearchWorkerResponse
@@ -16,9 +16,15 @@ export class SessionSearchCatalogTransport {
     private readonly prepare: () => Promise<void>,
     private readonly send: (command: SearchWorkerCommand) => Promise<SearchWorkerResponse>
   ) {}
-  async request(command: CatalogCommand): Promise<SearchWorkerResponse> {
+  async request(command: CatalogCommand, pinnedEpoch?: number): Promise<SearchWorkerResponse> {
+    if (pinnedEpoch !== undefined && pinnedEpoch !== this.epoch()) {
+      throw createAiVaultScanCancelledError()
+    }
     await this.prepare()
-    const epoch = this.epoch()
+    const epoch = pinnedEpoch ?? this.epoch()
+    if (epoch !== this.epoch()) {
+      throw createAiVaultScanCancelledError()
+    }
     const size = JSON.stringify(command).length * 2 + 1024
     const input = command.command
     const rows =

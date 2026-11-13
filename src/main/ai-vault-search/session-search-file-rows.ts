@@ -1,4 +1,4 @@
-import { asRecord } from '../ai-vault/session-scanner-record-value'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
 import type SyncDatabase from '../sqlite/sync-database'
 import type {
   SessionSearchStateCounts,

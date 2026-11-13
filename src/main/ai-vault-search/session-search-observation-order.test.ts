@@ -6,7 +6,7 @@ import './worker/session-search-worker.test-fixture'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import * as filesystem from '../native-chat/wsl-transcript-fs-access'
+import * as filesystem from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { SessionSearchWorkerClient } from './worker/session-search-worker-client'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
@@ -25,6 +25,7 @@ it.each(['file', 'subtree'] as const)(
     const child = join(directory, 'zz-recreated')
     const path = join(variant === 'subtree' ? child : directory, 'zz-new.jsonl')
     const subject = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
       databasePath: harness.databasePath,
       roots: harness.roots,
       historyDays: null,
@@ -161,6 +162,7 @@ it('discovers searchable conversations when a directory page exceeds the transpo
   const root = join(harness.root, 'a'.repeat(120), 'b'.repeat(120), 'c'.repeat(120), 'projects')
   const project = join(root, 'project')
   const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
     databasePath: harness.databasePath,
     roots: { ...harness.roots, claudeProjectsDir: root },
     historyDays: null,
