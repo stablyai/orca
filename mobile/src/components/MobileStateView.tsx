@@ -22,6 +22,8 @@ type MobileStateViewProps = {
   loading?: boolean
   /** Keeps the content centred above a floating bottom bar. */
   bottomInset?: number
+  /** Full-width content under the message, such as a list of choices. */
+  children?: ReactNode
 }
 
 /** Every screen's loading, empty, no-match, error and offline state: icon, title, one sentence, one action. */
@@ -33,7 +35,8 @@ export function MobileStateView({
   details,
   action,
   loading = false,
-  bottomInset = 0
+  bottomInset = 0,
+  children
 }: MobileStateViewProps) {
   useMobileColorScheme()
   return (
@@ -49,6 +52,7 @@ export function MobileStateView({
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {details ? <MobileStateDetails details={details} /> : null}
       {action ? <MobileStateButton label={action.label} onPress={action.onPress} /> : null}
+      {children ? <View style={styles.children}>{children}</View> : null}
     </View>
   )
 }
@@ -187,6 +191,10 @@ export function MobileNoMatchState({
 }
 
 const styles = themedStyleSheet(() => ({
+  children: {
+    alignSelf: 'stretch',
+    marginTop: spacing.md
+  },
   state: {
     flex: 1,
     alignItems: 'center',

@@ -1,6 +1,9 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { ClaudeStartupOutcome } from './claude-structured-startup-outcome'
-import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-support'
+import type {
+  ClaudeCliFlagCheck,
+  ClaudeCliFlagFact
+} from '../cli-capabilities/claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -11,19 +14,20 @@ import type {
 } from '../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
 import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
-import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
-import type { ClaudePromptRegistry } from '../claude-prompt-registry'
+import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
+import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
+import { ClaudeJournalBoundDelivery } from './journal/claude-journal-bound-delivery'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import type { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
-import type { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
-import type { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
-import type { ClaudeAtRestCommandCatalog } from '../claude-at-rest-commands'
+import type { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-background-task-tracker'
+import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
+import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
+import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
 import type { ClaudeInitProof } from './claude-structured-init-proof'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { ClaudeNamingInputs } from '../claude-naming-invocation'
+import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
 import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
 
 export type {
@@ -120,7 +124,6 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: {
-    reportedModel?: string
     model?: string
     effort?: string
     fastMode?: boolean
@@ -172,6 +175,7 @@ export type ClaudeSession = {
   closeEnded?: boolean
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
+  delivery: ClaudeJournalBoundDelivery
   unbindReadingControl?: () => void
   /** Provider identity and initialize proof retained for the host-awaited open. */
   link: AgentSessionProviderHandleLink
@@ -207,7 +211,7 @@ export type ClaudeSessionExit = {
 export type ClaudeAcquisitionAttempt = {
   connection: ClaudeStreamJsonConnection | null
   prompts: ClaudePromptRegistry
-  buffered: (() => void)[]
+  delivery: ClaudeJournalBoundDelivery
   published: boolean
   cancelled: boolean
   exitProven: boolean
@@ -224,16 +228,17 @@ export function createClaudeAcquisitionAttempt(
   const finished = new Promise<void>((resolve) => {
     finish = resolve
   })
-  return {
+  const attempt: ClaudeAcquisitionAttempt = {
     connection: null,
     prompts,
-    buffered: [],
+    delivery: new ClaudeJournalBoundDelivery(undefined, () => attempt.published),
     published: false,
     cancelled: false,
     exitProven: false,
     finished,
     finish
   }
+  return attempt
 }
 
 export class ClaudeAcquisitionRegistry {
@@ -304,6 +309,7 @@ export async function cancelClaudeAcquisitionAttempt(
   return cancelProcessAcquisition({
     cancel: () => {
       attempt.cancelled = true
+      attempt.delivery.dispose()
     },
     connection: () => attempt.connection,
     exitProven: () => attempt.exitProven,
@@ -314,7 +320,12 @@ export async function cancelClaudeAcquisitionAttempt(
 export type ClaudeAcquireCallbacks = {
   /** Publishes the session, its start ending admitted first so its exit is never missed. */
   publish: (session: ClaudeSession) => void
-  deliver: (attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void) => void
+  deliver: (
+    attempt: ClaudeAcquisitionAttempt,
+    sessionId: string,
+    event: () => void,
+    payload?: unknown
+  ) => void
   emit: (
     session: ClaudeSession | null,
     events: StructuredAgentSessionEventSink | undefined,

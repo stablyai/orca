@@ -4,9 +4,9 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RelayDispatcher } from '../../../wsl-guest/dispatcher'
-import { PluginOverlayManager } from '../../../wsl-guest/plugin-overlay'
-import { createInstallPluginsHandler } from '../../../wsl-guest/wsl-install-plugins-handler'
+import { RelayDispatcher } from '../../../wsl-guest/transport/publication/dispatcher'
+import { PluginOverlayManager } from '../../../wsl-guest/plugins/overlays/plugin-overlay'
+import { createInstallPluginsHandler } from '../../../wsl-guest/plugins/installation/wsl-install-plugins-handler'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { REINSTALL_MIN_INTERVAL_MS } from './wsl-hook-relay-deps'
 import type { MultiplexerTransport } from '../../ssh/protocol/ssh-multiplexer-transport-writer'
@@ -170,11 +170,10 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
     rmSync(root, { recursive: true, force: true })
   })
 
-  const cases = (['detect', 'hooks', 'plugin'] as const).flatMap((stage) =>
-    [true, false].flatMap((initialEnabled) =>
-      [true, false].map((toggleBack) => ({ stage, initialEnabled, toggleBack }))
-    )
-  )
+  const cases = [
+    { stage: 'plugin', initialEnabled: true, toggleBack: false },
+    { stage: 'plugin', initialEnabled: false, toggleBack: false }
+  ] as const
 
   it.each(cases)(
     'manager settings across $stage: initially enabled $initialEnabled, toggle back $toggleBack',

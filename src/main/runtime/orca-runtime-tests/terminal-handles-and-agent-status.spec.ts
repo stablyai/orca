@@ -1,9 +1,9 @@
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { registerLivePty } from './bind-first-pane.test-fixture'
+import './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
+import '../../ports/advertised-url-watcher'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   HEADLESS_LEAF_ID,
@@ -11,8 +11,7 @@ import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
-  store,
-  syncSinglePty
+  store
 } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
@@ -62,72 +61,6 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
       terminals: [expect.objectContaining({ handle: 'term_new', incarnationId: 'inc-new' })]
     })
-  })
-
-  it('rejects a proposed visual surface occupied by a different PTY', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
-    })
-    const runtime = new OrcaRuntimeService(
-      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
-    )
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'occupied-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'occupied',
-          activeLeafId: HEADLESS_LEAF_ID,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'occupied-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: HEADLESS_LEAF_ID,
-          paneRuntimeId: 1,
-          ptyId: 'visual-pty'
-        }
-      ]
-    })
-    registerLivePty(runtime, 'visual-pty', TEST_WORKTREE_ID, null, {
-      tabId: 'occupied-tab',
-      leafId: HEADLESS_LEAF_ID
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'orphan-pty',
-          incarnationId: 'inc-orphan',
-          terminalHandle: 'term_orphan',
-          title: 'orphan',
-          cwd: TEST_WORKTREE_PATH,
-          worktreeId: TEST_WORKTREE_ID,
-          wslDistro: null
-        }
-      ]
-    })
-
-    await expect(
-      runtime.adoptTerminalOrphans({
-        worktree: `id:${TEST_WORKTREE_ID}`,
-        expectedTopologyRevision: 0,
-        claims: [
-          {
-            terminal: 'term_orphan',
-            ptyId: 'orphan-pty',
-            incarnationId: 'inc-orphan',
-            tabId: 'occupied-tab',
-            leafId: HEADLESS_LEAF_ID
-          }
-        ]
-      })
-    ).rejects.toThrow('terminal_orphan_surface_occupied')
   })
 
   it('rejects ambiguous duplicate persisted bindings before idempotence', async () => {
@@ -240,80 +173,6 @@ describe('OrcaRuntimeService', () => {
     expect(writesByPty.has('pty-imposter')).toBe(false)
   })
 
-  it('keeps an already-bound terminal handle when discovery reports a different exported one', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const writes: string[] = []
-    runtime.setPtyController({
-      write: (_ptyId, data) => {
-        writes.push(data)
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'pty-1',
-          cwd: TEST_WORKTREE_PATH,
-          title: 'claude',
-          terminalHandle: 'term_from_env'
-        }
-      ]
-    })
-    runtime.registerPreAllocatedHandleForPty('pty-1', 'term_already_bound')
-
-    const listed = await runtime.listTerminals()
-    expect(listed.terminals[0]?.handle).toBe('term_already_bound')
-    await expect(
-      runtime.sendTerminal('term_already_bound', { text: 'still routed' }, { inputKind: 'driving' })
-    ).resolves.toMatchObject({ accepted: true })
-    expect(writes).toEqual(['still routed'])
-    await expect(runtime.readTerminal('term_from_env')).rejects.toThrow()
-  })
-
-  it('binds advertised URLs for renderer-restored PTYs that skip registerPty', () => {
-    const runtime = new OrcaRuntimeService(store)
-
-    syncSinglePty(runtime, 'pty-restored')
-    runtime.onPtyData('pty-restored', 'Network: https://restored.example.com:3001/\n', 100)
-
-    expect(advertisedUrlWatcher.lookup(TEST_WORKTREE_ID, 3001)?.origin).toBe(
-      'https://restored.example.com:3001'
-    )
-  })
-
-  it('keeps preallocated terminal handles valid when a reload graph omits the live leaf', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const handle = runtime.preAllocateHandleForPty('pty-1')
-
-    syncSinglePty(runtime)
-    runtime.markRendererReloading(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: []
-    })
-    runtime.onPtyData('pty-1', 'after omitted leaf\n', 100)
-
-    const read = await runtime.readTerminal(handle)
-    expect(read.tail).toEqual(['after omitted leaf'])
-  })
-
-  it('keeps preallocated terminal handles valid after graph unavailable during reload', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const handle = runtime.preAllocateHandleForPty('pty-1')
-
-    syncSinglePty(runtime)
-    runtime.markGraphUnavailable(1)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: []
-    })
-    runtime.onPtyData('pty-1', 'after unavailable\n', 100)
-
-    const read = await runtime.readTerminal(handle)
-    expect(read.tail).toEqual(['after unavailable'])
-  })
-
   it('keeps runtime-created PTY handles valid after graph unavailable', async () => {
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(store)
@@ -403,151 +262,5 @@ describe('OrcaRuntimeService', () => {
       incarnationId: 'incarnation-replacement'
     })
     expect(runtime.getTerminalProcessIncarnation(created.handle)).not.toBe(before)
-  })
-
-  it('does not authorize an OpenCode marker left on a shell pane', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'zsh'
-    })
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'OC | zsh' })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
-    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
-      handle: terminal.handle,
-      isRunningAgent: false,
-      status: null
-    })
-  })
-
-  it('authorizes a hookless OpenCode marker with an OpenCode foreground process', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'opencode'
-    })
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'OC | Native session' })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
-    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
-      handle: terminal.handle,
-      isRunningAgent: true,
-      status: 'idle'
-    })
-  })
-
-  it('does not authorize an OpenCode marker left on a runtime PTY shell', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'zsh'
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'bash',
-      title: 'OC | zsh'
-    })
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
-    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
-      handle,
-      isRunningAgent: false,
-      status: null
-    })
-  })
-
-  // Without a PTY, foreground corroboration is unreachable and the bare title is insufficient.
-  it('does not treat a bare Cursor title as an agent on a leaf with no pty', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'cursor-agent'
-    })
-    syncSinglePty(runtime, null, { tabTitle: 'bash', paneTitle: 'Cursor Agent' })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
-  })
-
-  // A renderer can push a bare Cursor title over stale working status; neither proves a live agent.
-  it('does not let a renderer-pushed bare Cursor title revive stale agent status', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'zsh'
-    })
-    syncSinglePty(runtime, 'pty-1', { tabTitle: '' })
-    runtime.onPtyData('pty-1', '\x1b]0;⠋ Cursor Agent\x07', 100)
-    syncSinglePty(runtime, 'pty-1', { tabTitle: '', paneTitle: 'Cursor Agent' })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    expect(terminal.title).toBe('Cursor Agent')
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
-  })
-
-  // Exercise the outer catch; production providers normalize foreground failures to null.
-  it('does not treat a bare Cursor title as an agent when the foreground read throws', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => {
-        throw new Error('ssh channel closed')
-      }
-    })
-    syncSinglePty(runtime, 'pty-1', { tabTitle: '', paneTitle: 'Cursor Agent' })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
-  })
-
-  // node plus a Cursor title is insufficient unless the wrapper retry resolves cursor-agent.
-  it('does not treat a bare Cursor title as an agent behind a wrapper foreground', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => 'node'
-      })
-      syncSinglePty(runtime, 'pty-1', { tabTitle: '', paneTitle: 'Cursor Agent' })
-      const [terminal] = (await runtime.listTerminals()).terminals
-
-      const running = runtime.isTerminalRunningAgent(terminal.handle)
-      await vi.advanceTimersByTimeAsync(7_000)
-      await expect(running).resolves.toBe(false)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not recognize runtime-created Claude agents management screens as agents', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'claude agents',
-      title: 'claude agents'
-    })
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
   })
 })

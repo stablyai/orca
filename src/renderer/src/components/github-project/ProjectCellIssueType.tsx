@@ -3,12 +3,15 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CircleDot } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
+import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubIssueType, GitHubProjectRow } from '../../../../shared/github/project-types'
+import type {
+  GitHubIssueType,
+  GitHubProjectRow
+} from '../../../../shared/github/projects/project-types'
 import { chipStyle, colorHex, singleSelectChipColors } from './project-cell-chip-colors'
 
 export function ProjectIssueTypeCell({

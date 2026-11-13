@@ -10,13 +10,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
-import type { RowEntry } from '../../../new-workspace/smart-workspace-name-field-model'
+import type { RowEntry } from '../../../new-workspace/name-field/smart-workspace-name-field-model'
 import type { SmartNameMode } from '../../../../../../shared/new-workspace/smart-workspace-source-results'
-import { useWorkItemSourceSearch } from '../../../new-workspace/use-work-item-source-search'
-import { SmartWorkspaceSourceTabs } from '../../../new-workspace/SmartWorkspaceSourceTabs'
-import { SmartWorkspaceSourceResultList } from '../../../new-workspace/SmartWorkspaceSourceResultList'
+import { useWorkItemSourceSearch } from '../../../new-workspace/source-search/use-work-item-source-search'
+import { SmartWorkspaceSourceTabs } from '../../../new-workspace/source-search/SmartWorkspaceSourceTabs'
+import { SmartWorkspaceSourceResultList } from '../../../new-workspace/source-search/SmartWorkspaceSourceResultList'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   ATTACHMENT_INPUT_KINDS,

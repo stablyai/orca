@@ -1,22 +1,38 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
+import { cn } from '@/lib/class-names'
+import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
 import {
   distanceFromBottom,
   NATIVE_CHAT_FOLLOW_REARM_PX
 } from '../../viewport/scroll/native-chat-autoscroll'
-import { setWithLRU } from '@/lib/scroll-cache'
+import { setWithLRU } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import {
   MAX_NATIVE_CHAT_DISCLOSURES,
   NativeChatDisclosureContext
 } from '../../messages/disclosure/native-chat-disclosure-store'
-
-function openDetailHeight(content: HTMLElement): number {
-  let height = 0
-  for (const detail of content.querySelectorAll<HTMLElement>('[data-native-chat-member-detail]')) {
-    height += detail.offsetHeight
-  }
-  return height
-}
+import { NativeChatToolRunWindowContext } from './native-chat-tool-run-window-context'
+import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
+import { ROW_KEY_ATTRIBUTE, useNativeChatToolRunPins } from './use-native-chat-tool-run-pins'
+import {
+  useNativeChatToolRunWindow,
+  type NativeChatToolRunDrawnRow
+} from './use-native-chat-tool-run-window'
+import { useNativeChatToolRunDetailRoom } from './use-native-chat-tool-run-detail-room'
+import {
+  claimNativeChatToolRunReveal,
+  useNativeChatToolRunReaderPosition
+} from './use-native-chat-tool-run-reader-position'
 
 /** Scroll inside the run, then return its box for transcript alignment; member offsets omit internal scroll. */
 export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement {
@@ -25,97 +41,326 @@ export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement 
     return member
   }
   scroller.scrollTop += member.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+  // The revealed card is now the reader's place: a pending landing or follow must not move it again.
+  claimNativeChatToolRunReveal(scroller, member)
   return scroller
 }
 
-/** An opened run's members in a bounded scroll box, so live work fills it instead of lengthening the page. */
+/** A drawn row re-renders only when its own row or renderer changes, not on every window move. */
+const WindowRow = memo(function WindowRow({
+  row,
+  renderRow
+}: {
+  row: NativeChatToolRunRow
+  renderRow: (row: NativeChatToolRunRow) => React.ReactNode
+}): React.ReactNode {
+  return renderRow(row)
+})
+
+/** The drawn rows; unchanged in draw-every-row mode while the reader scrolls, so that mode costs nothing per move. */
+const WindowRows = memo(function WindowRows({
+  drawn,
+  rows,
+  renderRow,
+  measureRow
+}: {
+  drawn: readonly NativeChatToolRunDrawnRow[]
+  rows: readonly NativeChatToolRunRow[]
+  renderRow: (row: NativeChatToolRunRow) => React.ReactNode
+  measureRow: (node: HTMLDivElement | null) => void
+}): React.ReactNode {
+  const children: React.ReactNode[] = []
+  let previousEnd = 0
+  for (const { index, start, end } of drawn) {
+    const row = rows[index]
+    if (!row) {
+      continue
+    }
+    children.push(
+      <Fragment key={row.key}>
+        {start > previousEnd + 0.5 ? (
+          <div aria-hidden style={{ height: start - previousEnd }} />
+        ) : null}
+        <div ref={measureRow} data-index={index} data-native-chat-tool-run-row={row.key}>
+          <WindowRow row={row} renderRow={renderRow} />
+        </div>
+      </Fragment>
+    )
+    previousEnd = Math.max(previousEnd, end)
+  }
+  return children
+})
+
+/** An opened run's rows in a bounded scroll box that draws only what the reader can reach, so a long run costs a window, not its length. */
 export function NativeChatToolRunMembers({
+  rows,
+  renderRow,
   followKey,
   startsAtEnd,
   memoryKey,
-  children
+  revealRowKey
 }: {
+  rows: readonly NativeChatToolRunRow[]
+  renderRow: (row: NativeChatToolRunRow) => React.ReactNode
   /** How much work the run holds: a reader at the end follows it growing. Opening a detail must not count. */
   followKey: number
   /** A live run opens on what it is doing now; a settled one reads from its top. */
   startsAtEnd: boolean
   /** The run's disclosure key. Windowing unmounts an off-screen row; its box comes back as the reader left it. */
   memoryKey?: string
-  children: React.ReactNode
+  /** The edit row a diff reveal targets; its card does the scrolling once drawn. */
+  revealRowKey?: string
 }): React.JSX.Element {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
-  const contentRef = useRef<HTMLDivElement | null>(null)
-  const [fades, setFades] = useState({ top: false, bottom: false })
+  const { isVisible, findActive } = useContext(NativeChatToolRunWindowContext)
   const runScroll = useContext(NativeChatDisclosureContext)?.runScroll
   const [remembered] = useState(() =>
     memoryKey === undefined ? undefined : runScroll?.get(memoryKey)
   )
+  const returningTo =
+    remembered && !remembered.followsEnd ? (remembered.position ?? undefined) : undefined
   const followsEndRef = useRef(remembered?.followsEnd ?? startsAtEnd)
-
+  // Drawn while a landing is pending, so it lands on the real row rather than an estimate.
+  const [heldRowKey, setHeldRowKey] = useState(returningTo?.key)
+  const [marks] = useState(createProgrammaticScrollMarks)
+  const [fades, setFades] = useState({ top: false, bottom: false })
+  // The row whose real measurement says new work has landed: the last one that draws something
+  // (a thought with no words draws nothing, so it can never be measured).
+  const followTailKey = useMemo(
+    () => rows.findLast((row) => row.kind !== 'aside' || row.focusable)?.key,
+    [rows]
+  )
+  const isVisibleRef = useRef(isVisible)
+  const followTailKeyRef = useRef(followTailKey)
   useLayoutEffect(() => {
-    if (scrollerRef.current && remembered && !remembered.followsEnd) {
-      scrollerRef.current.scrollTop = remembered.top
-    }
-  }, [remembered])
+    isVisibleRef.current = isVisible
+    followTailKeyRef.current = followTailKey
+  })
 
-  // Before paint: follow only if the reader was at the end before the new work.
-  useLayoutEffect(() => {
+  const rowIndexByKey = useMemo(() => new Map(rows.map((row, index) => [row.key, index])), [rows])
+  // Below the threshold, or while Find searches drawn text, every row is drawn; one keyed tree serves both modes.
+  const drawsEveryRow = rows.length < VIRTUALIZED_LIST_MIN_ROWS || findActive
+  const pins = useNativeChatToolRunPins({
+    rows,
+    rowIndexByKey,
+    revealRowKey,
+    heldRowKey,
+    drawsEveryRow,
+    isVisible,
+    scrollerRef
+  })
+  const detailRoom = useNativeChatToolRunDetailRoom({
+    scrollerRef,
+    rowIndexByKey,
+    initial: remembered?.detailHeights
+  })
+  // Follow transaction: armed by new work while the reader is at the end; done once the tail has really been measured.
+  const followRef = useRef<{ observedTail: boolean } | null>(null)
+  // A real tail measurement wakes the follow pass even when it changed no size.
+  const [tailObservations, setTailObservations] = useState(0)
+  // The reader-position owner exists after the window; a measured landing row reaches it through here.
+  const onRowMeasuredRef = useRef<(key: string) => void>(() => {})
+  const onMeasure = useCallback(
+    (element: HTMLDivElement) => {
+      const key = element.getAttribute(ROW_KEY_ATTRIBUTE)
+      if (key === null || !isVisibleRef.current) {
+        return
+      }
+      detailRoom.record(key, element)
+      onRowMeasuredRef.current(key)
+      const follow = followRef.current
+      // Only a laid-out tail counts: a callback can carry a cached or zero size.
+      if (
+        follow &&
+        !follow.observedTail &&
+        key === followTailKeyRef.current &&
+        element.getBoundingClientRect().height > 0
+      ) {
+        follow.observedTail = true
+        setTailObservations((count) => count + 1)
+      }
+    },
+    [detailRoom]
+  )
+  const { virtualizer, measureRow, totalSize, drawn } = useNativeChatToolRunWindow({
+    rows,
+    scrollerRef,
+    isVisible,
+    drawsEveryRow,
+    rangeExtractor: pins.rangeExtractor,
+    marks,
+    onMeasure
+  })
+
+  const pinToEnd = useCallback(() => {
     const scroller = scrollerRef.current
-    if (scroller && followsEndRef.current) {
+    if (scroller && scroller.scrollTop < scroller.scrollHeight - scroller.clientHeight - 1) {
+      marks.mark(scroller.scrollHeight)
       scroller.scrollTop = scroller.scrollHeight
     }
-  }, [followKey])
+  }, [marks])
+
+  const onRevealed = useCallback(() => {
+    followRef.current = null
+    followsEndRef.current = false
+  }, [])
+  const reader = useNativeChatToolRunReaderPosition({
+    scrollerRef,
+    virtualizer,
+    rows,
+    rowIndexByKey,
+    isVisible,
+    followsEndRef,
+    marks,
+    totalSize,
+    initial: returningTo,
+    setHeldRowKey,
+    onRevealed
+  })
+
+  useLayoutEffect(() => {
+    onRowMeasuredRef.current = reader.onRowMeasured
+  }, [reader])
+
+  // A following reader whose pane shows again goes back to the end.
+  const wasVisibleRef = useRef(isVisible)
+  useLayoutEffect(() => {
+    if (wasVisibleRef.current !== isVisible) {
+      wasVisibleRef.current = isVisible
+      if (isVisible && followsEndRef.current) {
+        followRef.current = { observedTail: false }
+      }
+    }
+  }, [isVisible])
+
+  // Before paint: new work starts a follow only if the reader was at the end before it. Each visible
+  // pass re-pins; once the tail is really measured (now, on a later measurement, or when a hidden pane
+  // shows again), one frame without tail growth ends it.
+  const followKeyRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    if (followKeyRef.current !== followKey) {
+      followKeyRef.current = followKey
+      if (followsEndRef.current) {
+        followRef.current = { observedTail: false }
+      }
+    }
+    const follow = followRef.current
+    if (!follow || !isVisible) {
+      return
+    }
+    if (!follow.observedTail && followTailKeyRef.current === undefined) {
+      // Nothing in the run draws: there is no landing to wait for.
+      follow.observedTail = true
+    }
+    if (!follow.observedTail) {
+      const tail = followTailKeyRef.current
+      const tailElement = Array.from(
+        scrollerRef.current?.querySelectorAll<HTMLDivElement>(`[${ROW_KEY_ATTRIBUTE}]`) ?? []
+      ).findLast((element) => element.getAttribute(ROW_KEY_ATTRIBUTE) === tail)
+      // The default measurement returns a cached size without a resize; read the tail itself.
+      const height = tailElement?.getBoundingClientRect().height ?? 0
+      if (tailElement && height > 0) {
+        virtualizer.resizeItem(Number(tailElement.dataset.index), height)
+        follow.observedTail = true
+      }
+    }
+    pinToEnd()
+    if (!follow.observedTail) {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (followRef.current === follow && virtualizer.getTotalSize() === totalSize) {
+        followRef.current = null
+      }
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [followKey, isVisible, pinToEnd, tailObservations, totalSize, virtualizer])
+
+  const remember = useCallback(() => {
+    const scroller = scrollerRef.current
+    if (!scroller || !runScroll || memoryKey === undefined) {
+      return
+    }
+    setWithLRU(
+      runScroll,
+      memoryKey,
+      {
+        position: reader.current(),
+        followsEnd: followsEndRef.current,
+        detailHeights: detailRoom.snapshot()
+      },
+      MAX_NATIVE_CHAT_DISCLOSURES
+    )
+  }, [detailRoom, memoryKey, reader, runScroll])
 
   const readPosition = useCallback(() => {
     const scroller = scrollerRef.current
-    if (!scroller) {
+    // A hidden pane reads zero geometry, which is not where the reader is.
+    if (!scroller || !isVisibleRef.current) {
       return
     }
     const fromEnd = distanceFromBottom(scroller)
-    followsEndRef.current = fromEnd <= NATIVE_CHAT_FOLLOW_REARM_PX
+    followsEndRef.current = !reader.landingPending() && fromEnd <= NATIVE_CHAT_FOLLOW_REARM_PX
     const top = scroller.scrollTop > 1
     const bottom = fromEnd > 1
     setFades((current) =>
       current.top === top && current.bottom === bottom ? current : { top, bottom }
     )
-    if (runScroll && memoryKey !== undefined) {
-      setWithLRU(
-        runScroll,
-        memoryKey,
-        { top: scroller.scrollTop, followsEnd: followsEndRef.current },
-        MAX_NATIVE_CHAT_DISCLOSURES
-      )
-    }
-  }, [memoryKey, runScroll])
+    remember()
+  }, [reader, remember])
+
+  const onScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const scroller = event.currentTarget
+      const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+      const byReader = !marks.consume(event.nativeEvent, scroller.scrollTop, maxScroll)
+      if (byReader && isVisibleRef.current) {
+        // The reader moved: any follow in flight yields to them.
+        followRef.current = null
+      }
+      // Registered on the box before the window's own listener, so this runs before the redraw it causes.
+      reader.onScrolled(scroller.scrollTop, byReader)
+      readPosition()
+    },
+    [marks, readPosition, reader]
+  )
 
   useEffect(() => {
     const scroller = scrollerRef.current
-    const content = contentRef.current
-    if (!scroller || !content || typeof ResizeObserver === 'undefined') {
+    if (!scroller || typeof ResizeObserver === 'undefined') {
       return
     }
-    let roomForDetails = 0
-    const observer = new ResizeObserver(() => {
-      const opened = openDetailHeight(content)
-      if (opened !== roomForDetails) {
-        roomForDetails = opened
-        // A variable, not state: a detail animating open would re-render every frame.
-        scroller.style.setProperty('--native-chat-opened-detail', `${opened}px`)
-      }
-      readPosition()
-    })
-    observer.observe(content)
     // The box's cap moves with an opened detail, which changes what lies past its edges.
+    const observer = new ResizeObserver(readPosition)
     observer.observe(scroller)
+    if (scroller.firstElementChild) {
+      observer.observe(scroller.firstElementChild)
+    }
     return () => observer.disconnect()
   }, [readPosition])
+
+  // The owned place is saved as the run leaves; nothing is read from a box that may already be hidden.
+  useLayoutEffect(() => remember, [remember])
+
+  const { retainInteractedRow } = pins
+  const onReaderAct = useCallback(
+    (event: React.SyntheticEvent) => {
+      // Opening a detail is the reader acting, not new work: it ends any follow in flight.
+      followRef.current = null
+      retainInteractedRow(event)
+    },
+    [retainInteractedRow]
+  )
+
+  // Drawn rows are in index order, so the last one ends the drawn extent.
+  const trailing = drawsEveryRow ? 0 : totalSize - (drawn.at(-1)?.end ?? 0)
 
   return (
     <div
       ref={scrollerRef}
-      onScroll={readPosition}
+      onScroll={onScroll}
       className={cn(
-        'scrollbar-sleek ml-1.75 mt-0.5 overflow-y-auto border-l border-chat-code-border pl-3.25',
+        'scrollbar-sleek ml-1.75 mt-0.5 overflow-y-auto border-l border-chat-code-border pl-3.25 [overflow-anchor:none]',
         // Contains the members' absolute sr-only labels, which otherwise lengthen the page.
         'relative',
         // Room for the list plus what the reader has opened in it, up to half the window.
@@ -125,7 +370,15 @@ export function NativeChatToolRunMembers({
       )}
       data-native-chat-tool-run-members
     >
-      <div ref={contentRef}>{children}</div>
+      <div
+        onClickCapture={onReaderAct}
+        onKeyDownCapture={onReaderAct}
+        onFocusCapture={pins.onFocusCapture}
+        onBlurCapture={pins.onBlurCapture}
+      >
+        <WindowRows drawn={drawn} rows={rows} renderRow={renderRow} measureRow={measureRow} />
+        {trailing > 0.5 ? <div aria-hidden style={{ height: trailing }} /> : null}
+      </div>
     </div>
   )
 }

@@ -7,14 +7,12 @@ import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from '../../../../../shared/github/pr-reviewer-display'
+} from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 import { toast } from 'sonner'
 
-import type {
-  GitHubAssignableUser,
-  GitHubOwnerRepo
-} from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'

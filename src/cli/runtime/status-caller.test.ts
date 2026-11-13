@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
-import { CORE_HANDLERS } from '../handlers/core'
+import { CORE_HANDLERS } from './cli-lifecycle-handlers'
 import { RuntimeClient } from './client'
 
 const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'

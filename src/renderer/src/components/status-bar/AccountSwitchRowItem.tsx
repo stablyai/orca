@@ -2,7 +2,7 @@ import { Check } from 'lucide-react'
 import React from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function AccountSwitchRowItem({
   label,

@@ -2,11 +2,15 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+// The steps render only after Agent browser use is on, so both results land on its block.
+export const BROWSER_USE_SETTINGS_TARGET_ID = 'browser-use'
+
 export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: BROWSER_USE_SETTINGS_TARGET_ID,
     title: translate(
-      'auto.components.settings.browser.use.search.a1414dcefb',
-      'Install Browser Use Skill'
+      'auto.components.settings.browser.use.search.e72d500ca5',
+      'Install browser use skill'
     ),
     description: translate(
       'auto.components.settings.browser.use.search.a7e82445fa',
@@ -38,9 +42,10 @@ export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: BROWSER_USE_SETTINGS_TARGET_ID,
     title: translate(
-      'auto.components.settings.browser.use.search.614c756ab1',
-      'Import Browser Cookies'
+      'auto.components.settings.browser.use.search.9e2bfa1405',
+      'Import browser cookies'
     ),
     description: translate(
       'auto.components.settings.browser.use.search.2fb24d17db',

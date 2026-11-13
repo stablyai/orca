@@ -1,4 +1,4 @@
-import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostListing } from '../../../../../preload/api/plugin-host-api'
 import type { PluginPagePreview } from './use-plugin-catalog'
 
 /** Plugins whose preview one Settings visit keeps; each holds a parsed manifest. */

@@ -12,15 +12,52 @@ export type FeatureTipId =
   | 'cmd-j-palette'
   | 'agent-session-search'
 
-export type FeatureTipSeenId = FeatureTipId | 'chat-ui-here-rollout-v1'
+const CHAT_UI_HERE_EXTRA_SEEN_IDS = ['chat-ui-here-rollout-v1', 'chat-ui-here-v2'] as const
+
+export type FeatureTipSeenId = FeatureTipId | (typeof CHAT_UI_HERE_EXTRA_SEEN_IDS)[number]
+
+type ChatUiLaunchTipSavedSettings = Pick<
+  TelemetrySettings,
+  'chatUiLaunchTipCohort' | 'chatUiLaunchTipRolloutCohort' | 'chatUiLaunchTipTargeting'
+>
+
+/** Saved values that keep their own targeting; anything else, including an unknown value, is a default profile. */
+export function isChatUiLaunchTipTargeted(telemetry: ChatUiLaunchTipSavedSettings | undefined) {
+  const saved = telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort
+  return (
+    saved === 'treatment' ||
+    saved === 'treatment-live-switch' ||
+    saved === 'treatment-swapped-buttons' ||
+    saved === 'treatment-center'
+  )
+}
+
+/** Not shown the tip earlier for a reason other than being on Chat UI. */
+function wasChatUiLaunchTipHeldBackOffChatUi(
+  telemetry: ChatUiLaunchTipSavedSettings | undefined
+): boolean {
+  const targeting = telemetry?.chatUiLaunchTipTargeting
+  return (
+    (telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort) === 'control' ||
+    (isChatUiLaunchTipTargeted(telemetry) &&
+      targeting?.mode === 'eligible-harnesses' &&
+      targeting.eligible !== true)
+  )
+}
 
 export function getFeatureTipSeenId(
   id: FeatureTipId,
-  telemetry: Pick<TelemetrySettings, 'chatUiLaunchTipRolloutCohort'> | undefined
+  telemetry: ChatUiLaunchTipSavedSettings | undefined
 ): FeatureTipSeenId {
-  return id === 'chat-ui-here' && telemetry?.chatUiLaunchTipRolloutCohort
-    ? 'chat-ui-here-rollout-v1'
-    : id
+  if (id !== 'chat-ui-here') {
+    return id
+  }
+  // Why: these profiles already have the older ids without having seen the card, so they need a fresh
+  // one; the saved assignment no longer changes, so neither does this id after delivery.
+  if (wasChatUiLaunchTipHeldBackOffChatUi(telemetry)) {
+    return 'chat-ui-here-v2'
+  }
+  return telemetry?.chatUiLaunchTipRolloutCohort ? 'chat-ui-here-rollout-v1' : id
 }
 
 export type FeatureTipPriority = 'new' | 'unseen'
@@ -113,7 +150,7 @@ export const FEATURE_TIPS = [
 export const FEATURE_TIP_IDS = FEATURE_TIPS.map((tip) => tip.id)
 export const FEATURE_TIP_SEEN_IDS: readonly FeatureTipSeenId[] = [
   ...FEATURE_TIP_IDS,
-  'chat-ui-here-rollout-v1'
+  ...CHAT_UI_HERE_EXTRA_SEEN_IDS
 ]
 
 export function isFeatureTipId(value: unknown): value is FeatureTipId {
@@ -121,7 +158,7 @@ export function isFeatureTipId(value: unknown): value is FeatureTipId {
 }
 
 export function isFeatureTipSeenId(value: unknown): value is FeatureTipSeenId {
-  return value === 'chat-ui-here-rollout-v1' || isFeatureTipId(value)
+  return FEATURE_TIP_SEEN_IDS.some((id) => id === value)
 }
 
 export function normalizeFeatureTipIds(value: unknown): FeatureTipSeenId[] {
@@ -167,7 +204,7 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
 export function getOrderedUnseenFeatureTips(args: {
   seenTipIds: ReadonlySet<FeatureTipSeenId>
   completedTipIds?: ReadonlySet<FeatureTipId>
-  telemetry?: Pick<TelemetrySettings, 'chatUiLaunchTipRolloutCohort'>
+  telemetry?: ChatUiLaunchTipSavedSettings
 }): FeatureTip[] {
   const completedTipIds = args.completedTipIds ?? new Set<FeatureTipId>()
   const unseenTips = FEATURE_TIPS.filter(

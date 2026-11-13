@@ -9,11 +9,11 @@ import {
 } from 'react'
 import { GitPullRequest } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
-import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/links'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import {
   nativeChatOpenedPullRequestKey,
   type NativeChatOpenedPullRequest

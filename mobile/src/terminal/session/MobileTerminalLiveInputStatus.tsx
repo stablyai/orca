@@ -1,5 +1,5 @@
 import { useContext, type RefObject } from 'react'
-import { Text, View } from 'react-native'
+import { Text, View, type HostInstance } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -12,13 +12,14 @@ import {
 import { MobileDictationLiveContext } from '../../dictation/mobile-dictation-live-context'
 import {
   MobileDictationCancelButton,
+  MobileDictationFailureNote,
   MobileDictationFinishingNote,
   MobileDictationRecordingMeter
 } from '../../dictation/MobileDictationLiveControls'
 
 type MobileTerminalLiveInputStatusProps = {
   readonly dictation: MobileDictationStatusFlags
-  readonly cancelRef: RefObject<View | null>
+  readonly cancelRef: RefObject<HostInstance | null>
   readonly dictationMode: string | undefined
   readonly isAttaching: boolean
   // Words heard so far that will be typed into this terminal.
@@ -37,6 +38,16 @@ export function MobileTerminalLiveInputStatus({
   const t = useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
   const dictationTitle = mobileDictationStatusTitle(dictation)
+  if (live?.failureReason != null) {
+    return (
+      <View style={[styles.status, styles.dictating]} pointerEvents="box-none">
+        <MobileDictationCancelButton onCancel={live.cancel} compact discards />
+        <View style={styles.dictationLine} pointerEvents="none">
+          <MobileDictationFailureNote reason={live.failureReason} compact />
+        </View>
+      </View>
+    )
+  }
   if (!dictationTitle) {
     return isAttaching ? (
       <View style={styles.status} pointerEvents="none">

@@ -1,7 +1,12 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import '@/lib/workspace/creation/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -132,7 +137,7 @@ export function canCreateChildWorktree(args: {
   return (
     args.repo != null &&
     isGitRepoKind(args.repo) &&
-    getComposerEligibleRepos([args.repo]).length > 0 &&
+    getNewWorkspaceDialogEligibleRepos([args.repo]).length > 0 &&
     !args.folderWorkspaceId &&
     !args.worktree.isArchived
   )
@@ -202,6 +207,7 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   const previousScrollTop = sidebar.scrollTop
   const previousScrollHeight = sidebar.scrollHeight
   const desiredTop = row.getBoundingClientRect().top
+  supersedeVirtualizedScrollAnchorRestore(sidebar)
 
   return () => {
     let attempts = 0
@@ -215,6 +221,10 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
       const currentAnchor = currentTarget ?? findSidebarVirtualRowByKey(currentSidebar, anchorKey)
       if (currentAnchor) {
         const delta = currentAnchor.getBoundingClientRect().top - desiredTop
+        supersedeVirtualizedScrollAnchorRestore(
+          currentSidebar,
+          Math.abs(delta) > 1 ? currentSidebar.scrollTop + delta : undefined
+        )
         if (Math.abs(delta) > 1) {
           currentSidebar.scrollTop += delta
           stableFrames = 0
@@ -222,10 +232,12 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
           stableFrames += 1
         }
       } else {
-        currentSidebar.scrollTop = Math.max(
+        const target = Math.max(
           0,
           previousScrollTop + currentSidebar.scrollHeight - previousScrollHeight
         )
+        supersedeVirtualizedScrollAnchorRestore(currentSidebar, target)
+        currentSidebar.scrollTop = target
         stableFrames = 0
       }
       attempts += 1
@@ -236,6 +248,8 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
         })
       ) {
         window.requestAnimationFrame(restore)
+      } else {
+        requestVirtualizedScrollAnchorRecord(currentSidebar)
       }
     }
     restore()

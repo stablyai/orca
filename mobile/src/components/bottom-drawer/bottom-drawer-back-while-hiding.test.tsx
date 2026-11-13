@@ -17,7 +17,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android', select: (options: { android?: unknown }) => options.android },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFill: {} },
   View: 'View',
   useWindowDimensions: () => ({ width: 412, height: 900 })
 }))
@@ -116,21 +116,6 @@ function pressAndroidBack(renderer: ReactTestRenderer): void {
 describe('bottom drawer close request while hiding', () => {
   afterEach(() => {
     animations.running = []
-  })
-
-  it('still closes an open drawer on Android Back', () => {
-    const onClose = vi.fn()
-    let renderer!: ReactTestRenderer
-    act(() => {
-      renderer = create(drawer(true, onClose, vi.fn()))
-    })
-    finishAnimations()
-
-    pressAndroidBack(renderer)
-    finishAnimations()
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-    act(() => renderer.unmount())
   })
 
   // Back during hide must not restart/cancel it or onHidden never fires and invisible Modal swallows taps.

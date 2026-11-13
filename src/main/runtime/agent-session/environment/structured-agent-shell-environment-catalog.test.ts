@@ -22,7 +22,7 @@ const shell = vi.hoisted(
     nextSaved: []
   })
 )
-vi.mock('../../../startup/login-shell-environment', () => ({
+vi.mock('../../../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
     if (options?.startedAfter !== undefined) {
       shell.current = { ...shell.next }
@@ -40,13 +40,14 @@ const cleanups: (() => void)[] = []
 afterEach(() => {
   cleanups.splice(0).forEach((stop) => stop())
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   shell.current = { PATH: '/a', IGNORED: 'a' }
   shell.next = { ...shell.current }
   shell.saved = []
   shell.nextSaved = []
 })
 
-function rig() {
+function rig(overlay?: Record<string, string>) {
   const record = {
     ...agentSessionRecordFixture(),
     provider: 'grok',
@@ -67,7 +68,8 @@ function rig() {
     workspaceMayOverrideDefaultModel: defaults
   })
   const environment = createStructuredAgentEnvironmentResolvers({
-    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] })
+    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] }),
+    resolveAgentLaunchEnv: () => overlay ?? {}
   })
   cleanups.push(service.stop, environment.bindCatalogSources(['grok']))
   const listing = (id: string) => ({
@@ -83,6 +85,22 @@ function rig() {
     fingerprint: agentModelCatalogFingerprintForRecord(record)
   }
 }
+
+it('keeps a Windows catalog source while only a shadowed inherited path changes', async () => {
+  vi.stubGlobal('process', { ...process, platform: 'win32' })
+  const overlay = { path: '/configured/bin' }
+  const h = rig(overlay)
+  const source = h.service.captureSource(h.record)
+  cleanups.push(() => source.release?.())
+  await captureHostShellEnvironment(async () => {
+    shell.next = { PATH: '/changed', IGNORED: 'a' }
+  })
+  expect(source()).toBe(true)
+  await captureHostShellEnvironment(async () => {
+    overlay.path = '/new-configured/bin'
+  })
+  expect(source()).toBe(false)
+})
 
 it('retires a producer on effective Refresh before new publication and fences late defaults and new old reports', async () => {
   const h = rig()
@@ -128,3 +146,26 @@ it('retires a producer on effective Refresh before new publication and fences la
   expect(agentModelCatalogStore.failureDetail(h.fingerprint)).toBe('current failure')
   expect(h.save).toHaveBeenCalledTimes(writes)
 })
+
+it.each([true, false])(
+  'keeps the agent session that launched Orca out of a chat agent environment (inherit shell: %s)',
+  async (inheritAll) => {
+    const parentSession = { CODEX_THREAD_ID: 'parent-thread', CODEX_WINDOWS_REGISTERED_CORE: '1' }
+    const resolvers = createStructuredAgentEnvironmentResolvers({
+      prewarm: false,
+      processEnvironment: { PATH: '/a', CODEX_HOME: '/home/user/.codex', ...parentSession },
+      resolveEnvironment: async () => ({
+        PATH: '/a',
+        CODEX_HOME: '/home/user/.codex',
+        ...parentSession
+      }),
+      resolveShellEnvironmentPolicy: () => ({ inheritAll, names: [] }),
+      resolveAgentLaunchEnv: () => ({ CODEX_CI: 'set-by-user' })
+    })
+    const env = await resolvers.resolveAgentEnvironment('codex')
+    expect(env.CODEX_THREAD_ID).toBeUndefined()
+    expect(env.CODEX_WINDOWS_REGISTERED_CORE).toBeUndefined()
+    expect(env.CODEX_HOME).toBe('/home/user/.codex')
+    expect(env.CODEX_CI).toBe('set-by-user')
+  }
+)

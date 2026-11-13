@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { GitHubPrRepoSlug } from './github-pr-repo-slug'
@@ -15,6 +15,8 @@ import {
 } from './pr-comment-actions'
 import { prCommentTarget, prCommentWrite, type PrCommentWrite } from './pr-comment-writes'
 import type { PrQueryScope } from './mobile-pr-queries'
+import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
 export type PrCommentActionsInput = {
   hostId: string
@@ -52,6 +54,22 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
   const { mutate, blockedOffline } = useHostMutation(prCommentWrite, { hostId, client })
   const ready = client !== null && connState === 'connected' && !blockedOffline
   const target = useMemo(() => prCommentTarget(queries), [queries])
+  const executionHost = useWorkspaceExecutionHost()
+  // A fork's #N and upstream #N keep separate drafts; null is a new root comment.
+  const draftKey = useCallback(
+    (replyTo: number | null): string | null => {
+      if (prNumber <= 0) {
+        return null
+      }
+      const repo = prRepo ? `${prRepo.host ?? ''}/${prRepo.owner}/${prRepo.repo}` : ''
+      return workspaceDraftRowKey(
+        'prComment',
+        { hostId, executionHost, worktreeId },
+        `${repo}#${prNumber}#${replyTo ?? 'new'}`
+      )
+    },
+    [executionHost, hostId, prNumber, prRepo, worktreeId]
+  )
 
   const setBusy = useCallback((key: string, busy: boolean) => {
     setBusyKeys((prev) => {
@@ -160,6 +178,7 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       [busyKeys]
     ),
     isRootBusy: busyKeys.has(ROOT_KEY),
+    draftKey,
     reply,
     toggleResolve,
     addRootComment,

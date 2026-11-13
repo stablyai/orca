@@ -28,6 +28,7 @@ import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -42,7 +43,7 @@ import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
 import {
   buildWorkspaceDirHistoryForUpdate,
-  expandWorkspaceDirHome,
+  normalizeWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
 
@@ -59,7 +60,7 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
-  const sanitizedUpdates = expandWorkspaceDirHome(stripRetiredGlobalSettings(updates))
+  const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
@@ -111,6 +112,11 @@ export function updateSettings(
         external: 'hide'
       })
     }
+  }
+  if ('workspaceCleanupPolicy' in updates) {
+    sanitizedUpdates.workspaceCleanupPolicy = normalizeWorkspaceCleanupRules(
+      updates.workspaceCleanupPolicy
+    )
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
   if ('nativeChatPermissionMode' in updates || 'agentPermissionDefault' in updates) {

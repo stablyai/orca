@@ -1,34 +1,35 @@
-import { useRef } from 'react'
-import {
-  FilePlus,
-  Globe,
-  History,
-  Search,
-  Smartphone,
-  TerminalSquare,
-  type LucideIcon
-} from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../store'
-import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '../../store/index'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
-} from '@/lib/client-creation-action-error'
+} from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
-import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
 import {
   ensureSimulatorTab,
   getSimulatorTabForWorktree
 } from '@/lib/simulator/tabs/ensure-simulator-tab'
-import { SplitPaneLandingAgentRow } from './SplitPaneLandingAgentRow'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useMeasuredWidth } from '@/components/right-sidebar/right-sidebar-measured-width'
+import { Button } from '@/components/ui/button'
 import {
-  LANDING_ROW_CLASS,
-  LandingRowShortcut,
-  moveLandingRowFocus
-} from './split-pane-landing-row'
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
+import { LandingAgentResults, LandingDefaultAgentItem } from './split-pane-landing-agents'
+import { LandingFileResults } from './split-pane-landing-files'
+import { LandingItemShortcut, landingQueryMatches } from './split-pane-landing-item'
 
 /** Fills an empty split pane so the user picks what opens there; each action creates into this group. */
 export function SplitPaneLanding({
@@ -45,6 +46,22 @@ export function SplitPaneLanding({
 }): React.JSX.Element {
   const t = useTranslate()
   const listRef = useRef<HTMLDivElement>(null)
+  const [selected, setSelected] = useState('default-agent')
+  const selectionDuringGestureRef = useRef(selected)
+  const [agentPickerOpen, setAgentPickerOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useState('')
+  // Why: a highlight the user moved since the last query is their choice; late results must not take it back.
+  const highlightMovedRef = useRef(false)
+  // Why: the full placeholder clips once a narrow card is focused; a placeholder can't follow a container query, so measure.
+  const [narrowCard, setNarrowCard] = useState(false)
+  const measureCard = useMeasuredWidth(
+    useCallback(
+      (width: number | null) => setNarrowCard(width !== null && width < NARROW_CARD_WIDTH),
+      []
+    )
+  )
+  const worktreePath = useFileListWorktree(worktreeId)?.path ?? null
   // Why: paired web clients without host streaming hide these, as the tab bar's + menu does.
   const [browserEnabled, emulatorEnabled] = useAppStore(
     useShallow((state) => {
@@ -56,15 +73,10 @@ export function SplitPaneLanding({
       ] as const
     })
   )
-  const canReopen = useAppStore(
-    (state) => (state.recentlyClosedTabKindsByWorktree[worktreeId]?.length ?? 0) > 0
-  )
-  const terminalShortcut = useShortcutKeyDetails('tab.newTerminal')
-  const browserShortcut = useShortcutKeyDetails('tab.newBrowser')
-  const markdownShortcut = useShortcutKeyDetails('tab.newMarkdown')
-  const quickOpenShortcut = useShortcutKeyDetails('worktree.quickOpen')
-  const emulatorShortcut = useShortcutKeyDetails('tab.newSimulator')
-  const reopenShortcut = useShortcutKeyDetails('tab.reopenClosed')
+  const terminalShortcut = useOptionalShortcutLabel('tab.newTerminal')
+  const browserShortcut = useOptionalShortcutLabel('tab.newBrowser')
+  const markdownShortcut = useOptionalShortcutLabel('tab.newMarkdown')
+  const emulatorShortcut = useOptionalShortcutLabel('tab.newSimulator')
 
   const openTerminal = (): void => {
     void openNewTerminalTabInWorkspace(useAppStore.getState, worktreeId, groupId).catch(
@@ -97,7 +109,7 @@ export function SplitPaneLanding({
     )
   }
 
-  const rows: LandingRow[] = [
+  const actions: LandingAction[] = [
     {
       id: 'terminal',
       icon: TerminalSquare,
@@ -121,13 +133,6 @@ export function SplitPaneLanding({
       shortcut: markdownShortcut,
       onSelect: openMarkdown
     },
-    {
-      id: 'quick-open',
-      icon: Search,
-      label: t('components.tabGroup.splitPaneLanding.goToFile', 'Go to file'),
-      shortcut: quickOpenShortcut,
-      onSelect: () => useAppStore.getState().openModal('quick-open')
-    },
     emulatorEnabled
       ? {
           id: 'emulator',
@@ -137,74 +142,190 @@ export function SplitPaneLanding({
           onSelect: openEmulator
         }
       : null
-  ].filter((row): row is LandingRow => row !== null)
+  ].filter(
+    (action): action is LandingAction => action !== null && landingQueryMatches(action.label, query)
+  )
+  const searching = query.trim() !== ''
+  const searchLabel = t(
+    'components.tabGroup.splitPaneLanding.searchAgentsAndFiles',
+    'Search agents and files'
+  )
+
+  const changeSelected = (next: string): void => {
+    // Why: cmdk falls back to the first row when the highlighted row unmounts; the user's pick is gone, so late rows lead again.
+    if (highlightMovedRef.current && !listHasRow(listRef.current, selected)) {
+      highlightMovedRef.current = false
+    }
+    selectionDuringGestureRef.current = next
+    setSelected(next)
+  }
+
+  const recordHighlightMove = (): void => {
+    if (selectionDuringGestureRef.current !== selected) {
+      highlightMovedRef.current = true
+    }
+  }
+
+  const changeQuery = (next: string): void => {
+    highlightMovedRef.current = false
+    setQuery(next)
+  }
+
+  // Why: cmdk keeps its value when rows mount later, so a fast Enter would open a row the user never saw highlighted.
+  const highlightFirstRow = (): void => {
+    if (highlightMovedRef.current) {
+      return
+    }
+    const first = listRef.current?.querySelector<HTMLElement>(
+      '[cmdk-item]:not([aria-disabled="true"])'
+    )
+    if (first?.dataset.value) {
+      setSelected(first.dataset.value)
+    }
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'ArrowRight' && query === '' && selected === 'default-agent') {
+      event.preventDefault()
+      setAgentPickerOpen(true)
+    } else if (event.key === 'Escape' && query !== '') {
+      event.preventDefault()
+      changeQuery('')
+    } else if (movesLandingHighlight(event)) {
+      selectionDuringGestureRef.current = selected
+    }
+  }
 
   return (
-    <div className="absolute inset-0 overflow-auto scrollbar-sleek bg-background">
-      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-4 py-10">
-        <div className="mb-3 px-2.5 text-sm text-muted-foreground">
-          {t('components.tabGroup.splitPaneLanding.heading', 'Open in this pane')}
-        </div>
-        <div
-          ref={listRef}
-          className="flex flex-col gap-1"
-          onKeyDown={(event) => moveLandingRowFocus(event, listRef.current)}
-        >
-          <SplitPaneLandingAgentRow
-            worktreeId={worktreeId}
-            groupId={groupId}
-            autoFocus={autoFocus}
-          />
-          {rows.map((row) => (
-            <LandingRowButton key={row.id} row={row} />
-          ))}
-          {canReopen ? (
-            <>
-              <div className="mx-2.5 my-1.5 h-px bg-border" />
-              <LandingRowButton
-                row={{
-                  id: 'reopen',
-                  icon: History,
-                  label: t(
-                    'components.tabGroup.splitPaneLanding.reopenClosedTab',
-                    'Reopen closed tab'
-                  ),
-                  shortcut: reopenShortcut,
-                  onSelect: () => useAppStore.getState().reopenClosedTab(worktreeId)
-                }}
-              />
-            </>
+    <div
+      className="absolute inset-0 overflow-auto scrollbar-sleek bg-background"
+      onKeyDown={(event) => {
+        // cmdk changes selection after the Command key handler, before this event bubbles here.
+        if (
+          movesLandingHighlight(event) &&
+          event.target instanceof Element &&
+          event.target.closest('[data-slot="command"]')
+        ) {
+          recordHighlightMove()
+        }
+      }}
+    >
+      <div className="flex min-h-full w-full flex-col items-center justify-center px-4 py-10">
+        <div ref={measureCard} className="split-pane-landing @container w-full max-w-[380px]">
+          <Command
+            density="card"
+            label={searchLabel}
+            shouldFilter={false}
+            loop
+            value={selected}
+            onValueChange={changeSelected}
+            onKeyDown={onKeyDown}
+            className="h-auto overflow-hidden"
+          >
+            <CommandInput
+              ref={inputRef}
+              autoFocus={autoFocus}
+              value={query}
+              onValueChange={changeQuery}
+              placeholder={
+                narrowCard
+                  ? t('components.tabGroup.splitPaneLanding.searchShort', 'Search')
+                  : searchLabel
+              }
+            />
+            <CommandList
+              ref={listRef}
+              onPointerMoveCapture={() => {
+                selectionDuringGestureRef.current = selected
+              }}
+              onPointerMove={recordHighlightMove}
+            >
+              <CommandEmpty>
+                {t('components.tabGroup.splitPaneLanding.noMatches', 'No matches')}
+              </CommandEmpty>
+              {searching ? (
+                <LandingAgentResults
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  query={query}
+                  onResultsChange={highlightFirstRow}
+                />
+              ) : null}
+              {!searching || actions.length > 0 ? (
+                <CommandGroup
+                  heading={
+                    searching ? t('components.tabGroup.splitPaneLanding.new', 'New') : undefined
+                  }
+                >
+                  {searching ? null : (
+                    <LandingDefaultAgentItem
+                      worktreeId={worktreeId}
+                      groupId={groupId}
+                      pickerOpen={agentPickerOpen}
+                      onPickerOpenChange={setAgentPickerOpen}
+                      onPickerClosed={() => inputRef.current?.focus()}
+                    />
+                  )}
+                  {actions.map((action) => (
+                    <CommandItem
+                      key={action.id}
+                      value={action.id}
+                      selection="palette"
+                      onSelect={action.onSelect}
+                    >
+                      <action.icon className="text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{action.label}</span>
+                      <LandingItemShortcut label={action.shortcut} />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {worktreePath ? (
+                <LandingFileResults
+                  worktreeId={worktreeId}
+                  worktreePath={worktreePath}
+                  query={query}
+                  onResultsChange={highlightFirstRow}
+                />
+              ) : null}
+            </CommandList>
+          </Command>
+          {onClosePane ? (
+            <div className="mt-3 flex justify-center">
+              <Button type="button" variant="ghost" size="xs" onClick={onClosePane}>
+                <span className="text-muted-foreground">
+                  {t('components.tabGroup.splitPaneLanding.closePane', 'Close pane')}
+                </span>
+              </Button>
+            </div>
           ) : null}
         </div>
-        {onClosePane ? (
-          <button
-            type="button"
-            className="mt-5 self-center rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onClosePane}
-          >
-            {t('components.tabGroup.splitPaneLanding.closePane', 'Close pane')}
-          </button>
-        ) : null}
       </div>
     </div>
   )
 }
 
-type LandingRow = {
+/** Focused placeholders do not ellipsize in Chromium. */
+const NARROW_CARD_WIDTH = 300
+
+type LandingAction = {
   id: string
   icon: LucideIcon
   label: string
-  shortcut: ShortcutKeyComboDetails
+  shortcut: string | null
   onSelect: () => void
 }
 
-function LandingRowButton({ row }: { row: LandingRow }): React.JSX.Element {
-  const Icon = row.icon
-  return (
-    <button type="button" data-landing-row className={LANDING_ROW_CLASS} onClick={row.onSelect}>
-      <Icon className="size-4 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate text-left">{row.label}</span>
-      <LandingRowShortcut shortcut={row.shortcut} />
-    </button>
+function listHasRow(list: HTMLElement | null, value: string): boolean {
+  return Array.from(list?.querySelectorAll<HTMLElement>('[cmdk-item]') ?? []).some(
+    (row) => row.dataset.value === value
   )
+}
+
+/** The keys cmdk moves its highlight with (vim bindings included). */
+function movesLandingHighlight(event: React.KeyboardEvent): boolean {
+  if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    return true
+  }
+  return event.ctrlKey && ['n', 'j', 'p', 'k'].includes(event.key)
 }

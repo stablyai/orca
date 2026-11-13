@@ -14,8 +14,8 @@ import {
   claudeSessionHasTurnWork,
   settledClaudeTurnEndLeaf
 } from './claude-structured-resume-point'
-import { claudeHeldSends } from '../claude-command-lifecycle'
-import { ClaudePluginInputError } from '../claude-plugin-ui'
+import { claudeHeldSends } from './turns/claude-command-lifecycle'
+import { ClaudePluginInputError } from '../sdk-transport/claude-plugin-ui'
 import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { claudeExitEnding } from './claude-structured-start-ending'
 import {
@@ -58,6 +58,7 @@ export function observeClaudeSessionExit(
     return
   }
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
+  session.delivery.dispose()
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.endings.record(sessionId, session.acquisitionGeneration, claudeExitEnding(error))
   lifecycle.sessions.delete(sessionId)
@@ -253,4 +254,20 @@ export function finishClaudeCloseAfterExit(input: {
         error
       })
     )
+}
+
+export function liveClaudeSession(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string
+): ClaudeSession {
+  const session = lifecycle.sessions.get(sessionId)
+  if (!session) {
+    // A child that just exited is named by its own diagnostic, not by its absence.
+    throw (
+      lifecycle.exits.get(sessionId)?.error ??
+      lifecycle.settledExitErrors.get(sessionId) ??
+      new Error(`no live claude stream-json session for ${sessionId}`)
+    )
+  }
+  return session
 }

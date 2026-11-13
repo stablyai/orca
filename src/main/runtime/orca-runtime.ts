@@ -4,7 +4,7 @@ import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
 import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
-import { publishWorkspaceViewChanges } from './sidebar-inputs/runtime-workspace-view-change-events'
+import { publishWorkspaceViewChanges } from './client/settings/runtime-workspace-view-change-events'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
@@ -28,6 +28,7 @@ import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-r
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
+import { registerWorktreeCatalogRoutes } from './workspaces/catalog/worktree-catalog-live-route'
 import {
   listReferenceWorkspaces,
   selectWarmedReferenceWorkspace,
@@ -48,19 +49,24 @@ import {
   installStructuredAgentAvailability as installAvailability,
   type StructuredAgentAvailabilityReader as AvailabilityReader
 } from './agent-session/launch/structured-agent-availability'
-import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
-import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
-import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
+import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
+import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
+import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows/workspace-rows-producer'
 import { getMainHttpClient } from '../network/http-client'
 import { getRuntimeDesktopSurface } from './construction/runtime-desktop-surface'
-import { CollapseWriteOrder } from './sidebar-inputs/workspace-view-collapse-writes'
-import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
+import { CollapseWriteOrder } from './client/settings/workspace-view-collapse-writes'
+import { SidebarInputsFeed } from './sidebar-inputs/feed/sidebar-inputs-feed'
 import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
-import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
+import { requireSwitchedOn } from './construction/require-sidebar-inputs-enabled'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
+import {
+  PeerMailRelay,
+  type PeerServerAnswerStatus
+} from './orchestration/federation/peer-mail/peer-mail-relay'
+import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -68,6 +74,28 @@ const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDE
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+  // Lazy: the database can open, and arm relays, while the runtime is still constructing.
+  declare private peerMailRelay: PeerMailRelay | undefined
+
+  override ensureOrchestrationFederationRelay(
+    runId?: string,
+    options?: { keepAwake?: boolean }
+  ): void {
+    super.ensureOrchestrationFederationRelay(runId, options)
+    this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
+    this.peerMailRelay.ensure()
+  }
+
+  /** What the pull loop last heard from a paired server, without asking it. */
+  getPeerServerAnswerStatus(environmentId: string): PeerServerAnswerStatus | undefined {
+    return this.peerMailRelay?.answerStatus(environmentId)
+  }
+
+  override stopOrchestrationFederationRelay(): void {
+    super.stopOrchestrationFederationRelay()
+    this.peerMailRelay?.stop()
+  }
+
   /** Sidebar facts are absent unless ORCA_SIDEBAR_INPUTS=main. */
   get sidebarFacts() {
     return sidebarFactsRuntime(this)
@@ -174,9 +202,15 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+    registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
+  }
+
+  /** What mobileRelay.hosts.list answers changed. */
+  notifyRelayHostsChanged(): void {
+    this.emitClientEvent({ type: 'relayHostsChanged' })
   }
 
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>
@@ -200,6 +234,13 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
       return null
     }
     return this.notifier.publishAgentLaunchTab(request)
+  }
+
+  /** The window follows a listed active chat only on its own intent (#5435), so a focused launch names it. */
+  focusLaunchedChatInHostWindow(worktreeId: string, sessionId: string): void {
+    this.notifier?.focusEditorTab?.(structuredAgentSessionHostTabId(sessionId), worktreeId, {
+      userInitiated: true
+    })
   }
 
   /** Retain final verdicts, clear settled ones, and remove withdrawn panes without removing split siblings. */

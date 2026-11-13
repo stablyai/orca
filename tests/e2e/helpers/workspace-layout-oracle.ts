@@ -21,7 +21,7 @@ import {
 import { compareClientToRuntime, compareDrawnToRuntime } from './workspace-layout-oracle-compare'
 import { readClientView, readDrawnLayout, type ClientView } from './workspace-layout-oracle-views'
 import { expectedDifferences, type ExpectedLayout } from './workspace-layout-oracle-expected'
-import { checkLayoutRoundTrip } from '../../../src/shared/workspace-layout/workspace-layout-round-trip-check'
+import { checkLayoutRoundTrip } from '../../../src/shared/workspace-layout/persistence/workspace-layout-round-trip-check'
 import { checkPaneMarkers } from './workspace-layout-oracle-markers'
 import { installRemountCounter, readRemountCounts } from './workspace-layout-oracle-watch'
 import { unexpectedFindings } from '../workspace-layout-oracle-known-on-main'

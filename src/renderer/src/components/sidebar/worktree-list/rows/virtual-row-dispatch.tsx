@@ -1,12 +1,13 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
@@ -14,33 +15,30 @@ import {
   getWorktreeVirtualRowTransform,
   shouldUseHeaderTopSpacing
 } from '../viewport/virtual-rows'
+import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { useHostHeaderDrag } from '../drag/host-header-drag'
 import { HostSectionHeader } from './HostSectionHeader'
-import {
-  renderFolderWorkspaceOption,
-  renderFolderWorkspaceVirtualRow,
-  type FolderWorkspaceRowContext
-} from './folder-row'
+import { renderFolderWorkspaceOption, type FolderWorkspaceRowContext } from './folder-row'
 import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import {
   renderImportedWorktreesVirtualRow,
   renderNewExternalWorktreesInboxVirtualRow,
   renderPendingCreationVirtualRow
 } from './notice-rows'
-import {
-  renderWorktreeItemRow,
-  renderWorktreeLineageDescendants,
-  type WorktreeItemRowContext
-} from './item-row'
+import { renderWorktreeItemRow, type WorktreeItemRowContext } from './item-row'
 import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
 
 export type WorktreeVirtualRowContext = {
+  dragUnitsByRow: ReadonlyMap<number, { identity: string }>
+  hiddenDragRanges: readonly { start: number; end: number }[]
+  projection: LineageRowProjection
+  activeFamilyRoots: ReadonlySet<number>
   renderRows: RenderRow[]
   firstHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
@@ -119,63 +117,7 @@ function folderLineageToggle(
   return row.lineageGroupKey ? ctx.item.getLineageToggleHandler(row.lineageGroupKey) : undefined
 }
 
-function renderLineageGroupVirtualRow(
-  ctx: WorktreeVirtualRowContext,
-  row: Extract<RenderRow, { type: 'lineage-group' }>,
-  vItem: VirtualItem
-): React.JSX.Element {
-  const parent = row.folder ? undefined : row.rows[0]
-  const children = row.folder ? row.rows : row.rows.slice(1)
-  const childIsActive = children.some((child) => child.worktree.id === ctx.activeWorktreeId)
-  const parentKey = parent ? getWorktreeHostIdentity(parent.worktree) : null
-  const parentPreviewOffset = parentKey
-    ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parentKey) ?? 0)
-    : 0
-  return (
-    <div
-      key={vItem.key}
-      role="presentation"
-      data-worktree-virtual-row
-      data-worktree-virtual-row-key={String(vItem.key)}
-      data-worktree-virtual-row-start={vItem.start}
-      data-index={vItem.index}
-      ref={ctx.measureVirtualRowElement}
-      className={cn(
-        'absolute left-0 right-0 top-0',
-        parentKey !== null &&
-          parentKey === ctx.worktreeDragState.draggingWorktreeId &&
-          'pointer-events-none',
-        ctx.worktreeDragState.draggingWorktreeId !== null &&
-          'transition-transform duration-150 ease-out will-change-transform'
-      )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset) }}
-    >
-      <div className="overflow-visible">
-        {row.folder
-          ? renderFolderWorkspaceOption({
-              ctx: ctx.folderWorkspace,
-              row: row.folder,
-              lineage: {
-                onToggle: folderLineageToggle(ctx, row.folder),
-                children: renderWorktreeLineageDescendants(ctx.item, row.folder, children),
-                childIsActive
-              }
-            })
-          : parent
-            ? renderWorktreeItemRow(
-                ctx.item,
-                parent,
-                false,
-                renderWorktreeLineageDescendants(ctx.item, parent, children),
-                childIsActive
-              )
-            : null}
-      </div>
-    </div>
-  )
-}
-
-// Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently.
+// Header frames retain sticky positioning; each workspace owns its measured slot.
 export function renderWorktreeVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,
@@ -203,10 +145,6 @@ export function renderWorktreeVirtualRow(
       },
       t
     )
-  }
-
-  if (row.type === 'lineage-group') {
-    return renderLineageGroupVirtualRow(ctx, row, vItem)
   }
 
   if (row.type === 'imported-worktrees-card') {
@@ -239,22 +177,37 @@ export function renderWorktreeVirtualRow(
     })
   }
 
-  if (row.type === 'folder-workspace') {
-    return renderFolderWorkspaceVirtualRow({
-      ctx: ctx.folderWorkspace,
-      row,
-      vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement,
-      lineage: { onToggle: folderLineageToggle(ctx, row) }
-    })
-  }
-
+  const frame = ctx.projection.frames[vItem.index]
+  const folder = row.type === 'folder-workspace'
   const itemWorkspaceStatus =
-    ctx.groupBy === 'workspace-status'
+    !folder && ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatus(row.worktree, ctx.workspaceStatuses)
       : null
-  const itemKey = getWorktreeHostIdentity(row.worktree)
-  const itemPreviewOffset = ctx.worktreeDragState.previewOffsetsByWorktreeId.get(itemKey) ?? 0
+  const itemKey = folder ? null : getWorktreeHostIdentity(row.worktree)
+  const sourceHidden =
+    itemKey !== null &&
+    ctx.worktreeDragState.draggingWorktreeId !== null &&
+    ctx.hiddenDragRanges.some(({ start, end }) => vItem.index >= start && vItem.index <= end)
+  const itemPreviewOffset =
+    (itemKey
+      ? ctx.worktreeDragState.previewOffsetsByWorktreeId.get(
+          ctx.dragUnitsByRow.get(vItem.index)?.identity ?? itemKey
+        )
+      : 0) ?? 0
+  const activeFamily = ctx.activeFamilyRoots.has(frame.root)
+  const rootFrame = ctx.projection.frames[frame.root]
+  const rootRow = ctx.renderRows[frame.root]
+  const familyHidden = ctx.hiddenDragRanges.some(
+    ({ start, end }) => frame.root >= start && frame.root <= end
+  )
+  const familyVariant =
+    rootRow.type === 'item' &&
+    isActiveSidebarWorkspace(rootRow.worktree, {
+      worktreeId: ctx.item.activeWorktreeId,
+      hostId: ctx.item.activeWorkspaceExecutionHostId
+    })
+      ? ctx.item.getActiveSurfaceVariant(rootRow)
+      : 'primary'
 
   return (
     <div
@@ -269,11 +222,13 @@ export function renderWorktreeVirtualRow(
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
         'absolute left-0 right-0 top-0',
-        itemKey === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
+        activeFamily && frame.root === vItem.index && 'worktree-sidebar-family-root',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset) }}
+      style={{
+        transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset)
+      }}
       onDragOver={
         itemWorkspaceStatus
           ? (event) => ctx.onWorkspaceStatusDragOver(event, itemWorkspaceStatus)
@@ -286,7 +241,44 @@ export function renderWorktreeVirtualRow(
           : undefined
       }
     >
-      {renderWorktreeItemRow(ctx.item, row, false)}
+      <div
+        className="relative"
+        style={{ paddingTop: frame.before, paddingBottom: frame.closing + frame.after }}
+      >
+        {activeFamily && (
+          <div
+            aria-hidden="true"
+            data-worktree-family-segment={familyVariant}
+            className={cn(
+              'pointer-events-none absolute border-x',
+              familyHidden && 'opacity-0',
+              frame.root === vItem.index && 'rounded-t-lg border-t',
+              frame.end === vItem.index && vItem.index === rootFrame.end && 'rounded-b-lg border-b'
+            )}
+            style={{
+              left: rootFrame.left + 4,
+              right: rootFrame.right,
+              top: 0,
+              bottom: frame.after
+            }}
+          />
+        )}
+        <div className={cn(sourceHidden && 'pointer-events-none opacity-0')}>
+          {folder
+            ? renderFolderWorkspaceOption({
+                ctx: ctx.folderWorkspace,
+                row,
+                frame,
+                lineage: { onToggle: folderLineageToggle(ctx, row), childIsActive: activeFamily }
+              })
+            : renderWorktreeItemRow(
+                ctx.item,
+                row,
+                frame,
+                activeFamily && frame.root === vItem.index
+              )}
+        </div>
+      </div>
     </div>
   )
 }

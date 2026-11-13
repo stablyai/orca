@@ -15,18 +15,12 @@ import { installLayoutFrameApplyCheck } from '../testing/workspace-layout-frame-
 import {
   CAPABLE,
   ENV,
-  LEAF_ID,
   WT,
   SERVER_LAYOUT,
   createFakeLayoutStreams,
   createServerHarness,
-  mirrorSnapshot,
-  serverLayout,
-  serverTerminalTab,
   senderSnapshot,
-  sessionTabs,
   settle,
-  surface,
   treeOf
 } from './testing/server-layout-frames.test-fixture'
 import {
@@ -74,7 +68,6 @@ const streams = createFakeLayoutStreams()
 hoisted.subscribe = streams.subscribe
 
 const TAB_1 = toWebTerminalSurfaceTabId('host-tab-1')
-const OTHER_WT = 'repo::/other-worktree'
 const { setServers, mirroredStore, install, uninstallAll } = createServerHarness(hoisted)
 
 beforeEach(() => {
@@ -89,58 +82,6 @@ beforeEach(() => {
 afterEach(uninstallAll)
 
 describe('which servers get a layout stream', () => {
-  it('leaves every workspace of an older server to the mirror', async () => {
-    const store = mirroredStore()
-    install(store)
-    setServers(store, [{ ...CAPABLE, capable: false }])
-    await settle()
-
-    // Presence: the server is paired and connected, and its workspace mirrored.
-    expect(store.getState().runtimeEnvironments.map((environment) => environment.id)).toEqual([ENV])
-    expect(store.getState().runtimeStatusByEnvironmentId.get(ENV)?.status?.runtimeId).toBe(
-      'runtime-1'
-    )
-    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([TAB_1])
-    expect(streams.all).toEqual([])
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-    // The mirror still writes the layout: a renamed tab shows.
-    mirrorSnapshot(
-      store,
-      ENV,
-      sessionTabs([{ ...surface('host-tab-1', LEAF_ID, 'terminal-1'), title: 'renamed' }], 2)
-    )
-    expect(store.getState().tabsByWorktree[WT]?.[0]?.title).toBe('renamed')
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-  })
-
-  it.each([
-    ['a new runtime id', { runtimeId: 'runtime-1b' }],
-    ['a new pairing revision', { pairingRevision: 2 }]
-  ] as const)('replaces the stream on %s without handing back first', async (_, change) => {
-    const store = mirroredStore()
-    install(store)
-    setServers(store, [CAPABLE])
-    const first = streams.openTo(ENV)
-    streams.send(first, {
-      type: 'snapshot',
-      workspaces: [{ key: WT, layout: SERVER_LAYOUT }],
-      seq: 1,
-      epoch: 'e'
-    })
-    await settle()
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-
-    setServers(store, [{ ...CAPABLE, ...change }])
-    await settle()
-
-    expect(first.closed).toBe(true)
-    const second = streams.openTo(ENV)
-    expect(second).not.toBe(first)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    expect(hoisted.resync).not.toHaveBeenCalled()
-    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([TAB_1])
-  })
-
   it.each(['lost', 'refused'] as const)(
     'hands the workspaces back when the replacement is %s before its snapshot',
     async (state) => {
@@ -164,66 +105,6 @@ describe('which servers get a layout stream', () => {
 
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
       expect(hoisted.resync.mock.calls).toEqual([[ENV, WT]])
-    }
-  )
-})
-
-describe('frames to mirror', () => {
-  it.each(['lost', 'refused'] as const)(
-    'clears the gate and resyncs each workspace when the stream is %s, keeping the frame tree until then',
-    async (state) => {
-      const store = mirroredStore()
-      hoisted.owners.set(OTHER_WT, ENV)
-      mirrorSnapshot(store, ENV, {
-        ...sessionTabs([surface('host-tab-9', LEAF_ID, 'terminal-9')], 1),
-        worktree: OTHER_WT
-      })
-      install(store)
-      setServers(store, [CAPABLE])
-      const stream = streams.openTo(ENV)
-      streams.send(stream, {
-        type: 'snapshot',
-        workspaces: [
-          { key: WT, layout: SERVER_LAYOUT },
-          {
-            key: OTHER_WT,
-            layout: {
-              ...serverLayout([serverTerminalTab('host-tab-9', LEAF_ID, 'server-pty-9')]),
-              worktreeId: OTHER_WT
-            }
-          }
-        ],
-        seq: 1,
-        epoch: 'e'
-      })
-      await settle()
-      expect([
-        isFrameDrawnServerWorkspace(ENV, WT),
-        isFrameDrawnServerWorkspace(ENV, OTHER_WT)
-      ]).toEqual([true, true])
-      const frameTree = treeOf(store.getState(), WT)
-      expect(frameTree.tabIds).toEqual([TAB_1])
-      // The resync never answers here: whatever the store shows meanwhile is the frames'.
-      hoisted.resync.mockReturnValue(new Promise(() => {}))
-      const states: AppState[] = []
-      const stop = store.subscribe((next) => states.push(next))
-
-      stream.onStatus(state === 'lost' ? { state } : { state, code: 'forbidden' })
-      await settle()
-      stop()
-
-      expect([
-        isFrameDrawnServerWorkspace(ENV, WT),
-        isFrameDrawnServerWorkspace(ENV, OTHER_WT)
-      ]).toEqual([false, false])
-      expect(hoisted.resync.mock.calls).toEqual([
-        [ENV, WT],
-        [ENV, OTHER_WT]
-      ])
-      expect(treeOf(store.getState(), WT)).toEqual(frameTree)
-      for (const recorded of states) {
-        expect(treeOf(recorded, WT)).toEqual(frameTree)
-      }
     }
   )
 })

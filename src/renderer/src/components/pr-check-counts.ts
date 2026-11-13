@@ -1,13 +1,13 @@
-import { normalizePRCheckHeadSha } from '../../../shared/github/pr-check-head'
+import { normalizePRCheckHeadSha } from '../../../shared/github/checks/pr-check-head'
 import {
   isCompletePRCheckOwner,
   samePRCheckObservation
-} from '../../../shared/github/complete-pr-check-owner'
-import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'
+} from '../../../shared/github/checks/complete-pr-check-owner'
+import type { ProviderCheckSummary } from '../../../shared/github/pull-requests/pull-request-types'
 import { translate } from '../i18n/i18n'
 import type { Translate } from '../i18n/use-translate'
 import { summarizeProviderChecks } from '../../../shared/source-control/checks/provider-check-summary'
-import type { PRCheckDetail } from '../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../shared/github/checks/check-types'
 
 export type PRCheckCounts = {
   passing: number

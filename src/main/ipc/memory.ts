@@ -6,7 +6,7 @@ import { collectMemorySnapshot } from '../memory/collector'
 import {
   assertResourceViewVisible,
   isResourceWindowVisible
-} from '../window/resource-view-admission'
+} from '../window/visibility/resource-view-admission'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 
 export function registerMemoryHandlers(store: Store): void {

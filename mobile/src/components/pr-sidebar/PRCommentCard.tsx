@@ -6,7 +6,7 @@ import type {
   GitHubReaction,
   GitHubReactionContent,
   PRComment
-} from '../../../../src/shared/github/comment-types'
+} from '../../../../src/shared/github/comments/comment-types'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
@@ -29,6 +29,8 @@ export type PRCommentCardActions = {
   isResolveBusy: (threadId: string) => boolean
   isEditBusy: (commentId: number) => boolean
   isDeleteBusy: (commentId: number) => boolean
+  // Where a reply to a comment waits until it is posted.
+  draftKey: (replyTo: number) => string | null
   // Repo slug for the slug-addressed edit/delete RPCs; gates the affordances when absent.
   prRepo: PRCommentRepoSlug | null
 }
@@ -296,6 +298,7 @@ export const PRCommentCard = memo(function PRCommentCard({
             placeholder={t('pullRequest.commentCard.replyPlaceholder', 'Write a reply…')}
             submitLabel={t('pullRequest.commentCard.reply', 'Reply')}
             submitting={replyBusy}
+            draftKey={actions.draftKey(comment.id)}
             onSubmit={submitReply}
             onCancel={() => setReplyOpen(false)}
             autoFocus
@@ -305,7 +308,7 @@ export const PRCommentCard = memo(function PRCommentCard({
       {actions ? (
         <ConfirmModal
           visible={confirmDelete}
-          title={t('pullRequest.commentCard.deleteConfirmTitle', 'Delete comment?')}
+          title={t('common.delete', 'Delete')}
           message={t(
             'pullRequest.commentCard.deleteConfirmMessage',
             'This permanently deletes the comment on GitHub.'

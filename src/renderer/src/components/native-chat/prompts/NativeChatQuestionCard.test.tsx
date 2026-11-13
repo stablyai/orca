@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { getByRole, queryByRole } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
@@ -85,5 +86,141 @@ describe('NativeChatQuestionCard', () => {
     expect(document.activeElement).toBe(rows[1])
     expect(pressAt(10, 10, 'ArrowDown')).toBe(true)
     expect(document.activeElement).toBe(rows[0])
+  })
+
+  it('shows a picked preview, keeps it on a second click, and confirms the digit-named option with Enter', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [
+              {
+                question: 'Which layout?',
+                multiSelect: false,
+                options: [
+                  { label: 'Sidebar', preview: '| nav | main |' },
+                  { label: 'Top bar', preview: '| nav |\n| main |' }
+                ]
+              }
+            ]
+          }}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    act(() => rows[0]!.focus())
+    pressKey({ key: '2' }, rows[0]!)
+    act(() => rows[1]!.click())
+    act(() => vi.runAllTimers())
+    expect(container.querySelector('pre')?.textContent).toBe('| nav |\n| main |')
+    expect(document.activeElement).toBe(rows[1])
+    expect(onAnswer).not.toHaveBeenCalled()
+    pressKey({ key: 'ArrowUp' }, rows[1]!)
+    pressKey({ key: '2' }, rows[0]!)
+    expect(document.activeElement).toBe(rows[1])
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+  })
+  it('opens with focus on option 1 without picking it, and Skip turns into Submit once picked', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={tabsOrSpaces}
+          onAnswer={() => {}}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    expect(document.activeElement).toBe(rows[0])
+    expect([...rows].map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
+    expect(getByRole(container, 'button', { name: 'Skip' })).toBeTruthy()
+
+    act(() => rows[1]!.click())
+    expect([...rows].map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+    // The Enter hint is aria-hidden, so the button is still named "Submit".
+    expect(getByRole(container, 'button', { name: 'Submit' })).toBeTruthy()
+    expect(queryByRole(container, 'button', { name: 'Skip' })).toBeNull()
+  })
+
+  it('confirms with Enter on the chosen single-select row instead of deselecting it', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [
+              tabsOrSpaces.questions[0]!,
+              {
+                question: 'Two or four?',
+                header: 'Width',
+                multiSelect: false,
+                options: [{ label: 'Two' }, { label: 'Four' }]
+              }
+            ]
+          }}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = (): HTMLButtonElement[] => [
+      ...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    ]
+    act(() => rows()[0]!.click())
+    act(() => vi.runAllTimers())
+    expect(rows()[0]!.textContent).toContain('Two')
+
+    pressKey({ key: 'ArrowLeft' }, rows()[0]!)
+    expect(rows()[0]!.textContent).toContain('Tabs')
+    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('true')
+    expect(getByRole(container, 'button', { name: 'Next' })).toBeTruthy()
+    act(() => rows()[0]!.focus())
+    pressKey({ key: 'Enter' }, rows()[0]!)
+    act(() => vi.runAllTimers())
+    expect(rows()[0]!.textContent).toContain('Two')
+
+    pressKey({ key: 'ArrowLeft' }, rows()[0]!)
+    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('true')
+    // Click still toggles the chosen row off.
+    act(() => rows()[0]!.click())
+    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('false')
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+  it('submits with a second Enter on the last step instead of deselecting the pick', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={tabsOrSpaces}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    act(() => rows[1]!.focus())
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(rows[1]!.getAttribute('aria-pressed')).toBe('true')
+    // Before the auto-advance fires, Enter on the chosen row submits it.
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+    act(() => vi.runAllTimers())
+    expect(onAnswer).toHaveBeenCalledTimes(1)
   })
 })

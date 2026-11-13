@@ -1,9 +1,10 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { findGroupAndWorktree, findGroupForTab, findTabAndWorktree } from './tab-group-state'
 import { pickNextActiveTab, pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
-import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
+import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function createTabsMoveActions(
   set: TabsSliceSet,
@@ -38,10 +39,9 @@ export function createTabsMoveActions(
           Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
         )
         targetOrder.splice(targetIndex, 0, tabId)
-        const nextActiveGroupIdByWorktree = {
-          ...state.activeGroupIdByWorktree,
-          [worktreeId]: opts?.activate ? targetGroupId : state.activeGroupIdByWorktree[worktreeId]
-        }
+        let nextActiveGroupId = opts?.activate
+          ? targetGroupId
+          : state.activeGroupIdByWorktree[worktreeId]
         const sourceRecentTabIds = sanitizeRecentTabIds(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
@@ -78,30 +78,38 @@ export function createTabsMoveActions(
           return group
         })
         let nextLayoutByWorktree = state.layoutByWorktree
-        let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
         let filteredGroups = nextGroups
+        const currentLayout = state.layoutByWorktree[worktreeId]
         if (sourceOrder.length === 0) {
           filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
-          const collapsedState = collapseGroupLayout(
-            nextLayoutByWorktree,
-            nextActiveGroupIdByWorktreeResolved,
+          if (currentLayout) {
+            const collapsed = collapseWorktreeGroupLayout(
+              currentLayout,
+              nextActiveGroupId,
+              sourceGroup.id,
+              targetGroupId
+            )
+            nextLayoutByWorktree = replaceRecordEntries(state.layoutByWorktree, [
+              [worktreeId, collapsed.layout]
+            ])
+            nextActiveGroupId = collapsed.activeGroupId
+          }
+        }
+        const nextActiveGroupIdByWorktreeResolved = replaceRecordEntries(
+          state.activeGroupIdByWorktree,
+          [[worktreeId, nextActiveGroupId]]
+        )
+        const nextGroupsByWorktree = replaceRecordEntries(state.groupsByWorktree, [
+          [worktreeId, filteredGroups]
+        ])
+        const nextUnifiedTabsByWorktree = replaceTabBuckets(state.unifiedTabsByWorktree, [
+          [
             worktreeId,
-            sourceGroup.id,
-            targetGroupId
-          )
-          nextLayoutByWorktree = collapsedState.layoutByWorktree
-          nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
-        }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: filteredGroups
-        }
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
-        }
+            (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+              candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+            )
+          ]
+        ])
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
           groupsByWorktree: nextGroupsByWorktree,

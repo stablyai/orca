@@ -14,7 +14,6 @@ type PrimaryAgentSpecDeps = {
   CLAUDE_THINKING_LEVELS: ThinkingLevel[]
   OPENAI_THINKING_LEVELS: ThinkingLevel[]
   parseClaudeModels: (stdout: string) => CommitMessageModel[]
-  parseCodexModels: (stdout: string) => CommitMessageModel[]
   parseLineModels: (stdout: string) => CommitMessageModel[]
   parsePiModels: (stdout: string) => CommitMessageModel[]
   withOpenAiThinking: (
@@ -26,7 +25,6 @@ export function buildPrimaryCommitMessageAgentSpecs({
   CLAUDE_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
   parseClaudeModels,
-  parseCodexModels,
   parseLineModels,
   parsePiModels,
   withOpenAiThinking
@@ -40,13 +38,13 @@ export function buildPrimaryCommitMessageAgentSpecs({
       binary: 'claude',
       // Claude -p accepts large prompts on stdin when no positional prompt is supplied.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, userArgs }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, toolFree, userArgs }) => [
         '-p',
         '--output-format',
         'text',
         '--model',
         model,
-        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy }),
+        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy, toolFree }),
         ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
         ...claudeBackgroundArgs(strictMcp, userArgs)
       ],
@@ -105,11 +103,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
       // `-c` is intentionally absent: Codex accepts repeated overrides.
       singletonOptions: [['--model', '-m']],
       modelSource: 'dynamic',
-      modelDiscovery: {
-        binary: 'codex',
-        args: ['debug', 'models'],
-        parse: parseCodexModels
-      },
+      modelDiscovery: { binary: 'codex', listing: 'codex-app-server' },
       // Match the official picker’s descending version order.
       models: [
         {

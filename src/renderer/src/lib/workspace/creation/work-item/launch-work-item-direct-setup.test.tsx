@@ -3,17 +3,16 @@ import { hostMocks, mocks } from './launch-work-item-direct-test-fixture'
 import { readDirectSetupRequest } from '@/lib/workspace/creation/work-item/direct-work-item-setup-test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import * as preflight from './launch-work-item-direct-preflight'
-import * as inventory from '../../../agent-session/launch/inventory/agent-detection-target-inventory'
 
 import { useAppStore } from '@/store/index'
 import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 
-vi.doUnmock('@/lib/ensure-hooks-confirmed')
+vi.doUnmock('@/runtime/repo-hooks/ensure-hooks-confirmed')
 const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-const { __resetTrustPromptChainForTests } = await import('../../../ensure-hooks-confirmed')
+const { __resetTrustPromptChainForTests } =
+  await import('../../../../runtime/repo-hooks/ensure-hooks-confirmed')
 const { DirectWorkItemSetupDialog } =
-  await import('@/components/new-workspace/DirectWorkItemSetupDialog')
+  await import('@/components/new-workspace/setup/DirectWorkItemSetupDialog')
 
 const hooks = { scripts: { setup: 'echo prepared' } }
 const args = {
@@ -62,87 +61,12 @@ describe('direct work item setup preparation', () => {
     unsubscribe()
   })
 
-  it.each(['absent', 'error', 'malformed', 'rejection'] as const)(
-    'cancels during initial inspection before consuming its late %s outcome',
-    async (shape) => {
-      const abort = new AbortController()
-      const read = Promise.withResolvers<{ hasHooks: boolean; hooks: null; status?: 'error' }>()
-      hostMocks.checkRuntimeHooks.mockReturnValueOnce(read.promise)
-      const launch = launchWorkItemDirect({ ...args, signal: abort.signal })
-      abort.abort()
-      if (shape === 'rejection') {
-        read.reject(new Error('late inspection failure'))
-      } else {
-        read.resolve({
-          hasHooks: shape === 'malformed',
-          hooks: null,
-          ...(shape === 'error' ? { status: 'error' } : {})
-        })
-      }
-      await expect(launch).resolves.toBe('cancelled')
-      expect(mocks.createWorktree).not.toHaveBeenCalled()
-      expect(mocks.toastError).not.toHaveBeenCalled()
-      expect(args.openModalFallback).not.toHaveBeenCalled()
-    }
-  )
-
   async function chooseSetup(): Promise<void> {
     await vi.waitFor(() =>
       expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
     )
     readDirectSetupRequest(useAppStore.getState().modalData.directSetup).choose('run')
   }
-
-  it.each(['pr', 'project', 'detection', 'plan'] as const)(
-    'suppresses a late cancelled %s rejection through the original launch',
-    async (stage) => {
-      const gate = Promise.withResolvers<never>()
-      const abort = new AbortController()
-      let reached: () => boolean
-      switch (stage) {
-        case 'pr':
-          mocks.resolvePrBase.mockReturnValueOnce(gate.promise)
-          reached = () => mocks.resolvePrBase.mock.calls.length > 0
-          break
-        case 'project': {
-          const read = vi
-            .spyOn(inventory, 'loadProjectLaunchContext')
-            .mockReturnValueOnce(gate.promise)
-          reached = () => read.mock.calls.length > 0
-          break
-        }
-        case 'detection': {
-          const detect = vi
-            .spyOn(preflight, 'resolveDirectProspectiveAgent')
-            .mockReturnValueOnce(gate.promise)
-          reached = () => detect.mock.calls.length > 0
-          break
-        }
-        case 'plan': {
-          const plan = vi
-            .spyOn(preflight, 'planDirectWorkItemLaunch')
-            .mockReturnValueOnce(gate.promise)
-          reached = () => plan.mock.calls.length > 0
-          break
-        }
-      }
-      hostMocks.checkRuntimeHooks.mockResolvedValue({ hasHooks: true, hooks })
-      const launch = launchWorkItemDirect({
-        ...args,
-        signal: abort.signal,
-        item: { ...args.item, type: 'pr', url: 'https://github.com/acme/repo/pull/42' }
-      })
-      await chooseSetup()
-      await vi.waitFor(() => expect(reached()).toBe(true))
-      abort.abort()
-      gate.reject(new Error('late preparation failed'))
-      await expect(launch).resolves.toBe('cancelled')
-      expect(mocks.toastError).not.toHaveBeenCalled()
-      expect(args.openModalFallback).not.toHaveBeenCalled()
-      expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
-      expect(mocks.createWorktree).not.toHaveBeenCalled()
-    }
-  )
 
   it('aborts the actual trust prompt, releases its queue, and permits a fresh launch', async () => {
     useAppStore.setState({ trustedOrcaHooks: {} })

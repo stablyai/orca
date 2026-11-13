@@ -1,4 +1,4 @@
-import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
 import { useAppStore } from '@/store/index'
 import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'

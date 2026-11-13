@@ -1,7 +1,7 @@
 import React from 'react'
 import { EyeOff } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -13,7 +13,7 @@ import {
   getFirstIncompleteFeatureWallSetupStepId,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 import { useTranslate } from '@/i18n/use-translate'

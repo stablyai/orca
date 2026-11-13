@@ -1,4 +1,7 @@
-import type { UseTerminalPaneContextMenuDeps } from './terminal-pane-context-menu-types'
+import type {
+  TerminalPaneAgentIdCopy,
+  UseTerminalPaneContextMenuDeps
+} from './terminal-pane-context-menu-types'
 import { createTerminalPaneMenuPaste } from '../input/paste/create-terminal-pane-menu-paste'
 import { createTerminalPaneMenuCopyActions } from '../clipboard/create-terminal-pane-menu-copy-actions'
 import { createTerminalPaneMenuLayoutActions } from '../layout/ownership/create-terminal-pane-menu-layout-actions'
@@ -12,6 +15,7 @@ import { useTerminalPaneSplitActions } from '../layout/split/use-terminal-pane-s
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
 import { resetTerminalInputModes } from '../input/terminal-input-mode-reset'
 import { useQuickCommandArgumentPrompt } from '@/components/terminal-quick-commands/use-quick-command-argument-prompt'
+import { focusPaneIfFocusUnclaimed } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
 
 type TerminalMenuState = {
   open: boolean
@@ -21,6 +25,7 @@ type TerminalMenuState = {
   paneCount: number
   menuPaneId: number | null
   menuPane: ManagedPane | null
+  onRestoreTerminalFocus: () => void
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
@@ -29,6 +34,7 @@ type TerminalMenuState = {
   onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onCopyAgentSessionId: () => Promise<void>
+  agentIdCopy: TerminalPaneAgentIdCopy
   onPaste: () => Promise<void>
   onSplitRight: () => void
   onSplitDown: () => void
@@ -128,8 +134,8 @@ export function useTerminalPaneContextMenu({
     onAgentSessionContinuationReady
   }
 
-  const { onCopy, onSelectAll, onCopyPaneId, onCopyTerminalId, onCopyAgentSessionId } =
-    createTerminalPaneMenuCopyActions({ paneTransportsRef, tabId, resolveMenuPane })
+  const { onCopy, onSelectAll, onCopyPaneId, onCopyTerminalId, onCopyAgentSessionId, agentIdCopy } =
+    createTerminalPaneMenuCopyActions({ paneTransportsRef, tabId, worktreeId, resolveMenuPane })
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 
@@ -204,6 +210,8 @@ export function useTerminalPaneContextMenu({
     paneCount,
     menuPaneId,
     menuPane,
+    // Escape or an item that skips refocus (e.g. an empty paste) unmounts the focused menu onto <body>.
+    onRestoreTerminalFocus: () => focusPaneIfFocusUnclaimed(resolveMenuPane()),
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu,
@@ -212,6 +220,7 @@ export function useTerminalPaneContextMenu({
     onCopyTerminalId,
     onCopyPaneId,
     onCopyAgentSessionId,
+    agentIdCopy,
     onPaste,
     onSplitRight,
     onSplitDown,

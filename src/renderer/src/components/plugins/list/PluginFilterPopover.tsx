@@ -1,5 +1,5 @@
 import { ListFilter } from 'lucide-react'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugin-host-api'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Checkbox } from '../../ui/checkbox'

@@ -6,7 +6,7 @@ import {
   readFeedbackImageFiles,
   releaseFeedbackImageDraft,
   type FeedbackImageDraft
-} from '@/lib/feedback-image-attachments'
+} from '@/components/sidebar/sidebar-feedback/feedback-image-attachments'
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
 
 function sumImageBytes(images: readonly FeedbackImageDraft[]): number {

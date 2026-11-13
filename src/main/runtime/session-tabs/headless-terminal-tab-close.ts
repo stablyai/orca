@@ -13,7 +13,7 @@ import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mo
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { retireMobileSessionTabSelection } from './mobile-session-tab-selection'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
-import { appendRetiredTerminalSurfaceProofs } from '../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+import { appendRetiredTerminalSurfaceProofs } from '../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'

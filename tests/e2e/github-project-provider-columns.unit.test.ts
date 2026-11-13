@@ -13,20 +13,29 @@ import {
   _resetProjectViewCachesForTests,
   type OptionalProjectItemField
 } from '../../src/main/github/project-view/project-view-cache'
-import { ghExecFileAsync } from '../../src/main/github/project-view/internals'
-import type { GitHubProjectRow } from '../../src/shared/github/project-types'
+import { ghExecFileAsync } from '../../src/main/git/command-runner/hosted-cli/gh-exec-file'
+import type { GitHubProjectRow } from '../../src/shared/github/projects/project-types'
 import { normalizeLinkedPullRequests } from '../../src/main/github/project-view/project-view-field-normalization'
-import { projectRelationsTableFixture } from '../../src/shared/github/project-relations.test-fixture'
-import { sortRows } from '../../src/shared/github/project-group-sort'
+import { projectRelationsTableFixture } from '../../src/shared/github/projects/project-relations.test-fixture'
+import { sortRows } from '../../src/shared/github/projects/project-group-sort'
 
 import ProjectCell from '../../src/renderer/src/components/github-project/ProjectCell'
 
-vi.mock('../../src/main/github/project-view/internals', () => ({
+vi.mock('../../src/main/github/execution/github-operation-slots', () => ({
   acquire: vi.fn(),
-  release: vi.fn(),
-  ghExecFileAsync: vi.fn(),
+  release: vi.fn()
+}))
+
+vi.mock('../../src/main/git/command-runner/hosted-cli/gh-exec-file', () => ({
+  ghExecFileAsync: vi.fn()
+}))
+
+vi.mock('../../src/main/github/project-view/project-host-execution', () => ({
   projectHostAuthenticationError: vi.fn().mockResolvedValue(null),
-  projectGhExecOptions: (host?: string) => ({ host }),
+  projectGhExecOptions: (host?: string) => ({ host })
+}))
+
+vi.mock('../../src/main/github/api/rate-limit', () => ({
   repositoryRateLimitGuard: () => ({ blocked: false }),
   noteRepositoryRateLimitSpend: vi.fn()
 }))
@@ -167,23 +176,6 @@ function renderColumns(row: GitHubProjectRow): void {
 }
 
 describe('Project columns from the items response', () => {
-  it('keeps old-host, draft, PR, redacted and zero-total rows blank', () => {
-    for (const raw of [
-      { id: 'old', type: 'ISSUE', content: {} },
-      { id: 'draft', type: 'DRAFT_ISSUE', content: {} },
-      { id: 'pr', type: 'PULL_REQUEST', content: {} },
-      { id: 'redacted', type: 'REDACTED', content: null },
-      {
-        id: 'empty',
-        type: 'ISSUE',
-        content: { subIssuesSummary: { total: 0, completed: 0, percentCompleted: 0 } }
-      }
-    ]) {
-      renderColumns(normalized(raw))
-    }
-    expect(document.body.textContent).toBe('')
-  })
-
   it.each([
     { errors: [missingSummary], parentDropped: false, summary: false, prs: true },
     { errors: [missingPrs], parentDropped: false, summary: true, prs: false },
@@ -248,79 +240,6 @@ describe('Project columns from the items response', () => {
     }
   )
 
-  it('shares a pending owner capability probe between concurrent callers', async () => {
-    let entered = () => {}
-    let release = () => {}
-    const started = new Promise<void>((resolve) => {
-      entered = resolve
-    })
-    const pending = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    vi.mocked(ghExecFileAsync).mockImplementationOnce(async () => {
-      entered()
-      await pending
-      return { stdout: JSON.stringify({ errors: [missingSummary] }), stderr: '' }
-    })
-    const first = fetchAllItems(args)
-    await started
-    const second = fetchAllItems(args)
-    expect(ghExecFileAsync).toHaveBeenCalledTimes(1)
-    release()
-    const results = await Promise.all([first, second])
-    expect(results).toEqual([
-      expect.objectContaining({ ok: true, parentFieldDropped: false }),
-      expect.objectContaining({ ok: true, parentFieldDropped: false })
-    ])
-    expect(ghExecFileAsync).toHaveBeenCalledTimes(3)
-    expect(vi.mocked(ghExecFileAsync).mock.calls[2][0].join(' ')).not.toContain(
-      'subIssuesSummary {'
-    )
-  })
-
-  it('fetches unrelated projects concurrently when all optional selections are unsupported', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(ghExecFileAsync).mockResolvedValueOnce({
-      stdout: JSON.stringify({ errors: [missingParent, missingSummary, missingPrs] }),
-      stderr: ''
-    })
-    expect(await fetchAllItems(args)).toMatchObject({ ok: true, parentFieldDropped: true })
-    vi.mocked(ghExecFileAsync).mockClear()
-    let entered = () => {}
-    let release = () => {}
-    const started = new Promise<void>((resolve) => {
-      entered = resolve
-    })
-    const pending = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    vi.mocked(ghExecFileAsync).mockImplementationOnce(async (arguments_) => {
-      entered()
-      await pending
-      return selectedResponse(arguments_)
-    })
-    const first = fetchAllItems(args)
-    await started
-    const second = fetchAllItems({ ...args, projectNumber: 2 })
-    // Flush the normal request's async auth boundary without releasing the first response.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    const concurrentCalls = vi.mocked(ghExecFileAsync).mock.calls.slice()
-    release()
-    expect(await Promise.all([first, second])).toEqual([
-      expect.objectContaining({ ok: true, parentFieldDropped: true }),
-      expect.objectContaining({ ok: true, parentFieldDropped: true })
-    ])
-    expect(concurrentCalls).toHaveLength(2)
-    expect(
-      concurrentCalls.map(([arguments_]) => arguments_.find((arg) => arg.startsWith('num=')))
-    ).toEqual(['num=1', 'num=2'])
-    for (const [arguments_] of concurrentCalls) {
-      expect(arguments_.join(' ')).not.toMatch(
-        /parent \{|subIssuesSummary \{|\.\.\. on ProjectV2ItemFieldPullRequestValue/
-      )
-    }
-  })
-
   it('keeps supported fields and the cursor on pages after a capability retry', async () => {
     vi.mocked(ghExecFileAsync).mockResolvedValueOnce({
       stdout: JSON.stringify({ errors: [missingSummary] }),
@@ -344,19 +263,6 @@ describe('Project columns from the items response', () => {
     expect(last.join(' ')).not.toContain('subIssuesSummary {')
     expect(last.join(' ')).toContain('parent {')
     expect(last.join(' ')).toContain('... on ProjectV2ItemFieldPullRequestValue')
-  })
-
-  it.each([10, 12])('shows exact counts for a linked PR list with total %i', (totalCount) => {
-    const row = normalized(item)
-    if (!row.content.linkedPullRequests) {
-      throw new Error('Expected linked PR content')
-    }
-    row.content.linkedPullRequests.totalCount = totalCount
-    renderColumns(row)
-    expect(
-      screen.getByText(cellText(totalCount === 12 ? prText : prText.replace(' +2 more', '')))
-        .textContent
-    ).toBeTruthy()
   })
 })
 

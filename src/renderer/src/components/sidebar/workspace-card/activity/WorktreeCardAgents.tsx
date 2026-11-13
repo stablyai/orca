@@ -1,7 +1,7 @@
 import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/hooks/use-now'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
@@ -11,7 +11,7 @@ import {
 } from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
@@ -31,13 +31,6 @@ import {
   buildCollapsedChildAgentSignalStates
 } from './worktree-card-idle-child-agents'
 import { recomputeOn } from '@/lib/recompute-on'
-
-export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
-  'orca-suppress-worktree-list-scroll-adjustment'
-
-const dispatchSuppressScrollAdjustment = () => {
-  window.dispatchEvent(new CustomEvent(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT))
-}
 
 type Props = {
   worktreeId: string
@@ -173,8 +166,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     expandedLineageParents,
     expandedIdleChildGroups,
     compactRootListExpanded,
-    toggleLineageParent: toggleLineageParentState,
-    toggleIdleChildGroup: toggleIdleChildGroupState,
+    toggleLineageParent,
+    toggleIdleChildGroup,
     toggleCompactRootList
   } = useWorktreeAgentExpansionState(worktreeId)
 
@@ -184,7 +177,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const wasExpanded = previousCompactExpandedRef.current
     previousCompactExpandedRef.current = compactRootListExpanded
     if (!wasExpanded && compactRootListExpanded && agentActivityDisplayMode === 'compact') {
-      dispatchSuppressScrollAdjustment()
       // Defer reveal one frame to avoid synchronous sidebar layout during the opening animation.
       const handle = requestAnimationFrame(() => {
         revealCompactAgentCard(compactAgentListRootRef.current)
@@ -193,20 +185,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     return undefined
   }, [agentActivityDisplayMode, compactRootListExpanded])
-  const toggleLineageParent = useCallback(
-    (paneKey: string) => {
-      dispatchSuppressScrollAdjustment()
-      toggleLineageParentState(paneKey)
-    },
-    [toggleLineageParentState]
-  )
-  const toggleIdleChildGroup = useCallback(
-    (parentPaneKey: string) => {
-      dispatchSuppressScrollAdjustment()
-      toggleIdleChildGroupState(parentPaneKey)
-    },
-    [toggleIdleChildGroupState]
-  )
 
   const sendTargetFor = (paneKey: string) =>
     isAgentSendTargetModeActive
@@ -402,10 +380,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               agents={summaryAgents}
               subjectLabel={subjectLabel}
               expanded={compactRootListExpanded}
-              onToggle={() => {
-                dispatchSuppressScrollAdjustment()
-                toggleCompactRootList()
-              }}
+              onToggle={toggleCompactRootList}
             />
             <CompactAgentExpansion expanded={compactRootListExpanded}>
               {rootAgents.map((rootAgent) =>

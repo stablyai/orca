@@ -304,6 +304,7 @@
       "plan": "Plan",
       "stoppedManually": "Arrêté manuellement",
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+      "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
@@ -359,8 +360,7 @@
       "pausedState": "En pause",
       "queuedState": "En file d'attente",
       "resume": "Reprendre",
-      "resumeSending": "Reprendre l'envoi des messages en file d'attente",
-      "title": "Messages en file d'attente"
+      "resumeSending": "Reprendre l'envoi des messages en file d'attente"
     },
     "offlineQueue": {
       "failed": "Échec de l'envoi — touchez Envoyer pour réessayer",
@@ -637,6 +637,7 @@
       "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} est hors ligne · état à {{time}}",
       "reconnecting": "{{hostName}} se reconnecte…",
       "stopped": "{{hostName}} est arrêté. Démarrez-le sur votre ordinateur.",
       "server": "Le serveur",
@@ -1358,13 +1359,47 @@
       "durationSeconds_many": "{{count}} secondes",
       "durationMinutes_one": "{{count}} minute",
       "durationMinutes_other": "{{count}} minutes",
-      "durationMinutes_many": "{{count}} minutes"
+      "durationMinutes_many": "{{count}} minutes",
+      "discard": "Supprimer l’enregistrement",
+      "retry": "Relancer la dictée",
+      "retryShort": "Réessayer"
     },
     "status": {
       "finishingOn": "Finalisation sur {{computer}}",
       "finishingOnComputer": "Finalisation sur l’ordinateur",
       "movedTo": "Passé sur {{computer}}",
       "movedToComputer": "Passé sur l’ordinateur"
+    },
+    "failure": {
+      "connectionLost": "Connexion perdue",
+      "connectionSlow": "Connexion trop lente",
+      "phoneStopped": "Arrêté sur ce téléphone",
+      "stopped": "Dictée arrêtée",
+      "recordingKept": "Enregistrement conservé"
+    },
+    "announce": {
+      "typedInto": "Saisi dans {{target}}",
+      "insertedIn": "Inséré dans {{target}}",
+      "listeningOnPhone": "Écoute. Transcription sur ce téléphone.",
+      "listeningOn": "Écoute. Transcription sur {{computer}}.",
+      "listeningOnComputer": "Écoute. Transcription sur l’ordinateur.",
+      "finishing": "Finalisation.",
+      "inserted": "Inséré.",
+      "cancelled": "Dictée annulée.",
+      "movedTo": "Ce téléphone a arrêté de transcrire. Suite sur {{computer}}.",
+      "movedToComputer": "Ce téléphone a arrêté de transcrire. Suite sur l’ordinateur.",
+      "stoppedKept": "Dictée arrêtée. {{reason}}. Votre enregistrement est conservé.",
+      "stoppedKeptGeneric": "Dictée arrêtée. Votre enregistrement est conservé.",
+      "stillListening": "Toujours à l’écoute."
+    },
+    "pill": {
+      "open": "Ouvrir",
+      "listening": "Écoute",
+      "starting": "Démarrage",
+      "finishing": "Finalisation",
+      "stopped": "Dictée arrêtée",
+      "label": "Dictée vers {{target}}, {{duration}}",
+      "hint": "Touchez deux fois pour revenir"
     }
   },
   "files": {
@@ -1599,7 +1634,6 @@
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
       "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
       "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
-      "deleteWorktree": "Supprimer le worktree",
       "pin": "Épingler",
       "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
       "removeHost": "Supprimer l'hôte",
@@ -1772,7 +1806,6 @@
       "daysAgo_one": "il y a {{count}} j",
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
-      "deleteConfirmTitle": "Supprimer le commentaire ?",
       "editPlaceholder": "Modifier le commentaire…",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
@@ -2197,6 +2230,10 @@
       "providerExitedRejection": "{{agent}} s'est arrêté avant l'envoi de ce message.",
       "providerExitedRow": "{{agent}} s'est arrêté pendant que cette réponse était en cours. Vous pouvez continuer dans cette conversation.",
       "providerRateLimited": "{{agent}} est limité en débit et réessaie.",
+      "providerUnavailable": "{{agent}} n’a pas pu répondre car le service est occupé. Choisissez un autre modèle ou patientez un peu, puis renvoyez le message.",
+      "providerSafetyStopped": "{{agent}} a arrêté cette réponse après un contrôle de sécurité. Vérifiez votre demande et renvoyez-la.",
+      "providerResponseFailed": "{{agent}} n’a pas pu terminer cette réponse. Ouvrez les détails pour en savoir plus.",
+      "selectedModel": "le modèle sélectionné",
       "providerRejected": "{{agent}} n'a pas accepté ce message.",
       "providerRejectedQuoted": "{{agent}} n'a pas accepté ce message : {{detail}}.",
       "providerRetryLastError": "Dernière erreur : {{detail}}.",
@@ -2350,13 +2387,10 @@
       "loadFailed": "Impossible de charger la pull request"
     },
     "queuedCardText": {
-      "showLess": "Afficher moins",
       "showLessHint": "Affiche une version abrégée du message",
-      "showMore": "Afficher plus",
       "showMoreHint": "Affiche le message entier"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Supprimer ce message en attente",
       "images_many": "{{count}} images",
       "images_one": "{{count}} image",
       "images_other": "{{count}} images",
@@ -2364,7 +2398,6 @@
       "send": "Envoyer",
       "sendAgainHint": "Renvoyer ce message",
       "sendHint": "Envoyer ce message",
-      "showLessHint": "Affiche une version abrégée du message",
       "steer": "Envoyer maintenant",
       "steerHint": "Envoyer sans interrompre le modèle"
     },
@@ -2421,7 +2454,6 @@
       "addTitle": "Ajouter une commande rapide",
       "chooseAgentTitle": "Choisir un agent",
       "deleteConfirmMessage": "Cette commande rapide sera retirée de votre liste enregistrée.",
-      "deleteConfirmTitle": "Supprimer « {{label}} » ?",
       "editTitle": "Modifier la commande rapide",
       "editorDescription": "Enregistrez des commandes de terminal ou des prompts d'agent pour y accéder rapidement.",
       "title": "Commandes rapides",
@@ -2484,8 +2516,7 @@
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
       "newTab": "Nouvel onglet",
-      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Effacer le terminal",
@@ -2528,6 +2559,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Échec de l'ajout (reconnexion en cours)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Impossible de fermer l’onglet. Réessayez.",
+      "closeFailedDesktopNotReady": "Impossible de fermer l’onglet. Orca est encore en cours de chargement sur votre ordinateur. Réessayez dans un instant."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Échec de la commande du navigateur",
@@ -2598,8 +2633,8 @@
       "insertFailed": "Impossible d'insérer la dictée",
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
-      "stoppedAfterSilence": "Arrêt après une minute de silence",
-      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes."
+      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes.",
+      "stoppedAfterSilenceSeconds": "Arrêt après {{seconds}} secondes de silence"
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -3412,6 +3447,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "Fusionner la PR nº {{number}} ?",
+      "confirmGitHubSquash": "Compresser les commits et fusionner la PR nº {{number}} ?",
+      "confirmGitHubRebase": "Rebaser et fusionner la PR nº {{number}} ?",
+      "confirmGitLabMerge": "Fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabSquash": "Compresser les commits et fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?",
+      "merged": "Fusionné",
+      "closed": "Fermé",
+      "conflicts": "Conflits",
+      "behind": "En retard",
+      "blocked": "Bloqué",
+      "checksPending": "Vérifications en attente",
+      "ableToMerge": "Fusion possible",
+      "unknown": "Inconnu"
+    },
+    "pagination": {
+      "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
+      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
+      "noMoreResults": "Aucun autre résultat sur la page {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Échec de la résolution de la branche de base.",
       "forkPushWarning": "L'option « Autoriser les modifications des mainteneurs » est désactivée pour cette PR ; le push vers le fork peut être refusé par GitHub."
@@ -4150,7 +4206,6 @@
       "outcome": "Résultat",
       "allOutcomes": "Tous les résultats",
       "couldNotStart": "Démarrage impossible",
-      "deleteAutomationTitle": "Supprimer l’automatisation ?",
       "deleteRetained": "Supprimer « {{name}} » et ses exécutions conservées ?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Impossible de vérifier le panneau d’origine de l’agent. Reconnectez-vous et réessayez.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Le panneau d’origine de l’agent ne peut plus être ouvert. La sortie enregistrée reste ici.",

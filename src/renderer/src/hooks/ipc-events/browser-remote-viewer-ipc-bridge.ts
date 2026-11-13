@@ -1,7 +1,7 @@
 import {
   hydrateBrowserRemoteViewerPages,
   setRemoteViewersForBrowserPage
-} from '../../lib/pane-manager/browser-remote-viewer-store'
+} from '../../runtime/browser/ownership/browser-remote-viewer-store'
 
 /** Local guests also render remote workspaces, so their viewer state follows this desktop's IPC. */
 export function registerBrowserRemoteViewerIpcBridge(): () => void {

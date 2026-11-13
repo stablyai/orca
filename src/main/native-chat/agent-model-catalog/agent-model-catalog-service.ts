@@ -112,13 +112,26 @@ export function createAgentModelCatalogService(
           binding: () => bindings.get(requestKey(params))
         })
       }
-      const result = snapshot(params)
-      // A waiting read that used its whole budget is final; work still running doesn't reopen it.
-      const { listingInProgress: _, ...settled } = result
-      const answer = waits && Date.now() >= deadline ? settled : result
-      return lifetime.signal.aborted
-        ? answer
-        : readAccountList(deps, params, answer, () => memoryBinding({ agent: params.agent })?.base)
+      const expired = waits && Date.now() >= deadline
+      // Expiry ends the wait, but a still-current scope can describe the listing left behind.
+      const answerParams =
+        expired && params.operation?.current({ ignoreDeadline: true })
+          ? { ...params, operation: undefined }
+          : params
+      const result = snapshot(answerParams)
+      const answer = lifetime.signal.aborted
+        ? result
+        : readAccountList(
+            deps,
+            answerParams,
+            result,
+            () => memoryBinding({ agent: params.agent })?.base
+          )
+      if (!expired || !answer.listingInProgress) {
+        return answer
+      }
+      // Expiring a reader cannot settle the listing, including for clients predating waitExpired.
+      return { ...answer, waitExpired: true }
     },
     recordLiveListing: live.recordLiveListing,
     async prewarm() {

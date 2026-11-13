@@ -8,14 +8,17 @@ import {
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '../../../store/index'
-import { Card, CardContent } from '../../ui/card'
 import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatIdleStopSetting } from './NativeChatIdleStopSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import { nativeChatScrollsToLatestOnSend } from '../../../../../shared/native-chat/native-chat-appearance-settings'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import {
+  nativeChatMarksNewMessages,
+  nativeChatScrollsToLatestOnSend
+} from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -54,6 +57,7 @@ export function ChatBehaviorSetting({
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
+    entries.markNewMessages,
     entries.linkPreviews,
     entries.shellEnvironment
   ]
@@ -64,135 +68,138 @@ export function ChatBehaviorSetting({
   const queueFollowUps = nativeChatQueueFollowUps(settings)
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
+  const markNewMessages = nativeChatMarksNewMessages(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
-    <section id="chat-behavior" className="space-y-3">
-      <SettingsSubsectionHeader title={getChatBehaviorTitle(t)} />
-      <Card>
-        <CardContent>
-          <div className="divide-y divide-border/40">
-            <ChatPermissionSetting
-              settings={settings}
-              updateSettings={updateSettings}
-              forceVisible={forceVisible}
-            />
-            <SearchableSetting
-              {...entries.resumeOnRestart}
-              id={entries.resumeOnRestart.targetSectionId}
-              forceVisible={forceVisible}
-              className="max-w-none"
-            >
-              <SettingsSwitchRow
-                label={entries.resumeOnRestart.title}
-                description={entries.resumeOnRestart.description}
-                checked={resumeOnRestartEnabled}
-                ariaLabel={t(
-                  'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
-                  'Toggle automatic resume after a restart'
-                )}
-                onChange={() =>
-                  updateSettings({ nativeChatResumeWorkOnRestart: !resumeOnRestartEnabled })
-                }
-              />
-            </SearchableSetting>
-            <SearchableSetting
-              {...entries.idleStop}
-              id={entries.idleStop.targetSectionId}
-              forceVisible={forceVisible}
-              className="max-w-none"
-            >
-              <NativeChatIdleStopSetting
-                settings={settings}
-                updateSettings={updateSettings}
-                title={entries.idleStop.title}
-                description={entries.idleStop.description}
-              />
-            </SearchableSetting>
-            {hostContinuesUsageLimits ? (
-              <SearchableSetting
-                {...entries.autoContinueAfterUsageLimit}
-                id={entries.autoContinueAfterUsageLimit.targetSectionId}
-                forceVisible={forceVisible}
-                className="max-w-none"
-              >
-                <SettingsSwitchRow
-                  label={entries.autoContinueAfterUsageLimit.title}
-                  description={entries.autoContinueAfterUsageLimit.description}
-                  checked={autoContinueEnabled}
-                  disabled={settings.nativeChatAutoContinueAfterUsageLimit === undefined}
-                  ariaLabel={t(
-                    'components.settings.nativeChat.usageLimitContinueToggleLabel',
-                    'Toggle continuing chats when a usage limit resets'
-                  )}
-                  onChange={() =>
-                    updateSettings({ nativeChatAutoContinueAfterUsageLimit: !autoContinueEnabled })
-                  }
-                />
-              </SearchableSetting>
-            ) : null}
-            {hostQueuesMessages ? (
-              <SearchableSetting
-                {...entries.queueFollowUps}
-                id={entries.queueFollowUps.targetSectionId}
-                forceVisible={forceVisible}
-                className="max-w-none"
-              >
-                <SettingsSwitchRow
-                  label={entries.queueFollowUps.title}
-                  description={entries.queueFollowUps.description}
-                  checked={queueFollowUps}
-                  ariaLabel={entries.queueFollowUps.title}
-                  onChange={() => updateSettings({ nativeChatQueueFollowUps: !queueFollowUps })}
-                />
-              </SearchableSetting>
-            ) : null}
-            <SearchableSetting
-              {...entries.scrollToLatestOnSend}
-              id={entries.scrollToLatestOnSend.targetSectionId}
-              forceVisible={forceVisible}
-              className="max-w-none"
-            >
-              <SettingsSwitchRow
-                label={entries.scrollToLatestOnSend.title}
-                description={entries.scrollToLatestOnSend.description}
-                checked={scrollToLatestOnSend}
-                ariaLabel={entries.scrollToLatestOnSend.title}
-                onChange={() =>
-                  updateSettings({ nativeChatScrollToLatestOnSend: !scrollToLatestOnSend })
-                }
-              />
-            </SearchableSetting>
-            <SearchableSetting
-              {...entries.linkPreviews}
-              id={entries.linkPreviews.targetSectionId}
-              forceVisible={forceVisible}
-              className="max-w-none"
-            >
-              <SettingsSwitchRow
-                label={entries.linkPreviews.title}
-                description={entries.linkPreviews.description}
-                checked={linkPreviewsEnabled}
-                ariaLabel={t(
-                  'components.settings.nativeChat.linkPreviewsToggleLabel',
-                  'Toggle link previews'
-                )}
-                onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
-              />
-            </SearchableSetting>
-            <SearchableSetting
-              {...entries.shellEnvironment}
-              id={entries.shellEnvironment.targetSectionId}
-              forceVisible={forceVisible}
-              className="max-w-none"
-            >
-              <NativeChatShellEnvironmentSetting
-                settings={settings}
-                updateSettings={updateSettings}
-              />
-            </SearchableSetting>
-          </div>
-        </CardContent>
-      </Card>
-    </section>
+    <SettingsGroup id="chat-behavior" title={getChatBehaviorTitle(t)}>
+      <ChatPermissionSetting
+        settings={settings}
+        updateSettings={updateSettings}
+        forceVisible={forceVisible}
+      />
+      <SearchableSetting
+        {...entries.resumeOnRestart}
+        id={entries.resumeOnRestart.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.resumeOnRestart.title}
+          description={entries.resumeOnRestart.description}
+          checked={resumeOnRestartEnabled}
+          ariaLabel={t(
+            'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
+            'Toggle automatic resume after a restart'
+          )}
+          onChange={() =>
+            updateSettings({ nativeChatResumeWorkOnRestart: !resumeOnRestartEnabled })
+          }
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.idleStop}
+        id={entries.idleStop.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <NativeChatIdleStopSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          title={entries.idleStop.title}
+          description={entries.idleStop.description}
+        />
+      </SearchableSetting>
+      {hostContinuesUsageLimits ? (
+        <SearchableSetting
+          {...entries.autoContinueAfterUsageLimit}
+          id={entries.autoContinueAfterUsageLimit.targetSectionId}
+          forceVisible={forceVisible}
+          className="max-w-none"
+        >
+          <SettingsSwitchRow
+            label={entries.autoContinueAfterUsageLimit.title}
+            description={entries.autoContinueAfterUsageLimit.description}
+            checked={autoContinueEnabled}
+            disabled={settings.nativeChatAutoContinueAfterUsageLimit === undefined}
+            ariaLabel={t(
+              'components.settings.nativeChat.usageLimitContinueToggleLabel',
+              'Toggle continuing chats when a usage limit resets'
+            )}
+            onChange={() =>
+              updateSettings({ nativeChatAutoContinueAfterUsageLimit: !autoContinueEnabled })
+            }
+          />
+        </SearchableSetting>
+      ) : null}
+      {hostQueuesMessages ? (
+        <SearchableSetting
+          {...entries.queueFollowUps}
+          id={entries.queueFollowUps.targetSectionId}
+          forceVisible={forceVisible}
+          className="max-w-none"
+        >
+          <SettingsSwitchRow
+            label={entries.queueFollowUps.title}
+            description={entries.queueFollowUps.description}
+            checked={queueFollowUps}
+            ariaLabel={entries.queueFollowUps.title}
+            onChange={() => updateSettings({ nativeChatQueueFollowUps: !queueFollowUps })}
+          />
+        </SearchableSetting>
+      ) : null}
+      <SearchableSetting
+        {...entries.scrollToLatestOnSend}
+        id={entries.scrollToLatestOnSend.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.scrollToLatestOnSend.title}
+          description={entries.scrollToLatestOnSend.description}
+          checked={scrollToLatestOnSend}
+          ariaLabel={entries.scrollToLatestOnSend.title}
+          onChange={() => updateSettings({ nativeChatScrollToLatestOnSend: !scrollToLatestOnSend })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.markNewMessages}
+        id={entries.markNewMessages.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.markNewMessages.title}
+          description={entries.markNewMessages.description}
+          checked={markNewMessages}
+          ariaLabel={entries.markNewMessages.title}
+          onChange={() => updateSettings({ nativeChatMarkNewMessages: !markNewMessages })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.linkPreviews}
+        id={entries.linkPreviews.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.linkPreviews.title}
+          description={entries.linkPreviews.description}
+          checked={linkPreviewsEnabled}
+          ariaLabel={t(
+            'components.settings.nativeChat.linkPreviewsToggleLabel',
+            'Toggle link previews'
+          )}
+          onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.shellEnvironment}
+        id={entries.shellEnvironment.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <NativeChatShellEnvironmentSetting settings={settings} updateSettings={updateSettings} />
+      </SearchableSetting>
+    </SettingsGroup>
   )
 }

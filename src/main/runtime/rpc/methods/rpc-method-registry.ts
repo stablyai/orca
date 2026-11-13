@@ -7,6 +7,7 @@ import { AI_VAULT_METHODS } from './history/ai-vault'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
+import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspaces/workspace-cleanup-runner-methods'
 import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { REFERENCE_METHODS } from './reference/reference'
 import { TERMINAL_METHODS } from './terminal/terminal'
@@ -94,6 +95,7 @@ export const ALL_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...WORKSPACE_CLEANUP_RUNNER_METHODS,
   ...AGENT_ACTIVITY_METHODS,
   ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,

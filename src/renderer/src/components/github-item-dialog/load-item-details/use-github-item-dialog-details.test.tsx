@@ -3,11 +3,11 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import React, { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import { requestPRReviewers } from '../land-pull-request/pr-reviewers-request-actions'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 import {

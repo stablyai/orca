@@ -145,7 +145,7 @@ export function MiniMaxCredentials({
   return (
     <>
       <SearchableSetting
-        title={t('auto.components.settings.AccountsPane.21d6eb141e', 'MiniMax Session Cookie')}
+        title={t('auto.components.settings.AccountsPane.4d41177f74', 'MiniMax session cookie')}
         description={t(
           'auto.components.settings.AccountsPane.33bba5ad83',
           'Paste your MiniMax session cookie for local rate-limit fetching.'
@@ -156,7 +156,7 @@ export function MiniMaxCredentials({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Label htmlFor="minimax-cookie">
-              {t('auto.components.settings.AccountsPane.21d6eb141e', 'MiniMax Session Cookie')}
+              {t('auto.components.settings.AccountsPane.4d41177f74', 'MiniMax session cookie')}
             </Label>
             <Badge
               variant={miniMaxConfigured ? 'secondary' : 'outline'}
@@ -187,8 +187,8 @@ export function MiniMaxCredentials({
         <UnsealedCredentialNotice
           protection={miniMaxCookieProtection}
           credentialName={t(
-            'auto.components.settings.AccountsPane.21d6eb141e',
-            'MiniMax Session Cookie'
+            'auto.components.settings.AccountsPane.4d41177f74',
+            'MiniMax session cookie'
           )}
         />
         {cookieNotice ? <p className="text-xs text-muted-foreground">{cookieNotice}</p> : null}

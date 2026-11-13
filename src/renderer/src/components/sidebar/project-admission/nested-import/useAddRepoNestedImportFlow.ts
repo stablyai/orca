@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useAppStore } from '@/store/index'
-import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/nested-repo-selected-paths'
+import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/workspace/creation/nested-repo-selected-paths'
 import {
   buildNestedRepoImportActionTelemetry,
   buildNestedRepoImportResultTelemetry,
@@ -18,6 +18,7 @@ import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/work
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
+import { nestedImportFailureDescription } from './nested-import-failure-description'
 import { defaultProjectGroupNameForPath } from '../dialog/add-repo-dialog-types'
 import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
 
@@ -160,7 +161,7 @@ export function useAddRepoNestedImportFlow({
           .filter((projectId): projectId is string => typeof projectId === 'string')
         const firstRepoId = importedRepoIds[0]
         if (!firstRepoId) {
-          const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
+          const firstFailure = result.projects.find((entry) => entry.status === 'failed')
           if (gen === nestedImportGenRef.current) {
             toast.error(
               translate(
@@ -168,7 +169,7 @@ export function useAddRepoNestedImportFlow({
                 'No repositories imported'
               ),
               {
-                description: firstFailure ?? undefined
+                description: nestedImportFailureDescription(firstFailure)
               }
             )
           }

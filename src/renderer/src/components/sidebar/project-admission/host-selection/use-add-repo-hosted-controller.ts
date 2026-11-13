@@ -1,12 +1,15 @@
 import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
+import type { AddRepoDialogEntryRequest } from '../dialog/add-repo-dialog-types'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 
 /** Nest Add Project in a host surface rather than replacing the store modal. */
 export type AddRepoDialogHostedController = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Direct step or pre-picked folder request initiated from AddProjectMenu. */
+  entryRequest?: AddRepoDialogEntryRequest | null
   /** Select the added Git project instead of navigating to its default checkout. */
   onProjectAdded: (repoId: string) => void | Promise<void>
   onProjectGroupImported?: (groupId: string) => boolean | Promise<boolean>

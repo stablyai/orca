@@ -69,6 +69,33 @@ it('rechecks closure before cancelling when a PR reopens during lookup', async (
   expect(cancel).not.toHaveBeenCalled()
 })
 
+it('skips a close event whose payload was rendered after a quick reopen', async () => {
+  const reopened = execute({
+    closed: { number: 123, closed_at: null },
+    current: { number: 123, state: 'open', closed_at: null, merged_at: null }
+  })
+  await expect(reopened.result).resolves.toBeUndefined()
+  expect(reopened.cancel).not.toHaveBeenCalled()
+
+  const stillClosed = execute()
+  await stillClosed.result
+  expect(stillClosed.cancel).toHaveBeenCalledWith(expect.objectContaining({ run_id: 42 }))
+})
+
+it('skips a close event when the PR was reopened and merged before cleanup', async () => {
+  const { result, cancel } = execute({
+    closed: { number: 123, closed_at: null },
+    current: {
+      number: 123,
+      state: 'closed',
+      closed_at: '2026-10-06T00:00:05Z',
+      merged_at: '2026-10-06T00:00:05Z'
+    }
+  })
+  await expect(result).resolves.toBeUndefined()
+  expect(cancel).not.toHaveBeenCalled()
+})
+
 const head = 'a'.repeat(40)
 const pushed = { number: 123, head: { sha: head } }
 const open = { ...pushed, state: 'open' }
