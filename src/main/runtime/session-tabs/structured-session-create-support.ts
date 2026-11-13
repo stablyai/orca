@@ -122,7 +122,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
       input.agent,
       input.worktree,
-      'launch',
+      input.accountHomePurpose ?? 'launch',
       hostLaunchDirectory
     )
     if (!resolveAccountHome) {

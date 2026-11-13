@@ -41,6 +41,7 @@ export type StructuredAgentSessionCreateIntentInput = {
   envelope: { sessionId: string; clientOperationId: string }
   worktree: string
   agent: StructuredAgentId
+  accountHomePurpose?: 'read'
   callerKey?: string
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource

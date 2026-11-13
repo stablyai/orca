@@ -117,6 +117,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     envelope: args.envelope,
     worktree: args.worktree,
     agent: args.agent,
+    ...(args.executionPolicy ? { accountHomePurpose: 'read' as const } : {}),
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
