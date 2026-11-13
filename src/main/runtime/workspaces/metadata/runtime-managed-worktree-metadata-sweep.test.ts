@@ -8,6 +8,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { testState, createStore, makeRepo } from '../../../persistence/persistence-test-harness'
 import type { Store } from '../../../persistence/loading-store/store'
 import { RuntimeManagedWorktreeQueries } from '../catalog/runtime-managed-worktree-queries'
+import { scanRuntimeWorktreesUntilNotOvertaken } from '../catalog/runtime-witnessed-worktree-scan'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
@@ -45,7 +46,13 @@ function queries(
     listResolved: async () => [],
     resolveRepo: async () => repo,
     selectRepos: () => [repo],
-    scanRepo: async () => ({ ok, worktrees: [...worktrees] }),
+    scanRepo: (target) =>
+      scanRuntimeWorktreesUntilNotOvertaken(
+        store as unknown as RuntimeStore,
+        target,
+        async () => ({ ok, worktrees: [...worktrees] }),
+        { captureMetadataPruneExpectation: true }
+      ),
     listKnownHostIds: () => []
   })
 }

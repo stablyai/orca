@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
+import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
@@ -76,7 +77,8 @@ function queries(
     listResolved: async () => resolved,
     resolveRepo: async () => SSH_REPO,
     selectRepos: () => [SSH_REPO],
-    scanRepo: async () => ({ ok: true, worktrees: [] }),
+    scanRepo: (repo) =>
+      scanRuntimeWorktreesUntilNotOvertaken(store, repo, async () => ({ ok: true, worktrees: [] })),
     listKnownHostIds: () => knownHostIds
   })
 }

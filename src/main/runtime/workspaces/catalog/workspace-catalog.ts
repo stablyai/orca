@@ -1,8 +1,9 @@
 import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import {
+  listKnownResolvedWorktreesForExplicitTarget,
+  type ResolvedWorktree
+} from './runtime-worktree-path-identity'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
@@ -25,16 +26,19 @@ import {
   listRuntimeFolderWorkspaces,
   projectRuntimeFolderWorkspaces
 } from './runtime-worktree-filesystem'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
-import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
-import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
-import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
+import type { RuntimeWorktreeScanAttempt } from './repo-worktree-resolution-scan'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeWorktreeScanCache } from './runtime-worktree-scan-state'
 import * as ScanCache from './runtime-worktree-scan-cache'
+import {
+  captureRuntimeWorktreeScanOwner,
+  runtimeWorktreeScanOwnerKey,
+  listRuntimeRepoWorktreesForListing,
+  type RuntimeWorktreeListingOptions,
+  type WitnessedRuntimeWorktreeScan
+} from './runtime-witnessed-worktree-scan'
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
@@ -46,40 +50,12 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     targetWorktreeId: string,
     targetWorktree: ResolvedWorktree | null
   ): ResolvedWorktree[] {
-    if (!this.store || !targetWorktree) {
-      return []
-    }
-    const target = splitWorktreeIdForFilesystem(targetWorktreeId)
-    if (!target?.repoId || !target.worktreePath) {
-      // Folder workspace keys have no repo/path tuple, but the converted row
-      // is already authoritative for this explicit target.
-      return [targetWorktree]
-    }
-    const worktreeIds = new Set(
-      Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
-        const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        return (
-          parsed?.repoId === target.repoId &&
-          Boolean(parsed.worktreePath) &&
-          (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
-            isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
-        )
-      })
+    return listKnownResolvedWorktreesForExplicitTarget(
+      this.store,
+      (worktreeId, repos) => this.buildResolvedWorktreeFromId(worktreeId, repos),
+      targetWorktreeId,
+      targetWorktree
     )
-    worktreeIds.add(targetWorktreeId)
-
-    const resolved: ResolvedWorktree[] = []
-    const repos = createRepoRowExecutionHostLookup(this.store.getRepos())
-    for (const worktreeId of worktreeIds) {
-      const worktree =
-        worktreeId === targetWorktreeId
-          ? targetWorktree
-          : this.buildResolvedWorktreeFromId(worktreeId, repos)
-      if (worktree) {
-        resolved.push(worktree)
-      }
-    }
-    return resolved
   }
 
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
@@ -176,8 +152,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
         const cached = this.worktreeScanCache.get(key)
         if (
           cached?.generation === (this.worktreeScanGenerations.get(key) ?? 0) &&
-          cached.runtimeKey === ScanCache.resolveWorktreeScanRuntime(store, repo).runtimeKey &&
-          cached.listing?.ok
+          cached.runtimeKey === runtimeWorktreeScanOwnerKey(store, repo) &&
+          cached.listing?.ok &&
+          cached.listing.isCurrent()
         ) {
           return cached.listing
         }
@@ -198,79 +175,101 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
   }
 
-  /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */
+  /** One bounded attempt sequence owns raw resolution and removal-checkout delivery together. */
   protected async listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
-  ): Promise<RuntimeWorktreeScanResult> {
-    const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
-    // Paired detectedList must retain folder-upgrade locators or folder ids lose metadata and terminals (#30150).
-    const scan = { ...cached, worktrees: preserveFolderUpgradeWorktreePath(repo, cached.worktrees) }
-    const listing =
-      scan.ok && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
-        ? {
-            ok: true,
-            worktrees: await withUnregisteredRemovalCheckouts(
-              repo.id,
-              withoutInFlightWorktreeCreates(repo.id, scan.worktrees)
-            )
-          }
-        : scan
-    const cachedEntry = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
-    if (cachedEntry?.result === cached) {
-      cachedEntry.listing = listing
-    }
-    return listing
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options: RuntimeWorktreeListingOptions = {}
+  ): Promise<WitnessedRuntimeWorktreeScan> {
+    const store = this.requireStore()
+    return listRuntimeRepoWorktreesForListing({
+      store,
+      repo: { ...repo },
+      scanRepo: (current, initialAttempt) =>
+        this.listRepoWorktreesForResolution(
+          current,
+          initialAttempt ? projectRuntimeByRepoId : undefined
+        ),
+      cache: this.worktreeScanCache,
+      generations: this.worktreeScanGenerations,
+      isCurrentRuntime: () => this.store === store,
+      options
+    })
   }
 
+  /** Raw topology is one attempt; listing and structured callers own their separate retry bounds. */
   protected async listRepoWorktreesForResolution(
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
-  ): Promise<RuntimeWorktreeScanResult> {
-    const { projectRuntime, runtimeKey, sshConnectionId } = ScanCache.resolveWorktreeScanRuntime(
-      this.requireStore(),
-      repo,
-      projectRuntimeByRepoId
-    )
-    const now = Date.now()
+  ): Promise<RuntimeWorktreeScanAttempt> {
+    repo = { ...repo }
+    const store = this.requireStore()
+    const ownerIsCurrent = captureRuntimeWorktreeScanOwner(store, repo)
+    const {
+      projectRuntime,
+      runtimeKey: projectRuntimeKey,
+      sshConnectionId
+    } = ScanCache.resolveWorktreeScanRuntime(store, repo, projectRuntimeByRepoId)
+    const runtimeKey = runtimeWorktreeScanOwnerKey(store, repo)
     const scanScopeKey = `${repo.id}\0${getRepoExecutionHostId(repo)}`
-    const retryCurrent = (): Promise<RuntimeWorktreeScanResult> => {
-      const current = this.store
-        ?.getRepos()
-        .find(
-          (candidate) =>
-            candidate.id === repo.id &&
-            getRepoExecutionHostId(candidate) === getRepoExecutionHostId(repo)
-        )
-      return current
-        ? this.listRepoWorktreesForResolution(current)
-        : Promise.resolve({ ok: false, worktrees: [] })
-    }
     const generation = this.worktreeScanGenerations.get(scanScopeKey) ?? 0
+    const isCurrent = () =>
+      this.store === store &&
+      ownerIsCurrent() &&
+      (this.worktreeScanGenerations.get(scanScopeKey) ?? 0) === generation &&
+      ScanCache.resolveWorktreeScanRuntime(store, repo).runtimeKey === projectRuntimeKey
+    const superseded = (): RuntimeWorktreeScanAttempt => ({
+      ok: false,
+      worktrees: [],
+      superseded: true
+    })
+    if (!isCurrent()) {
+      return superseded()
+    }
     const cached = this.worktreeScanCache.get(scanScopeKey)
     if (
       cached?.generation === generation &&
       cached.runtimeKey === runtimeKey &&
-      cached.expiresAt > now
+      cached.expiresAt > Date.now()
     ) {
       return cached.result
     }
+    const finish = (result: RuntimeWorktreeScanAttempt, promise: Promise<unknown>) => {
+      const flight = this.worktreeScanInFlight.get(scanScopeKey)
+      const entry = this.worktreeScanCache.get(scanScopeKey)
+      return isCurrent() &&
+        (!flight || flight.promise === promise) &&
+        (entry === cached || entry?.result === result)
+        ? result
+        : superseded()
+    }
     const inFlight = this.worktreeScanInFlight.get(scanScopeKey)
     if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
-      return (await inFlight.promise).result
+      return finish((await inFlight.promise).result, inFlight.promise)
     }
     const reusableCached =
       cached?.generation === generation && cached.runtimeKey === runtimeKey ? cached : null
     const promise = this.refreshRepoWorktreeScan(repo, projectRuntime, reusableCached)
-      .then(async (refresh) => {
-        if (this.worktreeScanInFlight.get(scanScopeKey)?.promise !== promise) {
-          return { ...refresh, result: await retryCurrent() }
+      .then((refresh) => {
+        const accepts = () =>
+          isCurrent() &&
+          this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise &&
+          (!refresh.observationCommit || refresh.observationCommit.isCurrent())
+        if (refresh.result.superseded || !accepts()) {
+          return { ...refresh, result: superseded() }
         }
-        if (refresh.result.ok || !sshConnectionId) {
+        if (refresh.result.ok) {
+          refresh.observationCommit?.commit(refresh.result.worktrees)
+        }
+        if (!accepts()) {
+          return { ...refresh, result: superseded() }
+        }
+        const result = { ...refresh.result, superseded: false, isCurrent }
+        if (result.ok || !sshConnectionId) {
           const entry: RuntimeWorktreeScanCache = {
             generation,
             runtimeKey,
-            result: refresh.result,
+            result,
             expiresAt: Date.now() + ScanCache.resolveWorktreeScanCacheTtlMs(repo),
             adminFingerprint: refresh.adminFingerprint,
             scannedAt: refresh.scannedAt
@@ -282,7 +281,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
             }
           })
         }
-        return refresh
+        return { ...refresh, result }
       })
       .finally(() => {
         if (this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise) {
@@ -290,7 +289,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
         }
       })
     this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
-    return (await promise).result
+    return finish((await promise).result, promise)
   }
 
   listRepos(): Repo[] {

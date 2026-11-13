@@ -28,6 +28,7 @@ import {
 } from './detected-worktree-scan-cache'
 import {
   getLocalWorktreeCatalogVersion,
+  isLocalWorktreeScanGenerationCurrent,
   localWorktreeCatalogVersionAt
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import {
@@ -45,6 +46,10 @@ import {
   rescanWorktreesWhenWslDistroRuns,
   wslDistroNotRunningForScanFailure
 } from './wsl-stopped-worktree-listing'
+import {
+  gitWorktreeObservationReader,
+  captureGitWorktreeObservationCommit
+} from '../../../workspaces/catalog/git-worktree-observations'
 
 // Partial stores (tests, embedders) may not publish workspace metadata; their listings carry no stamp.
 function readWorkspaceMetadataCursor(store: {
@@ -126,7 +131,10 @@ export async function listDetectedWorktreesForCapturedRepo(
     const pendingAtScan = snapshotPendingWorktreeRemovals()
     const scan = await scanUntilNotOvertaken(
       repo.id,
-      () => listDetectedGitWorktrees(store, repo),
+      () =>
+        listDetectedGitWorktrees(store, repo, () =>
+          captureGitWorktreeObservationCommit(store, repo)
+        ),
       () => isCurrent() && !providerAbort?.signal.aborted
     )
     // Stale rejection preserves client rows; non-authoritative replacement could hide newly created worktrees.
@@ -142,7 +150,7 @@ export async function listDetectedWorktreesForCapturedRepo(
     if (aborted) {
       return aborted
     }
-    if (!isCurrent()) {
+    if (!isCurrent() || !isLocalWorktreeScanGenerationCurrent(repo.id, scan.generation)) {
       return null
     }
     const listedWorktreeIds = gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`)
@@ -167,9 +175,14 @@ export async function listDetectedWorktreesForCapturedRepo(
       if (aborted) {
         return aborted
       }
-      if (!isCurrent()) {
+      if (
+        !isCurrent() ||
+        !isLocalWorktreeScanGenerationCurrent(repo.id, scan.generation) ||
+        (scan.observationCommit && !scan.observationCommit.isCurrent())
+      ) {
         return null
       }
+      scan.observationCommit?.commit(gitWorktrees)
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     releaseWslStoppedWorktreeRescan(repo.id)
@@ -198,6 +211,8 @@ export async function listDetectedWorktreesForCapturedRepo(
     // Retained rows need their scan-failure cause to explain why they are unavailable.
     const unavailableReason = describeWorktreeScanFailure(err)
     const failureKind = classifyWorktreeScanFailure(unavailableReason)
+    const fallbackMeta = readAllWorktreeMetaForRepo(store, repo)
+    const fallbackMetadata = readWorkspaceMetadataCursor(store)
     // A distro the gate would not start (E9) is expected: keep stored rows and re-list once it runs.
     const wslDistroStopped = wslDistroNotRunningForScanFailure(err)
     if (wslDistroStopped) {
@@ -206,12 +221,12 @@ export async function listDetectedWorktreesForCapturedRepo(
         repoId: repo.id,
         authoritative: false,
         source: 'metadata-fallback',
-        worktrees: listWslStoppedWorktrees(store, repo, allMeta),
+        worktrees: listWslStoppedWorktrees(store, repo, fallbackMeta),
         unavailableReason,
         failureKind,
         wslDistroStopped,
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
-        ...(workspaceMetadata ? { workspaceMetadata } : {})
+        ...(fallbackMetadata ? { workspaceMetadata: fallbackMetadata } : {})
       }
     }
     warnOnce(
@@ -220,15 +235,24 @@ export async function listDetectedWorktreesForCapturedRepo(
       `[worktrees] failed to list detected worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
       err
     )
+    const readObservation = gitWorktreeObservationReader(store, repo)
     return {
       repoId: repo.id,
       authoritative: false,
       source: 'metadata-fallback',
-      worktrees: [],
+      worktrees: buildDisconnectedDetectedWorktrees(
+        store,
+        repo,
+        listDisconnectedSshWorktrees(
+          store,
+          repo,
+          createSshWorktreeMetaIndex(Object.entries(fallbackMeta))
+        ).filter((row) => readObservation(fallbackMeta[row.id]))
+      ),
       unavailableReason,
       failureKind,
       catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
-      ...(workspaceMetadata ? { workspaceMetadata } : {})
+      ...(fallbackMetadata ? { workspaceMetadata: fallbackMetadata } : {})
     }
   }
 }

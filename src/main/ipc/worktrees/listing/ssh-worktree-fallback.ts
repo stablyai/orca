@@ -1,5 +1,6 @@
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import { readGitWorktreeObservation } from '../../../../shared/worktree/git-worktree-observation'
 import { parseWorktreeId } from '../../worktree-logic'
 import { mergeWorktree } from '../../worktree-metadata-merge'
 import {
@@ -33,6 +34,10 @@ import {
   getProjectHostSetupMetaUpdates,
   resolveWorktreeMetaWithDiscoveryBackfill
 } from './worktree-discovery-metadata'
+import {
+  gitWorktreeObservationReader,
+  isAdoptableGitWorktree
+} from '../../../workspaces/catalog/git-worktree-observations'
 
 export type SshWorktreeMetaCandidate = {
   id: string
@@ -88,6 +93,7 @@ export function synthesizeSshGitWorktree(
     branch: '',
     isBare: false,
     isMainWorktree: areWorktreePathsEqual(path, repo.path),
+    ...readGitWorktreeObservation(meta.gitWorktree),
     ...(meta.sparseDirectories !== undefined ||
     meta.sparseBaseRef !== undefined ||
     meta.sparsePresetId !== undefined
@@ -104,6 +110,7 @@ export function listDisconnectedSshWorktrees(
   const byWorktreeId = new Map<string, Worktree>()
   const expectedHostId = getRepoExecutionHostId(repo)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
+  const readObservation = gitWorktreeObservationReader(store, repo)
   for (const candidate of metaIndex.get(repo.id) ?? []) {
     if (
       (candidate.meta.hostId && candidate.meta.hostId !== expectedHostId) ||
@@ -116,6 +123,7 @@ export function listDisconnectedSshWorktrees(
       Object.keys(ownershipUpdates).length > 0
         ? { ...candidate.meta, ...ownershipUpdates }
         : candidate.meta
+    const observation = readObservation(meta)
     if (Object.keys(ownershipUpdates).length > 0) {
       store.setWorktreeMeta(
         hostWorktreeTarget({ id: candidate.id, hostId: expectedHostId }),
@@ -125,7 +133,7 @@ export function listDisconnectedSshWorktrees(
     // Remote Windows paths need separator-independent basenames; host basename or repo displayName mislabels rows.
     const worktree = mergeWorktree(
       repo.id,
-      synthesizeSshGitWorktree(repo, candidate.path, meta),
+      synthesizeSshGitWorktree(repo, candidate.path, { ...meta, gitWorktree: observation }),
       meta,
       getWorktreePathBasenameFromId(candidate.id) ?? undefined
     )
@@ -175,6 +183,9 @@ export function buildDetectedGitWorktrees(
       isLegacyRepoForVisibility,
       worktreeVisibilitySourceMatcher
     })
+    if (!meta && !isAdoptableGitWorktree(gitWorktree) && !gitWorktree.removalError) {
+      return { ...detected, visible: false }
+    }
     if (!detected.visible) {
       return detected
     }

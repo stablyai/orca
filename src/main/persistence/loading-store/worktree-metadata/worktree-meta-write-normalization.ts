@@ -7,6 +7,7 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-status
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/meta-persisted-defaults'
 import { normalizeGitHubPRSuppressionUpdate } from '../../../../shared/worktree/github-pr-suppression'
+import { readGitWorktreeObservation } from '../../../../shared/worktree/git-worktree-observation'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
@@ -61,5 +62,11 @@ export function mergeWorktreeMetaForWrite(
     ? sourceContext
     : null
   updated.instanceId ||= randomUUID()
+  const observation = readGitWorktreeObservation(updated.gitWorktree)
+  if (observation && (!existing?.instanceId || existing.instanceId === updated.instanceId)) {
+    updated.gitWorktree = observation
+  } else {
+    delete updated.gitWorktree
+  }
   return updated
 }

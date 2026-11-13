@@ -1,5 +1,7 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
+import { readGitWorktreeObservation } from '../../../shared/worktree/git-worktree-observation'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
@@ -96,6 +98,15 @@ function normalizeLinkedMetadata(meta: WorktreeMeta): boolean {
     ? sourceContext
     : null
   let changed = false
+  const observation = readGitWorktreeObservation(meta.gitWorktree)
+  if (!isDeepStrictEqual(meta.gitWorktree, observation)) {
+    if (observation) {
+      meta.gitWorktree = observation
+    } else {
+      delete meta.gitWorktree
+    }
+    changed = true
+  }
   const linkedItems = getWorkspaceAttachments(meta)
   if (
     meta.linkedItems !== undefined &&

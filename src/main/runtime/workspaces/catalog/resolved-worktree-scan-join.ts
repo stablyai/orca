@@ -133,7 +133,7 @@ function joinRows(
       metaById,
       repoOwners.rowsFor(repo.id).length
     )
-    if (scan?.ok) {
+    if (scan?.ok && !scan.superseded && (!scan.isCurrent || scan.isCurrent())) {
       scannedRepoKeys.add(key)
       for (const row of rows) {
         gitRunById.set(composeWorktreeHostIdentity(row.hostId, row.id), scan.gitRun)

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 
@@ -29,6 +29,14 @@ vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
 
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
 const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
+const { invalidateDetectedWorktreeScanCache } = await import('./detected-worktree-scan-cache')
+const removalListing = await import('../../../workspaces/removal/worktree-removal-listing')
+const { holdInFlightWorktreeCreate } =
+  await import('../../../workspaces/creation/worktree-create-in-flight')
+const { registerWorktreeChangeInvalidator, runWorktreeChangeInvalidators } =
+  await import('./worktree-change-invalidators')
+const { bumpWorktreeScanGeneration } =
+  await import('../../../git/worktrees/catalog/worktree-scan-cache')
 await import('../../../workspaces/catalog/local-worktree-scan-generation')
 
 const localRepo: Repo = {
@@ -64,10 +72,59 @@ function worktreeAt(repo: Repo, path: string): GitWorktreeInfo {
 
 // Clients order listing rows by scan-start generation against applied create/remove replies.
 describe('the catalog version a listing carries', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(() => {
     __resetDetectedWorktreeScanCacheForTests()
     listRepoWorktreesMock.mockReset()
   })
+
+  it.each(['fresh', 'cached'] as const)(
+    'rejects a %s result when a create releases during removal augmentation',
+    async (mode) => {
+      const store = createStore(localRepo)
+      const path = `${localRepo.path}/creating`
+      const unregister = registerWorktreeChangeInvalidator(invalidateDetectedWorktreeScanCache)
+      const release = await holdInFlightWorktreeCreate(localRepo.id, path, () => {
+        runWorktreeChangeInvalidators(localRepo.id)
+        bumpWorktreeScanGeneration(localRepo.path)
+      })
+      listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, path)])
+      try {
+        if (mode === 'cached') {
+          expect(
+            await listDetectedWorktreesForCapturedRepo(store, localRepo, () => true)
+          ).toMatchObject({ worktrees: [] })
+        }
+        let entered!: () => void
+        const augmenting = new Promise<void>((resolve) => {
+          entered = resolve
+        })
+        let finish!: () => void
+        const completion = new Promise<void>((resolve) => {
+          finish = resolve
+        })
+        vi.spyOn(removalListing, 'withUnregisteredRemovalCheckouts').mockImplementationOnce(
+          async (_, rows) => {
+            entered()
+            await completion
+            return rows
+          }
+        )
+        const result = listDetectedWorktreesForCapturedRepo(store, localRepo, () => true)
+        await augmenting
+        release()
+        finish()
+        expect(await result).toBeNull()
+        listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, `${path}-fresh`)])
+        expect(
+          await listDetectedWorktreesForCapturedRepo(store, localRepo, () => true)
+        ).toMatchObject({ worktrees: [{ path: `${path}-fresh` }] })
+      } finally {
+        release()
+        unregister()
+      }
+    }
+  )
 
   it('carries the metadata cursor it read with its metadata, not one advanced during the scan', async () => {
     const cursor = { epoch: 'e1', seq: 4 }

@@ -55,6 +55,12 @@ function detectedResult(worktrees: DetectedWorktree[]): DetectedWorktreeListResu
 }
 
 describe('external worktree inbox', () => {
+  it('never offers a branchless Git record for adoption', () => {
+    const result = detectedResult([detectedWorktree({ branch: '' })])
+    expect(getHiddenExternalWorktrees(result)).toEqual([])
+    expect(getHiddenImportableExternalWorktrees(result)).toEqual([])
+    expect(getNewExternalWorktreeInboxWorktrees(result, repo)).toEqual([])
+  })
   it('lists hidden agent scratch among importable worktrees so recovery stays reachable', () => {
     // Scratch cannot be revealed by the visibility toggle (#9388); per-path import preserves recovery (#10324).
     const hiddenScratch = detectedWorktree({

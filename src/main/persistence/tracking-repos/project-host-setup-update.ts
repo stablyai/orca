@@ -2,6 +2,9 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoUpdatePersistenceOperations } from './repo-update-operations'
+import { getRepoKind } from '../../../shared/repo-kind'
+import { retireGitWorktreeObservations } from './git-worktree-observation-lifetime'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 
 export type ProjectHostSetupUpdateOperations = {
   state: PersistedState
@@ -73,6 +76,8 @@ export class ProjectHostSetupPersistenceOperations {
     setup: ProjectHostSetup,
     updates: ProjectHostSetupUpdateArgs['updates']
   ): ProjectHostSetup {
+    const previousPath = setup.path
+    const previousKind = getRepoKind(setup)
     if (updates.displayName !== undefined) {
       setup.displayName = updates.displayName.trim() || setup.displayName
     }
@@ -103,6 +108,9 @@ export class ProjectHostSetupPersistenceOperations {
     }
     if (updates.setupMethod !== undefined) {
       setup.setupMethod = updates.setupMethod
+    }
+    if (!areWorktreePathsEqual(previousPath, setup.path) || previousKind !== getRepoKind(setup)) {
+      retireGitWorktreeObservations(this.state, [], [setup])
     }
     setup.updatedAt = Date.now()
     this.scheduleSave()

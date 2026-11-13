@@ -18,7 +18,9 @@ import {
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
 import {
   toDetectedWorktree,
-  applyMetadataFallbackVisibility
+  applyMetadataFallbackVisibility,
+  buildKnownOrcaWorkspaceLayouts,
+  isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree/ownership'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
@@ -28,6 +30,7 @@ import {
   isFolderWorkspaceIdForRepo,
   mergeFolderWorkspace
 } from '../folder-workspace-model'
+import { gitWorktreeObservationReader } from '../../../workspaces/catalog/git-worktree-observations'
 
 // During WSL moves, project repairs stay in memory to avoid mutating the source store.
 function folderMetaWriter(
@@ -117,6 +120,8 @@ export function buildDisconnectedDetectedWorktrees(
   const settings = store.getSettings()
   const hostId = getRepoExecutionHostId(repo)
   const hostMeta = options.hostMeta ?? readAllWorktreeMetaForHost(store, hostId)
+  const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+  const readObservation = gitWorktreeObservationReader(store, repo)
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
@@ -124,16 +129,24 @@ export function buildDisconnectedDetectedWorktrees(
   )
   const detected = worktrees.map((worktree) => {
     const meta = readWorktreeMetaForHost(store, worktree.id, hostId) ?? hostMeta[worktree.id]
+    const observation = readObservation(meta)
     const detected = toDetectedWorktree({
       repo,
       worktree,
       meta,
       settings,
-      knownOrcaLayouts: [],
-      isLegacyRepoForVisibility: true,
+      knownOrcaLayouts: observation ? knownOrcaLayouts : [],
+      isLegacyRepoForVisibility: observation
+        ? isLegacyRepoForExternalWorktreeVisibility(repo)
+        : true,
       worktreeVisibilitySourceMatcher
     })
-    return applyMetadataFallbackVisibility(detected)
+    return observation
+      ? {
+          ...detected,
+          visible: detected.visible && (!observation.prunable || !!worktree.removalError)
+        }
+      : applyMetadataFallbackVisibility(detected)
   })
   return projectWorktreeLineageWithHostPeers(store, repo, detected)
 }

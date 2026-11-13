@@ -1,9 +1,14 @@
 import { creatureNameTier } from '../../../../shared/worktree/retired-name-registry'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { basename } from 'node:path'
 import type { Repo } from '../../../../shared/repo-types'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
-import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
+import type {
+  AddWorktreeOptions,
+  GitWorktreeExecOptions
+} from '../../../git/worktrees/worktree-operation-options'
+import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
+import { listWorktreesSharedStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
   acquireGitAdmission,
   _resetGitAdmissionForTests
@@ -13,6 +18,7 @@ import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admi
 const {
   runtimeCreateMocks: mocks,
   worktreePath,
+  writtenMeta,
   createWorktree,
   resetRuntimeCreateMocks
 } = await vi.hoisted(async () => await import('./runtime-local-worktree-create-test-harness'))
@@ -93,22 +99,99 @@ import type { PreparationRearmHolder } from '../../../workspaces/creation/prepar
 import { createWorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 
+import { registerWorktreeChangeInvalidator } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
+import { registerDetectedWorktreeScanInvalidation } from '../../../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
+import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
+import type * as CreatedWorktreeReconciliation from '../../../ipc/created-worktree-reconciliation'
+
+let resolveCreatedWorktree: typeof CreatedWorktreeReconciliation.resolveCreatedWorktree
+beforeAll(async () => {
+  registerDetectedWorktreeScanInvalidation()
+  const actual = await vi.importActual<typeof CreatedWorktreeReconciliation>(
+    '../../../ipc/created-worktree-reconciliation'
+  )
+  resolveCreatedWorktree = actual.resolveCreatedWorktree
+})
 beforeEach(resetRuntimeCreateMocks)
 
 describe('runtime create listing hold', () => {
   const rows = [{ path: worktreePath }]
 
   it('holds the checkout during Git creation and releases it once metadata is saved', async () => {
+    const revision = getWorktreeScanMutationRevision()
+    const metadataAtInvalidation: number[] = []
+    const unregister = registerWorktreeChangeInvalidator(() => {
+      metadataAtInvalidation.push(writtenMeta.length)
+    })
     mocks.consume.mockImplementation(async () => {
       expect(withoutInFlightWorktreeCreates('repo-1', rows)).toEqual([])
       return { status: 'hit', result: {}, rearm: mocks.rearm }
     })
     mocks.resolveShared.mockImplementation(async () => {
+      expect(writtenMeta).toHaveLength(1)
+      expect(getWorktreeScanMutationRevision()).toBe(revision + 2)
       expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
       return []
     })
-    await createWorktree()
+    try {
+      await createWorktree()
+    } finally {
+      unregister()
+    }
+    expect(metadataAtInvalidation).toEqual([0, 1])
     expect(mocks.resolveShared).toHaveBeenCalledOnce()
+    expect(getWorktreeScanMutationRevision()).toBe(revision + 2)
+  })
+
+  it('retires the post-add generation and pending Git read when actual verification fails', async () => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
+    let finishOldRead: (result: { stdout: string; stderr: string }) => void = () => {}
+    const oldRead = new Promise<{ stdout: string; stderr: string }>((resolve) => {
+      finishOldRead = resolve
+    })
+    let oldReadStarted = false
+    // Separate deadlines keep this concurrent read distinct from the create's own verification.
+    const scanOptions: GitWorktreeExecOptions = { timeout: 1_234, admissionTier: 'interactive' }
+    // Warm capability negotiation so verification is not serialized behind the held read.
+    await listWorktreesSharedStrict('/repo', scanOptions)
+    mocks.git.mockImplementation((args: string[], options: GitWorktreeExecOptions) => {
+      if (args[0] === 'worktree' && options.timeout === scanOptions.timeout && !oldReadStarted) {
+        oldReadStarted = true
+        return oldRead
+      }
+      return Promise.resolve({ stdout: '', stderr: '' })
+    })
+    let oldScan: Promise<GitWorktreeInfo[]> | undefined
+    let revisionAtVerification = 0
+    mocks.listing.mockImplementation((...args: Parameters<typeof resolveCreatedWorktree>) => {
+      revisionAtVerification = getWorktreeScanMutationRevision()
+      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toEqual([])
+      oldScan = listWorktreesSharedStrict('/repo', scanOptions)
+      return resolveCreatedWorktree(...args)
+    })
+    try {
+      await expect(createWorktree()).rejects.toThrow(
+        `Worktree created but not found in listing: ${worktreePath} (branch app)`
+      )
+      expect(mocks.add).toHaveBeenCalledOnce()
+      expect(mocks.git).toHaveBeenCalledWith(
+        ['worktree', 'list', '--porcelain', '-z'],
+        expect.objectContaining({ cwd: '/repo' })
+      )
+      expect(writtenMeta).toEqual([])
+      expect(oldReadStarted).toBe(true)
+      expect(getWorktreeScanMutationRevision()).toBe(revisionAtVerification + 1)
+      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
+      if (!oldScan) {
+        throw new Error('Post-add verification did not start the concurrent scan')
+      }
+      const freshScan = listWorktreesSharedStrict('/repo', scanOptions)
+      expect(freshScan).not.toBe(oldScan)
+      await expect(freshScan).resolves.toEqual([])
+    } finally {
+      finishOldRead({ stdout: '', stderr: '' })
+      await oldScan
+    }
   })
 
   it('releases the checkout when Git creation fails', async () => {
@@ -168,9 +251,15 @@ describe('runtime concurrent creates on one name', () => {
 
 describe('runtime prepared-worktree replenishment', () => {
   it('arms the holder even when materialization fails', async () => {
+    const revision = getWorktreeScanMutationRevision()
     mocks.copyPaths.mockRejectedValue(new Error('copy failed'))
     const rearm: PreparationRearmHolder = { fire: () => {} }
     await expect(createWorktree({}, rearm)).rejects.toThrow('copy failed')
+    expect(writtenMeta).toHaveLength(1)
+    expect(withoutInFlightWorktreeCreates('repo-1', [{ path: worktreePath }])).toEqual([
+      { path: worktreePath }
+    ])
+    expect(getWorktreeScanMutationRevision()).toBe(revision + 2)
     // The slot was consumed before the failure, so the caller's `finally` must find a real thunk.
     rearm.fire()
     expect(mocks.rearm).toHaveBeenCalledOnce()

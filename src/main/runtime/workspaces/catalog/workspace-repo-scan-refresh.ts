@@ -1,4 +1,5 @@
 import { RuntimeWorkspaceCatalog } from './workspace-catalog'
+import { composeWorktreeId } from '../../../../shared/worktree/id'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type {
@@ -24,6 +25,11 @@ import {
   blockedWslDistroForPath,
   wslDistroForPath
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import {
+  gitWorktreeObservationReader,
+  captureGitWorktreeObservationCommit
+} from '../../../workspaces/catalog/git-worktree-observations'
+import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
@@ -138,10 +144,30 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     probe: Promise<string | null> | null,
     scannedAt: number
   ): Promise<RuntimeWorktreeScanRefresh> {
-    const result = dropRepeatedWorktreeRows(
+    const observationCommit = getRepoSshConnectionId(repo)
+      ? undefined
+      : captureGitWorktreeObservationCommit(this.requireStore(), repo)
+    let result = dropRepeatedWorktreeRows(
       await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
     )
-    return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
+    if (!result.ok && !getRepoSshConnectionId(repo)) {
+      const store = this.requireStore()
+      const meta = readAllWorktreeMetaForRepo(store, repo)
+      const readObservation = gitWorktreeObservationReader(store, repo)
+      result = {
+        ok: false,
+        worktrees: this.listStoredWorktreesForResolution(repo).filter((git) =>
+          readObservation(meta[composeWorktreeId(repo.id, git.path)])
+        )
+      }
+    }
+    return {
+      result,
+      observationCommit,
+      adminFingerprint: null,
+      adminFingerprintProbe: probe,
+      scannedAt
+    }
   }
 
   /** Allow one outstanding filesystem probe per repo: timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */

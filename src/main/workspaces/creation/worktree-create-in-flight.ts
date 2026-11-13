@@ -108,6 +108,7 @@ export async function resolveCreatePathAlias(worktreePath: string): Promise<stri
 export async function holdInFlightWorktreeCreate(
   repoId: string,
   worktreePath: string,
+  onReleased: () => void,
   options: { wslDistro?: string } = {}
 ): Promise<() => void> {
   const hostPath =
@@ -120,7 +121,9 @@ export async function holdInFlightWorktreeCreate(
   }
   inFlightCreates.add(entry)
   return () => {
-    inFlightCreates.delete(entry)
+    if (inFlightCreates.delete(entry)) {
+      onReleased()
+    }
   }
 }
 

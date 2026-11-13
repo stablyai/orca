@@ -1,6 +1,7 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
+import type { captureGitWorktreeObservationCommit } from '../../../workspaces/catalog/git-worktree-observations'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -59,6 +60,7 @@ export type DetectedWorktreeMetadataPrune = Readonly<{
 }>
 
 export type DetectedWorktreeScanResult = {
+  observationCommit?: ReturnType<typeof captureGitWorktreeObservationCommit>
   gitWorktrees: GitWorktreeInfo[]
   fresh: boolean
   /** Mutation overtook this scan; publishing its missing rows as authoritative would falsely delete new worktrees. */
@@ -131,16 +133,19 @@ function listUnlessWslDistroStopped(
 
 export async function listDetectedGitWorktrees(
   store: Store,
-  repo: Repo
+  repo: Repo,
+  captureObservation?: () => ReturnType<typeof captureGitWorktreeObservationCommit>
 ): Promise<DetectedWorktreeScanResult> {
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || isFolderRepo(repo)) {
     const generation = getLocalWorktreeScanGeneration(repo.id)
+    const observationCommit = captureObservation?.()
     return {
       gitWorktrees: await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
       fresh: true,
       superseded: false,
-      generation
+      generation,
+      ...(observationCommit ? { observationCommit } : {})
     }
   }
 
@@ -180,6 +185,7 @@ export async function listDetectedGitWorktrees(
     hygieneDue && !localWorktreeGitOptions.wslDistro
       ? store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
       : undefined
+  const observationCommit = captureObservation?.()
   const scan: DetectedWorktreeScan = {
     invalidated: false,
     promise: listUnlessWslDistroStopped(repo, localWorktreeGitOptions),
@@ -219,6 +225,7 @@ export async function listDetectedGitWorktrees(
       fresh,
       superseded: !fresh,
       generation,
+      ...(fresh && observationCommit ? { observationCommit } : {}),
       ...(fresh ? { sideEffectToken: scan.sideEffectToken, hygieneDue: scan.hygieneDue } : {}),
       ...(fresh && scan.metadataPrune ? { metadataPrune: scan.metadataPrune } : {})
     }

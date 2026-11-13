@@ -81,7 +81,9 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
         // Remote clients need rename pushes; per-click unread changes must remain event-free.
         runtime.notifyWorktreesChangedForRemoteClients(getRepoIdFromWorktreeId(args.worktreeId))
       }
-      return meta
+      const publicMeta = { ...meta }
+      delete publicMeta.gitWorktree
+      return publicMeta
     }
   )
 

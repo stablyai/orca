@@ -36,6 +36,8 @@ vi.mock(
 )
 
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
+import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
+import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   bumpLocalWorktreeScanGeneration,
@@ -80,16 +82,25 @@ function metadata(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 
 function queries(
   store: RuntimeStore,
-  overrides: Partial<ConstructorParameters<typeof RuntimeManagedWorktreeQueries>[0]> = {}
+  overrides: Omit<
+    Partial<ConstructorParameters<typeof RuntimeManagedWorktreeQueries>[0]>,
+    'scanRepo'
+  > & {
+    scanRepo?: (repo: Repo) => Promise<RuntimeWorktreeScanResult>
+  } = {}
 ): RuntimeManagedWorktreeQueries {
+  const { scanRepo = async () => ({ ok: true as const, worktrees: [] }), ...rest } = overrides
   return new RuntimeManagedWorktreeQueries({
     getStore: () => store,
     listResolved: async () => [],
     resolveRepo: async () => store.getRepos()[0]!,
     selectRepos: () => store.getRepos(),
-    scanRepo: async () => ({ ok: true, worktrees: [] }),
+    scanRepo: (repo) =>
+      scanRuntimeWorktreesUntilNotOvertaken(store, repo, scanRepo, {
+        captureMetadataPruneExpectation: true
+      }),
     listKnownHostIds: () => [],
-    ...overrides
+    ...rest
   })
 }
 
@@ -319,18 +330,54 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     expect(pruneLineageMock.mock.calls[0]?.[2]).toEqual(rows([repo.path, created]))
   })
 
-  it('publishes the last scan non-authoritatively once the re-scan bound is spent', async () => {
+  it('publishes saved rows non-authoritatively once the listing owner spends its re-scan bound', async () => {
     const scanRepo = vi.fn(overtakenScan([repo.path]))
-
-    const result = await queries(gitStore(), { scanRepo }).listDetected(repo)
+    const savedPath = `${repo.path}/saved`
+    const saved = metadata({
+      hostId: 'local',
+      instanceId: 'saved',
+      gitWorktree: { isBare: false, isMainWorktree: false, branch: 'main', prunable: false }
+    })
+    const store = gitStore({
+      getAllWorktreeMeta: () => ({ [`${repo.id}::${savedPath}`]: saved }),
+      getWorktreeMeta: () => saved
+    })
+    const result = await queries(store, { scanRepo }).listDetected(repo)
 
     // One scan plus the two re-runs the bound allows.
     expect(scanRepo).toHaveBeenCalledTimes(3)
-    expect(result).toMatchObject({ authoritative: false, source: 'git' })
+    expect(result).toMatchObject({ authoritative: false, source: 'metadata-fallback' })
     expect(result.unavailableReason).toBeUndefined()
     expect(result.failureKind).toBeUndefined()
-    expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
+    expect(result.worktrees.map((worktree) => worktree.path)).toEqual([savedPath])
     expect(pruneLineageMock).not.toHaveBeenCalled()
     expect(pruneMetadataMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back without another scan when mutation overtakes the metadata-prune await', async () => {
+    const savedPath = `${repo.path}/saved`
+    const saved = metadata({
+      hostId: 'local',
+      instanceId: 'saved',
+      gitWorktree: { isBare: false, isMainWorktree: false, branch: 'main', prunable: false }
+    })
+    const store = gitStore({
+      getAllWorktreeMeta: () => ({ [`${repo.id}::${savedPath}`]: saved }),
+      getWorktreeMeta: () => saved,
+      captureNativeLocalWorktreeMetadataScanExpectation: () => ({ metadata: [] }),
+      pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(),
+      getProfileStorageDirectory: () => '/tmp/orca-test'
+    })
+    const scanRepo = vi.fn().mockResolvedValue({ ok: true, worktrees: rows([created]) })
+    pruneMetadataMock.mockImplementationOnce(async () => {
+      bumpLocalWorktreeScanGeneration(repo.id)
+      return { scanGenerationCurrent: false, preservedMetadataCandidateIds: new Set() }
+    })
+    const result = await queries(store, { scanRepo }).listDetected(repo)
+    expect(result).toMatchObject({ authoritative: false, source: 'metadata-fallback' })
+    expect(result.worktrees.map((worktree) => worktree.path)).toEqual([savedPath])
+    expect(scanRepo).toHaveBeenCalledOnce()
+    expect(pruneLineageMock).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 })

@@ -1,8 +1,13 @@
-import { readRuntimeListingMetadata, readRuntimeWorktreeMetadata } from './runtime-listing-metadata'
+import { readRuntimeListingMetadata } from './runtime-listing-metadata'
 import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-worktree-query-dependencies'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
-import { buildRuntimeWorktreeVisibilityMatchers } from './runtime-worktree-visibility'
+import {
+  buildRuntimeWorktreeVisibilityMatchers,
+  isRuntimeWorktreeVisible,
+  projectRuntimeDetectedWorktree,
+  readRuntimeWorktreeVisibilityDefaults
+} from './runtime-worktree-visibility'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import {
@@ -19,14 +24,8 @@ import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-workt
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
-import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import {
-  applyMetadataFallbackVisibility,
-  buildKnownOrcaWorkspaceLayouts,
-  toDetectedWorktree
-} from '../../../../shared/worktree/ownership'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
+import { applyMetadataFallbackVisibility } from '../../../../shared/worktree/ownership'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
@@ -41,13 +40,18 @@ import {
 } from '../../../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
-import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
+import { currentRuntimeWorktreeScanRepo } from './runtime-witnessed-worktree-scan'
+import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
 import {
   getRetiredNameRegistryForRepo,
   hasRetiredNameRegistryStore
 } from '../../../workspaces/removal/retirement/worktree-name-retirement'
+import {
+  gitWorktreeObservationReader,
+  isAdoptableGitWorktree
+} from '../../../workspaces/catalog/git-worktree-observations'
 
 export class RuntimeManagedWorktreeQueries {
   constructor(private readonly deps: RuntimeManagedWorktreeQueryDependencies) {}
@@ -67,10 +71,13 @@ export class RuntimeManagedWorktreeQueries {
     const matchers = buildRuntimeWorktreeVisibilityMatchers(
       repos,
       resolved,
-      this.visibilityDefaults(defaultsSupported)
+      readRuntimeWorktreeVisibilityDefaults(() => this.deps.getStore(), defaultsSupported)
     )
     const hiddenRepos = runtimeHiddenRepos(this.deps.getStore())
     const worktrees = resolved.filter((worktree) => {
+      if (worktree.git.prunable && !worktree.removalError) {
+        return false
+      }
       const routing = resolveWorktreeHostRouting(repos, worktree, repoLookup)
       if (hiddenRepos.hasWorktree(worktree) || routing.kind === 'ambiguous') {
         return false
@@ -79,12 +86,21 @@ export class RuntimeManagedWorktreeQueries {
         return !worktree.isBare && !scopedRepo
       }
       if (
+        !isFolderRepo(routing.repo) &&
+        !worktree.instanceId &&
+        !isAdoptableGitWorktree(worktree.git) &&
+        !worktree.removalError
+      ) {
+        return false
+      }
+      if (
         scopedRepo &&
         (worktree.repoId !== scopedRepo.id || routing.hostId !== getRepoExecutionHostId(scopedRepo))
       ) {
         return false
       }
-      return this.toDetected(
+      return projectRuntimeDetectedWorktree(
+        () => this.deps.getStore(),
         routing.repo,
         worktree,
         matchers.get(getRepoHostIdentityForParts(worktree.repoId, routing.hostId)),
@@ -129,7 +145,10 @@ export class RuntimeManagedWorktreeQueries {
       throw new Error('runtime_unavailable')
     }
     const settings = store.getSettings()
-    const visibilityDefaults = this.visibilityDefaults(defaultsSupported)
+    const visibilityDefaults = readRuntimeWorktreeVisibilityDefaults(
+      () => this.deps.getStore(),
+      defaultsSupported
+    )
     const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
     if (isFolderRepo(repo)) {
       const worktrees = listRuntimeFolderWorkspaces(store, repo)
@@ -140,7 +159,8 @@ export class RuntimeManagedWorktreeQueries {
         resolveConfiguredWorktreeBasePaths(repo)
       )
       const detected = worktrees.map((worktree) =>
-        this.toDetected(
+        projectRuntimeDetectedWorktree(
+          () => this.deps.getStore(),
           repo,
           worktree,
           matcher,
@@ -158,11 +178,11 @@ export class RuntimeManagedWorktreeQueries {
         worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
       }
     }
-    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
-      this.deps.scanRepo(target)
-    )
+    repo = { ...repo }
+    let scan = await this.deps.scanRepo(repo)
+    repo = { ...(currentRuntimeWorktreeScanRepo(store, repo) ?? repo) }
     // Publish overtaken scans as non-authoritative: throwing would drop client rows. Prune nothing; the overtaking mutation's event requests a fresh listing.
-    if (scan.ok && !scan.superseded) {
+    if (scan.ok && !scan.superseded && scan.isCurrent()) {
       // Headless hosts lack ipcMain listings; runtime must sweep its own metadata too (#17776).
       if (scan.metadataPruneExpectation && canPruneAuthoritativeLocalMetadata(store)) {
         await pruneMetadataMissingFromAuthoritativeLocalScan({
@@ -170,11 +190,24 @@ export class RuntimeManagedWorktreeQueries {
           repo,
           gitWorktrees: scan.worktrees,
           scan: scan.metadataPruneExpectation,
-          scanGeneration: scan.scanGeneration
+          scanGeneration: scan.scanGeneration,
+          isCallerCurrent: scan.isCurrent
         })
       }
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
+      if (scan.isCurrent()) {
+        pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
+      }
     }
+    const current = currentRuntimeWorktreeScanRepo(store, repo)
+    if (scan.superseded || !scan.isCurrent()) {
+      scan = {
+        ...scan,
+        ok: false,
+        superseded: true,
+        worktrees: current ? listStoredWorktreeRowsForRepo(store, current) : []
+      }
+    }
+    repo = current ?? repo
     const matcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
       resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
@@ -183,6 +216,7 @@ export class RuntimeManagedWorktreeQueries {
     const expectedHostId = getRepoExecutionHostId(repo)
     const listed = readRuntimeListingMetadata(store, repo)
     const repoOwnerCount = listed.repoOwnerCount
+    const readObservation = gitWorktreeObservationReader(store, repo)
     const detected = scan.worktrees.map((gitWorktree) => {
       const id = `${repo.id}::${gitWorktree.path}`
       const meta = readWorktreeMetaForHost(store, id, expectedHostId) ?? listed.ownedMeta(id)
@@ -190,7 +224,8 @@ export class RuntimeManagedWorktreeQueries {
         ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
         hostId: repoOwnerCount === 1 ? (meta?.hostId ?? expectedHostId) : expectedHostId
       }
-      const result = this.toDetected(
+      const result = projectRuntimeDetectedWorktree(
+        () => this.deps.getStore(),
         repo,
         worktree,
         matcher,
@@ -198,7 +233,17 @@ export class RuntimeManagedWorktreeQueries {
         visibilitySettings,
         meta ?? null
       )
-      return scan.ok ? result : applyMetadataFallbackVisibility(result)
+      if (scan.ok && !meta && !isAdoptableGitWorktree(gitWorktree) && !gitWorktree.removalError) {
+        return { ...result, visible: false }
+      }
+      const observation = readObservation(meta)
+      if (scan.ok || observation) {
+        return {
+          ...result,
+          visible: result.visible && (!gitWorktree.prunable || !!gitWorktree.removalError)
+        }
+      }
+      return applyMetadataFallbackVisibility(result)
     })
     return {
       repoId: repo.id,
@@ -218,19 +263,14 @@ export class RuntimeManagedWorktreeQueries {
     settingsOverride?: ReturnType<RuntimeStore['getSettings']>,
     repoLookup = createRepoRowExecutionHostLookup(this.deps.getStore()?.getRepos() ?? [])
   ): boolean {
-    const routing = resolveWorktreeHostRouting<Repo>([], worktree, repoLookup)
-    const repo = routing.kind === 'resolved' ? routing.repo : undefined
-    return repo
-      ? this.toDetected(
-          repo,
-          worktree,
-          matcher,
-          defaultsSupported,
-          settingsOverride,
-          undefined,
-          repoLookup.rowsFor(repo.id).length
-        ).visible
-      : !worktree.isBare
+    return isRuntimeWorktreeVisible(
+      () => this.deps.getStore(),
+      worktree,
+      matcher,
+      defaultsSupported,
+      settingsOverride,
+      repoLookup
+    )
   }
 
   buildVisibilityMatchers(
@@ -241,44 +281,12 @@ export class RuntimeManagedWorktreeQueries {
     return buildRuntimeWorktreeVisibilityMatchers(
       this.deps.getStore()?.getRepos() ?? [],
       worktrees,
-      this.visibilityDefaults(defaultsSupported, settingsOverride)
+      readRuntimeWorktreeVisibilityDefaults(
+        () => this.deps.getStore(),
+        defaultsSupported,
+        settingsOverride
+      )
     )
-  }
-
-  private toDetected(
-    repo: Repo,
-    worktree: Worktree,
-    matcher?: WorktreeVisibilitySourceMatcher,
-    defaultsSupported = true,
-    settingsOverride?: ReturnType<RuntimeStore['getSettings']>,
-    providedMeta?: WorktreeMeta | null,
-    repoOwnerCount?: number
-  ) {
-    const store = this.deps.getStore()
-    const settings = settingsOverride ?? store?.getSettings()
-    if (!settings) {
-      return {
-        ...worktree,
-        ownership: 'unknown-legacy' as const,
-        selectedCheckout: false,
-        visible: !worktree.isBare
-      }
-    }
-    const visibilityDefaults = this.visibilityDefaults(defaultsSupported, settings)
-    return toDetectedWorktree({
-      repo,
-      worktree,
-      meta:
-        providedMeta === undefined
-          ? store
-            ? readRuntimeWorktreeMetadata(store, repo, worktree.id, repoOwnerCount)
-            : undefined
-          : (providedMeta ?? undefined),
-      settings: { ...settings, worktreeVisibilityDefaults: visibilityDefaults },
-      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
-      isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo),
-      worktreeVisibilitySourceMatcher: matcher
-    })
   }
 
   async listRetiredNames(repoSelector: string): Promise<{
@@ -296,16 +304,5 @@ export class RuntimeManagedWorktreeQueries {
       retiredNamesByRepo: { [repo.id]: registry.names },
       retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
     }
-  }
-
-  private visibilityDefaults(
-    defaultsSupported: boolean,
-    settingsOverride?: ReturnType<RuntimeStore['getSettings']>
-  ) {
-    const defaults =
-      settingsOverride !== undefined
-        ? settingsOverride.worktreeVisibilityDefaults
-        : this.deps.getStore()?.getSettings().worktreeVisibilityDefaults
-    return defaultsSupported || !defaults ? defaults : { external: defaults.external }
   }
 }

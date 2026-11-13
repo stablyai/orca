@@ -29,7 +29,10 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
 import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/observations/restored-status-dead-terminal-sweep'
-import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
+import {
+  WORKSPACE_RECORD_DOMAINS,
+  WORKTREE_METADATA_DOMAINS
+} from '../../persistence/profile-save-domains'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
@@ -42,6 +45,7 @@ import {
 export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDetectedCheckoutsAndLiveContent {
   // The top runtime class builds it; read only after construction.
   declare readonly workspaceRows: WorkspaceRowsProducer | null
+  private readonly detachSortStampRecords: () => void
   private readonly sidebarTemporal = new SidebarRetentionOwner(this.sidebarClock, {
     // The durable file keeps the hide form; the window reads it the same way at hydration.
     showSleepingWorkspaces: () =>
@@ -104,12 +108,52 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       },
       { consumesTerminalSideEffects: true }
     )
-    // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
-    this.store?.onStateWritten?.((domains) => {
+    let pendingMetadataWrites = 0
+    let relevantMetadataWrite = false
+    let queued = false
+    let disposed = false
+    const detachMetadata = this.store?.onWorktreeMetaWritten?.(({ previous, next }) => {
+      pendingMetadataWrites = Math.max(0, pendingMetadataWrites - 1)
+      relevantMetadataWrite ||=
+        !previous ||
+        previous.instanceId !== next.instanceId ||
+        previous.hostId !== next.hostId ||
+        previous.isUnread !== next.isUnread ||
+        previous.lastActivityAt !== next.lastActivityAt ||
+        previous.smartTier !== next.smartTier ||
+        previous.smartAt !== next.smartAt
+    })
+    // Granular callbacks are read-only and follow save notices; settle after both have run.
+    const detachState = this.store?.onStateWritten?.((domains) => {
+      if (
+        detachMetadata &&
+        domains?.length &&
+        domains.every((domain) => WORKTREE_METADATA_DOMAINS.some((key) => key === domain))
+      ) {
+        pendingMetadataWrites++
+        if (!queued) {
+          queued = true
+          queueMicrotask(() => {
+            queued = false
+            const reconcile = pendingMetadataWrites > 0 || relevantMetadataWrite
+            pendingMetadataWrites = 0
+            relevantMetadataWrite = false
+            if (!disposed && reconcile) {
+              this.sortStamps.noteRecordsWritten()
+            }
+          })
+        }
+        return
+      }
       if (domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))) {
         this.sortStamps.noteRecordsWritten()
       }
     })
+    this.detachSortStampRecords = () => {
+      disposed = true
+      detachState?.()
+      detachMetadata?.()
+    }
   }
 
   getSidebarTemporalSnapshot(): SidebarTemporalSnapshot {
@@ -214,6 +258,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     return () => {
       detachTransitions()
       detachActivity()
+      this.detachSortStampRecords()
       this.sidebarTemporal.dispose()
       this.sortStampNotices.dispose()
     }

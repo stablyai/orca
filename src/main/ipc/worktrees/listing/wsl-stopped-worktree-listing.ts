@@ -24,6 +24,8 @@ import {
   createSshWorktreeMetaIndexForRepo,
   listDisconnectedSshWorktrees
 } from './ssh-worktree-fallback'
+import { gitWorktreeObservationReader } from '../../../workspaces/catalog/git-worktree-observations'
+import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 export type WslDistroNotRunning = NonNullable<DetectedWorktreeListResult['wslDistroStopped']>
 
@@ -45,7 +47,7 @@ export function wslDistroNotRunningForScanFailure(error: unknown): WslDistroNotR
   return null
 }
 
-/** Stored rows for a repo whose distro the gate refused to start; the main checkout always exists. */
+/** Initialized rows retain their Git facts while the distro is stopped. */
 export function listWslStoppedWorktrees(
   store: Store,
   repo: Repo,
@@ -56,17 +58,22 @@ export function listWslStoppedWorktrees(
     repo,
     createSshWorktreeMetaIndexForRepo(allMeta ?? {}, repo.id)
   )
-  const worktrees = known.some((worktree) => areWorktreePathsEqual(worktree.path, repo.path))
-    ? known
-    : [
-        mergeWorktree(
-          repo.id,
-          { path: repo.path, head: '', branch: '', isBare: false, isMainWorktree: true },
-          undefined,
-          repo.displayName
-        ),
-        ...known
-      ]
+  const readObservation = gitWorktreeObservationReader(store, repo)
+  const initialized = known.some((worktree) =>
+    readObservation(readWorktreeMetaForRepo(store, worktree.id, repo) ?? allMeta?.[worktree.id])
+  )
+  const worktrees =
+    initialized || known.some((worktree) => areWorktreePathsEqual(worktree.path, repo.path))
+      ? known
+      : [
+          mergeWorktree(
+            repo.id,
+            { path: repo.path, head: '', branch: '', isBare: false, isMainWorktree: true },
+            undefined,
+            repo.displayName
+          ),
+          ...known
+        ]
   return buildDisconnectedDetectedWorktrees(store, repo, worktrees)
 }
 

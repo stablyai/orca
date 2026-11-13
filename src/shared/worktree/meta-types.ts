@@ -15,8 +15,11 @@ import type { OrcaWorkspaceLayout } from '../global-settings-types'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sort-stamps'
 import type { ExternalConversationLink } from '../external-conversation-link'
+import type { GitWorktreeObservation } from './git-worktree-observation'
 
 export type WorktreeMeta = {
+  /** Host-owned Git observations survive an unavailable host; visibility remains derived. */
+  gitWorktree?: GitWorktreeObservation
   /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
   instanceId?: string
   /** See Worktree.projectId. Persisted for project-first workspace ownership. */

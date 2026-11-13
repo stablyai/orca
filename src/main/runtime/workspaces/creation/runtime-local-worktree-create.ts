@@ -1,3 +1,5 @@
+import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
+import { bumpWorktreeScanGeneration } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import { worktreeCreateGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { shouldRunSetupForCreate } from '../../../workspace-hooks/effective-hook-config'
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
@@ -80,6 +82,8 @@ async function performRuntimeLocalWorktreeCreate<T>(
   pathClaim: WorktreeCreatePathClaim
 ) {
   const { request, repo, store } = args
+  const repoId = repo.id
+  const repoPath = repo.path
   const hostSettings = store.getSettings()
   // Carry layout choice through name retirement and metadata, not just path creation.
   const settings = {
@@ -175,8 +179,12 @@ async function performRuntimeLocalWorktreeCreate<T>(
     })
   )
   const releaseInFlightHold = await holdInFlightWorktreeCreate(
-    repo.id,
+    repoId,
     candidate.worktreePath,
+    () => {
+      runWorktreeChangeInvalidators(repoId)
+      bumpWorktreeScanGeneration(repoPath)
+    },
     worktreeGitOptions
   )
   try {

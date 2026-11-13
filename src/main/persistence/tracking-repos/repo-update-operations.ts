@@ -9,11 +9,17 @@ import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/wo
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { getRepoKind, isFolderRepo } from '../../../shared/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
+import { retireGitWorktreeObservations } from './git-worktree-observation-lifetime'
+
+type RepoUpdateState = Pick<
+  PersistedState,
+  'repos' | 'projectGroups' | 'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
+>
 
 export type RepoUpdateMutationOperations = {
-  state: Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'>
+  state: RepoUpdateState
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
@@ -63,7 +69,7 @@ function assertKindChangeKeepsFolderWorkspaces(
 export class RepoUpdatePersistenceOperations {
   constructor(private readonly operations: RepoUpdateMutationOperations) {}
 
-  private get state(): Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'> {
+  private get state(): RepoUpdateState {
     return this.operations.state
   }
 
@@ -253,6 +259,13 @@ export class RepoUpdatePersistenceOperations {
       if (sanitizedUpdates.ghAccount) {
         invalidateGhAccountTokenCache(sanitizedUpdates.ghAccount)
       }
+    }
+    const nextRepo = { ...repo, ...sanitizedUpdates }
+    if (
+      getRepoExecutionHostId(repo) !== getRepoExecutionHostId(nextRepo) ||
+      getRepoKind(repo) !== getRepoKind(nextRepo)
+    ) {
+      retireGitWorktreeObservations(this.state, [repo])
     }
     Object.assign(repo, sanitizedUpdates)
     this.bumpLocalWorktreeScanGeneration(repo.id)

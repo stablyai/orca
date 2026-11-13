@@ -31,8 +31,7 @@ import type { RuntimeSyncedLeaf } from '../../../shared/runtime-session-contract
 import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
-import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
+import type { RuntimeWorkspaceCatalog } from '../workspaces/catalog/workspace-catalog'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
@@ -209,9 +208,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
-    repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
-  ): Promise<RuntimeWorktreeScanResult>
+    ...args: Parameters<RuntimeWorkspaceCatalog['listRepoWorktreesForListing']>
+  ): ReturnType<RuntimeWorkspaceCatalog['listRepoWorktreesForListing']>
   protected abstract listKnownExecutionHostIds(
     additionalHostIds?: Iterable<ExecutionHostId>,
     includeConfiguredHosts?: boolean

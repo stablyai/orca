@@ -1,3 +1,9 @@
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import type { Repo } from '../../../../shared/repo-types'
+import {
+  createRepoRowExecutionHostLookup,
+  type RepoRowExecutionHostLookup
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
@@ -8,6 +14,7 @@ import {
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   splitWorktreeId,
+  splitWorktreeIdForFilesystem,
   worktreeIdentityKey,
   worktreeIdsEqual
 } from '../../../../shared/worktree/id'
@@ -120,4 +127,49 @@ export function findResolvedWorktreeIdForPath(
     matches[0]?.id ??
     null
   )
+}
+
+export function listKnownResolvedWorktreesForExplicitTarget(
+  store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getRepos'> | null,
+  buildResolvedWorktreeFromId: (
+    worktreeId: string,
+    repos: RepoRowExecutionHostLookup<Repo>
+  ) => ResolvedWorktree | null,
+  targetWorktreeId: string,
+  targetWorktree: ResolvedWorktree | null
+): ResolvedWorktree[] {
+  if (!store || !targetWorktree) {
+    return []
+  }
+  const target = splitWorktreeIdForFilesystem(targetWorktreeId)
+  if (!target?.repoId || !target.worktreePath) {
+    // Folder workspace keys have no repo/path tuple, but the converted row
+    // is already authoritative for this explicit target.
+    return [targetWorktree]
+  }
+  const worktreeIds = new Set(
+    Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) => {
+      const parsed = splitWorktreeIdForFilesystem(worktreeId)
+      return (
+        parsed?.repoId === target.repoId &&
+        Boolean(parsed.worktreePath) &&
+        (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
+          isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
+      )
+    })
+  )
+  worktreeIds.add(targetWorktreeId)
+
+  const resolved: ResolvedWorktree[] = []
+  const repos = createRepoRowExecutionHostLookup(store.getRepos())
+  for (const worktreeId of worktreeIds) {
+    const worktree =
+      worktreeId === targetWorktreeId
+        ? targetWorktree
+        : buildResolvedWorktreeFromId(worktreeId, repos)
+    if (worktree) {
+      resolved.push(worktree)
+    }
+  }
+  return resolved
 }

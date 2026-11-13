@@ -60,6 +60,7 @@ export type RuntimeStore = {
   onWorkspaceSessionWritten?: Store['onWorkspaceSessionWritten']
   onWorkspaceSessionOperationEnded?: Store['onWorkspaceSessionOperationEnded']
   onStateWritten?: Store['onStateWritten']
+  onWorktreeMetaWritten?: Store['onWorktreeMetaWritten']
   setWorkspaceSession?: Store['setWorkspaceSession']
   getRemoteLayoutSnapshots?: Store['getRemoteLayoutSnapshots']
   readTerminalScrollbackSnapshotAsync?: Store['readTerminalScrollbackSnapshotAsync']

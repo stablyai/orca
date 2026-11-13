@@ -18,6 +18,8 @@ import { normalizeProjectRuntimePreference } from '../../../shared/execution-hos
 import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
+import { retireChangedProjectRuntimeObservations } from './git-worktree-observation-lifetime'
+import { WORKTREE_METADATA_DOMAINS } from '../profile-save-domains'
 
 export type ProjectHostMutationOperations = {
   state: PersistedState
@@ -88,6 +90,7 @@ export class ProjectHostPersistenceOperations {
     if (!project) {
       return null
     }
+    const previousProject = { ...project }
     if ('localWindowsRuntimePreference' in updates) {
       for (const repoId of project.sourceRepoIds) {
         this.operations.bumpLocalWorktreeScanGeneration(repoId)
@@ -101,7 +104,12 @@ export class ProjectHostPersistenceOperations {
       }
     }
     project.updatedAt = Date.now()
-    this.scheduleSave(['projects'])
+    const retired = retireChangedProjectRuntimeObservations(
+      this.state,
+      [previousProject],
+      this.state.settings.localWindowsRuntimeDefault
+    )
+    this.scheduleSave(retired ? ['projects', ...WORKTREE_METADATA_DOMAINS] : ['projects'])
     return { ...project }
   }
 

@@ -4,6 +4,7 @@ import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wir
 import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { SettingsMutationOperations } from './settings-update'
+import { retireChangedProjectRuntimeObservations } from '../tracking-repos/git-worktree-observation-lifetime'
 
 export function publishSettingsUpdate(
   operations: SettingsMutationOperations,
@@ -24,6 +25,11 @@ export function publishSettingsUpdate(
       operations.state.settings.localWindowsRuntimeDefault
     )
   ) {
+    retireChangedProjectRuntimeObservations(
+      operations.state,
+      operations.state.projects,
+      previousSettings.localWindowsRuntimeDefault
+    )
     for (const repoId of new Set(operations.state.repos.map(({ id }) => id))) {
       operations.bumpLocalWorktreeScanGeneration(repoId)
     }

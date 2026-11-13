@@ -31,6 +31,31 @@ function note(id: string): DiffComment {
 }
 
 describe('worktree metadata write normalization', () => {
+  it('keeps observations on ordinary writes but never transfers them to a replacement incarnation', () => {
+    const existing: WorktreeMeta = {
+      ...existingMeta,
+      instanceId: 'original',
+      gitWorktree: { isBare: true, isMainWorktree: true, branch: '', prunable: false }
+    }
+    const renamed = mergeWorktreeMetaForWrite(existing, { displayName: 'Saved label' })
+    expect(renamed.gitWorktree).toEqual({
+      isBare: true,
+      isMainWorktree: true,
+      branch: '',
+      prunable: false
+    })
+    const replacement = mergeWorktreeMetaForWrite(renamed, { instanceId: 'replacement' })
+    expect(replacement.gitWorktree).toBeUndefined()
+    expect(replacement).toMatchObject({ instanceId: 'replacement', displayName: 'Saved label' })
+    expect(
+      mergeWorktreeMetaForWrite(existing, {
+        instanceId: 'replacement',
+        gitWorktree: existing.gitWorktree
+      }).gitWorktree
+    ).toBeUndefined()
+    expect(mergeWorktreeMetaForWrite(existingMeta, {}).gitWorktree).toBeUndefined()
+  })
+
   it('applies a stale review-note writer’s own add and delete without dropping notes added elsewhere', () => {
     const existing = { ...existingMeta, diffComments: [note('a'), note('desktop')] }
     const updated = mergeWorktreeMetaForWrite(existing, {

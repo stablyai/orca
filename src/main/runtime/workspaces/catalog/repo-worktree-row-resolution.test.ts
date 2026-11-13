@@ -7,15 +7,26 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
-import type { Store } from '../../../persistence/loading-store/store'
 import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../../../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
+  scanRepoWorktreeRows,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
+import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { joinResolvedWorktreeScans } from './resolved-worktree-scan-join'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { bumpLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
+import {
+  partialRuntimeStore,
+  storeWorktreeMeta
+} from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 function repo(
   id: string,
@@ -43,34 +54,62 @@ function gitWorktree(path: string): GitWorktreeInfo {
 }
 
 function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
-  store: Store
+  store: RuntimeStore
   metaById: Record<string, WorktreeMeta>
-  scanRepo: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['scanRepo']>>
+  rawScanRepo: ReturnType<typeof vi.fn<(owner: Repo) => Promise<RuntimeWorktreeScanResult>>>
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
-  const store = {
+  const store = partialRuntimeStore({
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getAllWorktreeLineage: () => ({}),
     getProjects: () => [],
     getSettings: () => ({}),
     setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
-      const next = { ...metaById[worktreeId], ...updates } as WorktreeMeta
+      const next = storeWorktreeMeta({ ...metaById[worktreeId], ...updates })
       metaById[worktreeId] = next
       return next
     }
-  } as unknown as Store
-  const scanRepo = vi.fn<RepoWorktreeRowDeps['scanRepo']>(async (owner) => ({
+  })
+  const rawScanRepo = vi.fn<(owner: Repo) => Promise<RuntimeWorktreeScanResult>>(async (owner) => ({
     ok: true,
     worktrees: [gitWorktree(owner.id === 'unrelated' ? '/unrelated/worktree' : '/same/worktree')]
   }))
   const listFolderWorkspaces = vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>(() => [])
-  return { store, metaById, scanRepo, listFolderWorkspaces }
+  return {
+    store,
+    metaById,
+    rawScanRepo,
+    scanRepo: (owner) => scanRuntimeWorktreesUntilNotOvertaken(store, owner, rawScanRepo),
+    listFolderWorkspaces
+  }
 }
 
 describe('host-qualified scoped worktree resolution', () => {
+  it('projects current saved rows without stamping or marking a fleet scan accepted after it is overtaken', async () => {
+    const owner = repo('late-fleet', '/repo')
+    const deps = createDeps([owner])
+    const savedId = `${owner.id}::/repo/saved`
+    deps.store.setWorktreeMeta(hostWorktreeTarget({ id: savedId, hostId: 'local' }), {
+      comment: 'saved content',
+      hostId: 'local',
+      gitWorktree: { isBare: false, isMainWorktree: false, branch: 'saved', prunable: false }
+    })
+    deps.rawScanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree('/repo/new')] })
+    const scan = await scanRepoWorktreeRows(deps, owner, new Map())
+    bumpLocalWorktreeScanGeneration(owner.id)
+    const before = structuredClone(deps.metaById)
+    const joined = joinResolvedWorktreeScans(
+      deps.store,
+      () => deps,
+      new Map([[getRepoHostIdentityForParts(owner.id, 'local'), { ...scan, gitRun: {} }]])
+    )
+    expect(joined.worktrees.map((row) => row.path)).toEqual(['/repo/saved'])
+    expect(joined.scannedRepoKeys.size).toBe(0)
+    expect(joined.gitRunById.size).toBe(0)
+    expect(deps.metaById).toEqual(before)
+  })
   it('does not project another host metadata onto a colliding scoped row', async () => {
     const deps = createDeps([
       repo('shared', '/local/repo', { executionHostId: 'local' }),
@@ -109,7 +148,7 @@ describe('host-qualified scoped worktree resolution', () => {
     const deps = createDeps([local, remote, repo('unrelated', '/unrelated/repo')])
     const worktreeId = 'folders::/shared/folder'
     deps.listFolderWorkspaces.mockImplementation((owner) =>
-      owner === remote
+      owner.id === remote.id && owner.executionHostId === remote.executionHostId
         ? ([
             {
               id: worktreeId,
@@ -131,7 +170,7 @@ describe('host-qualified scoped worktree resolution', () => {
       resolveScopedWorktreeIdRow(deps, worktreeId, 'ssh:builder')
     ).resolves.toMatchObject({ id: worktreeId, hostId: 'ssh:builder' })
     expect(deps.listFolderWorkspaces).toHaveBeenCalledExactlyOnceWith(remote, 2)
-    expect(deps.scanRepo).not.toHaveBeenCalled()
+    expect(deps.rawScanRepo).not.toHaveBeenCalled()
   })
 })
 
@@ -140,7 +179,7 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
   it('refuses rather than guessing when two rows spell one path', async () => {
     const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
     const deps = createDeps([owner])
-    deps.scanRepo.mockImplementation(async () => ({
+    deps.rawScanRepo.mockImplementation(async () => ({
       ok: true,
       worktrees: [gitWorktree('/same/worktree'), gitWorktree('/same//worktree')]
     }))
@@ -155,7 +194,7 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
     const path = 'D:/Agentic/game2/battle-core'
     const owner = repo('shared', 'D:/Agentic/game2', { executionHostId: 'runtime:windows' })
     const deps = createDeps([owner])
-    deps.scanRepo.mockImplementation(async () => ({ ok: true, worktrees: [gitWorktree(path)] }))
+    deps.rawScanRepo.mockImplementation(async () => ({ ok: true, worktrees: [gitWorktree(path)] }))
 
     await expect(
       resolveScopedWorktreeIdRow(deps, 'shared::D:\\Agentic\\game2\\battle-core', 'runtime:windows')
@@ -184,7 +223,7 @@ describe('folder-to-Git checkout identity', () => {
       })
       deps.metaById[oldId] = metadata
       Object.assign(deps.store, { getProjectHostSetups: () => [] })
-      deps.scanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree(gitPath)] })
+      deps.rawScanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree(gitPath)] })
 
       const detected = buildDetectedGitWorktrees(deps.store, owner, [gitWorktree(gitPath)])
       const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())

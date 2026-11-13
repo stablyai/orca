@@ -16,6 +16,7 @@ import {
 import { makeTerminalTab } from '../../src/main/persistence/persistence-session-fixtures'
 import { buildDetectedGitWorktrees } from '../../src/main/ipc/worktrees/listing/ssh-worktree-fallback'
 import { resolveRepoWorktreeRows } from '../../src/main/runtime/workspaces/catalog/repo-worktree-row-resolution'
+import { scanRuntimeWorktreesUntilNotOvertaken } from '../../src/main/runtime/workspaces/catalog/runtime-witnessed-worktree-scan'
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-folder-upgrade-store-'))
@@ -77,7 +78,11 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
   const runtime = await resolveRepoWorktreeRows(
     {
       store: reloaded,
-      scanRepo: async () => ({ ok: true, worktrees }),
+      scanRepo: (capturedRepo) =>
+        scanRuntimeWorktreesUntilNotOvertaken(reloaded, capturedRepo, async () => ({
+          ok: true,
+          worktrees
+        })),
       listFolderWorkspaces: () => []
     },
     repo,
