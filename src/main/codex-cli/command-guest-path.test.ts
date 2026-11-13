@@ -1,12 +1,17 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isCodexCliAvailable,
   resolveGuestNativeAgentCommand,
   WINDOWS_ONLY_AGENT_CLI_DIR
 } from './command'
+
+// Host machines may have a real codex in /usr/local/bin or /opt/homebrew/bin.
+vi.mock('../../shared/system-cli-install-dirs', () => ({
+  getSystemCliInstallDirectories: () => []
+}))
 
 let root: string
 let native: string
