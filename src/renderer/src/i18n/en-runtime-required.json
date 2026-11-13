@@ -1225,13 +1225,6 @@
           }
         }
       },
-      "tab": {
-        "bar": {
-          "QuickLaunchButton": {
-            "chatNotOnWindows": "No chat on Windows yet"
-          }
-        }
-      },
       "task": {
         "project": {
           "source": {
@@ -1709,7 +1702,6 @@
         "modelApplyFailed": "Could not apply model {{value}}.",
         "modelPickerFailed": "Could not open the model picker."
       },
-      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
