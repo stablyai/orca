@@ -95,6 +95,22 @@ export class RepoLifecycleOperations {
   removeProjectForHost(target: RepoHostTarget): void {
     const id = target.id
     const hostId = getRepoExecutionHostId(target)
+    const host = parseExecutionHostId(hostId)
+    if (host?.kind === 'runtime') {
+      const snapshot =
+        this[repoLifecycleOperationsContext].runtime.state.hostRepoCatalogSnapshots?.[
+          host.environmentId
+        ]
+      if (snapshot?.repos.some((repo) => repo.id === id)) {
+        this[repoLifecycleOperationsContext].runtime.state.hostRepoCatalogSnapshots = {
+          ...this[repoLifecycleOperationsContext].runtime.state.hostRepoCatalogSnapshots,
+          [host.environmentId]: {
+            repos: snapshot.repos.filter((repo) => repo.id !== id)
+          }
+        }
+        scheduleSave(this[repoLifecycleOperationsContext].scheduling, ['hostRepoCatalogSnapshots'])
+      }
+    }
     const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
     )
