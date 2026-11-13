@@ -147,7 +147,7 @@ import {
 } from './agent-sources'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
 import { gitBasicAuthorization, parseEgressPreset } from './network-policy'
-import { cachedProviderEnv } from './session-env'
+import { cachedProviderEnv, forgetProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
@@ -2292,22 +2292,14 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       const current = (await getSandbox(env.SANDBOX_DB, row.id)) ?? row
       let patched: Awaited<ReturnType<typeof patchWorkspace>> =
         Object.keys(rest).length > 0
-          ? await patchWorkspace(db, caller, current, rest, now, deps.teamMembership ?? createTeamMembershipCheck(env))
+          ? await patchWorkspace(db, caller, current, rest, now, deps.teamMembership ?? createTeamMembershipCheck(env), (running) => suspendSandbox(life, running))
           : { row: current, revoke: 'none' }
       const transferred = patched.row.user_id !== current.user_id
       if (transferred) {
-        // OWNER-TRANSFER. The owner and the transferred mark are already written together. Now
-        // stop the VM, so nothing the previous owner left running carries on (a stop keeps the
-        // disk only: the next wake is a new session with a freshly built, shared-mode env), and
-        // end everything that acted for them: its share links and its in-VM API token.
-        if (patched.row.status === 'running') {
-          const stopped = await suspendSandbox(life, patched.row).catch((error: unknown) => {
-            // Already marked transferred, so nothing personal can attach; reconcile stops it.
-            console.log(JSON.stringify({ event: 'owner_transfer_suspend_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
-            return null
-          })
-          patched = { ...patched, row: stopped ?? (await getSandbox(env.SANDBOX_DB, row.id)) ?? patched.row }
-        }
+        // OWNER-TRANSFER. patchWorkspace stopped the VM and then wrote the owner and the mark
+        // together. End what acted for the previous owner: the share links, the in-VM API token,
+        // and the proxy's cached copy of the keys this workspace's sessions were using.
+        forgetProviderEnv(row.id)
         await revokeSandboxShares(env.SANDBOX_DB, row.id, now)
         await revokeWorkspaceTokens(env.SANDBOX_DB, row.id, now)
       }

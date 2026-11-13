@@ -346,6 +346,46 @@ describe('a hand-off to a teammate', () => {
     expect((await t.row()).ownership_transferred_at).not.toBeNull()
   })
 
+  it.each(['creating', 'resuming', 'suspending', 'archiving', 'failed'])('refuses while the workspace is %s: never onto a boot or a stop in flight', async (status) => {
+    const asked: string[] = []
+    const t = await setup({ teamMembership: async (_account, userId) => (asked.push(userId), { member: true }) })
+    t.h.raw.prepare('UPDATE sandboxes SET status = ? WHERE id = ?').run(status, t.id)
+    const sent = t.h.vercel.commands.length
+    const refused = await t.transfer(t.admin, 'mia')
+    expect([refused.status, refused.body]).toEqual([409, { error: 'conflict', reason: `sandbox_${status}` }])
+    expect(await t.row()).toMatchObject({ user_id: 'mallory', ownership_transferred_at: null, status })
+    expect(asked).toEqual([])
+    expect(t.h.vercel.commands.length).toBe(sent)
+  })
+
+  it('refuses when the VM cannot be stopped: the workspace stays with its owner, unmarked', async () => {
+    const t = await setup()
+    const stop = t.h.vercel.stopSession.bind(t.h.vercel)
+    t.h.vercel.stopSession = async () => {
+      throw new Error('provider down')
+    }
+    const refused = await t.transfer(t.mallory, 'mia')
+    expect([refused.status, refused.body]).toEqual([409, { error: 'conflict', reason: 'stop_failed' }])
+    expect(await t.row()).toMatchObject({ user_id: 'mallory', ownership_transferred_at: null })
+    expect(t.h.raw.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'workspace.owner_changed'").get()).toEqual({ n: 0 })
+    // Once it can be stopped, the same request goes through.
+    t.h.vercel.stopSession = stop
+    t.h.raw.prepare("UPDATE sandboxes SET status = 'running' WHERE id = ? AND status <> 'suspended'").run(t.id)
+    expect((await t.transfer(t.mallory, 'mia')).status).toBe(200)
+    expect(await t.row()).toMatchObject({ user_id: 'mia', status: 'suspended' })
+  })
+
+  it('writes the owner only if the workspace is stopped at that instant', async () => {
+    const t = await setup()
+    // As if the previous owner woke it again between the stop and the write.
+    const { transferOwnership } = await import('../src/store')
+    t.h.raw.prepare("UPDATE sandboxes SET status = 'running' WHERE id = ?").run(t.id)
+    expect(await transferOwnership(t.h.env.SANDBOX_DB, t.id, 'mia', t.h.now())).toBeNull()
+    expect(await t.row()).toMatchObject({ user_id: 'mallory', ownership_transferred_at: null })
+    t.h.raw.prepare("UPDATE sandboxes SET status = 'suspended' WHERE id = ?").run(t.id)
+    expect(await transferOwnership(t.h.env.SANDBOX_DB, t.id, 'mia', t.h.now())).toMatchObject({ user_id: 'mia', ownership_transferred_at: t.h.now() })
+  })
+
   it('naming the current owner again is not a transfer', async () => {
     const t = await setup(answers({ member: false }))
     expect((await t.transfer(t.mallory, 'mallory')).status).toBe(200)

@@ -261,6 +261,20 @@ export async function updateRegistry(db: D1Database, id: string, patch: Registry
   return getSandbox(db, id)
 }
 
+/**
+ * OWNER-TRANSFER: the new owner and the transferred mark in one statement, and only while the
+ * workspace is stopped. A row that is running or mid-boot at this instant is left untouched
+ * (null), so a hand-off can never land on a live VM or on a boot whose environment was resolved
+ * for the previous owner.
+ */
+export async function transferOwnership(db: D1Database, id: string, newOwnerId: string, now: number): Promise<SandboxRow | null> {
+  const result = await db
+    .prepare(`UPDATE sandboxes SET user_id = ?, ownership_transferred_at = ? WHERE id = ? AND status IN ('suspended', 'archived')`)
+    .bind(newOwnerId, now, id)
+    .run()
+  return (result.meta.changes ?? 0) > 0 ? getSandbox(db, id) : null
+}
+
 /** Last activity (open, message, presence) — coarse, at most one write a minute per workspace. */
 export async function touchActivity(db: D1Database, id: string, userId: string, now: number): Promise<void> {
   await db
