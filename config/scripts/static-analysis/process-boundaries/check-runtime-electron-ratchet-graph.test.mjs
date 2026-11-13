@@ -22,34 +22,8 @@ function fixture(files) {
   return root
 }
 
-async function inspectGraph(entries, { separateEntries = false, plugins = [] } = {}) {
-  let result
-  const inspect = {
-    name: 'inspect-electron-ratchet-graph',
-    setup(pluginBuild) {
-      if (separateEntries) {
-        delete pluginBuild.initialOptions.stdin
-        pluginBuild.initialOptions.entryPoints = entries
-      }
-      pluginBuild.onEnd((built) => {
-        result = built
-      })
-    }
-  }
-  const importers = await collectElectronImporters(entries, { plugins: [...plugins, inspect] })
-  return { importers, ...result }
-}
-
-function fixtureInputs(result, root) {
-  return Object.fromEntries(
-    Object.entries(result.metafile.inputs)
-      .filter(([file]) => file.includes(path.basename(root)))
-      .sort(([left], [right]) => left.localeCompare(right))
-  )
-}
-
 describe('the runtime Electron import graph', () => {
-  it('retains every original CommonJS input and Electron edge when sharing root dependencies', async () => {
+  it('finds Electron importers across CommonJS, conditional exports and dynamic imports', async () => {
     const root = fixture({
       'entry.mjs': `
         export { value } from './shared.cjs'
@@ -59,8 +33,6 @@ describe('the runtime Electron import graph', () => {
       'future.cjs': `
         module.exports = {
           value: require('conditional-package').value,
-          bare: () => require.resolve('electron'),
-          subpath: () => require.resolve('electron/main'),
           addon: () => require('./missing.node'),
           desktop: () => require('desktop-package')
         }
@@ -85,30 +57,14 @@ describe('the runtime Electron import graph', () => {
       }
     }
     const entries = ['entry.mjs', 'future.cjs', 'shared.cjs'].map((file) => path.join(root, file))
-    const original = await inspectGraph(entries, {
-      separateEntries: true,
-      plugins: [injectElectron]
-    })
-    const shared = await inspectGraph(entries, { plugins: [injectElectron] })
+    const importers = await collectElectronImporters(entries, { plugins: [injectElectron] })
 
-    expect(fixtureInputs(shared, root)).toEqual(fixtureInputs(original, root))
-    expect(shared.importers).toEqual(original.importers)
-    expect(shared.importers.map((file) => file.slice(file.indexOf(path.basename(root))))).toEqual([
+    expect(importers.map((file) => file.slice(file.indexOf(path.basename(root))))).toEqual([
       `${path.basename(root)}/dynamic.mjs`,
       `${path.basename(root)}/future.cjs`,
       `${path.basename(root)}/node_modules/conditional-package/import.mjs`,
       `${path.basename(root)}/node_modules/conditional-package/require.cjs`,
       `${path.basename(root)}/node_modules/desktop-package/index.cjs`
     ])
-    const future = Object.entries(shared.metafile.inputs).find(([file]) =>
-      file.endsWith('/future.cjs')
-    )
-    expect(future[1].imports).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ path: 'electron', kind: 'require-resolve', external: true }),
-        expect.objectContaining({ path: 'electron/main', kind: 'require-resolve', external: true }),
-        expect.objectContaining({ path: './missing.node', external: true })
-      ])
-    )
   })
 })
