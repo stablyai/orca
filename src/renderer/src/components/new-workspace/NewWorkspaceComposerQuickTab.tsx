@@ -1,5 +1,6 @@
 import type { ComposerModalData } from './composer-modal-data'
 import { reportComposerPreparationFailure } from './composer-creation-recovery'
+import { runQuickWorkspaceCreation } from './quick-workspace-creation'
 import { toast } from 'sonner'
 import type {
   AgentPickerDraft,
@@ -27,7 +28,6 @@ import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
@@ -194,16 +194,14 @@ export default function NewWorkspaceComposerQuickTab({
       setQuickAgentOverride(agent)
       setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })
     },
-    [observation.contextKey]
+    [observation.contextKey, setQuickAgentPick, setQuickAgentOverride]
   )
 
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled || creationInFlightRef.current) {
       return
     }
-    creationInFlightRef.current = true
-    setCreationInFlight(true)
-    try {
+    await runQuickWorkspaceCreation(creationInFlightRef, setCreationInFlight, async () => {
       if (
         quickAgentOverride === undefined &&
         quickAgent &&
@@ -211,7 +209,7 @@ export default function NewWorkspaceComposerQuickTab({
         !folderDefaultTarget
       ) {
         toast.error(
-          translate(
+          t(
             'auto.components.NewWorkspaceComposerModal.folderDefaultAmbiguous',
             'This folder workspace has no single target project. Choose an explicit agent.'
           )
@@ -232,7 +230,7 @@ export default function NewWorkspaceComposerQuickTab({
             selection = observation.selectionFor(agent, undefined)
             if (!selection.ready) {
               toast.error(
-                translate(
+                t(
                   'auto.components.NewWorkspaceComposerModal.targetDefaultChanged',
                   'The target project default changed. Check its agent and retry.'
                 )
@@ -262,10 +260,7 @@ export default function NewWorkspaceComposerQuickTab({
           selection.choice?.executionHostId
         )
       })
-    } finally {
-      creationInFlightRef.current = false
-      setCreationInFlight(false)
-    }
+    })
   }, [
     createDisabled,
     quickAgent,
@@ -281,7 +276,8 @@ export default function NewWorkspaceComposerQuickTab({
     quickAgentPick,
     submitQuick,
     isSubmissionCancelled,
-    modalData
+    modalData,
+    t
   ])
   const {
     addProjectOpen,
@@ -351,7 +347,7 @@ export default function NewWorkspaceComposerQuickTab({
       </DialogHeader>
       {quickAgentOverride === undefined && defaultPending ? (
         <p className="text-xs text-muted-foreground" aria-live="polite">
-          {translate(
+          {t(
             'auto.components.NewWorkspaceComposerModal.resolvingTargetDefault',
             'Resolving target project default…'
           )}

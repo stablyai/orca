@@ -1,6 +1,6 @@
 import type { SettingsSearchEntry } from './search/settings-search'
 import { searchKeywordTranslator } from './search/settings-search-keywords'
-import type { Translate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useEffect, useState, type ComponentProps } from 'react'
 import { SearchableSetting } from './section-layout/SearchableSetting'
 import { toast } from 'sonner'
@@ -25,10 +25,11 @@ type ProjectDefaultAgentSettingProps = {
 export function ProjectDefaultAgentSetting(
   props: ProjectDefaultAgentSettingProps
 ): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SearchableSetting
-      title={translate('settings.projectDefaultAgent.title', 'Default agent')}
-      description={translate(
+      title={t('settings.projectDefaultAgent.title', 'Default agent')}
+      description={t(
         'settings.projectDefaultAgent.description',
         'Choose the agent used for new workspaces in this project.'
       )}
@@ -46,6 +47,7 @@ function ProjectDefaultAgentControl({
   executionHostId,
   updateProject
 }: ProjectDefaultAgentSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<{
     projectId: string
@@ -81,7 +83,7 @@ function ProjectDefaultAgentControl({
     )
     return () => controller.abort()
   }, [environmentId])
-  const label = translate('settings.projectDefaultAgent.title', 'Default agent')
+  const label = t('settings.projectDefaultAgent.title', 'Default agent')
   const saved = project.defaultTuiAgent ?? 'inherit'
   const effectiveGlobal = environmentId
     ? remoteGlobal.status === 'ready'
@@ -90,20 +92,17 @@ function ProjectDefaultAgentControl({
     : globalDefault
   const globalLabel =
     environmentId && remoteGlobal.status === 'loading'
-      ? translate(
-          'settings.projectDefaultAgent.targetGlobalLoading',
-          'Loading target host global default…'
-        )
+      ? t('settings.projectDefaultAgent.targetGlobalLoading', 'Loading target host global default…')
       : effectiveGlobal === undefined
-        ? translate(
+        ? t(
             'settings.projectDefaultAgent.targetGlobalUnavailable',
             'Target host global setting unavailable'
           )
         : effectiveGlobal === 'blank'
-          ? translate('settings.projectDefaultAgent.blankTerminal', 'Blank Terminal')
+          ? t('settings.projectDefaultAgent.blankTerminal', 'Blank Terminal')
           : effectiveGlobal
             ? getAgentLabel(effectiveGlobal)
-            : translate('settings.projectDefaultAgent.auto', 'Automatic selection')
+            : t('settings.projectDefaultAgent.auto', 'Automatic selection')
 
   const save = async (value: string): Promise<void> => {
     const next = value === 'inherit' ? null : value === 'blank' || isTuiAgent(value) ? value : null
@@ -112,26 +111,11 @@ function ProjectDefaultAgentControl({
     }
     setSaving(true)
     setFailure(null)
-    try {
-      const result = await updateProject(project.id, { defaultTuiAgent: next })
-      if (result !== true) {
-        throw new Error(
-          translate(
-            'settings.projectDefaultAgent.saveFailed',
-            'Project default agent could not be saved. Update the target host and try again.'
-          )
-        )
-      }
-      toast.success(translate('settings.projectDefaultAgent.saved', 'Project default agent saved'))
-    } catch (caught) {
-      setFailure({
-        projectId: project.id,
-        value,
-        message: caught instanceof Error ? caught.message : String(caught)
-      })
-    } finally {
-      setSaving(false)
+    const message = await persistProjectDefaultAgent(project.id, next, updateProject, t)
+    if (message !== null) {
+      setFailure({ projectId: project.id, value, message })
     }
+    setSaving(false)
   }
 
   return (
@@ -147,10 +131,10 @@ function ProjectDefaultAgentControl({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="inherit">
-            {translate('settings.projectDefaultAgent.inherit', 'Inherit global')}
+            {t('settings.projectDefaultAgent.inherit', 'Inherit global')}
           </SelectItem>
           <SelectItem value="blank">
-            {translate('settings.projectDefaultAgent.blankTerminal', 'Blank Terminal')}
+            {t('settings.projectDefaultAgent.blankTerminal', 'Blank Terminal')}
           </SelectItem>
           {getAgentCatalog().map((agent) => (
             <SelectItem key={agent.id} value={agent.id}>
@@ -161,12 +145,12 @@ function ProjectDefaultAgentControl({
       </Select>
       <p className="text-xs text-muted-foreground">
         {saved === 'inherit'
-          ? translate(
+          ? t(
               'settings.projectDefaultAgent.effectiveGlobal',
               'Current global default: {{value0}}',
               { value0: globalLabel }
             )
-          : translate(
+          : t(
               'settings.projectDefaultAgent.futureLaunches',
               'Applies to new workspaces and agent launches in this project.'
             )}
@@ -182,12 +166,33 @@ function ProjectDefaultAgentControl({
             disabled={saving}
             onClick={() => void save(error.value)}
           >
-            {translate('settings.projectDefaultAgent.retry', 'Retry save')}
+            {t('settings.projectDefaultAgent.retry', 'Retry save')}
           </Button>
         </div>
       ) : null}
     </div>
   )
+}
+
+async function persistProjectDefaultAgent(
+  projectId: string,
+  next: ProjectUpdateArgs['updates']['defaultTuiAgent'],
+  updateProject: ProjectDefaultAgentSettingProps['updateProject'],
+  t: Translate
+): Promise<string | null> {
+  try {
+    const result = await updateProject(projectId, { defaultTuiAgent: next })
+    if (result !== true) {
+      return t(
+        'settings.projectDefaultAgent.saveFailed',
+        'Project default agent could not be saved. Update the target host and try again.'
+      )
+    }
+    toast.success(t('settings.projectDefaultAgent.saved', 'Project default agent saved'))
+    return null
+  } catch (caught) {
+    return caught instanceof Error ? caught.message : String(caught)
+  }
 }
 
 export function getProjectDefaultAgentSearchEntry(

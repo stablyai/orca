@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { resolveDesktopWorkspaceDefaultAgent } from '@/lib/desktop-workspace-default-agent'
@@ -12,7 +12,9 @@ export function useWorkspaceDefaultAgent(
 ) {
   const target = `${repo}\0${hostId}`
   const currentTargetRef = useRef(target)
-  currentTargetRef.current = target
+  useLayoutEffect(() => {
+    currentTargetRef.current = target
+  }, [target])
   const remote = Boolean(repo && hostId && hostId !== 'local')
   const [resolved, setResolved] = useState<
     { target: string; state: WorkspaceDefaultState } | undefined
