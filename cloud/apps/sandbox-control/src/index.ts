@@ -1307,7 +1307,8 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         (await handleOperator(request, url.pathname, {
           life,
           github: deps.github ?? githubMinter(env),
-          readJson: () => readJson(request)
+          readJson: () => readJson(request),
+          keyring: () => keyringFor(env)
         })) ?? fail('not_found', 404)
       )
     }
