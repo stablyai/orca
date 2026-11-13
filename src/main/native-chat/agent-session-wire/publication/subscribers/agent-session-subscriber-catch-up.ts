@@ -78,7 +78,7 @@ export function deliverToSubscriber(
   return unlessSuperseded(deliver(port, input))
 }
 
-/** A superseded emission sent nothing and advanced nothing; the newer commit's delivery follows. */
+/** The superseded emission sent nothing; frames before it stand, and an emitted replacement already dropped the work credit, so the next delivery restates. */
 async function unlessSuperseded<T>(delivery: Promise<T>): Promise<T | undefined> {
   try {
     return await delivery
@@ -142,6 +142,7 @@ async function deliver(
         return frame
       }
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
+      subscriber.workView = undefined
       await refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return frame
     }
@@ -290,6 +291,8 @@ async function publishSnapshotFrame(
   }
   subscriber.cursor = page.liveCursor ?? page.window.nextCursor
   subscriber.fence = fence
+  // The replacement dropped client restatements; owe them until every follow-up lands.
+  subscriber.workView = undefined
   await refreshPublishedWork(delivery, subscriber, journal, frame.work, shared)
   return frame
 }

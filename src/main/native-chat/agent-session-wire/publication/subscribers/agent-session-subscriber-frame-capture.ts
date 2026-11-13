@@ -1,6 +1,7 @@
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { JournalDomainHistoryWork } from '../../../agent-session-journal/journal-domain-history-page'
 import { AgentSessionJournalError } from '../../../agent-session-journal/writing/journal-write-guards'
+import { journalOpenRefusalError } from '../../../agent-session-journal/replay/journal-open-failure'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { AgentSessionHistoryFrame } from '../history/agent-session-history-page'
@@ -115,7 +116,7 @@ export async function readCaughtUpWork(
 const REQUEST_FRAME_ATTEMPTS = 3
 
 /** A request answers once, so it takes another capture only after one was abandoned because live
- *  authority moved; persistent churn fails the request instead of answering with mixed state. */
+ *  authority moved; persistent churn refuses as retryable unavailable history, never mixed state. */
 export async function captureRequestFrame<T>(
   journal: AgentSessionJournal,
   capture: () => Promise<T | undefined>
@@ -135,5 +136,5 @@ export async function captureRequestFrame<T>(
       `the journal for ${journal.identity.sessionId} is closed`
     )
   }
-  throw new Error('live work kept changing while this chat frame was read')
+  throw journalOpenRefusalError(new Error('live work kept changing while this chat frame was read'))
 }

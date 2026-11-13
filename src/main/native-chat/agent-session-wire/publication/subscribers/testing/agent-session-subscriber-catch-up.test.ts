@@ -1,7 +1,10 @@
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { claudeProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
+import {
+  AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionSubscribeEvent
+} from '../../../../../../shared/agent-session/agent-session-wire'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
@@ -31,6 +34,7 @@ import {
   structuredQueueSendGate,
   tryReadQueuePublication
 } from '../../../delivery/structured-agent-session-queued-publication'
+import { queuedImageReaderEvent } from '../../history/agent-session-queued-image-reader'
 import {
   fixture,
   journals,
@@ -108,6 +112,7 @@ async function openChat(name: string, held: Set<string>) {
       journal,
       fence: 1,
       ...(cursor ? { cursor } : {}),
+      projectJournalEvent: queuedImageReaderEvent,
       emit: (event) => {
         events.push(event)
         eventsOf.set(id, [...(eventsOf.get(id) ?? []), event])
@@ -387,4 +392,49 @@ it('a capture whose live authority changes during its queue read is replaced, no
   await vi.waitFor(() => expect(chat.sendState('send')).toBe('unknown'))
 
   expect(chat.delivered(before)).not.toContain('pending')
+})
+
+it('a send restated off a snapshot page survives a follow-up abandoned by a newer commit', async () => {
+  const chat = await openChat('offpage', new Set(['send']))
+  await chat.submit()
+  const status = (id: string) =>
+    chat.journal.appendItem(
+      { provider: 'orca', clientMessageId: id },
+      { kind: 'status', text: id },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  for (let index = 0; index < AGENT_SESSION_HISTORY_MAX_LIMIT; index += 1) {
+    await status(`filler-${index}`)
+  }
+  chat.open()
+  await vi.waitFor(() => expect(chat.sendState('send')).toBe('pending'))
+  await chat.laneDrained()
+
+  // The newer commit lands between the snapshot and its off-page restatement.
+  let newer: Promise<unknown> | undefined
+  chat.invariants.push(() => {
+    const last = chat.events.at(-1)
+    if (last?.type === 'snapshot' && !newer) {
+      expect(last.page.submissions.some((entry) => entry.clientMessageId === 'send')).toBe(false)
+      newer = status('newer')
+    }
+  })
+  chat.subscribers.snapshot(SESSION, chat.journal, 1)
+  await vi.waitFor(() => expect(newer).toBeDefined())
+  await newer
+  await chat.laneDrained()
+  chat.subscribers.publish(SESSION, chat.journal)
+  await vi.waitFor(() =>
+    expect(
+      chat
+        .pane()
+        .items.some(
+          (item) =>
+            item.itemId === agentJournalItemKey({ provider: 'orca', clientMessageId: 'newer' })
+        )
+    ).toBe(true)
+  )
+  await chat.laneDrained()
+
+  expect(chat.sendState('send')).toBe('pending')
 })
