@@ -10,6 +10,7 @@ on:
       - 'src/main/updater/**'
       - 'native/macos-shipit-scheduling/**'
       - 'config/scripts/macos-shipit-scheduling*'
+      - 'config/scripts/desktop-distribution/macos/macos-native-addon.cjs'
       - 'config/electron-builder.config.cjs'
       - 'src/main/startup/quit/main-process-quit*'
       - 'src/main/window/main-window/main-window-state-lifecycle*'

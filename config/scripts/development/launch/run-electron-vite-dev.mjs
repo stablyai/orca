@@ -46,6 +46,7 @@ import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-l
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
 import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
+import * as devKeyboardLayoutReader from './dev-keyboard-layout-reader.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -243,13 +244,15 @@ function prepareMacDevElectronApp() {
       sourceAppPath,
       electronVersion,
       bundleLayoutVersion,
-      plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
+      plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()],
+      // Reuse a bundle only while its built keyboard layout reader matches the source.
+      keyboardLayoutSource: devKeyboardLayoutReader.hashDevKeyboardLayoutSource()
     },
     null,
     2
   )
   const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Electron')
-  // Require Chromium resources to avoid blank crash; optional swiftc keyboard helper only degrades keyboard behavior when absent.
+  // Require Chromium resources to avoid blank crash; optional keyboard layout reader only degrades keyboard behavior when absent.
   const chromiumResourcePath = path.join(
     appPath,
     'Contents',
@@ -260,7 +263,7 @@ function prepareMacDevElectronApp() {
   )
   const requiredResourcePaths = [
     chromiumResourcePath,
-    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
+    path.join(appPath, 'Contents', 'Resources', devKeyboardLayoutReader.DEV_KEYBOARD_LAYOUT_ADDON),
     path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint')
   ]
 
@@ -355,6 +358,7 @@ function prepareMacDevElectronApp() {
   }
 
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
+  devKeyboardLayoutReader.buildDevKeyboardLayoutReader(path.join(appPath, 'Contents', 'Resources'))
 
   // Re-sign after copy/plist edits or macOS rejects notification registration (UNErrorDomain 1); signing failure stays nonfatal for dev.
   let signed = true

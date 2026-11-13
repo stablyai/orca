@@ -9841,7 +9841,8 @@
         {
           "file": "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
           "assertions": [
-            "rapid input-source changes coalesce to one latest-generation refresh signal"
+            "an unchanged layout is read once and the refresh after an input-source change returns the new layout",
+            "a layout is never cached without a live input-source subscription, and failed reads or native loads are retried"
           ]
         },
         {

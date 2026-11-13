@@ -1,96 +1,67 @@
-import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import type {
-  KeyboardLayoutKeyCharacters,
-  KeyboardLayoutSnapshot
-} from '../../shared/keyboard-layout-snapshot'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
 
-const HELPER_EXECUTABLE = 'orca-keyboard-layout'
-const HELPER_TIMEOUT_MS = 1000
-const MAX_HELPER_OUTPUT_BYTES = 64 * 1024
+const KEYBOARD_LAYOUT_ADDON = 'orca_keyboard_layout.node'
 
-let cachedHelperPath: string | null | undefined
-let readInFlight: Promise<KeyboardLayoutSnapshot | null> | null = null
-
-function resolveHelperPath(): string | null {
-  if (cachedHelperPath !== undefined) {
-    return cachedHelperPath
-  }
-  if (process.platform !== 'darwin') {
-    cachedHelperPath = null
-    return cachedHelperPath
-  }
-  const candidate = join(dirname(process.execPath), HELPER_EXECUTABLE)
-  cachedHelperPath = existsSync(candidate) ? candidate : null
-  return cachedHelperPath
+type KeyboardLayoutRead = { snapshot: KeyboardLayoutSnapshot; keyboardType: number }
+type KeyboardLayoutAddon = {
+  read: () => KeyboardLayoutRead | null
+  keyboardType: () => number
 }
 
-function optionalString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null
-}
+const requireNative = createRequire(import.meta.url)
+let addon: KeyboardLayoutAddon | null = null
+let loadFailureLogged = false
+// Only a live input-source subscription can tell us when a cached read goes stale.
+let cacheAuthorized = false
+let cached: KeyboardLayoutRead | null = null
 
-export function parseKeyboardLayoutSnapshot(stdout: string): KeyboardLayoutSnapshot | null {
-  let parsed: unknown
+function loadAddon(): KeyboardLayoutAddon | null {
+  if (addon) {
+    return addon
+  }
   try {
-    parsed = JSON.parse(stdout)
+    addon = requireNative(join(process.resourcesPath, KEYBOARD_LAYOUT_ADDON)) as KeyboardLayoutAddon
+  } catch (error) {
+    // Not memoized: a later request retries the load; log once so focus can't flood the log.
+    if (!loadFailureLogged) {
+      loadFailureLogged = true
+      console.warn('[keyboard-layout] native layout reader unavailable:', error)
+    }
+  }
+  return addon
+}
+
+/** Current layout from an in-process read; served from cache until the input source or keyboard type changes. */
+export function readMacKeyboardLayoutSnapshot(): KeyboardLayoutSnapshot | null {
+  if (process.platform !== 'darwin') {
+    return null
+  }
+  const reader = loadAddon()
+  if (!reader) {
+    return null
+  }
+  try {
+    if (cached && cached.keyboardType === reader.keyboardType()) {
+      return cached.snapshot
+    }
+    cached = null
+    const read = reader.read()
+    if (read && cacheAuthorized) {
+      cached = read
+    }
+    return read?.snapshot ?? null
   } catch {
     return null
   }
-  if (!parsed || typeof parsed !== 'object') {
-    return null
-  }
-  const record = parsed as Record<string, unknown>
-  if (!record.keyCharacters || typeof record.keyCharacters !== 'object') {
-    return null
-  }
-  const keyCharacters: Record<string, KeyboardLayoutKeyCharacters> = {}
-  for (const [code, value] of Object.entries(record.keyCharacters)) {
-    if (!value || typeof value !== 'object') {
-      continue
-    }
-    const characters = value as Record<string, unknown>
-    keyCharacters[code] = {
-      unmodified: optionalString(characters.unmodified),
-      shifted: optionalString(characters.shifted)
-    }
-  }
-  return {
-    inputSourceId: optionalString(record.inputSourceId),
-    layoutSourceId: optionalString(record.layoutSourceId),
-    keyCharacters
-  }
 }
 
-export function readMacKeyboardLayoutSnapshot(): Promise<KeyboardLayoutSnapshot | null> {
-  const helperPath = resolveHelperPath()
-  if (!helperPath) {
-    return Promise.resolve(null)
-  }
-  if (readInFlight) {
-    return readInFlight
-  }
-  readInFlight = runHelper(helperPath).finally(() => {
-    readInFlight = null
-  })
-  return readInFlight
+export function invalidateMacKeyboardLayoutSnapshot(): void {
+  cached = null
 }
 
-export async function waitForMacKeyboardLayoutSnapshotIdle(): Promise<void> {
-  while (readInFlight) {
-    await readInFlight
-  }
-}
-
-function runHelper(helperPath: string): Promise<KeyboardLayoutSnapshot | null> {
-  return new Promise((resolve) => {
-    execFile(
-      helperPath,
-      [],
-      { timeout: HELPER_TIMEOUT_MS, maxBuffer: MAX_HELPER_OUTPUT_BYTES },
-      (error, stdout) => {
-        resolve(error ? null : parseKeyboardLayoutSnapshot(String(stdout).trim()))
-      }
-    )
-  })
+export function setMacKeyboardLayoutCacheAuthorized(authorized: boolean): void {
+  cacheAuthorized = authorized
+  cached = null
 }

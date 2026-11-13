@@ -284,7 +284,6 @@
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
 1 src/main/ipc/floating-workspace-directory.ts
-1 src/main/ipc/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notification-authorization-status.ts
 1 src/main/ipc/pty/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts

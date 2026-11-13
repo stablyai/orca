@@ -41,7 +41,6 @@ src/main/ipc/developer-permissions.ts
 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-input-source.ts
-src/main/ipc/macos-keyboard-layout-snapshot.ts
 src/main/ipc/notification-authorization-status.ts
 src/main/ipc/preflight-command-exec.ts
 src/main/ipc/worktree-apfs-clone.ts

@@ -3,7 +3,10 @@ import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
 } from '../../shared/keyboard-layout-events'
-import { waitForMacKeyboardLayoutSnapshotIdle } from './macos-keyboard-layout-snapshot'
+import {
+  invalidateMacKeyboardLayoutSnapshot,
+  setMacKeyboardLayoutCacheAuthorized
+} from './macos-keyboard-layout-snapshot'
 
 const INPUT_SOURCE_CHANGED_NOTIFICATION =
   'com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged'
@@ -27,13 +30,6 @@ export function registerMacKeyboardLayoutChangeNotifications(): () => void {
       }
     }
   }
-  const refreshAfterCurrentRead = async (nextGeneration: number): Promise<void> => {
-    await waitForMacKeyboardLayoutSnapshotIdle()
-    if (!disposed && nextGeneration === generation) {
-      broadcast({ phase: 'refresh', generation: nextGeneration })
-    }
-  }
-
   try {
     subscriptionId = systemPreferences.subscribeNotification(
       INPUT_SOURCE_CHANGED_NOTIFICATION,
@@ -41,20 +37,24 @@ export function registerMacKeyboardLayoutChangeNotifications(): () => void {
         if (disposed) {
           return
         }
+        // Reads are synchronous in main, so clearing here means the refresh below reads the new source.
+        invalidateMacKeyboardLayoutSnapshot()
         const nextGeneration = ++generation
         broadcast({ phase: 'invalidated', generation: nextGeneration })
-        void refreshAfterCurrentRead(nextGeneration)
+        broadcast({ phase: 'refresh', generation: nextGeneration })
       }
     )
   } catch {
     return () => undefined
   }
+  setMacKeyboardLayoutCacheAuthorized(true)
 
   const dispose = (): void => {
     if (disposed) {
       return
     }
     disposed = true
+    setMacKeyboardLayoutCacheAuthorized(false)
     app.removeListener('will-quit', dispose)
     try {
       systemPreferences.unsubscribeNotification(subscriptionId)
