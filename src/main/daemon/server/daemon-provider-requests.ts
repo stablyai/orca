@@ -36,7 +36,7 @@ export function canRetireDaemon(
     host: TerminalHost
   },
   client: ConnectedDaemonClient | undefined
-): boolean {
+): client is ConnectedDaemonClient {
   return (
     client !== undefined &&
     client.streamSocket !== null &&

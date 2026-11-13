@@ -127,8 +127,7 @@ const plan = {
   binary: 'codex',
   args: [],
   label: 'Codex',
-  stdinPayload: null,
-  outputFormat: 'text' as const
+  stdinPayload: null
 }
 
 it.each(['generation', 'policy', 'models'] as const)(
