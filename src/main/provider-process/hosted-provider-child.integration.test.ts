@@ -96,6 +96,7 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
       const closed = once(child, 'close')
       child.stdin.end()
       await gate.pending
+      // ast-grep-ignore: test-no-real-time-wait -- Real child output must stay pending beyond the former one-second drain deadline.
       await new Promise((resolve) => setTimeout(resolve, 1_100))
       expect(child.exitCode).toBeNull()
       gate.release()
@@ -141,6 +142,7 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
       })
     )
     await exited
+    // ast-grep-ignore: test-no-real-time-wait -- Actual child exit must not close an explicitly paused reader after the former one-second deadline.
     await new Promise((resolve) => setTimeout(resolve, 1_100))
     expect(closed).toBe(false)
     let output = ''

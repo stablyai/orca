@@ -16,9 +16,11 @@ import type { HostedProviderOutcome } from '../daemon/protocol/daemon-provider-p
 import type { SpawnSourceControlAgent } from '../text-generation/source-control-text-generation-types'
 import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 
-const { owners } = vi.hoisted(() => ({
-  owners: [] as { duplex: PassThrough; stderr: PassThrough; control: PassThrough }[]
-}))
+const { owners } = vi.hoisted(
+  (): { owners: { duplex: PassThrough; stderr: PassThrough; control: PassThrough }[] } => ({
+    owners: []
+  })
+)
 
 vi.mock('@orca/process-host', async (original) => ({
   ...(await original<typeof ProcessHost>()),
