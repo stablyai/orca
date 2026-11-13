@@ -1,4 +1,4 @@
-// macOS Local Network privacy maps a process to its app by executable UUID; stock Electron's and Node's are shared by every app shipping that build (TN3179).
+// macOS Local Network privacy maps a process to its app by executable UUID; stock Electron's is shared by every app shipping that build (TN3179).
 const { execFileSync } = require('node:child_process')
 const { createHash } = require('node:crypto')
 const { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')

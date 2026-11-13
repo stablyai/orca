@@ -14,10 +14,6 @@ const {
 const { builtinModules } = require('node:module')
 const { basename, dirname, join, relative, resolve, sep } = require('node:path')
 const { pathToFileURL } = require('node:url')
-const {
-  assertMacExecutableUuid,
-  giveMacExecutableUniqueUuid
-} = require('../../desktop-distribution/macos/macos-executable-uuid.cjs')
 
 const MAC_TERMINAL_HOST_NAME = 'Orca Terminal Host'
 const MAC_TERMINAL_HOST_EXECUTABLE = 'orca-terminal-host'
@@ -320,19 +316,16 @@ async function buildMacTerminalHost({
   signCode
 }) {
   const { NODE_RUNTIME_DARWIN_MINIMUM_OS } = await loadNodeRuntimePin()
-  const info = buildMacTerminalHostInfo({
-    appInfo: readPlist(join(appPath, 'Contents', 'Info.plist')),
-    usageDescriptions,
-    minimumOs: NODE_RUNTIME_DARWIN_MINIMUM_OS
-  })
   const paths = assembleMacTerminalHost({
     appPath,
     nodeExecutable: await pinnedDarwinNode(arch),
     iconPath,
-    info
+    info: buildMacTerminalHostInfo({
+      appInfo: readPlist(join(appPath, 'Contents', 'Info.plist')),
+      usageDescriptions,
+      minimumOs: NODE_RUNTIME_DARWIN_MINIMUM_OS
+    })
   })
-  // Stock Node's UUID is shared by every copy of that release, whatever bundle id it runs under.
-  giveMacExecutableUniqueUuid(paths.executable, info.CFBundleIdentifier)
   await signCode(paths.ptyNode, {})
   await signCode(paths.spawnHelper, {})
   await signCode(paths.bundle, { entitlements: entitlementsPath })
@@ -395,11 +388,6 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
     if (archs.length !== 1 || archs[0] !== arch) {
       problems.push(`${binary} has architectures ${archs.join(',')}, expected ${arch}`)
     }
-  }
-  try {
-    assertMacExecutableUuid(paths.executable, appId)
-  } catch (error) {
-    problems.push(error.message)
   }
   const { identifier, teamId } = readCodesignDetails(paths.bundle)
   if (identifier !== appId) {
