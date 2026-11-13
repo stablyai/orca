@@ -12,6 +12,7 @@ import {
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import {
   usesInstalledAgentModelCatalog,
+  unpickedFastModeIsOff,
   usesModelSpecificAcpEfforts
 } from './agent-model-catalog-ownership'
 import {
@@ -156,7 +157,7 @@ export function applyStructuredAgentSessionModelCatalog(
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
       : {
-          fastMode: 'policy',
+          ...(unpickedFastModeIsOff(state.record.agent) ? { fastMode: 'policy' as const } : {}),
           ...Object.fromEntries(
             Object.entries(state.acceptedInputSources ?? {}).filter(
               ([, source]) => source !== 'policy'

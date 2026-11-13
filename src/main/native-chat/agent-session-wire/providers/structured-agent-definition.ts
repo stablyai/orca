@@ -17,8 +17,6 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
     fallbackModels: () => AgentSessionModelOption[] | null
     /** Unpicked effort follows the model default, matching running-child reports. */
     effortDefaultsToModel: boolean
-    /** An unpicked Fast is off; otherwise it follows the agent's per-model default. */
-    fastModeDefaultsOff?: true
   }
 }
 

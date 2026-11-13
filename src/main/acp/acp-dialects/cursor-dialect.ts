@@ -6,6 +6,7 @@ import {
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
 import { AcpRpcError } from '../transport/acp-errors'
+import { MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS } from '../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import {
   pendingAcpResolution,
   type AcpDialect,
@@ -39,6 +40,10 @@ function questionRequest(params: unknown): AcpRequestPresentation {
   const parsed = questionRequestSchema.safeParse(params)
   if (!parsed.success) {
     throw new AcpRpcError(-32602, 'Invalid agent question request')
+  }
+  // A card keeps only so many questions; refused, Cursor asks each one on its own.
+  if (parsed.data.questions.length > MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS) {
+    throw new AcpRpcError(-32602, 'Too many questions for one card')
   }
   const questions = parsed.data.questions.map((question) => ({
     id: question.id,
@@ -85,7 +90,14 @@ function fallbackQuestionRequest(params: unknown): AcpRequestPresentation | unde
   if (!request?.options.some((option) => option.optionId === QUESTION_FALLBACK_SKIP)) {
     return undefined
   }
-  const question = request.toolCall.title ?? 'The agent has a question'
+  // The title is the group's; the question itself is the text content.
+  const text = request.toolCall.content?.find(
+    (block) => block.type === 'content' && block.content.type === 'text'
+  )
+  const question =
+    (text?.type === 'content' && text.content.type === 'text' ? text.content.text : null) ??
+    request.toolCall.title ??
+    'The agent has a question'
   const options = request.options.map((option) => ({ id: option.optionId, label: option.name }))
   return {
     body: { kind: 'question', question, options, resolution: pendingAcpResolution },

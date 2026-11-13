@@ -65,6 +65,10 @@ export function mergedAgentModelCatalogModels(
           : model.isDefault,
       efforts,
       ...(defaultEffort ? { defaultEffort } : {}),
+      // A live menu reports Fast only for its current model; keep what the listing knew.
+      ...(model.supportsFastMode === undefined && olderModel?.supportsFastMode !== undefined
+        ? { supportsFastMode: olderModel.supportsFastMode }
+        : {}),
       ...(observation !== undefined
         ? {
             declaredDefaultEffort:

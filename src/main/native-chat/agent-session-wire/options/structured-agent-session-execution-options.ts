@@ -6,6 +6,7 @@ import {
   refuse,
   type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { unpickedFastModeIsOff } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
 
@@ -27,7 +28,8 @@ export function captureStructuredExecutionOptions(
   // A missing Fast pick has a definite baseline on hosts that offer it.
   if (
     candidate.fastMode === undefined &&
-    ctx.agents.definition(ctx.agent)?.restingOptions.fastModeDefaultsOff
+    unpickedFastModeIsOff(ctx.agent) &&
+    ctx.agents.definition(ctx.agent)?.restingOptions.acceptsKey('fastMode')
   ) {
     candidate.fastMode = 'false'
   }

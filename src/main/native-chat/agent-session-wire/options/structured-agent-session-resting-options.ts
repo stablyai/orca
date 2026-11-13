@@ -3,7 +3,10 @@ import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-se
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import { finishedListingIds } from '../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
 import { savedEffectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
-import { independentAgentModelCatalog } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
+import {
+  independentAgentModelCatalog,
+  unpickedFastModeIsOff
+} from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import {
@@ -109,7 +112,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
   const listedModelIds = proof ? finishedListingIds(proof) : undefined
   const fastMode =
     saved.fastMode === undefined
-      ? rules?.fastModeDefaultsOff
+      ? unpickedFastModeIsOff(record.provider) && rules?.acceptsKey('fastMode')
         ? false
         : null
       : decodeStructuredAgentSessionOptionValue('fastMode', saved.fastMode)

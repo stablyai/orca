@@ -92,7 +92,8 @@ export function translateAcpRequest(
           : [
               {
                 type: 'item.update',
-                item: `${method}:${JSON.stringify(id)}`,
+                // Request ids restart with each process; a tool call id names this plan alone.
+                item: `${method}:${callId ?? JSON.stringify(id)}`,
                 body: {
                   kind: 'status',
                   presentation: 'plan-document',

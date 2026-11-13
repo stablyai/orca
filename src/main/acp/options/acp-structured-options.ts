@@ -90,7 +90,9 @@ export class AcpStructuredOptions {
       this.unobservedCurrent.add(key)
     }
     if (key === 'model') {
+      // Each model has its own effort and Fast defaults, so both are written again.
       this.appliedInput.delete('effort')
+      this.appliedInput.delete('fastMode')
       this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {

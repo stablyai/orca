@@ -5,7 +5,7 @@ import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-mod
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   independentAgentModelCatalog,
-  usesModelSpecificAcpEfforts
+  fillsLiveModelsFromCatalog
 } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
@@ -133,7 +133,7 @@ export async function readStructuredAgentSessionOptions(
   const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
-  if (live && usesModelSpecificAcpEfforts(agent)) {
+  if (live && fillsLiveModelsFromCatalog(agent)) {
     options = {
       ...options,
       models: fillUnknownModelEfforts(

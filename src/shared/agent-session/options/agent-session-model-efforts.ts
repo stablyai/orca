@@ -29,6 +29,9 @@ export function fillUnknownModelEfforts(
         : {}),
       ...(discovered.declaredDefaultEffort !== undefined
         ? { declaredDefaultEffort: discovered.declaredDefaultEffort }
+        : {}),
+      ...(rest.supportsFastMode === undefined && discovered.supportsFastMode !== undefined
+        ? { supportsFastMode: discovered.supportsFastMode }
         : {})
     }
   })

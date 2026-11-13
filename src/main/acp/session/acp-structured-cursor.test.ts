@@ -194,6 +194,55 @@ it('writes effort to the effort levels, not the thinking switch, and Fast to its
   })
 })
 
+it("writes the person's Fast choice again after a model switch resets it", async () => {
+  // Each model brings its own Fast default: Grok and Composer start on.
+  const optionsFor = (model: string, fast: string): SessionConfigOption[] => [
+    { ...OPUS_OPTIONS[0]!, currentValue: model } as SessionConfigOption,
+    { ...OPUS_OPTIONS[3]!, currentValue: fast } as SessionConfigOption
+  ]
+  const rig = await openAcpAdapterRig({
+    spec: CURSOR,
+    script: (agent) => {
+      let model = 'grok-4.7'
+      let fast = 'true'
+      agent.on('session/new', (frame) =>
+        agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: optionsFor(model, fast) })
+      )
+      agent.on('session/set_config_option', (frame) => {
+        const { configId, value } = frame.params as { configId: string; value: string }
+        if (configId === 'model') {
+          model = value
+          fast = 'true'
+        } else {
+          fast = value
+        }
+        agent.reply(frame, { configOptions: optionsFor(model, fast) })
+      })
+      agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+    }
+  })
+  await rig.acquire()
+  for (const [clientMessageId, model] of [
+    ['send-1', 'grok-4.7'],
+    ['send-2', 'composer-2.5']
+  ] as const) {
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId,
+      fence: 1,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      executionOptions: { model, fastMode: 'false' }
+    })
+    await rig.settle()
+  }
+  expect(
+    rig.sent('session/set_config_option').map(({ params }) => {
+      const { configId, value } = params as { configId: string; value: string }
+      return `${configId}=${value}`
+    })
+  ).toEqual(['model=grok-4.7', 'fast=false', 'model=composer-2.5', 'fast=false'])
+})
+
 it("lists each model's own effort levels and Fast support before a chat exists", async () => {
   const models = await readCursorModelCatalog({
     requestSessionFreeExtension: async (method) => {
