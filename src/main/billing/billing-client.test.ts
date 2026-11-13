@@ -87,9 +87,9 @@ describe('billing client', () => {
     })
 
     it('falls back to the empty body on an older auth (400), still checking the claim', async () => {
-      const bodies: Array<string | undefined> = []
+      const bodies: (string | undefined)[] = []
       const fetchImpl: typeof fetch = async (_input, init) => {
-        bodies.push(init?.body as string | undefined)
+        bodies.push(typeof init?.body === 'string' ? init.body : undefined)
         return init?.body === '{}'
           ? Response.json({ billingToken: jwt({ sub: 'u1', org: 'org_paid' }), expiresAt: 1 })
           : new Response(JSON.stringify({ error: 'invalid_request' }), { status: 400 })

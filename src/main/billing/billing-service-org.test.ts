@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { isPackaged: false, getPath: () => '/tmp' }, shell: { openExternal: vi.fn() } }))
 
-const profile = { id: 'p1', cloud: { userId: 'u1', activeOrgId: 'org_paid' as string | undefined } }
+const profile: { id: string; cloud: { userId: string; activeOrgId: string | undefined } } = {
+  id: 'p1',
+  cloud: { userId: 'u1', activeOrgId: 'org_paid' }
+}
 vi.mock('../orca-profiles/profile-index-store', () => ({
   ensureActiveOrcaProfile: () => ({ profile })
 }))
@@ -23,8 +26,8 @@ vi.mock('../orca-profiles/cloud-session/profile-cloud-session-refresh', () => ({
 }))
 const mint = vi.fn()
 const fetchEntitlement = vi.fn()
-vi.mock('./billing-client', async (original) => ({
-  ...(await original<typeof import('./billing-client')>()),
+vi.mock('./billing-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   mintBillingToken: (...args: unknown[]) => mint(...args),
   fetchEntitlement: (...args: unknown[]) => fetchEntitlement(...args)
 }))
