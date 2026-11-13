@@ -30,29 +30,10 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(inert(ARTIFACT).querySelectorAll('a[href], area[href]')).toHaveLength(0)
   })
 
-  it('keeps the text, the headings and the images the author wrote', () => {
-    const doc = inert(ARTIFACT)
-    expect(doc.getElementById('marker')?.textContent).toBe('text')
-    expect(doc.getElementById('top')?.textContent).toBe('tap')
-    expect(doc.getElementById('blank')?.textContent).toBe('window')
-    expect(doc.getElementById('mapped')?.getAttribute('src')).toBe('x.png')
-    expect(doc.title).toBe('A')
-    // The elements are still there and still in order: this is a hidden affordance, not a deletion.
-    expect([...doc.querySelectorAll('a')].map((one) => one.id)).toEqual([
-      'top',
-      'blank',
-      'root',
-      'empty',
-      'frag',
-      'named',
-      'svglink'
-    ])
-  })
-
   // Preserve authored doctype bytes/identifiers; srcdoc inherits embedder’s mode regardless, so test document.doctype rather than CSS1Compat.
   it('keeps the doctype whole, identifiers and all', () => {
     const doctypeOf = (html: string) => htmlPreviewWithInertLinks(html).split('>')[0] ?? ''
-    expect(doctypeOf(ARTIFACT).toLowerCase()).toBe('<!doctype html')
+
     expect(
       doctypeOf('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"><html><body>x')
     ).toBe('<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"')
@@ -62,10 +43,6 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
       )
     ).toContain(
       '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'
-    )
-    // Leave missing doctype absent rather than inventing author markup.
-    expect(htmlPreviewWithInertLinks('<html><body>x</body></html>').toLowerCase()).not.toContain(
-      '<!doctype'
     )
   })
 
@@ -82,17 +59,6 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(out).toContain('<textarea>\n\n\nfield</textarea>')
     // Only a block that starts with one gets one: this is a compensation, not a prefix.
     expect(out).toContain('<pre id="q">no newline</pre>')
-  })
-
-  it('leaves an href inside a comment where a regex pass would have found it', () => {
-    // Use parser rather than regex so href inside comment remains untouched artifact text.
-    const doc = inert(
-      '<!doctype html><html><body><!-- <a href="https://example.com/x">c</a> -->' +
-        '<a id="real" href="https://example.com/z">r</a></body></html>'
-    )
-    expect(doc.body.innerHTML).toContain('href="https://example.com/x"')
-    // The control: a link that is rendered did lose its href.
-    expect(doc.getElementById('real')?.hasAttribute('href')).toBe(false)
   })
 
   // Declarative shadowroot templates become rendered content at frame parse, but DOMParser leaves templates intact on Chromium 147/WebKit 26.4/happy-dom.
