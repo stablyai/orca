@@ -107,7 +107,8 @@ describe('gcStaleWorktreeMeta', () => {
           comment: 'resume after review',
           isArchived: true,
           archivedCheckout: { branch: 'feature/archived', archivedAt: 1 },
-          lastActivityAt: Date.now() - WORKTREE_META_GC_GRACE_MS - 1
+          // Epoch-start activity is past any grace period, so only the archive mark keeps it.
+          lastActivityAt: 1
         }
       }
     })

@@ -16,11 +16,10 @@ export function isWorktreePathReserved(
   }
   // Any project's archive may sit in a shared workspace root; remote hosts' paths are not this disk.
   return Object.entries(store?.getAllWorktreeMeta?.() ?? {}).some(([worktreeId, meta]) => {
-    const archivedPath = meta.archivedCheckout && splitWorktreeId(worktreeId)?.worktreePath
-    return (
-      Boolean(archivedPath) &&
-      (!meta.hostId || meta.hostId === LOCAL_EXECUTION_HOST_ID) &&
-      areWorktreePathsEqual(archivedPath as string, worktreePath)
-    )
+    if (!meta.archivedCheckout || (meta.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID)) {
+      return false
+    }
+    const archivedPath = splitWorktreeId(worktreeId)?.worktreePath
+    return archivedPath ? areWorktreePathsEqual(archivedPath, worktreePath) : false
   })
 }
