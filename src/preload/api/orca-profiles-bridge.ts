@@ -88,6 +88,11 @@ export const orcaProfilesApi = {
   orgCreate: (args) => ipcRenderer.invoke('orcaProfiles:orgCreate', args),
   orgDeleteCheck: (args) => ipcRenderer.invoke('orcaProfiles:orgDeleteCheck', args),
   orgDelete: (args) => ipcRenderer.invoke('orcaProfiles:orgDelete', args),
+  orgEnterprise: (args) => ipcRenderer.invoke('orcaProfiles:orgEnterprise', args),
+  orgSsoSetupLink: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoSetupLink', args),
+  orgSsoDomainAdd: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoDomainAdd', args),
+  orgSsoDomainVerify: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoDomainVerify', args),
+  orgSsoDomainRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoDomainRemove', args),
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void): (() => void) => {
     const listener = (_event: unknown, payload: OrcaBillingReturn): void => callback(payload)
     ipcRenderer.on(ORCA_BILLING_RETURN_CHANNEL, listener)

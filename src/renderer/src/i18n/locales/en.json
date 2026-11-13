@@ -1602,7 +1602,69 @@
         "upsellTitle": "Single sign-on is part of {{plan}}",
         "upsellBody": "Sign in with your identity provider over SAML, and add or remove teammates with SCIM.",
         "managedTitle": "Single sign-on is set up with us",
-        "managedBody": "To set up or change single sign-on, contact us."
+        "managedBody": "To set up or change single sign-on, contact us.",
+        "domains": {
+          "invalid": "Enter a domain like example.com.",
+          "public": "That domain belongs to an email provider. Use a domain your company owns.",
+          "tooMany": "A team can have up to 10 domains.",
+          "notFound": "That domain is no longer on the list.",
+          "taken": "Another team has already verified that domain. Contact us if it should be yours.",
+          "recordNotFound": "We couldn’t find the record yet. DNS changes can take a few minutes; try again shortly.",
+          "dnsUnavailable": "We couldn’t look up the record. Try again in a moment.",
+          "copy": "Copy {{label}}",
+          "verified": "Verified",
+          "pending": "Not verified",
+          "recordMissing": "Record missing",
+          "check": "Check record",
+          "remove": "Remove",
+          "pendingBody": "Add this TXT record at your DNS provider to show the domain is yours.",
+          "recordMissingBody": "The TXT record is gone. Sign-in still works; add the record back to keep the domain verified.",
+          "recordName": "Name",
+          "recordValue": "Value",
+          "title": "Email domains",
+          "body": "People who sign in with SSO using an email at one of these domains are sent to your identity provider.",
+          "none": "No domains yet.",
+          "inputLabel": "Domain to add",
+          "add": "Add domain",
+          "placeholder": "example.com"
+        },
+        "status": {
+          "on": "On",
+          "onWith": "Your team signs in with {{idp}}.",
+          "onBody": "Your team signs in with your identity provider.",
+          "testing": "Testing",
+          "testingBody": "Your connection is set up but not live. Finish testing it on the setup page to turn it on.",
+          "offBody": "Connect your identity provider over SAML or OIDC so your team signs in with it."
+        },
+        "title": "Single sign-on",
+        "connection": "Identity provider",
+        "manage": "Manage",
+        "setUp": "Set up SSO",
+        "linkWarning": "The setup link works without signing in and expires in 1 hour. Only share it with the person who manages your identity provider.",
+        "ownersOnly": "Only a team owner can change single sign-on.",
+        "lapsed": "Single sign-on stays on, but your plan no longer includes changing it. Contact us to make changes.",
+        "require": "Require SSO",
+        "requiredBody": "Every member signs in with SSO. Other sign-in methods are turned off for your team.",
+        "requiredOwnersBody": "Members sign in with SSO. Owners can still sign in another way until one owner has signed in with SSO.",
+        "requireOffBody": "Once SSO is on, every member must sign in with it. This can’t be turned off separately.",
+        "requiredValue": "Required",
+        "notRequiredValue": "Not yet",
+        "lapsedTitle": "Need to change single sign-on?",
+        "lapsedBody": "Talk to us about your plan.",
+        "loading": "Loading single sign-on",
+        "loadFailed": "Couldn’t load single sign-on",
+        "retry": "Try again",
+        "upsellBodySso": "Sign in with your identity provider over SAML or OIDC, and require it for everyone on your team.",
+        "error": {
+          "signIn": "Sign in to Orca again to see this.",
+          "forbidden": "Only a team owner or admin can see this.",
+          "rateLimited": "Too many requests. Try again shortly.",
+          "unsupported": "Single sign-on settings aren’t available here yet.",
+          "unavailable": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+          "recentSignIn": "For your team’s safety, sign out and sign in to Orca again, then open the setup page within 10 minutes.",
+          "notEntitled": "Your team’s plan doesn’t include changing single sign-on."
+        },
+        "sessionsEndOn": "Sign-ins made before SSO was turned on end on {{date}} at {{time}}. Members then sign in again with SSO."
       },
       "title": "Enterprise",
       "searchDescription": "Single sign-on and directory sync, and the audit log of changes across your team.",
@@ -1615,7 +1677,31 @@
       "description": "Single sign-on, sign-in policies and the audit log for your team.",
       "bannerTitle": "Single sign-on and the audit log are part of {{plan}}",
       "bannerBody": "Talk to us about moving your team to {{plan}}.",
-      "contactUs": "Contact us"
+      "contactUs": "Contact us",
+      "scim": {
+        "status": {
+          "active": "Active",
+          "activeBody": "Your identity provider adds, updates and removes teammates.",
+          "waiting": "Waiting for first sync",
+          "waitingBody": "Directory sync is on. Nothing has arrived from your identity provider yet.",
+          "notEnabled": "Not turned on",
+          "notEnabledBody": "Ask us to turn directory sync on for your team. Then connect your identity provider here.",
+          "needsSso": "Needs SSO",
+          "needsSsoBody": "Turn on single sign-on first. Directory sync uses the same identity provider."
+        },
+        "change": {
+          "added": "A teammate was added",
+          "removed": "A teammate was removed",
+          "role": "A role changed",
+          "group": "A group changed"
+        },
+        "title": "Directory sync",
+        "connection": "SCIM provisioning",
+        "open": "Open directory sync setup",
+        "keyNote": "The setup page shows the SCIM address and key to enter in your identity provider. Orca never shows or stores the key.",
+        "lastChange": "Last change received",
+        "lastChangeSummary": "{{what}} · {{when}}"
+      }
     }
   },
   "menu": {
@@ -1988,7 +2074,9 @@
             "7d4bc516ee": "Failed to switch profile",
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project",
-            "signInDidNotFinish": "Sign-in didn’t finish. Try again."
+            "signInDidNotFinish": "Sign-in didn’t finish. Try again.",
+            "ssoRequired": "Your team requires single sign-on",
+            "ssoRequiredBody": "Sign in again and choose Sign in with SSO."
           }
         },
         "runtime": {

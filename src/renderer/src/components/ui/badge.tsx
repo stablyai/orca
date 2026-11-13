@@ -32,6 +32,9 @@ const badgeVariants = cva(
           'border-destructive/20 bg-destructive/10 px-1.5 py-0 text-2xs text-destructive-text dark:border-destructive/30',
         statusWarning:
           'border-status-warning-border bg-status-warning-background px-1.5 py-0 text-2xs text-status-warning-text',
+        /** Sentence-case success pill beside a row label ("On", "Verified"), next to `tag` pills. */
+        statusSuccess:
+          'border-status-success-border bg-status-success-background px-1.5 py-0 text-2xs text-status-success',
         referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:

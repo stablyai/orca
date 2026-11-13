@@ -23,7 +23,8 @@ export type EnterpriseSettingsViewProps = {
   audit: EnterpriseAuditLogProps
   /**
    * Whether the team's plan includes single sign-on: true, false, or null while that is not known
-   * yet (the block waits rather than guess). Ignored once `singleSignOn` is passed.
+   * yet (the block waits rather than guess). With `singleSignOn` passed the slot draws the block,
+   * and this only says whether it is showing its locked state (so the page has one Contact sales).
    */
   ssoIncluded: boolean | null
   singleSignOn?: React.ReactNode
@@ -38,7 +39,7 @@ export function EnterpriseSettingsView({
 }: EnterpriseSettingsViewProps): React.JSX.Element {
   const t = useTranslate()
   const { contact, onContactSales } = audit
-  const ssoLocked = singleSignOn === undefined && ssoIncluded === false
+  const ssoLocked = ssoIncluded === false
   const auditLocked = audit.log.status === 'upsell'
   // Neither: one banner carries the page's only Contact sales.
   const banner = ssoLocked && auditLocked
