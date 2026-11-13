@@ -22244,7 +22244,9 @@
           "kept": "Kept · {{count}}",
           "showMore": "Show {{count}} more",
           "waiting": "Inactive {{elapsed}} of {{after}} days",
-          "title": "Activity"
+          "title": "Activity",
+          "notListed_one": "1 more kept workspace is not listed.",
+          "notListed_other": "{{count}} more kept workspaces are not listed."
         },
         "runFailed": "Couldn't run cleanup.",
         "updateFailed": "Couldn't save the cleanup rules.",

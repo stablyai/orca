@@ -268,6 +268,18 @@ function KeptRows({
             <ChevronDown className="size-3" />
           </Button>
         </div>
+      ) : total > rows.length ? (
+        // The host saves a capped receipt, so a busy run lists fewer rows than it kept.
+        <p className="py-1 text-xs text-muted-foreground">
+          {t(
+            'components.settings.workspaceCleanup.activity.notListed',
+            '{{count}} more kept workspaces are not listed.',
+            {
+              count: total - rows.length,
+              defaultValue_one: '1 more kept workspace is not listed.'
+            }
+          )}
+        </p>
       ) : null}
     </>
   )

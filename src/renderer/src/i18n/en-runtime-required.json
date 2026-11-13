@@ -2113,6 +2113,10 @@
     },
     "settings": {
       "workspaceCleanup": {
+        "activity": {
+          "notListed_one": "1 more kept workspace is not listed.",
+          "notListed_other": "{{count}} more kept workspaces are not listed."
+        },
         "change": {
           "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
           "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
