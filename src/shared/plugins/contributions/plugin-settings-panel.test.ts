@@ -4,7 +4,7 @@ import { parsePluginManifest } from '../manifest/plugin-manifest'
 function manifest(
   panels: unknown[],
   capabilities: unknown[] = [{ kind: 'settings:own' }],
-  floor = '1.4.255'
+  floor = '1.4.258'
 ) {
   return {
     manifestVersion: 2,
@@ -28,10 +28,15 @@ const connection = {
 }
 
 describe('plugin integration settings panels', () => {
-  it('accepts a dedicated settings panel alongside a normal sidebar panel', () => {
+  it('requires explicit source development opt-in for unreleased settings panels', () => {
+    expect(parsePluginManifest(manifest([connection]))).toMatchObject({ ok: false })
+    expect(parsePluginManifest({ ...manifest([connection]), manifestVersion: 1 })).toMatchObject({
+      ok: false
+    })
     expect(
       parsePluginManifest(
-        manifest([{ id: 'tasks', title: 'Tasks', entry: 'tasks.html' }, connection])
+        manifest([{ id: 'tasks', title: 'Tasks', entry: 'tasks.html' }, connection]),
+        { allowUnreleased: true }
       )
     ).toMatchObject({
       ok: true,
@@ -43,14 +48,14 @@ describe('plugin integration settings panels', () => {
     })
   })
 
-  it('refuses unsupported hosts, HTML, multiple settings pages and missing own-settings access', () => {
+  it('retains released engine floors, components-only UI, uniqueness and own-settings access', () => {
     for (const input of [
-      manifest([connection], [{ kind: 'settings:own' }], '1.4.254'),
+      manifest([connection], [{ kind: 'settings:own' }], '1.4.245'),
       manifest([{ ...connection, ui: 'html', entry: 'connection.html' }]),
       manifest([connection, { ...connection, id: 'other' }]),
       manifest([connection], [])
     ]) {
-      expect(parsePluginManifest(input).ok).toBe(false)
+      expect(parsePluginManifest(input, { allowUnreleased: true }).ok).toBe(false)
     }
   })
 })

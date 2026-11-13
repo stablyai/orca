@@ -222,8 +222,8 @@ export async function unloadPluginDevFolder(input: {
   target: PluginDevFolderTarget
 }): Promise<{ path: string; pluginKey: string | null }> {
   const { service } = input
-  const stored = service.options.getDevPluginPaths()
   const path = await findLoadedDevFolder(service, input.target)
+  const stored = service.options.getDevPluginPaths()
   if (!path) {
     throw new PluginCliError(
       PLUGIN_NOT_FOUND_CODE,

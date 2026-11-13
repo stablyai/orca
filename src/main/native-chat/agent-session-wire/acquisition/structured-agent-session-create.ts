@@ -40,6 +40,7 @@ import { resolveAgentSessionReplayOutcome } from '../operations/structured-agent
 import { openingMessageOptions } from '../options/structured-agent-session-execution-options'
 
 export type StructuredAgentSessionCreateOptions = {
+  beforeEffect?: () => void
   firstMessage?: StructuredAgentSessionFirstMessage
   hostLaunchDirectory?: string
   catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
@@ -165,19 +166,18 @@ async function foundConversation(
     ? { ok: true as const, items: null }
     : await prepareCreateTranscript(context, params)
   if (!prepared.ok) {
-    const { refusal } = prepared
     return {
       ok: false,
-      refusal: isAgentSessionCreateAdmissionRefusal(refusal)
-        ? { ...refusal, createAttemptRefusedBeforeCommit: true }
-        : refusal
+      refusal: isAgentSessionCreateAdmissionRefusal(prepared.refusal)
+        ? { ...prepared.refusal, createAttemptRefusedBeforeCommit: true }
+        : prepared.refusal
     }
   }
   if (!replayed) {
     await prepareForkFounding(params, request, prepared.items)
   }
   const existing = context.sessions.get(sessionId)
-  const opened = existing
+  const { session } = existing
     ? { session: existing }
     : await openStructuredAgentSessionConversationJournal(
         deps,
@@ -190,7 +190,6 @@ async function foundConversation(
         })
         throw journalOpenRefusalError(error)
       })
-  const { session } = opened
   const fence = candidate.record.lease.runtimeFence
   let committed = replayed
   try {
@@ -203,6 +202,7 @@ async function foundConversation(
         { uncommittedCreate: true }
       )
       await params.fork?.revalidate()
+      options.beforeEffect?.()
       const first = options.firstMessage
       if (first) {
         const sent = await performSend(

@@ -52,6 +52,7 @@ export type StructuredAgentSessionAttachContext = {
 }
 
 export type StructuredAgentSessionAttachOptions = {
+  beforeEffect?: () => void
   hostLaunchDirectory?: string
   /** The saved list a new chat's options are admitted against, for the folder its picker read. */
   catalogModels?: AttachFlowInput['models']

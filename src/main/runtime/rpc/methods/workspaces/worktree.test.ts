@@ -24,6 +24,41 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
   run()
 
 describe('worktree RPC methods', () => {
+  it('refuses creation when startup-agent resolution outlives the caller approval', async () => {
+    let approved = true
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      showRepo: async () => repo,
+      resolveStartupDraftAgent: async () => {
+        approved = false
+        return 'claude'
+      },
+      createManagedWorktree: async () => ({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'review',
+        startupDraft: 'review this branch'
+      }),
+      {
+        beforeInvoke: () => {
+          if (!approved) {
+            throw new Error('plugin_approval_revoked')
+          }
+        }
+      }
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: 'plugin_approval_revoked' }
+    })
+  })
+
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-1', 'run-1')
     const runtime = {

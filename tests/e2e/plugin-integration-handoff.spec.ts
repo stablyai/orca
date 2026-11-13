@@ -63,7 +63,12 @@ test('a plugin integration creates a stable code target and hands it to an expli
   const createdId = await page.getByText(/^Target ID: /).innerText()
   expect(createdId).not.toBe(originalId)
   expect(createdId).toMatch(/^Target ID: identity:/)
+  const createdWorkspace = page
+    .locator('[data-worktree-sidebar] [role="option"][data-worktree-id]')
+    .filter({ hasText: 'acme-plugin-handoff' })
+  await expect(createdWorkspace).not.toHaveAttribute('aria-current', 'page')
   await page.getByRole('button', { name: 'Open code workspace', exact: true }).click()
+  await expect(createdWorkspace).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText(createdId, { exact: true })).toBeVisible()
   await page.getByRole('combobox', { name: 'Installed Agent', exact: true }).click()
   await page.getByRole('option', { name: 'Codex', exact: true }).click()

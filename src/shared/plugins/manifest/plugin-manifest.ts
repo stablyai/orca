@@ -14,7 +14,7 @@ import { pluginIdSchema, pluginRelativePathSchema } from './plugin-manifest-fiel
 import { pluginManifestDetailFields } from '../catalog/plugin-detail-fields'
 import { PLUGIN_ICON_RULE_TEXT, pluginManifestImageFields } from '../images/plugin-image-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
-import { validatePluginEngineFloor } from './plugin-engine-floor'
+import { validatePluginEngineFloor, validatePluginUnreleasedFields } from './plugin-engine-floor'
 import {
   validateOmittedPublisherFloor,
   validateSourceModuleEntryFloor,
@@ -198,17 +198,22 @@ export const pluginManifestV2Object = z
   })
   .strict()
 
-function buildPluginManifestSchema(enforceEngineFloor: boolean) {
+function buildPluginManifestSchema(enforceEngineFloor: boolean, allowUnreleased = false) {
   return z.preprocess(
     upgradePluginManifestV1Names,
     z.discriminatedUnion('manifestVersion', [
-      pluginManifestV1Object.superRefine(validatePluginManifestContributions),
+      pluginManifestV1Object.superRefine((manifest, ctx) => {
+        validatePluginManifestContributions(manifest, ctx)
+        if (enforceEngineFloor && !allowUnreleased) {
+          validatePluginUnreleasedFields(pluginManifestV1Object, manifest, ctx)
+        }
+      }),
       pluginManifestV2Object.superRefine((manifest, ctx) => {
         validatePluginManifestContributions(manifest, ctx)
         validatePluginExecutionProfile(manifest, ctx)
         validatePluginManifestV2Rules(manifest, ctx)
         if (enforceEngineFloor) {
-          validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
+          validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx, allowUnreleased)
           validateOmittedPublisherFloor(manifest, ctx)
           validateSourceModuleEntryFloor(manifest, ctx)
         }
@@ -219,6 +224,7 @@ function buildPluginManifestSchema(enforceEngineFloor: boolean) {
 
 /** Authoring schema: also refuses an engines.orca below the newest field it uses. */
 export const pluginManifestSchema = buildPluginManifestSchema(true)
+const devPluginManifestSchema = buildPluginManifestSchema(true, true)
 // Why no floor at runtime: the floor only lets older hosts say "requires Orca X"; a host that
 // parses every field and meets engines.orca runs the plugin fine, so refusing it strands installs.
 const hostPluginManifestSchema = buildPluginManifestSchema(false)
@@ -268,9 +274,17 @@ function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginMan
   return { ok: false, error: formatPluginSchemaIssues(parsed.error.issues, raw) }
 }
 
-/** Strict authoring check (`validate:plugin`, catalog CI, dev folders). */
-export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
-  const parsed = parseWith(pluginManifestSchema, raw)
+export type PluginManifestParseOptions = { allowUnreleased?: boolean }
+
+/** Strict authoring check; only source development may opt into unreleased fields. */
+export function parsePluginManifest(
+  raw: unknown,
+  options: PluginManifestParseOptions = {}
+): PluginManifestParseResult {
+  const parsed = parseWith(
+    options.allowUnreleased ? devPluginManifestSchema : pluginManifestSchema,
+    raw
+  )
   // Why only here: hosts strip these characters so installed plugins keep loading.
   const unsafe = parsed.ok ? unsafePluginDisplayTextPaths(raw) : []
   return unsafe.length > 0

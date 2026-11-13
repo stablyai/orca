@@ -6,7 +6,10 @@ import { runProcess } from '@orca/process-host'
 import { z } from 'zod'
 import type { PluginDeclarativeNode } from '../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { parsePluginDeclarativeTree } from '../../../shared/plugins/declarative/plugin-declarative-tree'
-import { parsePluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
+import {
+  parsePluginManifest,
+  type PluginManifestParseOptions
+} from '../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_PANEL_CHECK_SCRIPT } from './plugin-panel-check-script'
 import { selectPluginTestNode } from './plugin-test-node'
 import { pluginTestingFiles } from './plugin-test-runner'
@@ -102,7 +105,7 @@ export function pluginCheckFixturePath(dir: string, entry: string): string | nul
   )
 }
 
-export type CheckPluginPanelsOptions = {
+export type CheckPluginPanelsOptions = PluginManifestParseOptions & {
   appRoot?: string
   /** Only this panel id. */
   panel?: string
@@ -122,17 +125,21 @@ type CheckTarget = {
 /** The plugin's components panels (and worker) as the check child takes them. */
 async function checkTargets(
   dir: string,
-  panelId?: string
+  options: CheckPluginPanelsOptions
 ): Promise<{ panels: CheckTarget[]; main: { path: string; url: string } | null }> {
   const parsed = parsePluginManifest(
-    JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
+    JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8')),
+    options
   )
   if (!parsed.ok) {
     return { panels: [], main: null }
   }
   const fileUrl = (path: string): string => pathToFileURL(join(dir, ...path.split('/'))).href
   const panels = parsed.manifest.contributes.panels
-    .filter((panel) => panel.ui === 'components' && (panelId === undefined || panel.id === panelId))
+    .filter(
+      (panel) =>
+        panel.ui === 'components' && (options.panel === undefined || panel.id === options.panel)
+    )
     .map((panel) => {
       const fixture = pluginCheckFixturePath(dir, panel.entry)
       return {
@@ -229,7 +236,7 @@ export async function checkPluginPanels(
   dir: string,
   options: CheckPluginPanelsOptions = {}
 ): Promise<PluginPanelCheck[]> {
-  const { panels, main } = await checkTargets(dir, options.panel)
+  const { panels, main } = await checkTargets(dir, options)
   if (panels.length === 0) {
     return []
   }

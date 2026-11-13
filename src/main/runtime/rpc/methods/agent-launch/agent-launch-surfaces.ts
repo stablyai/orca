@@ -1,4 +1,5 @@
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
+import { assertAgentPromptRequestActive } from '../../../terminal/input/agent-prompt-signals'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
@@ -56,7 +57,7 @@ export function agentLaunchSurfaceFactory(
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
   const { early: earlyTab, presentation } = view
-  const beforeEffect = context.agentLaunchPolicy?.beforeEffect
+  const beforeEffect = context.agentLaunchPolicy?.beforeEffect ?? context.beforeEffect
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -107,7 +108,8 @@ export function agentLaunchSurfaceFactory(
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
         ...(firstMessage ? { firstMessage } : {}),
-        ...(signal ? { signal } : {}),
+        beforeEffect,
+        signal: signal ?? context.signal,
         activate:
           !callerPresentsSurface &&
           (presentation === undefined || (presentation === 'focused' && movesHostWindow))
@@ -150,6 +152,12 @@ export function agentLaunchSurfaceFactory(
         // The user closed its tab while it waited: nothing is spawned, and that is the answer.
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
+      try {
+        beforeEffect?.()
+        assertAgentPromptRequestActive(context.signal)
+      } catch (error) {
+        terminalSpawn.rethrow(error)
+      }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
         wslUserAct: true,
@@ -186,7 +194,12 @@ export function agentLaunchSurfaceFactory(
                   : agentLaunchTabViewerRule(context, presentation)
             }
           : {}),
-        onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
+        signal: context.signal,
+        onPtySpawnDispatched: () => {
+          beforeEffect?.()
+          assertAgentPromptRequestActive(context.signal)
+          terminalSpawn.onPtySpawnDispatched()
+        }
       })
       const terminal = await created.catch(terminalSpawn.rethrow)
       if (earlyTab?.closedByUser()) {

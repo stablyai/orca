@@ -64,10 +64,12 @@ async function installContentErrors(root, manifest) {
   return errors
 }
 
-const targets = process.argv.slice(2)
+const args = process.argv.slice(2)
+const options = { allowUnreleased: args.includes('--allow-unreleased') }
+const targets = args.filter((arg) => arg !== '--allow-unreleased')
 if (targets.length === 0) {
   console.error(
-    'usage: validate-plugin-files <plugin dir | orca-plugin.json | orca-catalog.json>...'
+    'usage: validate-plugin-files [--allow-unreleased] <plugin dir | orca-plugin.json | orca-catalog.json>...'
   )
   process.exit(2)
 }
@@ -107,9 +109,9 @@ for (const target of targets) {
       const bytes = readFileSync(target)
       return { bytes, sha256: createHash('sha256').update(bytes).digest('hex') }
     }
-    const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
+    const errors = validatePluginFile(path.basename(file), raw, readCatalogFile, options)
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
-      const { manifest } = parsePluginManifest(raw)
+      const { manifest } = parsePluginManifest(raw, options)
       errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root), englishLookup()))
       errors.push(...(await installContentErrors(root, manifest)))
     }
@@ -117,9 +119,9 @@ for (const target of targets) {
       console.error(`${file}: ${error}`)
     }
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
-      const { manifest } = parsePluginManifest(raw)
+      const { manifest } = parsePluginManifest(raw, options)
       for (const warning of [
-        ...pluginManifestWarnings(raw),
+        ...pluginManifestWarnings(raw, options),
         ...strictPluginArtifactWarnings(manifest, readPluginText(root))
       ]) {
         console.warn(`${file}: warning: ${warning}`)
@@ -131,7 +133,7 @@ for (const target of targets) {
       manifestOk ||= path.basename(file) === 'orca-plugin.json'
     }
   }
-  if (manifestOk && statSync(target).isDirectory()) {
+  if (manifestOk && statSync(target).isDirectory() && !options.allowUnreleased) {
     const { entry, sourcePath, note, ownerWarning } = await pluginCatalogReleaseForHead(target)
     if (sourcePath) {
       console.log(

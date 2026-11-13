@@ -108,6 +108,8 @@ export const WORKTREE_METHODS = [
       context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
         const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
+        context.beforeEffect?.()
+        context.signal?.throwIfAborted()
         const automationProvenance =
           resolveAutomationWorkspaceProvenance({
             authority: runtime,
@@ -122,8 +124,6 @@ export const WORKTREE_METHODS = [
           })
         // Reserve provenance before create for recovery, but release failed reservations so retry is safe.
         try {
-          context.beforeEffect?.()
-          context.signal?.throwIfAborted()
           const result = await createWorktreeWithStartupAgent(
             runtime,
             buildManagedWorktreeCreateArgs(
@@ -137,7 +137,8 @@ export const WORKTREE_METHODS = [
                 creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
               },
               context
-            )
+            ),
+            { beforeEffect: context.beforeEffect, signal: context.signal }
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
           // Create notification already bumped generation; stamp the catalog containing the new worktree.

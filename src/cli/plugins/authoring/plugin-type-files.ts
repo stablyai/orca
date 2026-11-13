@@ -108,7 +108,7 @@ export async function pluginFolderWantsTypes(pluginDir: string): Promise<boolean
   } catch {
     return false
   }
-  const manifest = parsePluginManifest(parsed)
+  const manifest = parsePluginManifest(parsed, { allowUnreleased: true })
   if (!manifest.ok) {
     return false
   }

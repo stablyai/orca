@@ -13,13 +13,14 @@ export type PluginDevWatchCheckResult = {
 }
 
 export async function checkPluginDevFolder(dir: string): Promise<PluginDevWatchCheckResult> {
-  const report = await validatePluginTarget(dir)
+  const options = { allowUnreleased: true }
+  const report = await validatePluginTarget(dir, options)
   if (!report.valid) {
     return { ok: false, invalid: report.errors, panels: [], editors: [] }
   }
   const [rendered, editors] = await Promise.all([
-    checkPluginPanels(report.path),
-    checkPluginEditors(report.path)
+    checkPluginPanels(report.path, options),
+    checkPluginEditors(report.path, undefined, options)
   ])
   // Why no tree: a watch prints one line per save; the summary says what drew.
   const panels = rendered.map(({ tree: _tree, ...panel }) => panel)

@@ -30,26 +30,29 @@ afterEach(async () => {
   handlers.clear()
 })
 
-async function fixture(development: boolean) {
+async function fixture(development: boolean, pluginIds = ['demo']) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-dev-unload-')))
   roots.push(root)
-  const sourcePath = join(root, 'source')
+  const sourcePaths = pluginIds.map((id) => join(root, id))
+  const sourcePath = sourcePaths[0]
   const userDataPath = join(root, 'profile')
-  await mkdir(sourcePath)
-  await writeFile(
-    join(sourcePath, 'orca-plugin.json'),
-    JSON.stringify({
-      manifestVersion: 2,
-      id: 'demo',
-      name: 'Demo',
-      version: '1.0.0',
-      engines: { orca: '>=1.4.246' },
-      execution: 'data'
-    })
-  )
+  for (const [index, id] of pluginIds.entries()) {
+    await mkdir(sourcePaths[index])
+    await writeFile(
+      join(sourcePaths[index], 'orca-plugin.json'),
+      JSON.stringify({
+        manifestVersion: 2,
+        id,
+        name: id,
+        version: '1.0.0',
+        engines: { orca: '>=1.4.246' },
+        execution: 'data'
+      })
+    )
+  }
   await writeFile(join(sourcePath, 'source.txt'), 'source-kept')
   let settings = {
-    devPluginPaths: development ? [sourcePath] : [],
+    devPluginPaths: development ? sourcePaths : [],
     pluginSystemEnabled: true,
     pluginConsents: {},
     disabledPlugins: []
@@ -85,12 +88,12 @@ async function fixture(development: boolean) {
   const data = join(getPluginsDataDir(userDataPath), 'local.demo', 'storage.json')
   await mkdir(join(data, '..'), { recursive: true })
   await writeFile(data, '{"remember":"keep"}')
-  const unload = () => {
+  const unload = (pluginKey = 'local.demo') => {
     const handler = handlers.get('plugins:unloadDevFolder')
     if (!handler) {
       throw new Error('Missing development unload IPC')
     }
-    return handler(undefined, { pluginKey: 'local.demo' })
+    return handler(undefined, { pluginKey })
   }
   return { sourcePath, userDataPath, service, store, data, unload }
 }
@@ -112,4 +115,13 @@ it('refuses a stale development removal targeting an installed plugin', async ()
   ).toBeDefined()
   expect(await readFile(join(sourcePath, 'source.txt'), 'utf8')).toBe('source-kept')
   expect(await readFile(data, 'utf8')).toBe('{"remember":"keep"}')
+})
+
+it('keeps both development folders unloaded when removal requests overlap', async () => {
+  const { store, unload } = await fixture(true, ['demo', 'another'])
+  await expect(Promise.all([unload('local.demo'), unload('local.another')])).resolves.toEqual([
+    [],
+    []
+  ])
+  expect(store.getSettings().devPluginPaths).toEqual([])
 })

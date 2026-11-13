@@ -5,7 +5,11 @@ import {
   pluginCatalogSchema,
   pluginCatalogVersionError
 } from '../catalog/plugin-catalog'
-import { PLUGIN_MANIFEST_FILENAME, parsePluginManifest } from '../manifest/plugin-manifest'
+import {
+  PLUGIN_MANIFEST_FILENAME,
+  parsePluginManifest,
+  type PluginManifestParseOptions
+} from '../manifest/plugin-manifest'
 import { pluginCatalogReleaseSchema } from '../catalog/plugin-catalog-release'
 import {
   OFFICIAL_PLUGIN_PUBLISHER,
@@ -37,10 +41,11 @@ export type PluginCatalogFileReader = (path: string) => { bytes: Uint8Array; sha
 export function validatePluginFile(
   fileName: string,
   raw: unknown,
-  readCatalogFile?: PluginCatalogFileReader
+  readCatalogFile?: PluginCatalogFileReader,
+  options: PluginManifestParseOptions = {}
 ): string[] {
   if (fileName === PLUGIN_MANIFEST_FILENAME) {
-    const parsed = parsePluginManifest(raw)
+    const parsed = parsePluginManifest(raw, options)
     if (!parsed.ok) {
       return [parsed.error]
     }
@@ -59,8 +64,11 @@ export function validatePluginFile(
 }
 
 /** Advice that never blocks a listing: deprecated fields that still work. */
-export function pluginManifestWarnings(raw: unknown): string[] {
-  const parsed = parsePluginManifest(raw)
+export function pluginManifestWarnings(
+  raw: unknown,
+  options: PluginManifestParseOptions = {}
+): string[] {
+  const parsed = parsePluginManifest(raw, options)
   if (!parsed.ok || parsed.manifest.manifestVersion !== 2 || !parsed.manifest.publisher) {
     return []
   }
