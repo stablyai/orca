@@ -40,6 +40,8 @@ export type TeamMemberListProps = {
   rowStates: Readonly<Record<string, TeamRowState>>
   /** The viewer may leave (another owner exists, or they are not an owner). */
   canLeave: boolean
+  /** Shown under the disabled "Leave team…" item when `canLeave` is false: what to do instead. */
+  leaveBlockedReason?: string | null
   now: number
   onChangeRole: (member: OrcaOrgMember, role: OrcaOrgRole) => void
   onMakeOwner: (member: OrcaOrgMember) => void
@@ -199,6 +201,18 @@ function RowMenu({
         {t('auto.components.billing.team.leave', 'Leave team…')}
       </DropdownMenuItem>
     )
+    if (!props.canLeave && props.leaveBlockedReason) {
+      // A disabled item alone doesn't say why; the last owner needs the way out spelled out.
+      items.push(
+        <p
+          key="leave-why"
+          data-team-leave-blocked=""
+          className="px-2 pb-1.5 text-xs text-muted-foreground text-pretty"
+        >
+          {props.leaveBlockedReason}
+        </p>
+      )
+    }
   }
   if (items.length === 0) {
     // Keeps the role column aligned with rows that have a menu.
@@ -219,7 +233,7 @@ function RowMenu({
           <MoreHorizontal />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className={row.self && !props.canLeave ? 'w-64' : 'w-48'}>
         {items}
       </DropdownMenuContent>
     </DropdownMenu>

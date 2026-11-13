@@ -15,9 +15,6 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   | 'agentNotice'
   | 'agentPickerDraft'
   | 'agentSetupDisabled'
-  | 'selectedRepoIsGit'
-  | 'selectedProjectId'
-  | 'projectOptions'
   | 'onQuickAgentChange'
   | 'agentRows'
   | 'onOpenAgentSettings'
@@ -40,9 +37,6 @@ export function NewWorkspaceComposerAgentSection({
   agentNotice,
   agentPickerDraft,
   agentSetupDisabled,
-  selectedRepoIsGit,
-  selectedProjectId,
-  projectOptions,
   onQuickAgentChange,
   onOpenAgentSettings,
   createDisabled,
@@ -90,11 +84,9 @@ export function NewWorkspaceComposerAgentSection({
           value={agentPickerDraft}
           cli={agentSurfaceRows?.selection.cli === true}
           setupDisabled={agentSetupDisabled}
-          matchTriggerWidth={
-            selectedRepoIsGit &&
-            projectOptions?.find((option) => option.id === selectedProjectId)?.kind !==
-              'project-group'
-          }
+          // The field is always full width here, so its menu is too: a 256 px menu under it reads as
+          // broken (AGENT-PICKER-WIDTH: "~" folder or GitHub-only repo with Orca Cloud fell back to it).
+          matchTriggerWidth
           onOpenAgentSettings={onOpenAgentSettings}
           onTriggerEnter={createDisabled ? undefined : onCreate}
           emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank terminal')}
