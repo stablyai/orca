@@ -14,20 +14,42 @@ import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
+import { useAppStore } from '../../store'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
-export function CodexSwitcherMenu({
-  codex,
-  compact,
-  iconOnly,
-  asSubmenu = false,
-  triggerContent
-}: {
+type CodexSwitcherMenuProps = {
   codex: ProviderRateLimits
   compact: boolean
   iconOnly: boolean
   asSubmenu?: boolean
+  parentMenuOpen?: boolean
   triggerContent?: React.ReactNode
-}): React.JSX.Element {
+}
+
+export function CodexSwitcherMenu(props: CodexSwitcherMenuProps): React.JSX.Element {
+  const settings = useAppStore((state) => state.settings)
+  const owner = useActiveAccountOwner(defaultScopeHost(settings))
+  return (
+    <CodexSwitcherForOwner
+      {...props}
+      key={`${getProviderAccountsOwnerKey(owner.target)}:${owner.wslHostDistro ?? ''}`}
+      owner={owner}
+    />
+  )
+}
+
+function CodexSwitcherForOwner({
+  codex,
+  compact,
+  iconOnly,
+  asSubmenu = false,
+  triggerContent,
+  parentMenuOpen,
+  owner
+}: CodexSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element {
   const t = useTranslate()
   const {
     activeTarget,
@@ -55,7 +77,7 @@ export function CodexSwitcherMenu({
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
     switchGroups
-  } = useCodexSwitcherController(codex)
+  } = useCodexSwitcherController(codex, owner, parentMenuOpen)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const rows = (selectedGroup?.targets ?? []).map((target) => {

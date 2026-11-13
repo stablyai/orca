@@ -139,13 +139,13 @@
 1 src/renderer/src/components/skills/setup/linear-agent-skill-install-cta.tsx
 1 src/renderer/src/components/source-control/BaseRefPicker.tsx
 1 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
-1 src/renderer/src/components/status-bar/CodexSwitcherMenu.tsx
+2 src/renderer/src/components/status-bar/CodexSwitcherMenu.tsx
 1 src/renderer/src/components/status-bar/SshStatusSegment.tsx
 1 src/renderer/src/components/status-bar/StatusBarSurface.tsx
 2 src/renderer/src/components/status-bar/provider-account-sync-key.ts
 1 src/renderer/src/components/status-bar/usage-provider-settings-target.ts
 1 src/renderer/src/components/status-bar/use-claude-switcher-state.ts
-2 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
+1 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
 1 src/renderer/src/components/status-bar/use-status-bar-controller.ts
 1 src/renderer/src/components/status-bar/use-workspace-space-git-refresh-action.ts
 1 src/renderer/src/components/status-bar/use-workspace-space-manager-panel.ts

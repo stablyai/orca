@@ -251,6 +251,7 @@ export function StatusBarSurface({
                         return (
                           <CodexSwitcherMenu
                             codex={p}
+                            parentMenuOpen={usageMenuOpen}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu

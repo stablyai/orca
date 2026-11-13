@@ -7,8 +7,13 @@ import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
 } from '@/lib/agent-session/accounts/codex/codex-session-restart'
+import { getRuntimeSentenceLabel } from '@/lib/provider-accounts/account-runtime-label'
+import { refreshProviderAccountLists } from './use-provider-account-list'
 import { getCodexStatusActiveId } from './status-bar-codex-accounts'
-import type { CodexStatusRuntimeTarget } from './status-bar-runtime-targets'
+import {
+  getCodexStatusRuntimeLabel,
+  type CodexStatusRuntimeTarget
+} from './status-bar-runtime-targets'
 
 type CodexSignInActionDependencies = {
   accountState: CodexRateLimitAccountsState
@@ -19,7 +24,7 @@ type CodexSignInActionDependencies = {
   mountedRef: MutableRefObject<boolean>
   reauthenticatingAccountId: string | null
   recordFeatureInteraction: AppState['recordFeatureInteraction']
-  setAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
+  setAccounts: (accounts: CodexRateLimitAccountsState) => void
   setReauthenticatingAccountId: Dispatch<SetStateAction<string | null>>
 }
 
@@ -44,6 +49,12 @@ export async function signInCodexAccount(
     return
   }
   const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
+  // The result can land after the user moved to another host, so the toast names its runtime.
+  const runtimeLabel = getRuntimeSentenceLabel({
+    runtime: target.runtime,
+    // The same name the runtime's tab shows.
+    label: getCodexStatusRuntimeLabel(target)
+  })
   setReauthenticatingAccountId(accountId)
   try {
     const next = await window.api.codexAccounts.reauthenticate({
@@ -75,14 +86,22 @@ export async function signInCodexAccount(
       await fetchInactiveCodexAccountUsage()
     }
     toast.success(
-      translate('auto.components.status.bar.StatusBar.codexSignInSuccess', 'Signed in to Codex')
+      translate(
+        'auto.components.status.bar.StatusBar.codexSignInSuccessOnRuntime',
+        'Signed in to Codex on {{runtime}}',
+        { runtime: runtimeLabel }
+      )
     )
   } catch (error) {
     console.error('Failed to re-authenticate Codex account from status bar:', error)
+    // Why: a failed sign-in may still have changed the stored login.
+    refreshProviderAccountLists({ kind: 'local' }, 'codex', 'unknown')
+    await fetchSettings().catch(() => {})
     toast.error(
       translate(
-        'auto.components.status.bar.StatusBar.codexSignInError',
-        'Codex sign-in failed. Please try again.'
+        'auto.components.status.bar.StatusBar.codexSignInFailedOnRuntime',
+        'Codex sign-in failed on {{runtime}}.',
+        { runtime: runtimeLabel }
       )
     )
   } finally {
