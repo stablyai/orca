@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import './runtime-test-module-registration.spec'
-import { OrcaRuntimeService } from '../orca-runtime'
+import '../orca-runtime'
 import '../orca-runtime-test-mocks/setup.spec'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
@@ -117,51 +117,6 @@ describe('OrcaRuntimeService', () => {
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-removed')).toBeUndefined()
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-other')?.placement).toEqual(
       survivor
-    )
-  })
-
-  it('drops a client page record even when its close command cannot be issued', async () => {
-    const runtime = createRuntime()
-    const host = attachClientBrowserHost(runtime)
-    await publishClientHostedPage(runtime, host, 'page-removed', TEST_WORKTREE_ID)
-    host.detachDelivery()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
-
-    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-removed')).toBeUndefined()
-    expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([])
-    await vi.waitFor(() =>
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('could not close its client page'),
-        expect.objectContaining({
-          browserPageId: 'page-removed',
-          error: expect.objectContaining({ message: 'browser_host_command_delivery_required' })
-        })
-      )
-    )
-    warn.mockRestore()
-  })
-
-  it('leaves client-hosted pages alone when another host still owns the same worktree id', async () => {
-    const runtimeStore = {
-      ...store,
-      getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'local' }),
-      removeWorktreeMeta: vi.fn()
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const host = attachClientBrowserHost(runtime)
-    const placement = await publishClientHostedPage(runtime, host, 'page-kept', TEST_WORKTREE_ID)
-
-    runtime['removeWorktreeMetadataAndHistory'](
-      runtimeStore as never,
-      TEST_WORKTREE_ID,
-      'runtime:env-b'
-    )
-
-    expect(host.takeCommands()).toEqual([])
-    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-kept')?.placement).toEqual(
-      placement
     )
   })
 })

@@ -21,12 +21,13 @@ import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-i
 import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
 import { withCodexVisualsThreadConfig } from '../launch/codex-structured-visuals'
-import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/native-chat-visuals-delivery'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   restoredCodexSessionOptions,
   reportedCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
 import { CodexSkillReport } from '../catalog/codex-structured-skill-report'
+import { codexMessageInputOptions } from '../turns/codex-structured-message-options'
 import { codexAcquireCatalogAccess } from '../catalog/codex-structured-acquire-catalog'
 import {
   CODEX_DEFAULT_SERVICE_TIER,
@@ -183,6 +184,10 @@ export async function openCodexStructuredSession(
       ...(opened.effort ? { effort: opened.effort } : {}),
       ...(serviceTier ? { serviceTier } : {})
     },
+    appliedTurnInputOptions: codexMessageInputOptions(input.options ?? {}, {
+      serviceTier: CODEX_DEFAULT_SERVICE_TIER,
+      interactionMode: 'default'
+    }),
     appliedSettings: attempt.window.appliedSettings,
     ...(catalogAccess ? { catalogAccess } : {}),
     dispatchEchoes: start.dispatchEchoes,

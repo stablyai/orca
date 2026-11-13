@@ -27,7 +27,7 @@ vi.mock('electron', async () => {
     nativeImage: {}
   }
 })
-vi.mock('../../../window/foreground-activation-policy', () => ({
+vi.mock('../../../window/activation/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => mocks.background
 }))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))

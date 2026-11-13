@@ -9,7 +9,7 @@ import {
   registerRendererOwnedAgentStatusPane,
   resolveRendererOwnedAgentStatusTiming
 } from '../../agent-status/renderer-owned-agent-status-registry'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { rendererAgentStatusObservations } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installRendererOwnedPaneStatus(session: ConnectPanePtySession): void {

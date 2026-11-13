@@ -1,4 +1,5 @@
 import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
@@ -26,11 +27,23 @@ import {
   updateBatchAgentPaneKey
 } from './agent-status-primitives'
 import {
+  retirePaneLaunchNote,
+  retiresLaunch
+} from '../../store/slices/agent-status/agent-status-launch-config'
+import {
   agentStatusEntryEqual,
   isAgentStatusFresh,
   isMirroredCommandCodeTurnBump,
   writableWebSessionTabsRecord
 } from './state-equality-core'
+
+type MirroredAgentStatusPatch = Pick<
+  WebSessionTabsSyncState,
+  'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+> &
+  Partial<
+    Pick<WebSessionTabsSyncState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>
+  >
 
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
@@ -42,7 +55,7 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): MirroredAgentStatusPatch | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -123,8 +136,19 @@ export function buildMirroredAgentStatusPatch(
                 : entry.lastAssistantMessageIsToolOutput
           }
         : entry
+    // The host owns the launch fact whichever writer wins presentation.
     const accepted =
-      nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
+      nextEntry === entry
+        ? entry
+        : withHostOrcaSessionId(
+            {
+              ...withHostProgramStatus(nextEntry, entry.programStatus),
+              ...(entry.launchAttested !== undefined
+                ? { launchAttested: entry.launchAttested }
+                : {})
+            },
+            entry
+          )
     const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
@@ -175,8 +199,13 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = true
   }
 
+  let retirement: ReturnType<typeof retirePaneLaunchNote> = {}
   for (const [paneKey, entry] of nextByPaneKey) {
     const existing = nextAgentStatusByPaneKey[paneKey]
+    // The host's retirement of this pane's launch ends the client's copies of its note.
+    if (retiresLaunch(existing, entry)) {
+      retirement = { ...retirement, ...retirePaneLaunchNote({ ...state, ...retirement }, paneKey) }
+    }
     if (
       agentStatusEntryEqual(existing, entry) &&
       existing?.firstStateStartedAt === entry.firstStateStartedAt
@@ -226,7 +255,8 @@ export function buildMirroredAgentStatusPatch(
   return {
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
-    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
+    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch,
+    ...retirement
   }
 }
 
@@ -237,4 +267,17 @@ function withHostProgramStatus(
 ): AgentStatusEntry {
   const { programStatus: _clientFacet, ...rest } = entry
   return programStatus ? { ...rest, programStatus } : rest
+}
+
+/** Only the host names its agents: for the same conversation its stamp wins, including no stamp
+ *  (a settled miss clearing a pending null); the client never mints or keeps one across keys. */
+function withHostOrcaSessionId(next: AgentStatusEntry, host: AgentStatusEntry): AgentStatusEntry {
+  if (
+    !host.providerSession ||
+    !agentProviderSessionsEqual(host.agentType, host.providerSession, next.providerSession)
+  ) {
+    return next
+  }
+  const { orcaSessionId: _client, ...rest } = next
+  return host.orcaSessionId !== undefined ? { ...rest, orcaSessionId: host.orcaSessionId } : rest
 }

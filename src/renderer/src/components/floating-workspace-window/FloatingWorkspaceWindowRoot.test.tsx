@@ -4,8 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { FloatingWorkspaceWindowSnapshot } from '../../../../shared/floating-workspace-window'
 import { FloatingWorkspaceWindowRoot } from './FloatingWorkspaceWindowRoot'
 
-vi.mock('@/hooks/useAppMenuPaste', () => ({ useAppMenuPaste: () => undefined }))
-vi.mock('@/hooks/useAppMenuSelectionActions', () => ({
+vi.mock('@/hooks/clipboard/menu/useAppMenuPaste', () => ({ useAppMenuPaste: () => undefined }))
+vi.mock('@/hooks/app-commands/useAppMenuSelectionActions', () => ({
   useAppMenuSelectionActions: () => undefined
 }))
 

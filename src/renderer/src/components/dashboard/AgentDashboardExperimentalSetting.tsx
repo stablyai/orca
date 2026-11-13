@@ -107,7 +107,7 @@ export function AgentDashboardExperimentalSetting({
   return (
     <PopoutExperimentalSetting
       id="experimental-agent-dashboard"
-      keywords={getExperimentalSearchEntry(t).agentDashboard.keywords}
+      keywords={getExperimentalSearchEntry().agentDashboard.keywords}
       enabled={settings.experimentalAgentDashboardPopout === true}
       mode={settings.experimentalAgentDashboardMode ?? 'in-window'}
       canPopout={canOpenAgentDashboardPopout()}

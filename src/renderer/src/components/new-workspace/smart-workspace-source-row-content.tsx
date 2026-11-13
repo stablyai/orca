@@ -12,6 +12,7 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { branchRefLabel } from '../../../../shared/git/refs/branch-ref-label'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
 import type { RowEntry, SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
 
@@ -130,7 +131,11 @@ export function RowLabel({
     )
   }
   if (row.kind === 'branch') {
-    return <span className="min-w-0 truncate font-mono text-2xs">{row.refName}</span>
+    return (
+      <span className="min-w-0 truncate font-mono text-2xs">
+        {row.label ?? branchRefLabel(row.refName)}
+      </span>
+    )
   }
   if (row.kind === 'jira') {
     const siteLabel = jiraSite

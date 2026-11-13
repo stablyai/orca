@@ -1,68 +1,103 @@
 // @vitest-environment happy-dom
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { captureGitHubImageUpload } from './github-image-upload'
-const { rpc, revision } = vi.hoisted(() => ({ rpc: vi.fn(), revision: vi.fn() }))
-vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
-  callRuntimeRpc: rpc
-}))
+import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import { GITHUB_IMAGE_ATTACHMENT_CAPABILITY } from '../../../../shared/github/attachments/image-attachment'
+
+const { call } = vi.hoisted(() => ({ call: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: call }))
 vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
-  getRuntimeEnvironmentRevision: revision
+  getRuntimeEnvironmentRevision: () => 1
 }))
-vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => false }))
-beforeEach(() => {
-  vi.resetAllMocks()
-  revision.mockReturnValue(4)
+vi.mock('@/app-shell/platform/web-client-location', () => ({ isWebClientLocation: () => false }))
+vi.mock('@/web/web-runtime-environment', () => ({ readStoredWebRuntimeEnvironment: () => null }))
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+  call.mockReset()
 })
-it('keeps every staged-byte request on the destination captured before the first await', async () => {
-  const held = Promise.withResolvers<{ capabilities: string[] }>()
-  rpc.mockImplementation(async (_runtime, method) => {
-    if (method === 'status.get') {
-      return held.promise
-    }
-    if (method === 'clipboard.startImageUpload') {
-      return { uploadId: 'image-1' }
-    }
-    if (method === 'github.uploadAttachment') {
-      return { url: 'https://github.com/user-attachments/assets/a' }
-    }
-    return {}
-  })
-  const address = {
-    runtime: { kind: 'environment' as const, environmentId: 'owner' },
-    target: { kind: 'repo' as const, repo: 'repo-1', source: 'origin' as const }
-  }
-  const upload = captureGitHubImageUpload(address)
-  const result = upload(new File([new Uint8Array([0, 1, 255])], 'a.png', { type: 'image/png' }))
-  address.runtime.environmentId = 'other'
-  address.target.repo = 'repo-2'
-  revision.mockReturnValue(9)
-  held.resolve({ capabilities: ['github.image-attachments.v1'] })
-  await expect(result).resolves.toBe('https://github.com/user-attachments/assets/a')
-  for (const [runtime, , , options] of rpc.mock.calls) {
-    expect(runtime).toEqual({ kind: 'environment', environmentId: 'owner' })
-    expect(options.expectedEnvironmentPairingRevision).toBe(4)
-  }
-  expect(
-    rpc.mock.calls.find((call) => call[1] === 'clipboard.appendImageUploadChunk')?.[2]
-  ).toEqual({ uploadId: 'image-1', offset: 0, contentBase64: 'AAH/' })
-  expect(rpc.mock.calls.find((call) => call[1] === 'github.uploadAttachment')?.[2]).toEqual({
-    uploadId: 'image-1',
-    target: { kind: 'repo', repo: 'repo-1', source: 'origin' },
-    fileName: 'a.png',
-    contentType: 'image/png'
-  })
+const address = {
+  runtime: { kind: 'local' as const },
+  target: { kind: 'repo' as const, repo: 'repo', source: 'origin' as const }
+}
+const file = () => new File(['image'], 'image.png', { type: 'image/png' })
+const ok = (result: unknown): RuntimeRpcResponse<unknown> => ({
+  id: 'request',
+  ok: true,
+  result,
+  _meta: { runtimeId: 'local' }
 })
-it('refuses image intake on an older runtime before sending any bytes', async () => {
-  rpc.mockResolvedValue({ capabilities: [] })
+function bridge(subscribe: unknown) {
+  vi.stubGlobal('window', { api: { runtime: { subscribe } } })
+}
+
+it('releases a late staging ID after retirement without admitting a chunk or POST', async () => {
+  const allocation = Promise.withResolvers<{ uploadId: string }>()
+  call.mockImplementation((_runtime, method) =>
+    method === 'clipboard.startImageUpload' ? allocation.promise : Promise.resolve()
+  )
+  const subscribe = vi.fn((_args, reply) => {
+    reply(ok({ capabilities: [GITHUB_IMAGE_ATTACHMENT_CAPABILITY] }))
+    return Promise.resolve({ unsubscribe: vi.fn() })
+  })
+  bridge(subscribe)
+  const controller = new AbortController()
+  const pending = captureGitHubImageUpload(address)(file(), controller.signal)
+  const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  await vi.waitFor(() =>
+    expect(call).toHaveBeenCalledWith(
+      address.runtime,
+      'clipboard.startImageUpload',
+      expect.anything(),
+      expect.anything()
+    )
+  )
+  controller.abort()
+  allocation.resolve({ uploadId: 'late' })
+  await rejected
+  expect(call.mock.calls.map((args) => args[1])).toEqual([
+    'clipboard.startImageUpload',
+    'clipboard.abortImageUpload'
+  ])
+  expect(call.mock.calls[1][2]).toEqual({ uploadId: 'late' })
+  expect(call.mock.calls[1][3].signal).toBeUndefined()
+  expect(subscribe.mock.calls.map(([args]) => args.method)).toEqual(['status.get'])
+})
+
+it('unsubscribes an active local upload and allows a live successor to finish', async () => {
+  call.mockImplementation((_runtime, method) =>
+    Promise.resolve(method === 'clipboard.startImageUpload' ? { uploadId: 'staged' } : undefined)
+  )
+  let active: AbortController | undefined
+  let cancelFirst = true
+  const subscribe = vi.fn((args, reply) => {
+    const host = new AbortController()
+    const unsubscribe = () => host.abort()
+    if (args.method === 'status.get') {
+      reply(ok({ capabilities: [GITHUB_IMAGE_ATTACHMENT_CAPABILITY] }))
+    } else if (args.method === 'github.uploadAttachment' && cancelFirst) {
+      active = host
+    } else {
+      reply(
+        ok(
+          args.method === 'github.uploadAttachment'
+            ? { url: 'https://github.com/user-attachments/assets/success' }
+            : undefined
+        )
+      )
+    }
+    return Promise.resolve({ unsubscribe })
+  })
+  bridge(subscribe)
+  const controller = new AbortController()
+  const pending = captureGitHubImageUpload(address)(file(), controller.signal)
+  const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  await vi.waitFor(() => expect(active).toBeDefined())
+  controller.abort()
+  await rejected
+  expect(active?.signal.aborted).toBe(true)
+  cancelFirst = false
   await expect(
-    captureGitHubImageUpload({
-      runtime: { kind: 'local' },
-      target: {
-        kind: 'repo',
-        repo: 'repo-1',
-        source: 'issue'
-      }
-    })(new File(['a'], 'a.png', { type: 'image/png' }))
-  ).rejects.toThrow('cannot upload images yet')
-  expect(rpc.mock.calls.map((call) => call[1])).toEqual(['status.get'])
+    captureGitHubImageUpload(address)(file(), new AbortController().signal)
+  ).resolves.toBe('https://github.com/user-attachments/assets/success')
 })

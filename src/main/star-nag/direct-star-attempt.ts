@@ -1,4 +1,4 @@
-import { starOrca } from '../github/client'
+import { starOrca } from '../github/client/fetch/orca-star'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { type StarNagPromptSession, trackStarNagSessionOutcome } from './prompt-session-telemetry'

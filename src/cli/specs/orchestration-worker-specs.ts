@@ -1,4 +1,5 @@
-import { GLOBAL_FLAGS, type CommandSpec } from '../args'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import type { CommandSpec } from '../discovery/command-spec'
 
 export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -43,7 +44,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
       '--model supports Claude, Codex, Cursor, Antigravity, Grok, and Muse opaque provider model ids; --effort requires --model. OMP also takes its model roles and selectors (such as @worker or provider/model:level), with --effort as its thinking level. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Other agents, including zcode, launch with the model from their own config.',
       'Finished workers close on their own unless started with --keep-open; a worker started in a new worktree (new-child or new-top-level) is kept open, so release it when no one will use its chat.',
-      'New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
+      'New worktrees use agent-first creation; without --setup, setup runs unless the project turns it off. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
       'New worktrees without --name get the name Orca gives an unnamed workspace; the receipt names it. Servers older than this change still require --name.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
       "How the worker runs follows the user's own setting for new agent tabs; there is no flag for it and no caller needs to ask. A dispatch the setting cannot apply to still starts, so the placement, agent, and launch options passed here are always the ones honoured.",
@@ -95,6 +96,35 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    // Gated by a user setting; the escalation names it only when on, so group help never does.
+    path: ['orchestration', 'approve'],
+    hidden: true,
+    summary:
+      "Allow a worker's permission prompt with a reason, when the user lets coordinators approve",
+    usage:
+      'orca orchestration approve --dispatch <dispatch_id> --prompt <approval_id> --reason <text> [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'prompt', 'reason', 'from', 'retry-request'],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      "Refused unless the user turned on Let coordinators approve worker permission prompts in Orca's settings on the machine running the worker; the escalation shows this command only then.",
+      "The user still sees Allow and Deny; the first answer wins. A prompt the worker's agent lets only a person approve is refused and stays with the user.",
+      "Orca picks the prompt's own allow-once option, never a standing rule."
+    ]
+  },
+  {
+    path: ['orchestration', 'deny'],
+    summary: "Deny a worker's permission prompt with a reason; the worker carries on",
+    usage:
+      'orca orchestration deny --dispatch <dispatch_id> --prompt <approval_id> --reason <text> [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'prompt', 'reason', 'from', 'retry-request'],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'The approval id is in the escalation that reported the prompt. Agents can allow one only with orchestration approve, when the user allows it.',
+      "Orca picks the prompt's own refuse-once option, never a standing rule or a stop, and refuses when there is none.",
+      "When the agent's prompt takes no message, the reason reaches the worker as its next mail."
+    ]
+  },
+  {
     path: ['orchestration', 'worker-abandon'],
     summary: 'Fence a worker without claiming its process stopped',
     usage:
@@ -112,7 +142,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
-      'An inspectable output archive is preserved before the terminal closes, so worker-read still returns output afterwards.',
+      "worker-read afterwards reads the worker's own transcript or chat history while it still exists; a worker with none, or whose original is gone, reads as no longer available.",
       'Never closes setup terminals, configured tabs, reused or pre-existing terminals, terminals the user kept open, or unproven identities.',
       'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.',
       'On a runtime that advertises orchestration.worker-auto-release.v1, an accepted worker_done already schedules this release about 2 minutes later (autoReleaseAt in worker-show and worker-list); call it only to release sooner or to clear a worker-keep-open. Chat workers follow autoReleaseAt too. autoReleaseAt is absent while its agent works again, and set afresh when it next goes idle.'
@@ -145,14 +175,23 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-list'],
     summary: 'List supervised worker terminal resource accounting',
     usage:
-      'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--include-remote] [--cursor <cursor>] [--limit <1-100>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal-state', 'include-remote', 'cursor', 'limit'],
+      'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--include-remote] [--on <server>] [--cursor <cursor>] [--limit <1-100>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'run',
+      'terminal-state',
+      'include-remote',
+      'on',
+      'cursor',
+      'limit'
+    ],
     notes: [
       'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
       'A reclaimable worker with resource.autoReleaseAt is released automatically at that time unless it is reused with worker-start --terminal or kept open (worker-keep-open, worker-start --keep-open, or the user).',
       'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.',
       'Returns at most 100 local rows, newest first, by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque nextCursor value unchanged.',
-      'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).'
+      'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).',
+      "--on <server> lists that paired server's own workers for your Run there (or all of them without a Run), paged with its own cursor."
     ]
   }
 ]

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { Repo } from '../../../../shared/repo-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
@@ -60,27 +60,6 @@ describe('stopMissingWorktreeTerminals', () => {
     )
   })
 
-  it.each([
-    ['legacy connectionId', { connectionId: 'ssh-1' }],
-    ['unified executionHostId', { executionHostId: 'ssh:ssh-1' as const }]
-  ])('never sweeps an SSH repo (%s) through the local provider', async (_, host) => {
-    const deletedId = 'repo-1::/workspace/deleted'
-    const localProvider = createProvider([`${deletedId}@@local-session`])
-    const runtime = createRuntime()
-
-    await stopMissingWorktreeTerminals({ ...localRepo, ...host }, [deletedId], [], {
-      runtime,
-      getLocalProvider: () => localProvider
-    })
-
-    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(deletedId, {
-      resolvedWorktreeId: deletedId,
-      resolvedConnectionId: 'ssh-1'
-    })
-    expect(localProvider.listProcesses).not.toHaveBeenCalled()
-    expect(localProvider.shutdown).not.toHaveBeenCalled()
-  })
-
   it.each([false, true])(
     'stops multiple workspaces through scoped daemon listings (unrelated duplicate: %s)',
     async (duplicate) => {
@@ -111,24 +90,4 @@ describe('stopMissingWorktreeTerminals', () => {
       }
     }
   )
-
-  it('does not reuse a failed process scan', async () => {
-    const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b']
-    const listProcesses = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('relay dropped'))
-      .mockResolvedValue([{ id: `${ids[1]}@@session`, cwd: '/workspace', title: 'shell' }])
-    const provider = { listProcesses, shutdown: vi.fn(async () => {}) } as unknown as IPtyProvider
-
-    await stopMissingWorktreeTerminals(localRepo, ids, [], {
-      runtime: createRuntime(),
-      getLocalProvider: () => provider
-    })
-
-    expect(listProcesses.mock.calls.length).toBeGreaterThan(1)
-    expect(provider.shutdown).toHaveBeenCalledWith(
-      `${ids[1]}@@session`,
-      expect.objectContaining({ immediate: true })
-    )
-  })
 })

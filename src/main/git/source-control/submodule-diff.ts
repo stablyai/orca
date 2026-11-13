@@ -1,5 +1,5 @@
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { buildDiffResult } from './diff-result'
 import { type BlobConversion, blobConversion, readGitBlobAtOidPath } from './git-blob-read'
 import { resolveSubmoduleWorktreePath } from './submodule-paths'

@@ -238,8 +238,7 @@ export function runLocalSourceControlPlan(
           stderr,
           label: plan.label,
           outputFormat: plan.outputFormat,
-          operation,
-          includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
+          operation
         })
       )
     }

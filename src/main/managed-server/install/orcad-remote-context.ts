@@ -34,7 +34,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { detectRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform-detection'
-import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
+import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { rememberSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
 
 /** Default SSH generic retains compatibility with lifecycle consumers requiring SSH-only fields. */

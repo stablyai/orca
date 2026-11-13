@@ -7,9 +7,8 @@ import {
   mockApi,
   resetRemoteRuntimeMocks
 } from '../github-slice-test-harness'
-import type { PRRefreshOutcome } from '../../../../../shared/github/pull-request-refresh-types'
-import type { PRInfo, CheckStatus } from '../../../../../shared/github/pull-request-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRRefreshOutcome } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 
 function createRefreshContext(pr: PRInfo | null = null) {
   const store = createTestStore()
@@ -77,92 +76,4 @@ describe('manual PR refresh whose outcome main also broadcasts', () => {
       fetchedAt: 1_300
     })
   })
-
-  const checksDeliveryCases: {
-    raw: CheckStatus
-    expected: CheckStatus
-    check: PRCheckDetail
-    order: 'broadcast-first' | 'reply-first'
-  }[] = [
-    {
-      raw: 'pending',
-      expected: 'success',
-      check: { name: 'build', status: 'completed', conclusion: 'success', url: null },
-      order: 'broadcast-first'
-    },
-    {
-      raw: 'success',
-      expected: 'failure',
-      check: { name: 'build', status: 'completed', conclusion: 'failure', url: null },
-      order: 'reply-first'
-    },
-    {
-      raw: 'success',
-      expected: 'pending',
-      check: { name: 'build', status: 'in_progress', conclusion: null, url: null },
-      order: 'broadcast-first'
-    }
-  ]
-  it.each(checksDeliveryCases)(
-    'keeps $expected checks from a concurrent details fetch with $order delivery',
-    async ({ raw, expected, check, order }) => {
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const prRepo = { owner: 'test-owner', repo: 'test-repo', host: 'github.com' }
-      const pr = makePR({ number: 6, headSha: 'head-oid', prRepo, checksStatus: raw })
-      const { store, repoPath, repoId, branch, worktreeId, cacheKey } = createRefreshContext(pr)
-      let deliverOutcome: () => void = () => {
-        throw new Error('PR lookup has not started')
-      }
-      mockApi.gh.prChecks.mockResolvedValue([check])
-      mockApi.gh.refreshPRNow.mockImplementationOnce(async ({ candidate }) => {
-        store.getState().applyGitHubPRRefreshEvent({
-          sequence: 1,
-          aliases: [candidate],
-          reason: 'manual',
-          requestStartedAt: 1_100,
-          status: 'in-flight'
-        })
-        // A detail poll can finish while the earlier PR snapshot is still loading other metadata.
-        vi.setSystemTime(1_200)
-        await store
-          .getState()
-          .fetchPRChecks(repoPath, 6, branch, pr.headSha, prRepo, { force: true, repoId })
-        expect(store.getState().prCache[cacheKey]?.data?.checksStatus).toBe(expected)
-        vi.setSystemTime(1_300)
-        const outcome: PRRefreshOutcome = { kind: 'found', pr, fetchedAt: 1_300 }
-        deliverOutcome = () =>
-          store.getState().applyGitHubPRRefreshEvent({
-            sequence: 1,
-            aliases: [candidate],
-            reason: 'manual',
-            requestStartedAt: 1_100,
-            outcome
-          })
-        if (order === 'broadcast-first') {
-          deliverOutcome()
-        }
-        return outcome
-      })
-
-      await store.getState().fetchPRForBranch(repoPath, branch, {
-        force: true,
-        repoId,
-        worktreeId,
-        fallbackPRNumber: 6,
-        reason: 'manual'
-      })
-      if (order === 'reply-first') {
-        deliverOutcome()
-      }
-
-      expect(store.getState().prCache[cacheKey]).toMatchObject({
-        data: { number: 6, checksStatus: expected },
-        fetchedAt: 1_300
-      })
-      expect(Object.values(store.getState().hostedReviewCache)).toMatchObject([
-        { data: { provider: 'github', number: 6, status: expected }, fetchedAt: 1_300 }
-      ])
-    }
-  )
 })

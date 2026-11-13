@@ -1,3 +1,5 @@
+import { appendDictationText } from './dictation-transcript-spacing'
+
 /** The text so far mid-dictation, for the desktop pill and phone replies: committed text never changes, tentative text may still be revised. */
 export type DictationTranscriptSnapshot = {
   /** Grows with every change, so a client keeps the newest snapshot when replies arrive out of order. */
@@ -10,7 +12,7 @@ export type DictationTranscriptSnapshot = {
 
 /** One dictation's speech events folded into the snapshot its chunk replies report. */
 export class DictationTranscript {
-  private readonly committed: string[] = []
+  private committed = ''
   private tentative = ''
   private revisionCount = 0
 
@@ -25,7 +27,7 @@ export class DictationTranscript {
     } else if (event.type === 'final') {
       const text = event.text?.trim()
       if (text) {
-        this.committed.push(text)
+        this.committed = appendDictationText(this.committed, text)
         this.tentative = ''
         this.revisionCount += 1
       }
@@ -33,12 +35,11 @@ export class DictationTranscript {
   }
 
   snapshot(): DictationTranscriptSnapshot {
-    const committed = this.committed.join(' ')
     return {
       revision: this.revisionCount,
-      committed,
+      committed: this.committed,
       tentative: this.tentative,
-      text: [committed, this.tentative].join(' ').trim()
+      text: appendDictationText(this.committed, this.tentative.trim())
     }
   }
 }

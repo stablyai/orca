@@ -14,7 +14,7 @@ import { editorRowHost } from '../../../shared/workspace-session/session-tab-fil
 import {
   editorTabNamesFile,
   sameEditorFile
-} from '../../../shared/workspace-layout/workspace-layout-editor-tab-file'
+} from '../../../shared/workspace-layout/editor-tabs/workspace-layout-editor-tab-file'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState

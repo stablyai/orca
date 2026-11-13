@@ -1,21 +1,34 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import {
   chatProviderAgents,
+  managedRuntimeChatAgents,
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
-import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import {
+  readChatProgram,
+  resolveChatProgramContext
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
-import { Card, CardContent } from '../../ui/card'
-import { AgentOpensAsControl } from '../../agent/launch-settings/AgentChatChoiceControls'
-import { buildAgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import {
+  AgentOpensAsControl,
+  chatUnavailableOnThisDesktop,
+  useAgentChatRuntimeInstall
+} from '../../agent/launch-settings/AgentChatChoiceControls'
+import {
+  buildAgentOpensAs,
+  type AgentOpensAs
+} from '../../../lib/agent-session/launch/native-chat-provider-choice'
+import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
+import { managedRuntimeInstallPending } from '../../managed-runtime/managed-runtime-install-view'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -46,36 +59,80 @@ export function ChatAgentLaunchSettings({
       .join(' ')
   })
   const chatOnly = new Set(chatOnlyKey.split(' '))
+  const managedChatAgents = recomputeOn([hostAgentsVersion], () =>
+    managedRuntimeChatAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+  )
   const entry = getChatLaunchEntriesByKey(t).agents
   return (
-    <section className="space-y-3">
-      <SettingsSubsectionHeader title={entry.title} description={entry.description} />
-      <Card size="list">
-        <CardContent>
-          <div className="divide-y divide-border">
-            {getAgentCatalog().map((agent) => {
-              const opensAs = recomputeOn([hostAgentsVersion], () =>
-                buildAgentOpensAs({
-                  agent: agent.id,
-                  cliDetected: detected === null ? null : detected.includes(agent.id),
-                  chatProgramHere: chatOnly.has(agent.id),
-                  settings,
-                  updateSettings
-                })
-              )
-              return opensAs ? (
-                <div key={agent.id} className="flex items-center justify-between gap-4 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <AgentIcon agent={agent.id} size={16} />
-                    <span className="text-sm font-medium">{agent.label}</span>
-                  </div>
-                  <AgentOpensAsControl label={agent.label} opensAs={opensAs} />
-                </div>
-              ) : null
-            })}
-          </div>
-        </CardContent>
-      </Card>
-    </section>
+    <SettingsGroup title={entry.title} description={entry.description}>
+      {getAgentCatalog().map((agent) => {
+        const opensAs = recomputeOn([hostAgentsVersion], () =>
+          buildAgentOpensAs({
+            agent: agent.id,
+            cliDetected: detected === null ? null : detected.includes(agent.id),
+            chatProgramHere: chatOnly.has(agent.id),
+            settings,
+            updateSettings
+          })
+        )
+        if (!opensAs) {
+          return null
+        }
+        return managedChatAgents.has(agent.id) && !chatUnavailableOnThisDesktop(agent.id) ? (
+          <ManagedChatAgentRow
+            key={agent.id}
+            agent={agent.id}
+            label={agent.label}
+            opensAs={opensAs}
+          />
+        ) : (
+          <ChatAgentRow key={agent.id} agent={agent.id} label={agent.label} opensAs={opensAs} />
+        )
+      })}
+    </SettingsGroup>
+  )
+}
+
+type ChatAgentRowProps = { agent: TuiAgent; label: string; opensAs: AgentOpensAs }
+
+function ChatAgentRow({
+  agent,
+  label,
+  opensAs,
+  line = null,
+  actions = null
+}: ChatAgentRowProps & { line?: React.ReactNode; actions?: React.ReactNode }): React.JSX.Element {
+  return (
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <AgentIcon agent={agent} size={16} />
+        <div className="min-w-0">
+          <div className="text-sm font-medium">{label}</div>
+          {line ? <div className="mt-0.5">{line}</div> : null}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {actions}
+        <AgentOpensAsControl label={label} opensAs={opensAs} />
+      </div>
+    </div>
+  )
+}
+
+/** Offers the agent's chat runtime install in its row until this computer has a current copy. */
+function ManagedChatAgentRow(props: ChatAgentRowProps): React.JSX.Element {
+  const { runtime, signInRunning } = useAgentChatRuntimeInstall(props.agent)
+  if (runtime.kind !== 'active' || !managedRuntimeInstallPending(runtime.snapshot)) {
+    return <ChatAgentRow {...props} />
+  }
+  return (
+    <ManagedRuntimeInstallRow
+      observation={runtime}
+      agentLabel={props.label}
+      signInRunning={signInRunning}
+      menu={false}
+    >
+      {(line, actions) => <ChatAgentRow {...props} line={line} actions={actions} />}
+    </ManagedRuntimeInstallRow>
   )
 }

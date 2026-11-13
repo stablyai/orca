@@ -5,10 +5,11 @@ import {
   buildWorkspaceFileContext,
   canClientOsOpenWorkspaceFile
 } from '@/runtime/files/workspace-file-host-routing'
-import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/files/access/file-owner-runtime-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../../shared/wsl-paths'
+import { msysDrivePathToWindows } from '../../../../../shared/cross-platform-path'
 import { terminalFileSourceHost } from '../links/files/terminal-worktree-path-link'
 
 export type TerminalFileContext = RuntimeFileOperationArgs & {
@@ -77,7 +78,13 @@ export function mapTerminalFilePath(
   wslDistro?: string | null
 ): string {
   const distro = terminalPathWslDistro(worktreePath, wslDistro)
-  if (!distro || !filePath.startsWith('/')) {
+  if (!distro) {
+    // Why: Windows hosts' Git Bash prints `/c/...`; a bare `/c` stays literal so `cmd /c` never links to C:\.
+    return /^[A-Za-z]:[\\/]/.test(worktreePath) && /^\/[A-Za-z]\/[^/]/.test(filePath)
+      ? msysDrivePathToWindows(filePath)
+      : filePath
+  }
+  if (!filePath.startsWith('/')) {
     return filePath
   }
   // Why: only a proven local WSL pane may reinterpret this POSIX-looking path; SSH/runtime paths stay literal.

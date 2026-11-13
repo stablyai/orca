@@ -1,6 +1,7 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveTuiAgentLaunchEnv,
@@ -15,13 +16,13 @@ import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
-} from '../../../native-chat/structured-agent-session-create-support'
+} from '../../../native-chat/agent-launch/structured-agent-session-create-support'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
 import {
   refreshHostAgentBaseEnvironmentAfterMiss,
@@ -101,10 +102,11 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
   agent: string,
   settings: LaunchEnvironmentSettings
 ): Promise<Record<string, string>> {
-  return {
-    ...(await resolveHostAgentBaseEnvironment(settings)),
-    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
-  }
+  return overlayEnvironmentVariables(
+    await resolveHostAgentBaseEnvironment(settings),
+    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
+    process.platform
+  )
 }
 
 /** What a chat start of `agent` on this host launches from, for a child that serves no chat. */

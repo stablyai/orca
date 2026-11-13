@@ -138,7 +138,7 @@ export function TerminalConfigImportModal({
               onClick={() => void onChooseFile()}
             >
               <FileUp className="size-4" />
-              {t('auto.components.settings.GhosttyImportModal.choose_file', 'Choose Config File')}
+              {t('auto.components.settings.GhosttyImportModal.80e9b42a86', 'Choose config file')}
             </Button>
           </div>
         ) : null}
@@ -242,7 +242,7 @@ export function TerminalConfigImportModal({
               </Button>
               {hasChanges && (
                 <Button disabled={choosingFile} onClick={() => void onApply()}>
-                  {t('auto.components.settings.GhosttyImportModal.9d3e56ca36', 'Apply Changes')}
+                  {t('auto.components.settings.GhosttyImportModal.9759d2dfa2', 'Apply changes')}
                 </Button>
               )}
             </>

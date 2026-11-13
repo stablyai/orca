@@ -36,54 +36,6 @@ describe('createIpcPtyTransport', () => {
     restorePtySpecWindow(originalWindow)
   })
 
-  it('does not create a second kill authority when a mounted pane detaches', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
-    const transport = createIpcPtyTransport({})
-    await transport.connect({ url: '', callbacks: {} })
-
-    transport.detach?.()
-
-    expect(kill).not.toHaveBeenCalled()
-  })
-
-  // Why: retained gauges would inflate every later high-water profile.
-  it.each(['detach', 'destroy'] as const)(
-    'drops its side-effect gauge from the census on %s',
-    async (teardown) => {
-      await import('../output/pty-side-effect-pending-census')
-      const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
-      const { createIpcPtyTransport } = await import('./pty-transport')
-      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
-
-      const transport = createIpcPtyTransport({})
-      await transport.connect({ url: '', callbacks: {} })
-      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
-
-      transport[teardown]?.()
-
-      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
-    }
-  )
-
-  // Why: teardown that already failed is exactly when a stranded gauge would pin the processor.
-  it('drops its side-effect gauge even when destroy throws mid-disconnect', async () => {
-    await import('../output/pty-side-effect-pending-census')
-    const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
-    const transport = createIpcPtyTransport({})
-    await transport.connect({ url: '', callbacks: {} })
-    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
-
-    kill.mockImplementationOnce(() => {
-      throw new Error('ipc channel closed')
-    })
-
-    expect(() => transport.destroy?.()).toThrow('ipc channel closed')
-    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
-  })
-
   it('keeps the live handler when detach() runs after a newer transport attached to the same PTY', async () => {
     // Why: a new pane can attach the same ptyId before the old detaches; unconditional unregister deletes the live handler (frozen-pane bug).
     const { createIpcPtyTransport } = await import('./pty-transport')

@@ -4,7 +4,7 @@ import { firstParam } from '../navigation/route-param-reader'
 import {
   sessionOfPageLocation,
   setHostDocumentSession
-} from '../notifications/notification-viewing-policy'
+} from '../notifications/delivery-policy/notification-viewing-policy'
 import {
   BRIDGE_OPEN_ROUTE_PARAM,
   type BridgeClearableRouteParam

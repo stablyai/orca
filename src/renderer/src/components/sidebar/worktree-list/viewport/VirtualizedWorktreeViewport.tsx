@@ -21,6 +21,7 @@ import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
+import { resolveSidebarWorkspaceDeleteIntent } from '../navigation/sidebar-workspace-delete'
 import { useWorktreeListKeyboardNavigation, withKeyboardPreview } from '../navigation/use-keyboard'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
@@ -224,15 +225,25 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     toggleGroup
   })
 
-  const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
-    rows,
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
-    pinnedDisplayPolicy,
-    scrollRef,
-    activeModal: props.activeModal,
-    markDirectScrollInput
-  })
+  const { handleContainerKeyDown, handleContainerKeyUp, handleContainerBlur, keyboardPreview } =
+    useWorktreeListKeyboardNavigation({
+      rows,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
+      pinnedDisplayPolicy,
+      scrollRef,
+      activeModal: props.activeModal,
+      markDirectScrollInput,
+      onKeyboardSelect: props.onKeyboardSelect,
+      focusedWorktree: props.focusedWorktree,
+      focusedWorkspaceExecutionHostId: props.focusedWorkspaceExecutionHostId,
+      resolveDeleteIntent: () =>
+        resolveSidebarWorkspaceDeleteIntent({
+          selectedWorktrees: props.selectedWorktrees,
+          focusedWorktree: props.focusedWorktree ?? null,
+          repoMap
+        })
+    })
 
   const dropCtx = useWorktreeDropCommitContext({
     scrollRef,
@@ -328,9 +339,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     },
     [markDirectScrollInput]
   )
-  const handleScroll = useCallback(() => {
-    markScrollMovement()
-  }, [markScrollMovement])
 
   const rowProps = useMemo(
     () => withKeyboardPreview(props, keyboardPreview),
@@ -376,16 +384,20 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         aria-orientation="vertical"
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
-          activeWorktreeId: rowProps.activeWorktreeId,
-          activeWorkspaceExecutionHostId: rowProps.activeWorkspaceExecutionHostId,
+          activeWorktreeId: props.focusedWorktree?.id ?? rowProps.activeWorktreeId,
+          activeWorkspaceExecutionHostId: props.focusedWorktree
+            ? (props.focusedWorkspaceExecutionHostId ?? null)
+            : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
           renderRows,
           virtualItems
         })}
         onKeyDown={handleContainerKeyDown}
+        onKeyUp={handleContainerKeyUp}
+        onBlur={handleContainerBlur}
         // Why: trackpad momentum fires sparse scroll events after the input stream quiets; suppress correction until the viewport stops.
-        onScroll={handleScroll}
+        onScroll={markScrollMovement}
         onPointerDown={handleScrollPointerDown}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}

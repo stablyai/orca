@@ -1,4 +1,7 @@
-import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageLinearIssueCreationModel } from '../linear/use-task-page-linear-issue-creation'
 import { useCallback } from 'react'
 import {

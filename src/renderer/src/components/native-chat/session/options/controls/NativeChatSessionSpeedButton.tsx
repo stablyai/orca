@@ -8,27 +8,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type {
-  SessionOptionDescriptor,
   SessionOptionSelectChoice,
   SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { isFastServiceTier } from '../../../../../../../shared/agent-session/options/structured-agent-session-discovered-model'
+import { loneFastTier } from '../../../../../../../shared/native-chat/input/native-chat-session-speed-tiers'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
-
-const STANDARD_TIER = 'default'
-
-/** Standard plus the other tiers, or null when the select is not a speed choice with any. */
-export function speedButtonTiers(
-  descriptor: SessionOptionDescriptor
-): { standard: SessionOptionSelectChoice; tiers: SessionOptionSelectChoice[] } | null {
-  if (descriptor.id !== 'serviceTier' || descriptor.kind.type !== 'select') {
-    return null
-  }
-  const standard = descriptor.kind.choices.find((choice) => choice.value === STANDARD_TIER)
-  const tiers = descriptor.kind.choices.filter((choice) => choice.value !== STANDARD_TIER)
-  return standard && tiers.length > 0 ? { standard, tiers } : null
-}
 
 /** A lone Fast tier toggles like Claude's Fast; anything else opens a list instead of a segmented switcher. */
 export function NativeChatSessionSpeedButton(props: {
@@ -46,8 +32,8 @@ export function NativeChatSessionSpeedButton(props: {
   const nameOf = (choice: SessionOptionSelectChoice) =>
     nativeChatSessionChoiceLabel(choice, say, 'serviceTier')
   // Only Fast takes the toggle and bolt; Flex and other tiers are picked from the list.
-  if (tiers.length === 1 && isFastServiceTier(tiers[0])) {
-    const only = tiers[0]
+  const only = loneFastTier(tiers)
+  if (only) {
     return (
       <Toggle
         variant="chip"
