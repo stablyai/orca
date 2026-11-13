@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useInsertionEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
@@ -66,9 +66,8 @@ export function SkillFreshnessNudge({
   const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
   // Startup gating applies once; a later dialog leaves the toast dimmed behind its backdrop, like other toasts, rather than re-creating it.
   const startupReleasedRef = useRef(false)
-  // Read at first presentation, which happens in Sonner's render after this component's.
   const logicalHoldRef = useRef(!startupPromptsFinished)
-  useLayoutEffect(() => {
+  useInsertionEffect(() => {
     logicalHoldRef.current = !startupPromptsFinished
   }, [startupPromptsFinished])
 

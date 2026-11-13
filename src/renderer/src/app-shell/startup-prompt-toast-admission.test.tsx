@@ -172,8 +172,8 @@ function App(): React.JSX.Element {
   gate = useOnboardingAndFeatureTips()
   return (
     <>
-      <SkillFreshnessNudge startupPromptsFinished={gate.startupPromptsFinished} />
       <Toaster />
+      <SkillFreshnessNudge startupPromptsFinished={gate.startupPromptsFinished} />
       <LazyModalOwner />
       <LocalDialogOwner />
       <SshCredentialOwner />
@@ -316,6 +316,41 @@ describe('new skill toast admission', () => {
     await step(() => useAppStore.setState({ sshCredentialQueue: [] }))
     expect(nudge()).toBeDefined()
     expect(raised()).toBe(false)
+  })
+
+  it('waits when a modal opens as a toast is delivered', async () => {
+    await step(() => gate.applyStartupOnboardingState(completedOnboarding))
+    const publish = toast.info
+    const callbacks: (() => void)[] = []
+    const info = vi.spyOn(toast, 'info').mockImplementation((...args) => {
+      const schedule = globalThis.setTimeout
+      const timer = vi
+        .spyOn(globalThis, 'setTimeout')
+        .mockImplementation((callback, delay, ...args) => {
+          if (typeof callback === 'function') {
+            callbacks.push(() => callback(...args))
+          }
+          const handle = schedule(() => {}, delay)
+          clearTimeout(handle)
+          return handle
+        })
+      const id = publish(...args)
+      timer.mockRestore()
+      return id
+    })
+    await step(() => freshness.set(planOf([sharedEntry('orca-cli', 'update')])))
+    await step()
+    expect(info).toHaveBeenCalledTimes(1)
+    expect(callbacks.length).toBeGreaterThan(0)
+    info.mockRestore()
+    await act(async () => {
+      useAppStore.getState().openModal('add-repo')
+      callbacks.forEach((callback) => callback())
+      await settle()
+    })
+    expect(nudge()).toBeUndefined()
+    await step(() => useAppStore.setState({ activeModal: 'none' }))
+    expect(nudge()).toBeDefined()
   })
 
   it('withholds a toast whose modal opened after publication but before it was shown', async () => {
