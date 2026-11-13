@@ -149,6 +149,9 @@ type HostedProgress = { phase: string; percent?: number; message?: string }
 
 /** `clone-progress <percent> <stage>` lines drive the sheet's clone step; the plain log hides them. */
 export function hostedProgressLine({ phase, percent, message }: HostedProgress): string {
+  if (phase === 'environment-held' && message && /^[A-Za-z0-9_-]{1,64}$/.test(message)) {
+    return `[orca-cloud] environment-held ${message}\n`
+  }
   return (phase === 'cloning' || phase === 'updating') && percent !== undefined
     ? `[orca-cloud] clone-progress ${percent} ${message === 'checkout' ? 'checkout' : 'download'}\n`
     : `[orca-cloud] ${phase}\n`

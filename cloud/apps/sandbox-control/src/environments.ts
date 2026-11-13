@@ -255,6 +255,8 @@ export type BootSource = {
   region: string
   /** An automatic environment (auto-environments.ts): the caller's machine size stands. */
   auto?: boolean
+  /** The golden the build started from (environment-security.ts compares it with the floor). */
+  baseSnapshotId: string | null
 }
 
 type BootBuildRow = {
@@ -266,6 +268,7 @@ type BootBuildRow = {
   snapshot_deleted_at: number | null
   result: string | null
   config: string
+  base_snapshot_id?: string | null
 }
 
 function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): BootSource | null {
@@ -286,7 +289,15 @@ function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): Boot
   } catch {
     // Default size.
   }
-  return { snapshotId: build.snapshot_id, environmentId: build.environment_id, buildId: build.id, repoDir: dir, machineSize, region: build.region }
+  return {
+    snapshotId: build.snapshot_id,
+    environmentId: build.environment_id,
+    buildId: build.id,
+    repoDir: dir,
+    machineSize,
+    region: build.region,
+    baseSnapshotId: build.base_snapshot_id ?? null
+  }
 }
 
 /**

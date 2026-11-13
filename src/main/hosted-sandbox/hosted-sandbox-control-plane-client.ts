@@ -155,7 +155,7 @@ export function createHostedSandboxControlPlaneClient(
         ...(idempotencyKey ? { headers: { 'idempotency-key': idempotencyKey } } : {}),
         // The repo clones after the sandbox is up; the driver shows it as its own step.
         // An environment boot reports its incremental fetch as an update (`clone.mode`).
-        features: ['clone-progress', 'repo-update']
+        features: ['clone-progress', 'repo-update', 'environment-held']
       }),
     bootPlan: async (repoUrl, signal) =>
       (

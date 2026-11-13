@@ -29,6 +29,8 @@ import type { Keyring } from './secrets-crypto'
 import { SANDBOX_VCPUS } from './machine-size'
 
 export const BUILD_DEADLINE_MS = 45 * 60_000
+/** Golden-refresh builds: our image updates, metered internally, never charged to the team (ENV-BUILD-CHURN). */
+export const GOLDEN_REFRESH_USER = 'system:golden-refresh'
 const STARTING_STUCK_MS = 5 * 60_000
 /** Finalization interrupted (a Worker cut off mid-snapshot) is recovered by the next look after this. */
 const SNAPSHOTTING_STUCK_MS = 3 * 60_000
@@ -852,6 +854,18 @@ export async function reportBuildUsage(deps: Pick<BuildDeps, 'db' | 'entitlement
     machineSize = parseConfig(row).machineSize ?? 'standard'
   } catch {
     machineSize = 'standard'
+  }
+  if (row.created_by === GOLDEN_REFRESH_USER) {
+    // ENV-BUILD-CHURN (e): our image update, not the team's work. Metered for our own cost tracking.
+    log('environment_build_internal_usage', {
+      buildId: row.id,
+      accountId: row.account_id,
+      machineSize,
+      ms: endedAt - startedAt,
+      status: row.status
+    })
+    await deps.db.prepare('UPDATE environment_builds SET usage_reported_at = ? WHERE id = ?').bind(deps.now(), row.id).run()
+    return false
   }
   try {
     await deps.entitlements.reportUsage({

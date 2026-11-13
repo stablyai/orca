@@ -168,6 +168,14 @@ export const HostedSandboxReadyResponseSchema = z
         mode: z.literal('update').optional()
       })
       .strict()
+      .optional(),
+    /**
+     * ENV-BUILD-CHURN (feature `environment-held`): the repo's environment wasn't used because its build
+     * is below the security floor; the workspace started from the current image without its setup.
+     */
+    environmentHeld: z
+      .object({ environmentId: z.string().min(1).max(64), reason: z.literal('security_update') })
+      .strict()
       .optional()
   })
   .strict()

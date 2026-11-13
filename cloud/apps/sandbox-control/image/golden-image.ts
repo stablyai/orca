@@ -53,6 +53,11 @@ export const ManifestSchema = z
       .strict()
       .nullable()
       .optional(),
+    /**
+     * ENV-BUILD-CHURN: bump (never lower) when this image fixes something every environment must get:
+     * environments on a golden below the highest level rebuild right away and never boot until they do.
+     */
+    securityLevel: z.number().int().min(0).optional(),
     /** Optional remote desktop (noVNC + websockify tarballs); absent = an image without it. */
     desktop: z
       .object({

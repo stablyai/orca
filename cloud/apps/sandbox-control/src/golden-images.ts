@@ -59,6 +59,8 @@ type GoldenRow = {
   created_at: number
   updated_at: number
   activated_at: number | null
+  /** ENV-BUILD-CHURN: the manifest's securityLevel when this image was built (environment-security.ts). */
+  security_level?: number
 }
 
 const REFRESH_BEFORE_MS = 24 * 60 * 60_000
@@ -111,10 +113,12 @@ async function insert(db: D1Database, row: Pick<GoldenRow, 'id' | 'region' | 'so
   await db
     .prepare(
       `INSERT INTO golden_images (id, region, source, bundle_sha256, status, build_name, session_id, command_id, snapshot_id,
-         expires_at, created_at, updated_at, activated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         expires_at, created_at, updated_at, activated_at, security_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(row.id, row.region, row.source, row.bundle_sha256 ?? null, row.status, row.build_name ?? null, row.session_id ?? null,
-      row.command_id ?? null, row.snapshot_id ?? null, row.expires_at ?? null, now, now, row.activated_at ?? null)
+      row.command_id ?? null, row.snapshot_id ?? null, row.expires_at ?? null, now, now, row.activated_at ?? null,
+      // The Worker's own manifest: the image it builds is the one that manifest describes.
+      row.security_level ?? MANIFEST.securityLevel ?? 0)
     .run()
 }
 

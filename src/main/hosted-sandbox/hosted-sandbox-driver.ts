@@ -168,6 +168,11 @@ export async function createSandboxWithProgress(
     // A cancelled, failed or stalled clone deletes the sandbox itself.
     await waitForClone(client, ready.sandbox.id, ctx, { mode: ready.clone.mode ?? 'clone' })
   }
+  if (ready.environmentHeld) {
+    // ENV-BUILD-CHURN: the workspace starts without its environment's setup (a security rebuild runs);
+    // the window says so in the workspace (ephemeral-vm-environment-check publishes the notice).
+    ctx?.onProgress?.({ phase: 'environment-held', message: ready.environmentHeld.environmentId })
+  }
   if (ctx?.signal?.aborted) {
     // Cancelled just as it answered: nothing will use it, so it must not keep running (and billing).
     await client.destroy(ready.sandbox.id).catch(() => undefined)
