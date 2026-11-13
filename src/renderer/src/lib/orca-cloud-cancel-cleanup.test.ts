@@ -161,7 +161,7 @@ describe('Orca Cloud cancel cleanup', () => {
       (result) => result.ok || result.reason !== 'unconfirmed'
     )
     beginOrcaCloudCancelCleanup('c-ep5b', [], { createStartedAt: 0, canceledAt: 1000 })
-    run.resolve({ ok: false, reason: null as never })
+    run.resolve({ ok: false })
     await flush()
     expect(toasts.showOrcaCloudCleanupDoneToast).toHaveBeenCalledWith('c-ep5b')
   })

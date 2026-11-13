@@ -33,9 +33,10 @@ import { startCloudWorkspaceFromGitHub } from './start-cloud-workspace-from-gith
 import { resetGitHubCreateKeysForTest } from './github-cloud-create-key'
 
 const createFromGitHub = vi.fn<(args: unknown) => Promise<unknown>>()
-const destroy = vi.fn(
-  async (_id: string) => ({ ok: true, value: undefined }) as { ok: boolean; value?: undefined }
-)
+const destroy = vi.fn(async (_id: string): Promise<{ ok: boolean; value?: undefined }> => ({
+  ok: true,
+  value: undefined
+}))
 const retryCancelledCreate = vi.fn(async (_args: { provisionId: string }) => true)
 
 beforeEach(() => {

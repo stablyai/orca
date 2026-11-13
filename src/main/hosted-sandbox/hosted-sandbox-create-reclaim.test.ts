@@ -3,7 +3,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { HostedEntitlementDeniedError } from './hosted-environment-provider'
-import { reclaimCancelledCreate } from './hosted-sandbox-create-reclaim'
+import type {
+  HostedSandboxDestroyResponse,
+  HostedSandboxView
+} from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { reclaimCancelledCreate, type ReclaimClient } from './hosted-sandbox-create-reclaim'
 import { CANCEL_CLEANUP_UNCONFIRMED, createSandboxWithProgress } from './hosted-sandbox-driver'
 
 const READY = {
@@ -23,11 +27,14 @@ const quiet = { waitMs: 0, log: () => {} }
 
 function client() {
   return {
-    create: vi.fn(async () => READY),
+    create: vi.fn<ReclaimClient['create']>(async () => READY),
     bootPlan: vi.fn(async () => 'clone' as const),
     cloneStatus: vi.fn(async () => ({ state: 'done' as const })),
-    destroy: vi.fn(async (id: string) => ({ id, status: 'destroyed' as const })),
-    list: vi.fn(async (): Promise<(typeof READY)['sandbox'][]> => [])
+    destroy: vi.fn(async (id: string): Promise<HostedSandboxDestroyResponse['sandbox']> => ({
+      id,
+      status: 'destroyed'
+    })),
+    list: vi.fn(async (): Promise<HostedSandboxView[]> => [])
   }
 }
 
@@ -63,7 +70,7 @@ describe('reclaimCancelledCreate', () => {
     )
     api.list.mockResolvedValue([
       { ...READY.sandbox, id: 'sbx_other', workspaceId: 'other-1' },
-      { ...READY.sandbox, status: 'creating' as never }
+      { ...READY.sandbox, status: 'creating' }
     ])
     expect(await reclaimCancelledCreate(api, BODY, 'create:k1', quiet)).toBe(true)
     expect(api.destroy).toHaveBeenCalledTimes(1)
@@ -73,7 +80,7 @@ describe('reclaimCancelledCreate', () => {
 
   it('EP-5: a delete the control plane does not answer with destroyed is not confirmed', async () => {
     const api = client()
-    api.destroy.mockImplementation(async (id: string) => ({ id, status: 'destroying' as never }))
+    api.destroy.mockImplementation(async (id: string) => ({ id, status: 'destroying' }))
     expect(await reclaimCancelledCreate(api, BODY, 'create:k1', { ...quiet, attempts: 2 })).toBe(
       false
     )
@@ -134,13 +141,14 @@ describe('createSandboxWithProgress cancel', () => {
   it('EP-5: a cancel whose sandbox could not be confirmed deleted says so (reason), not a plain cancel', async () => {
     const api = client()
     const controller = new AbortController()
-    api.create.mockImplementation((async (_body: unknown, signal?: AbortSignal) => {
+    const create: ReclaimClient['create'] = async (_body, signal) => {
       if (signal) {
         controller.abort()
         throw new EnvironmentProviderError('aborted', 'Cancelled.')
       }
       throw new EnvironmentProviderError('unavailable', 'down')
-    }) as never)
+    }
+    api.create.mockImplementation(create)
     vi.useFakeTimers()
     try {
       const outcome = expect(
