@@ -27,6 +27,7 @@ const SETTINGS = {
   agentDefaultEnv: {}
 }
 const store = (surface: 'chat' | 'terminal'): AgentLaunchRouteStore =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a route store with only the settings the route reads
   ({
     settings: { ...SETTINGS, agentDefaultSurface: surface }
   }) as unknown as AgentLaunchRouteStore
@@ -90,6 +91,7 @@ describe('an Orca Cloud create decided before its VM exists (CLOUD-HELD-SURFACE)
 
   it('a host whose capabilities are verified is decided by those, never the image list', () => {
     const verified = (capabilities: readonly string[]) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: settings plus the one runtime status the route reads
       ({
         settings: { ...SETTINGS, agentDefaultSurface: 'chat' },
         runtimeStatusByEnvironmentId: new Map([['env-old', { status: { capabilities } }]])
