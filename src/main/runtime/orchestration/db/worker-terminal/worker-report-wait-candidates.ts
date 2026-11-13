@@ -56,10 +56,12 @@ const SEED_SQL = `WITH seed(id) AS (
     FROM seed CROSS JOIN dispatch_contexts d ON d.id = seed.id AND d.run_id = ?1
     ${CANDIDATE_JOINS}`
 
-/** Newest-first position in the Run, which is how worker-list pages it. */
-const RUN_POSITION_SQL = `SELECT requested.value AS database_id,
-    (SELECT COUNT(*) FROM dispatch_contexts WHERE run_id = ?2 AND rowid > requested.value) AS position
-  FROM json_each(?1) AS requested`
+/** Newest-first position in the Run, which is how worker-list pages it; one pass down to the oldest candidate (?3). */
+const RUN_POSITION_SQL = `WITH ranked AS (
+    SELECT rowid AS database_id, ROW_NUMBER() OVER (ORDER BY rowid DESC) - 1 AS position
+      FROM dispatch_contexts WHERE run_id = ?2 AND rowid >= ?3)
+  SELECT database_id, position FROM ranked
+   WHERE database_id IN (SELECT value FROM json_each(?1))`
 
 /** The row `offset` rows from `rowid` in the Run, newer or older. */
 const NEWER_ROW_SQL = `SELECT rowid AS database_id FROM dispatch_contexts
@@ -118,7 +120,11 @@ export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: str
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects exactly these columns.
   const positions = this.db
     .prepare(RUN_POSITION_SQL)
-    .all(JSON.stringify(candidates.map((row) => row.database_id)), runId) as {
+    .all(
+      JSON.stringify(candidates.map((row) => row.database_id)),
+      runId,
+      Math.min(...candidates.map((row) => row.database_id))
+    ) as {
     database_id: number
     position: number
   }[]
