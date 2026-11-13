@@ -20,10 +20,12 @@ const FAKE_DOCKER = `#!/usr/bin/env bash
 if [ "$1" = info ]; then [ -f "$FAKE_DIR/up" ]; exit $?; fi
 echo "real docker $*"
 `
-// A stand-in apt-get: logs each call; `install` puts the fake docker CLI in place (or fails, with FAKE_APT_FAIL).
+// A stand-in apt-get: logs each call; `install` puts the fake docker CLI in place. FAKE_APT_FAIL fails
+// every call (archive unreachable); FAKE_APT_FAIL_INSTALL only the install.
 const FAKE_APT = `#!/usr/bin/env bash
 echo "$*" >>"$FAKE_DIR/apt"
 [ -n "\${FAKE_APT_FAIL:-}" ] && { echo "E: Unable to fetch" >&2; exit 100; }
+[ "$1" = install ] && [ -n "\${FAKE_APT_FAIL_INSTALL:-}" ] && { echo "E: Version not found" >&2; exit 100; }
 [ "$1" = install ] && { sleep 0.2; cp "$FAKE_DIR/docker.pkg" "$FAKE_DIR/docker"; chmod 755 "$FAKE_DIR/docker"; }
 exit 0
 `
@@ -90,6 +92,7 @@ describe('the docker shim (PARITY-DOCKER)', { timeout: 20_000 }, () => {
     expect(first.stderr).toContain('Downloading and installing Docker (about 110 MB)')
     expect(first.stderr).not.toContain('E: ')
     expect(first.stderr).toContain('Running containers stop when the workspace sleeps')
+    expect(first.stderr).toContain("Containers that call github.com or an agent's API need to trust this workspace's proxy certificate")
     expect(first.stderr).toContain('vercel-proxy-ca.pem')
     expect(aptCalls()).toEqual([
       'update -qq',
@@ -128,12 +131,27 @@ describe('the docker shim (PARITY-DOCKER)', { timeout: 20_000 }, () => {
     expect(Date.now() - t0).toBeLessThan(5000)
   })
 
-  it('a failed install says so plainly, with where the details are, and runs nothing', () => {
+  it('an unreachable archive says so, runs nothing, and the next docker retries', () => {
     const failed = docker(['ps'], { FAKE_APT_FAIL: '1' })
     expect(failed.status).toBe(1)
-    expect(failed.stderr).toContain("Docker couldn't be set up in this workspace")
+    expect(failed.stderr).toContain(
+      "orca: Couldn't set up Docker in this workspace because the Ubuntu package archive couldn't be reached. Run docker again to retry. Details: "
+    )
     expect(failed.stderr).toContain('dockerd.log')
     expect(failed.stdout).toBe('')
+    expect(starts()).toBe(0)
+
+    // "Run docker again to retry" is true: the next command installs.
+    const retried = docker(['ps'])
+    expect(retried.status).toBe(0)
+    expect(retried.stdout).toBe('real docker ps\n')
+  })
+
+  it('a failed install (archive reachable) says so without blaming the network', () => {
+    const failed = docker(['ps'], { FAKE_APT_FAIL_INSTALL: '1' })
+    expect(failed.status).toBe(1)
+    expect(failed.stderr).toContain("orca: Couldn't set up Docker in this workspace. Run docker again to retry. Details: ")
+    expect(failed.stderr).not.toContain('archive')
     expect(starts()).toBe(0)
   })
 
@@ -146,13 +164,27 @@ describe('the docker shim (PARITY-DOCKER)', { timeout: 20_000 }, () => {
     expect(aptCalls()).toEqual([])
   })
 
-  it('says so when dockerd never comes up, with where its log is', () => {
+  it('says so when dockerd never comes up, and the next docker retries the start', () => {
     installed()
     const failed = docker(['ps'], { FAKE_NEVER_UP: '1', ORCA_DOCKER_WAIT_TICKS: '5' })
     expect(failed.status).toBe(1)
-    expect(failed.stderr).toContain("Docker didn't start in this workspace")
+    expect(failed.stderr).toContain("orca: Docker couldn't start in this workspace. Run docker again to retry. Details: ")
     expect(failed.stderr).toContain('dockerd.log')
     expect(failed.stdout).toBe('')
+
+    const retried = docker(['ps'])
+    expect(retried.status).toBe(0)
+    expect(starts()).toBe(2)
+  })
+
+  it('says containers stop on sleep at every daemon start, the proxy certificate only at the first', () => {
+    installed()
+    expect(docker(['ps']).stderr).toContain('proxy certificate')
+    rmSync(join(dir, 'up')) // the workspace slept: the daemon is gone
+    const woke = docker(['ps'])
+    expect(woke.stderr).toContain('Running containers stop when the workspace sleeps')
+    expect(woke.stderr).not.toContain('proxy certificate')
+    expect(starts()).toBe(2)
   })
 
   it('leaves an existing daemon config alone', () => {
