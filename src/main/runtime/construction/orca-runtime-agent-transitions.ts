@@ -30,6 +30,17 @@ import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
+import { ClaudeTerminalSessionNameSync } from '../claude-terminal-session-name-sync'
+import { readClaudeTranscriptCustomTitle } from '../../claude/claude-terminal-session-name'
+import { createLaunchedAgentWriteGuard } from '../terminal/wait/launched-agent-write-guard'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { terminalIdOf, type WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
+import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'
+
+// A draft or a long turn holds the rename; past this the user's newer intent is unknown.
+const CLAUDE_RENAME_HOLD_MS = 10 * 60_000
+const CLAUDE_RENAME_RECHECK_MS = 5_000
 
 function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
@@ -106,6 +117,109 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
 
   private readonly externalConversations = installExternalConversations(this.store, this)
 
+  private readonly claudeSessionNames = new ClaudeTerminalSessionNameSync({
+    isEnabled: () => this.store?.getSettings().claudeSessionNameSync !== false,
+    listRows: () => this.getAgentStatusSnapshotFn?.() ?? [],
+    readTranscriptPath: (paneKey) => {
+      let newest: { at: number; path: string } | null = null
+      for (const row of this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []) {
+        const path = row.agentType === 'claude' ? row.providerSession?.transcriptPath : undefined
+        if (path && (!newest || row.receivedAt > newest.at)) {
+          newest = { at: row.receivedAt, path }
+        }
+      }
+      return newest?.path ?? null
+    },
+    getHandle: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+    waitForEmptyComposer: (handle, signal) => this.waitForEmptyClaudeComposer(handle, signal),
+    readComposerDraft: (handle) => this.readClaudeComposerDraft(handle),
+    sendCommand: async (handle, text, signal, beforeEachWrite) => {
+      // The pane may have returned to its shell since the hook row was written.
+      const guard = createLaunchedAgentWriteGuard(this, 'claude')
+      try {
+        await this.sendTerminalAgentPrompt(handle, text, {
+          inputKind: 'driving',
+          beforeWrite: async (ptyId) => {
+            await guard.beforeWrite(ptyId)
+            await beforeEachWrite()
+          },
+          acceptQueued: true,
+          observationTimeoutMs: 0,
+          signal
+        })
+      } finally {
+        guard.dispose()
+      }
+    },
+    renameTab: async (handle, name) => {
+      await this.renameTerminal(handle, name)
+    },
+    readCustomTitle: readClaudeTranscriptCustomTitle
+  })
+
+  /** A tab named in the window: its Claude pane takes the name as its session name. */
+  syncClaudeSessionNameForTab(tabId: string, title: string | null): void {
+    this.claudeSessionNames.tabRenamed(tabId, title)
+  }
+
+  /** The partitions holding a window layout command's tab, or its workspace's for a workspace command. */
+  protected layoutHostIdsFor(worktreeId: string, tabId: string | null): ExecutionHostId[] {
+    return tabId !== null
+      ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+      : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat()
+  }
+
+  /** A window rename main applied, in apply order, so a later rename always wins. */
+  protected syncClaudeSessionNameAfterLayoutApply(
+    command: WindowLayoutCommand,
+    reply: LayoutApplyReply
+  ): void {
+    if (!reply.ok || command.type !== 'renameTab' || command.kind !== 'custom') {
+      return
+    }
+    const hostId = this.layoutHostIdsFor(command.workspace, command.tabId)[0]
+    const tabId = hostId
+      ? terminalIdOf(this.requireStore(), hostId, command.workspace, command.tabId)
+      : command.tabId
+    this.claudeSessionNames.tabRenamed(tabId, command.title)
+  }
+
+  override async renameTerminal(
+    handle: string,
+    title: string | null
+  ): Promise<RuntimeTerminalRename> {
+    const rename = await super.renameTerminal(handle, title)
+    if (rename.tabId) {
+      this.claudeSessionNames.tabRenamed(rename.tabId, rename.title)
+    }
+    return rename
+  }
+
+  protected override observeClaudeTerminalTitle(paneKey: string, title: string): void {
+    this.claudeSessionNames.observeTitle(paneKey, title)
+  }
+
+  /** Never type into a draft: it would be submitted with the command. */
+  private async waitForEmptyClaudeComposer(handle: string, signal: AbortSignal): Promise<boolean> {
+    const deadline = Date.now() + CLAUDE_RENAME_HOLD_MS
+    while (!signal.aborted && Date.now() < deadline) {
+      const wait = await this.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: Math.max(1, deadline - Date.now()),
+        signal
+      })
+      if (wait.satisfied && !(await this.readClaudeComposerDraft(handle))) {
+        return true
+      }
+      await new Promise((resolve) => setTimeout(resolve, CLAUDE_RENAME_RECHECK_MS).unref?.())
+    }
+    return false
+  }
+
+  private async readClaudeComposerDraft(handle: string): Promise<string | undefined> {
+    return (await this.readTerminal(handle, { screen: true, limit: 1 })).draft
+  }
+
   // The sidebar feed's activity facts already announce row changes when it is on.
   private readonly worktreeRowsChanges = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? null
@@ -136,6 +250,11 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
     this.agentTransitions.subscribe((change) => this.terminalWorkerTurnStops.observe(change))
     this.agentTransitions.subscribe((change) => this.workerAutoReleaseActivity.observePane(change))
+    this.agentTransitions.subscribe((change) => {
+      if (change.kind === 'moved') {
+        this.claudeSessionNames.observeTurnChange(change.paneKey)
+      }
+    })
     const saveMovedWorkerSessions = watchMovedWorkerResumeSessions(
       this,
       () => this._orchestrationDb

@@ -157,6 +157,7 @@ export type RuntimeStore = {
     claudeSubagentNavigationEnabled?: GlobalSettings['claudeSubagentNavigationEnabled']
     followSymlinkedDirectories?: GlobalSettings['followSymlinkedDirectories']
     tabAutoGenerateTitle?: GlobalSettings['tabAutoGenerateTitle']
+    claudeSessionNameSync?: GlobalSettings['claudeSessionNameSync']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
     agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']

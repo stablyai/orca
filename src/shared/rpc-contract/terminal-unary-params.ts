@@ -164,6 +164,12 @@ export const TerminalRename = TerminalHandle.extend({
   })
 })
 
+// A tab the window named; its Claude pane on this host takes the name with `/rename`.
+export const TerminalSyncAgentSessionName = z.object({
+  tabId: z.string().min(1),
+  title: z.union([z.string(), z.null()])
+})
+
 // An explicit empty string clears the pane; an omitted title must not clear it.
 export const TerminalSetPaneTitle = TerminalHandle.extend({
   title: z.string()

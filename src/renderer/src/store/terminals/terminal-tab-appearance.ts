@@ -5,6 +5,7 @@ import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
 import { captureStructuredChatRename } from '@/runtime/native-chat/naming/structured-chat-rename-action'
+import { syncLocalClaudeSessionName } from '@/runtime/claude-session-name-sync'
 
 export function createTerminalTabAppearanceActions(
   set: TerminalStoreSet,
@@ -47,8 +48,11 @@ export function createTerminalTabAppearanceActions(
             )
           )
           .finally(action.finish)
-      } else if (item) {
-        get().setTabCustomLabel(item.id, title, opts)
+      } else {
+        if (item) {
+          get().setTabCustomLabel(item.id, title, opts)
+        }
+        syncLocalClaudeSessionName(tabId, title)
       }
     },
     setTabColor: (tabId, color, opts) => {

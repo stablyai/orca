@@ -315,10 +315,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     const apply = (): Promise<LayoutApplyReply> =>
       Layout.applyWindowLayoutCommand(
         this.requireStore(),
-        (worktreeId, tabId) =>
-          tabId !== null
-            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
+        (worktreeId, tabId) => this.layoutHostIdsFor(worktreeId, tabId),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
         { ...this.layoutCommandRun(command), ...run }
@@ -327,6 +324,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
       ? this.inResumeRecordOrder(apply)
       : (placing?.then(apply) ?? apply()))
+    this.syncClaudeSessionNameAfterLayoutApply(command, reply)
     // The frame precedes the reply so the window can wait for its visible change.
     return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }

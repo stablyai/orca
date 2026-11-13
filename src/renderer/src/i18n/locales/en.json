@@ -993,6 +993,10 @@
         "title": "Warn when a Codex tab shares a server",
         "description": "Shows a notice on a Codex you started yourself when it shares a server with other tabs, because its agent status may be wrong."
       },
+      "claudeSessionNameSync": {
+        "title": "Sync tab names with Claude Code sessions",
+        "description": "Renaming a tab that runs Claude Code also renames its session, as /rename does, and /rename in Claude Code renames the tab."
+      },
       "environmentName": "Environment variable name",
       "environmentValue": "Value for {{name}}",
       "savedEnvironment": "Saved value · enter to replace",

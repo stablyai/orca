@@ -716,6 +716,7 @@ import {
   TerminalSetViewerColors,
   TerminalSplit,
   TerminalStopExact,
+  TerminalSyncAgentSessionName,
   TerminalViewClaudeAgent,
   TerminalWait
 } from './terminal-unary-params'
@@ -1620,6 +1621,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.stopExact': TerminalStopExact,
   'terminal.subscribe': TerminalSubscribe,
   'terminal.subscribeClaudeAgentViews': null,
+  'terminal.syncAgentSessionName': TerminalSyncAgentSessionName,
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.viewClaudeAgent': TerminalViewClaudeAgent,

@@ -2,6 +2,7 @@ import type { AntigravityChatAuthSettings } from './antigravity-chat-auth-config
 import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
+import type { ClaudeSessionNameSyncSettings } from './claude-session-name-sync-settings'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
@@ -30,6 +31,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
+  ClaudeSessionNameSyncSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
