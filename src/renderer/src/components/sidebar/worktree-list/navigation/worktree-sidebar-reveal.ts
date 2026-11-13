@@ -116,7 +116,7 @@ export function revealElementInScrollContainer(
     return true
   }
   const targetTop = Math.max(0, nextScrollTop)
-  supersedeVirtualizedScrollAnchorRestore(container, targetTop)
+  supersedeVirtualizedScrollAnchorRestore(container, scrollTo ? undefined : targetTop)
   onScrollIssued?.(targetTop)
   const scrollBehavior = motionSafeScrollBehavior(behavior)
   if (scrollTo) {

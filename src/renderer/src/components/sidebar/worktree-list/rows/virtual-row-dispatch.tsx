@@ -268,6 +268,7 @@ export function renderWorktreeVirtualRow(
             ? renderFolderWorkspaceOption({
                 ctx: ctx.folderWorkspace,
                 row,
+                frame,
                 lineage: { onToggle: folderLineageToggle(ctx, row), childIsActive: activeFamily }
               })
             : renderWorktreeItemRow(

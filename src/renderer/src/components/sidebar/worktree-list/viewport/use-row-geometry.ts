@@ -158,8 +158,17 @@ export function useWorktreeRowGeometry(args: {
         if (!first || !last) {
           return false
         }
-        const top = rect.top + first.start
-        const bottom = rect.top + last.end - projection.frames[frame.end].after
+        const top = rect.top + first.start + frame.before
+        let trailing = 0
+        let parent = frame.parent
+        while (parent !== null) {
+          const ancestor = projection.frames[parent]
+          if (ancestor.end === frame.end) {
+            trailing += 7
+          }
+          parent = ancestor.parent
+        }
+        const bottom = rect.top + last.end - projection.frames[frame.end].after - trailing
         return isReorderInsideFolderBounds(point, {
           left: rect.left + frame.left + 4,
           right: rect.right - frame.right,

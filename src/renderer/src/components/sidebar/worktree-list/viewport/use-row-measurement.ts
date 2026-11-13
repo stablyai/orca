@@ -93,7 +93,14 @@ export function useVirtualRowMeasurementSync(args: {
     measureMountedRows()
     const frameId = window.requestAnimationFrame(measureMountedRows)
     return () => window.cancelAnimationFrame(frameId)
-  }, [activeRenderRowKeys, prCacheLen, issueCacheLen, measureMountedRows, virtualizer])
+  }, [
+    activeRenderRowKeys,
+    prCacheLen,
+    issueCacheLen,
+    measureMountedRows,
+    virtualizer,
+    virtualization.smoothScrollRevision
+  ])
 
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,

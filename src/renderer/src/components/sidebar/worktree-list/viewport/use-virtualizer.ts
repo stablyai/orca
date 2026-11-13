@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useReducer, useRef } from 'react'
 import type React from 'react'
 import {
-  elementScroll,
   measureElement as measureVirtualElementSize,
   useVirtualizer
 } from '@tanstack/react-virtual'
@@ -18,6 +17,7 @@ import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
 import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../navigation/worktree-sidebar-reveal'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createSidebarSmoothReveal } from './sidebar-smooth-reveal'
 
 export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualizer>
 
@@ -104,6 +104,11 @@ export function useWorktreeListVirtualizer(args: {
     [firstHeaderIndex, isCurrentVirtualRowElement, renderRows]
   )
 
+  const [smoothScrollRevision, onRetired] = useReducer((revision: number) => revision + 1, 0)
+  const smoothReveal = useMemo(
+    () => createSidebarSmoothReveal({ marks: args.programmaticScrollMarks, onRetired }),
+    [args.programmaticScrollMarks, onRetired]
+  )
   const virtualizer = useVirtualizer({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
@@ -140,18 +145,14 @@ export function useWorktreeListVirtualizer(args: {
     scrollPaddingStart: WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
     // Why: seed scrollOffset from the ref (not 0) so the first getVirtualItems() after remount picks the right rows.
     initialOffset: () => scrollOffsetRef.current,
-    scrollToFn: (offset, options, instance) => {
-      const target = offset + (options.adjustments ?? 0)
-      if (instance.scrollElement?.scrollTop !== target) {
-        args.programmaticScrollMarks.mark(target)
-      }
-      elementScroll(offset, options, instance)
-    },
+    scrollToFn: smoothReveal.scrollTo,
+    observeElementOffset: smoothReveal.observeOffset,
     getItemKey: getVirtualItemKey
   })
 
   return {
     virtualizer,
+    smoothScrollRevision,
     programmaticScrollMarks: args.programmaticScrollMarks,
     rowIndexByKey: args.projection.rowIndexByKey,
     restoreSignal: args.projection.restoreSignal,
