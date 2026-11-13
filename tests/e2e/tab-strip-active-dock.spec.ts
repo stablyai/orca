@@ -84,7 +84,7 @@ test.describe('Tab strip active-tab dock', () => {
 
       const strip = orcaPage.locator(STRIP).first()
       await strip.evaluate((el) => {
-        el.style.maxWidth = '200px'
+        el.style.maxWidth = '150px'
       })
       await expect(strip).toHaveAttribute('data-active-tab-dock-disabled', '')
       await strip.evaluate((el, side) => {
@@ -97,7 +97,7 @@ test.describe('Tab strip active-tab dock', () => {
       await expect(activeTab).toHaveCount(0)
 
       await strip.evaluate((el) => {
-        el.style.maxWidth = '400px'
+        el.style.maxWidth = '220px'
       })
       await expect(strip).not.toHaveAttribute('data-active-tab-dock-disabled')
       await strip.evaluate((el, side) => {
@@ -126,7 +126,7 @@ test.describe('Tab strip active-tab dock', () => {
 
     const strip = orcaPage.locator(STRIP).first()
     await strip.evaluate((el) => {
-      el.style.maxWidth = '200px'
+      el.style.maxWidth = '150px'
     })
     await expect(strip).toHaveAttribute('data-active-tab-dock-disabled', '')
     await strip.evaluate((el) => {

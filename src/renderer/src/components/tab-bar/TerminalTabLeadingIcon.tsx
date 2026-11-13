@@ -20,6 +20,8 @@ type TerminalTabLeadingIconProps = {
   isActive: boolean
   /** Program-reported 0–100 for the tab's live work; fills the state ring. */
   progress?: number
+  /** Icon-only slot: identity icon with the bell or state as a corner badge, so 32px fits. */
+  compact?: boolean
 }
 
 type TerminalTabAgentIdentityIconProps = {
@@ -50,9 +52,49 @@ export function TerminalTabLeadingIcon({
   shell,
   showUnreadActivity,
   isActive,
-  progress
+  progress,
+  compact = false
 }: TerminalTabLeadingIconProps): React.JSX.Element {
   const t = useTranslate()
+  if (compact) {
+    const dotState = showUnreadActivity ? null : terminalTabActivityToAgentDotState(activityStatus)
+    return (
+      <span
+        className="relative inline-flex shrink-0"
+        data-testid={showUnreadActivity ? 'tab-activity-bell' : undefined}
+        aria-label={
+          showUnreadActivity
+            ? t(
+                'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
+                'Unread agent completion'
+              )
+            : undefined
+        }
+      >
+        {agent ? (
+          <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} />
+        ) : (
+          <span className={`inline-flex ${isActive ? '' : 'opacity-70'}`} aria-hidden>
+            <ShellIcon shell={shell} size={12} />
+          </span>
+        )}
+        {showUnreadActivity ? (
+          <span
+            aria-hidden
+            className="absolute -right-1 -top-1 size-1.5 rounded-full bg-amber-500 ring-1 ring-tab-inactive"
+          />
+        ) : dotState ? (
+          <span
+            className="absolute -right-1.5 -top-1.5 inline-flex"
+            data-testid="tab-agent-activity-indicator"
+            data-agent-activity-status={activityStatus}
+          >
+            <AgentStateDot state={dotState} size="sm" title={null} progress={progress} />
+          </span>
+        ) : null}
+      </span>
+    )
+  }
   if (showUnreadActivity) {
     return (
       <span

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
@@ -12,6 +12,15 @@ import { useTabBarItemActions } from './use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { useTranslate } from '@/i18n/use-translate'
+import { useTabDragActive } from '../tab-group/tab-drag-context'
+import { useTabStripCondense } from './use-tab-strip-condense'
+import type { TabStripEntry } from './TabStripOverflowChip'
+import { useTerminalTabAttentionIds } from './use-terminal-tab-attention-ids'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+
+const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
+const NO_TERMINAL_TABS: readonly TerminalTab[] = []
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const t = useTranslate()
@@ -91,6 +100,19 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     groupId: runtime.resolvedGroupId,
     groupActiveTabId: props.groupActiveTabId ?? null
   })
+  const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_ROWS
+  const stripEntries = useMemo<TabStripEntry[]>(
+    () => [
+      ...itemProjection.orderedItems.map((item) => ({ id: item.id, kind: 'item' as const, item })),
+      ...clientHostedBrowserRows.map((row) => ({
+        id: row.browserPageId,
+        kind: 'paired' as const,
+        row
+      }))
+    ],
+    [itemProjection.orderedItems, clientHostedBrowserRows]
+  )
+  const stripIds = useMemo(() => stripEntries.map((entry) => entry.id), [stripEntries])
   const tabStripNavigation = useTabStripOverflowNavigation({
     activeVisibleTabId: itemProjection.activeVisibleTabId,
     activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
@@ -100,14 +122,34 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     ].join('|'),
     worktreeId
   })
+  const isTabDragActive = useTabDragActive()
+  const condense = useTabStripCondense({
+    ids: stripIds,
+    activeId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
+    frozen: isTabDragActive,
+    hasOverflow: tabStripNavigation.tabStripOverflowState.hasOverflow
+  })
+  // Only an overflowing strip has a chip whose dot and list need attention state.
+  const attentionTerminalTabs = useMemo(
+    () =>
+      condense.hiddenIds.size === 0
+        ? NO_TERMINAL_TABS
+        : itemProjection.orderedItems.flatMap((item) =>
+            item.type === 'terminal' ? [item.data] : []
+          ),
+    [condense.hiddenIds, itemProjection.orderedItems]
+  )
+  const attentionIds = useTerminalTabAttentionIds(attentionTerminalTabs)
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
+  const { setSurface } = condense
   const surfaceRef = useCallback(
     (node: HTMLDivElement | null) => {
       clearPendingNewTabMenuFocusOnUnmount(node)
       attachFileDropOwner(node)
+      setSurface(node)
     },
-    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
+    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount, setSurface]
   )
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
@@ -124,7 +166,10 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       tabStripDragScroll,
       activeClientHostedBrowserRowId,
       itemActions,
-      surfaceRef
+      surfaceRef,
+      condense,
+      stripEntries,
+      attentionIds
     },
     t
   )

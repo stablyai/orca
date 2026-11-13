@@ -214,7 +214,13 @@ export default function BrowserTab({
           fallbackClassName="text-blue-500"
         />
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
+      {isPinned && (
+        <Pin
+          className="mr-1 size-3 shrink-0 text-muted-foreground"
+          aria-hidden
+          data-tab-compact-hide=""
+        />
+      )}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {showAudioControl && (
         // Why: unlike close, stays visible on inactive tabs; finding the playing tab is the point.
