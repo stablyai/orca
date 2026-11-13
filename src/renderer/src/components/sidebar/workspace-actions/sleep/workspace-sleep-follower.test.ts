@@ -46,7 +46,7 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-workspace-store', () => ({
-  getCloudWorkspaceSnapshot: () => ({ ids: mocks.cloudIds })
+  getCloudWorkspaceSnapshot: () => ({ ids: mocks.cloudIds, paired: {} })
 }))
 vi.mock('@/lib/orca-cloud/cloud-predictive-wake', () => ({
   notePredictiveWakeSlept: mocks.notePredictiveWakeSlept
@@ -68,7 +68,10 @@ vi.mock('./browser-tab-sleep', () => ({
 }))
 
 import { followWorkspaceSleep, keepWorkspaceAwakeDuringSleep } from './workspace-sleep-follower'
-import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
+import {
+  forgetWorktreeSleepIntent,
+  hasWorktreeSleepIntent
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   hasWakeAfterSleepRequest,
   requestWakeAfterSleep,

@@ -1,6 +1,7 @@
 import type { AppState } from '../../types'
 import { workspaceEditorFiles } from '../editor/tabs/workspace-editor-files'
 import { hasSplitLandingGroup } from './split-landing-groups'
+import { isWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
 
 // Last user-close lands on welcome; failed-create cleanup preserves selection.
 type LandingState = Pick<
@@ -25,6 +26,9 @@ export function landsOnEmptiedWorktree(
 ): boolean {
   return (
     current.activeWorktreeId === worktreeId &&
+    // SLEEP-HOME-REGRESSION: a cloud workspace put to sleep on screen stays selected, read-only,
+    // when its sleep closes its last tab (the host stops its terminals; the asleep view covers it).
+    !isWorktreeSleepViewHeld(worktreeId) &&
     remainingTabs === 0 &&
     (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
     (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&

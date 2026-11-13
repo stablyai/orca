@@ -4,6 +4,7 @@ import { armFloatingPanelReclaimIntent } from '@/components/floating-terminal/fl
 import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { selectFloatingVisibleTabCount } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
+import { isWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
 
 /** Capture panel ownership before prompts/removal blur it; run the captured reaction only after the close lands. */
 export function captureWorkspaceEmptiedReaction(
@@ -25,7 +26,9 @@ export function captureWorkspaceEmptiedReaction(
 
 function leaveWorktreeIfEmpty(worktreeId: string): void {
   const state = useAppStore.getState()
-  if (state.activeWorktreeId !== worktreeId) {
+  // A cloud workspace put to sleep on screen stays, read-only, even with no tab left (its chat
+  // asleep, its terminal gone): the asleep view covers the workspace (SLEEP-HOME-REGRESSION).
+  if (state.activeWorktreeId !== worktreeId || isWorktreeSleepViewHeld(worktreeId)) {
     return
   }
   // Why: split-group closes bypass legacy Terminal.tsx; deselect the emptied worktree here or the window goes blank instead of landing.

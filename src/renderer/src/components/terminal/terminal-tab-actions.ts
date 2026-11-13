@@ -26,6 +26,7 @@ import {
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 import { runAsAutomaticDeselection } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
+import { isWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
   terminalTabCloseStoreReason,
@@ -249,7 +250,11 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
   ) {
     // Re-read after closeUnifiedTab repairs/deactivates the surface; stale state must not clobber it.
     const current = useAppStore.getState()
-    if (current.activeWorktreeId === owningWorktreeId) {
+    // A held asleep cloud workspace stays selected with no tab (SLEEP-HOME-REGRESSION).
+    if (
+      current.activeWorktreeId === owningWorktreeId &&
+      !isWorktreeSleepViewHeld(owningWorktreeId)
+    ) {
       // Only unified renderable count includes agent-session/simulator tabs when proving the worktree empty.
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
       if (renderableTabCount === 0 && !hasSplitLandingGroup(current, owningWorktreeId)) {

@@ -40,9 +40,12 @@ export function holdActiveCloudSleepView(worktreeId: string): boolean {
   if (isWorktreeSleepViewHeld(worktreeId)) {
     return true
   }
+  const cloud = getCloudWorkspaceSnapshot()
+  // SLEEP-HOME-REGRESSION: a paired cloud workspace (no local VM record) stays on screen asleep
+  // too, as on n46/n48; leaving it for Home lost the read-only view and "Wake to continue".
   if (
     useAppStore.getState().activeWorktreeId !== worktreeId ||
-    !getCloudWorkspaceSnapshot().ids.has(worktreeId)
+    !(cloud.ids.has(worktreeId) || worktreeId in cloud.paired)
   ) {
     return false
   }

@@ -26,13 +26,23 @@ vi.mock('@/store', () => ({
     }
   }
 }))
+const cloud = vi.hoisted((): { ids: Set<string>; paired: Record<string, string> } => ({
+  ids: new Set<string>(),
+  paired: {}
+}))
 vi.mock('@/lib/orca-cloud/orca-cloud-workspace-store', () => ({
-  getCloudWorkspaceSnapshot: () => ({ ids: new Set<string>() })
+  getCloudWorkspaceSnapshot: () => cloud
 }))
 
-import { holdRestoredAsleepCloudSelection } from './workspace-sleep-view-hold'
+import {
+  holdActiveCloudSleepView,
+  holdRestoredAsleepCloudSelection
+} from './workspace-sleep-view-hold'
 import { cloudVmRecord } from './cloud-vm-record.test-fixture'
-import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
+import {
+  forgetWorktreeSleepIntent,
+  hasWorktreeSleepIntent
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { isWorktreeSleepViewHeld, resetWorktreeSleepViewForTests } from '@/lib/worktree-sleep-view'
 
 describe('restoring an asleep Orca Cloud selection at startup (RA-13b)', () => {
@@ -62,5 +72,35 @@ describe('restoring an asleep Orca Cloud selection at startup (RA-13b)', () => {
     expect(holdRestoredAsleepCloudSelection([])).toBeNull()
     expect(hasWorktreeSleepIntent('ws')).toBe(false)
     expect(isWorktreeSleepViewHeld('ws')).toBe(false)
+  })
+})
+
+describe('sleeping the cloud workspace on screen (SLEEP-HOME-REGRESSION)', () => {
+  beforeEach(() => {
+    store.listeners.clear()
+    store.select('ws')
+    cloud.ids.clear()
+    for (const key of Object.keys(cloud.paired)) {
+      delete cloud.paired[key]
+    }
+  })
+  afterEach(() => {
+    resetWorktreeSleepViewForTests()
+  })
+
+  it('holds a paired cloud workspace read-only on screen, like an owned one', () => {
+    cloud.paired['ws'] = 'env-paired'
+    expect(holdActiveCloudSleepView('ws')).toBe(true)
+    expect(isWorktreeSleepViewHeld('ws')).toBe(true)
+  })
+
+  it('holds an owned one as before, and never a local workspace or one not on screen', () => {
+    cloud.ids.add('ws')
+    expect(holdActiveCloudSleepView('ws')).toBe(true)
+    resetWorktreeSleepViewForTests()
+    cloud.ids.clear()
+    expect(holdActiveCloudSleepView('ws')).toBe(false)
+    cloud.paired['other'] = 'env-paired'
+    expect(holdActiveCloudSleepView('other')).toBe(false)
   })
 })
