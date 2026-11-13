@@ -96,6 +96,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const hasLineageChildren = deleteLineage.descendants.length > 0
   // Skip-confirm preferences never authorize discarding unsaved editor text.
   const skipConfirm =
+    options.forceConfirm !== true &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
     collectRemovalUnsavedFiles(useAppStore.getState, [target]).length === 0
   if (skipConfirm && !hasLineageChildren) {
@@ -114,7 +115,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
           ])
         }
       : {}),
-    ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
+    ...(hasLineageChildren || options.forceConfirm ? { allowSkipConfirm: false } : {})
   })
 }
 
