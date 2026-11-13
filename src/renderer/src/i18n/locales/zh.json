@@ -2108,6 +2108,11 @@
         "pasteTooLarge": "粘贴内容过大"
       },
       "useMacosTccPromptNotice": {
+        "titleOne": "macOS 刚刚打断了一个代理",
+        "titleMany": "macOS 已打断你的代理 {{count}} 次",
+        "subtitle": "开启完全磁盘访问权限后，就不会再弹出这些文件访问提示",
+        "enable": "开启完全磁盘访问权限",
+        "close": "关闭",
         "dismiss": "不再显示"
       },
       "useInstalledAgentSkills": {
