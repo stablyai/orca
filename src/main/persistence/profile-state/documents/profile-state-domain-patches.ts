@@ -113,7 +113,13 @@ export function prepareProfileStateDomainPatches(
   })
 }
 
-export function defineProfileStateOwnValue(object: object, key: string, value: unknown): void {
+type ProfileStatePropertyTarget = Record<string, unknown> | unknown[]
+
+export function defineProfileStateOwnValue(
+  object: ProfileStatePropertyTarget,
+  key: string,
+  value: unknown
+): void {
   Object.defineProperty(object, key, {
     value,
     enumerable: true,
