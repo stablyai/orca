@@ -162,13 +162,17 @@ export function useWorktreeCardReviewDetails({
     cachedBranchPR !== undefined &&
     hostedReview?.provider === 'github' &&
     hostedReview.number === cachedBranchPR.number
+  // Why: branch lookups rank an active review above merged history, so a live open/draft review outranks an older merged PR at this head.
+  const hostedReviewIsActive = hostedReview?.state === 'open' || hostedReview?.state === 'draft'
   const useCachedBranchReview =
     cachedBranchPR !== undefined &&
     cachedBranchPR !== null &&
     !hasNonGitHubLinkedReview &&
     cachedBranchPRCanDriveDisplay &&
     (hostedReview === undefined ||
-      (cachedMergedBranchPRMatchesCurrentHead && !hostedReviewMatchesHeadMatchedCachedMergedPR) ||
+      (cachedMergedBranchPRMatchesCurrentHead &&
+        !hostedReviewMatchesHeadMatchedCachedMergedPR &&
+        !hostedReviewIsActive) ||
       (hostedReview === null &&
         ((cachedBranchPRFetchedAt !== undefined &&
           cachedBranchPRFetchedAt > (hostedReviewEntry?.fetchedAt ?? 0)) ||
