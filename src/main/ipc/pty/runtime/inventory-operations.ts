@@ -3,6 +3,7 @@ import { getProvider, localProvider, registeredPtyProviders } from '../provider/
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 
 function markSshInventoryUnverifiable(
   runtime: PtyRuntimeControllerDeps['runtime'],
@@ -68,4 +69,17 @@ export async function listProcessesFromRuntimeController(
     }
   }
   return (await listProcessesWithHostScopeFromRuntimeController(deps, opts)).processes
+}
+
+/** Exit proof needs the provider that owns local PTYs, so it waits out startup and names who answered. */
+export async function listLocalProcessesForExitProofFromRuntimeController(
+  deps: PtyRuntimeControllerDeps
+): Promise<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }> {
+  await deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
+  const provider = localProvider
+  const processes = await provider.listProcesses()
+  if (provider !== localProvider) {
+    throw new Error('The local PTY provider changed while listing; its answer proves nothing.')
+  }
+  return { processes, inProcessOwner: provider instanceof LocalPtyProvider }
 }

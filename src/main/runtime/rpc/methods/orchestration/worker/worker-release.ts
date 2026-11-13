@@ -19,6 +19,7 @@ import {
   WorkerRetainParams
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
+import { settleProvenExitedWorkerTerminal } from './release/worker-release-proven-exit'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineOrchestrationMethod({
@@ -56,27 +57,20 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
       }
       if (requested.disposition === 'retained') {
         const resource = requested.resource
-        const processIncarnation = resource?.process_incarnation
-        if (
-          processIncarnation &&
-          (await runtime.inspectTerminalProcessIncarnationLiveness(
-            processIncarnation,
-            resource.host_scope
-          )) === 'exited'
-        ) {
-          const reconciled = db.settleDeadWorkerTerminalRelease({
-            requestingDispatchId: params.dispatch,
-            resourceId: resource.id,
-            processIncarnation
-          })
-          if (reconciled.disposition === 'released') {
-            runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-            return {
+        const exited = resource
+          ? await settleProvenExitedWorkerTerminal({
+              runtime,
+              db,
               dispatchId: params.dispatch,
-              state: 'released',
-              processAction: 'none',
-              archive: archiveSummary(reconciled.resource)
-            }
+              resource
+            })
+          : null
+        if (exited) {
+          return {
+            dispatchId: params.dispatch,
+            state: 'released',
+            processAction: 'none',
+            archive: archiveSummary(exited)
           }
         }
         return {
