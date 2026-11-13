@@ -18,7 +18,7 @@ import type {
   CatalogOption
 } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import { agentPermissionArgsForLaunch } from '../../agent-launch/permissions/agent-permission-args'
 import {
   readLaunchPermissionChoice,

@@ -7,13 +7,13 @@ import { buildWslExecArgs } from '../../../../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../../../../shared/wsl-paths'
 import { resolveWslExecutablePath } from '../../../../wsl/execution/wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from '../../../../wsl/execution/wsl-interop-spawn-directory'
-import { admitWslTranscriptPath } from '../../../../native-chat/wsl-transcript-running-admission'
+import { admitWslTranscriptPath } from '../../../../native-chat/transcript-filesystem/wsl-transcript-running-admission'
 import { noteWslDistroMayHaveStopped } from '../../../../wsl/discovery/wsl-background-distro-gate'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
 import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 import { buildRelayAiVaultServiceEnv } from '../../../scan-service/session-scanner-service-env'
-import { AiVaultScanIssueError } from '../../../session-scan-issues'
+import { AiVaultScanIssueError } from '../../../parsing/session-scan-issues'
 import {
   AI_VAULT_SCAN_ISSUE_COPY,
   aiVaultScanIssueText

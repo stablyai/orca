@@ -2,8 +2,8 @@
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import { resolveHostId } from '../../../persistence/loading-store/session-host-partitions'
-import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
+import { applyCommandToSession } from '../../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 

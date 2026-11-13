@@ -24,13 +24,13 @@ vi.mock('../../command-runner/git-exec-file-sync', async (importOriginal) => ({
   gitExecFileSync: gitExecFileSyncMock
 }))
 
-vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => ({
+vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
 // Keep the ordered runner queues; worktree-checkout-progress-real-git covers the checkout.workers read.
-vi.mock('../../command-runner/checkout-workers-git-args', () => ({
+vi.mock('./checkout-workers-git-args', () => ({
   checkoutWorkersGitArgs: async () => []
 }))
 

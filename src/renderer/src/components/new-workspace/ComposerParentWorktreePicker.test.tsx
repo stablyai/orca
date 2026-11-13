@@ -159,19 +159,28 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('ComposerParentWorktreePicker', () => {
-  it('restricts candidates to the active folder workspace subtree', () => {
+  it('offers live folder descendants through retired roots and intermediate parents', () => {
     const attached = makeWorktree({
       id: 'attached',
       displayName: 'Attached',
-      instanceId: 'attached-instance'
+      instanceId: 'attached-instance',
+      removing: true,
+      removalRecorded: true
     })
     const nested = makeWorktree({
       id: 'nested',
       displayName: 'Nested',
       instanceId: 'nested-instance'
     })
+    const bridge = makeWorktree({
+      id: 'bridge',
+      instanceId: 'bridge-instance',
+      removing: true,
+      removalRecorded: true
+    })
+    const leaf = makeWorktree({ id: 'leaf', displayName: 'Leaf', instanceId: 'leaf-instance' })
     const outside = makeWorktree({ id: 'outside', displayName: 'Outside' })
-    seed([attached, nested, outside])
+    seed([attached, nested, bridge, leaf, outside])
     storeState.workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(attached.id)]: {
         childWorkspaceKey: worktreeWorkspaceKey(attached.id),
@@ -192,23 +201,45 @@ describe('ComposerParentWorktreePicker', () => {
         origin: 'manual',
         capture: { source: 'manual-action', confidence: 'explicit' },
         createdAt: 2
+      },
+      [bridge.id]: {
+        worktreeId: bridge.id,
+        worktreeInstanceId: 'bridge-instance',
+        parentWorktreeId: nested.id,
+        parentWorktreeInstanceId: 'nested-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 3
+      },
+      [leaf.id]: {
+        worktreeId: leaf.id,
+        worktreeInstanceId: 'leaf-instance',
+        parentWorktreeId: bridge.id,
+        parentWorktreeInstanceId: 'bridge-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 4
       }
     }
-
+    const onChange = vi.fn()
     render(
       <ComposerParentWorktreePicker
         repoId={REPO_ID}
         value={null}
-        onChange={vi.fn()}
+        onChange={onChange}
         activeFolderWorkspaceId="folder-1"
       />
     )
     fireEvent.click(trigger())
 
     const labels = candidateLabels().join(' ')
-    expect(labels).toContain('Attached')
+    expect(labels).not.toContain('Attached')
+    expect(labels).not.toContain('bridge')
     expect(labels).toContain('Nested')
+    expect(labels).toContain('Leaf')
     expect(labels).not.toContain('Outside')
+    fireEvent.click(rows().find((row) => row.textContent?.includes('Leaf'))!)
+    expect(onChange).toHaveBeenCalledWith('leaf')
   })
 
   it('closes an open popover when the drawer collapses the trigger', () => {

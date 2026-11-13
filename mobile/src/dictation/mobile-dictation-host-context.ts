@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileDictationAwayTarget } from './mobile-dictation-away-insert'
+import type { MobileDictationLiveText } from './use-mobile-dictation-announcements'
+import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
+import type { StopAfterSilenceSeconds } from '../../../src/shared/dictation-silence-stop'
 
 export type MobileDictationHostToast = { message: string; open?: () => void }
 
@@ -19,7 +22,14 @@ export type MobileDictationOwner = {
   // The target tab's pane key, for a screen still in the stack to switch back to it.
   readonly paneKey: string | undefined
   readonly dictationMode: string | undefined
+  readonly silenceSeconds: StopAfterSilenceSeconds
   readonly removeFillerWords: boolean
+  // The computer's terms for this worktree, for words the phone recognizes itself.
+  readonly dictationTerms: readonly DictationTerm[] | undefined
+  // The computer spells its own words with this worktree's repo terms.
+  readonly worktreeId: string
+  // The computer that would transcribe it, for what a screen reader hears; null when the phone lacks its name.
+  readonly computerName: string | null
 }
 
 // A mounted session screen, as the dictation host sees it.
@@ -43,6 +53,8 @@ export type MobileDictationHost = {
   readonly start: (owner: MobileDictationOwner) => Promise<void>
   // Stop with the selection tick, as every stop button does.
   readonly stop: () => void
+  // Say something to the screen reader; a screen's own toast is not read on the page.
+  readonly announce: (message: string) => void
   readonly attach: (screen: MobileDictationScreen) => () => void
   // A screen's shown() answer changed; the pill reads it on render.
   readonly refresh: () => void
@@ -64,6 +76,8 @@ export type MobileDictationPill = {
   readonly clearToast: () => void
   // The tallest bottom bar a screen reported, so the pill floats above it.
   readonly clearance: number
+  // Announcements the shell could not speak, for the page's live region (TalkBack, older shells).
+  readonly liveText: MobileDictationLiveText
 }
 
 export const MobileDictationHostContext = createContext<MobileDictationHost | null>(null)

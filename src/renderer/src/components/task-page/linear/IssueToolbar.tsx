@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { ChevronLeft, SlidersHorizontal, List, ArrowDownUp, Eye } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   DropdownMenu,
   DropdownMenuTrigger,

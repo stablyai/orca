@@ -5,7 +5,7 @@ import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 // How a durable session record becomes a Codex process launch.
 //
 // Every input except the account is read back from the record the store already made durable,
@@ -29,11 +29,13 @@ import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-s
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
+import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
@@ -160,7 +162,15 @@ export function codexStructuredLaunchPart(
       launch: {
         command,
         prefixArgs,
-        args: [...prefixArgs, ...args, 'app-server'],
+        // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
+        args: [
+          ...prefixArgs,
+          ...codexOrcaHooksOffArgs(
+            accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
+          ),
+          ...args,
+          'app-server'
+        ],
         codexHome: accountHome.path,
         resumeThreadId,
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.

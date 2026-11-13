@@ -17,6 +17,7 @@ export type AttachMobileImageDeps = {
   readonly pickImage: (source: MobileImageSource) => Promise<PickedMobileImage | null>
   // Start spinner only after selection; the OS picker may remain open a long time.
   readonly onUploadStart?: () => void
+  readonly fitImage?: (image: PickedMobileImage) => Promise<PickedMobileImage>
   readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
 }
 
@@ -30,14 +31,16 @@ export async function attachMobileImageToTerminal(
     getConnectionId,
     pickImage,
     onUploadStart,
+    fitImage,
     beforeTerminalSend
   }: AttachMobileImageDeps
 ): Promise<boolean> {
-  const picked = await pickImage(source)
-  if (!picked) {
+  const pickedImage = await pickImage(source)
+  if (!pickedImage) {
     return false
   }
   onUploadStart?.()
+  const picked = fitImage ? await fitImage(pickedImage) : pickedImage
   const connectionId = await getConnectionId()
   const imagePath = await saveMobileClipboardImageAsTempFile(client, picked.base64, {
     connectionId,

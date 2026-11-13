@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
 import {
   Copy,
   CircleX,
@@ -17,7 +17,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { openExternalLink } from '../../platform/external-link'
 import { useClipboardWriter } from '../../platform/clipboard'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 import { LIST_LEADING_SLOT, LIST_ROW_PADDING } from '../list/ListGroup'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../ActionSheetModal'
@@ -58,7 +58,7 @@ export function PrCheckFailureRow({
   const [showLog, setShowLog] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
-  const menuRef = useRef<View>(null)
+  const menuRef = useRef<HostInstance>(null)
   const details = entry?.status === 'loaded' ? entry.details : null
   const content = details ? presentCheckDetail(details) : null
   const annotation = content?.annotations[0] ?? null

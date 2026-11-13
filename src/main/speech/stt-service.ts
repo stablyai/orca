@@ -1,10 +1,12 @@
 import type { MessagePortMain } from 'electron'
+import { dictationVocabulary, type DictationTerm } from '../../shared/dictation-dictionary'
 import {
   createDictationTextPipeline,
   type DictationTextSettings
 } from '../../shared/dictation-text-pipeline'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
+import { sileroVadLanded } from './speech-vad-model'
 import type { SpawnSttWorkerProcess } from './stt-worker-process'
 import { prewarmSttModel } from './stt-session-prewarm'
 import { startSttDictation } from './stt-session-start'
@@ -16,12 +18,14 @@ import {
   teardownIdleSttEngine
 } from './stt-session-stop'
 
-export { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
+export { START_DICTATION_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
 
 export type SttEvent =
   | { type: 'ready' }
   | { type: 'partial'; text?: string }
   | { type: 'final'; text?: string }
+  /** Speech was heard whose text hasn't arrived yet; only from pause-cut on-device models. */
+  | { type: 'speech-pending'; pending: boolean }
   | { type: 'stopped' }
   | { type: 'error'; error?: string }
 
@@ -42,21 +46,43 @@ export class SttService {
 
   constructor(modelManager: ModelManager, spawnWorker: SpawnSttWorkerProcess) {
     this.state = createSttSessionState(modelManager, spawnWorker)
+    modelManager.setProgressCallback((modelId) => {
+      if (sileroVadLanded(modelManager, modelId)) {
+        void this.reloadForVad()
+      }
+    })
   }
 
+  /** A recognizer loaded before the VAD landed cuts text only at stop; reload it once no dictation uses it. */
+  private async reloadForVad(): Promise<void> {
+    const engine = this.state.engine
+    if (!engine || engine.retired || engine.vadModelPath) {
+      return
+    }
+    const { modelId, language } = engine
+    const unloaded = this.unloadModelWhenIdle()
+    const generation = this.state.prewarmGeneration
+    await unloaded
+    // A newer pre-warm or a dictation took over; loading is theirs now.
+    if (this.state.prewarmGeneration === generation && !this.state.engine) {
+      await this.prewarm(modelId, language)
+    }
+  }
+
+  /** `terms`: the dictionary for where this dictation goes, repo terms first (dictationTermsFor). */
   startDictation(
     modelId: string,
     sink: SttEventSink,
-    hotwordsFilePath?: string,
+    terms: readonly DictationTerm[] = [],
     owner = 'desktop',
     voice?: Partial<DictationTextSettings>
   ): Promise<void> {
-    const clean = createDictationTextPipeline(getCatalogModel(modelId), voice)
+    const clean = createDictationTextPipeline(getCatalogModel(modelId), voice, terms)
     return startSttDictation(
       this.state,
       modelId,
       clean ? cleanTranscriptEvents(sink, clean) : sink,
-      hotwordsFilePath,
+      dictationVocabulary(terms),
       owner,
       voice?.dictationLanguage
     )

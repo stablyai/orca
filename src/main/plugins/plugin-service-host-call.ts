@@ -1,27 +1,27 @@
 import { capabilityKinds } from '../../shared/plugins/capabilities/plugin-capabilities'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginAuditLog } from './plugin-audit-log'
-import type { PluginHostCallPolicy } from './workers/plugin-host-call-adapter'
+import type { PluginHostCallPolicy } from './workers/host-api/plugin-host-call-adapter'
 import {
   bindPluginHostServices,
   type PluginRuntimeDelegate
-} from './workers/plugin-host-service-bindings'
-import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
-import { pluginHostCallRevoked, type PluginHostCallScope } from './workers/plugin-host-call-scope'
-import type { PluginPanelCaller } from '../../shared/plugins/workers/plugin-panel-bridge-protocol'
-import type { PluginPanelBridgeServices } from './workers/plugin-host-panel-method-bindings'
-import type { PluginPanelBridge } from './panels/plugin-panel-bridge'
+} from './workers/host-api/plugin-host-service-bindings'
+import type { PluginDesktopFrameServices } from './workers/host-api/plugin-host-method-bindings'
 import {
-  pluginStatusBarRevision,
-  type PluginStatusBarState
-} from './status-bar/plugin-status-bar-state'
+  pluginHostCallRevoked,
+  type PluginHostCallScope
+} from './workers/host-api/plugin-host-call-scope'
+import type { PluginPanelCaller } from '../../shared/plugins/workers/plugin-panel-bridge-protocol'
+import type { PluginPanelBridgeServices } from './workers/host-api/plugin-host-panel-method-bindings'
+import type { PluginPanelBridge } from './panels/plugin-panel-bridge'
+import { pluginStatusBarRevision } from './status-bar/plugin-status-bar-state'
 import type {
   PluginHostCallOutcome,
   PluginSurface
 } from '../../shared/plugins/frames/plugin-protocol'
-import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
+import { executePluginHostCallRequest } from './workers/host-api/plugin-host-call-adapter'
 import { getPluginHostRendererActions } from './view/plugin-host-renderer-actions'
-import type { PluginAppearanceService } from './appearance/plugin-appearance-service'
+import type { PluginServiceOptions } from './plugin-service-options'
 
 /** Who made a call: the open panel (frames only), and its host window's WebContents for desktop
  *  IPC calls. */
@@ -73,14 +73,15 @@ export function resolvePluginServiceHostCallPolicy(input: {
   pluginsDataDir: string
   desktop: PluginDesktopFrameServices | null | undefined
   panels: PluginPanelBridgeServices | null
-  statusBar?: PluginStatusBarState | null
-  appearance?: PluginAppearanceService | null
+  /** The service's desktop sinks; each is absent where this Orca has none. */
+  sinks: Pick<PluginServiceOptions, 'statusBar' | 'appearance' | 'editorTypography'>
   audit: PluginAuditLog
   log?: (pluginKey: string) => (line: string) => void
 }): PluginHostCallPolicy {
   const plugin = input.findApprovedPlugin(input.pluginKey)
   return {
     grantedCapabilities: plugin ? capabilityKinds(plugin.manifest.capabilities) : null,
+    allowProposed: plugin?.isDev === true,
     services: input.runtimeDelegate
       ? bindPluginHostServices({
           delegate: input.runtimeDelegate,
@@ -89,8 +90,9 @@ export function resolvePluginServiceHostCallPolicy(input: {
           panels: input.panels,
           renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
-          statusBar: input.statusBar,
-          appearance: input.appearance,
+          statusBar: input.sinks.statusBar,
+          appearance: input.sinks.appearance,
+          editorTypography: input.sinks.editorTypography,
           declaredStatusBarItemIds: plugin?.manifest.contributes.statusBarItems.map(
             (item) => item.id
           ),

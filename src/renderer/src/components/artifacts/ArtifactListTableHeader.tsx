@@ -1,7 +1,7 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { ARTIFACTS_TABLE_GRID_CLASS } from './artifacts-table-layout'
-import { LIST_TABLE_HEADER_CLASS } from '@/lib/list-table-layout'
+import { LIST_TABLE_HEADER_CLASS } from '@/lib/list-interaction/list-table-layout'
 
 export function ArtifactListTableHeader(): React.JSX.Element {
   const t = useTranslate()

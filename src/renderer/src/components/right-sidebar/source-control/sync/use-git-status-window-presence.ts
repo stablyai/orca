@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import type { GitStatusRefreshScheduler } from './git-status-refresh-scheduler'
 
 /** Pause the status scheduler while hidden, catch up on reveal, and re-time it on window focus. */
@@ -40,9 +40,15 @@ export function useGitStatusWindowPresence(
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleWindowFocus)
+    const stopResume = window.api?.ui?.onSystemResumed?.(() => {
+      if (canFetch && isWindowVisible()) {
+        schedulerRef.current?.refreshNow()
+      }
+    })
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleWindowFocus)
+      stopResume?.()
     }
   }, [schedulerRef, canFetch, pollScope])
 }

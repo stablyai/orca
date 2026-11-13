@@ -3,9 +3,9 @@ import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { ConnectionState } from './connection-state'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import { hostStatusSchema, type HostStatusReply } from '../hosts/host-status-reply-schema'
-import { normalizeHostAppVersion } from '../hosts/host-app-version'
-import { recordHostAppVersion } from '../hosts/host-app-version-store'
-import { recordHostDescriptorFromStatus } from '../hosts/host-descriptor-recorder'
+import { normalizeHostAppVersion } from '../../host-descriptors/host-app-version'
+import { recordHostAppVersion } from '../../host-descriptors/host-app-version-store'
+import { recordHostDescriptorFromStatus } from '../../host-descriptors/host-descriptor-recorder'
 import { readConnectionStatusProbe, startRuntimeStatusProbe } from './runtime-status-probe'
 
 export type HostStatusGates = {

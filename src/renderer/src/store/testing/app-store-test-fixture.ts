@@ -52,12 +52,14 @@ import { createRemoteServerUpdatesSlice } from '../slices/runtime-host-updates/r
 import { createTerminalQuickCommandHostsSlice } from '../terminals/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from '../slices/agent-status/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from '../slices/agent-status/structured-chat-slept-at'
+import { createStructuredChatCompanionWritesSlice } from '../slices/agent-status/structured-chat-companion-writes'
 import { createWorkspaceAttentionSlice } from '../slices/workspace-attention/workspace-attention-slice'
 import { createEphemeralVmLifecycleSlice } from '../slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../slices/editor/buffers/editor-buffer-record-lifecycle'
 import { withAgentConversationRetention } from '../slices/agent-status/agent-conversation-retention'
 import { TEST_REPO } from '../repos/repo.test-fixture'
+import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/observations/provider-runtime-context'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
   withEditorBufferRecords(withAgentConversationRetention(creator), check)
@@ -65,6 +67,8 @@ const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: b
 export function createTestStore(
   isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
 ) {
+  // Why: the session generation is module state; a shared test worker would carry another file's bumps into this store.
+  resetProviderRuntimeSessionGenerationForTests()
   // Why the record middleware: views of one file share a record only through it, as in the app.
   return create<AppState>()(
     withTestStorePolicies(
@@ -118,6 +122,7 @@ export function createTestStore(
         ...createTerminalQuickCommandHostsSlice(...a),
         ...createStructuredSessionLaunchDirectorySlice(...a),
         ...createStructuredChatSleptAtSlice(...a),
+        ...createStructuredChatCompanionWritesSlice(...a),
         ...createWorkspaceAttentionSlice(...a),
         ...createEphemeralVmLifecycleSlice(...a)
       }),

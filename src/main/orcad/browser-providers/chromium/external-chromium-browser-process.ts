@@ -1,0 +1,253 @@
+import { z } from 'zod'
+import type { RuntimeBrowserCommandHost } from '../../../runtime/browser/commands/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../../../runtime/browser/commands/browser-commands'
+import { BrowserError } from '../../../browser/browser-error'
+import { assertUploadFilesExist } from '../../../browser/cdp/input/browser-upload-files'
+import {
+  agentBrowserEvalCommand,
+  ExternalChromiumBrowserSession,
+  type ExternalChromiumLaunch
+} from './external-chromium-browser-session'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import {
+  externalChromiumCommandArguments,
+  externalChromiumWaitCommand,
+  normalizeExternalChromiumCommandResult
+} from './external-chromium-command-arguments'
+import {
+  externalChromiumSnapshotResult,
+  type ExternalChromiumPageRecord as PageRecord
+} from './external-chromium-tab-projection'
+import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
+import { runExternalChromiumPageInput, type PageInputSession } from './external-chromium-page-input'
+import { agentBrowserSnapshotArgs } from '../../../browser/agent-browser/protocol/agent-browser-snapshot-arguments'
+import { Snapshot } from '../../../../shared/rpc-contract/browser-observation-params'
+import { ExpectedPageUrlGuard } from '../../../browser/cdp/input/browser-expected-page-url'
+
+const AgentBrowserCurrentUrl = z.object({ url: z.string() })
+
+const AgentBrowserSnapshot = z.object({
+  refs: z
+    .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))
+    .optional(),
+  // An object for --delta/--full: agent-browser's full, unchanged or delta answer.
+  snapshot: z.union([z.string(), z.looseObject({ kind: z.string() })]).optional()
+})
+
+export class ExternalChromiumBrowserProcess {
+  private readonly session: ExternalChromiumBrowserSession
+  private readonly tabs: ExternalChromiumTabRegistry
+  private queue: Promise<void> = Promise.resolve()
+  private available = false
+
+  constructor(agentBrowserPath: string, launch: ExternalChromiumLaunch, statePath: string) {
+    this.session = new ExternalChromiumBrowserSession(agentBrowserPath, launch, statePath)
+    this.tabs = new ExternalChromiumTabRegistry(this.session)
+  }
+
+  async start(signal?: AbortSignal): Promise<void> {
+    const activeTabId = await this.session.start(signal)
+    signal?.throwIfAborted()
+    this.tabs.initialize(activeTabId)
+    this.available = true
+  }
+
+  createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
+    return new Proxy({} as RuntimeBrowserCommands, {
+      // Startup checks membership before resolving commands dynamically.
+      has: (_target, property) => typeof property === 'string' && property !== 'then',
+      get: (_target, property) => {
+        if (property === 'then') {
+          return undefined
+        }
+        if (typeof property !== 'string') {
+          return undefined
+        }
+        return (...args: unknown[]) => this.enqueue(() => this.invoke(host, property, args))
+      }
+    })
+  }
+  isAvailable(): boolean {
+    return this.available
+  }
+
+  async stop(): Promise<void> {
+    this.available = false
+    await this.enqueue(async () => {
+      await this.session.stop()
+      this.tabs.clear()
+    })
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(operation, operation)
+    this.queue = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
+  }
+
+  private async invoke(
+    host: RuntimeBrowserCommandHost,
+    method: string,
+    args: unknown[]
+  ): Promise<unknown> {
+    const params = (args[0] ?? {}) as Record<string, unknown>
+    if (method === 'browserTabCreate') {
+      return this.tabs.createTab(host, params)
+    }
+    if (method === 'browserTabList') {
+      return this.tabs.listTabs(host, params)
+    }
+    if (method === 'browserTabShow') {
+      return { tab: await this.tabs.describeTab(host, params) }
+    }
+    if (method === 'browserTabCurrent') {
+      return { tab: await this.tabs.currentTab(host, params) }
+    }
+    if (method === 'browserTabSwitch') {
+      return this.tabs.switchTab(host, params)
+    }
+    if (method === 'browserTabClose') {
+      return this.tabs.closeTab(host, params)
+    }
+    if (
+      method.startsWith('browserProfile') ||
+      method === 'browserTabSetProfile' ||
+      method === 'browserTabProfileClone'
+    ) {
+      throw new BrowserError(
+        'browser_profile_unavailable',
+        'Browser profile import and switching require the desktop Electron provider.'
+      )
+    }
+    if (method === 'browserTabProfileShow') {
+      const tab = await this.tabs.describeTab(host, params)
+      return {
+        browserPageId: tab.browserPageId,
+        worktreeId: tab.worktreeId,
+        profileId: 'default',
+        profileLabel: 'Default'
+      }
+    }
+    if (method === 'browserScreencast') {
+      throw new BrowserError(
+        'browser_screencast_unavailable',
+        'This browser provider does not offer screencast.'
+      )
+    }
+    if (method === 'browserProceedCertificate') {
+      throw new BrowserError(
+        'browser_certificate_trust_unavailable',
+        'This browser provider cannot override certificate failures.'
+      )
+    }
+
+    const page = await this.tabs.resolveTargetPage(host, params)
+    await this.session.selectPage(page.agentPageId)
+    if (typeof params.expectUrl !== 'string') {
+      return this.runOnPage(this.session, page, method, params)
+    }
+    const guard = new ExpectedPageUrlGuard(params.expectUrl, page.publicPageId)
+    return guard.withReceipt(
+      await this.runOnPage(this.pageSessionRechecking(guard, page, method), page, method, params)
+    )
+  }
+
+  /** Every helper run rechecks; a read and a write sharing one batch share its check. */
+  private pageSessionRechecking(
+    guard: ExpectedPageUrlGuard,
+    page: PageRecord,
+    method: string
+  ): PageInputSession {
+    const verify = async (): Promise<void> => {
+      // Unlike `tab`, `get url` waits out a navigation still replacing the document, and so would
+      // wait forever on a dialog, which blocks the page and any navigation with it.
+      const { url } = AgentBrowserCurrentUrl.parse(
+        method === 'browserDialogAccept' || method === 'browserDialogDismiss'
+          ? await this.tabs.describePage(page)
+          : await this.session.run(['get', 'url'])
+      )
+      guard.verifyStep([url])
+    }
+    return {
+      run: async (...args) => {
+        await verify()
+        return this.session.run(...args)
+      },
+      runSteps: async (...args) => {
+        await verify()
+        return this.session.runSteps(...args)
+      }
+    }
+  }
+
+  private async runOnPage(
+    session: PageInputSession,
+    page: PageRecord,
+    method: string,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
+    if (method === 'browserSnapshot') {
+      return this.snapshot(page, params)
+    }
+    if (method === 'browserScreenshot') {
+      return this.session.screenshot(params, false)
+    }
+    if (method === 'browserFullScreenshot') {
+      return this.session.screenshot(params, true)
+    }
+    if (method === 'browserPdf') {
+      return this.session.pdf()
+    }
+    if (method === 'browserGoto') {
+      const url = normalizeBrowserNavigationUrl(String(params.url ?? ''))
+      if (!url) {
+        throw new BrowserError(
+          'invalid_argument',
+          `Unsupported browser URL: ${String(params.url ?? '')}`
+        )
+      }
+      return session.run(['open', url])
+    }
+    if (method === 'browserEval') {
+      return session.run(agentBrowserEvalCommand(String(params.expression ?? '')))
+    }
+    if (method === 'browserWait') {
+      const { args, processTimeoutMs } = externalChromiumWaitCommand(params)
+      await this.session.run(args, { timeoutMs: processTimeoutMs })
+      return { waited: true }
+    }
+    const input = await runExternalChromiumPageInput(session, method, params)
+    if (input !== null) {
+      return input
+    }
+    if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {
+      await session.run([method.slice('browser'.length).toLowerCase()])
+      const tab = await this.tabs.describePage(page)
+      return { url: tab.url, title: tab.title }
+    }
+
+    if (method === 'browserUpload') {
+      const files: unknown[] = Array.isArray(params.files) ? params.files : []
+      await assertUploadFilesExist(files.map(String))
+    }
+    const command = externalChromiumCommandArguments(method, params)
+    if (!command) {
+      throw new BrowserError(
+        'browser_command_unavailable',
+        `${method} is not supported by this browser provider.`
+      )
+    }
+    const result = await session.run(command, { cliArgv: method === 'browserExec' })
+    return normalizeExternalChromiumCommandResult(method, params, result)
+  }
+
+  private async snapshot(page: PageRecord, params: Record<string, unknown>): Promise<unknown> {
+    const data = AgentBrowserSnapshot.parse(
+      await this.session.run(agentBrowserSnapshotArgs(Snapshot.parse(params)))
+    )
+    return externalChromiumSnapshotResult(page, data, await this.tabs.describePage(page))
+  }
+}

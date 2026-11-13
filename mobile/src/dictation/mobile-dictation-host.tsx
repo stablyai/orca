@@ -4,12 +4,17 @@ import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { triggerError } from '../platform/haptics'
 import { useClipboardWriter } from '../platform/clipboard'
-import { dictationFailureMessage } from './mobile-dictation-setup'
+import { dictationFailureMessage, isDictationSetupRequiredError } from './mobile-dictation-setup'
 import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
 import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
+import { DEFAULT_STOP_AFTER_SILENCE_SECONDS } from '../../../src/shared/dictation-silence-stop'
 import { insertMobileDictationAway } from './mobile-dictation-away-insert'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
+import {
+  useMobileDictationAnnouncements,
+  useMobileDictationSpeech
+} from './use-mobile-dictation-announcements'
 import {
   MobileDictationClearanceContext,
   MobileDictationHostContext,
@@ -58,6 +63,8 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   const clearToast = useCallback(() => setToast(null), [])
   const [clearances, setClearances] = useState<ReadonlyMap<symbol, number>>(new Map())
   const clipboard = useClipboardWriter()
+  const speech = useMobileDictationSpeech()
+  const { say: speak } = speech
 
   // Bring a dictation's target back: its screen if one is still mounted, otherwise open the session again.
   const openOwner = useCallback(
@@ -78,10 +85,12 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   }, [openOwner])
 
   // Say it on the screen that shows the dictation, else in the host's toast (with Open for the dictation it is about).
+  // A screen's toast is not read by VoiceOver on the page, so it is spoken too; the host's toast is spoken when it shows.
   const say = (message: string, about?: MobileDictationOwner) => {
     const screen = screenFor(screensRef.current, ownerRef.current, false)
     if (screen?.shown()) {
       screen.toast(message)
+      speak(message)
     } else {
       setToast(about ? { message, open: () => openOwner(about) } : { message })
     }
@@ -90,6 +99,10 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     const screen = screenFor(screensRef.current, ownerRef.current, false)
     if (screen?.shown()) {
       screen.reportFailure(err)
+      // A setup refusal opens the setup sheet, which is read on its own.
+      if (!isDictationSetupRequiredError(err.message)) {
+        speak(dictationFailureMessage(err.message))
+      }
       return
     }
     triggerError()
@@ -100,6 +113,8 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     client: owner?.client ?? null,
     enabled: true,
     removeFillerWords: owner?.removeFillerWords ?? true,
+    dictationTerms: owner?.dictationTerms,
+    worktreeId: owner?.worktreeId,
     onTranscript: (text) => {
       const current = ownerRef.current
       if (!current) {
@@ -131,12 +146,40 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     onAudioLimitReached: () => say(nativeChatDictationCopy.stoppedAtCloudLimit())
   })
   const stop = useMobileDictationHaptics(dictation)
-  useMobileDictationSilenceStop(dictation, owner?.dictationMode, stop, (message) => say(message))
+  useMobileDictationSilenceStop(
+    dictation,
+    owner?.dictationMode,
+    // Off is null, so only a missing owner takes the default.
+    owner ? owner.silenceSeconds : DEFAULT_STOP_AFTER_SILENCE_SECONDS,
+    stop,
+    (message) => say(message)
+  )
 
   // Screens subscribe to the live dictation; the host's context only changes when its owner or pill does.
-  const liveRef = useRef(dictation)
+  const liveRef = useRef<UseMobileDictationResult>(dictation)
   const listenersRef = useRef(new Set<() => void>())
-  const { meter, start: startDictation, stop: stopDictation, cancel, retry } = dictation
+  const {
+    meter,
+    start: startDictation,
+    stop: stopDictation,
+    cancel: cancelDictation,
+    retry
+  } = dictation
+  const away =
+    owner !== null &&
+    isUnderway(dictation) &&
+    screenFor(screensRef.current, owner, false)?.shown() !== true
+  const { noteCancel } = useMobileDictationAnnouncements(
+    dictation,
+    { computerName: owner?.computerName ?? null, away, toast: toast?.message ?? null },
+    speak
+  )
+  // Every ✕ (in place, the pill, the terminal's long press) ends here, so a cancel is never read as "Inserted."
+  const cancel = useCallback(() => {
+    noteCancel()
+    return cancelDictation()
+  }, [cancelDictation, noteCancel])
+  const published = useMemo(() => ({ ...dictation, cancel }), [cancel, dictation])
   const idle = useMemo<UseMobileDictationResult>(
     () => ({
       status: 'idle',
@@ -157,7 +200,7 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   )
   const idleRef = useRef(idle)
   useLayoutEffect(() => {
-    liveRef.current = dictation
+    liveRef.current = published
     idleRef.current = idle
     for (const listener of listenersRef.current) {
       listener()
@@ -213,19 +256,18 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     })
   }, [])
 
-  const away =
-    owner !== null && isUnderway(dictation) && !screenFor(screensRef.current, owner, false)?.shown()
   const title = owner?.title ?? ''
   const clearance = Math.max(0, ...clearances.values())
   const pill = useMemo(
-    () => ({ away, title, open, toast, clearToast, clearance }),
-    [away, clearToast, clearance, open, title, toast]
+    () => ({ away, title, open, toast, clearToast, clearance, liveText: speech.liveText }),
+    [speech.liveText, away, clearToast, clearance, open, title, toast]
   )
   const value = useMemo<MobileDictationHost>(
     () => ({
       owner,
       start,
       stop,
+      announce: speak,
       attach,
       refresh,
       subscribe,
@@ -233,7 +275,18 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
       getIdleDictation,
       getUnderway
     }),
-    [attach, getDictation, getIdleDictation, getUnderway, owner, refresh, start, stop, subscribe]
+    [
+      attach,
+      getDictation,
+      getIdleDictation,
+      getUnderway,
+      owner,
+      refresh,
+      speak,
+      start,
+      stop,
+      subscribe
+    ]
   )
   return (
     <MobileDictationClearanceContext.Provider value={setClearance}>

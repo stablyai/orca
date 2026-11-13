@@ -1,9 +1,9 @@
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
+import { AutomationOwnerConflictNotice } from './hosts/AutomationOwnerConflictNotice'
 import { AutomationsPageBreadcrumb } from './AutomationsPageBreadcrumb'
-import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
-import type { AutomationActionNotice } from './automation-row-action-dispatch'
+import type { AutomationHostRecoveryAction } from './hosts/automation-host-status-descriptors'
+import type { AutomationActionNotice } from './hosts/automation-row-action-dispatch'
 
 export function AutomationsPageTopBar({
   pageView,

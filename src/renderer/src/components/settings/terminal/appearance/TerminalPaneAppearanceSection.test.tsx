@@ -36,7 +36,7 @@ function renderSection(
 function headerButtonsOption(label: string): HTMLButtonElement {
   const option = Array.from(
     container.querySelectorAll<HTMLButtonElement>(
-      '[role="radiogroup"][aria-label="Pane Header Buttons"] [role="radio"]'
+      '[role="radiogroup"][aria-label="Pane header buttons"] [role="radio"]'
     )
   ).find((candidate) => candidate.textContent === label)
   if (!option) {

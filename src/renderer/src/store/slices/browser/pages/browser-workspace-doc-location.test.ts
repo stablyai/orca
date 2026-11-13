@@ -74,9 +74,27 @@ function persistedSession(
     state.browserTabsByWorktree,
     state.browserPagesByWorkspace,
     state.activeBrowserTabIdByWorktree,
+    {},
     {}
   )
 }
+
+it('keeps an untitled web page identifiable in its saved page and workspace', async () => {
+  const store = await createStoreWithWorktree()
+  const tab = store
+    .getState()
+    .createBrowserTab(WORKTREE_ID, 'https://kagi.com/search?token=test-only&q=orca')
+  await settled()
+  const pageId = store.getState().browserPagesByWorkspace[tab.id][0].id
+  expect(store.getState().browserPagesByWorkspace[tab.id][0].title).toBe(
+    'https://kagi.com/search?q=orca'
+  )
+  store.getState().updateBrowserPageState(pageId, { title: '' })
+  expect(store.getState().browserTabsByWorktree[WORKTREE_ID][0].title).toBe(
+    'https://kagi.com/search?q=orca'
+  )
+  expect(JSON.stringify(persistedSession(store))).not.toContain('token=')
+})
 
 describe('a browser page that shows a workspace document', () => {
   // Chromium echoes untitled documents’ grant URLs as titles; fence this persisted/mirrored sink too.

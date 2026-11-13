@@ -3,9 +3,16 @@ import type { AppState } from '../../types'
 import type { DictationState, SpeechModelState } from '../../../../../shared/speech-types'
 import type { DictationTranscriptSnapshot } from '../../../../../shared/dictation-transcript'
 
-export type DictationLiveText = Pick<DictationTranscriptSnapshot, 'committed' | 'tentative'>
+export type DictationLiveText = Pick<DictationTranscriptSnapshot, 'committed' | 'tentative'> & {
+  /** The engine heard speech it hasn't committed yet (pause-cut on-device models only). */
+  speechPending: boolean
+}
 
-export const NO_DICTATION_LIVE_TEXT: DictationLiveText = { committed: '', tentative: '' }
+export const NO_DICTATION_LIVE_TEXT: DictationLiveText = {
+  committed: '',
+  tentative: '',
+  speechPending: false
+}
 
 export type DictationSlice = {
   dictationState: DictationState

@@ -1,11 +1,12 @@
 import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { CloneTargetArgs, CloneTargetCheck } from '../../shared/git/clone/clone-target-check'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupUpdate,
+  ProjectGroupMutation,
   ProjectGroupImportMode,
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
@@ -75,6 +76,7 @@ export type RepositoryApi = {
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
     }
   }) => Promise<Repo>
@@ -131,6 +133,9 @@ export type ProjectGroupsApi = {
     createdFrom?: ProjectGroup['createdFrom']
   }) => Promise<ProjectGroup>
   update: (args: { groupId: string; updates: ProjectGroupUpdate }) => Promise<ProjectGroup | null>
+  updateMany: (args: {
+    mutations: readonly ProjectGroupMutation[]
+  }) => Promise<ProjectGroup[] | null>
   delete: (args: { groupId: string }) => Promise<boolean>
   moveProject: (args: {
     projectId: string

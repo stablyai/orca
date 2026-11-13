@@ -31,7 +31,7 @@ export async function checkDirectMailbox(args: {
   const readAndReturn = () => {
     const messages = showAll
       ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
-      : db.getUnreadMessages(handle, typeFilter)
+      : db.getUnreadMessages(handle, typeFilter, { excludeRunOwnedDirect: true })
     if (
       consumeUnread &&
       messages.some((message) => message.run_id === ORCHESTRATION_LEGACY_RUN_ID)

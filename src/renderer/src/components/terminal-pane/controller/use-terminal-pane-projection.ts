@@ -24,7 +24,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     isChatEligibleForLeaf,
     isChatViewMode,
     isVisible,
-    managerRef,
+    terminalManager,
     toggleNativeChatForLeaf,
     paneTitles,
     paneTransportsRef,
@@ -62,8 +62,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     settings?.terminalPaneHeaderButtons,
     activeContextualTourId
   )
-  const activePane = managerRef.current?.getActivePane()
-  const managedPanes = managerRef.current?.getPanes() ?? []
+  const activePane = terminalManager?.getActivePane()
+  const managedPanes = terminalManager?.getPanes() ?? []
   const activePaneRuntimeEnvironmentId = activePane
     ? (paneTransportsRef.current.get(activePane.id)?.getRuntimeEnvironmentId?.() ?? null)
     : undefined
@@ -85,6 +85,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
 
   const {
     menuAgentSessionId,
+    menuAgentIdAvailable,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,
@@ -138,7 +139,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     visibleLaunchRefusal,
     visibleTerminalError,
     menuPaneHasCustomTitle,
-    menuAgentSessionId,
+    menuAgentIds: { sessionId: menuAgentSessionId, agentIdAvailable: menuAgentIdAvailable },
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,

@@ -1,5 +1,4 @@
 import type {
-  TaskStatus,
   DispatchStatus,
   WorkerDispatchRow,
   LegacyWorkerTerminalRecoveryRow
@@ -7,7 +6,10 @@ import type {
 import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
-import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import {
+  reconcileTaskAfterDispatchInterruption,
+  settleTaskAfterLostWorker
+} from '../dispatch-context/task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
 export function listLegacyWorkerTerminalRecoveryRows(
@@ -17,14 +19,15 @@ export function listLegacyWorkerTerminalRecoveryRows(
   if (dispatchIds?.length === 0) {
     return []
   }
+  // Why: drive from the live workers' partial index; ORDER BY dc.rowid alone made the planner scan every Dispatch.
   const rows = this.db
     .prepare(
       `SELECT dc.id AS dispatch_id, dc.task_id, dc.status AS dispatch_status,
               dc.contract_version, dc.assignee_handle, dc.assignee_pane_key,
               dc.process_incarnation, wd.state AS worker_state, wd.worktree_id,
               wd.agent_terminal_handle
-       FROM dispatch_contexts dc
-       INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
+       FROM worker_dispatches wd INDEXED BY idx_worker_dispatches_recoverable
+       CROSS JOIN dispatch_contexts dc ON dc.id = wd.dispatch_id
        WHERE wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
        ${dispatchIds ? 'AND wd.dispatch_id IN (SELECT value FROM json_each(?))' : ''}
        ORDER BY dc.rowid`
@@ -70,26 +73,12 @@ export function reconcileMissingWorkerTerminal(
         }
       })
       if (!stopWasPending) {
-        const taskStatus: TaskStatus = dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
         reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
-        const task = this.getTask(dispatch.task_id)
-        if (
-          task &&
-          ['dispatched', 'blocked'].includes(task.status) &&
-          !this.db
-            .prepare(
-              "SELECT 1 FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
-            )
-            .get(dispatch.task_id)
-        ) {
-          transitionLifecycleWithDb(this.db, {
-            entity: 'task',
-            id: dispatch.task_id,
-            from: task.status,
-            to: taskStatus,
-            projection: { completed_at: taskStatus === 'failed' ? new Date().toISOString() : null }
-          })
-        }
+        settleTaskAfterLostWorker(
+          this,
+          dispatch.task_id,
+          dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
+        )
       }
       this.closeQuestionsForDispatch(dispatchId)
     }

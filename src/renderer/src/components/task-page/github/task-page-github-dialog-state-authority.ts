@@ -1,5 +1,5 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

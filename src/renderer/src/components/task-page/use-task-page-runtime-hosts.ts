@@ -1,3 +1,5 @@
+import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
 import type { TaskPageRepoSelectionModel } from './use-task-page-repo-selection'
 import { normalizeGitHubTaskPreset } from '../../../../shared/work-items/task-github-search'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
@@ -14,8 +16,9 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { PreflightStatus } from '../../../../preload/api/preflight-api'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
+  const t = useTranslate()
   const {
     settings,
     pageData,
@@ -78,8 +81,11 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     ]
   )
   const hostLabelById = useMemo(
-    () => new Map([...hostRegistryById].map(([hostId, host]) => [hostId, host.label])),
-    [hostRegistryById]
+    () =>
+      new Map(
+        [...hostRegistryById].map(([hostId, host]) => [hostId, translateHostDisplayLabel(host, t)])
+      ),
+    [hostRegistryById, t]
   )
   const runtimeTaskSourceHostIds = useMemo(() => {
     if (taskSource !== 'github' && taskSource !== 'gitlab') {

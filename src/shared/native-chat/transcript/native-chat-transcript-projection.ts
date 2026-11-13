@@ -61,6 +61,36 @@ export function compareNativeChatTranscriptMessages(
 
 type NativeChatMessageCompare = (a: NativeChatMessage, b: NativeChatMessage) => number
 
+/** Every field but the blocks agrees, so a revision keeps its place and attribution among the other rows. */
+export function sameNativeChatRowPlacement(
+  before: NativeChatMessage,
+  next: NativeChatMessage
+): boolean {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime keys are used only for equality, including any extra message fields.
+  const keys = Object.keys(before) as (keyof NativeChatMessage)[]
+  return (
+    keys.length === Object.keys(next).length &&
+    keys.every((key) => {
+      if (!Object.hasOwn(next, key)) {
+        return false
+      }
+      if (key === 'blocks') {
+        return true
+      }
+      if (key === 'journalPosition') {
+        return (
+          before.journalPosition?.sequence === next.journalPosition?.sequence &&
+          before.journalPosition?.index === next.journalPosition?.index
+        )
+      }
+      // Journal creation position, rather than a revised provider clock, orders these rows.
+      return key === 'timestamp' && before.journalPosition && next.journalPosition
+        ? true
+        : before[key] === next[key]
+    })
+  )
+}
+
 /** One of a subagent's rows, with the conversation turn it happened during. */
 export type NativeChatSubagentRow = {
   message: NativeChatMessage
@@ -131,7 +161,9 @@ export function projectNativeChatTranscript(
   compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
   journal?: NativeChatTurnJournal | null,
   order = (rows: readonly NativeChatMessage[]) =>
-    orderNativeChatTranscriptEntries(rows, (row) => row, compare)
+    orderNativeChatTranscriptEntries(rows, (row) => row, compare),
+  /** Folds one scope: the conversation, or one subagent's rows within one parent turn. */
+  projectScope: (rows: readonly NativeChatMessage[]) => NativeChatMessage[] = projectRows
 ): NativeChatTranscriptProjection {
   const sorted = order(messages)
   const own: NativeChatMessage[] = []
@@ -149,7 +181,7 @@ export function projectNativeChatTranscript(
       }
     }
   }
-  const conversation = projectRows(own)
+  const conversation = projectScope(own)
   if (byAgent.size === 0) {
     return { conversation, subagentRows: NO_SUBAGENT_ROWS }
   }
@@ -168,7 +200,7 @@ export function projectNativeChatTranscript(
     let chunk: NativeChatMessage[] = []
     let chunkTurn: string | undefined
     const flush = (): void => {
-      for (const message of projectRows(chunk)) {
+      for (const message of projectScope(chunk)) {
         projected.push({ message, turnKey: chunkTurn })
       }
       chunk = []

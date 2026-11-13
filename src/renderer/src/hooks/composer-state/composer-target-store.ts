@@ -1,19 +1,17 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  getComposerEligibleRepos,
-  resolveComposerActiveRepoId
-} from '@/lib/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
+import { resolveComposerSeedRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectAllKnownWorkspaceStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 
@@ -129,7 +127,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
 
-  const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
+  const eligibleRepos = useMemo(() => getNewWorkspaceDialogEligibleRepos(repos), [repos])
 
   const hostOptions = useMemo(
     () =>
@@ -159,7 +157,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
   )
 
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments),
+    () => resolveComposerSeedRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments),
     [repos, eligibleRepos, activeRepoId, runtimeEnvironments]
   )
 

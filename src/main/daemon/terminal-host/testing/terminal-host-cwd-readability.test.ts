@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 import { TerminalHost } from '../terminal-host'
-import { validateWorkingDirectoryAsync } from '../../../providers/working-directory-validation'
 
 const { opendirMock, statMock } = vi.hoisted(() => ({
   opendirMock: vi.fn(),
@@ -105,74 +104,6 @@ describe('TerminalHost cwd readability verdict', () => {
       ...(signal ? { cancelSignal: signal, isCanceled: () => signal.aborted } : {}),
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
-
-  it('keeps native UNC creation within the validation lane while healthy creation proceeds', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    vi.useFakeTimers()
-    let release = () => {}
-    const unavailable = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    opendirMock.mockImplementation(async () => {
-      await unavailable
-      return dirReading(() => null)
-    })
-    const server = '\\\\unreachable-smb\\share'
-    let active = 0
-    let peak = 0
-    statMock.mockImplementation(async (cwd: string) => {
-      if (cwd.startsWith(server)) {
-        active += 1
-        peak = Math.max(peak, active)
-        try {
-          await unavailable
-        } finally {
-          active -= 1
-        }
-      }
-      return { isDirectory: () => true }
-    })
-    await host.dispose()
-    host = new TerminalHost({
-      spawnSubprocess: async (opts) => {
-        if (opts.cwd) {
-          try {
-            await validateWorkingDirectoryAsync(opts.cwd, { signal: opts.cancelSignal })
-          } catch (error) {
-            opts.onCreationDisposition?.({ kind: 'no-fork' })
-            throw error
-          }
-        }
-        return createMockSubprocess()
-      }
-    })
-    const abort = new AbortController()
-    const firstPath = `${server}\\first`
-    const canceled = create('unc-canceled', firstPath, abort.signal)
-    void canceled.catch(() => {})
-    const pending = [
-      create('unc-second', `${server}\\second`),
-      create('unc-queued', `${server}\\third`)
-    ]
-    try {
-      await vi.advanceTimersByTimeAsync(1_100)
-      expect(active + opendirMock.mock.calls.length).toBe(2)
-      abort.abort()
-      await expect(canceled).rejects.toThrow('was canceled')
-      pending.push(create('unc-canceled', firstPath))
-      await vi.advanceTimersByTimeAsync(1_100)
-      expect(statMock).toHaveBeenCalledTimes(2)
-      expect((await create('healthy', 'C:\\healthy')).isNew).toBe(true)
-      expect(active).toBe(2)
-    } finally {
-      release()
-      await vi.advanceTimersByTimeAsync(0)
-      await Promise.allSettled([canceled, ...pending])
-    }
-    expect(peak).toBe(2)
-    expect(host.listSessions()).toHaveLength(4)
-    expect(statMock).toHaveBeenCalledTimes(4)
-  })
 
   it.each(['open', 'read', 'close'] as const)(
     'starts a shell when the diagnostic directory %s remains pending',

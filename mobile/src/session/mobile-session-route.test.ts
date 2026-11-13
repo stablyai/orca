@@ -45,27 +45,6 @@ function mountedHostState(hostId: string): HostStackNavigationState {
 }
 
 describe('mobile session route', () => {
-  it('keeps dynamic route identities raw for the navigator to encode', () => {
-    expect(
-      mobileSessionRouteTarget({
-        hostId: 'host/one',
-        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1',
-        paneKey: 'pane/one',
-        executionHost: 'runtime:server-1'
-      })
-    ).toEqual({
-      name: '[hostId]/session/[worktreeId]',
-      params: {
-        hostId: 'host/one',
-        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1',
-        paneKey: 'pane/one',
-        executionHost: 'runtime:server-1'
-      }
-    })
-  })
-
   it('mounts the host, then opens the session over its list', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
@@ -87,5 +66,36 @@ describe('mobile session route', () => {
       target: '/h',
       payload: target
     })
+  })
+
+  it('mounts the host, then puts a standalone session in place of its list', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const target = mobileSessionRouteTarget({
+      hostId: 'host/one',
+      worktreeId: 'repo::/tmp/wt',
+      standalone: true
+    })
+
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      target
+    )
+    harness.setState(mountedHostState('host/one'))
+
+    expect(harness.navigation.dispatch.mock.calls).toEqual([
+      [
+        {
+          type: 'REPLACE',
+          target: '/h',
+          source: 'host-index',
+          payload: {
+            name: '[hostId]/session/[worktreeId]',
+            params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt', standalone: '1' }
+          }
+        }
+      ]
+    ])
   })
 })

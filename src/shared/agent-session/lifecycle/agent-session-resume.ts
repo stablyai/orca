@@ -1,4 +1,5 @@
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
+import { readClaudePermissionMode } from './provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
 import type {
   AgentStatusCacheIdentity,
@@ -7,6 +8,8 @@ import type {
 import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+
+export { agentProviderSessionsEqual } from './agent-provider-session-equality'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',
@@ -50,6 +53,8 @@ export type AgentProviderSessionMetadata = {
   cwd?: string
   /** Claude's live effort level; resume replays it because Claude restores only its saved per-model default. */
   effort?: string
+  /** Claude's live permission mode; a resume with no recorded recipe takes its permission from it. */
+  permissionMode?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -176,42 +181,23 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
     return null
   }
   const record = raw as Record<string, unknown>
-  const key = record.key
-  if (key !== 'session_id' && key !== 'conversation_id') {
-    return null
-  }
   const id = normalizeSessionId(record.id)
-  if (!id) {
+  if ((record.key !== 'session_id' && record.key !== 'conversation_id') || !id) {
     return null
   }
   // Persisted/relay paths cross trust boundaries too; reject controls as for hook paths.
   const transcriptPath = readPathFromKeys(record, ['transcriptPath'])
   const cwd = readPathFromKeys(record, ['cwd'])
   const effort = readAgentEffortLevel(record.effort)
+  const permissionMode = readClaudePermissionMode(record.permissionMode)
   return {
-    key,
+    key: record.key,
     id,
     ...(transcriptPath ? { transcriptPath } : {}),
     ...(cwd ? { cwd } : {}),
-    ...(effort ? { effort } : {})
+    ...(effort ? { effort } : {}),
+    ...(permissionMode ? { permissionMode } : {})
   }
-}
-
-/** Compare the provider-owned values that identify the CLI resume target.
- *  Pi-family transcript resumes use file identity; other agents use provider ids. */
-export function agentProviderSessionsEqual(
-  agent: string | undefined,
-  left: AgentProviderSessionMetadata | undefined,
-  right: AgentProviderSessionMetadata | undefined
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right
-  }
-  return (
-    left.key === right.key &&
-    left.id === right.id &&
-    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
-  )
 }
 
 export function extractAgentProviderSession(

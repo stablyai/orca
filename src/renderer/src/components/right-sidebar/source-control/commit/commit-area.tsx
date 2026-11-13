@@ -1,4 +1,4 @@
-import React, { useId, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { ArrowDownUp, ArrowUp, Check, CloudUpload, GitPullRequestArrow, Plus } from 'lucide-react'
 import {
   DropdownMenuContent,
@@ -6,6 +6,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import {
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
@@ -80,7 +81,6 @@ export function CommitArea({
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
   const t = useTranslate()
-  const actionDescriptionId = useId()
   // Cap rows so long messages scroll internally instead of pushing Commit offscreen.
   const rows = getCommitMessageTextareaRows(commitMessage)
   // Spin the primary only for its matching operation; Fetch uses the chevron and commits use isCommitting.
@@ -173,41 +173,44 @@ export function CommitArea({
     'More commit and remote actions'
   )
   const dropdownMenuContent = (
-    <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-1rem)]">
+    <DropdownMenuContent align="end" className="w-58 max-w-[calc(100vw-1rem)]">
       {dropdownItems.map((entry) =>
         entry.kind === 'separator' ? (
           <DropdownMenuSeparator key={entry.id} />
         ) : (
-          <div key={entry.kind}>
-            <DropdownMenuItem
-              aria-disabled={entry.disabled || undefined}
-              variant={entry.variant}
-              textValue={entry.label}
-              aria-describedby={entry.disabled ? `${actionDescriptionId}-${entry.kind}` : undefined}
-              onSelect={(event) => {
-                if (entry.disabled) {
-                  event.preventDefault()
-                  return
-                }
-                onDropdownAction(entry.kind)
-              }}
-            >
-              <span className="flex min-w-0 flex-col break-words">
-                <span>{entry.label}</span>
-                {!entry.disabled && (
-                  <span className="text-2xs text-muted-foreground">{entry.title}</span>
+          <DropdownMenuItem
+            key={entry.kind}
+            className="min-h-7"
+            aria-disabled={entry.disabled || undefined}
+            aria-description={entry.title}
+            variant={entry.variant}
+            textValue={entry.label}
+            onSelect={(event) => {
+              if (entry.disabled) {
+                event.preventDefault()
+                return
+              }
+              onDropdownAction(entry.kind)
+            }}
+          >
+            <span className={cn('min-w-0 truncate', entry.idle && 'text-muted-foreground')}>
+              {entry.label}
+            </span>
+            {entry.status && (
+              <span
+                className={cn(
+                  'ml-auto shrink-0 pl-3 text-2xs whitespace-nowrap tabular-nums',
+                  entry.statusTone === 'warning'
+                    ? 'text-status-warning-text'
+                    : entry.statusTone === 'active'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
                 )}
-              </span>
-            </DropdownMenuItem>
-            {entry.disabled && (
-              <p
-                id={`${actionDescriptionId}-${entry.kind}`}
-                className="px-2.5 pb-1 text-2xs text-muted-foreground break-words"
               >
-                {entry.title}
-              </p>
+                {entry.status}
+              </span>
             )}
-          </div>
+          </DropdownMenuItem>
         )
       )}
     </DropdownMenuContent>

@@ -42,12 +42,12 @@ vi.mock('../../wsl/filesystem/unc-path-access', () => ({
   wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock
 }))
 
-vi.mock('../macos-tcc-login-shell', () => ({
+vi.mock('../shell-launch/macos/tcc-login-shell', () => ({
   wrapShellSpawnForMacosTccAttribution: wrapSpawnMock,
   hostReportsChildExitStatus: (file: string) => file !== '/usr/bin/login'
 }))
 import { spawnShellWithFallback } from './local-pty-executable-spawn'
-import { _resetWorkingDirectoryValidationStateForTest } from '../working-directory-validation'
+import { _resetWorkingDirectoryValidationStateForTest } from '../working-directory/validation'
 
 describe('spawnShellWithFallback macOS TCC login wrapping', () => {
   let origPlatform: PropertyDescriptor | undefined

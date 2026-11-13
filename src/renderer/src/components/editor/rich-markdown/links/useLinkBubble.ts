@@ -1,155 +1,184 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import type React from 'react'
+import { useCallback, useEffect } from 'react'
 import type { Editor } from '@tiptap/react'
-import { getLinkBubblePosition } from './RichMarkdownLinkBubble'
-import type { LinkBubbleState } from './RichMarkdownLinkBubble'
-import { useAppStore } from '@/store/index'
-import { scrollToAnchorInEditor } from '../../markdown/navigation/markdown-anchor-scroll'
-import {
-  classifyHtmlSuperscriptLinkAction,
-  type RichMarkdownHtmlSuperscriptLinkContext
-} from '../citations/rich-markdown-html-superscript-link-context'
+import type { EditorEvents } from '@tiptap/core'
+import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
 import { copyRichMarkdownLink } from './rich-markdown-link-clipboard'
+import {
+  createEditableMarkdownLinkBubble,
+  getRichMarkdownSelectionLinkBubble
+} from './rich-markdown-selected-link-actions'
+import {
+  findRichMarkdownHoveredLinkElement,
+  resolveRichMarkdownHoveredLinkBubble,
+  useMarkdownLinkHoverBubble
+} from './use-markdown-link-hover-bubble'
+
+function isValidTargetRange(
+  editor: Editor,
+  targetRange: { from: number; to: number } | undefined
+): targetRange is { from: number; to: number } {
+  return (
+    targetRange !== undefined &&
+    targetRange.from >= 0 &&
+    targetRange.to <= editor.state.doc.content.size &&
+    targetRange.from <= targetRange.to
+  )
+}
+
+export function applyRichMarkdownLinkSave(
+  editor: Editor,
+  href: string,
+  targetRange?: { from: number; to: number }
+): void {
+  if (!editor.isEditable) {
+    return
+  }
+  if (isValidTargetRange(editor, targetRange)) {
+    if (href) {
+      editor.chain().focus().setTextSelection(targetRange).setLink({ href }).run()
+    } else {
+      editor.chain().focus().setTextSelection(targetRange).unsetLink().run()
+    }
+    return
+  }
+  if (href) {
+    if (editor.isActive('link')) {
+      editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
+      return
+    }
+    const { from, to } = editor.state.selection
+    if (from === to) {
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: 'text',
+          text: href,
+          marks: [{ type: 'link', attrs: { href } }]
+        })
+        .run()
+      return
+    }
+    editor.chain().focus().setLink({ href }).run()
+    return
+  }
+  if (editor.isActive('link')) {
+    editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    return
+  }
+  editor.commands.focus()
+}
+
+export function applyRichMarkdownLinkRemove(
+  editor: Editor,
+  targetRange?: { from: number; to: number }
+): void {
+  if (!editor.isEditable) {
+    return
+  }
+  if (isValidTargetRange(editor, targetRange)) {
+    editor.chain().focus().setTextSelection(targetRange).unsetLink().run()
+    return
+  }
+  editor.chain().focus().extendMarkRange('link').unsetLink().run()
+}
 
 // Keep state in the parent so callbacks created during editor initialization can access its setters.
 export function useLinkBubble(
   editor: Editor | null,
   rootRef: React.RefObject<HTMLElement | null>,
   linkBubble: LinkBubbleState | null,
+  isEditingLink: boolean,
   setLinkBubble: (v: LinkBubbleState | null) => void,
-  setIsEditingLink: (v: boolean) => void,
-  linkContext: {
-    sourceFilePath: string
-    worktreeId: string
-    worktreeRoot: string | null
-    runtimeEnvironmentId?: string | null
-    htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
-  }
+  setIsEditingLink: (v: boolean) => void
 ): {
   handleLinkSave: (href: string) => void
   handleLinkRemove: () => void
   handleLinkEditCancel: () => void
-  handleLinkOpen: () => void
   handleLinkCopy: () => void
   toggleLinkFromToolbar: () => void
+  cancelHoverBubble: () => void
+  onBubblePointerEnter: React.PointerEventHandler<HTMLDivElement>
+  onBubblePointerLeave: React.PointerEventHandler<HTMLDivElement>
 } {
-  const citationContextSnapshot = useSyncExternalStore(
-    linkContext.htmlSuperscriptLinkContext.subscribe,
-    linkContext.htmlSuperscriptLinkContext.getSnapshot,
-    linkContext.htmlSuperscriptLinkContext.getSnapshot
-  )
+  const containerElement = editor && !editor.isDestroyed ? editor.view.dom : rootRef.current
+  const { cancelHoverBubble, onBubblePointerEnter, onBubblePointerLeave } =
+    useMarkdownLinkHoverBubble({
+      containerElement,
+      isOpen: linkBubble !== null,
+      isEditing: isEditingLink,
+      findLinkElement: (target) => findRichMarkdownHoveredLinkElement(editor, target),
+      resolveLinkBubble: (linkElement, point) =>
+        resolveRichMarkdownHoveredLinkBubble(editor, linkElement, point),
+      setLinkBubble
+    })
+
   useEffect(() => {
-    if (!linkBubble) {
+    if (!editor) {
       return
     }
-    const openEnabled = classifyHtmlSuperscriptLinkAction(linkBubble.href, citationContextSnapshot)
-    if (openEnabled !== linkBubble.openEnabled) {
-      setLinkBubble({ ...linkBubble, openEnabled })
+    const dismissStaleBubble = ({ transaction }: EditorEvents['transaction']): void => {
+      if (transaction.docChanged) {
+        cancelHoverBubble()
+        setLinkBubble(null)
+        setIsEditingLink(false)
+      }
     }
-  }, [citationContextSnapshot, linkBubble, setLinkBubble])
+    editor.on('transaction', dismissStaleBubble)
+    return () => {
+      editor.off('transaction', dismissStaleBubble)
+    }
+  }, [cancelHoverBubble, editor, setIsEditingLink, setLinkBubble])
+
   const startLinkEdit = useCallback(() => {
     if (!editor) {
       return
     }
+    const selectionBubble = getRichMarkdownSelectionLinkBubble(editor, rootRef.current)
+    if (selectionBubble && selectionBubble.kind === 'markdown') {
+      cancelHoverBubble()
+      setLinkBubble(selectionBubble)
+      setIsEditingLink(true)
+      return
+    }
     const pos = getLinkBubblePosition(editor, rootRef.current)
     if (pos) {
-      const href = editor.isActive('link')
-        ? (editor.getAttributes('link').href as string) || ''
-        : ''
-      setLinkBubble({
-        kind: 'markdown',
-        href,
-        openEnabled: Boolean(href),
-        copyEnabled: Boolean(href),
-        ...pos
-      })
+      cancelHoverBubble()
+      setLinkBubble(createEditableMarkdownLinkBubble('', pos))
       setIsEditingLink(true)
     }
-  }, [editor, rootRef, setLinkBubble, setIsEditingLink])
+  }, [cancelHoverBubble, editor, rootRef, setIsEditingLink, setLinkBubble])
 
   const handleLinkSave = useCallback(
     (href: string) => {
       if (!editor) {
         return
       }
-
-      if (href) {
-        if (editor.isActive('link')) {
-          editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
-        } else {
-          const { from, to } = editor.state.selection
-          if (from === to) {
-            editor
-              .chain()
-              .focus()
-              .insertContent({
-                type: 'text',
-                text: href,
-                marks: [{ type: 'link', attrs: { href } }]
-              })
-              .run()
-          } else {
-            editor.chain().focus().setLink({ href }).run()
-          }
-        }
-      } else if (editor.isActive('link')) {
-        editor.chain().focus().extendMarkRange('link').unsetLink().run()
-      } else {
-        editor.commands.focus()
-      }
+      applyRichMarkdownLinkSave(editor, href, linkBubble?.targetRange)
+      cancelHoverBubble()
       setIsEditingLink(false)
+      setLinkBubble(null)
     },
-    [editor, setIsEditingLink]
+    [cancelHoverBubble, editor, linkBubble?.targetRange, setIsEditingLink, setLinkBubble]
   )
 
   const handleLinkRemove = useCallback(() => {
     if (!editor) {
       return
     }
-    editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    applyRichMarkdownLinkRemove(editor, linkBubble?.targetRange)
+    cancelHoverBubble()
     setLinkBubble(null)
     setIsEditingLink(false)
-  }, [editor, setLinkBubble, setIsEditingLink])
+  }, [cancelHoverBubble, editor, linkBubble?.targetRange, setIsEditingLink, setLinkBubble])
 
   const handleLinkEditCancel = useCallback(() => {
+    cancelHoverBubble()
     setIsEditingLink(false)
-    if (!linkBubble?.href) {
-      setLinkBubble(null)
-    }
+    setLinkBubble(null)
     editor?.commands.focus()
-  }, [editor, linkBubble?.href, setLinkBubble, setIsEditingLink])
-
-  const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
-
-  const handleLinkOpen = useCallback(() => {
-    if (
-      !linkBubble?.href ||
-      !linkBubble.openEnabled ||
-      !classifyHtmlSuperscriptLinkAction(linkBubble.href, citationContextSnapshot)
-    ) {
-      return
-    }
-    if (linkBubble.href.startsWith('#')) {
-      scrollToAnchorInEditor(rootRef.current, linkBubble.href.slice(1))
-      return
-    }
-    void activateMarkdownLink(linkBubble.href, {
-      sourceFilePath: linkContext.sourceFilePath,
-      worktreeId: linkContext.worktreeId,
-      worktreeRoot: linkContext.worktreeRoot,
-      runtimeEnvironmentId: linkContext.runtimeEnvironmentId,
-      sourceOwner: citationContextSnapshot.sourceOwner
-    })
-  }, [
-    activateMarkdownLink,
-    citationContextSnapshot,
-    linkBubble?.href,
-    linkBubble?.openEnabled,
-    linkContext.sourceFilePath,
-    linkContext.worktreeId,
-    linkContext.worktreeRoot,
-    linkContext.runtimeEnvironmentId,
-    rootRef
-  ])
+  }, [cancelHoverBubble, editor, setIsEditingLink, setLinkBubble])
 
   const handleLinkCopy = useCallback(() => {
     if (!linkBubble?.href || !linkBubble.copyEnabled) {
@@ -164,18 +193,21 @@ export function useLinkBubble(
     }
     if (editor.isActive('link')) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run()
+      cancelHoverBubble()
       setLinkBubble(null)
     } else {
       startLinkEdit()
     }
-  }, [editor, setLinkBubble, startLinkEdit])
+  }, [cancelHoverBubble, editor, setLinkBubble, startLinkEdit])
 
   return {
     handleLinkSave,
     handleLinkRemove,
     handleLinkEditCancel,
-    handleLinkOpen,
     handleLinkCopy,
-    toggleLinkFromToolbar
+    toggleLinkFromToolbar,
+    cancelHoverBubble,
+    onBubblePointerEnter,
+    onBubblePointerLeave
   }
 }

@@ -1,6 +1,7 @@
-import { getPRConflictSummary } from '../../conflict-summary'
-import type { ghRepoExecOptions, OwnerRepo } from '../../gh-utils'
-import { hydrateGitHubPRStack } from '../../github-pr-stack'
+import { getPRConflictSummary } from '../../pull-requests/conflicts/conflict-summary'
+import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { hydrateGitHubPRStack } from '../../pull-requests/stacks/github-pr-stack'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import { derivePullRequestMergeable, type PullRequestLookupData } from './pull-request-lookup-data'
 import { getCachedGitHubPRStackSummary } from './pr-stack-summary-cache'
@@ -14,6 +15,7 @@ export async function derivePRRefreshData(args: {
   ghOptions: ReturnType<typeof ghRepoExecOptions>
   executionScope: string
   usedExactNumberLookup: boolean
+  includeDerivedData?: boolean
 }): Promise<{
   mergeable: ReturnType<typeof derivePullRequestMergeable>
   stack: PullRequestLookupData['stack']
@@ -22,6 +24,15 @@ export async function derivePRRefreshData(args: {
 }> {
   const { data, dataRepo, repoPath, connectionId, localGitOptions, ghOptions, executionScope } =
     args
+  const mergeable = derivePullRequestMergeable(data)
+  if (args.includeDerivedData === false) {
+    return {
+      mergeable,
+      stack: undefined,
+      stackMergeQueueRequired: undefined,
+      conflictSummary: undefined
+    }
+  }
   if (!data.stackMetadataChecked && dataRepo && args.usedExactNumberLookup) {
     try {
       data.stack = await getCachedGitHubPRStackSummary(
@@ -35,7 +46,6 @@ export async function derivePRRefreshData(args: {
       // Stack metadata is additive; exact PR lookup remains usable without it.
     }
   }
-  const mergeable = derivePullRequestMergeable(data)
   const stack =
     data.stack && dataRepo
       ? await hydrateGitHubPRStack(

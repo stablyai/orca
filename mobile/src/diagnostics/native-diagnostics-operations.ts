@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import Constants from 'expo-constants'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import type { RpcClientContextValue } from '../transport/connection/rpc-client-context-contract'
 import { connectionLogStore } from './connection/persisted-connection-log-store'
 import {

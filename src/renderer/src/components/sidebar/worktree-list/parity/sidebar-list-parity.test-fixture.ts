@@ -33,13 +33,13 @@ import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import {
   readWindowWorkspaceActivityFacts,
   toLocallyOwnedRows
-} from '@/lib/sidebar-shadow/workspace-activity-shadow'
-import { readWindowDesktopSidebarFacts } from '@/lib/sidebar-shadow/desktop-facts-shadow'
+} from '@/components/sidebar/worktree-list/parity/sidebar-workspace-activity.test-fixture'
+import { readWindowDesktopSidebarFacts } from '@/components/sidebar/worktree-list/parity/sidebar-desktop-facts.test-fixture'
 import {
   readWindowPairedServerHosts,
   readWindowPairedServerRows
-} from '@/lib/sidebar-shadow/paired-server-rows-shadow'
-import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
+} from '@/components/sidebar/worktree-list/parity/sidebar-paired-server-rows.test-fixture'
+import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/feed/sidebar-inputs-feed'
 import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
 import { buildSidebarFeedCatalog } from '../../../../../../shared/sidebar-list/sidebar-feed-catalog'
 import {
