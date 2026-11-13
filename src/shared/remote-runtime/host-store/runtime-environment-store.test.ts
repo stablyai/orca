@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
-import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  listEnvironments
+} from './runtime-environment-store-operations'
 import {
   RuntimeEnvironmentStoreError,
   getEnvironmentStorePath,

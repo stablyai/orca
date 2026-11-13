@@ -162,7 +162,7 @@ export async function resolveSetParentFields(
   parentWorktree?: string
   matchFolderWorkspaces?: true
 }> {
-  const environment = resolveParentEnvironment(flags, client)
+  const environment = await resolveParentEnvironment(flags, client)
   if (environment) {
     return {
       crossStoreParent: await resolveCrossEnvironmentParent(client, { flags, cwd, environment })

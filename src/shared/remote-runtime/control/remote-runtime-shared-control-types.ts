@@ -121,7 +121,7 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   isManuallyDisconnected?: () => boolean
   isCapabilityPaused?: () => boolean
   /** The server's VM is asleep: no socket is opened or retried until its workspace wakes it. */
-  isAsleep?: () => boolean
+  prepareSleepCheck?: () => (() => boolean) | Promise<() => boolean>
   /** Publishes local transport diagnostics after a meaningful state transition. */
   onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
   /** Any inbound frame, ping or pong on the current socket. */
@@ -137,5 +137,5 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   /** Opt-in app-level heartbeat on ready sockets; absent keeps transport-only liveness. */
   appHeartbeat?: SharedControlAppHeartbeatOptions
   /** Null uses normal retry; a promise owns token recovery and decides whether this connection retries. */
-  onAuthenticationRejected?: () => Promise<'retry' | 'stop'> | null
+  onAuthenticationRejected?: () => Promise<'retry' | 'stop' | null> | null
 }

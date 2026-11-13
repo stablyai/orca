@@ -80,7 +80,7 @@ async function openInExternalEditor(
         ? { ok: false, reason: 'ssh-target-not-found' }
         : { ok: false, reason: 'remote-runtime-unsupported' }
     }
-    if (!isEditorSshHostForOwner(sshTarget, request.ownerHostId, listRuntimeEnvironments)) {
+    if (!(await isEditorSshHostForOwner(sshTarget, request.ownerHostId, listRuntimeEnvironments))) {
       return { ok: false, reason: 'remote-runtime-unsupported' }
     }
     if (sshTarget.owner?.type === 'on-demand-runtime') {

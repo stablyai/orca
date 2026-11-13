@@ -18,7 +18,7 @@ const {
 type Listed = { id: string; incarnationId: string; connected: boolean }
 
 /** A restarted host: the saved pane binds `persisted-pty`, stamped with the process now running. */
-function restartedHost(stamp: string, listedByHost: () => Listed[]) {
+async function restartedHost(stamp: string, listedByHost: () => Listed[]) {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
       terminalPtyIncarnationsByPaneKey: { [`host-tab:${HEADLESS_LEAF_ID}`]: stamp }
@@ -43,11 +43,11 @@ function restartedHost(stamp: string, listedByHost: () => Listed[]) {
         }))
   })
   // Main composes its panes before the first inventory registers any terminal.
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return runtime
 }
 
-async function hostTabRows(runtime: ReturnType<typeof restartedHost>) {
+async function hostTabRows(runtime: Awaited<ReturnType<typeof restartedHost>>) {
   const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
   return listed.terminals
     .filter((terminal) => terminal.tabId === 'host-tab')
@@ -57,7 +57,7 @@ async function hostTabRows(runtime: ReturnType<typeof restartedHost>) {
 describe('a terminal record arriving after main composed its panes (switch on)', () => {
   it('re-composes when the record learns the incarnation the pane is stamped with', async () => {
     let incarnationId = 'inc-before'
-    const runtime = restartedHost('inc-now', () => [
+    const runtime = await restartedHost('inc-now', () => [
       { id: 'persisted-pty', incarnationId, connected: true }
     ])
     await hostTabRows(runtime)

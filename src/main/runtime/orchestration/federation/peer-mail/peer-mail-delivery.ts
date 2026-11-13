@@ -44,7 +44,7 @@ export async function requirePeerMailServer(
   runtime: PeerMailRuntime,
   selector: string
 ): Promise<OrchestrationWorkerServer> {
-  const server = runtime.resolveOrchestrationWorkerServer(selector)
+  const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
     await runtime.callOrchestrationWorkerServer(
       server.environmentId,

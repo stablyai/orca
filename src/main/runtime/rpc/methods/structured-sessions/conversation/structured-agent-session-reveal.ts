@@ -126,11 +126,11 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         }
         if (
           caller?.kind === 'paired-device' &&
-          !ctx.runtime.reopenMobileSessionTabForClient(
+          !(await ctx.runtime.reopenMobileSessionTabForClient(
             revealed.workspaceId,
             revealed.sessionId,
             caller.deviceId
-          )
+          ))
         ) {
           throw new Error('Could not publish the chat to its caller.')
         }

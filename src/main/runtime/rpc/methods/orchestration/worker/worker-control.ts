@@ -102,7 +102,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       }
       const federated = db.getFederatedDispatch(params.dispatch)
       if (federated) {
-        const server = resolvePinnedFederatedServer(runtime, federated)
+        const server = await resolvePinnedFederatedServer(runtime, federated)
         return readFederatedWorkerOutput({
           runtime,
           db,

@@ -175,7 +175,7 @@ describe('orchestration migration behavior', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'remote work', runId: run.id })
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment_windows',
       name: 'windows',
       peerFingerprint: 'windows_peer'
@@ -223,7 +223,7 @@ describe('orchestration migration behavior', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'remote work', runId: run.id })
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment_windows',
       name: 'windows',
       peerFingerprint: 'windows_peer'

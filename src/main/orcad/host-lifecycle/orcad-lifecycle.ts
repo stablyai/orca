@@ -1,3 +1,4 @@
+import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { setRuntimeBrowserCommandsFactory } from '../../runtime/browser/installation/runtime-browser-commands-factory'
 import { markHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { setDesktopBrowserBridgeHostEnabled } from '../../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
@@ -130,7 +131,11 @@ export async function startOrcadWithLifecycle<T extends object>(
       await runtime.stop()
       runtimeCleanupSucceeded = true
     } finally {
-      await cleanupHost(runtimeCleanupSucceeded)
+      try {
+        await closeEnvironmentStore()
+      } finally {
+        await cleanupHost(runtimeCleanupSucceeded)
+      }
     }
   })
   try {

@@ -59,7 +59,7 @@ describe('OrcaRuntimeService', () => {
         { id: ptyId, cwd: TEST_WORKTREE_PATH, title: 'Recovered SSH Terminal' }
       ]
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -152,8 +152,8 @@ describe('OrcaRuntimeService', () => {
         isDestroyed: () => false,
         webContents: { send: vi.fn() }
       })
-      const publishEmpty = (snapshotVersion: number): void => {
-        runtime.syncWindowGraph(1, {
+      const publishEmpty = async (snapshotVersion: number): Promise<void> => {
+        await runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [],
           mobileSessionTabs: [

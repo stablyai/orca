@@ -44,12 +44,12 @@ function refuse(verdict: Refusal['verdict'], code: string, reason: string): Refu
   return { outcome: 'refused', verdict, code, reason }
 }
 
-export function stopManagedOrcadEnvironment(
+export async function stopManagedOrcadEnvironment(
   userDataPath: string,
   args: { selector: string; signal?: AbortSignal },
   policy: ManagedOrcadStopPolicy
 ): Promise<OrcadManagedStopResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
+  return await withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
     const { environment, deployment } = managed
     if (policy.isActiveEnvironment(environment.id)) {
       return refuse(
@@ -75,31 +75,29 @@ export function stopManagedOrcadEnvironment(
 }
 
 /** Forget local state without assuming host exit; later connects may relink a still-running server. */
-export function forgetManagedOrcadEnvironment(
+export async function forgetManagedOrcadEnvironment(
   userDataPath: string,
   args: { selector: string },
   policy: ManagedOrcadStopPolicy
 ): Promise<OrcadManagedForgetResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, (managed) =>
+  return await withManagedOrcadLifecycle(userDataPath, args.selector, (managed) =>
     forgetLinkedEnvironment(userDataPath, managed, policy)
   )
 }
 
 /** Forget one of two saved entries for one managed server; the other keeps managing it, so the host is not contacted. */
-export function forgetRedundantManagedOrcadEnvironment(
+export async function forgetRedundantManagedOrcadEnvironment(
   userDataPath: string,
   args: { selector: string },
   policy: ManagedOrcadStopPolicy
 ): Promise<OrcadManagedForgetResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, (managed) => {
+  return await withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
     // Checked in the queue and unlinked in the same tick, so two Removes cannot each count the other as the twin.
-    if (!findManagedSshTwin(listEnvironments(userDataPath), managed.environment)) {
-      return Promise.resolve(
-        refuse(
-          'live',
-          'orcad_forget_no_managed_twin',
-          'No other saved entry manages this server anymore, so removing this one would leave it unmanaged. Stop it instead.'
-        )
+    if (!findManagedSshTwin(await listEnvironments(userDataPath), managed.environment)) {
+      return refuse(
+        'live',
+        'orcad_forget_no_managed_twin',
+        'No other saved entry manages this server anymore, so removing this one would leave it unmanaged. Stop it instead.'
       )
     }
     return forgetLinkedEnvironment(userDataPath, managed, policy)
@@ -194,7 +192,7 @@ async function unlinkEnvironmentLocally(
   policy: ManagedOrcadStopPolicy
 ): Promise<void> {
   // Remove registration before releasing claims so crashes leave a resumable hidden target.
-  removeManagedOrcadEnvironment(userDataPath, environment.id)
+  await removeManagedOrcadEnvironment(userDataPath, environment.id)
   await policy.retireLocalState(environment.id)
   await closeOrcadManagedTunnel(environment.id)
   const { claims } = requireManagedOrcadInfrastructure()
@@ -207,11 +205,11 @@ async function unlinkEnvironmentLocally(
   await policy.releaseHostTransport(deployment.sshTargetId)
 }
 
-export function cancelManagedOrcadStop(
+export async function cancelManagedOrcadStop(
   userDataPath: string,
   args: { selector: string; signal?: AbortSignal }
 ): Promise<OrcadManagedCancelStopResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
+  return await withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
     const { environment, deployment } = managed
     const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
     const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)

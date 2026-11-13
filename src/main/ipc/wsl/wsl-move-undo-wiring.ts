@@ -104,7 +104,9 @@ async function withHostCopyPort<T extends WslMoveHostCopyStop>(
 ): Promise<T | 'stopped' | 'unreachable'> {
   // A host the user removed ran its terminals down with it, unless its Remove kept the server
   // running for another Orca (R39): then its copies may still run, and nothing here reaches them.
-  if (!listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)) {
+  if (
+    !(await listEnvironments(userDataPath)).some((env) => env.id === move.destinationEnvironmentId)
+  ) {
     return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
       ? 'unreachable'
       : 'stopped'
@@ -199,14 +201,16 @@ export function createWslMoveUndoPorts(
       try {
         // A removed host took its automations with it, unless another Orca keeps its server (R39).
         if (
-          !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
+          !(await listEnvironments(userDataPath)).some(
+            (env) => env.id === move.destinationEnvironmentId
+          )
         ) {
           return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
             ? { outcome: 'unreachable' }
             : { outcome: 'stopped', restore: async () => {}, applyHere: () => () => {} }
         }
         // E11: a Remove that could not prove the server stopped; the host is not to be touched.
-        if (wslHostRemovalPending(userDataPath, move.manifest.source.distro)) {
+        if (await wslHostRemovalPending(userDataPath, move.manifest.source.distro)) {
           return { outcome: 'removal-pending' }
         }
         if (!(await connectUndoHost(userDataPath, move, mode))) {

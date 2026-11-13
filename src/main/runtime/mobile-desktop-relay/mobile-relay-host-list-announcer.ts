@@ -22,7 +22,9 @@ export class RelayHostListAnnouncer {
 
   constructor(
     private readonly hosts: MobileDesktopRelayHosts,
-    private readonly describe: () => MobileRelayHostsListResult,
+    private readonly describe: () =>
+      | MobileRelayHostsListResult
+      | Promise<MobileRelayHostsListResult>,
     private readonly sources: RelayHostListAnnouncerSources
   ) {}
 
@@ -66,23 +68,39 @@ export class RelayHostListAnnouncer {
 
   private watch(): () => void {
     let queued = false
+    let requested = false
     const check = (): void => {
+      requested = true
       if (queued) {
         return
       }
       queued = true
       // One change can reach several sources, e.g. a retirement and its new status owner.
       queueMicrotask(() => {
-        queued = false
-        const watching = this.watching
-        if (!watching) {
-          return
+        const run = async (): Promise<void> => {
+          try {
+            while (requested) {
+              requested = false
+              const watching = this.watching
+              if (!watching) {
+                return
+              }
+              const next = await this.describeForAnnouncement()
+              if (this.watching !== watching) {
+                return
+              }
+              if (next !== watching.announced) {
+                watching.announced = next
+                this.sources.changed()
+              }
+            }
+          } finally {
+            queued = false
+          }
         }
-        const next = this.describeForAnnouncement()
-        if (next !== watching.announced) {
-          watching.announced = next
-          this.sources.changed()
-        }
+        void run().catch((error) =>
+          console.warn('[mobile-relay] Host list announcement failed', error)
+        )
       })
     }
     const stops = [
@@ -107,9 +125,9 @@ export class RelayHostListAnnouncer {
   }
 
   // A store that can't be read must not throw here, outside any request; phones re-read and get the error.
-  private describeForAnnouncement(): string {
+  private async describeForAnnouncement(): Promise<string> {
     try {
-      return JSON.stringify(this.describe())
+      return JSON.stringify(await this.describe())
     } catch {
       return 'unreadable'
     }

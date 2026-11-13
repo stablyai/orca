@@ -17,7 +17,7 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
     const replies: string[] = []
     try {
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -74,7 +74,7 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
       ).toBe(true)
       runtime.projectedFrames = 0
       const delivered = replies.length
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(0)
       expect(replies).toHaveLength(delivered)
       stopped.abort()
@@ -90,7 +90,7 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
 it('delivers a cleared snapshot when authenticated empty adoption completes without another workspace change', async () => {
   const h = createReconciliationDeliveryRuntime()
   h.hostRuntime.attachWindow(1)
-  h.hostRuntime.syncWindowGraph(1, {
+  await h.hostRuntime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
     mobileSessionTabs: [

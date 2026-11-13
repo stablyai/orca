@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 // #36923: the CLI reaches a recipe VM's server directly, so it asks the desktop that owns the
 // VM to wake it, and only for a command that opens the workspace.
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -44,13 +45,15 @@ function prepare(method: string, answer: DesktopRecipeVmWake = 'up') {
 }
 
 describe('a CLI command for a recipe VM environment', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-recipe-vm-'))
-    environmentId = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'sandbox',
-      pairingCode: PAIRING_CODE,
-      source: 'ephemeral-vm'
-    }).id
+    environmentId = (
+      await addEnvironmentFromPairingCode(userDataPath, {
+        name: 'sandbox',
+        pairingCode: PAIRING_CODE,
+        source: 'ephemeral-vm'
+      })
+    ).id
   })
 
   afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))

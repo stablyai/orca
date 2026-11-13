@@ -45,13 +45,13 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
   const claims = registry.getOrcadRuntimeClaims()
   const store = registry.getOrcadMigrationSource()
   const appVersion = getAppEnvironment().getVersion()
-  const isRegistered = (environmentId: string): boolean =>
-    listEnvironments(userDataPath).some((entry) => entry.id === environmentId)
+  const isRegistered = async (environmentId: string): Promise<boolean> =>
+    (await listEnvironments(userDataPath)).some((entry) => entry.id === environmentId)
   return {
     // A fence alone may be unfinished setup; only registered servers count.
-    managedEnvironmentId: (target) => {
+    managedEnvironmentId: async (target) => {
       const environmentId = getManagedOrcadFenceEnvironmentId(target)
-      return environmentId && isRegistered(environmentId) ? environmentId : null
+      return environmentId && (await isRegistered(environmentId)) ? environmentId : null
     },
     ensureTunnel: async (environmentId) => {
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
@@ -64,7 +64,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       }
       await retainOrcadMigrationSource(userDataPath, head.migrationId, store)
       // Retry what earlier connects could not reach the server to re-enable.
-      const environment = listEnvironments(userDataPath).find(
+      const environment = (await listEnvironments(userDataPath)).find(
         (entry) => entry.id === head.destinationEnvironmentId
       )
       return environment
@@ -141,7 +141,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       const environmentId =
         getManagedOrcadFenceEnvironmentId(target) ??
         getManagedOrcadFenceEnvironmentId(registry.getTarget(target.id))
-      if (environmentId && !isRegistered(environmentId)) {
+      if (environmentId && !(await isRegistered(environmentId))) {
         claims.release(target.id, environmentId)
         await claims.flush()
       }

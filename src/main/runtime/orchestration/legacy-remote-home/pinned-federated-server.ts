@@ -3,13 +3,13 @@ import { OrchestrationError } from '../orchestration-error'
 import type { FederatedDispatchRow } from '../db/orchestration-records'
 import { RuntimeEnvironmentStoreError } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 
-export function resolvePinnedFederatedServer(
+export async function resolvePinnedFederatedServer(
   runtime: WorkerTerminalReleaseRuntime,
   federated: FederatedDispatchRow
 ) {
   let server
   try {
-    server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
+    server = await runtime.resolveOrchestrationWorkerServer(federated.environment_id)
   } catch (error) {
     // Not found: removed, or re-paired, which adds the server as a new environment.
     if (error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument') {

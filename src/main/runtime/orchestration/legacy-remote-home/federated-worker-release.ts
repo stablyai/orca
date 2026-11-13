@@ -42,7 +42,7 @@ const RemoteReleaseReceiptSchema = z
 
 type FederatedWorkerMutationArgs = {
   runtime: WorkerTerminalReleaseRuntime
-  server: ReturnType<typeof resolvePinnedFederatedServer>
+  server: Awaited<ReturnType<typeof resolvePinnedFederatedServer>>
   federated: FederatedDispatchRow
   dispatchId: string
   requestId: string

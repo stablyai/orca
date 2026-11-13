@@ -1,3 +1,4 @@
+import { registerRuntimeEnvironmentSubscriptionControls } from './runtime-environment-binary-payload'
 import {
   assertCrewSubscriptionInputs,
   runtimeEnvironmentSubscriptionId,
@@ -39,6 +40,24 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
       let failure: SubscriptionSetup.RuntimeEnvironmentSetupFailure | undefined
       let setupSignal: AbortSignal | undefined
       let operation: 'environment-resolution' | 'subscription' = 'environment-resolution'
+      const sender = event.sender
+      const setupController = new AbortController()
+      const rendererLifetime = abortWhenRendererGone(sender)
+      let closeOperation = (): void => {}
+      const pending = {
+        ownerWebContentsId: sender.id,
+        environmentId: args.selector,
+        close: (): void => {
+          setupController.abort()
+          rendererLifetime.dispose()
+          if (pendingSubscriptions.get(subscriptionId) === pending) {
+            pendingSubscriptions.delete(subscriptionId)
+          }
+          closeOperation()
+        }
+      }
+      const abortSetup = (): void => pending.close()
+      rendererLifetime.signal.addEventListener('abort', abortSetup, { once: true })
       try {
         assertCrewSubscriptionInputs(
           args,
@@ -47,19 +66,20 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
           remoteRuntimeSubscriptions,
           pendingSubscriptions
         )
-        const { environment, pairingRevision } = resolveSubscriptionEnvironment(
+        pendingSubscriptions.set(subscriptionId, pending)
+        setupSignal = setupController.signal
+        const { environment, pairingRevision } = await resolveSubscriptionEnvironment(
           getUserDataPath(),
           args
         )
+        setupController.signal.throwIfAborted()
+        pending.environmentId = environment.id
         const transportGeneration = getRuntimeEnvironmentTransportGeneration(environment.id)
         const transportIsCurrent = (): boolean =>
           getRuntimeEnvironmentTransportGeneration(environment.id) === transportGeneration
-        const sender = event.sender
         const ownerWebContentsId = sender.id
-        const setupController = new AbortController()
-        setupSignal = setupController.signal
-        const assertCrewCurrent = (): void =>
-          assertCrewSubscriptionCurrent(
+        const assertCrewCurrent = async (): Promise<void> =>
+          await assertCrewSubscriptionCurrent(
             event,
             sender,
             getUserDataPath,
@@ -73,7 +93,16 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
             }
           )
         if (crewResult) {
-          assertCrewCurrent()
+          await assertCrewCurrent()
+        }
+        setupController.signal.throwIfAborted()
+        if (
+          sender.isDestroyed() ||
+          !event.senderFrame ||
+          event.senderFrame.detached ||
+          event.senderFrame !== sender.mainFrame
+        ) {
+          throw new Error('The window that started this subscription went away')
         }
         const associationObserver =
           args.method === 'agentSession.subscribeStatus'
@@ -87,11 +116,10 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
             : undefined
         let rendererGone = sender.isDestroyed()
         let subscription: RemoteRuntimeTransportSubscription | null = null
-        const rendererLifetime = abortWhenRendererGone(sender)
         const disposeRendererLifetime = (): void => {
           associationObserver?.dispose()
           rendererLifetime.dispose()
-          rendererLifetime.signal.removeEventListener('abort', closeSubscription)
+          rendererLifetime.signal.removeEventListener('abort', abortSetup)
         }
         const closeSubscription = (): void => {
           rendererGone = true
@@ -122,14 +150,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
             // The renderer is gone; there is no one left to tell.
           }
         }
-        const pending = {
-          ownerWebContentsId,
-          environmentId: environment.id,
-          close: closeSubscription
-        }
-        pendingSubscriptions.set(subscriptionId, pending)
-        // A reload replaces the owning document without destroying its WebContents.
-        rendererLifetime.signal.addEventListener('abort', closeSubscription, { once: true })
+        closeOperation = closeSubscription
         try {
           operation = 'subscription'
           subscription = await subscribeRuntimeEnvironment(
@@ -202,102 +223,83 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
           disposeRendererLifetime()
           throw error
         }
-        if (pendingSubscriptions.get(subscriptionId) === pending) {
-          pendingSubscriptions.delete(subscriptionId)
-        }
-        assertSettledCrewSubscriptionCurrent(
-          crewResult,
-          assertCrewCurrent,
-          disposeRendererLifetime,
-          subscription
-        )
-        assertSubscriptionPairingCurrent(
-          getUserDataPath,
-          environment,
-          pairingRevision,
-          transportIsCurrent,
-          crewResult,
-          disposeRendererLifetime,
-          subscription,
-          (value) => {
-            failure = value
+        try {
+          await assertSettledCrewSubscriptionCurrent(
+            crewResult,
+            assertCrewCurrent,
+            disposeRendererLifetime,
+            subscription
+          )
+          if (
+            pendingSubscriptions.get(subscriptionId) !== pending ||
+            setupController.signal.aborted
+          ) {
+            subscription.close()
+            return crewResult
+              ? { subscriptionId, ok: true as const }
+              : { subscriptionId, requestId: subscription.requestId }
           }
-        )
-        if (rendererGone || sender.isDestroyed() || transportClosed) {
-          disposeRendererLifetime()
-          subscription.close()
-          return crewResult
-            ? { subscriptionId, ok: true as const }
-            : { subscriptionId, requestId: subscription.requestId }
-        }
-        remoteRuntimeSubscriptions.set(subscriptionId, {
-          setupController,
-          requestId: subscription.requestId,
-          environmentId: environment.id,
-          ownerWebContentsId,
-          disposeRendererLifetime,
-          notifyClosed,
-          sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
-          close: () => {
+          await assertSubscriptionPairingCurrent(
+            getUserDataPath,
+            environment,
+            pairingRevision,
+            transportIsCurrent,
+            crewResult,
+            disposeRendererLifetime,
+            subscription,
+            (value) => {
+              failure = value
+            }
+          )
+          if (
+            pendingSubscriptions.get(subscriptionId) !== pending ||
+            setupController.signal.aborted ||
+            rendererGone ||
+            sender.isDestroyed() ||
+            transportClosed
+          ) {
             disposeRendererLifetime()
-            subscription?.close()
+            subscription.close()
+            return crewResult
+              ? { subscriptionId, ok: true as const }
+              : { subscriptionId, requestId: subscription.requestId }
           }
-        })
+          remoteRuntimeSubscriptions.set(subscriptionId, {
+            setupController,
+            requestId: subscription.requestId,
+            environmentId: environment.id,
+            ownerWebContentsId,
+            disposeRendererLifetime,
+            notifyClosed,
+            sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
+            close: () => {
+              disposeRendererLifetime()
+              subscription?.close()
+            }
+          })
+        } finally {
+          if (pendingSubscriptions.get(subscriptionId) === pending) {
+            pendingSubscriptions.delete(subscriptionId)
+          }
+        }
         return crewResult
           ? { subscriptionId, ok: true as const }
           : { subscriptionId, requestId: subscription.requestId }
       } catch (error) {
+        pending.close()
         if (!crewResult) {
           throw error
         }
         return crewSubscriptionSetupFailure(subscriptionId, error, failure, operation, setupSignal)
+      } finally {
+        if (pendingSubscriptions.get(subscriptionId) === pending) {
+          pendingSubscriptions.delete(subscriptionId)
+        }
+        if (remoteRuntimeSubscriptions.get(subscriptionId)?.setupController !== setupController) {
+          rendererLifetime.dispose()
+        }
       }
     }
   )
-  ipcMain.handle(
-    'runtimeEnvironments:unsubscribe',
-    (event, args: { subscriptionId: string }): { unsubscribed: boolean } => {
-      const pending = pendingSubscriptions.get(args.subscriptionId)
-      if (pending?.ownerWebContentsId === event.sender.id) {
-        pending.close()
-        return { unsubscribed: true }
-      }
-      const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (!subscription || subscription.ownerWebContentsId !== event.sender.id) {
-        return { unsubscribed: false }
-      }
-      remoteRuntimeSubscriptions.delete(args.subscriptionId)
-      subscription.close()
-      return { unsubscribed: true }
-    }
-  )
-  ipcMain.on(
-    'runtimeEnvironments:subscriptionBinary',
-    (event, args: { subscriptionId?: unknown; bytes?: unknown }) => {
-      if (typeof args.subscriptionId !== 'string') {
-        return
-      }
-      const bytes = toBinaryPayload(args.bytes)
-      if (!bytes) {
-        return
-      }
-      const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (subscription?.ownerWebContentsId === event.sender.id) {
-        subscription.sendBinary(bytes)
-      }
-    }
-  )
-}
-
-function toBinaryPayload(value: unknown): Uint8Array<ArrayBufferLike> | null {
-  if (value instanceof Uint8Array) {
-    return value
-  }
-  if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value)
-  }
-  if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-  }
-  return null
+  registerRuntimeEnvironmentSubscriptionControls(pendingSubscriptions, remoteRuntimeSubscriptions)
 }

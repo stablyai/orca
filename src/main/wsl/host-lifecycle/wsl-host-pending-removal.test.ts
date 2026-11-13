@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -58,8 +59,8 @@ describe('WslHostService pending removal', () => {
       verdict: 'live',
       kept: true
     })
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
-    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pendingStop).toMatchObject({
+    expect(await listEnvironments(userDataPath)).toHaveLength(1)
+    expect((await findWslHostDeployment(userDataPath, 'wsl:ubuntu'))?.pendingStop).toMatchObject({
       reason: '1 terminal kept running',
       verdict: 'live'
     })
@@ -71,7 +72,7 @@ describe('WslHostService pending removal', () => {
       removalPending: true
     })
     // Open work, liveness and passive calls leave it alone.
-    expect(service.hasUserVisibleWork('Ubuntu')).toBe(false)
+    expect(await service.hasUserVisibleWork('Ubuntu')).toBe(false)
     service.setVisibleWork([])
     service.setVisibleWork(['wsl:ubuntu'])
     connector.isReachable.mockResolvedValue(false)
@@ -82,7 +83,7 @@ describe('WslHostService pending removal', () => {
 
     // Remove again: a proven stop finishes it.
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
-    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(await listEnvironments(userDataPath)).toEqual([])
     expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
   })
 
@@ -99,7 +100,7 @@ describe('WslHostService pending removal', () => {
     await service.remove('wsl:ubuntu')
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ ...unverifiable, kept: true })
     expect(connector.stopServer).toHaveBeenCalledTimes(2)
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
+    expect(await listEnvironments(userDataPath)).toHaveLength(1)
   })
 
   it('finishes a pending Remove on a stopped distro, which proves the stop, without booting it', async () => {
@@ -114,7 +115,7 @@ describe('WslHostService pending removal', () => {
 
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
     expect(connector.connect).not.toHaveBeenCalled()
-    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(await listEnvironments(userDataPath)).toEqual([])
   })
 
   it('finishes removing a host whose distro is gone, which runs nothing', async () => {
@@ -128,7 +129,7 @@ describe('WslHostService pending removal', () => {
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
     expect(connector.resolveDistroName).toHaveBeenLastCalledWith('Ubuntu', UBUNTU_ID)
     expect(connector.stopServer).toHaveBeenCalledTimes(1)
-    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(await listEnvironments(userDataPath)).toEqual([])
   })
 
   it('stops, rather than drops, a host whose registry could not be read', async () => {
@@ -139,7 +140,7 @@ describe('WslHostService pending removal', () => {
     connector.resolveDistroName.mockResolvedValue(null)
 
     await expect(service.remove('wsl:ubuntu')).resolves.toMatchObject({ kept: true })
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
+    expect(await listEnvironments(userDataPath)).toHaveLength(1)
   })
 
   it('re-adding or connecting a pending host keeps it and withdraws the removal', async () => {
@@ -155,14 +156,14 @@ describe('WslHostService pending removal', () => {
       environmentId: 'wsl:ubuntu'
     })
     expect(connector.connect).toHaveBeenCalledWith('Ubuntu', {})
-    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pendingStop).toBeUndefined()
+    expect((await findWslHostDeployment(userDataPath, 'wsl:ubuntu'))?.pendingStop).toBeUndefined()
 
     await service.remove('wsl:ubuntu')
     // Only the user's own Connect withdraws it; any other caller is refused.
     await expect(service.connect('wsl:ubuntu')).rejects.toThrow('didn’t finish removing')
-    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pendingStop).toBeDefined()
+    expect((await findWslHostDeployment(userDataPath, 'wsl:ubuntu'))?.pendingStop).toBeDefined()
     await service.connect('wsl:ubuntu', { withdrawPendingRemoval: true })
-    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pendingStop).toBeUndefined()
+    expect((await findWslHostDeployment(userDataPath, 'wsl:ubuntu'))?.pendingStop).toBeUndefined()
   })
 
   it('re-adding a pending host on a stopped distro asks to start it, as any add does', async () => {
@@ -178,7 +179,7 @@ describe('WslHostService pending removal', () => {
       kind: 'distro-stopped'
     })
     expect(connector.connect).not.toHaveBeenCalled()
-    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pendingStop).toBeDefined()
+    expect((await findWslHostDeployment(userDataPath, 'wsl:ubuntu'))?.pendingStop).toBeDefined()
   })
 
   it('shows an unfinished removal from launch', async () => {

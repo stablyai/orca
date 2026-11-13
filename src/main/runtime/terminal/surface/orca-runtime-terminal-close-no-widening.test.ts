@@ -29,11 +29,11 @@ type Condition =
   | 'nothing-published'
   | 'pane-unlisted'
 
-function syncRendererSplit(
+async function syncRendererSplit(
   harness: CloseContinuityHarness,
   ptyIdsByLeafId: Record<string, string>,
   livePtyIdsByLeafId = ptyIdsByLeafId
-): void {
+): Promise<void> {
   const parentLayout = {
     root: {
       type: 'split' as const,
@@ -58,7 +58,7 @@ function syncRendererSplit(
       terminalLayoutsByTabId: { ...session.terminalLayoutsByTabId, [TAB_ID]: parentLayout }
     }))
   }
-  harness.runtime.syncWindowGraph(1, {
+  await harness.runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -92,17 +92,17 @@ function syncRendererSplit(
   })
 }
 
-function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
+async function arrange(entry: Entry, condition: Condition): Promise<CloseContinuityHarness> {
   const usesPtyRecord = entry !== 'cli-graph' && entry !== 'renderer' && condition !== 'no-live-pty'
   const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: usesPtyRecord })
   if (condition === 'unbound-sibling') {
     // Renderer split exists before PTY binding/persistence.
-    syncRendererSplit(harness, { [LEAF_ID]: PTY_ID })
+    await syncRendererSplit(harness, { [LEAF_ID]: PTY_ID })
   } else {
     harness.syncSplitFixtureGraph()
   }
   if (condition === 'no-live-pty') {
-    syncRendererSplit(
+    await syncRendererSplit(
       harness,
       { [LEAF_ID]: 'pty-exited', [SIBLING_LEAF_ID]: SIBLING_PTY_ID },
       { [SIBLING_LEAF_ID]: SIBLING_PTY_ID }
@@ -113,7 +113,7 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
     harness.syncFixtureTabWithoutLeaf()
   }
   if (condition === 'nothing-published') {
-    harness.runtime.syncWindowGraph(1, {
+    await harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,
@@ -139,7 +139,7 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
   }
   if (condition === 'pane-unlisted') {
     // Renderer lags main: sibling has no layout, closed pane has no row.
-    harness.runtime.syncWindowGraph(1, {
+    await harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,
@@ -283,7 +283,7 @@ async function closesOnlyThatPane(
   entry: (typeof rows)[number][0],
   condition: (typeof rows)[number][1]
 ): Promise<void> {
-  const harness = arrange(entry, condition)
+  const harness = await arrange(entry, condition)
   const siblingWasPersisted = Boolean(
     harness.getSession().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[SIBLING_LEAF_ID]
   )

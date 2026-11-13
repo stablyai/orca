@@ -63,7 +63,7 @@ async function syncFederatedDispatchPages(
       `Federated Dispatch ${dispatchId} was not found.`
     )
   }
-  const currentServer = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
+  const currentServer = await runtime.resolveOrchestrationWorkerServer(federated.environment_id)
   if (currentServer.peerFingerprint !== federated.peer_fingerprint) {
     throw new OrchestrationError(
       'peer_changed',

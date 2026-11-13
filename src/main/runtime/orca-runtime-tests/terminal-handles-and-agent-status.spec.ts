@@ -186,7 +186,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
     runtime.markGraphUnavailable(1)
@@ -217,14 +217,14 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     const [tabId, leafId] = created.paneKey?.split(':') ?? []
     if (!tabId || !leafId) {
       throw new Error('expected stable pane identity')
     }
-    const syncSurface = (ptyId: string | null): void => {
-      runtime.syncWindowGraph(1, {
+    const syncSurface = async (ptyId: string | null): Promise<void> => {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId,

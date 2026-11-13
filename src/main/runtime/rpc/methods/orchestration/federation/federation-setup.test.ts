@@ -150,7 +150,7 @@ describe('orchestration federated setup evidence', () => {
       ]
     })
     db.markWorkerDispatchReady(started.dispatch.id)
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment_windows',
       name: 'windows',
       peerFingerprint: 'windows_peer'

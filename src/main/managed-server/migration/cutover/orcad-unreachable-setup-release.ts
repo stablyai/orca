@@ -38,11 +38,11 @@ export async function releaseUnreachableOrcadSetup(args: {
   await stopStrandedOrcad(args.targetId, args.signal).catch((error: unknown) => {
     console.warn(`[orcad] Could not stop the unreachable setup's server: ${errorMessage(error)}`)
   })
-  const isRegistered = (id: string): boolean =>
-    listEnvironments(args.userDataPath).some((entry) => entry.id === id)
+  const isRegistered = async (id: string): Promise<boolean> =>
+    (await listEnvironments(args.userDataPath)).some((entry) => entry.id === id)
   // Unregister first so an interrupted release leaves a recoverable undeployed fence.
-  if (isRegistered(environmentId)) {
-    removeManagedOrcadEnvironment(args.userDataPath, environmentId)
+  if (await isRegistered(environmentId)) {
+    await removeManagedOrcadEnvironment(args.userDataPath, environmentId)
   }
   await releaseUndeployedMigrationFence({
     userDataPath: args.userDataPath,

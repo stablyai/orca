@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { createServer, type Server } from 'node:net'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

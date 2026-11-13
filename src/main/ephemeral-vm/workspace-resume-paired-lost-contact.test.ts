@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 // #34089 for VMs reached as paired Orca servers: a VM its provider stopped or reclaimed stays
 // recorded as running. Once Orca's own probes have failed for minutes, opening the workspace runs
 // the recipe's resume and keeps the device pairing unless the server came back with a new host key.
@@ -104,7 +105,7 @@ async function bootOrcad(serverDataPath: string, keyPair: KeyPair) {
 /** The desktop's own status probe of the environment's saved pairing, as its status owner sends it. */
 async function probe(environmentId: string) {
   const connection = getPreferredPairedRuntimeConnection(
-    resolveEnvironment(state.desktopDataPath, environmentId)
+    await resolveEnvironment(state.desktopDataPath, environmentId)
   )
   try {
     const response = await sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
@@ -142,11 +143,13 @@ describe('opening a workspace whose paired VM server Orca could not reach for mi
     serverDataPath = mkdtempSync(join(tmpdir(), 'orca-lost-vm-server-'))
     keyPair = generateKeyPair()
     const boot = await bootOrcad(serverDataPath, keyPair)
-    environmentId = addEnvironmentFromPairingCode(state.desktopDataPath, {
-      name: 'VM workspace',
-      pairingCode: boot.pairingCode,
-      source: 'ephemeral-vm'
-    }).id
+    environmentId = (
+      await addEnvironmentFromPairingCode(state.desktopDataPath, {
+        name: 'VM workspace',
+        pairingCode: boot.pairingCode,
+        source: 'ephemeral-vm'
+      })
+    ).id
     state.record = {
       id: 'vm-1',
       status: 'running',

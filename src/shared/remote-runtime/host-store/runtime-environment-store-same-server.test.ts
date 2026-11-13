@@ -9,7 +9,7 @@ import {
   addOrUpdateEnvironmentFromPairingCode,
   listEnvironments,
   resolveEnvironmentPairingOffer
-} from './runtime-environment-store'
+} from './runtime-environment-store-operations'
 
 const serverKey = Buffer.alloc(32, 7).toString('base64')
 

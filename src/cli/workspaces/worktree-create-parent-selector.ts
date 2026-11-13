@@ -40,7 +40,7 @@ export async function resolveCreateParentSelector(
   cwd: string,
   client: RuntimeClient
 ): Promise<CreateParentSelector> {
-  const parentEnvironment = resolveParentEnvironment(flags, client)
+  const parentEnvironment = await resolveParentEnvironment(flags, client)
   const rawParentWorktree = getOptionalStringFlag(flags, 'parent-worktree')
   if (!rawParentWorktree) {
     return {}

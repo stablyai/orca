@@ -46,13 +46,13 @@ describe('runtime graph ownership', () => {
     const runtime = new GraphRuntime()
     const handle = runtime.preAllocateHandleForPty('pty')
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, graph)
+    await runtime.syncWindowGraph(1, graph)
     const leaf = runtime.graphLeaves.get('tab::leaf')
 
     runtime.markRendererReloading(1)
 
     expect(runtime.detachedLeaves.get('pty')).toBe(leaf)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.onPtyData('pty', 'after omitted leaf\n', 100)
     await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
       tail: ['after omitted leaf']

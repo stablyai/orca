@@ -14,7 +14,7 @@ const {
   makeWorkspaceSessionWithHeadlessTerminal
 } = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
-function makeRuntime() {
+async function makeRuntime() {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
@@ -27,7 +27,7 @@ function makeRuntime() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   const events: RuntimeClientEvent[] = []
   runtime.onClientEvent((event) => events.push(event))
   const sleepPhases = (): string[] =>
@@ -37,7 +37,7 @@ function makeRuntime() {
 
 describe('owned-session teardown policy', () => {
   it('sleeps the terminals on the host when no renderer can run the sleep flow', async () => {
-    const { runtime, sleepPhases } = makeRuntime()
+    const { runtime, sleepPhases } = await makeRuntime()
 
     await runtime.sleepManagedWorktree(`id:${TEST_WORKTREE_ID}`)
 
@@ -50,7 +50,7 @@ describe('owned-session teardown policy', () => {
   })
 
   it('never reports a headless sleep whose stop is unproven as done', async () => {
-    const { runtime } = makeRuntime()
+    const { runtime } = await makeRuntime()
     vi.spyOn(runtime, 'sleepTerminalsForWorktree').mockResolvedValue({
       stopped: 0,
       stoppedPtyIds: [],
@@ -66,7 +66,7 @@ describe('owned-session teardown policy', () => {
   })
 
   it("stops every project workspace's terminals under one deadline, not one after another", async () => {
-    const { runtime, runtimeStore } = makeRuntime()
+    const { runtime, runtimeStore } = await makeRuntime()
     const [repo] = runtimeStore.getRepos()
     const slow = `${repo.id}::/slow`
     const fast = `${repo.id}::/fast`

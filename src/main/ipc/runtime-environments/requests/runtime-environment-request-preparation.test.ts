@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 // #36923: opening a sleeping paired recipe VM wakes it, and the wake re-pairs its server. The
 // opening request is held to its caller's pairing as of before that wake, then to the pairing the
 // wake made; any other change still refuses it.

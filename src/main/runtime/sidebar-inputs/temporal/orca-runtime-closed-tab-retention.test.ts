@@ -49,8 +49,8 @@ class Probe extends OrcaRuntimeService {
 type Host = NonNullable<OrcaRuntimeService['sidebarFacts']>
 
 /** The window's graph: one terminal tab in WT, running pty-1. */
-function publishTerminalTab(runtime: Host): void {
-  runtime.syncWindowGraph(1, {
+async function publishTerminalTab(runtime: Host): Promise<void> {
+  await runtime.syncWindowGraph(1, {
     tabs: [{ tabId: 'tab-1', worktreeId: WT, title: 'Terminal', activeLeafId: LEAF, layout: null }],
     leaves: [{ tabId: 'tab-1', worktreeId: WT, leafId: LEAF, paneRuntimeId: 1, ptyId: 'pty-1' }],
     mobileSessionTabs: [
@@ -89,7 +89,7 @@ async function createHost(): Promise<Host> {
   if (!runtime) {
     throw new Error('built without the sidebar facts layer')
   }
-  publishTerminalTab(runtime)
+  await publishTerminalTab(runtime)
   runtime.beginSidebarListSession('session-1')
   await vi.advanceTimersByTimeAsync(300)
   expect(runtime.getWorkspaceActivityFacts().facts[WT]?.terminal).toBe('live')
@@ -100,8 +100,8 @@ const retained = (runtime: Host): readonly string[] =>
   runtime.getSidebarTemporalSnapshot().retention?.retainedIds ?? []
 
 /** The window's graph once its terminal tab in WT is closed. */
-function publishNoTabs(runtime: Host): void {
-  runtime.syncWindowGraph(1, {
+async function publishNoTabs(runtime: Host): Promise<void> {
+  await runtime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
     mobileSessionTabs: [
@@ -136,7 +136,7 @@ describe('main sleeping retention and a closed last tab', () => {
 
   it('drops the row when the stop request lands after the graph', async () => {
     const runtime = await createHostWithSpawnedPty()
-    publishNoTabs(runtime)
+    await publishNoTabs(runtime)
     expect(runtime.getWorkspaceActivityFacts().facts[WT]?.terminal).toBe('live')
     runtime.markPtyStopRequested('pty-1')
     expect(runtime.getWorkspaceActivityFacts().facts[WT]).toBeUndefined()
@@ -146,7 +146,7 @@ describe('main sleeping retention and a closed last tab', () => {
   it('keeps a closed tab’s terminal unverifiable when its host stops answering', async () => {
     const runtime = await createHostWithSpawnedPty()
     runtime.markPtyStopRequested('pty-1')
-    publishNoTabs(runtime)
+    await publishNoTabs(runtime)
     runtime.markPtyLivenessUnverifiable('pty-1', 'ssh contact lost')
     expect(runtime.getWorkspaceActivityFacts().facts[WT]?.terminal).toBe('unverifiable')
   })
@@ -154,7 +154,7 @@ describe('main sleeping retention and a closed last tab', () => {
   it('counts the terminal live again when its stop fails', async () => {
     const runtime = await createHostWithSpawnedPty()
     runtime.markPtyStopRequested('pty-1')
-    publishNoTabs(runtime)
+    await publishNoTabs(runtime)
     expect(runtime.getWorkspaceActivityFacts().facts[WT]).toBeUndefined()
     runtime.clearPtyStopRequest('pty-1')
     expect(runtime.getWorkspaceActivityFacts().facts[WT]?.terminal).toBe('live')

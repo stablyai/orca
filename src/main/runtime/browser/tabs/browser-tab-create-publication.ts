@@ -161,26 +161,30 @@ export function browserTabSwitchTakesFocus(focus: boolean | undefined): boolean 
   return focus === true
 }
 
-export function publishSwitchedBrowserSessionTab(
+export async function publishSwitchedBrowserSessionTab(
   host: BrowserTabCreatePublicationHost,
   publication: BrowserTabSwitchPublication
-): void {
+): Promise<void> {
   const rules = BROWSER_TAB_SWITCH_PUBLICATION_RULES[publication.placementKind]
   if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
   if (rules.marksSessionTabFocus && browserTabSwitchTakesFocus(publication.focus)) {
     // Switch has no navigation audience yet; preserve its existing host-facing semantics.
-    host.markHeadlessBrowserSessionTabActive?.(publication.worktreeId, publication.browserPageId, {
-      focusesHost: true
-    })
+    await host.markHeadlessBrowserSessionTabActive?.(
+      publication.worktreeId,
+      publication.browserPageId,
+      {
+        focusesHost: true
+      }
+    )
   }
 }
 
-export function publishCreatedBrowserSessionTab(
+export async function publishCreatedBrowserSessionTab(
   host: BrowserTabCreatePublicationHost,
   publication: BrowserTabCreatePublication
-): void {
+): Promise<void> {
   const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[publication.placementKind]
   // A page link no client brought forward must not take over the agent's routing, yet must still appear.
   const leavesAgentTab = publication.opensPageLink === true && !publication.focus.selects
@@ -206,20 +210,24 @@ export function publishCreatedBrowserSessionTab(
   }
   // Caller-only creates still need this call to place the tab in the requested group.
   if (rules.marksSessionTabFocus && publication.focus.selects) {
-    host.markHeadlessBrowserSessionTabActive?.(publication.worktreeId, publication.browserPageId, {
-      ...(publication.targetGroupId !== undefined
-        ? { targetGroupId: publication.targetGroupId }
-        : {}),
-      focusesHost: publication.focus.focusesHost,
-      ...(publication.clientNavigationId !== undefined
-        ? {
-            caller: {
-              clientNavigationId: publication.clientNavigationId,
-              navigation: publication.focus.navigation,
-              ...(publication.opensPageLink ? { follows: true } : {})
+    await host.markHeadlessBrowserSessionTabActive?.(
+      publication.worktreeId,
+      publication.browserPageId,
+      {
+        ...(publication.targetGroupId !== undefined
+          ? { targetGroupId: publication.targetGroupId }
+          : {}),
+        focusesHost: publication.focus.focusesHost,
+        ...(publication.clientNavigationId !== undefined
+          ? {
+              caller: {
+                clientNavigationId: publication.clientNavigationId,
+                navigation: publication.focus.navigation,
+                ...(publication.opensPageLink ? { follows: true } : {})
+              }
             }
-          }
-        : {})
-    })
+          : {})
+      }
+    )
   }
 }

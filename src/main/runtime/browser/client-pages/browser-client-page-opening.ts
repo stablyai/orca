@@ -104,7 +104,7 @@ export async function createBrowserClientPage(
     loading: url !== 'about:blank',
     active: focus.startsActive
   })
-  publishCreatedBrowserSessionTab(host, {
+  await publishCreatedBrowserSessionTab(host, {
     placementKind: 'client',
     browserPageId,
     worktreeId: worktree.id,

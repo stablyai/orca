@@ -16,7 +16,7 @@ const {
 } = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { committingSpawn } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
 
-function windowlessRuntime() {
+async function windowlessRuntime() {
   const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
@@ -33,13 +33,13 @@ function windowlessRuntime() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, spawn, started, getSession, setSession }
 }
 
 describe('a restored pane with no live terminal, on a host with no window (layout-owner build)', () => {
   it("refuses a client's first view of a pane main dropped after the client listed it", async () => {
-    const { runtime, spawn, getSession, setSession } = windowlessRuntime()
+    const { runtime, spawn, getSession, setSession } = await windowlessRuntime()
     await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const session = getSession()
     setSession({

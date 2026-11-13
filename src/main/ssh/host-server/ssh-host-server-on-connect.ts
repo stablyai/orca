@@ -73,7 +73,7 @@ export type HostServerTerminalVerdict = {
 }
 
 export type HostServerOnConnectDeps = {
-  managedEnvironmentId: (target: SshTarget) => string | null
+  managedEnvironmentId: (target: SshTarget) => string | null | Promise<string | null>
   ensureTunnel: (environmentId: string) => Promise<void>
   /** Wake only on proven stopped activation, then verify serving behind the tunnel. */
   ensureServing: (environmentId: string) => Promise<OrcadManagedServing>
@@ -125,7 +125,7 @@ async function decide(
   if (target.orcadFence?.sourceChangedAt) {
     return { route: 'unserved', reason: 'source_changed' }
   }
-  const existing = deps.managedEnvironmentId(target)
+  const existing = await deps.managedEnvironmentId(target)
   if (existing) {
     trace.path = 'existing'
     deps.progress(target, 'connecting')

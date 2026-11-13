@@ -22,7 +22,7 @@ export function registerAgentSessionAttachmentUploadHandlers(): void {
           {
             ...args,
             // The manual-disconnect check keys on the resolved id, not whatever selector came in.
-            environmentId: resolveEnvironment(userDataPath, args.environmentId).id,
+            environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id,
             userDataPath,
             signal: lifetime.signal
           },

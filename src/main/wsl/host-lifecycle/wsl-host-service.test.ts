@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,6 +49,36 @@ describe('WslHostService', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
+  it('shares concurrent Add through one owned registration', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    const [first, second] = await Promise.all([
+      service.add({ distro: 'Ubuntu' }),
+      service.add({ distro: 'Ubuntu' })
+    ])
+    expect(first).toEqual(second)
+    expect(await listEnvironments(userDataPath)).toHaveLength(1)
+    expect(await service.ensureForRuntimeCall('wsl:ubuntu')).toBeUndefined()
+    expect(connector.disconnect).not.toHaveBeenCalled()
+  })
+
+  it('a closed connection supersedes Ready while its registry read is pending', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    ready.mockClear()
+    const first = service.handleConnectionChange('Ubuntu', connection('Ubuntu', 42001), {
+      state: 'ready',
+      census: null
+    })
+    const closed = service.handleConnectionChange('Ubuntu', null, { state: 'closed' })
+    await Promise.all([first, closed])
+    expect(service.getStatuses()).toEqual([
+      expect.objectContaining({ environmentId: 'wsl:ubuntu', state: 'closed' })
+    ])
+    expect(ready).not.toHaveBeenCalled()
+  })
+
   it('keeps a host whose removal failed usable and removable again', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
@@ -59,12 +90,12 @@ describe('WslHostService', () => {
 
     await expect(service.remove('wsl:ubuntu')).rejects.toThrow('EBUSY')
 
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
+    expect(await listEnvironments(userDataPath)).toHaveLength(1)
     expect(removed).not.toHaveBeenCalled()
     await expect(service.ensureForRuntimeCall('wsl:ubuntu')).resolves.toBeUndefined()
     await expect(service.connect('wsl:ubuntu')).resolves.toBeUndefined()
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
-    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(await listEnvironments(userDataPath)).toEqual([])
     expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
   })
 
@@ -79,12 +110,15 @@ describe('WslHostService', () => {
       () => new Promise((resolve) => (finishRead = resolve))
     )
 
-    service.focusHost('wsl:ubuntu')
+    await service.focusHost('wsl:ubuntu')
     await vi.waitFor(() => expect(connector.reachability).toHaveBeenCalled())
     // The user's Start boots and connects while the focus read is still out.
     connector.distro.state = 'running'
     await service.connect('wsl:ubuntu')
-    service.handleConnectionChange('Ubuntu', connection('Ubuntu'), { state: 'ready', census: null })
+    await service.handleConnectionChange('Ubuntu', connection('Ubuntu'), {
+      state: 'ready',
+      census: null
+    })
     finishRead('stopped')
 
     await vi.waitFor(() => expect(connector.reachability).toHaveBeenCalledTimes(2))
@@ -105,8 +139,8 @@ describe('WslHostService', () => {
       await connector.disconnect('Ubuntu')
       service.setVisibleWork(['wsl:ubuntu'])
       duringStop = {
-        visible: service.hasUserVisibleWork('Ubuntu'),
-        known: service.isKnownDistro('Ubuntu'),
+        visible: await service.hasUserVisibleWork('Ubuntu'),
+        known: await service.isKnownDistro('Ubuntu'),
         connect: await service.ensureForRuntimeCall('wsl:ubuntu').then(
           () => 'connected',
           (error: Error) => error.message
@@ -123,7 +157,7 @@ describe('WslHostService', () => {
       connect: 'This WSL host is being removed.'
     })
     expect(connector.connect).not.toHaveBeenCalled()
-    expect(service.isKnownDistro('Ubuntu')).toBe(false)
+    expect(await service.isKnownDistro('Ubuntu')).toBe(false)
     service.setVisibleWork(['wsl:ubuntu'])
     await service.ensureForRuntimeCall('wsl:ubuntu')
     expect(connector.connect).not.toHaveBeenCalled()
@@ -150,7 +184,7 @@ describe('WslHostService', () => {
     finishConnect()
 
     await expect(adding).resolves.toMatchObject({ ok: false, kind: 'disabled' })
-    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(await listEnvironments(userDataPath)).toEqual([])
     expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
     expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
     expect(ready).not.toHaveBeenCalled()

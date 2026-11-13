@@ -1,23 +1,25 @@
 import {
-  getRegisteredSshState,
-  listRegisteredSshTargets
-} from '../../ssh/targets/ssh-target-registry'
+  readRuntimeDesktopSidebarFacts,
+  CATALOG_EVENTS,
+  SIDEBAR_VIEW_UI_FIELDS,
+  DESKTOP_WRITE_DOMAINS
+} from './sidebar-inputs-desktop-facts'
+export { readRuntimeDesktopSidebarFacts } from './sidebar-inputs-desktop-facts'
+
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
+
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import {
-  savedWorkspaceCatalog,
-  WORKTREE_METADATA_DOMAINS
-} from '../../persistence/profile-save-domains'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
+
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
+import type { PairedServerRowsSnapshot } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import type { PairedServerRowsProducer } from './workspace-rows/paired-server-rows-producer'
 import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
 import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icons/repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './feed/sidebar-inputs-feed'
-import { readDesktopSidebarFacts } from './catalog/desktop-sidebar-facts'
+
 import { readStoreInstallationId } from '../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { readSidebarProjectCatalog } from './catalog/sidebar-project-catalog'
@@ -28,51 +30,6 @@ import {
 import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/feed-facts/paired-server-activity-facts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
-
-/** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
-export function readRuntimeDesktopSidebarFacts(
-  store: RuntimeStore,
-  installationId: string | undefined
-): DesktopSidebarFacts {
-  return readDesktopSidebarFacts({
-    store,
-    sshTargets: listRegisteredSshTargets(),
-    sshStateOf: getRegisteredSshState,
-    wslStatuses: getWslHostService()?.getStatuses() ?? [],
-    installationId
-  })
-}
-
-// The bus every catalog, view and SSH change reaches clients through.
-const CATALOG_EVENTS = new Set<RuntimeClientEvent['type']>([
-  'worktreesChanged',
-  'reposChanged',
-  'workspaceViewChanged',
-  'sshStateChanged'
-])
-
-// The host's sidebar view settings, each its own entity; ui.get serves the same fields.
-const SIDEBAR_VIEW_UI_FIELDS = [
-  'groupBy',
-  'sortBy',
-  'projectOrderBy',
-  'hideSleepingWorkspaces',
-  'hideDefaultBranchWorkspace',
-  'alwaysShowDefaultBranchWorkspace',
-  'hideAutomationGeneratedWorkspaces',
-  'hideCliCreatedWorkspaces',
-  'hideDetachedHeadWorkspaces',
-  'hideWorkspacesFromOtherDevices',
-  'filterRepoIds',
-  'collapsedGroups',
-  'workspaceStatuses',
-  'workspaceHostScope',
-  'visibleWorkspaceHostIds',
-  'worktreeCardProperties',
-  'agentActivityDisplayMode'
-] as const satisfies readonly (keyof PersistedUIState)[]
-
-const DESKTOP_WRITE_DOMAINS = [...WORKTREE_METADATA_DOMAINS, 'settings', 'ui']
 
 export type SidebarInputsFeedSources = {
   facts: OrcaRuntimeWithSidebarTemporal
@@ -93,6 +50,22 @@ export function sidebarInputsFeedDomains(
 ): SidebarInputsFeedDomain[] {
   const { facts, pairedServerRows, workspaceLifecycle, workspaceRows } = sources
   const urgent = { urgent: true }
+  let preparedPaired: PairedServerRowsSnapshot | undefined
+  const pairedSnapshot = (): PairedServerRowsSnapshot => {
+    if (!preparedPaired) {
+      throw new Error('paired server facts are not prepared')
+    }
+    return preparedPaired
+  }
+  const preparePaired = (consume: () => void): Promise<void> =>
+    pairedServerRows.withPreparedSnapshot((snapshot) => {
+      preparedPaired = snapshot
+      try {
+        consume()
+      } finally {
+        preparedPaired = undefined
+      }
+    })
   const watchCatalog = (changed: () => void): (() => void) =>
     sources.onClientEvent(
       (event) => {
@@ -119,6 +92,7 @@ export function sidebarInputsFeedDomains(
   return [
     {
       name: 'activity',
+      prepare: preparePaired,
       read: () => {
         const rows = workspaceRows.snapshot()?.rows
         if (!rows) {
@@ -128,7 +102,7 @@ export function sidebarInputsFeedDomains(
           // This host's session tabs and agents are by bare id, so a same-id pair it lists share them.
           ...keyWorkspaceActivityByRow(facts.getWorkspaceActivityFacts().facts, rows),
           ...buildPairedServerActivityFacts(
-            pairedServerRows.snapshot().servers,
+            pairedSnapshot().servers,
             (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
           )
         }
@@ -200,20 +174,40 @@ export function sidebarInputsFeedDomains(
     },
     {
       name: 'pairedServerHosts',
+      prepare: preparePaired,
       read: () =>
         Object.fromEntries(
-          pairedServerRows
-            .snapshot()
-            .servers.map(({ hostId, freshness, host }) => [hostId, { freshness, host }])
+          pairedSnapshot().servers.map(({ hostId, freshness, host }) => [
+            hostId,
+            { freshness, host }
+          ])
         ),
-      watch: (changed) => pairedServerRows.revision.onChange(changed)
+      watch: (changed) => {
+        const detaches = [
+          pairedServerRows.revision.onChange(changed),
+          sources.store()?.onStateWritten?.((domains) => {
+            if (domains?.includes('settings')) {
+              changed()
+            }
+          }),
+          sources.onClientEvent(
+            (event) => {
+              if (event.type === 'sshStateChanged') {
+                changed()
+              }
+            },
+            { consumesTerminalSideEffects: false }
+          )
+        ]
+        return () => detaches.forEach((detach) => detach?.())
+      }
     },
     {
       name: 'pairedServerRows',
+      prepare: preparePaired,
       read: () =>
         Object.fromEntries(
-          pairedServerRows
-            .snapshot()
+          pairedSnapshot()
             // Activity goes out in its own domain, so a terminal count does not resend the row.
             .servers.flatMap(({ rows }) =>
               rows.map(({ activity: _activity, ...row }) => [row.key, row])
@@ -281,6 +275,7 @@ export function sidebarInputsFeedDomains(
     },
     {
       name: 'review',
+      prepare: preparePaired,
       read: () => {
         const worktrees = workspaceRows.resolvedWorktrees()
         if (!worktrees) {
@@ -291,7 +286,7 @@ export function sidebarInputsFeedDomains(
         return {
           ...buildWorkspaceReviewFacts(worktrees, store.getRepos(), prCache),
           // A paired server's rows by the window's cache too.
-          ...buildPairedServerReviewFacts(pairedServerRows.snapshot().servers, prCache)
+          ...buildPairedServerReviewFacts(pairedSnapshot().servers, prCache)
         }
       },
       watch: (changed) => {

@@ -25,27 +25,27 @@ export type RemoteWorkerServer = {
   repaired?: true
 }
 
-function remoteWorkerServer(
+async function remoteWorkerServer(
   record: RemoteDispatchRow,
   linkState: string | null | undefined,
-  name: (environmentId: string) => string
-): RemoteWorkerServer {
+  name: (environmentId: string) => Promise<string>
+): Promise<RemoteWorkerServer> {
   return {
     environmentId: record.environment_id,
-    name: name(record.environment_id),
+    name: await name(record.environment_id),
     asOf: exposeUtcTimestamp(record.updated_at) ?? record.updated_at,
     ...(linkState === 'closed' ? { repaired: true as const } : {})
   }
 }
 
 /** The paired server's name; one removed from this Orca since keeps the name a link recorded, else its environment ID. */
-export function remoteServerName(
+export async function remoteServerName(
   runtime: ReadsRuntime,
   environmentId: string,
   recorded?: string | null
-): string {
+): Promise<string> {
   try {
-    return runtime.resolveOrchestrationWorkerServer(environmentId).name
+    return (await runtime.resolveOrchestrationWorkerServer(environmentId)).name
   } catch {
     return recorded ?? environmentId
   }
@@ -57,10 +57,12 @@ export function remoteServerName(
  * note says when the record is from and what the pull loop last heard from the server. Metadata
  * only: the worker's output stays on its server (worker-read), and a prompt wait arrives as mail.
  */
-export function remoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRow) {
+export async function remoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRow) {
   const link = getRemoteRunLink(runtime.getOrchestrationDb(), record.conversation_id)
-  const server = remoteWorkerServer(record, link?.state, (id) =>
-    remoteServerName(runtime, id, link?.server_name)
+  const server = await remoteWorkerServer(
+    record,
+    link?.state,
+    async (id) => await remoteServerName(runtime, id, link?.server_name)
   )
   const heard = server.repaired
     ? undefined
@@ -127,11 +129,11 @@ function recordNote(
   return ago ? `${state} ${server.name} last answered ${ago}.` : state
 }
 
-export type RemoteWorkerListRow = ReturnType<typeof remoteWorkerListRow>
+export type RemoteWorkerListRow = Awaited<ReturnType<typeof remoteWorkerListRow>>
 
-function remoteWorkerListRow(
+async function remoteWorkerListRow(
   record: ReturnType<typeof listRemoteDispatches>[number],
-  name: (environmentId: string, recorded: string | null) => string
+  name: (environmentId: string, recorded: string | null) => Promise<string>
 ) {
   return {
     dispatchId: record.dispatch_id,
@@ -142,7 +144,11 @@ function remoteWorkerListRow(
     agentTerminalHandle: null,
     terminalState: null,
     resource: null,
-    server: remoteWorkerServer(record, record.link_state, (id) => name(id, record.server_name))
+    server: await remoteWorkerServer(
+      record,
+      record.link_state,
+      async (id) => await name(id, record.server_name)
+    )
   }
 }
 
@@ -159,12 +165,12 @@ type WorkerListPage = {
  * them. Later pages follow this Orca's own cursor, and a terminal-state filter leaves them out,
  * since only their server knows their terminals.
  */
-export function withRemoteWorkerRows<Page extends WorkerListPage>(
+export async function withRemoteWorkerRows<Page extends WorkerListPage>(
   runtime: ReadsRuntime,
   params: { run?: string; cursor?: string; terminalState?: string },
   page: Page,
   maxRows: number
-): Page {
+): Promise<Page> {
   if (params.terminalState) {
     return page
   }
@@ -177,14 +183,16 @@ export function withRemoteWorkerRows<Page extends WorkerListPage>(
     return { ...page, page: { ...page.page, total: page.page.total + total } }
   }
   const names = new Map<string, string>()
-  const name = (id: string, recorded: string | null): string => {
+  const name = async (id: string, recorded: string | null): Promise<string> => {
     const key = `${id}\n${recorded ?? ''}`
-    const known = names.get(key) ?? remoteServerName(runtime, id, recorded)
+    const known = names.get(key) ?? (await remoteServerName(runtime, id, recorded))
     names.set(key, known)
     return known
   }
-  const rows = listRemoteDispatches(db, { runId: params.run, limit: Math.max(0, maxRows) }).map(
-    (record) => remoteWorkerListRow(record, name)
+  const rows = await Promise.all(
+    listRemoteDispatches(db, { runId: params.run, limit: Math.max(0, maxRows) }).map(
+      async (record) => await remoteWorkerListRow(record, name)
+    )
   )
   const warnings =
     rows.length < total

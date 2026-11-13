@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { EventEmitter } from 'node:events'
 import { rm } from 'node:fs/promises'
 import 'node:os'

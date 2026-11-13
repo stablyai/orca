@@ -11,7 +11,7 @@ import { WORKTREE_ID } from '../../__fixtures__/orca-runtime-terminal-close-cont
     const before = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     expect(before.retiredTerminalSurfaces).toHaveLength(1)
 
-    harness.runtime.syncWindowGraph(1, {
+    await harness.runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [

@@ -34,7 +34,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 123)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'laptop-tab',
@@ -139,7 +139,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -208,7 +208,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -299,7 +299,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -370,7 +370,7 @@ describe('OrcaRuntimeService', () => {
       tabsByWorktree: { ...session.tabsByWorktree, [TEST_WORKTREE_ID]: [] },
       terminalLayoutsByTabId: {}
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     acknowledged.resolve()
     await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
@@ -420,7 +420,7 @@ describe('OrcaRuntimeService', () => {
       kill,
       getForegroundProcess: async () => null
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'durable-tab',
       leafId: HEADLESS_LEAF_ID
@@ -455,7 +455,7 @@ describe('OrcaRuntimeService', () => {
         getForegroundProcess: async () => null,
         listProcesses: async () => []
       })
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'host-tab',

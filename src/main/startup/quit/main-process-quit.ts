@@ -1,3 +1,4 @@
+import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
 import { app, type Event } from 'electron'
@@ -269,7 +270,7 @@ function installWillQuitHandler(): void {
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
     // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
-    settleTeardownWithinDeadline([
+    const teardowns = [
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
@@ -288,6 +289,13 @@ function installWillQuitHandler(): void {
       { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
       { name: 'state', promise: storeFlush }
+    ]
+    const environmentStoreDrain = Promise.allSettled(teardowns.map((item) => item.promise)).then(
+      () => closeEnvironmentStore()
+    )
+    settleTeardownWithinDeadline([
+      ...teardowns,
+      { name: 'environment-store', promise: environmentStoreDrain }
     ])
       .then((pendingTeardowns) => {
         if (pendingTeardowns.length > 0) {

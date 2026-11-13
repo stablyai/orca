@@ -106,7 +106,7 @@ it.each(['offline', 'legacy-identity'])(
     const { TEST_WORKTREE_ID } =
       await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
     const runtime = new OrcaRuntimeService(store)
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const spawn = vi.fn()
     const kill = vi.fn()
     runtime.setPtyController({
@@ -150,7 +150,7 @@ it('reconciles after the reply-cache expires and isolates deliberate forks and p
   try {
     // Copy the fixture store so main-owned bindings cannot leak into shared tests.
     const runtime = new OrcaRuntimeService({ ...store })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const live: {
       id: string
       cwd: string

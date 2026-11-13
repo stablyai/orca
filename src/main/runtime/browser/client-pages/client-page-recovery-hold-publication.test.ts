@@ -19,8 +19,8 @@ it.each([750, 7500])(
       tabs: []
     }))
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
-    runtime.markClientHostedPagesReconciled('device-a')
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+    await runtime.markClientHostedPagesReconciled('device-a')
     const frames: RuntimeMobileSessionTabsResult[] = []
     const otherFrames: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged(
@@ -49,12 +49,12 @@ it.each([750, 7500])(
       await attached.completion
       const heldWorktrees = [snapshots[0]!.worktree, snapshots[count - 1]!.worktree]
       for (const worktree of heldWorktrees) {
-        expect(runtime.snapshotForClient(worktree, 'device-b').clientHostedPagesUnreconciled).toBe(
-          true
-        )
+        expect(
+          (await runtime.snapshotForClient(worktree, 'device-b')).clientHostedPagesUnreconciled
+        ).toBe(true)
       }
       runtime.projectedFrames = 0
-      runtime.markClientHostedPagesReconciled('device-b')
+      await runtime.markClientHostedPagesReconciled('device-b')
       expect(runtime.projectedFrames).toBe(2)
       expect(otherFrames.map((frame) => frame.worktree)).toEqual(heldWorktrees)
       expect(otherFrames.every((frame) => frame.clientHostedPagesUnreconciled === undefined)).toBe(
@@ -64,7 +64,7 @@ it.each([750, 7500])(
       expect(refresh).not.toHaveBeenCalled()
       otherFrames.length = 0
       runtime.projectedFrames = 0
-      runtime.markClientHostedPagesReconciled('device-b')
+      await runtime.markClientHostedPagesReconciled('device-b')
       expect(runtime.projectedFrames).toBe(0)
       expect(otherFrames).toEqual([])
       expect(refresh).not.toHaveBeenCalled()
@@ -93,13 +93,13 @@ it('does not owe delivery for speculative projections and forgets removed worksp
     'mobile'
   )
   try {
-    expect(runtime.peekSnapshotForClient(worktree, 'device-a').clientHostedPagesUnreconciled).toBe(
-      true
-    )
-    runtime.markClientHostedPagesReconciled('device-a')
+    expect(
+      (await runtime.peekSnapshotForClient(worktree, 'device-a')).clientHostedPagesUnreconciled
+    ).toBe(true)
+    await runtime.markClientHostedPagesReconciled('device-a')
     expect(frames).toEqual([])
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -114,10 +114,12 @@ it('does not owe delivery for speculative projections and forgets removed worksp
         }
       ]
     })
-    expect(runtime.snapshotForClient(worktree, 'device-b').clientHostedPagesUnreconciled).toBe(true)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    expect(
+      (await runtime.snapshotForClient(worktree, 'device-b')).clientHostedPagesUnreconciled
+    ).toBe(true)
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     frames.length = 0
-    runtime.markClientHostedPagesReconciled('device-b')
+    await runtime.markClientHostedPagesReconciled('device-b')
     expect(frames).toEqual([])
   } finally {
     unsubscribe()
@@ -138,7 +140,7 @@ it('keeps each subscription last held frame independently of later read replies'
   )
   try {
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -160,14 +162,14 @@ it('keeps each subscription last held frame independently of later read replies'
     const now = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(now + 45_001)
     expect(
-      runtime.snapshotForClient(worktree, 'device-a').clientHostedPagesUnreconciled
+      (await runtime.snapshotForClient(worktree, 'device-a')).clientHostedPagesUnreconciled
     ).toBeUndefined()
-    runtime.markClientHostedPagesReconciled('device-a')
+    await runtime.markClientHostedPagesReconciled('device-a')
     expect(frames.map((frame) => [frame.worktree, frame.clientHostedPagesUnreconciled])).toEqual([
       [worktree, undefined]
     ])
     frames.length = 0
-    runtime.markClientHostedPagesReconciled('device-a')
+    await runtime.markClientHostedPagesReconciled('device-a')
     expect(frames).toEqual([])
   } finally {
     vi.restoreAllMocks()

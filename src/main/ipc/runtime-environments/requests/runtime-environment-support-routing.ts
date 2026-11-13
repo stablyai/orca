@@ -2,6 +2,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestGuard,
   RuntimeRequestPreparation,
   RuntimeRpcResponse
 } from '../../../../shared/runtime-rpc-envelope'
@@ -89,6 +90,7 @@ export function executeSupportRoutedCall(args: {
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
   prepareRequest?: RuntimeRequestPreparation
+  prepareGuard?: RuntimeRequestGuard
 }): Promise<RuntimeRpcResponse<unknown>> {
   return routeRuntimeEnvironmentCallBySupport({
     userDataPath: args.userDataPath,
@@ -109,7 +111,8 @@ export function executeSupportRoutedCall(args: {
             args.timeoutMs,
             args.envelope,
             args.signal,
-            args.prepareRequest
+            args.prepareRequest,
+            args.prepareGuard
           ),
     unsupported: (route) =>
       args.expectedRuntimeId !== undefined
@@ -122,7 +125,8 @@ export function executeSupportRoutedCall(args: {
             args.envelope,
             args.signal,
             ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-            args.prepareRequest
+            args.prepareRequest,
+            args.prepareGuard
           ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
@@ -236,7 +240,7 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
       }
       return response
     }
-    environment = resolveEnvironment(args.userDataPath, environment.id)
+    environment = await resolveEnvironment(args.userDataPath, environment.id)
   }
   return runtimeEnvironmentChangedFailure(environment, args.method)
 }

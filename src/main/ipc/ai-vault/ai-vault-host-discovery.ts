@@ -7,12 +7,12 @@ export type AiVaultHostDiscoveryResult<T> = {
 }
 
 /** Degrade throwing host enumeration to an issue so all-hosts reads retain healthy local sessions. */
-export function discoverAiVaultHosts<T>(
-  enumerate: () => readonly T[],
+export async function discoverAiVaultHosts<T>(
+  enumerate: () => readonly T[] | Promise<readonly T[]>,
   args: { path: string; fallbackMessage: string }
-): AiVaultHostDiscoveryResult<T> {
+): Promise<AiVaultHostDiscoveryResult<T>> {
   try {
-    return { hostInfos: enumerate() }
+    return { hostInfos: await enumerate() }
   } catch (error) {
     return {
       hostInfos: [],

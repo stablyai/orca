@@ -1,6 +1,6 @@
 /** Crashes and older unlink flows can leave runtime session partitions that listings advertise as orphaned hosts. */
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { readEnvironmentStoreRecords } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { readEnvironmentStoreRecords } from '../../../../shared/remote-runtime/host-store/runtime-environment-registry'
 
 type SessionHostStore = {
   getWorkspaceSessionHostIds: () => ExecutionHostId[]
@@ -8,14 +8,14 @@ type SessionHostStore = {
 }
 
 /** Drop orphaned runtime hosts while preserving local and SSH sessions. */
-export function reconcileOrphanedRuntimeSessions(
+export async function reconcileOrphanedRuntimeSessions(
   store: SessionHostStore,
   userDataPath: string
-): ExecutionHostId[] {
+): Promise<ExecutionHostId[]> {
   let known: Set<string>
   try {
     // Raw records, not the listing: newer-format and overlay-hidden servers are still saved.
-    const records = readEnvironmentStoreRecords(userDataPath, { requireStoreFile: true })
+    const records = await readEnvironmentStoreRecords(userDataPath, { requireStoreFile: true })
     if (records.unreadable.some((record) => record.id === undefined)) {
       return []
     }

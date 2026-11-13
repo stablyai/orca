@@ -21,8 +21,12 @@ export type WslHostRegistrationContext = {
   wsl: () => WslHostConnector
   /** Bumped each time the experiment is turned off; an add that spans a bump ends without a host. */
   disableGeneration: () => number
-  recordForDistro: (distro: string) => WslHostDeploymentRecord | null
-  recordForEnvironment: (environmentId: string) => WslHostDeploymentRecord | null
+  recordForDistro: (
+    distro: string
+  ) => WslHostDeploymentRecord | null | Promise<WslHostDeploymentRecord | null>
+  recordForEnvironment: (
+    environmentId: string
+  ) => WslHostDeploymentRecord | null | Promise<WslHostDeploymentRecord | null>
   setReady: (record: WslHostDeploymentRecord, connection: WslOrcadConnection) => void
 }
 
@@ -35,10 +39,18 @@ export async function registerWslHost(
     return refusal
   }
   const generation = context.disableGeneration()
+  const candidates = await context.wsl().listDistros()
+  const registered = new Set(
+    (
+      await Promise.all(
+        candidates.map(async ({ name }) => ((await context.recordForDistro(name)) ? name : null))
+      )
+    ).filter((name): name is string => name !== null)
+  )
   const admission = admitWslHostDistro({
     requested: args.distro,
-    candidates: await context.wsl().listDistros(),
-    alreadyAdded: (name) => context.recordForDistro(name) !== null,
+    candidates,
+    alreadyAdded: (name) => registered.has(name),
     startIfStopped: args.startIfStopped === true
   })
   if (!('distro' in admission)) {
@@ -63,7 +75,7 @@ export async function registerWslHost(
   }
   const { connection } = connected
   try {
-    addWslHostEnvironment(userDataPath, {
+    await addWslHostEnvironment(userDataPath, {
       id: environmentId,
       name: wslHostEnvironmentLabel(distro.name),
       pairingCode: connection.pairingOffer,
@@ -79,7 +91,7 @@ export async function registerWslHost(
     await abandonWslHostAdd(context.wsl(), distro.name)
     return { ok: false, kind: 'failed', message: errorMessage(error) }
   }
-  const record = context.recordForEnvironment(environmentId)
+  const record = await context.recordForEnvironment(environmentId)
   if (record) {
     context.setReady(record, connection)
   }

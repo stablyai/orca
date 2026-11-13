@@ -132,7 +132,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         })
         if (adoption.unadoptedPageIds.length === 0) {
           // Clear reconciliation hold only after every live guest has a record; otherwise retain it until later attach or window deadline.
-          runtime.markClientHostedPagesReconciled(pairedDeviceId)
+          await runtime.markClientHostedPagesReconciled(pairedDeviceId)
         }
         await recoverUnavailableRuntimeBrowserClientPages({
           lease: handle.lease,

@@ -22,7 +22,7 @@ async function coordinator(host: Host = 'headless') {
   const db = new OrchestrationDb(':memory:')
   const { runtime, write } = createRuntime(db, { headless: host === 'headless' })
   if (host !== 'headless') {
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   }
   const [terminal] = (await runtime.listTerminals()).terminals
   const run = db.createRun({
@@ -122,7 +122,7 @@ describe('orchestration mailbox pointer for a terminal no pane shows', () => {
   it('points a PTY whose pane a serve window retracted before it closed', async () => {
     const { db, runtime, write, sendRunMail } = await coordinator()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,
@@ -136,7 +136,7 @@ describe('orchestration mailbox pointer for a terminal no pane shows', () => {
         { tabId: TAB_ID, worktreeId: WORKTREE_ID, leafId: LEAF_ID, paneRuntimeId: 1, ptyId: PTY_ID }
       ]
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.markGraphUnavailable(1)
     await goIdle(runtime)
     sendRunMail()

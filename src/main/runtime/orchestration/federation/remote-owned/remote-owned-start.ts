@@ -87,7 +87,7 @@ export async function startRemoteOwnedWorker(
     ctx
   )
   const db = runtime.getOrchestrationDb()
-  const server = runtime.resolveOrchestrationWorkerServer(params.on!)
+  const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!

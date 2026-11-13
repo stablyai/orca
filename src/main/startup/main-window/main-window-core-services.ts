@@ -22,7 +22,8 @@ import {
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
-import { holdLaunchReconnectOptOuts } from '../../ipc/ssh/ssh-host-user-disconnect'
+
+let attachmentTail: Promise<void> = Promise.resolve()
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -30,7 +31,22 @@ export function attachMainWindowCoreServices(
     markExpectedRendererReload: (webContentsId: number) => void
     recordRendererReload: (ignoreCache: boolean) => void
   }
-): void {
+): Promise<void> {
+  const attachment = attachmentTail.then(() => installMainWindowCoreServices(window, deps))
+  attachmentTail = attachment.catch(() => {})
+  return attachment
+}
+
+async function installMainWindowCoreServices(
+  window: BrowserWindow,
+  deps: {
+    markExpectedRendererReload: (webContentsId: number) => void
+    recordRendererReload: (ignoreCache: boolean) => void
+  }
+): Promise<void> {
+  if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+    throw new Error('Main window closed while preparing services')
+  }
   const store = state.store
   const runtime = state.runtime
   const stats = state.stats
@@ -55,9 +71,7 @@ export function attachMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
-  // Server status probes start inside registerCoreHandlers; held hosts must be marked first.
-  holdLaunchReconnectOptOuts(store.getSshTargets())
-  registerCoreHandlers(
+  await registerCoreHandlers(
     store,
     runtime,
     stats,
@@ -75,6 +89,7 @@ export function attachMainWindowCoreServices(
     state.crashReports ?? undefined,
     keybindings,
     {
+      deferHostInitialization: true,
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery(),
       prepareAiVaultSessionResume: (args) =>
@@ -118,8 +133,11 @@ export function attachMainWindowCoreServices(
         }
       : undefined
   )
+  if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+    throw new Error('Main window closed while preparing services')
+  }
   automations.start()
-  attachMainWindowServices(
+  await attachMainWindowServices(
     window,
     store,
     runtime,
@@ -127,6 +145,7 @@ export function attachMainWindowCoreServices(
     (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
+      deferSshInitialization: true,
       awaitLocalPtyStartup: () => state.localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => state.localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -145,6 +164,9 @@ export function attachMainWindowCoreServices(
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }
   )
+  if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+    throw new Error('Main window closed while preparing services')
+  }
   // Attach durable diagnostic pulls now, defer process launch past first paint.
   initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
   rateLimits.attach(window)

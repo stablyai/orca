@@ -12,7 +12,7 @@ export type FocusExistingMainWindowResult = 'focused' | 'opened' | 'pending'
 export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
   getWindow: () => BrowserWindow | null
-  openWindow: () => BrowserWindow
+  openWindow: () => BrowserWindow | Promise<BrowserWindow>
   /** False while some other path must own the first window; the reopen is dropped, not queued. */
   canOpenWindow?: () => boolean
   platform?: NodeJS.Platform
@@ -110,31 +110,39 @@ function openWindowWithRetry(
   platform: NodeJS.Platform,
   setTimer: FocusTimer,
   attempt: number
-): BrowserWindow | null {
-  try {
-    return opts.openWindow()
-  } catch (error) {
+): BrowserWindow | null | Promise<BrowserWindow | null> {
+  const failed = (error: unknown): null => {
     opts.warn?.('[window] Failed to reopen main window for second-instance launch', error)
     if (attempt >= REOPEN_MAX_ATTEMPTS) {
       return null
     }
     setTimer(() => {
-      // openWindow constructs each time; adopt windows created by concurrent/partially failed attempts to avoid orphaning duplicates.
       const existing = opts.getWindow()
       if (existing && !existing.isDestroyed()) {
         activateWindow(existing, opts.app, platform, setTimer)
         return
       }
-      // Opening may have become forbidden (e.g. quit teardown) since this retry was scheduled.
       if (opts.canOpenWindow?.() === false) {
         return
       }
       const window = openWindowWithRetry(opts, platform, setTimer, attempt + 1)
-      if (window) {
+      if (window instanceof Promise) {
+        void window.then((ready) => {
+          if (ready) {
+            activateWindow(ready, opts.app, platform, setTimer)
+          }
+        })
+      } else if (window) {
         activateWindow(window, opts.app, platform, setTimer)
       }
     }, REOPEN_RETRY_DELAY_MS)
     return null
+  }
+  try {
+    const window = opts.openWindow()
+    return window instanceof Promise ? window.catch(failed) : window
+  } catch (error) {
+    return failed(error)
   }
 }
 
@@ -150,7 +158,16 @@ export function focusExistingMainWindow(
     if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
-    window = openWindowWithRetry(opts, platform, setTimer, 1)
+    const opening = openWindowWithRetry(opts, platform, setTimer, 1)
+    if (opening instanceof Promise) {
+      void opening.then((ready) => {
+        if (ready) {
+          activateWindow(ready, opts.app, platform, setTimer)
+        }
+      })
+      return 'pending'
+    }
+    window = opening
     if (!window) {
       return 'pending'
     }

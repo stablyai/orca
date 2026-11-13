@@ -1,4 +1,4 @@
-import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
+import { createMobileSessionTabsDelivery } from './mobile-session-tabs-delivery'
 import { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab } from './mobile-session-publication-preservation'
 import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
@@ -62,54 +62,19 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     }
   }
 
-  /** One lazy sender pass belongs to this synchronous delivery, shared across scopes and listeners. */
   protected createMobileSessionTabsDelivery() {
-    let senderScope: ReturnType<typeof this.agentProjections.senders.buildForFramePass> | undefined
-    return (
-      result: RuntimeMobileSessionTabsResult,
-      changeSequence: number,
-      clientNavigationId?: string,
-      candidates?: readonly MobileSessionTabSubscription[],
-      delivery?: 'reconciliation'
-    ): void => {
-      const { agentSenderAssociations: _senders, ...tabsOnly } = result
-      // A frame for one client is already its projection; projecting again stacks the epoch suffix and revision, so the client fences it.
-      const project = (frame: RuntimeMobileSessionTabsResult, id: string | undefined) =>
-        clientNavigationId === undefined ? this.projectMobileSessionTabsForClient(frame, id) : frame
-      let desktopFrame: RuntimeMobileSessionTabsResult | undefined
-      try {
-        for (const subscription of this.selectMobileSessionTabsListeners(
-          result.worktree,
-          clientNavigationId,
-          candidates
-        )) {
-          if (!this.mobileSessionTabListeners.has(subscription)) {
-            continue
-          }
-          let frame: RuntimeMobileSessionTabsResult = tabsOnly
-          if (subscription.clientKind !== 'mobile') {
-            if (!desktopFrame) {
-              desktopFrame = result
-              if (!result.agentSenderAssociations) {
-                senderScope ??= this.agentProjections.senders.buildForFramePass()
-                desktopFrame = { ...result, agentSenderAssociations: senderScope(result.worktree) }
-              }
-            }
-            frame = desktopFrame
-          }
-          const supplied = project(frame, subscription.clientNavigationId)
-          this.deliverMobileSessionTabsFrame(subscription, supplied, changeSequence, delivery)
-        }
-        const senders = desktopFrame?.agentSenderAssociations
-        if (clientNavigationId === undefined && senders) {
-          this.agentProjections.senders.acknowledgeFrame(result.worktree, senders)
-        }
-      } finally {
-        if (senderScope) {
-          this.releaseAgentSenderHistoryIfUnobserved()
-        }
-      }
-    }
+    return createMobileSessionTabsDelivery({
+      senders: this.agentProjections.senders,
+      listeners: (worktree, navigation, candidates) =>
+        this.selectMobileSessionTabsListeners(worktree, navigation, candidates),
+      subscribed: (subscription) => this.mobileSessionTabListeners.has(subscription),
+      project: (frame, navigation) => this.projectMobileSessionTabsForClient(frame, navigation),
+      deliver: (subscription, frame, sequence, delivery) =>
+        this.deliverMobileSessionTabsFrame(subscription, frame, sequence, delivery),
+      source: (worktree) => this.mobileSessionTabsByWorktree.get(worktree),
+      epoch: () => this.getAuthoritativeSessionTabsInventoryEpoch(),
+      releaseHistory: () => this.releaseAgentSenderHistoryIfUnobserved()
+    })
   }
 
   protected agentSenderGraphReply(base: AgentSenderRevision | undefined) {
@@ -141,40 +106,61 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     }
   }
 
-  protected toMobileSessionTabsFrames(
+  protected async toMobileSessionTabsFrames(
     snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>,
     includeAgentSenders = true
-  ): RuntimeMobileSessionTabsResult[] {
-    let senderScope: ReturnType<typeof this.agentProjections.senders.buildForFramePass> | undefined
-    try {
-      return [...snapshots].map((snapshot) => {
-        const result = this.toMobileSessionTabsResult(snapshot)
-        if (!includeAgentSenders) {
-          return result
+  ): Promise<RuntimeMobileSessionTabsResult[]> {
+    const consume = (): RuntimeMobileSessionTabsResult[] => {
+      let senderScope:
+        | ReturnType<typeof this.agentProjections.senders.buildForFramePass>
+        | undefined
+      try {
+        return [...snapshots].map((snapshot) => {
+          const result = this.toMobileSessionTabsResult(snapshot)
+          if (!includeAgentSenders) {
+            return result
+          }
+          senderScope ??= this.agentProjections.senders.buildForFramePass()
+          return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
+        })
+      } finally {
+        if (senderScope) {
+          this.releaseAgentSenderHistoryIfUnobserved()
         }
-        senderScope ??= this.agentProjections.senders.buildForFramePass()
-        return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
-      })
-    } finally {
-      if (senderScope) {
-        this.releaseAgentSenderHistoryIfUnobserved()
       }
     }
+    return includeAgentSenders
+      ? this.agentProjections.senders.withPreparedPublication(consume)
+      : consume()
   }
 
-  protected getMobileSessionTabsForWorktree(
+  protected async getMobileSessionTabsForWorktree(
     worktreeId: string,
     clientNavigationId?: string,
     options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
-  ): RuntimeMobileSessionTabsResult {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
-      if (publishedEpoch === null) {
-        this.notifyEmptyWorktreeOnPublication(worktreeId)
+  ): Promise<RuntimeMobileSessionTabsResult> {
+    const consume = (): RuntimeMobileSessionTabsResult => {
+      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+      if (!snapshot) {
+        const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+        if (publishedEpoch === null) {
+          this.notifyEmptyWorktreeOnPublication(worktreeId)
+        }
+        const result = this.projectMobileSessionTabsForClient(
+          this.emptyMobileSessionTabsResult(
+            worktreeId,
+            publishedEpoch,
+            options?.includeAgentSenders
+          ),
+          clientNavigationId
+        )
+        const launch = options?.includeInitialSurfaceLaunch
+          ? readCreatedWorkspaceLaunch(this, worktreeId)
+          : undefined
+        return launch ? { ...result, initialSurfaceLaunch: launch } : result
       }
       const result = this.projectMobileSessionTabsForClient(
-        this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch, options?.includeAgentSenders),
+        this.toMobileSessionTabsFrame(snapshot, options?.includeAgentSenders),
         clientNavigationId
       )
       const launch = options?.includeInitialSurfaceLaunch
@@ -182,14 +168,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         : undefined
       return launch ? { ...result, initialSurfaceLaunch: launch } : result
     }
-    const result = this.projectMobileSessionTabsForClient(
-      this.toMobileSessionTabsFrame(snapshot, options?.includeAgentSenders),
-      clientNavigationId
-    )
-    const launch = options?.includeInitialSurfaceLaunch
-      ? readCreatedWorkspaceLaunch(this, worktreeId)
-      : undefined
-    return launch ? { ...result, initialSurfaceLaunch: launch } : result
+    return options?.includeAgentSenders !== false
+      ? this.agentProjections.senders.withPreparedPublication(consume)
+      : consume()
   }
 
   // Only unpublished graphs mean ask later; published graphs without an entry are empty, allowing the first terminal create.
@@ -266,7 +247,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     return worktreeId
   }
 
-  /** Every browser tab clients see: running pages and saved tabs whose page starts on first use. */
+  /** Every browser tab clients see: running pages and saved tabs whose page starts on first consume. */
   protected getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
     const liveTabs = this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []
     const byPageId = new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))

@@ -57,10 +57,10 @@ function log(message: string): void {
   console.info(`[desktop-browser-bridge] ${message}`)
 }
 
-export function listDesktopBrowserBridgeCandidates(
+export async function listDesktopBrowserBridgeCandidates(
   userDataPath: string,
   connections: Pick<SshConnectionManager, 'getState'> | null
-): DesktopBrowserBridgeCandidate[] {
+): Promise<DesktopBrowserBridgeCandidate[]> {
   const candidates: DesktopBrowserBridgeCandidate[] = []
   // Why: a managed host's eligibility follows its orcad claim, not whether it is listed in SSH
   // settings; environment recipes connect runtime-owned targets that are claimed the same way.
@@ -81,7 +81,7 @@ export function listDesktopBrowserBridgeCandidates(
       continue
     }
     try {
-      const environment = resolveEnvironment(userDataPath, environmentId)
+      const environment = await resolveEnvironment(userDataPath, environmentId)
       if (getOrcadSshDeployment(environment)?.sshTargetId !== target.id) {
         continue
       }
@@ -121,8 +121,8 @@ export function installDesktopBrowserBridge(options: {
     return dispatcher
   }
   manager = new DesktopBrowserBridgeManager({
-    listCandidates: () =>
-      listDesktopBrowserBridgeCandidates(userDataPath, options.getConnectionManager()),
+    listCandidates: async () =>
+      await listDesktopBrowserBridgeCandidates(userDataPath, options.getConnectionManager()),
     supportsBridge: async (environmentId) => {
       const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, undefined, {
         observeOnly: true
@@ -135,7 +135,7 @@ export function installDesktopBrowserBridge(options: {
     subscribe: (environmentId) => async (callbacks) => {
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
       const connection = getPreferredPairedRuntimeConnection(
-        resolveEnvironment(userDataPath, environmentId)
+        await resolveEnvironment(userDataPath, environmentId)
       )
       return subscribeRemoteRuntimeTransport(
         connection,

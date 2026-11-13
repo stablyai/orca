@@ -36,7 +36,7 @@ export async function stopSingleWorker(
       )
     }
     await refuseFederatedStopWhileKeptOpen(runtime, federated)
-    const server = resolvePinnedFederatedServer(runtime, federated)
+    const server = await resolvePinnedFederatedServer(runtime, federated)
     const call = (method: string, params?: unknown, requestId?: string) =>
       runtime.callOrchestrationWorkerServer(
         server.environmentId,

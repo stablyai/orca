@@ -78,7 +78,10 @@ function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabs
   }
 }
 
-function splitRuntime(): { runtime: OrcaRuntimeService; session: () => WorkspaceSessionState } {
+async function splitRuntime(): Promise<{
+  runtime: OrcaRuntimeService
+  session: () => WorkspaceSessionState
+}> {
   let session = splitSession()
   const runtime = new OrcaRuntimeService(
     partialRuntimeStore({
@@ -90,7 +93,7 @@ function splitRuntime(): { runtime: OrcaRuntimeService; session: () => Workspace
     })
   )
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: 'tab',
@@ -119,12 +122,12 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
       }
     }
     // Listing mints the handles named by retirement notices.
-    const closed = splitRuntime().runtime
+    const closed = (await splitRuntime()).runtime
     await phone(closed)
     await closed.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })
     expect(await phone(closed)).toEqual({ version: 2, retired: [RIGHT] })
 
-    const kept = splitRuntime().runtime
+    const kept = (await splitRuntime()).runtime
     await phone(kept)
     await kept.onPtyExit('pty-right', 1, undefined, { providerExitObserved: true })
     expect(await phone(kept)).toEqual({ version: 1, retired: [] })

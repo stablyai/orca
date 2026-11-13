@@ -110,8 +110,11 @@ function savedPaneHost(ptyId: string, opts: { windowed?: boolean; splitPtyId?: s
   if (opts.windowed) {
     runtime.attachWindow(1)
   }
-  const publishWindowGraph = (): void => {
-    runtime.syncWindowGraph(opts.windowed ? 1 : 0, opts.windowed ? graph : { tabs: [], leaves: [] })
+  const publishWindowGraph = async (): Promise<void> => {
+    await runtime.syncWindowGraph(
+      opts.windowed ? 1 : 0,
+      opts.windowed ? graph : { tabs: [], leaves: [] }
+    )
   }
   publishWindowGraph()
   return { runtime, host, publishWindowGraph }

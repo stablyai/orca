@@ -1,3 +1,4 @@
+import '../../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'

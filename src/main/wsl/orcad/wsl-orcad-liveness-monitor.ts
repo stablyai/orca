@@ -1,3 +1,4 @@
+import { wslOrcadVerifyRetryDelayMs } from './wsl-orcad-reconnect-backoff'
 import type { WslOrcadConnection } from './wsl-orcad-connection-types'
 import type {
   Supervised,
@@ -122,4 +123,18 @@ export async function attachSupervisedWatch(
     }
   })
   return 'ready'
+}
+
+export function scheduleSupervisedVerify(
+  entry: Supervised,
+  schedule: (delayMs: number, task: () => void) => WslOrcadTimer,
+  verify: () => void
+): void {
+  entry.timer?.cancel()
+  const delayMs = wslOrcadVerifyRetryDelayMs(entry.verifyStreak)
+  entry.verifyStreak += 1
+  entry.timer = schedule(delayMs, () => {
+    entry.timer = null
+    verify()
+  })
 }

@@ -24,9 +24,9 @@ let policyState: WslHostsPolicyState | null = null
 let movedProjects: WslHostsMovedProjects = 'keep'
 
 // Unreadable state counts as absent: today's closed behavior.
-function readFact(fact: () => boolean): boolean {
+async function readFact(fact: () => boolean | Promise<boolean>): Promise<boolean> {
   try {
-    return fact()
+    return await fact()
   } catch {
     return false
   }
@@ -65,19 +65,19 @@ function notePolicy(
  * Startup, before any gate check. A cached remote policy block closes an open internal gate, and a
  * closed gate with saved WSL work becomes `serve-only`, so blocking never strands a moved project.
  */
-export function configureWslHostsGate(facts: {
-  hasSavedWslHost: () => boolean
-  hasWslMoveCutover: () => boolean
+export async function configureWslHostsGate(facts: {
+  hasSavedWslHost: () => boolean | Promise<boolean>
+  hasWslMoveCutover: () => boolean | Promise<boolean>
   policy?: () => WslHostsPolicyState
   /** Read only when the policy blocks. */
   movedProjects?: () => WslHostsMovedProjects
-}): void {
+}): Promise<void> {
   notePolicy(readPolicy(facts.policy), facts.movedProjects)
   promoted = wslHostsGateOpen()
     ? null
     : {
-        hasSavedWslHost: readFact(facts.hasSavedWslHost),
-        hasWslMoveCutover: readFact(facts.hasWslMoveCutover)
+        hasSavedWslHost: await readFact(facts.hasSavedWslHost),
+        hasWslMoveCutover: await readFact(facts.hasWslMoveCutover)
       }
   const state = wslHostsGateState()
   noteWslHostsServeOnly(state === 'serve-only')

@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
@@ -140,7 +141,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     powerMonitorOnMock.mockReset()
     powerMonitorOffMock.mockReset()
 
-    registerSshHandlers(mockStore as never, () => mockWindow as never)
+    await registerSshHandlers(mockStore as never, () => mockWindow as never)
   }
 
   return {

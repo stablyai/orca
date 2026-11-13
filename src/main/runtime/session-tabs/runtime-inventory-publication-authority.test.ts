@@ -35,11 +35,11 @@ describe('authoritative session tab inventory publication', () => {
     await waitForInventoryWaiter(runtime)
 
     expect(collect).toHaveBeenCalledTimes(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     await Promise.resolve()
     expect(settled).toBe(false)
 
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     await expect(pending).resolves.toEqual({ snapshots: [], authoritative: true })
     expect(collect).toHaveBeenCalledTimes(2)
   })
@@ -51,7 +51,7 @@ describe('authoritative session tab inventory publication', () => {
       'collectAllMobileSessionTabs'
     )
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
     await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({ snapshots: [] })
     // Why: the retry gives daemon-backed tabs a post-race restore chance.
@@ -61,7 +61,7 @@ describe('authoritative session tab inventory publication', () => {
   it('requires the current headed renderer generation to publish', async () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: []
@@ -74,11 +74,11 @@ describe('authoritative session tab inventory publication', () => {
       return result
     })
     await waitForInventoryWaiter(runtime)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     await Promise.resolve()
     expect(settled).toBe(false)
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -103,9 +103,9 @@ describe('authoritative session tab inventory publication', () => {
     const runtime = createInventoryRuntime()
     const worktree = 'repo::/resync'
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
-    const incomplete = runtime.syncWindowGraph(1, {
+    const incomplete = await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [],
@@ -115,7 +115,7 @@ describe('authoritative session tab inventory publication', () => {
     const pending = runtime.listAllMobileSessionTabsInventory()
     await waitForInventoryWaiter(runtime)
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -140,7 +140,7 @@ describe('authoritative session tab inventory publication', () => {
   it('restores publication authority when a renderer reload is cancelled', async () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     const fence = runtime.markRendererReloading(1)
     if (!fence) {
       throw new Error('expected renderer reload fence')
@@ -155,7 +155,7 @@ describe('authoritative session tab inventory publication', () => {
 
   it('restores authoritative headless publication after a failed desktop promotion', async () => {
     const runtime = createInventoryRuntime()
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     runtime.attachWindow(1)
     const pending = runtime.listAllMobileSessionTabsInventory()
     await waitForInventoryWaiter(runtime)
@@ -189,14 +189,14 @@ describe('authoritative session tab inventory publication', () => {
     })
     await waitForInventoryWaiter(runtime)
 
-    expect(() =>
-      runtime.syncWindowGraph(2, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    expect(
+      async () => await runtime.syncWindowGraph(2, { tabs: [], leaves: [], mobileSessionTabs: [] })
     ).toThrow('Runtime graph publisher does not match the authoritative window')
     await Promise.resolve()
     expect(settled).toBe(false)
     expect(getSessionTabsInventoryPublication(runtime).epoch).toBeNull()
 
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     await expect(pending).resolves.toEqual({ snapshots: [], authoritative: true })
   })
 })

@@ -41,7 +41,7 @@ it.each([
       vi.mocked(detectAgentCommandsOnHost).mockResolvedValue(new Set(['qoder']))
       // Copy the fixture store so main-owned bindings cannot leak into shared tests.
       const runtime = new QoderAdoptionRuntime({ ...store })
-      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
       let revealedRecipe: SleepingAgentLaunchConfig | undefined
       const revealTerminalSession = vi.fn(
         (_workspace: string, reveal: { launchConfig?: SleepingAgentLaunchConfig }) => {
@@ -140,7 +140,7 @@ it.each([
         }
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents: {
@@ -308,7 +308,7 @@ it.each(['missing-original', 'different-agent'])(
       'unknown-operation'
     )
     const runtime = new QoderAdoptionRuntime({ ...store })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const tabId = 'original-owned-tab'
     const leafId = '55555555-5555-4555-8555-555555555555'
     registerBoundPty(runtime, 'unknown-owned-pty', TEST_WORKTREE_ID, null, {
@@ -380,7 +380,7 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
       .mockReset()
       .mockResolvedValue(new Set(['qoder']))
     const runtime = new OrcaRuntimeService({ ...store })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     let accept = false
     const inventory: {
       id: string

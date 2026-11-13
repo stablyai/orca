@@ -27,7 +27,7 @@ it.each([750, 7500])(
     const corpus = snapshots(count)
     const workspace = corpus[0]!.worktree
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: corpus })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: corpus })
     const global = openRecoveryTabsStream(runtime, 'departing-global')
     const active = openRecoveryTabsStream(
       runtime,
@@ -73,7 +73,7 @@ it.each([750, 7500])(
       refresh.mockClear()
       const sequence = runtime.sessionTabsSequence()
       const delivered = active.frames.length
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(1)
       expect(runtime.sessionTabsSequence()).toBe(sequence + 1)
       expect(active.frames).toHaveLength(delivered + 1)
@@ -81,7 +81,7 @@ it.each([750, 7500])(
       expect(active.frames.at(-1)?.clientHostedPagesUnreconciled).toBeUndefined()
       expect(senderWorkspaces).toEqual([workspace])
       expect(refresh).not.toHaveBeenCalled()
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(1)
       expect(runtime.sessionTabsSequence()).toBe(sequence + 1)
       runtime.projectedFrames = 0
@@ -111,7 +111,7 @@ it('stops projecting remaining owed workspaces when clearing output releases the
   const h = createReconciliationDeliveryRuntime()
   const runtime = h.hostRuntime
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots(2) })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots(2) })
   const stopped = new AbortController()
   const rpc = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
   const cleared: string[] = []
@@ -139,7 +139,7 @@ it('stops projecting remaining owed workspaces when clearing output releases the
     )
     runtime.projectedFrames = 0
     const sequence = runtime.sessionTabsSequence()
-    runtime.markClientHostedPagesReconciled('device-a')
+    await runtime.markClientHostedPagesReconciled('device-a')
     expect(cleared).toEqual(['repo-1::/tmp/covered-0'])
     expect(runtime.projectedFrames).toBe(1)
     expect(runtime.sessionTabsSequence()).toBe(sequence + 1)
@@ -158,7 +158,7 @@ it('refreshes sender scopes only through accepting desktop channels and settles 
   let peerKey = 'sender-peer-before'
   runtime.setAgentSenderPeerKey(() => peerKey)
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: corpus })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: corpus })
   const initial = openRecoveryTabsStream(
     runtime,
     'initial-sender-census',
@@ -187,9 +187,9 @@ it('refreshes sender scopes only through accepting desktop channels and settles 
     const before = phone.frames.at(-1)!.snapshotVersion
     const beforeCount = phone.frames.length
     peerKey = 'sender-peer-after'
-    runtime.refreshAgentSenderAssociations()
+    await runtime.refreshAgentSenderAssociations()
     runtime.onMobileSessionTabsChanged(() => {}, 'flush', 'mobile')()
-    runtime.refreshAgentSenderAssociations()
+    await runtime.refreshAgentSenderAssociations()
     runtime.onMobileSessionTabsChanged(() => {}, 'flush', 'mobile')()
     expect(phone.frames.at(-1)!.snapshotVersion).toBe(before)
     expect(phone.frames).toHaveLength(beforeCount)
@@ -205,11 +205,11 @@ it('refreshes sender scopes only through accepting desktop channels and settles 
     expect(refreshed?.agentSenderAssociations?.peerFingerprint).toBe(
       'pXI0wdMoVIozNMf8PhOCNlB9sTAAEaBF6DfNP9doYqk'
     )
-    runtime.refreshAgentSenderAssociations()
+    await runtime.refreshAgentSenderAssociations()
     runtime.onMobileSessionTabsChanged(() => {}, 'flush', 'mobile')()
     const settled = phone.frames.length
     const version = phone.frames.at(-1)!.snapshotVersion
-    runtime.refreshAgentSenderAssociations()
+    await runtime.refreshAgentSenderAssociations()
     runtime.onMobileSessionTabsChanged(() => {}, 'flush', 'mobile')()
     expect(phone.frames).toHaveLength(settled)
     expect(phone.frames.at(-1)!.snapshotVersion).toBe(version)
@@ -230,14 +230,14 @@ it('routes removal only to the matching workspace and broad RPC streams', async 
   const keptWorkspace = corpus[0]!.worktree
   const removedWorkspace = corpus[1]!.worktree
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: corpus })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: corpus })
   const kept = openRecoveryTabsStream(runtime, 'kept-workspace', `id:${keptWorkspace}`)
   const removed = openRecoveryTabsStream(runtime, 'removed-workspace', `id:${removedWorkspace}`)
   const all = openRecoveryTabsStream(runtime, 'all-workspaces')
   try {
     await Promise.all([kept.initial, removed.initial, all.initial])
     const delivered = kept.frames.length
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [corpus[0]!] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [corpus[0]!] })
     runtime.onMobileSessionTabsChanged(() => {}, 'flush', 'mobile')()
     expect(kept.frames).toHaveLength(delivered)
     expect(removed.frames.at(-1)).toMatchObject({ worktree: removedWorkspace, removed: true })

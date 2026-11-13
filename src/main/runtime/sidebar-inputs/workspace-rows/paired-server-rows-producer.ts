@@ -1,18 +1,19 @@
+import { observeEnvironmentStoreReads } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-read-observation'
+import { newPairedServerEntry, type ServerEntry } from './paired-server-rows-state'
+import { pairedServerRowsSnapshot } from './paired-server-rows-snapshot'
+import { watchPairedServerRows } from './paired-server-rows-watch'
 import { ProducerRevision } from '../producer-revision'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { environmentStoreWriteCount } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { describePairedServerHosts } from '../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import type { MobileRelayServerWorktreeRow } from '../../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import {
-  normalizePairedServerRow,
-  type PairedServerRowsSnapshot
-} from '../../../../shared/sidebar-list/feed-facts/paired-server-rows'
+import type { PairedServerRowsSnapshot } from '../../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import type {
-  MobileDesktopRelayHostListing,
-  MobileDesktopRelayHosts,
-  MobileDesktopRelayHostWatch
+  MobileDesktopRelayListing,
+  MobileDesktopRelayHosts
 } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import {
-  describeRelayHosts,
+  describeRelayHostListing,
   relayHostFence
 } from '../../mobile-desktop-relay/mobile-relay-host-descriptions'
 import type { ServerWorktreeRows } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
@@ -27,30 +28,16 @@ import { fetchPairedServerCatalog } from '../../../../shared/sidebar-list/catalo
 // Owner-approved fallback for changes a server announces no event for (status-only, older servers).
 export const FALLBACK_REFRESH_MS = 30_000
 
-type ServerEntry = {
-  environmentId: string
-  fence: string
-  identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
-  inContact: boolean
-  /** Moves on every contact change, so an answer can tell it predates a gap. */
-  contactGeneration: number
-  /** Null until a fetch under this pairing answered. */
-  rows: MobileRelayServerWorktreeRow[] | null
-  /** The rows are the server's answer since it last came into contact; else unverifiable. */
-  confirmed: boolean
-  /** Its repos and project groups as last fetched under this pairing; null until one answered. */
-  catalog: PairedServerCatalog | null
-  /** A catalog change may have gone unread: set on contact and on a catalog change event. */
-  catalogStale: boolean
-  watch: MobileDesktopRelayHostWatch | null
-  refreshing: Promise<void> | null
-  refreshAgain: boolean
-}
-
 /** Cache paired-server rows without a window; refresh on contact/events/reads and every 30s while visible. Contact gaps make rows unverifiable until a post-gap fetch; only removal/re-pair drops them. */
 export class PairedServerRowsProducer implements ServerWorktreeRows {
   private readonly servers = new Map<string, ServerEntry>()
   private hosts: MobileDesktopRelayHosts | null = null
+  private attachment: object | null = null
+  private sourceGeneration = 0
+  private detachHosts: (() => void) | null = null
+  private refreshListing: Promise<void> | null = null
+  private listingDirty = false
+  private displayedHosts = ''
   readonly revision = new ProducerRevision()
 
   constructor(
@@ -61,9 +48,47 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
   ) {}
 
   attach(hosts: MobileDesktopRelayHosts): () => void {
+    this.detachHosts?.()
+    const attachment = {}
+    this.attachment = attachment
     this.hosts = hosts
-    const stopStatus = hosts.onStatusChanged(() => this.sync())
-    const stopRetired = hosts.onEnvironmentRetired(() => this.sync())
+    const changed = (): void => {
+      if (this.attachment !== attachment) {
+        return
+      }
+      this.listingDirty = true
+      this.refreshListing ??= this.refreshInvalidatedListing().finally(() => {
+        this.refreshListing = null
+      })
+      void this.refreshListing.catch((error: unknown) =>
+        console.warn('[paired-server-rows] could not list servers', error)
+      )
+    }
+    const stopStatus = hosts.onStatusChanged((contact) => {
+      if (this.attachment !== attachment) {
+        return
+      }
+      const entry = contact ? this.servers.get(contact.environmentId) : undefined
+      if (entry && contact && !contact.inContact && entry.inContact) {
+        this.sourceGeneration++
+        entry.inContact = false
+        entry.contactGeneration++
+        this.unconfirm(entry)
+      }
+      changed()
+    })
+    const stopRetired = hosts.onEnvironmentRetired((environmentId) => {
+      if (this.attachment !== attachment) {
+        return
+      }
+      const entry = this.servers.get(environmentId)
+      if (entry) {
+        this.sourceGeneration++
+        this.retire(entry)
+      }
+      changed()
+    })
+    const stopCatalog = hosts.onCatalogChanged?.(changed)
     const fallback = setInterval(() => {
       if (this.options.hasDemand()) {
         for (const entry of this.servers.values()) {
@@ -74,54 +99,110 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
       }
     }, FALLBACK_REFRESH_MS)
     fallback.unref?.()
-    this.sync()
-    return () => {
+    const detach = (): void => {
+      if (this.attachment !== attachment) {
+        return
+      }
+      this.attachment = null
+      this.hosts = null
+      this.detachHosts = null
+      this.sourceGeneration++
       clearInterval(fallback)
       stopStatus()
       stopRetired()
+      stopCatalog?.()
       for (const entry of this.servers.values()) {
-        entry.watch?.close()
+        this.retire(entry)
       }
-      this.servers.clear()
-      this.hosts = null
+      this.displayedHosts = ''
       this.revision.bump()
+    }
+    this.detachHosts = detach
+    changed()
+    return detach
+  }
+
+  async sync(): Promise<void> {
+    await this.withPreparedListing(() => {})
+  }
+
+  async snapshot(): Promise<PairedServerRowsSnapshot> {
+    return this.withPreparedSnapshot((snapshot) => snapshot)
+  }
+
+  /** Keeps fresh host facts and their complete synchronous consumption in one continuation. */
+  async withPreparedSnapshot<T>(consume: (snapshot: PairedServerRowsSnapshot) => T): Promise<T> {
+    return this.withPreparedListing((listing) => consume(this.snapshotFromListing(listing)))
+  }
+
+  private async refreshInvalidatedListing(): Promise<void> {
+    do {
+      this.listingDirty = false
+      await this.withPreparedListing(() => {})
+    } while (this.listingDirty && this.hosts)
+  }
+
+  private async withPreparedListing<T>(
+    consume: (listing: MobileDesktopRelayListing | null) => T
+  ): Promise<T> {
+    for (;;) {
+      const hosts = this.hosts
+      const attachment = this.attachment
+      if (!hosts) {
+        return consume(null)
+      }
+      const generation = this.sourceGeneration
+      const observation = await observeEnvironmentStoreReads(
+        async () => hosts.list(),
+        environmentStoreWriteCount
+      )
+      if (
+        attachment !== this.attachment ||
+        generation !== this.sourceGeneration ||
+        !observation.current
+      ) {
+        continue
+      }
+      this.syncListing(hosts, observation.value)
+      return consume(observation.value)
     }
   }
 
-  /** Re-reads the configured servers: drops removed or re-paired ones, watches those in contact. */
-  sync(): void {
-    const hosts = this.hosts
-    if (!hosts) {
-      return
-    }
+  private retire(entry: ServerEntry): void {
+    this.servers.delete(entry.environmentId)
+    entry.watchSetup = null
+    entry.watch?.close()
+    this.revision.bump()
+  }
+
+  private syncListing(hosts: MobileDesktopRelayHosts, listing: MobileDesktopRelayListing): void {
     const fences = new Map(
-      hosts.list().environments.map((environment) => [environment.id, relayHostFence(environment)])
+      listing.environments.map((environment) => [environment.id, relayHostFence(environment)])
     )
     for (const [environmentId, entry] of this.servers) {
       if (fences.get(environmentId) !== entry.fence) {
-        entry.watch?.close()
-        this.servers.delete(environmentId)
-        this.revision.bump()
+        this.retire(entry)
       }
     }
-    // Why the shown hosts: a managed server reached over its SSH host's relay is not in contact here.
-    const shown = new Map(describeRelayHosts(hosts).map((host) => [host.environmentId, host]))
+    const shown = new Map(
+      describeRelayHostListing(listing).map((host) => [host.environmentId, host])
+    )
+    const displayed = JSON.stringify(
+      describePairedServerHosts({
+        ...listing,
+        hostLabelOverrides: this.options.hostLabelOverrides()
+      })
+    )
+    if (displayed !== this.displayedHosts) {
+      this.displayedHosts = displayed
+      this.revision.bump()
+    }
     for (const host of shown.values()) {
       if (!this.servers.has(host.environmentId)) {
-        this.servers.set(host.environmentId, {
-          environmentId: host.environmentId,
-          fence: relayHostFence(host.identity),
-          identity: host.identity,
-          inContact: false,
-          contactGeneration: 0,
-          rows: null,
-          confirmed: false,
-          catalog: null,
-          catalogStale: true,
-          watch: null,
-          refreshing: null,
-          refreshAgain: false
-        })
+        this.servers.set(
+          host.environmentId,
+          newPairedServerEntry(host.environmentId, relayHostFence(host.identity), host.identity)
+        )
         this.revision.bump()
       }
     }
@@ -129,17 +210,26 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
       const inContact = shown.get(entry.environmentId)?.health === 'available'
       if (inContact !== entry.inContact) {
         entry.inContact = inContact
-        entry.contactGeneration += 1
+        entry.contactGeneration++
         entry.confirmed = false
         entry.catalogStale ||= inContact
         this.revision.bump()
+        if (inContact && entry.rows !== null) {
+          entry.refreshAgain ||= entry.refreshing !== null
+          void this.refresh(entry.environmentId)
+        }
       }
-      // Why current(): a replaced transport can end the stream without telling it.
-      if (inContact && !entry.watch?.current()) {
+      if (inContact && !entry.watch?.current() && !entry.watchSetup) {
         entry.watch?.close()
-        this.watch(hosts, entry)
-      } else if (!inContact && entry.watch) {
-        entry.watch.close()
+        entry.watch = null
+        watchPairedServerRows(hosts, entry, {
+          attachment: () => this.attachment,
+          current: (candidate) => this.servers.get(candidate.environmentId) === candidate,
+          refresh: (id) => this.refresh(id)
+        })
+      } else if (!inContact) {
+        entry.watchSetup = null
+        entry.watch?.close()
         entry.watch = null
       }
     }
@@ -166,63 +256,18 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     return entry && entry.fence === fence ? entry.rows : null
   }
 
-  snapshot(): PairedServerRowsSnapshot {
-    const shown = new Map(
-      (this.hosts
-        ? describePairedServerHosts({
-            ...this.hosts.list(),
-            hostLabelOverrides: this.options.hostLabelOverrides()
-          })
-        : []
-      ).map(({ environmentId, label, health, compatibility, pairedDeviceId, installationId }) => [
-        environmentId,
-        {
-          label,
-          health,
-          compatibility,
-          pairedDeviceId,
-          ...(installationId ? { installationId } : {})
-        }
-      ])
+  private snapshotFromListing(listing: MobileDesktopRelayListing | null): PairedServerRowsSnapshot {
+    return pairedServerRowsSnapshot(
+      listing,
+      this.servers.values(),
+      this.revision.value,
+      this.options.hostLabelOverrides()
     )
-    return {
-      revision: this.revision.value,
-      servers: [...this.servers.values()].map((entry) => {
-        const hostId = toRuntimeExecutionHostId(entry.environmentId)
-        return {
-          hostId,
-          freshness: entry.inContact && entry.confirmed ? 'live' : 'unverifiable',
-          host: shown.get(entry.environmentId) ?? null,
-          rows: (entry.rows ?? []).flatMap((row) => normalizePairedServerRow(hostId, row) ?? [])
-        }
-      })
-    }
   }
 
   /** Each server's catalog as last fetched, kept like its rows while it is out of contact. */
   catalogs(): PairedServerCatalog[] {
     return [...this.servers.values()].flatMap((entry) => entry.catalog ?? [])
-  }
-
-  private watch(hosts: MobileDesktopRelayHosts, entry: ServerEntry): void {
-    const current = (): boolean => this.servers.get(entry.environmentId) === entry
-    // Ready fires on every (re)connect, so contact and a missed-event replay both count as changes.
-    const watch = hosts.watchChanges({ environmentId: entry.environmentId }, entry.identity, {
-      onChange: ({ catalog }) => {
-        if (current()) {
-          // A fetch already in flight may predate this change, so one more runs after it.
-          entry.refreshAgain ||= entry.refreshing !== null
-          entry.catalogStale ||= catalog
-          void this.refresh(entry.environmentId)
-        }
-      },
-      onClose: () => {
-        if (current() && entry.watch === watch) {
-          entry.watch = null
-        }
-      }
-    })
-    entry.watch = watch
   }
 
   private unconfirm(entry: ServerEntry): void {

@@ -51,7 +51,7 @@ export class RemoteRuntimeCompatGate {
       )) === 'reload'
     ) {
       // A resume re-pairs the VM's server: this and later requests use the saved pairing.
-      this.connectionAfterWake = resolveRemoteConnection(
+      this.connectionAfterWake = await resolveRemoteConnection(
         this.userDataPath,
         null,
         this.environmentSelector

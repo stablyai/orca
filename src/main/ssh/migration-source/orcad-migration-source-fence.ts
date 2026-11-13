@@ -213,14 +213,14 @@ export async function releaseUndeployedMigrationFence(args: {
   userDataPath: string
   claims: SshTargetOrcadClaims
   targetId: string
-  isDestinationRegistered: (environmentId: string) => boolean
+  isDestinationRegistered: (environmentId: string) => boolean | Promise<boolean>
   signal?: AbortSignal
 }): Promise<'released' | 'none'> {
   const cutover = findOrcadMigrationSourceCutoverForTarget(args.userDataPath, args.targetId)
   if (!cutover) {
     return 'none'
   }
-  if (args.isDestinationRegistered(cutover.destinationEnvironmentId)) {
+  if (await args.isDestinationRegistered(cutover.destinationEnvironmentId)) {
     throw new Error('orcad_migration_destination_registered')
   }
   await releaseUnstagedFence(args, cutover)

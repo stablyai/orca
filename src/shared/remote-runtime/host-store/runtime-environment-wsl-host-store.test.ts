@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
-import { listEnvironments } from './runtime-environment-store'
+import { listEnvironments } from './runtime-environment-store-operations'
 import {
   addWslHostEnvironment,
   findWslHostDeployment,
   reconcileWslHostBridgePorts,
   refreshWslHostPairing
-} from './runtime-environment-wsl-host-store'
+} from './runtime-environment-wsl-host-operations'
 import { getPreferredPairingOffer } from '../host-catalog/runtime-environments'
 import { writeWslHostDeployment } from './wsl-host-deployment-store'
 

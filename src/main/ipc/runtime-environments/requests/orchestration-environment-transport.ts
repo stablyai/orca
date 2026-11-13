@@ -14,8 +14,8 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
   // Read per call: the desktop settles userData casing only after app.setName.
   const registryRoot = (): string => getAppEnvironment().getPath('userData')
   return {
-    resolve: (selector) => {
-      const environment = resolveEnvironment(registryRoot(), selector)
+    resolve: async (selector) => {
+      const environment = await resolveEnvironment(registryRoot(), selector)
       const connection = getPreferredPairedRuntimeConnection(environment)
       return {
         environmentId: environment.id,
@@ -24,8 +24,10 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },
-    hasEnvironment: (environmentId) =>
-      listEnvironments(registryRoot()).some((environment) => environment.id === environmentId),
+    hasEnvironment: async (environmentId) =>
+      (await listEnvironments(registryRoot())).some(
+        (environment) => environment.id === environmentId
+      ),
     // Loaded on first dial: the routing graph is large and most hosts never place remote workers.
     call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision, send) =>
       (await import('./runtime-environment-transport-routing')).callRuntimeEnvironment(
@@ -38,6 +40,7 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         envelope,
         send && {
           ...(send.prepareRequest ? { prepareRequest: send.prepareRequest } : {}),
+          ...(send.prepareGuard ? { prepareGuard: send.prepareGuard } : {}),
           ...(send.expectedRuntimeId === undefined
             ? {}
             : { expectedEnvironmentRuntimeId: send.expectedRuntimeId })

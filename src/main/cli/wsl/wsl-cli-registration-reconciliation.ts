@@ -13,7 +13,7 @@ import {
 } from './wsl-cli-registration-registry'
 import { WslCliInstaller } from './wsl-cli-installer'
 import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
-import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/runtime-environment-registry'
 
 // Why: each repair spawns a guest shell; a small cap bounds the startup fan-out.
 const MAX_CONCURRENT_DISTRO_REPAIRS = 2
@@ -116,8 +116,8 @@ export async function reconcileManagedWslCliRegistrations(
     ? await getHostLauncherTarget().catch(() => null)
     : null
   const appVersion = options.appVersion ?? ''
-  const inspectableDistros = (
-    options.listOrcaHostDistros ?? (() => orcaHostDistros(options.userDataPath))
+  const inspectableDistros = await (
+    options.listOrcaHostDistros ?? (async () => await orcaHostDistros(options.userDataPath))
   )()
   const candidates = await registry.getCandidates(availableDistros, {
     currentTarget,
@@ -217,9 +217,9 @@ export async function reconcileManagedWslCliRegistrations(
   return [...results, ...deferred]
 }
 
-function orcaHostDistros(userDataPath: string): string[] {
+async function orcaHostDistros(userDataPath: string): Promise<string[]> {
   try {
-    return readWslHostDeployments(userDataPath).deployments.map((record) => record.distro)
+    return (await readWslHostDeployments(userDataPath)).deployments.map((record) => record.distro)
   } catch {
     // An unreadable store names no host; registered distros are still reconciled.
     return []

@@ -80,8 +80,8 @@ export abstract class RuntimeMarkdownTabOperations extends RuntimeMobileSessionT
             ? undefined
             : { expectedEnvironmentPairingRevision: expectedPairingRevision }
         ),
-      environmentPairingRevision: (environmentId) =>
-        this.resolveOrchestrationWorkerServer(environmentId).pairingRevision
+      environmentPairingRevision: async (environmentId) =>
+        (await this.resolveOrchestrationWorkerServer(environmentId)).pairingRevision
     })
   }
 }

@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,12 +35,12 @@ it('publishes real same-socket verification after every authenticated reconnect'
   })
   const profile = mkdtempSync(join(tmpdir(), 'orca-status-socket-'))
   profiles.push(profile)
-  const environment = addEnvironmentFromPairingCode(profile, {
+  const environment = await addEnvironmentFromPairingCode(profile, {
     name: 'host',
     pairingCode: encodePairingOffer(server.offer)
   })
   await getRuntimeEnvironmentStatus(profile, environment.id)
-  const owner = getRuntimeEnvironmentStatusOwner(profile, environment.id)
+  const owner = await getRuntimeEnvironmentStatusOwner(profile, environment.id)
   await vi.waitFor(
     () => {
       expect(owner.read()).toMatchObject({ transport: 'ready', verification: 'verified' })

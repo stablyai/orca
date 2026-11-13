@@ -11,8 +11,12 @@ export function managedServerUpdateDeps(userDataPath: string): ManagedServerUpda
   const registry = requireManagedOrcadTargetStore()
   const appVersion = getAppEnvironment().getVersion()
   return {
-    autoUpdate: (environmentId, options) =>
-      autoUpdateManagedOrcadEnvironment(userDataPath, { environmentId, appVersion, ...options }),
+    autoUpdate: async (environmentId, options) =>
+      await autoUpdateManagedOrcadEnvironment(userDataPath, {
+        environmentId,
+        appVersion,
+        ...options
+      }),
     // Re-read the store: caller snapshots may predate an overlapping check's failure.
     recordedUpdateFailure: (target) => {
       const failure = (registry.getTarget(target.id) ?? target).managedServerUpdateFailure

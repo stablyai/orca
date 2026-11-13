@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { resetRuntimeEnvironmentStatusOwners } from '../connections/runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -136,7 +137,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
+    await registerRuntimeEnvironmentHandlers(store as never)
     const verifyAndAdd = handler<
       { name: string; pairingCode: string; allowLoopback?: boolean },
       { ok: boolean; kind?: string }
@@ -148,12 +149,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ok: false,
       kind: 'host-unreachable'
     })
-    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+    expect(await environmentStore.listEnvironments(userDataPath)).toEqual([])
   })
 
   it('refreshes the saved server when a verified link is for it, and retires its old connection', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    const saved = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+    await registerRuntimeEnvironmentHandlers(store as never)
+    const saved = await environmentStore.addEnvironmentFromPairingCode(userDataPath, {
       name: 'desk',
       pairingCode: pairingCode('ws://100.76.32.125:6768')
     })
@@ -178,7 +179,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       updatedExisting: true,
       environment: { id: saved.id, name: 'desk' }
     })
-    expect(environmentStore.resolveEnvironmentPairingOffer(userDataPath, saved.id)).toMatchObject({
+    expect(
+      await environmentStore.resolveEnvironmentPairingOffer(userDataPath, saved.id)
+    ).toMatchObject({
       endpoint: 'ws://192.0.2.10:6768',
       deviceToken: 'second-token'
     })

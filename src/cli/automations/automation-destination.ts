@@ -101,7 +101,7 @@ export async function routeAutomationCreate<
   const connectionId = repo ? getRepoRoutingConnectionId(repo) : null
   const server =
     repo && connectionId && client.isRemote === false
-      ? listEnvironments(client.userDataPath).find(
+      ? (await listEnvironments(client.userDataPath)).find(
           (environment) => getManagedOrcadSshTargetId(environment) === connectionId
         )
       : undefined

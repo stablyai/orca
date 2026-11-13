@@ -1,8 +1,10 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
+import {
+  readEnvironmentRegistryFile,
+  invalidateEnvironmentStoreObservation
+} from './runtime-environment-store-observation'
 import { warnUnreadableEnvironmentState } from './runtime-environment-store-records'
 import {
   getPreferredLoopbackRuntimePort,
@@ -10,7 +12,6 @@ import {
   KnownRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
 import { OrcadWslDeploymentLinkSchema } from '../host-catalog/wsl-host-deployment-link'
 
 // Isolate WSL records so older builds cannot reject the entire pairing store.
@@ -91,15 +92,13 @@ function recordEnvironmentId(raw: unknown): string | undefined {
 
 function readStoredRecords(userDataPath: string): StoredRecord[] {
   const path = getWslHostDeploymentStorePath(userDataPath)
-  if (!existsSync(path)) {
-    return []
-  }
   let text: string
   try {
-    hardenExistingSecureFile(path)
-    text = readNodeFileSyncWithinLimit(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES).buffer.toString(
-      'utf8'
-    )
+    const read = readEnvironmentRegistryFile(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES)
+    if (!read) {
+      return []
+    }
+    text = read.buffer.toString('utf8')
   } catch {
     throw new WslHostDeploymentStoreInvalidError(path)
   }
@@ -178,6 +177,7 @@ export function writeWslHostDeployment(
   if (next && !records.some((record) => record.environmentId === environmentId)) {
     raws.push(next)
   }
+  invalidateEnvironmentStoreObservation(getWslHostDeploymentStorePath(userDataPath))
   writeSecureJsonFileWithinLimit(
     path,
     { version: 1, deployments: raws },

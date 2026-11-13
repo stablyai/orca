@@ -9,6 +9,7 @@ import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-s
 import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type {
   MobileDesktopRelayHostListing,
+  MobileDesktopRelayListing,
   MobileDesktopRelayHosts
 } from './mobile-desktop-relay-hosts'
 
@@ -17,11 +18,17 @@ export type DescribedRelayHost = MobileRelayHost & {
   identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
 }
 
-export function describeRelayHosts(
+export async function describeRelayHosts(
   hosts: Pick<MobileDesktopRelayHosts, 'list'>,
   hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()
+): Promise<DescribedRelayHost[]> {
+  return describeRelayHostListing(await hosts.list(), hostLabelOverrides)
+}
+
+export function describeRelayHostListing(
+  listing: MobileDesktopRelayListing,
+  hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()
 ): DescribedRelayHost[] {
-  const listing = hosts.list()
   const identities = new Map(
     listing.environments.map((environment) => [environment.id, environment])
   )

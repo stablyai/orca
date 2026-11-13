@@ -73,8 +73,8 @@ import {
 } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { WSL_HOST_CAPABILITY_CHANNEL } from '../../../shared/wsl-host-types'
 
-function register(): void {
-  registerWslHostHandlers({
+async function register(): Promise<void> {
+  await registerWslHostHandlers({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the add and remove handlers run, and they read the active runtime setting alone.
     store: { getSettings: () => ({ activeRuntimeEnvironmentId: null }) } as never,
     getUserDataPath: () => '/user-data',
@@ -92,9 +92,9 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
   // A block published while Orca runs must stop new hosts now, not at the next launch.
   it('a live policy block refuses an Add at once, tells the window, and keeps the saved host served', async () => {
     vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
-    configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => false })
+    await configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => false })
     try {
-      register()
+      await register()
       expect(await handlers.get('wslHosts:getCapability')?.({})).toMatchObject({
         acceptsNewWork: true
       })

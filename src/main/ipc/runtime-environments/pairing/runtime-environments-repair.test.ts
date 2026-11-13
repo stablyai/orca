@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -76,11 +77,12 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
   let userDataPath: string
   let repair: (event: unknown, args: { selector: string; pairingCode: string }) => unknown
 
-  function savedToken(): string | undefined {
-    return environmentStore.resolveEnvironment(userDataPath, 'desk').endpoints[0]?.deviceToken
+  async function savedToken(): Promise<string | undefined> {
+    return (await environmentStore.resolveEnvironment(userDataPath, 'desk')).endpoints[0]
+      ?.deviceToken
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-repair-'))
     getPathMock.mockReturnValue(userDataPath)
     handleMock.mockReset()
@@ -93,8 +95,8 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
       setHostRepoCatalogSnapshot: vi.fn()
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The registrar only reads the fixture's settings and workspace-session methods.
-    registerRuntimeEnvironmentHandlers(store as never)
-    environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+    await registerRuntimeEnvironmentHandlers(store as never)
+    await environmentStore.addEnvironmentFromPairingCode(userDataPath, {
       name: 'desk',
       pairingCode: pairingCode(ENDPOINT, { deviceToken: 'revoked-token' })
     })
@@ -107,8 +109,9 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
   })
 
   it('replaces a revoked pairing in place and clears the blocked status', async () => {
-    const before = environmentStore.resolveEnvironment(userDataPath, 'desk')
-    getRuntimeEnvironmentStatusOwner(userDataPath, before.id).authenticationRejected()
+    const before = await environmentStore.resolveEnvironment(userDataPath, 'desk')
+    const owner = await getRuntimeEnvironmentStatusOwner(userDataPath, before.id)
+    owner.authenticationRejected()
     expect(getRuntimeEnvironmentStatusSnapshots()).toMatchObject([
       { verification: 'blocked', blockedReason: 'access-revoked' }
     ])
@@ -125,8 +128,8 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
       runtimeStatus: { runtimeId: 'runtime-after-restart' }
     })
     expect(JSON.stringify(result)).not.toContain('fresh-token')
-    const after = environmentStore.resolveEnvironment(userDataPath, 'desk')
-    expect(savedToken()).toBe('fresh-token')
+    const after = await environmentStore.resolveEnvironment(userDataPath, 'desk')
+    expect(await savedToken()).toBe('fresh-token')
     expect(after.pairingRevision).toBeGreaterThan(before.pairingRevision ?? before.createdAt)
     const snapshot = getRuntimeEnvironmentStatusSnapshots().find(
       (entry) => entry.environmentId === before.id
@@ -153,11 +156,11 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
       ok: false,
       kind: 'different-server'
     })
-    expect(savedToken()).toBe('revoked-token')
+    expect(await savedToken()).toBe('revoked-token')
   })
 
   it('leaves the record untouched for an invalid or rejected link', async () => {
-    const before = environmentStore.resolveEnvironment(userDataPath, 'desk')
+    const before = await environmentStore.resolveEnvironment(userDataPath, 'desk')
     await expect(
       repair(null, { selector: 'desk', pairingCode: 'not a link' })
     ).resolves.toMatchObject({ ok: false, kind: 'access-link-invalid' })
@@ -173,11 +176,11 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
         pairingCode: pairingCode(ENDPOINT, { deviceToken: 'also-revoked' })
       })
     ).resolves.toMatchObject({ ok: false, kind: 'access-link-invalid' })
-    expect(environmentStore.resolveEnvironment(userDataPath, 'desk')).toEqual(before)
+    expect(await environmentStore.resolveEnvironment(userDataPath, 'desk')).toEqual(before)
   })
 
   it('declines a server another Orca service pairs', async () => {
-    environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+    await environmentStore.addEnvironmentFromPairingCode(userDataPath, {
       name: 'vm',
       pairingCode: pairingCode(ENDPOINT, { deviceToken: 'vm-token', keyByte: 2 }),
       source: 'ephemeral-vm'

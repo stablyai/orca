@@ -41,7 +41,7 @@ describe('terminal listing while a spawn binding is being persisted', () => {
       const bindingPersisted = deferred<void>()
       const { runtime } = createInventoryRuntime(async () => [processRow(ptyId)])
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [{ tabId: TAB, worktreeId: WORKTREE, title: '', activeLeafId: LEAF, layout: null }],
         leaves: [
           {

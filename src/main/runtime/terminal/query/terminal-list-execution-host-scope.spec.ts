@@ -51,7 +51,10 @@ export function registerTerminalListExecutionHostScopeTests(): void {
 
   type GraphLeaf = { worktreeId: string; leafId: string; ptyId: string }
 
-  function makeRuntime(leaves: GraphLeaf[], store = makeStore()): OrcaRuntimeService {
+  async function makeRuntime(
+    leaves: GraphLeaf[],
+    store = makeStore()
+  ): Promise<OrcaRuntimeService> {
     const runtime = new OrcaRuntimeService(store as never)
     runtime.setPtyController({
       spawn: vi.fn(async () => ({ id: 'never' })),
@@ -60,7 +63,7 @@ export function registerTerminalListExecutionHostScopeTests(): void {
       listProcesses: vi.fn(async () => leaves.map((leaf) => ({ id: leaf.ptyId, cwd: '/tmp' })))
     } as never)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: leaves.map((leaf, index) => ({
         tabId: `tab-${index + 1}`,
         worktreeId: leaf.worktreeId,
@@ -85,7 +88,7 @@ export function registerTerminalListExecutionHostScopeTests(): void {
     // A targeted listing a newer census overtook joins that census instead of answering for no
     // host; re-listing would overtake the newer one in turn (two workspaces sleeping at once).
     it('answers from a newer concurrent inventory refresh instead of an empty scope', async () => {
-      const runtime = makeRuntime([])
+      const runtime = await makeRuntime([])
       const releases: (() => void)[] = []
       const listProcessesWithHostScope = vi.fn(
         () =>

@@ -45,7 +45,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
     const remoteRows = paged
       ? (params.limit ?? ORCHESTRATION_FLEET_PAGE_MAX)
       : ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS - page.workers.length
-    return withRemoteWorkerRows(runtime, params, page, remoteRows)
+    return await withRemoteWorkerRows(runtime, params, page, remoteRows)
   }
 })
 

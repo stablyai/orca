@@ -49,9 +49,11 @@ import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provi
 import { confirmNoDaemonSessionsRemain } from '../../ipc/pty/pty-management'
 
 // Inject the opener to avoid an actions/lifecycle import cycle.
-let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
+let openWindow: (options?: {
+  revealOnDidFinishLoad?: boolean
+}) => BrowserWindow | Promise<BrowserWindow>
 export function setMainWindowOpener(
-  opener: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
+  opener: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow | Promise<BrowserWindow>
 ): void {
   openWindow = opener
 }
@@ -75,7 +77,9 @@ export function showMainWindowFromTray(): void {
     return
   }
   if (!isQuittingForUpdate()) {
-    openWindow()
+    void Promise.resolve(openWindow()).catch((error: unknown) =>
+      console.warn('[window] Failed to open main window', error)
+    )
   }
 }
 

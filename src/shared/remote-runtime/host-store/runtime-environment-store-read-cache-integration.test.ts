@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
 import type * as BoundedReader from '../../file-content/node-bounded-file-reader'
 import { __resetSecureFileHardenedPathsForTests } from '../../secure-storage/secure-file'
-import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  listEnvironments
+} from './runtime-environment-store-operations'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 
 type ReadHook = ((path: string) => void) | undefined

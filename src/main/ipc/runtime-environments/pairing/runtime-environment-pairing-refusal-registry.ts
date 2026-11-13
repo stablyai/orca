@@ -1,8 +1,10 @@
 /** Register recovery here to keep status owners and control sockets independent of SSH tunnel imports. */
-export type RefusedPairingRecovery = (environmentId: string) => Promise<'built' | 'repaired'> | null
+export type RefusedPairingRecovery = (
+  environmentId: string
+) => Promise<'built' | 'repaired' | null> | null
 export type SharedControlRefusalHandler = (
   environmentId: string
-) => Promise<'retry' | 'stop'> | null
+) => Promise<'retry' | 'stop' | null> | null
 
 let recovery: RefusedPairingRecovery = () => null
 let sharedControlHandler: SharedControlRefusalHandler = () => null
@@ -24,13 +26,15 @@ export function noteRuntimeEnvironmentConnectRequested(environmentId: string): v
 }
 
 /** Null when nobody can pair this server again, so the refusal stands. */
-export function recoverRefusedPairing(environmentId: string): Promise<'built' | 'repaired'> | null {
+export function recoverRefusedPairing(
+  environmentId: string
+): Promise<'built' | 'repaired' | null> | null {
   return recovery(environmentId)
 }
 
 /** A promise means the handler owns recovery of the refused socket. */
 export function handleSharedControlRefusal(
   environmentId: string
-): Promise<'retry' | 'stop'> | null {
+): Promise<'retry' | 'stop' | null> | null {
   return sharedControlHandler(environmentId)
 }

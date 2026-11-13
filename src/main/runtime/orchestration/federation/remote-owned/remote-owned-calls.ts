@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
+import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
+import type { RuntimeRequestGuard } from '../../../../../shared/runtime-rpc-envelope'
+import { pairedOrchestrationPeers, type OrchestrationWorkerServer } from '../environment-transport'
 import {
   closeRemoteRunLink,
   getRemoteRunLink,
@@ -36,30 +39,33 @@ export async function callRemoteOwnedServer(
   }
 ): Promise<unknown> {
   const db = runtime.getOrchestrationDb()
-  const server = runtime.resolveOrchestrationWorkerServer(link.environment_id)
-  // Run again on the socket just before the frame leaves: a reset or re-pair while it waited stops it.
-  const requireLink = (): void => {
+  const server = await runtime.resolveOrchestrationWorkerServer(link.environment_id)
+  const pairingChanged = (now: OrchestrationWorkerServer): OrchestrationError =>
+    new OrchestrationError(
+      'server_pairing_changed',
+      `The pairing with ${now.name} was re-made, so it no longer runs Run ${link.run_id}'s workers. No effects were applied.`,
+      { effectsApplied: false, server: now.name }
+    )
+  const requireLink = (now: OrchestrationWorkerServer): void => {
+    if (runtime.getOrchestrationDb() !== db) {
+      throw new OrchestrationError(
+        'remote_link_closed',
+        'This Run was reset on this Orca. No effects were applied.',
+        { effectsApplied: false }
+      )
+    }
     const current = getRemoteRunLink(db, link.conversation_id)
-    const now = runtime.resolveOrchestrationWorkerServer(link.environment_id)
-    if (
-      current &&
-      current.state !== 'closed' &&
-      !remoteRunLinkPinMatches(current, remoteServerPin(now))
-    ) {
+    const pin = remoteServerPin(now)
+    if (current && current.state !== 'closed' && !remoteRunLinkPinMatches(current, pin)) {
       closeRemoteRunLink(
         db,
         current.conversation_id,
         `The pairing with ${now.name} was re-made.`,
         (handle, type) => runtime.notifyMessageArrived(handle, type)
       )
-      throw new OrchestrationError(
-        'server_pairing_changed',
-        `The pairing with ${now.name} was re-made, so it no longer runs Run ${link.run_id}'s workers. No effects were applied.`,
-        { effectsApplied: false, server: now.name }
-      )
+      throw pairingChanged(now)
     }
     if (!current || !call.whileLink.includes(current.state)) {
-      // Only a re-made pairing closes a link; a reset leaves it owing a cancel.
       const why =
         current?.state === 'closed'
           ? `The pairing with ${server.name} was re-made, so it no longer runs Run ${link.run_id}'s workers.`
@@ -68,8 +74,33 @@ export async function callRemoteOwnedServer(
         effectsApplied: false
       })
     }
+    // A replacement link cannot authorize a request prepared for the original pairing.
+    if (!remoteRunLinkPinMatches(link, pin) || !remoteRunLinkPinMatches(link, current)) {
+      throw pairingChanged(now)
+    }
   }
-  requireLink()
+  const prepareGuard: RuntimeRequestGuard = async (connection) => {
+    const now = await runtime.resolveOrchestrationWorkerServer(link.environment_id)
+    const generation = environmentStoreWriteCount()
+    const peers = pairedOrchestrationPeers(
+      connection.hostPublicKeyB64,
+      connection.credential.deviceToken
+    )
+    return () => {
+      if (generation !== environmentStoreWriteCount()) {
+        return false
+      }
+      requireLink(now)
+      if (
+        now.peerFingerprint !== peers.peerFingerprint ||
+        (now.homePeerFingerprint ?? now.peerFingerprint) !== peers.homePeerFingerprint
+      ) {
+        throw pairingChanged(now)
+      }
+      return true
+    }
+  }
+  requireLink(await runtime.resolveOrchestrationWorkerServer(link.environment_id))
   return runtime.callOrchestrationWorkerServer(
     link.environment_id,
     call.method,
@@ -85,10 +116,7 @@ export async function callRemoteOwnedServer(
     },
     {
       expectedEnvironmentPairingRevision: link.pairing_revision ?? undefined,
-      prepareRequest: (request) => {
-        requireLink()
-        return { params: request.params, envelope: request.envelope }
-      }
+      prepareGuard
     }
   )
 }

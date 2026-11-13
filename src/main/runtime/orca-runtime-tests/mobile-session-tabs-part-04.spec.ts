@@ -69,7 +69,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'ssh-host-tab')
 
@@ -129,8 +129,8 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
-    const publishRendererOmission = (snapshotVersion: number): void => {
-      runtime.syncWindowGraph(1, {
+    const publishRendererOmission = async (snapshotVersion: number): Promise<void> => {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [

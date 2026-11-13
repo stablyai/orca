@@ -1,5 +1,6 @@
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestGuard,
   RuntimeRequestPreparation
 } from '../../../../shared/runtime-rpc-envelope'
 
@@ -11,4 +12,5 @@ export type RuntimeEnvironmentCall = {
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
   prepareRequest?: RuntimeRequestPreparation
+  prepareGuard?: RuntimeRequestGuard
 }

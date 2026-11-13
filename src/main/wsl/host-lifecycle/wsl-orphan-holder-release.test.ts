@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,8 +17,8 @@ const KEY = Buffer.alloc(32, 7).toString('base64')
 
 let userDataPath: string
 
-function addHost(distro: string, port: number): void {
-  addWslHostEnvironment(userDataPath, {
+async function addHost(distro: string, port: number): Promise<void> {
+  await addWslHostEnvironment(userDataPath, {
     id: `wsl:${distro.toLowerCase()}`,
     name: `${distro} (WSL)`,
     pairingCode: encodePairingOffer({
@@ -61,9 +62,9 @@ afterEach(() => {
 
 describe('releasing orphaned WSL holders at launch', () => {
   it('keeps a live host’s holder and releases only orphans and pending removals', async () => {
-    addHost('Ubuntu', 42000)
-    addHost('Debian', 42001)
-    setWslHostPendingStop(userDataPath, 'wsl:debian', {
+    await addHost('Ubuntu', 42000)
+    await addHost('Debian', 42001)
+    await setWslHostPendingStop(userDataPath, 'wsl:debian', {
       since: 1,
       reason: 'busy',
       verdict: 'live'
@@ -85,15 +86,15 @@ describe('releasing orphaned WSL holders at launch', () => {
 })
 
 describe('wslHolderKeepPolicy', () => {
-  it('keeps every holder when the host records cannot all be read', () => {
-    addHost('Ubuntu', 42000)
+  it('keeps every holder when the host records cannot all be read', async () => {
+    await addHost('Ubuntu', 42000)
     writeFileSync(getWslHostDeploymentStorePath(userDataPath), '{not json')
     expect(wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })('Alpine')).toBe(true)
   })
 
-  it('keeps the holder of a host added after the policy was made', () => {
+  it('keeps the holder of a host added after the policy was made', async () => {
     const isWanted = wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })
-    addHost('Ubuntu', 42000)
+    await addHost('Ubuntu', 42000)
     expect(isWanted('ubuntu')).toBe(true)
   })
 })

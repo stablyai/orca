@@ -41,7 +41,7 @@ export async function readDocPreviewTerminalFile(
     throw new Error('Not found')
   }
   const root = getRuntimeEnvironmentRegistryRoot()
-  const environment = resolveEnvironment(root, owner.environmentId)
+  const environment = await resolveEnvironment(root, owner.environmentId)
   const revision = environment.pairingRevision ?? environment.createdAt
   const call = async (method: string, params: unknown): Promise<unknown> => {
     const response = await callRuntimeEnvironment(

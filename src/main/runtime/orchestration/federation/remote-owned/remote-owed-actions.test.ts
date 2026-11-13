@@ -38,6 +38,12 @@ vi.mock('../relay/federation-relay-scheduler', async (original) => ({
 
 const COORDINATOR_PANE = 'tab_coord:11111111-1111-4111-8111-111111111111'
 
+const sendingConnection = {
+  endpoint: 'ws://127.0.0.1:1',
+  hostPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+  credential: { kind: 'token' as const, deviceToken: 'test-home-token' }
+}
+
 type Sent = { method: string; params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined }
 type Answer = { result: unknown } | { error: string }
 
@@ -85,6 +91,8 @@ describe('what the coordinating Orca owes a paired server', () => {
       }
       await beforeSend()
       // The socket's own preparation runs last, as it does just before a real frame leaves.
+      const guard = await send?.prepareGuard?.(sendingConnection)
+      guard?.()
       const prepared = send?.prepareRequest?.({ params, envelope, measure: () => 0 })
       sent.push({
         method,
@@ -115,8 +123,8 @@ describe('what the coordinating Orca owes a paired server', () => {
     server = {
       environmentId: 'env_b',
       name: 'devB',
-      peerFingerprint: 'host_b',
-      homePeerFingerprint: 'cred_a',
+      peerFingerprint: 'Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU',
+      homePeerFingerprint: 'd9b49845ccf7825b16d8a6026f24f283a700ec94ad6e750e0ff344db365934a0',
       pairingRevision: 1
     }
     beforeSend = async () => undefined
@@ -332,6 +340,34 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(owed().stop_owed).toBe(0)
     })
   })
+
+  it.each([1, undefined])(
+    'rejects a changed home credential with pairing revision %s',
+    async (pairingRevision) => {
+      server = { ...server, pairingRevision }
+      link.pairing_revision = pairingRevision ?? null
+      db.db
+        .prepare('UPDATE remote_run_links SET pairing_revision = ? WHERE conversation_id = ?')
+        .run(pairingRevision ?? null, link.conversation_id)
+      startedOnB()
+      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
+      let release!: () => void
+      beforeSend = () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+      const pending = sendOwedRemoteStop(runtime, owed())
+      await vi.waitFor(() => expect(release).toBeDefined())
+      server = { ...server, homePeerFingerprint: 'replaced-home' }
+      release()
+      await expect(pending).rejects.toMatchObject({
+        code: 'server_pairing_changed',
+        data: { effectsApplied: false }
+      })
+      expect(sent).toEqual([])
+      expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
+    }
+  )
 
   describe('S8 pull loop', () => {
     const state = (seq: number, payload?: string) => ({

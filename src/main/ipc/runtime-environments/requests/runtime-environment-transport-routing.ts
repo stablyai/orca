@@ -1,3 +1,7 @@
+import {
+  markEnvironmentUsedFromResponse,
+  shouldUseCachedRequestConnection
+} from './runtime-environment-usage-response'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import {
@@ -48,6 +52,7 @@ export async function callRuntimeEnvironment(
   expectedEnvironmentPairingRevision?: number,
   envelope?: Rpc.RuntimeOrchestrationEnvelope,
   options?: {
+    prepareGuard?: Rpc.RuntimeRequestGuard
     prepareRequest?: Rpc.RuntimeRequestPreparation
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
@@ -62,7 +67,7 @@ export async function callRuntimeEnvironment(
       await requireWslHostWithoutStart(userDataPath, selector, preparation)
       statusOptions = rest
     }
-    const environment = resolveEnvironment(userDataPath, selector)
+    const environment = await resolveEnvironment(userDataPath, selector)
     const failure = runtimeEnvironmentRevisionFailure(
       environment,
       expectedEnvironmentPairingRevision,
@@ -79,7 +84,7 @@ export async function callRuntimeEnvironment(
       )
     )
   }
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {
@@ -111,6 +116,7 @@ export async function callRuntimeEnvironment(
           params,
           timeoutMs: effectiveTimeoutMs,
           signal: options?.signal,
+          prepareGuard: options?.prepareGuard,
           prepareRequest: options?.prepareRequest
         }
         if (envelope && !sharedControlEnvelope) {
@@ -122,7 +128,11 @@ export async function callRuntimeEnvironment(
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
         }
-        if (shouldUseCachedRequestConnection(method)) {
+        if (
+          shouldUseCachedRequestConnection(method) &&
+          !options?.prepareGuard &&
+          !options?.prepareRequest
+        ) {
           const response = await sendRemoteRuntimeConnectionRequestAbortable(
             currentEnvironment.id,
             pairedConnection,
@@ -153,7 +163,8 @@ export async function callRuntimeEnvironment(
           sharedControlEnvelope,
           options?.signal,
           ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-          options?.prepareRequest
+          options?.prepareRequest,
+          options?.prepareGuard
         )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
@@ -188,7 +199,7 @@ export async function subscribeRuntimeEnvironment(
   signal?: AbortSignal,
   preparation?: ManagedRuntimeCallPreparation,
   crewAttempt?: {
-    assertCurrent: () => void
+    assertCurrent: () => Promise<void>
     observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
   }
 ): Promise<RemoteRuntimeTransportSubscription> {
@@ -196,11 +207,12 @@ export async function subscribeRuntimeEnvironment(
     ...rawCallbacks,
     onEvent: decodeRuntimeEnvironmentSubscriptionEvents(method, rawCallbacks.onEvent, isCurrent)
   }
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
   const environment = crewAttempt
-    ? resolveEnvironment(userDataPath, selector)
+    ? await resolveEnvironment(userDataPath, selector)
     : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
+  throwIfSignalAborted(signal)
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)
   }
@@ -269,7 +281,8 @@ export async function subscribeRuntimeEnvironment(
     if (crewAttempt) {
       try {
         throwIfSignalAborted(signal)
-        crewAttempt.assertCurrent()
+        await crewAttempt.assertCurrent()
+        throwIfSignalAborted(signal)
         assertCrewSourceCurrent(environment)
       } catch (error) {
         subscription.close()
@@ -288,20 +301,4 @@ export async function subscribeRuntimeEnvironment(
     crewAttempt?.observeFailure(runtimeEnvironmentSetupFailure(error, 'subscription'))
     throw error
   }
-}
-
-function markEnvironmentUsedFromResponse(
-  userDataPath: string,
-  environmentId: string,
-  response: Rpc.RuntimeRpcResponse<unknown>
-): void {
-  if (response.ok === true) {
-    recordRuntimeEnvironmentUsage(userDataPath, environmentId, {
-      runtimeId: response._meta.runtimeId
-    })
-  }
-}
-
-function shouldUseCachedRequestConnection(method: string): boolean {
-  return method === 'terminal.send' || method === 'terminal.updateViewport'
 }

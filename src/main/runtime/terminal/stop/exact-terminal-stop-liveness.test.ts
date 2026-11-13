@@ -87,7 +87,7 @@ describe('terminal.stopExact post-stop verification', () => {
       leafId: LEAF,
       incarnationId: INCARNATION
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         { tabId: TAB, worktreeId: WORKTREE, title: 'terminal', activeLeafId: LEAF, layout: null }
       ],

@@ -1,11 +1,17 @@
+import { AgentSenderHandleIncarnations } from './agent-sender-handle-incarnations'
+import type { Dependencies } from './runtime-agent-sender-dependencies'
+export {
+  type AgentSenderHandleReads,
+  type TerminalHandleAccess
+} from './runtime-agent-sender-dependencies'
 import type {
   AgentSenderAssociation,
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../../shared/agent-sender-associations'
-import type { RuntimeAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-projection'
+
 import { readLiveAgentSenderPanes, type AgentSenderPane } from './agent-sender-live-panes'
-import { readAgentSenderPrincipals, type AgentSenderPrincipal } from './agent-sender-principals'
+import { prepareAgentSenderPrincipals, type AgentSenderPrincipal } from './agent-sender-principals'
 import { readAgentSenderSessions } from './agent-sender-chat-sessions'
 import {
   AgentSenderWorkerHistory,
@@ -13,41 +19,12 @@ import {
 } from './runtime-agent-sender-worker-history'
 import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
-import type {
-  RuntimeLeafRecord,
-  RuntimePtyWorktreeRecord
-} from '../terminal/records/runtime-terminal-state-records'
-import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
 
-/** The handles terminals already hold, read without issuing one: display bookkeeping never
- *  changes terminal identity, so a terminal with no issued handle has no sender row. */
-export type AgentSenderHandleReads = {
-  hasPublishedScope?(worktreeId: string): boolean
-  readLeafHandle(leaf: RuntimeLeafRecord): string | null
-  /** One reader per walk, so a lookup that must index records does it once per build. */
-  readPtyHandles(): (pty: RuntimePtyWorktreeRecord) => string | null
-}
-
-/** Orchestration issues terminal handles; sender rows only read the ones already issued. */
-export type TerminalHandleAccess = Pick<
-  RuntimeAgentOrchestrationDependencies,
-  'issueLeafHandle' | 'issuePtyHandle'
-> &
-  AgentSenderHandleReads
-
-type Dependencies = Omit<
-  RuntimeAgentOrchestrationDependencies,
-  'issueLeafHandle' | 'issuePtyHandle'
-> &
-  AgentSenderHandleReads & {
-    peerFingerprint(): string | undefined
-    /** This host's principal as the paired environment authenticates it, and that peer's key. */
-    principal(environmentId: string): AgentSenderPrincipal | undefined
-    /** Moves when a pairing changes, so principals are read again only then. */
-    pairingGeneration(): number
-  }
-/** Bounded like the hook server's per-pane maps; eviction only forgets an old respawn. */
-const MAX_HANDLE_INCARNATIONS = 4096
+import {
+  AgentSenderPublisher,
+  sameAgentSenderKey as same,
+  type AgentSenderScope
+} from './runtime-agent-sender-publication'
 
 /** Publishes where each sender a card saves runs now: the terminal its handle names, the worker
  *  lineage a Dispatch continued into, and chats by session. Terminal and chat inputs rebuild
@@ -76,7 +53,7 @@ export class RuntimeAgentSenderAssociations {
     }
   }
   /** The process each handle was first seen running; a respawn that kept the handle is not it. */
-  private readonly handleIncarnations = new Map<string, string>()
+  private readonly handleIncarnations = new AgentSenderHandleIncarnations()
   private terminalKey: unknown[] = []
   private failedKey: unknown[] = []
   private terminal: Pick<AgentSenderScope, 'associations' | 'attachments'> = {
@@ -87,6 +64,46 @@ export class RuntimeAgentSenderAssociations {
   private chats: AgentSenderAssociation[] = []
   readonly publisher = new AgentSenderPublisher((id) => this.deps.hasPublishedScope?.(id) ?? false)
   constructor(private readonly deps: Dependencies) {}
+
+  private publicationTail: Promise<void> = Promise.resolve()
+  private preparedPrincipals: { values: AgentSenderPrincipal[] } | { error: unknown } | undefined
+
+  /** Preparation may yield; the consumer owns a complete synchronous publication and delivery. */
+  withPreparedPublication<T>(
+    consume: () => T extends PromiseLike<unknown> ? never : T,
+    prepare = true
+  ): Promise<T> {
+    const result = this.publicationTail.then(async () => {
+      if (prepare) {
+        try {
+          for (;;) {
+            const prepared = await prepareAgentSenderPrincipals(this.deps, {
+              db: this.database,
+              generation: this.principalsRead,
+              pairing: this.pairing,
+              values: this.principals
+            })
+            if (prepared.current()) {
+              this.preparedPrincipals = { values: prepared.values }
+              break
+            }
+          }
+        } catch (error) {
+          this.preparedPrincipals = { error }
+        }
+      }
+      try {
+        return consume()
+      } finally {
+        this.preparedPrincipals = undefined
+      }
+    })
+    this.publicationTail = result.then(
+      () => {},
+      () => {}
+    )
+    return result
+  }
 
   /** Display bookkeeping: a failure preserves ordinary rows but withdraws unproved workers. */
   build(worktreeId?: string): AgentSenderPublication {
@@ -159,28 +176,12 @@ export class RuntimeAgentSenderAssociations {
 
   private livePanes() {
     return readLiveAgentSenderPanes(this.deps, this.work, (handle, incarnation) =>
-      this.originalExecution(handle, incarnation)
+      this.handleIncarnations.matches(handle, incarnation)
     )
   }
 
   /** A handle names the execution it was issued to; restart reattach keeps both, but a respawn
    *  that kept the handle runs a fresh shell, so its old cards no longer name what runs there. */
-  private originalExecution(handle: string, incarnation: string | null): boolean {
-    if (!incarnation) {
-      return true
-    }
-    const first = this.handleIncarnations.get(handle)
-    if (first === undefined) {
-      this.handleIncarnations.set(handle, incarnation)
-      if (this.handleIncarnations.size > MAX_HANDLE_INCARNATIONS) {
-        const oldest = this.handleIncarnations.keys().next().value
-        if (oldest !== undefined) {
-          this.handleIncarnations.delete(oldest)
-        }
-      }
-    }
-    return first === undefined || first === incarnation
-  }
 
   private refresh(): void {
     const db = this.deps.getDb()
@@ -263,7 +264,14 @@ export class RuntimeAgentSenderAssociations {
         // Federated Dispatches and pairings name principals; worker writes never reread them.
         const pairing = this.deps.pairingGeneration()
         if (principalsGeneration !== this.principalsRead || pairing !== this.pairing) {
-          this.principals = readAgentSenderPrincipals(db, this.deps.principal)
+          const prepared = this.preparedPrincipals
+          if (!prepared) {
+            throw new Error('Sender publication requires prepared principals')
+          }
+          if ('error' in prepared) {
+            throw prepared.error
+          }
+          this.principals = prepared.values
           this.principalsRead = principalsGeneration
           this.pairing = pairing
         }
@@ -313,8 +321,4 @@ export class RuntimeAgentSenderAssociations {
       })
     }
   }
-}
-
-function same(key: unknown[], other: unknown[]): boolean {
-  return key.length === other.length && key.every((value, i) => value === other[i])
 }

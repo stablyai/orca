@@ -1,5 +1,5 @@
 /** Whether the move orchestrator still has a reason to keep a distro's record (D3a-2 pruning). */
-import { readWslHostDeployments } from '../../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../../../shared/remote-runtime/host-store/runtime-environment-registry'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import type { Store } from '../../loading-store/store'
@@ -10,14 +10,14 @@ import { defaultWslOrcadEnvironmentId } from '../../../wsl/orcad/wsl-orcad-deplo
  * A bridge project of the distro (local, on its UNC path, not moved) or its WSL host record. A
  * host file that cannot be read counts as in use: a failed read never makes a distro look gone.
  */
-export function isDistroInUse(
+export async function isDistroInUse(
   store: Pick<Store, 'getRepos' | 'getFolderWorkspaces'>,
   userDataPath: string,
   distro: string
-): boolean {
+): Promise<boolean> {
   const environmentId = defaultWslOrcadEnvironmentId(distro)
   try {
-    const hosts = readWslHostDeployments(userDataPath)
+    const hosts = await readWslHostDeployments(userDataPath)
     if (
       hosts.unreadableEnvironmentIds.has(environmentId) ||
       hosts.deployments.some((record) => record.environmentId === environmentId)

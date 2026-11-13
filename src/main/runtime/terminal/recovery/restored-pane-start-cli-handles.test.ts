@@ -24,7 +24,7 @@ type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 /** Start the third saved pane, recording its binding before returning the spawn reply. */
 async function restoredPane() {
   const { runtime, store, setSession } = surfaceRuntime()
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   const session = store.getSession()
   const layout = session.terminalLayoutsByTabId[SURFACE_TAB_ID]!
   setSession({

@@ -20,7 +20,7 @@ import { makePendingAgentTabActivationRuntime } from './orca-runtime-test-scenar
 
 describe('OrcaRuntimeService', () => {
   it('falls back to a plain shell when the pending tab agent is disabled', async () => {
-    const { runtime, spawn } = makePendingAgentTabActivationRuntime({
+    const { runtime, spawn } = await makePendingAgentTabActivationRuntime({
       disabledTuiAgents: ['claude']
     })
 
@@ -106,8 +106,16 @@ describe('OrcaRuntimeService', () => {
       ]
     }
 
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [rendererSnapshot] })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [rendererSnapshot] })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot]
+    })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot]
+    })
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const terminalTabs = listed.tabs.filter((tab) => tab.type === 'terminal')
@@ -205,8 +213,16 @@ describe('OrcaRuntimeService', () => {
       ]
     }
 
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [rendererSnapshot] })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [rendererSnapshot] })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot]
+    })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot]
+    })
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const terminalTabs = listed.tabs.filter((tab) => tab.type === 'terminal')
@@ -245,7 +261,7 @@ describe('OrcaRuntimeService', () => {
       leafId: '99999999-9999-4999-8999-999999999999',
       incarnationId: 'inc-now'
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const unrelatedPty = runtime['ptysById'].get('persisted-pty')!
     const unrelatedHandle = runtime['issuePtyHandle'](unrelatedPty)
     rows = [
@@ -323,7 +339,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => [{ id: persistedPtyId, cwd: TEST_WORKTREE_PATH, title: 'Remote' }]
     })
     runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
@@ -385,7 +401,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -476,7 +492,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => [{ id: servePtyId, cwd: TEST_WORKTREE_PATH, title: 'Adopted' }]
     })
     runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',

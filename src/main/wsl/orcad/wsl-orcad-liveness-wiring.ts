@@ -44,7 +44,7 @@ export function createWslOrcadLivenessSupervisor(options: {
   manager: WslOrcadConnectionManager
   bridgeActivity: WslOrcadBridgeActivity
   holder: WslDistroHolder
-  hasUserVisibleWork: (distro: string) => boolean
+  hasUserVisibleWork: (distro: string) => boolean | Promise<boolean>
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,

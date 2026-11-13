@@ -1,3 +1,4 @@
+import { recordEnvironmentStoreRead } from '../../../shared/remote-runtime/host-store/runtime-environment-store-read-observation'
 import {
   RuntimeAgentSenderAssociations,
   type AgentSenderHandleReads
@@ -8,7 +9,7 @@ import {
   type RuntimeAgentOrchestrationDependencies
 } from '../orchestration/crew/runtime-agent-orchestration-projection'
 import type { RuntimeConstructionServices } from './runtime-construction-services'
-import { environmentStoreWriteCount } from '../../../shared/remote-runtime/host-store/runtime-environment-store-file'
+import { environmentStoreWriteCount } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import type { AgentSenderPrincipal } from '../agent-senders/agent-sender-principals'
 
 type SenderHost = Pick<
@@ -46,14 +47,20 @@ export function createRuntimeAgentProjections(
       return key ? fingerprintOrchestrationPeer(key) : undefined
     },
     pairingGeneration: environmentStoreWriteCount,
-    principal: (environmentId) => {
+    principal: async (environmentId) => {
       if (pairing !== environmentStoreWriteCount()) {
         pairing = environmentStoreWriteCount()
         principals.clear()
       }
       if (!principals.has(environmentId)) {
-        principals.set(environmentId, resolvePrincipal(host, environmentId))
+        const generation = pairing
+        const principal = await resolvePrincipal(host, environmentId)
+        if (environmentStoreWriteCount() !== generation || pairing !== generation) {
+          return principal
+        }
+        principals.set(environmentId, principal)
       }
+      recordEnvironmentStoreRead(pairing)
       return principals.get(environmentId)
     }
   })
@@ -67,13 +74,13 @@ export function createRuntimeAgentProjections(
   }
 }
 
-function resolvePrincipal(
+async function resolvePrincipal(
   host: SenderHost,
   environmentId: string
-): AgentSenderPrincipal | undefined {
+): Promise<AgentSenderPrincipal | undefined> {
   try {
     const { peerFingerprint, homePeerFingerprint } =
-      host.resolveOrchestrationWorkerServer(environmentId)
+      await host.resolveOrchestrationWorkerServer(environmentId)
     return homePeerFingerprint ? { peerFingerprint, homePeerFingerprint } : undefined
   } catch {
     return undefined

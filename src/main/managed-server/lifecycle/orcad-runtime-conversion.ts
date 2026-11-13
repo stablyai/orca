@@ -81,14 +81,14 @@ export async function convertSshTargetToManagedOrcad(
   if (deployed.outcome === 'deferred') {
     return deployed // Retain fence and journal for a later resume.
   }
-  const environment = listEnvironments(userDataPath).find(
+  const environment = (await listEnvironments(userDataPath)).find(
     (entry) => entry.id === fenced.destinationEnvironmentId
   )
   if (!environment || !environmentMatchesManagedOrcadCutover(environment, fenced)) {
     throw new Error('orcad_migration_destination_environment_mismatch')
   }
   // Record before commit so crashes cannot allow rollback across migrated state.
-  recordManagedOrcadMigration(
+  await recordManagedOrcadMigration(
     userDataPath,
     environment.id,
     (args.now ?? (() => new Date()))().toISOString()
@@ -186,14 +186,14 @@ async function fenceOrResume(
     return existing.cutover
   }
   const stale = existing.state === 'stale-journal' ? existing.cutover : null
-  if (stale && !isRegistered(userDataPath, stale.destinationEnvironmentId)) {
+  if (stale && !(await isRegistered(userDataPath, stale.destinationEnvironmentId))) {
     removeOrcadMigrationJournalsForDestination(
       userDataPath,
       target.id,
       stale.destinationEnvironmentId
     )
   }
-  const converted = listEnvironments(userDataPath).some(
+  const converted = (await listEnvironments(userDataPath)).some(
     (environment) => getOrcadSshDeployment(environment)?.sshTargetId === target.id
   )
   if (converted) {
@@ -269,8 +269,10 @@ function requireJournaledCutover(
   return journaled
 }
 
-function isRegistered(userDataPath: string, environmentId: string): boolean {
-  return listEnvironments(userDataPath).some((environment) => environment.id === environmentId)
+async function isRegistered(userDataPath: string, environmentId: string): Promise<boolean> {
+  return (await listEnvironments(userDataPath)).some(
+    (environment) => environment.id === environmentId
+  )
 }
 
 function refuse(

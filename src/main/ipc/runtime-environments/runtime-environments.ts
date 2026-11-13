@@ -1,3 +1,4 @@
+import { holdLaunchReconnectOptOuts } from '../ssh/ssh-host-user-disconnect'
 import { createAiVaultAssociationObserver } from '../ai-vault/ai-vault-projection-dependency'
 import { invalidateAiVaultHostLegCache } from '../ai-vault/ai-vault-host-leg-cache'
 import { registerRuntimeEnvironmentSubscriptionHandlers } from './subscriptions/runtime-environment-subscription-handlers'
@@ -102,7 +103,7 @@ onRuntimeEnvironmentTransportGenerationRetired((environmentId) => {
 })
 
 /** Returns once the environment's client-hosted browser pages have been released. */
-export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
+export async function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
   // Same-ID re-pairing must retire every transport authenticated as the former peer.
   advanceRuntimeEnvironmentCapabilityIncarnation(environmentId)
   advanceRuntimeEnvironmentTransportGeneration(environmentId)
@@ -110,7 +111,7 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): Pr
   closeSubscriptionsForEnvironment(environmentId)
   retireMobileDesktopRelayEnvironment(environmentId)
   resetDesktopBrowserBridgeEnvironment(environmentId)
-  reactivateRuntimeEnvironmentStatus(environmentId)
+  await reactivateRuntimeEnvironmentStatus(environmentId)
   return retirePairedRuntimeBrowserClientHostEnvironment(
     environmentId,
     new Error('Runtime environment transport was invalidated')
@@ -123,28 +124,28 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): Pr
 }
 
 /** CLI update/rollback re-pairing needs a new status owner to publish the saved revision to renderers. */
-function reactivateRuntimeEnvironmentStatus(environmentId: string): void {
+async function reactivateRuntimeEnvironmentStatus(environmentId: string): Promise<void> {
   const userDataPath = getUserDataPath()
   if (
     isRuntimeEnvironmentManuallyDisconnected(environmentId) ||
-    !listEnvironments(userDataPath).some(
+    !(await listEnvironments(userDataPath)).some(
       (environment) => environment.id === environmentId && !isGatedOffWslHost(environment)
     )
   ) {
     return
   }
-  getRuntimeEnvironmentStatusOwner(userDataPath, environmentId).activate()
+  ;(await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)).activate()
 }
 
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
 let stopPreferenceWatch: (() => void) | undefined
 
-export function registerRuntimeEnvironmentHandlers(store: Store): void {
+export async function registerRuntimeEnvironmentHandlers(store: Store): Promise<void> {
   stopPreferenceWatch?.()
-  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), () => {
+  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), async () => {
     // CLI and recipe removals skip the Settings path; drop their session partitions here too.
     try {
-      reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+      await reconcileOrphanedRuntimeSessions(store, getUserDataPath())
     } catch (error) {
       console.warn('[runtime-environments] orphaned session reconcile failed:', error)
     }
@@ -160,8 +161,6 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     ipcMain.removeHandler(channel)
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
-  reconcileOrphanedRuntimeSessions(store, getUserDataPath())
-
   registerRuntimeEnvironmentConnectivityHandlers({
     store,
     getUserDataPath,
@@ -181,20 +180,13 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   )
   setManagedOrcadPairingRepairedListener(invalidateRuntimeEnvironmentTransport)
   setRefusedPairingHandlers({
-    recover: (environmentId) => recoverRefusedManagedPairing(getUserDataPath(), environmentId),
-    sharedControl: (environmentId) =>
-      handleManagedSharedControlRefusal(getUserDataPath(), environmentId),
+    recover: async (environmentId) =>
+      await recoverRefusedManagedPairing(getUserDataPath(), environmentId),
+    sharedControl: async (environmentId) =>
+      await handleManagedSharedControlRefusal(getUserDataPath(), environmentId),
     connectRequested: (environmentId) =>
       forgetManagedOrcadAutomaticFailures(getUserDataPath(), environmentId)
   })
-  for (const environment of listEnvironments(getUserDataPath())) {
-    if (
-      !isRuntimeEnvironmentManuallyDisconnected(environment.id) &&
-      !isGatedOffWslHost(environment)
-    ) {
-      getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id).activate()
-    }
-  }
   registerRuntimeSshAccessHandlers({
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
@@ -220,4 +212,19 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     recordLayoutFrame: (environmentId, method, response) =>
       recordRemoteLayoutFrame(store, environmentId, method, response)
   })
+  await holdLaunchReconnectOptOuts(store.getSshTargets?.() ?? [])
+  await reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+  await Promise.all(
+    (await listEnvironments(getUserDataPath())).map(async (environment) => {
+      if (
+        !isRuntimeEnvironmentManuallyDisconnected(environment.id) &&
+        !isGatedOffWslHost(environment)
+      ) {
+        const owner = await getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id)
+        if (!isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+          owner.activate()
+        }
+      }
+    })
+  )
 }

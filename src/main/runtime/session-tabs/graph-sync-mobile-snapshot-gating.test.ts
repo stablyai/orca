@@ -62,11 +62,11 @@ function createRuntime(initialSession: WorkspaceSessionState) {
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const sync = (
+  const sync = async (
     mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[],
     graph: { tabs?: unknown[]; leaves?: unknown[] } = {}
-  ): void => {
-    runtime.syncWindowGraph(1, {
+  ): Promise<void> => {
+    await runtime.syncWindowGraph(1, {
       tabs: (graph.tabs ?? []) as never,
       leaves: (graph.leaves ?? []) as never,
       mobileSessionTabs

@@ -29,7 +29,7 @@ export async function applyResumedRuntimePairing(args: {
   probeSavedPairing?: (connection: PairedRuntimeConnection) => Promise<unknown>
   now?: number
 }): Promise<ResumedRuntimePairingOutcome> {
-  const { repairFromFreshOffer, ...refreshed } = refreshEnvironmentFromResumePairingCode(
+  const { repairFromFreshOffer, ...refreshed } = await refreshEnvironmentFromResumePairingCode(
     args.userDataPath,
     args.environmentId,
     { pairingCode: args.pairingCode, now: args.now }
@@ -45,7 +45,7 @@ export async function applyResumedRuntimePairing(args: {
 
 async function confirmSavedPairing(
   refreshed: ResumedRuntimePairingOutcome,
-  repairFromFreshOffer: () => KnownRuntimeEnvironment,
+  repairFromFreshOffer: () => Promise<KnownRuntimeEnvironment>,
   probe: (connection: PairedRuntimeConnection) => Promise<unknown> = probeSavedPairing
 ): Promise<ResumedRuntimePairingOutcome> {
   try {
@@ -57,7 +57,7 @@ async function confirmSavedPairing(
       return refreshed
     }
     // The server kept its key but lost the saved device (e.g. its device list was reset).
-    return { ...refreshed, environment: repairFromFreshOffer(), reusedPairing: false }
+    return { ...refreshed, environment: await repairFromFreshOffer(), reusedPairing: false }
   }
 }
 

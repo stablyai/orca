@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -83,11 +84,11 @@ const { recoverManagedOrcadEnvironment } = await import('./orcad-managed-recover
 const { rollbackManagedOrcadEnvironment } = await import('./orcad-managed-rollback')
 
 const idle = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 7 }
-let harness: ReturnType<typeof createManagedLifecycleHarness>
+let harness: Awaited<ReturnType<typeof createManagedLifecycleHarness>>
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.resetAllMocks()
-  harness = createManagedLifecycleHarness()
+  harness = await createManagedLifecycleHarness()
   mocks.state.store = harness.targetStore
   mocks.resolveContext.mockImplementation(async () => harness.context())
   mocks.census.mockResolvedValue(idle)
@@ -99,8 +100,8 @@ beforeEach(() => {
 
 afterEach(() => rmSync(harness.userDataPath, { recursive: true, force: true }))
 
-function expectEnrolledPairing(): void {
-  const [environment] = listEnvironments(harness.userDataPath)
+async function expectEnrolledPairing(): Promise<void> {
+  const [environment] = await listEnvironments(harness.userDataPath)
   expect(environment?.endpoints[0]?.deviceToken).toBe('device-token')
   expect(environment?.pairingRevision).toBe(harness.environment.pairingRevision)
   expect(environment?.orcadDeployment).toEqual(harness.environment.orcadDeployment)
@@ -153,7 +154,7 @@ describe('updateManagedOrcadEnvironment', () => {
       buildHash: 'local-hash',
       fullVersion: '0.3.0+new'
     })
-    const [environment] = listEnvironments(harness.userDataPath)
+    const [environment] = await listEnvironments(harness.userDataPath)
     expect(environment?.pairingRevision).toBe(harness.environment.pairingRevision)
     expect(environment?.orcadDeployment).toEqual(harness.environment.orcadDeployment)
     const status = await getManagedOrcadRuntimeStatus(harness.userDataPath, 'Managed')
@@ -171,7 +172,7 @@ describe('updateManagedOrcadEnvironment', () => {
 
   it('keeps a pairing the terminal count repaired, not the one read before it', async () => {
     mocks.census.mockImplementationOnce(async () => {
-      refreshManagedOrcadPairing(
+      await refreshManagedOrcadPairing(
         harness.userDataPath,
         'environment-1',
         encodePairingOffer({
@@ -186,7 +187,7 @@ describe('updateManagedOrcadEnvironment', () => {
     mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: MANAGED_VERSION })
     mocks.probe.mockResolvedValueOnce(managedReadiness('startup-offer-token'))
     await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
-    const [environment] = listEnvironments(harness.userDataPath)
+    const [environment] = await listEnvironments(harness.userDataPath)
     expect(environment?.endpoints[0]?.deviceToken).toBe('repaired-token')
   })
 
@@ -194,12 +195,12 @@ describe('updateManagedOrcadEnvironment', () => {
     mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
     mocks.probe.mockResolvedValueOnce(managedReadiness('startup-offer-token'))
     await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
-    expectEnrolledPairing()
+    await expectEnrolledPairing()
   })
 
   it('saves the new pairing on the tunnel port the census moved to', async () => {
     mocks.census.mockImplementationOnce(async () => {
-      moveManagedOrcadLocalPort(harness.userDataPath, 'environment-1', MANAGED_LOCAL_PORT + 1)
+      await moveManagedOrcadLocalPort(harness.userDataPath, 'environment-1', MANAGED_LOCAL_PORT + 1)
       return idle
     })
     mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
@@ -207,7 +208,7 @@ describe('updateManagedOrcadEnvironment', () => {
 
     await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
 
-    const [environment] = listEnvironments(harness.userDataPath)
+    const [environment] = await listEnvironments(harness.userDataPath)
     expect(environment?.orcadDeployment?.localPort).toBe(MANAGED_LOCAL_PORT + 1)
     expect(environment?.endpoints[0]?.endpoint).toBe(`ws://127.0.0.1:${MANAGED_LOCAL_PORT + 1}/`)
   })
@@ -242,7 +243,11 @@ describe('rollbackManagedOrcadEnvironment', () => {
   })
 
   it('refuses a rollback to a snapshot older than the migrated catalog, not a newer one', async () => {
-    recordManagedOrcadMigration(harness.userDataPath, 'environment-1', '2026-02-01T00:00:00.000Z')
+    await recordManagedOrcadMigration(
+      harness.userDataPath,
+      'environment-1',
+      '2026-02-01T00:00:00.000Z'
+    )
     await expect(
       rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     ).resolves.toMatchObject({ outcome: 'refused', code: 'orcad_rollback_crosses_migration' })
@@ -278,7 +283,7 @@ describe('rollbackManagedOrcadEnvironment', () => {
     })
     mocks.probe.mockResolvedValueOnce(managedReadiness('startup-offer-token'))
     await rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
-    expectEnrolledPairing()
+    await expectEnrolledPairing()
   })
 })
 
@@ -291,6 +296,6 @@ describe('recoverManagedOrcadEnvironment', () => {
       readiness: managedReadiness('startup-offer-token')
     })
     await recoverManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
-    expectEnrolledPairing()
+    await expectEnrolledPairing()
   })
 })

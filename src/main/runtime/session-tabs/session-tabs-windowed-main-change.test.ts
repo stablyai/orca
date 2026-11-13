@@ -71,7 +71,7 @@ function windowPublication(): RuntimeMobileSessionTabsSnapshot {
 /** Attaches a window that publishes once, then records every push a phone gets. */
 async function windowedPhone(runtime: Runtime): Promise<RuntimeMobileSessionTabsResult[]> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
     mobileSessionTabs: [windowPublication(), UNLOADED_SSH_ROWS]
@@ -150,7 +150,7 @@ describe('session.tabs on a windowed server follow main without a window publish
     await vi.runAllTimersAsync()
     // The window republishes its older snapshot, which still lists the closed tab.
     const older = windowPublication()
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [

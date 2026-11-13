@@ -54,7 +54,7 @@ function sessionRow(paneKey: string, receivedAt = 0): AgentStatusIpcPayload {
   return { paneKey, providerSession: SESSION, receivedAt } as never
 }
 
-function makeRuntime(
+async function makeRuntime(
   fixture: Fixture,
   opts: {
     spawn?: NonNullable<RuntimePtyController['spawn']>
@@ -84,7 +84,7 @@ function makeRuntime(
     getForegroundProcess: async () => null,
     listProcesses: opts.listProcesses ?? (async () => [])
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   electronMocks.BrowserWindow.fromId.mockReturnValue(null)
   const attachWindow = (webContents?: { send: (...args: unknown[]) => void }): void => {
     runtime.attachWindow(TEST_WINDOW_ID)
@@ -163,7 +163,7 @@ describe('resumeAgentSessionInWorkspace', () => {
               ...(kind === 'observed' ? { isReattach: true } : {})
             }
       let first = true
-      const { runtime, spawn, openOldPane, resume } = makeRuntime(fixture, {
+      const { runtime, spawn, openOldPane, resume } = await makeRuntime(fixture, {
         spawn: async (args) => {
           if (!first) {
             return { id: 'next-C' }
@@ -198,7 +198,7 @@ describe('resumeAgentSessionInWorkspace', () => {
       MUTATION_ID
     )
     let started = false
-    const { spawn, resume, attachWindow } = makeRuntime(fixture, {
+    const { spawn, resume, attachWindow } = await makeRuntime(fixture, {
       rows: () => [],
       spawn: () => {
         started = true
@@ -245,7 +245,7 @@ describe('resumeAgentSessionInWorkspace', () => {
       const started = new Promise<void>((resolve) => {
         firstSpawnStarted = resolve
       })
-      const { spawn, resume, openOldPane } = makeRuntime(fixture, {
+      const { spawn, resume, openOldPane } = await makeRuntime(fixture, {
         spawn: () => {
           if (spawn.mock.calls.length > 1) {
             return Promise.resolve({ id: 'second-pty' })
@@ -281,7 +281,7 @@ describe('resumeAgentSessionInWorkspace', () => {
     const listeners = new Set<
       (sessions: readonly { paneKey: string; sessionId: string }[]) => void
     >()
-    const { spawn, resume } = makeRuntime(fixture, {
+    const { spawn, resume } = await makeRuntime(fixture, {
       rows: () => rows,
       subscribeAgentProviderSessionChanges: (listener) => {
         listeners.add(listener)
@@ -302,7 +302,7 @@ describe('resumeAgentSessionInWorkspace', () => {
 
   it('settles a lost-reply attempt once a retry of the same request binds, and frees on its exit', async () => {
     let calls = 0
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace(), {
       rows: () => [],
       spawn: async () => {
         calls += 1
@@ -326,7 +326,7 @@ describe('resumeAgentSessionInWorkspace', () => {
 
   it('lets at most one of two concurrent resumes own the session', async () => {
     const fixture = makeSleptWorkspace()
-    const { spawn, resume } = makeRuntime(fixture)
+    const { spawn, resume } = await makeRuntime(fixture)
 
     const results = await Promise.all([resume(), resume({ mutationId: 'another-delivery' })])
 
@@ -337,7 +337,7 @@ describe('resumeAgentSessionInWorkspace', () => {
 
   it('shares one spawn between concurrent retries of the same request', async () => {
     const fixture = makeSleptWorkspace()
-    const { spawn, resume } = makeRuntime(fixture)
+    const { spawn, resume } = await makeRuntime(fixture)
 
     const results = await Promise.all([resume(), resume()])
 
@@ -349,7 +349,7 @@ describe('resumeAgentSessionInWorkspace', () => {
 describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publication', () => {
   it('honors cancellation during create inventory lookup before dispatch', async () => {
     const controller = new AbortController()
-    const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {
+    const { resume, spawn } = await makeRuntime(makeSleptWorkspace(), {
       listProcesses: async () => {
         controller.abort()
         return []
@@ -360,7 +360,7 @@ describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publi
   })
 
   it('settles a failed post-spawn publication when that PTY exits', async () => {
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace())
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace())
     const unsubscribe = runtime.onMobileSessionTabsChanged(() => {
       throw new Error('publication failed')
     })
@@ -374,7 +374,7 @@ describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publi
 describe('resumeAgentSessionInWorkspace claim lifetime', () => {
   it('releases the hold after a proven exit before registration', async () => {
     let first = true
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace(), {
       spawn: async () => {
         if (first) {
           first = false
@@ -395,7 +395,7 @@ describe('resumeAgentSessionInWorkspace claim lifetime', () => {
       started = resolve
     })
     let calls = 0
-    const { runtime, resume, spawn } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume, spawn } = await makeRuntime(makeSleptWorkspace(), {
       spawn: async () => {
         calls += 1
         if (calls === 1) {
@@ -444,7 +444,7 @@ describe('resumeAgentSessionInWorkspace claim lifetime', () => {
     const leafId = deterministicAgentSessionUuid(`agent-session-resume-leaf\0${seed}`)
     let firstInventory = true
     let spawns = 0
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace(), {
       listProcesses: async () => {
         if (firstInventory) {
           firstInventory = false
@@ -493,7 +493,7 @@ it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     })
     let rows: AgentStatusIpcPayload[] = []
     let spawned = 0
-    const { resume, openOldPane, spawn } = makeRuntime(fixture, {
+    const { resume, openOldPane, spawn } = await makeRuntime(fixture, {
       rows: () => rows,
       checkHookAgentPresence: async () => 'exited',
       spawn: async () => ({ id: `numbered-resume-${++spawned}` })

@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,7 +49,7 @@ describe('WslHostService Remove as a user action', () => {
     setWslHostService(service)
     try {
       await service.add({ distro: 'Ubuntu' })
-      const [environment] = listEnvironments(userDataPath)
+      const [environment] = await listEnvironments(userDataPath)
       await removeThroughOwningService(environment!)
       expect(heard).toEqual([{ kind: 'removed', distro: 'Ubuntu' }])
     } finally {

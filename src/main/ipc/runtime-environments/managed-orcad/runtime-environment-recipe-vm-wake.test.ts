@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 // #36923: a client reaches a recipe VM's workspace through the VM's own server, which is gone
 // while the VM sleeps. Opening the workspace wakes it; any other request leaves it asleep.
 import { mkdtempSync } from 'node:fs'

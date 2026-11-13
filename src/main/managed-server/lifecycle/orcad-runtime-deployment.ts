@@ -62,7 +62,7 @@ export async function createManagedOrcadEnvironment(
     const environmentId =
       getManagedOrcadFenceEnvironmentId(targetStore.getTarget(args.sshTargetId)) ?? randomUUID()
     // Duplicate/name checks before an add: a crash-zeroed list (#18766) must read as empty here.
-    const environments = listEnvironments(userDataPath, { recoverBlankStore: true })
+    const environments = await listEnvironments(userDataPath, { recoverBlankStore: true })
     const registered = environments.find((entry) => entry.id === environmentId)
     if (registered) {
       assertRuntimeEnvironmentNotReconciling(registered)
@@ -147,7 +147,7 @@ export async function createManagedOrcadEnvironment(
         tunnel.remotePort,
         { ...tunnel, preferredPort: ORCAD_MANAGED_REMOTE_PORT }
       )
-      const environment = addManagedOrcadEnvironment(userDataPath, {
+      const environment = await addManagedOrcadEnvironment(userDataPath, {
         id: environmentId,
         name: args.name,
         pairingCode: tunneledOrcadPairingCode(tunnel.readiness(), localPort),

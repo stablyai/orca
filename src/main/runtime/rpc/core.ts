@@ -169,7 +169,7 @@ export type RpcContext = {
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {
-    list(): MobileRelayHostsListResult
+    list(): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
     worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
   }
   // Authenticated runtime devices see which other desktops share this server.

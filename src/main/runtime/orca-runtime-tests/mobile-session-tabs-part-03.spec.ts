@@ -48,7 +48,7 @@ describe('OrcaRuntimeService', () => {
       canGoForward: false,
       isActive: true
     }
-    runtime.syncWindowGraph(0, {
+    await runtime.syncWindowGraph(0, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -70,7 +70,7 @@ describe('OrcaRuntimeService', () => {
     )
     await vi.waitFor(() => expect(closeOffscreenTab).toHaveBeenCalledWith(browserTab.browserPageId))
 
-    runtime.syncWindowGraph(0, {
+    await runtime.syncWindowGraph(0, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -132,7 +132,7 @@ describe('OrcaRuntimeService', () => {
         capturePage: vi.fn(async () => null)
       }
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     let resolutionStarted = (): void => {}
     const started = new Promise<void>((resolve) => {
       resolutionStarted = resolve
@@ -169,7 +169,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     const [createdA, createdB] = await Promise.all([
       runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {

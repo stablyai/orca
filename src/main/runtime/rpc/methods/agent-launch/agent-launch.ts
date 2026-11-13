@@ -81,7 +81,7 @@ async function runAgentLaunch(
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
-    onSurfacePublished: (surface) => {
+    onSurfacePublished: async (surface) => {
       try {
         context.agentLaunchPolicy?.onSurfacePublished?.(surface)
       } catch (error) {
@@ -89,7 +89,7 @@ async function runAgentLaunch(
       }
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
-      selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
+      await selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
     }
   })
   return withPlacement(result, view)

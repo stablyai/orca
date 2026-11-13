@@ -35,7 +35,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await expect(
       runtime.activateMobileSessionTab(
@@ -79,7 +79,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -157,7 +157,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -226,7 +226,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
@@ -271,7 +271,7 @@ describe('OrcaRuntimeService', () => {
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these close paths call only the listed notifier methods.
     runtime.setNotifier({ closeTerminal, closeTerminalPane } as never)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',

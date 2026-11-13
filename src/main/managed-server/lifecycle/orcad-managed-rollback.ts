@@ -26,11 +26,11 @@ import {
   followLaunchedServerPort
 } from './orcad-managed-lifecycle'
 
-export function rollbackManagedOrcadEnvironment(
+export async function rollbackManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs
 ): Promise<OrcadManagedRollbackResult> {
-  return withManagedOrcadLifecycle(
+  return await withManagedOrcadLifecycle(
     userDataPath,
     args.selector,
     async ({ environment, deployment }) => {
@@ -85,7 +85,7 @@ export function rollbackManagedOrcadEnvironment(
         { ...slot, remoteInstallDir: targetDir },
         { buildHash: targetBuildHash, fullVersion: result.target }
       )
-      const updated = refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
+      const updated = await refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
       await followLaunchedServerPort(userDataPath, environment.id)
       return {
         outcome: 'rolled-back',

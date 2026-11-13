@@ -14,7 +14,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'bash'

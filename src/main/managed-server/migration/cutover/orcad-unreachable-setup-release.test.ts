@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -65,7 +66,7 @@ async function strandedConversion() {
   if (fenced.outcome !== 'fenced') {
     throw new Error('expected a fence')
   }
-  addManagedOrcadEnvironment(userDataPath, {
+  await addManagedOrcadEnvironment(userDataPath, {
     id: 'env-1',
     name: 'Managed',
     pairingCode: encodePairingOffer({
@@ -92,7 +93,7 @@ describe('releasing a setup the host never let this client reach', () => {
 
     expect(getManagedOrcadFenceEnvironmentId(h.store.getSshTarget(TARGET.id))).toBeNull()
     expect(listOrcadMigrationSourceCutovers(h.userDataPath)).toEqual([])
-    expect(listEnvironments(h.userDataPath)).toEqual([])
+    expect(await listEnvironments(h.userDataPath)).toEqual([])
     expect(h.store.getRepos()).toEqual([expect.objectContaining({ id: 'repo-1' })])
   })
 
@@ -107,6 +108,6 @@ describe('releasing a setup the host never let this client reach', () => {
     await releaseUnreachableOrcadSetup({ ...h, targetId: TARGET.id })
 
     expect(getManagedOrcadFenceEnvironmentId(h.store.getSshTarget(TARGET.id))).toBe('env-1')
-    expect(listEnvironments(h.userDataPath)).toHaveLength(1)
+    expect(await listEnvironments(h.userDataPath)).toHaveLength(1)
   })
 })

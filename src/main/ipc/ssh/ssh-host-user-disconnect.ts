@@ -34,23 +34,23 @@ type RuntimeLayer = { userDataPath: string; invalidateTransport: InvalidateTrans
 
 const appUserDataPath = (): string => getAppEnvironment().getPath('userData')
 
-function environmentsReachedThrough(
+async function environmentsReachedThrough(
   userDataPath: string,
   targetId: string
-): KnownRuntimeEnvironment[] {
-  return listEnvironments(userDataPath).filter(
+): Promise<KnownRuntimeEnvironment[]> {
+  return (await listEnvironments(userDataPath)).filter(
     (environment) => getRuntimeSshAccess(environment)?.sshTargetId === targetId
   )
 }
 
-export function disconnectRuntimeEnvironmentForUser(
+export async function disconnectRuntimeEnvironmentForUser(
   environmentId: string,
   { userDataPath, invalidateTransport }: RuntimeLayer
-): void {
+): Promise<void> {
   markRuntimeEnvironmentManuallyDisconnected(environmentId)
   void invalidateTransport(environmentId)
   // Retain disconnected evidence for renderers that missed the teardown event.
-  getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
+  await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
 }
 
 export async function disconnectSshHostForUser(
@@ -60,7 +60,7 @@ export async function disconnectSshHostForUser(
   // Fence status probes and reserve teardown synchronously so later Connect queues behind it.
   recordSshUserDisconnected(targetId)
   const userDataPath = runtimeLayer?.userDataPath ?? appUserDataPath()
-  const environments = environmentsReachedThrough(userDataPath, targetId).filter(
+  const environments = (await environmentsReachedThrough(userDataPath, targetId)).filter(
     (environment) => !isRuntimeEnvironmentManuallyDisconnected(environment.id)
   )
   environments.forEach((environment) => markRuntimeEnvironmentManuallyDisconnected(environment.id))
@@ -74,7 +74,10 @@ export async function disconnectSshHostForUser(
     for (const environment of environments) {
       // A Connect during the import already lifted this server; tearing it down would undo that.
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        disconnectRuntimeEnvironmentForUser(environment.id, { userDataPath, invalidateTransport })
+        await disconnectRuntimeEnvironmentForUser(environment.id, {
+          userDataPath,
+          invalidateTransport
+        })
       }
     }
   }
@@ -106,48 +109,55 @@ export async function liftSshUserDisconnectForEnvironment(
 }
 
 /** Update, Recover and like actions lift what Connect lifts but dial the host themselves, skipping Connect's server-update check. Returns the servers to resume afterwards. */
-export function liftUserHoldsForServerAction(environment: KnownRuntimeEnvironment): string[] {
+export async function liftUserHoldsForServerAction(
+  environment: KnownRuntimeEnvironment
+): Promise<string[]> {
   const lifted = isRuntimeEnvironmentManuallyDisconnected(environment.id) ? [environment.id] : []
   clearRuntimeEnvironmentManualDisconnect(environment.id)
   noteRuntimeEnvironmentConnectRequested(environment.id)
   clearSshCredentialDeclinedForEnvironment(environment)
   const targetId = getRuntimeSshAccess(environment)?.sshTargetId
-  return targetId ? [...new Set([...lifted, ...liftSshHostUserDisconnect(targetId)])] : lifted
+  return targetId
+    ? [...new Set([...lifted, ...(await liftSshHostUserDisconnect(targetId))])]
+    : lifted
 }
 
-let launchReconnectOptOutsHeld = false
+let launchReconnectOptOutsHeld: Promise<void> | undefined
 
 /** Opted-out hosts start each launch as if the user had disconnected them: nothing dials them, servers included, until Connect. Once per process, before server status probes start. */
-export function holdLaunchReconnectOptOuts(
+export async function holdLaunchReconnectOptOuts(
   targets: readonly Pick<SshTarget, 'id' | 'label' | 'reconnectOnLaunch'>[],
   userDataPath: string = appUserDataPath()
-): void {
-  if (launchReconnectOptOutsHeld) {
-    return
-  }
-  launchReconnectOptOutsHeld = true
-  for (const target of targets) {
-    if (target.reconnectOnLaunch !== false) {
-      continue
+): Promise<void> {
+  return (launchReconnectOptOutsHeld ??= (async () => {
+    const held = targets.filter((target) => target.reconnectOnLaunch === false)
+    held.forEach((target) => recordSshUserDisconnected(target.id))
+    if (held.length === 0) {
+      return
     }
-    recordSshUserDisconnected(target.id)
-    for (const environment of environmentsReachedThrough(userDataPath, target.id)) {
-      markRuntimeEnvironmentManuallyDisconnected(
-        environment.id,
-        `Reconnect on launch is off for ${target.label}. Connect to resume.`
-      )
+    const environments = await listEnvironments(userDataPath)
+    const byTarget = new Map(held.map((target) => [target.id, target]))
+    for (const environment of environments) {
+      const targetId = getRuntimeSshAccess(environment)?.sshTargetId
+      const target = targetId ? byTarget.get(targetId) : undefined
+      if (target && isSshUserDisconnected(target.id)) {
+        markRuntimeEnvironmentManuallyDisconnected(
+          environment.id,
+          `Reconnect on launch is off for ${target.label}. Connect to resume.`
+        )
+      }
     }
-  }
+  })())
 }
 
 export function resetLaunchReconnectOptOutsForTests(): void {
-  launchReconnectOptOutsHeld = false
+  launchReconnectOptOutsHeld = undefined
 }
 
 /** Stop and remove persists across reloads and restarts: automatic dials must not deploy a new server. */
-export function isManagedServerRemovalHeld(
+export async function isManagedServerRemovalHeld(
   target: Pick<SshTarget, 'managedServerRemoved' | 'orcadFence'> | undefined
-): boolean {
+): Promise<boolean> {
   if (!target?.managedServerRemoved) {
     return false
   }
@@ -155,19 +165,21 @@ export function isManagedServerRemovalHeld(
   const environmentId = getManagedOrcadFenceEnvironmentId(target)
   return (
     !environmentId ||
-    !listEnvironments(appUserDataPath()).some((environment) => environment.id === environmentId)
+    !(await listEnvironments(appUserDataPath())).some(
+      (environment) => environment.id === environmentId
+    )
   )
 }
 
 /** Explicit host Connect lifts its servers; resume their status checks only after connection settles. */
-export function liftSshHostUserDisconnect(targetId: string): string[] {
+export async function liftSshHostUserDisconnect(targetId: string): Promise<string[]> {
   clearSshUserDisconnected(targetId)
   const registry = getSshTargetRegistryStore()
   if (registry?.getTarget(targetId)?.managedServerRemoved) {
     registry.updateTarget(targetId, { managedServerRemoved: undefined })
   }
   const lifted: string[] = []
-  for (const environment of environmentsReachedThrough(appUserDataPath(), targetId)) {
+  for (const environment of await environmentsReachedThrough(appUserDataPath(), targetId)) {
     if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       lifted.push(environment.id)
@@ -177,10 +189,12 @@ export function liftSshHostUserDisconnect(targetId: string): string[] {
 }
 
 /** Resume after connect to avoid status probes racing it for the same SSH host. */
-export function resumeRuntimeEnvironmentStatus(environmentIds: readonly string[]): void {
+export async function resumeRuntimeEnvironmentStatus(
+  environmentIds: readonly string[]
+): Promise<void> {
   for (const environmentId of environmentIds) {
     if (!isRuntimeEnvironmentManuallyDisconnected(environmentId)) {
-      getRuntimeEnvironmentStatusOwner(appUserDataPath(), environmentId).activate()
+      ;(await getRuntimeEnvironmentStatusOwner(appUserDataPath(), environmentId)).activate()
     }
   }
 }

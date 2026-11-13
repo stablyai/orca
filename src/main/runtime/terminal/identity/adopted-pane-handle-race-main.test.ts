@@ -49,7 +49,7 @@ it('gives a restored pane one handle: none before its adoption registers, then t
     getForegroundProcess: async () => null,
     listProcesses: async () => [{ id: PTY, cwd: TEST_WORKTREE_PATH, title: 'sh' }]
   })
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
 
   // Adopted starts can create the record before handle registration.
   runtime['getOrCreatePtyWorktreeRecord'](PTY)

@@ -65,7 +65,7 @@ export async function readFederatedFleetSnapshots(args: {
     const cache = getOrchestrationPeerCapabilityCache(args.runtime)
     let observedCapabilityEpoch: string | null = null
     try {
-      const server = resolvePinnedFederatedServer(args.runtime, first)
+      const server = await resolvePinnedFederatedServer(args.runtime, first)
       // Shipped hosts serve this method without advertising it.
       const known = cache.knownSupport(
         first.peer_fingerprint,

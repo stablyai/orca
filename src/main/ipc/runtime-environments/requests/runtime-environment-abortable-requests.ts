@@ -2,6 +2,7 @@ import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type {
+  RuntimeRequestGuard,
   RuntimeRequestPreparation,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -19,9 +20,10 @@ export function sendRemoteRuntimeRequestAbortable(
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
-  prepareRequest?: RuntimeRequestPreparation
+  prepareRequest?: RuntimeRequestPreparation,
+  prepareGuard?: RuntimeRequestGuard
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal || clientCapabilities.length > 0 || prepareRequest) {
+  if (signal || clientCapabilities.length > 0 || prepareRequest || prepareGuard) {
     return sendRemoteRuntimeRequestOnSocket(
       connection,
       method,
@@ -32,7 +34,9 @@ export function sendRemoteRuntimeRequestAbortable(
       signal,
       clientCapabilities,
       undefined,
-      prepareRequest ? prepareRequest : undefined
+      prepareRequest,
+      undefined,
+      prepareGuard
     )
   }
   return envelope
@@ -90,9 +94,10 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
-  prepareRequest?: RuntimeRequestPreparation
+  prepareRequest?: RuntimeRequestPreparation,
+  prepareGuard?: RuntimeRequestGuard
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal || prepareRequest) {
+  if (signal || prepareRequest || prepareGuard) {
     return sendRemoteRuntimeSharedControlRequest(
       environmentId,
       connection,
@@ -101,7 +106,8 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
       timeoutMs,
       envelope,
       signal,
-      ...(prepareRequest ? ([prepareRequest] as const) : [])
+      prepareRequest,
+      prepareGuard
     )
   }
   return envelope

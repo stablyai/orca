@@ -222,7 +222,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           if (automatic && isWorktreeTerminalsSleepingError(err)) {
             // The host may sleep this worktree while the probe waits for its spawn lock.
             return this.applyMobileSessionTabNavigation(
-              this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+              await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
                 includeAgentSenders: opts.includeAgentSenders
               }),
               tab.id,
@@ -236,7 +236,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           recordShownTerminalUserOpen(this, worktreeId, tab.id)
         }
         const activated = this.applyMobileSessionTabNavigation(
-          this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
             includeAgentSenders: opts.includeAgentSenders
           }),
           tab.id,
@@ -245,7 +245,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         )
         return startupCwdFallback ? { ...activated, startupCwdFallback } : activated
       }
-      const callerSnapshot = this.getMobileSessionTabsForWorktree(
+      const callerSnapshot = await this.getMobileSessionTabsForWorktree(
         worktreeId,
         opts.clientNavigationId,
         { includeAgentSenders: false }
@@ -279,7 +279,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         this.notifier?.focusTerminal?.(targetTab.parentTabId, worktreeId, targetTab.leafId)
       }
       return this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+        await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
           includeAgentSenders: opts.includeAgentSenders
         }),
         targetTab.id,
@@ -300,7 +300,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       }
     }
     return this.applyMobileSessionTabNavigation(
-      this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+      await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
         includeAgentSenders: opts.includeAgentSenders
       }),
       tab.id,

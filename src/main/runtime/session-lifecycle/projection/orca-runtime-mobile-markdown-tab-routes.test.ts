@@ -86,7 +86,7 @@ async function runtimeOnHost(
 ): Promise<Runtime> {
   const harness = makeRuntimeStoreWithWorkspaceSession(session)
   const runtime = new OrcaRuntimeService(harness.runtimeStore)
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
   const target = await runtime.resolveRuntimeFileTarget(`id:${TEST_WORKTREE_ID}`)
   vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue({
@@ -124,7 +124,7 @@ async function desktopOnServer(
   const serverForwards = vi.spyOn(server, 'callOrchestrationWorkerServer')
   const desktop = await runtimeOnHost('runtime:env-a')
   const pairing = { revision: PAIRING_REVISION }
-  vi.spyOn(desktop, 'resolveOrchestrationWorkerServer').mockImplementation(() => ({
+  vi.spyOn(desktop, 'resolveOrchestrationWorkerServer').mockImplementation(async () => ({
     environmentId: 'env-a',
     name: 'env-a',
     peerFingerprint: 'peer',
@@ -310,11 +310,11 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
   }
 
   // Main-owned layout reads host partitions, so fixtures must list them like Store.
-  function runtimeWithWindowTabs(
+  async function runtimeWithWindowTabs(
     tabs: RuntimeMobileSessionMarkdownTab[],
     session = sessionWithReadme(),
     ownerHostId: 'local' | 'ssh:ssh-1' = 'local'
-  ): Runtime {
+  ): Promise<Runtime> {
     const harness = makeRuntimeStoreWithWorkspaceSession(withSavedEditorTabs(session), ownerHostId)
     const repo = { ...store.getRepos()[0]!, executionHostId: ownerHostId }
     const runtime = new OrcaRuntimeService({
@@ -324,7 +324,7 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
       getWorkspaceSessionHostIds: () => [ownerHostId]
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -343,7 +343,7 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
   }
 
   it('reads an untitled tab read-only and never saves it', async () => {
-    const runtime = runtimeWithWindowTabs([windowTab({ isUntitled: true, isDirty: true })])
+    const runtime = await runtimeWithWindowTabs([windowTab({ isUntitled: true, isDirty: true })])
     await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
     await expect(
@@ -367,7 +367,7 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
 
   it('never makes the file of an untitled tab that has none on disk', async () => {
     const untitled = join(root, 'untitled.md')
-    const runtime = runtimeWithWindowTabs(
+    const runtime = await runtimeWithWindowTabs(
       [
         windowTab({
           id: untitled,

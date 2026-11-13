@@ -13,7 +13,7 @@ export async function revealPairedTerminalOnLocalDesktop(
     return false
   }
   try {
-    const environment = resolveEnvironment(client.userDataPath, client.environmentSelector)
+    const environment = await resolveEnvironment(client.userDataPath, client.environmentSelector)
     const { terminal } = (
       await client.call<{ terminal: RuntimeTerminalShow }>('terminal.show', { terminal: handle })
     ).result

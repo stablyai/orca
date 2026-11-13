@@ -184,7 +184,7 @@ describe('mobile relay host catalog', () => {
     state.retire('env')
     answerFetch(psReply([{ worktreeId: 'w', hostId: 'local' }]))
     await expect(rows).resolves.toEqual({ worktrees: null })
-    expect(hostCatalog.list().hosts).toEqual([])
+    expect((await hostCatalog.list()).hosts).toEqual([])
     state.environments = [{ ...removed[0]!, snapshot: snapshot('env', 'unreachable') }]
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({ worktrees: null })
   })

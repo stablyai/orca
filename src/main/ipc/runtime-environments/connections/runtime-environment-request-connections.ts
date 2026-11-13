@@ -1,14 +1,26 @@
+export {
+  getRuntimeEnvironmentStatusOwner,
+  withRuntimeEnvironmentStatusOwner,
+  resetRuntimeEnvironmentStatusOwners,
+  getRuntimeEnvironmentStatusSnapshot,
+  getRuntimeEnvironmentStatusSnapshots
+} from '../status/runtime-environment-status-owner-registry'
+import {
+  getOwnedRuntimeEnvironmentStatusOwner,
+  retireRuntimeEnvironmentStatusOwner
+} from '../status/runtime-environment-status-owner-registry'
+
+export { isRemoteRuntimeConnectionReady } from './runtime-environment-connection-readiness'
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
 import type { RuntimeEnvironmentCall } from '../requests/runtime-environment-call'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeHostStatusOwner } from '../../../../shared/remote-runtime/host-status/runtime-host-status-owner'
+
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
-import { createRuntimeEnvironmentStatusOwner } from '../status/runtime-environment-status-owner'
+
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestGuard,
   RuntimeRequestPreparation,
   RuntimeRpcResponse
 } from '../../../../shared/runtime-rpc-envelope'
@@ -44,73 +56,8 @@ type CachedSharedControlConnection = {
   answeredAt: () => number | null
 }
 
-const requestConnections = new Map<string, CachedRuntimeConnection>()
-const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
-const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
-
-/** Consult owned authenticated transports without acquiring another host channel. */
-export function isRemoteRuntimeConnectionReady(
-  environmentId: string,
-  pairedConnection: PairedRuntimeConnection
-): boolean {
-  const pairingKey = getPairingKey(pairedConnection)
-  return [sharedControlConnections.get(environmentId), requestConnections.get(environmentId)].some(
-    (cached) => cached?.pairingKey === pairingKey && cached.connection.isReady()
-  )
-}
-
-export function getRuntimeEnvironmentStatusOwner(
-  userDataPath: string,
-  selector: string
-): RuntimeHostStatusOwner {
-  const environment = resolveEnvironment(userDataPath, selector)
-  const pairedConnection = getPreferredPairedRuntimeConnection(environment)
-  const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairedConnection)}`
-  let cached = statusOwners.get(environment.id)
-  if (!cached || cached.key !== key || cached.owner.read().retired) {
-    if (cached) {
-      closeRemoteRuntimeRequestConnection(environment.id)
-    }
-    const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, {
-      isReady: () => getRemoteRuntimeSharedControlDiagnostics(environment.id)?.state === 'ready',
-      request: (signal) =>
-        sendRemoteRuntimeSharedControlRequest<RuntimeStatus>(
-          environment.id,
-          pairedConnection,
-          'status.get',
-          undefined,
-          15_000,
-          undefined,
-          signal
-        ),
-      establish: () => {
-        ensureRemoteRuntimeSharedControlConnection(environment.id, pairedConnection)
-        reconnectRemoteRuntimeSharedControlConnection(environment.id)
-      },
-      pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
-    })
-    cached = { key, owner }
-    statusOwners.set(environment.id, cached)
-    if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-      owner.dispose()
-    }
-  }
-  return cached.owner
-}
-
-export function resetRuntimeEnvironmentStatusOwners(): void {
-  for (const id of statusOwners.keys()) {
-    closeRemoteRuntimeRequestConnection(id)
-  }
-}
-
-export function getRuntimeEnvironmentStatusSnapshot(environmentId: string) {
-  return statusOwners.get(environmentId)?.owner.read() ?? null
-}
-
-export function getRuntimeEnvironmentStatusSnapshots() {
-  return [...statusOwners.values()].map(({ owner }) => owner.read())
-}
+export const requestConnections = new Map<string, CachedRuntimeConnection>()
+export const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
 
 export function sendRemoteRuntimeConnectionRequest<TResult>(
   environmentId: string,
@@ -137,9 +84,7 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
 }
 
 export function closeRemoteRuntimeRequestConnection(environmentId: string): void {
-  const status = statusOwners.get(environmentId)
-  statusOwners.delete(environmentId)
-  status?.owner.dispose()
+  retireRuntimeEnvironmentStatusOwner(environmentId)
   const cached = requestConnections.get(environmentId)
   requestConnections.delete(environmentId)
   cached?.connection.close()
@@ -154,10 +99,14 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
-  prepareRequest?: RuntimeRequestPreparation
+  prepareRequest?: RuntimeRequestPreparation,
+  prepareGuard?: RuntimeRequestGuard
 ): Promise<RuntimeRpcResponse<TResult>> {
   const connection = getSharedControlConnection(environmentId, pairedConnection)
-  return connection.request(method, params, timeoutMs, envelope, signal, { prepareRequest })
+  return connection.request(method, params, timeoutMs, envelope, signal, {
+    prepareRequest,
+    prepareGuard
+  })
 }
 
 /** Send only on the shared socket that proved expectedRuntimeId; return null if it changed or is unproven. */
@@ -194,7 +143,7 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
       call.timeoutMs,
       call.envelope,
       call.signal,
-      { beforeSend, prepareRequest: call.prepareRequest }
+      { beforeSend, prepareRequest: call.prepareRequest, prepareGuard: call.prepareGuard }
     )
   } catch (error) {
     if (socketChanged) {
@@ -284,8 +233,8 @@ function getSharedControlConnection(
         // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
         appHeartbeat: {},
         // R39: every ready socket, including after a reconnect, re-declares this installation.
-        onReady: () =>
-          declareWslHostClient(environmentId, (method, params, timeoutMs) =>
+        onReady: async () =>
+          await declareWslHostClient(environmentId, (method, params, timeoutMs) =>
             connection.request(method, params, timeoutMs)
           ),
         // Wall-clock time includes suspend, expiring pre-sleep answers.
@@ -302,16 +251,14 @@ function getSharedControlConnection(
             diagnostics
           })
           noteRuntimeEnvironmentSharedControlContact(environmentId, diagnostics)
-          statusOwners
-            .get(environmentId)
-            ?.owner.connectionChanged(
-              diagnostics.state === 'ready'
-                ? 'ready'
-                : diagnostics.state === 'closed' || diagnostics.state === 'reconnecting'
-                  ? 'disconnected'
-                  : 'connecting',
-              diagnostics
-            )
+          getOwnedRuntimeEnvironmentStatusOwner(environmentId)?.connectionChanged(
+            diagnostics.state === 'ready'
+              ? 'ready'
+              : diagnostics.state === 'closed' || diagnostics.state === 'reconnecting'
+                ? 'disconnected'
+                : 'connecting',
+            diagnostics
+          )
         }
       })
     cached = { pairingKey, answeredAt: () => answeredAt, connection }

@@ -94,12 +94,12 @@ describe('a chat tab across /clear', () => {
       (tab) => tab.type === 'agent-session' && tab.sessionId === HOST_TEST_SESSION
     )!
     const other = before.tabs.find((tab) => tab.id !== target.id)!
-    runtime.selectCreatedMobileSessionTabForClient(
+    await runtime.selectCreatedMobileSessionTabForClient(
       before.worktree,
       { sessionId: 'session-other' },
       callerId
     )
-    runtime.selectCreatedMobileSessionTabForClient(
+    await runtime.selectCreatedMobileSessionTabForClient(
       before.worktree,
       { sessionId: 'session-other' },
       bystanderId

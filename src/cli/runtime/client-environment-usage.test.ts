@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import type * as nodeFs from 'node:fs'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -59,7 +60,7 @@ posixIt('returns remote replies when the saved environment store cannot be updat
     publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
     scope: 'runtime'
   })
-  addEnvironmentFromPairingCode(root, { name: 'workstation', pairingCode })
+  await addEnvironmentFromPairingCode(root, { name: 'workstation', pairingCode })
   mocks.state.unownedPath = root
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   mocks.remote.mockResolvedValue(success({ server: 'remote' }))

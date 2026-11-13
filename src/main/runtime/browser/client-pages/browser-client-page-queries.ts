@@ -103,7 +103,7 @@ export class BrowserClientPageQueries {
     const page = selected ? pages.getPage(selected.browserPageId) : undefined
     if (page) {
       pages.activatePage(page.browserPageId, page.placement)
-      publishSwitchedBrowserSessionTab(this.host, {
+      await publishSwitchedBrowserSessionTab(this.host, {
         placementKind: 'client',
         browserPageId: page.browserPageId,
         worktreeId: page.workspaceId,

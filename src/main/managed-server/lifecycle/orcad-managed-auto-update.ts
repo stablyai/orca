@@ -39,7 +39,7 @@ export function isWaitingOrcadUpdateDeferral(code: string): boolean {
   return WAITING_CODES.has(code)
 }
 
-export function autoUpdateManagedOrcadEnvironment(
+export async function autoUpdateManagedOrcadEnvironment(
   userDataPath: string,
   args: {
     environmentId: string
@@ -49,7 +49,7 @@ export function autoUpdateManagedOrcadEnvironment(
     onUpdating: () => void
   }
 ): Promise<ManagedOrcadAutoUpdateOutcome> {
-  return withManagedOrcadLifecycle(userDataPath, args.environmentId, async (managed) => {
+  return await withManagedOrcadLifecycle(userDataPath, args.environmentId, async (managed) => {
     // Restarting during migration would race cutover staging.
     if (findIncompleteManagedOrcadMigration(userDataPath, managed.environment.id)) {
       return { outcome: 'skipped', reason: 'migrating' }

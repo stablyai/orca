@@ -2,7 +2,7 @@ import WebSocket from 'ws'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { SharedControlAppHeartbeat } from './remote-runtime-shared-control-app-heartbeat'
-import { isRetryHeld } from './remote-runtime-shared-control-hold'
+import { prepareRetryHold } from './remote-runtime-shared-control-hold'
 import type {
   RemoteRuntimeSharedControlConnectionOptions,
   SharedControlConnectionState,
@@ -46,7 +46,7 @@ export class SharedControlReadinessTimer {
       | 'readyDeadlineMs'
       | 'appHeartbeat'
       | 'isManuallyDisconnected'
-      | 'isAsleep'
+      | 'prepareSleepCheck'
     >,
     private readonly args: {
       getState: () => SharedControlConnectionState
@@ -65,7 +65,10 @@ export class SharedControlReadinessTimer {
             // clear() stops the heartbeat whenever the socket changes, so only readiness needs checking.
             isCurrent: () => args.getState() === 'ready',
             // The same hold that stops reconnects: a disconnected or sleeping host is never probed.
-            shouldProbe: () => !isRetryHeld(options),
+            shouldProbe: async () => {
+              const held = await prepareRetryHold(options)
+              return () => !held()
+            },
             onUnresponsive: (generation) =>
               args.retire(
                 remoteRuntimeUnavailableError(

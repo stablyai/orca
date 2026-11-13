@@ -303,9 +303,9 @@ export class RpcDispatcher {
       context.orchestrationCaller
     )
     if (request.method.startsWith('orchestration.')) {
-      queueMicrotask(() => {
+      queueMicrotask(async () => {
         try {
-          runtime.refreshAgentSenderAssociations?.()
+          await runtime.refreshAgentSenderAssociations?.()
         } catch (error) {
           console.warn('[runtime] Sender identity publication failed', error)
         }

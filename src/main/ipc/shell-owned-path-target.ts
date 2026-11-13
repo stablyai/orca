@@ -47,7 +47,7 @@ export async function resolveOwnedPathTarget(
   if (isLocallyOwned(ownerHostId)) {
     return validateLocalPathTarget(pathValue)
   }
-  const access = resolveWindowsPathAccess(ownerHostId)
+  const access = await resolveWindowsPathAccess(ownerHostId)
   if (!access) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }

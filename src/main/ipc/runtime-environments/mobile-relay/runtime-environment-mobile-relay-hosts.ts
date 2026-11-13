@@ -1,3 +1,4 @@
+import { describePairedServerHosts } from '../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import {
   pairedRuntimeBrowserClientHostId,
   pairedRuntimeBrowserClientHostsPage
@@ -25,6 +26,7 @@ import { wslHostsGateOpen } from '../../../wsl/host-lifecycle/wsl-host-gate'
 import type { WslHostPhoneReach } from '../../../wsl/host-lifecycle/wsl-host-phone-reach'
 import {
   getWslHostPhoneGate,
+  getWslHostService,
   onWslHostStatusesChanged
 } from '../../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -66,13 +68,13 @@ const PHONE_CALL_PREPARATION: ManagedRuntimeCallPreparation = {
 }
 
 /** Servers a phone may reach, each with its WSL host reach (null for any other server). */
-function listRelayableEnvironments(
+async function listRelayableEnvironments(
   userDataPath: string
-): { environment: KnownRuntimeEnvironment; reach: WslHostPhoneReach | null }[] {
+): Promise<{ environment: KnownRuntimeEnvironment; reach: WslHostPhoneReach | null }[]> {
   // One records read per list: the phone polls it every few seconds.
-  const wslReaches = wslHostsGateOpen() ? getWslHostPhoneGate()?.reachAll() : undefined
+  const wslReaches = wslHostsGateOpen() ? await getWslHostPhoneGate()?.reachAll() : undefined
   const relayable: { environment: KnownRuntimeEnvironment; reach: WslHostPhoneReach | null }[] = []
-  for (const environment of listEnvironments(userDataPath)) {
+  for (const environment of await listEnvironments(userDataPath)) {
     const reach =
       classifyRuntimeEnvironmentHost(environment).kind === 'wsl'
         ? (wslReaches?.get(environment.id) ?? 'hidden')
@@ -99,8 +101,8 @@ function desktopWslHostFlags(reach: WslHostPhoneReach | null): {
 export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHosts {
   const userDataPath = getRuntimeEnvironmentRegistryRoot()
   return {
-    list: () => {
-      const relayable = listRelayableEnvironments(userDataPath)
+    list: async () => {
+      const relayable = await listRelayableEnvironments(userDataPath)
       const environments = relayable.map(({ environment }) => environment)
       const reachById = new Map(relayable.map(({ environment, reach }) => [environment.id, reach]))
       const statusByEnvironmentId = new Map<string, RuntimeEnvironmentStatus>()
@@ -142,7 +144,7 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
     },
     resolve: async (environmentId, openingMethod, signal) => {
       if (
-        !listRelayableEnvironments(userDataPath).some(
+        !(await listRelayableEnvironments(userDataPath)).some(
           ({ environment }) => environment.id === environmentId
         )
       ) {
@@ -183,7 +185,8 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
             : {})
         }
       ),
-    serverStateForOpening: (environmentId) => recipeVmServerState(userDataPath, environmentId),
+    serverStateForOpening: async (environmentId) =>
+      await recipeVmServerState(userDataPath, environmentId),
     userDisconnects: runtimeEnvironmentManualDisconnectCount,
     hostsBrowserPage: pairedRuntimeBrowserClientHostsPage,
     browserHostClientId: pairedRuntimeBrowserClientHostId,
@@ -201,8 +204,26 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
     },
     // A WSL host's reach (hidden, stopped, ready) is part of its listing too.
     onStatusChanged: (listener) => {
-      const stopStatus = onRuntimeEnvironmentStatusPublished(listener)
-      const stopWsl = onWslHostStatusesChanged(listener)
+      const stopStatus = onRuntimeEnvironmentStatusPublished((snapshot) => {
+        const health = describePairedServerHosts({
+          environments: [{ id: snapshot.environmentId }],
+          statusByEnvironmentId: new Map([
+            [snapshot.environmentId, runtimeEnvironmentStatusFromSnapshot(snapshot)]
+          ]),
+          sshTargetLabels: new Map(),
+          sshConnectionStates: new Map(),
+          hostLabelOverrides: new Map()
+        })[0]?.health
+        listener({ environmentId: snapshot.environmentId, inContact: health === 'available' })
+      })
+      const stopWsl = onWslHostStatusesChanged(() => {
+        for (const status of getWslHostService()?.getStatuses() ?? []) {
+          if (status.state !== 'ready') {
+            listener({ environmentId: status.environmentId, inContact: false })
+          }
+        }
+        listener()
+      })
       return () => {
         stopStatus()
         stopWsl()
@@ -211,18 +232,18 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
     // Its own watch: serve has no window, so the renderer catalog broadcast never runs there.
     onCatalogChanged: (listener) =>
       watchRuntimeEnvironmentRegistry(userDataPath, listener, 'Phone server list'),
-    watchChanges: (host, expected, callbacks) =>
-      watchRuntimeEnvironmentChanges(userDataPath, host.environmentId, expected, callbacks)
+    watchChanges: async (host, expected, callbacks) =>
+      await watchRuntimeEnvironmentChanges(userDataPath, host.environmentId, expected, callbacks)
   }
 }
 
 /** Main's own client-event stream to one server, bound to the transport and pairing it opened on. */
-function watchRuntimeEnvironmentChanges(
+async function watchRuntimeEnvironmentChanges(
   userDataPath: string,
   environmentId: string,
   expected: { pairingRevision: number; runtimeId: string | null },
   callbacks: Parameters<MobileDesktopRelayHosts['watchChanges']>[2]
-): MobileDesktopRelayHostWatch {
+): Promise<MobileDesktopRelayHostWatch> {
   const controller = new AbortController()
   let subscription: RemoteRuntimeTransportSubscription | null = null
   const generation = getRuntimeEnvironmentTransportGeneration(environmentId)
@@ -239,7 +260,7 @@ function watchRuntimeEnvironmentChanges(
       callbacks.onClose()
     }
   }
-  const environment = listRelayableEnvironments(userDataPath).find(
+  const environment = (await listRelayableEnvironments(userDataPath)).find(
     (entry) => entry.environment.id === environmentId
   )?.environment
   if (

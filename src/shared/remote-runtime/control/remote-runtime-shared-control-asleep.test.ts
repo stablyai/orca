@@ -20,7 +20,7 @@ describe('shared-control while the server VM is asleep', () => {
     const server = await createSharedControlTestServer()
     let asleep = false
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
-      isAsleep: () => asleep
+      prepareSleepCheck: () => () => asleep
     })
     await connection.request('worktree.ps', undefined, 1_000)
     expect(server.connectionCount()).toBe(1)
@@ -50,7 +50,7 @@ describe('shared-control while the server VM is asleep', () => {
     const server = await createSharedControlTestServer()
     let asleep = false
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
-      isAsleep: () => asleep
+      prepareSleepCheck: () => () => asleep
     })
     await connection.request('worktree.ps', undefined, 1_000)
 
@@ -61,6 +61,51 @@ describe('shared-control while the server VM is asleep', () => {
 
     expect(server.connectionCount()).toBe(1)
     expect(connection.getDiagnostics().state).toBe('closed')
+    connection.close()
+  })
+
+  it('retires a delayed open on close and never dials from its late answer', async () => {
+    const server = await createSharedControlTestServer()
+    let release!: (check: () => boolean) => void
+    const check = new Promise<() => boolean>((resolve) => {
+      release = resolve
+    })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      prepareSleepCheck: () => check
+    })
+    const request = connection.request('repo.list', undefined, 1_000)
+    const rejected = expect(request).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+    connection.close()
+    release(() => false)
+    await rejected
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(server.connectionCount()).toBe(0)
+  })
+
+  it('keeps a shared delayed open when just one caller cancels', async () => {
+    const server = await createSharedControlTestServer()
+    let release!: (check: () => boolean) => void
+    const check = new Promise<() => boolean>((resolve) => {
+      release = resolve
+    })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      prepareSleepCheck: () => check
+    })
+    const controller = new AbortController()
+    const cancelled = connection.request(
+      'repo.list',
+      undefined,
+      1_000,
+      undefined,
+      controller.signal
+    )
+    const rejected = expect(cancelled).rejects.toThrow('cancelled')
+    const retained = connection.request('repo.list', undefined, 1_000)
+    controller.abort(new Error('cancelled'))
+    release(() => false)
+    await rejected
+    await expect(retained).resolves.toMatchObject({ ok: true })
+    expect(server.connectionCount()).toBe(1)
     connection.close()
   })
 })

@@ -310,8 +310,11 @@ describe('OrcaRuntimeService', () => {
     })
   })
   describe('stale terminal handle resolution (#7718)', () => {
-    function syncSingleTerminalGraph(runtime: OrcaRuntimeService, ptyId: string): void {
-      runtime.syncWindowGraph(1, {
+    async function syncSingleTerminalGraph(
+      runtime: OrcaRuntimeService,
+      ptyId: string
+    ): Promise<void> {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'tab-1',
@@ -372,7 +375,7 @@ describe('OrcaRuntimeService', () => {
     it('errors with terminal_handle_stale instead of adopting a replacement PTY', async () => {
       const runtime = new OrcaRuntimeService(store)
       runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
+      await syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
       const internals = runtime as unknown as {
@@ -392,7 +395,7 @@ describe('OrcaRuntimeService', () => {
     it('lets a handle issued before its first PTY adopt that PTY without erroring', async () => {
       const runtime = new OrcaRuntimeService(store)
       runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
+      await syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
       // A pre-spawn handle has no PTY yet; its first binding must still resolve.
@@ -427,7 +430,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -474,7 +477,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -507,7 +510,7 @@ describe('OrcaRuntimeService', () => {
           leafId: 'pane:1',
           ptyId: 'pty-stall'
         })
-        runtime.syncWindowGraph(1, {
+        await runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [
             {

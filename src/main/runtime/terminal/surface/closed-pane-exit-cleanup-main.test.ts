@@ -22,7 +22,7 @@ type Harness = ReturnType<typeof surfaceRuntime>
 type Runtime = Harness['runtime']
 
 /** The scenario's split tab, each pane bound to its terminal's incarnation, as a spawn commit leaves it. */
-function closingHost(host: Host): Harness & { reconciled: string[] } {
+async function closingHost(host: Host): Promise<Harness & { reconciled: string[] }> {
   const harness = surfaceRuntime()
   const { runtime, store, setSession } = harness
   setSession({
@@ -39,7 +39,7 @@ function closingHost(host: Host): Harness & { reconciled: string[] } {
   if (host === 'a window') {
     runtime.attachWindow(1)
   }
-  runtime.syncWindowGraph(host === 'a window' ? 1 : HEADLESS_RUNTIME_WINDOW_ID, {
+  await runtime.syncWindowGraph(host === 'a window' ? 1 : HEADLESS_RUNTIME_WINDOW_ID, {
     tabs: [],
     leaves: []
   })
@@ -91,7 +91,7 @@ const CLOSES = [
 for (const host of ['no window', 'a window'] as const) {
   for (const { route, close } of CLOSES) {
     it(`close then exit retires the pane's agent status and phone row: ${route}, with ${host}`, async () => {
-      const harness = closingHost(host)
+      const harness = await closingHost(host)
 
       await close(harness.runtime)
       expect(harness.store.getSession().closedTerminalPanesByPaneKey?.[PANE_B]).toMatchObject({
@@ -107,7 +107,7 @@ for (const host of ['no window', 'a window'] as const) {
     })
 
     it(`exit then close retires them too: ${route}, with ${host}`, async () => {
-      const harness = closingHost(host)
+      const harness = await closingHost(host)
 
       harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
       await close(harness.runtime).catch(() => {})
@@ -117,7 +117,7 @@ for (const host of ['no window', 'a window'] as const) {
     })
 
     it(`close, restart, then exit still finds the pane from disk: ${route}, with ${host}`, async () => {
-      const harness = closingHost(host)
+      const harness = await closingHost(host)
       await close(harness.runtime)
 
       // The relaunch reattaches the closed pane's live terminal; no pane holds it any more.
@@ -131,7 +131,7 @@ for (const host of ['no window', 'a window'] as const) {
       if (host === 'a window') {
         relaunched.attachWindow(1)
       }
-      relaunched.syncWindowGraph(host === 'a window' ? 1 : HEADLESS_RUNTIME_WINDOW_ID, {
+      await relaunched.syncWindowGraph(host === 'a window' ? 1 : HEADLESS_RUNTIME_WINDOW_ID, {
         tabs: [],
         leaves: []
       })
@@ -150,7 +150,7 @@ for (const host of ['no window', 'a window'] as const) {
     })
 
     it(`does not take the closed pane for a later incarnation of the id: ${route}, with ${host}`, async () => {
-      const harness = closingHost(host)
+      const harness = await closingHost(host)
       await close(harness.runtime)
       harness.runtime['terminalIdentity'].setPtyIncarnationId(
         harness.runtime['ptysById'].get('pty-b')!,

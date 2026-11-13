@@ -82,7 +82,7 @@ it('never probes an asleep host or a connection that did not opt in', async () =
   let sleeping = false
   const asleep = new RemoteRuntimeSharedControlConnection(server.pairing, {
     appHeartbeat: heartbeat,
-    isAsleep: () => sleeping
+    prepareSleepCheck: () => () => sleeping
   })
   const legacy = new RemoteRuntimeSharedControlConnection(server.pairing)
   await asleep.request('worktree.ps', undefined, 1000)

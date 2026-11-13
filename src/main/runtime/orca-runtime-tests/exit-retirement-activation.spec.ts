@@ -53,7 +53,7 @@ async function startSplitHost() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   const activate = (leafId: string, intent: 'user' | 'automatic') =>
     runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', leafId, {
       notifyClients: false,

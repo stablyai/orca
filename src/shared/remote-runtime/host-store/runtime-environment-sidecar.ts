@@ -1,8 +1,10 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
+import {
+  readEnvironmentRegistryFile,
+  invalidateEnvironmentStoreObservation
+} from './runtime-environment-store-observation'
 import { RuntimeEnvironmentReconciliationRecordSchema } from '../host-catalog/runtime-environment-reconciliation-record'
 import { readEnvironmentStoreRecords } from './runtime-environment-store-records'
 import {
@@ -15,7 +17,6 @@ import {
   type KnownRuntimeEnvironment,
   type PersistedRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
 
 // Shipped builds strip unknown environment fields on routine writes; preserve newer state in this untouched sidecar.
 const SIDECAR_FILE = 'orca-environment-sidecar.json'
@@ -92,13 +93,13 @@ export function runtimeEnvironmentSidecarBinding(environment: PersistedRuntimeEn
 
 export function readRuntimeEnvironmentSidecar(userDataPath: string): RuntimeEnvironmentSidecar {
   const path = getRuntimeEnvironmentSidecarPath(userDataPath)
-  if (!existsSync(path)) {
-    return { version: 1, entries: {}, unreadable: {} }
-  }
   let text: string
   try {
-    hardenExistingSecureFile(path)
-    text = readNodeFileSyncWithinLimit(path, MAX_SIDECAR_FILE_BYTES).buffer.toString('utf8')
+    const read = readEnvironmentRegistryFile(path, MAX_SIDECAR_FILE_BYTES)
+    if (!read) {
+      return { version: 1, entries: {}, unreadable: {} }
+    }
+    text = read.buffer.toString('utf8')
   } catch {
     throw new RuntimeEnvironmentSidecarInvalidError(path)
   }
@@ -255,6 +256,7 @@ export function writeRuntimeEnvironmentSidecarEntry(
         : {})
     })
   }
+  invalidateEnvironmentStoreObservation(getRuntimeEnvironmentSidecarPath(userDataPath))
   writeSecureJsonFileWithinLimit(
     getRuntimeEnvironmentSidecarPath(userDataPath),
     {

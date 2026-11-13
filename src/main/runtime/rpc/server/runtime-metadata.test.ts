@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import nacl from 'tweetnacl'
 import { chmodSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -79,13 +80,13 @@ describe('runtime metadata', () => {
 
   it.runIf(process.platform !== 'win32')(
     'uses hardened atomic writes for runtime credential stores on Unix',
-    () => {
+    async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-secure-files-'))
       tempDirs.push(userDataPath)
 
       new DeviceRegistry(userDataPath).addDevice('phone')
       loadOrCreateE2EEKeypair(userDataPath)
-      addEnvironmentFromPairingCode(userDataPath, {
+      await addEnvironmentFromPairingCode(userDataPath, {
         name: 'desk',
         pairingCode: encodePairingOffer({
           v: 2,
@@ -109,7 +110,7 @@ describe('runtime metadata', () => {
 
   it.runIf(process.platform !== 'win32')(
     'hardens existing runtime credential stores before reading them on Unix',
-    () => {
+    async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-existing-secure-files-'))
       tempDirs.push(userDataPath)
       const keyMaterial = Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
@@ -119,7 +120,7 @@ describe('runtime metadata', () => {
         deviceToken: 'device-token',
         publicKeyB64: keyMaterial
       })
-      const environment = addEnvironmentFromPairingCode(userDataPath, {
+      const environment = await addEnvironmentFromPairingCode(userDataPath, {
         name: 'desk',
         pairingCode
       })
@@ -157,7 +158,7 @@ describe('runtime metadata', () => {
         scope: 'mobile'
       })
       expect(loadOrCreateE2EEKeypair(userDataPath).publicKeyB64).toBe(storedPublicKeyB64)
-      expect(listEnvironments(userDataPath)[0]?.id).toBe(environment.id)
+      expect((await listEnvironments(userDataPath))[0]?.id).toBe(environment.id)
 
       for (const path of [devicesPath, keypairPath, environmentsPath]) {
         expect(statSync(path).mode & 0o777).toBe(0o600)

@@ -43,12 +43,7 @@ export type MobileDesktopRelayCallOptions = {
 
 export type MobileDesktopRelayHosts = {
   /** Last-known server statuses and SSH targets identifying their underlying hosts. */
-  list: () => {
-    environments: MobileDesktopRelayHostListing[]
-    statusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
-    sshTargetLabels: ReadonlyMap<string, string>
-    sshConnectionStates: ReadonlyMap<string, SshConnectionState>
-  }
+  list: () => MobileDesktopRelayListing | Promise<MobileDesktopRelayListing>
   /** Null when the id names no configured server; a phone-supplied endpoint is never used. */
   /** `openingMethod`: the request that needs the server, which may wake a recipe VM behind it. */
   resolve: (
@@ -57,7 +52,9 @@ export type MobileDesktopRelayHosts = {
     signal?: AbortSignal
   ) => Promise<MobileDesktopRelayHost | null>
   /** Where a recipe VM behind this server stands, for a request that opens a workspace. */
-  serverStateForOpening?: (environmentId: string) => 'up' | 'waking' | 'asleep'
+  serverStateForOpening?: (
+    environmentId: string
+  ) => 'up' | 'waking' | 'asleep' | Promise<'up' | 'waking' | 'asleep'>
   /** How many times the user has disconnected this server: a link still preparing when it changes
    *  must not open, even if something reconnected the server since. */
   userDisconnects?: (environmentId: string) => number
@@ -76,7 +73,9 @@ export type MobileDesktopRelayHosts = {
     enabled: boolean
   ) => Promise<BrowserPageCreationPlacement>
   onEnvironmentRetired: (listener: (environmentId: string) => void) => () => void
-  onStatusChanged: (listener: () => void) => () => void
+  onStatusChanged: (
+    listener: (contact?: { environmentId: string; inContact: boolean }) => void
+  ) => () => void
   /** The saved server list was edited (added, renamed, removed), here or by the CLI. */
   onCatalogChanged?: (listener: () => void) => () => void
   /** Windowless server events: onChange fires on ready, catalog changes and reconnect replay.
@@ -85,11 +84,18 @@ export type MobileDesktopRelayHosts = {
     host: Pick<MobileDesktopRelayHost, 'environmentId'>,
     expected: NonNullable<MobileDesktopRelayCallOptions['expected']>,
     callbacks: { onChange: (change: { catalog: boolean }) => void; onClose: () => void }
-  ) => MobileDesktopRelayHostWatch
+  ) => MobileDesktopRelayHostWatch | Promise<MobileDesktopRelayHostWatch>
 }
 
 export type MobileDesktopRelayHostWatch = {
   close: () => void
   /** False after close, stream end or transport replacement, even without onClose. */
   current: () => boolean
+}
+
+export type MobileDesktopRelayListing = {
+  environments: MobileDesktopRelayHostListing[]
+  statusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
+  sshTargetLabels: ReadonlyMap<string, string>
+  sshConnectionStates: ReadonlyMap<string, SshConnectionState>
 }

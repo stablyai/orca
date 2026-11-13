@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,8 +19,8 @@ vi.mock(
     return {
       ...actual,
       // E11 (#33843): `pendingStop` is optional until that PR lands, so the record gains it here.
-      findWslHostDeployment: (...args: Parameters<typeof actual.findWslHostDeployment>) => {
-        const record = actual.findWslHostDeployment(...args)
+      findWslHostDeployment: async (...args: Parameters<typeof actual.findWslHostDeployment>) => {
+        const record = await actual.findWslHostDeployment(...args)
         return record && removal.pending ? { ...record, pendingStop: { reason: 'x' } } : record
       }
     }
@@ -49,7 +50,7 @@ describe('the move driver reaching its WSL host', () => {
     await service.add({ distro: 'Ubuntu' })
     await connector.disconnect('Ubuntu')
     connector.distro.state = 'stopped'
-    service.handleConnectionChange('Ubuntu', null, {
+    await service.handleConnectionChange('Ubuntu', null, {
       state: 'distro-stopped',
       terminals: 'exited',
       recovering: false
@@ -72,7 +73,7 @@ describe('the move driver reaching its WSL host', () => {
 
   it("a user's move connects a parked host with no visible work (E9)", async () => {
     const { connector, service } = await stoppedAndParkedHost()
-    expect(service.hasUserVisibleWork('Ubuntu')).toBe(false)
+    expect(await service.hasUserVisibleWork('Ubuntu')).toBe(false)
     await expect(connectWslMoveHostService(service, userDataPath, 'Ubuntu', 'user')).resolves.toBe(
       true
     )

@@ -30,7 +30,14 @@ export function releaseDesktopActivationAfter<TArgs extends unknown[], TResult>(
 ): (...args: TArgs) => TResult {
   return (...args) => {
     const result = open(...args)
-    gate?.markReady()
+    if (result instanceof Promise) {
+      void result.then(
+        () => gate?.markReady(),
+        () => {}
+      )
+    } else {
+      gate?.markReady()
+    }
     return result
   }
 }

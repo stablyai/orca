@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,9 +38,9 @@ function sessionStore(hostIds: ExecutionHostId[]) {
 }
 
 describe('reconciling orphaned runtime sessions at startup', () => {
-  it('drops only runtime sessions whose server is gone, never local or ssh', () => {
+  it('drops only runtime sessions whose server is gone, never local or ssh', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-session-reconcile-'))
-    const kept = addEnvironmentFromPairingCode(userDataPath, {
+    const kept = await addEnvironmentFromPairingCode(userDataPath, {
       name: 'kept',
       pairingCode: pairingCode()
     })
@@ -49,23 +50,25 @@ describe('reconciling orphaned runtime sessions at startup', () => {
       `runtime:${kept.id}`,
       'runtime:removed-env'
     ])
-    expect(reconcileOrphanedRuntimeSessions(store, userDataPath)).toEqual(['runtime:removed-env'])
+    expect(await reconcileOrphanedRuntimeSessions(store, userDataPath)).toEqual([
+      'runtime:removed-env'
+    ])
   })
 
-  it('deletes nothing when the environment store is missing or unreadable', () => {
+  it('deletes nothing when the environment store is missing or unreadable', async () => {
     const missing = mkdtempSync(join(tmpdir(), 'orca-session-reconcile-missing-'))
     const store = sessionStore(['runtime:removed-env'])
-    expect(reconcileOrphanedRuntimeSessions(store, missing)).toEqual([])
+    expect(await reconcileOrphanedRuntimeSessions(store, missing)).toEqual([])
 
     const corrupt = mkdtempSync(join(tmpdir(), 'orca-session-reconcile-corrupt-'))
     writeFileSync(getEnvironmentStorePath(corrupt), '{not json', { mode: 0o600 })
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    expect(reconcileOrphanedRuntimeSessions(store, corrupt)).toEqual([])
+    expect(await reconcileOrphanedRuntimeSessions(store, corrupt)).toEqual([])
   })
 
-  it('keeps sessions of saved servers this build cannot read or currently hides', () => {
+  it('keeps sessions of saved servers this build cannot read or currently hides', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-session-reconcile-hidden-'))
-    const linked = addEnvironmentFromPairingCode(userDataPath, {
+    const linked = await addEnvironmentFromPairingCode(userDataPath, {
       name: 'linked',
       pairingCode: pairingCode()
     })
@@ -86,6 +89,8 @@ describe('reconciling orphaned runtime sessions at startup', () => {
       'runtime:removed-env'
     ])
 
-    expect(reconcileOrphanedRuntimeSessions(store, userDataPath)).toEqual(['runtime:removed-env'])
+    expect(await reconcileOrphanedRuntimeSessions(store, userDataPath)).toEqual([
+      'runtime:removed-env'
+    ])
   })
 })

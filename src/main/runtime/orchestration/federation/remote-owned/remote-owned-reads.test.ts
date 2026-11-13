@@ -35,7 +35,7 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockImplementation((selector) => {
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockImplementation(async (selector) => {
       if (selector !== SERVER.environmentId) {
         throw new OrchestrationError('server_not_found', `No server ${selector}.`)
       }

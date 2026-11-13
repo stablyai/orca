@@ -113,7 +113,7 @@ describe('orchestration worker-list pagination', () => {
     vi.spyOn(db, 'listFederatedDispatchesByIds').mockImplementation((dispatchIds) =>
       dispatchIds.includes('dispatch-z') ? [federatedDispatch('dispatch-z')] : []
     )
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment-remote',
       name: 'remote',
       peerFingerprint: 'peer-remote',

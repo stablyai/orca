@@ -40,6 +40,7 @@ import {
 } from './wsl-host-deployment-store'
 import { isWslHostsServing } from '../../wsl-host-internal-gate'
 import { createSecureFileContentCache } from './runtime-environment-store-read-cache'
+import { invalidateEnvironmentStoreObservation } from './runtime-environment-store-observation'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
@@ -96,8 +97,7 @@ export function readEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
 ): MergedEnvironmentStore {
-  // Windows hits must re-verify ACLs anyway, which costs as much as the read it would skip (measured).
-  if (options.requireStoreFile || options.recoverBlankStore || process.platform === 'win32') {
+  if (options.requireStoreFile || options.recoverBlankStore) {
     return readEnvironmentStoreUncached(userDataPath, options)
   }
   const storePath = getEnvironmentStorePath(userDataPath)
@@ -193,6 +193,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   const path = getEnvironmentStorePath(userDataPath)
   const environments = RuntimeEnvironmentStoreSchema.parse(store).environments
   // The new registry replaces a blank file in one atomic write, so no reader sees it emptied early.
+  invalidateEnvironmentStoreObservation(path)
   const onDisk = readEnvironmentStoreRecords(userDataPath, { recoverBlankStore: true })
   const readableIds = new Set(onDisk.environments.map((environment) => environment.id))
   const unreadableIds = new Set(onDisk.unreadable.map((record) => record.id))
@@ -223,6 +224,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
     backUpBlankEnvironmentStore(userDataPath)
   }
   // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
+  invalidateEnvironmentStoreObservation(path)
   writeSecureFile(path, serialized, { durable: true })
   environmentStoreWrites++
 }

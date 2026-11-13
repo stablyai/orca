@@ -135,8 +135,8 @@ function createHarness(options: { restarted?: boolean } = {}) {
     }))
   })
 
-  const publishRendererSnapshot = (tabIds: readonly string[], snapshotVersion: number) => {
-    runtime.syncWindowGraph(1, {
+  const publishRendererSnapshot = async (tabIds: readonly string[], snapshotVersion: number) => {
+    await runtime.syncWindowGraph(1, {
       ...rendererGraph(tabIds),
       mobileSessionTabs: [
         {
@@ -304,9 +304,9 @@ function createSplitHarness() {
   } as never)
   runtime.attachWindow(1)
 
-  const publishSplitSnapshot = (leafIds: readonly string[], snapshotVersion: number) => {
+  const publishSplitSnapshot = async (leafIds: readonly string[], snapshotVersion: number) => {
     const layout = makeSplitLayout(leafIds)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_P,

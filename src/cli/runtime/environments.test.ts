@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,10 +34,10 @@ function pairingCode(endpoint = 'ws://127.0.0.1:6768', keyFill = 1): string {
 describe('CLI runtime environments', () => {
   const posixModeIt = process.platform === 'win32' ? it.skip : it
 
-  posixModeIt('stores paired environments with owner-only POSIX permissions', () => {
+  posixModeIt('stores paired environments with owner-only POSIX permissions', async () => {
     const userDataPath = temporaryProfile()
 
-    addEnvironmentFromPairingCode(userDataPath, {
+    await addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode(),
       now: 100
@@ -46,25 +47,26 @@ describe('CLI runtime environments', () => {
     expect((statSync(getEnvironmentStorePath(userDataPath)).mode & 0o777).toString(8)).toBe('600')
   })
 
-  it('rejects an environment with the same name', () => {
+  it('rejects an environment with the same name', async () => {
     const userDataPath = temporaryProfile()
-    const first = addEnvironmentFromPairingCode(userDataPath, {
+    const first = await addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode('ws://127.0.0.1:1111'),
       now: 100
     })
 
-    expect(() =>
-      addEnvironmentFromPairingCode(userDataPath, {
-        name: 'workstation',
-        pairingCode: pairingCode('ws://127.0.0.1:2222', 2),
-        now: 200
-      })
+    expect(
+      async () =>
+        await addEnvironmentFromPairingCode(userDataPath, {
+          name: 'workstation',
+          pairingCode: pairingCode('ws://127.0.0.1:2222', 2),
+          now: 200
+        })
     ).toThrow('A server named "workstation" already exists.')
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
-    expect(resolveEnvironmentPairingOffer(userDataPath, 'workstation').endpoint).toBe(
+    expect(await listEnvironments(userDataPath)).toHaveLength(1)
+    expect((await resolveEnvironmentPairingOffer(userDataPath, 'workstation')).endpoint).toBe(
       'ws://127.0.0.1:1111'
     )
-    expect(listEnvironments(userDataPath)[0]?.id).toBe(first.id)
+    expect((await listEnvironments(userDataPath))[0]?.id).toBe(first.id)
   })
 })

@@ -32,7 +32,9 @@ export type WslMoveBrowserCookieCopyDependencies = {
    */
   sessionsReady: () => boolean
   orcaProfileId: () => string | null
-  listEnvironments: () => readonly KnownRuntimeEnvironment[]
+  listEnvironments: () =>
+    | readonly KnownRuntimeEnvironment[]
+    | Promise<readonly KnownRuntimeEnvironment[]>
   listBrowserProfiles: () => readonly { id: string; partition: string }[]
   resolveHostStorage: (
     orcaProfileId: string,
@@ -70,19 +72,19 @@ export function previewWslMoveBrowserCookieCopy(
  * the live connection is re-saved once to restore the link. If logins still cannot carry, the
  * preview says so; the move is never blocked for it.
  */
-export function ensureWslMoveDestinationBrowserLogins(dependencies: {
-  resolveEnvironment: () => KnownRuntimeEnvironment
-  resaveConnection: () => void
+export async function ensureWslMoveDestinationBrowserLogins(dependencies: {
+  resolveEnvironment: () => KnownRuntimeEnvironment | Promise<KnownRuntimeEnvironment>
+  resaveConnection: () => void | Promise<void>
   orcaProfileId: () => string | null
   resolveHostStorage: WslMoveBrowserCookieCopyDependencies['resolveHostStorage']
-}): {
+}): Promise<{
   environment: KnownRuntimeEnvironment
   notCarried?: WslMoveBrowserCookieFreshPartitionReason
-} {
-  let environment = dependencies.resolveEnvironment()
+}> {
+  let environment = await dependencies.resolveEnvironment()
   if (!environment.orcadDeployment) {
-    dependencies.resaveConnection()
-    environment = dependencies.resolveEnvironment()
+    await dependencies.resaveConnection()
+    environment = await dependencies.resolveEnvironment()
   }
   const orcaProfileId = dependencies.orcaProfileId()
   if (!orcaProfileId) {
@@ -110,9 +112,9 @@ export async function runWslMoveBrowserCookieCopy(
     throw new Error('wsl_move_browser_sessions_not_ready')
   }
   const { cutover } = context
-  const environment = dependencies
-    .listEnvironments()
-    .find((entry) => entry.id === cutover.destinationEnvironmentId)
+  const environment = (await dependencies.listEnvironments()).find(
+    (entry) => entry.id === cutover.destinationEnvironmentId
+  )
   if (!environment) {
     recordOutcome(dependencies.userDataPath, cutover.migrationId, {
       outcome: 'fresh-partition',

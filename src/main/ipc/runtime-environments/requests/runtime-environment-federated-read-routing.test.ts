@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { resetRuntimeEnvironmentStatusOwners } from '../connections/runtime-environment-request-connections'
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -64,11 +65,11 @@ describe('federated read RPC transport routing', () => {
       resultForRequest: (method) =>
         method === 'status.get' ? { runtimeId: 'runtime-restarted', capabilities: [] } : {}
     })
-    const paired = addEnvironmentFromPairingCode(userDataPath, {
+    const paired = await addEnvironmentFromPairingCode(userDataPath, {
       name: 'Restarted host',
       pairingCode: encodePairingOffer(server.offer)
     })
-    markEnvironmentUsed(userDataPath, paired.id, { runtimeId: 'runtime-proven' })
+    await markEnvironmentUsed(userDataPath, paired.id, { runtimeId: 'runtime-proven' })
     sendRemoteRuntimeRequestOnSocketMock.mockImplementation(actual.sendRemoteRuntimeRequestOnSocket)
     await expect(
       callRuntimeEnvironment(

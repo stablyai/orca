@@ -21,7 +21,7 @@ const CHAT = 'agent-session:s1'
 async function headlessRuntime() {
   const harness = threeTabSurfaceRuntime()
   const { runtime, bindPane } = harness
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   runtime.setPtyController({
     spawn: vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
       await bindPane({

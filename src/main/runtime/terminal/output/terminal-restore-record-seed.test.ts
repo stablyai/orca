@@ -35,7 +35,7 @@ function makeStore() {
   }
 }
 
-function makeRuntimeWithLeaf(): OrcaRuntimeService {
+async function makeRuntimeWithLeaf(): Promise<OrcaRuntimeService> {
   // SAFETY: Restore reads only this fixture's workspace, metadata, and settings capabilities.
   const runtime = new OrcaRuntimeService(makeStore() as never)
   runtime.setPtyController({
@@ -46,7 +46,7 @@ function makeRuntimeWithLeaf(): OrcaRuntimeService {
     // SAFETY: Restore uses only the explicitly stubbed PTY inventory, write, and lifecycle operations.
   } as never)
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: 'tab-1',
@@ -73,7 +73,7 @@ function makeRuntimeWithLeaf(): OrcaRuntimeService {
 
 describe('seedTerminalRestoreTail', () => {
   it('lets live bytes land on top of the seed and refuses to re-apply history', async () => {
-    const runtime = makeRuntimeWithLeaf()
+    const runtime = await makeRuntimeWithLeaf()
 
     runtime.seedTerminalRestoreTail(PTY_ID, { text: 'restored line\r\n' })
     runtime.onPtyData(PTY_ID, 'live line\r\n', 1234567)
@@ -90,7 +90,7 @@ describe('seedTerminalRestoreTail', () => {
   })
 
   it('does not seed records that already saw live output', async () => {
-    const runtime = makeRuntimeWithLeaf()
+    const runtime = await makeRuntimeWithLeaf()
 
     runtime.onPtyData(PTY_ID, 'live first\r\n', 42)
     runtime.seedTerminalRestoreTail(PTY_ID, { text: 'stale history\r\n' })
@@ -101,7 +101,7 @@ describe('seedTerminalRestoreTail', () => {
   })
 
   it('caps the parsed suffix of an oversized payload at a line boundary', async () => {
-    const runtime = makeRuntimeWithLeaf()
+    const runtime = await makeRuntimeWithLeaf()
 
     runtime.seedTerminalRestoreTail(PTY_ID, {
       text: `${'x'.repeat(300 * 1024)}\r\npartial-first-line\r\nfinal restored line\r\n`

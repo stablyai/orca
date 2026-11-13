@@ -11,7 +11,7 @@ import type { resolvePinnedFederatedServer } from './pinned-federated-server'
 // Old peers expose only terminal reads; retain fences and cursor scope instead of silently degrading transcript cursors.
 export async function readLegacyFederatedTerminal(args: {
   runtime: Parameters<typeof resolvePinnedFederatedServer>[0]
-  server: ReturnType<typeof resolvePinnedFederatedServer>
+  server: Awaited<ReturnType<typeof resolvePinnedFederatedServer>>
   federated: Parameters<typeof resolvePinnedFederatedServer>[1]
   workerState: string
   dispatchId: string

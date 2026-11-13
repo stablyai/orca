@@ -148,7 +148,7 @@ export class RuntimeBrowserTabCreation {
     }
 
     const bridge = this.targets.requireAgentBrowserBridge()
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'renderer',
       browserPageId,
       worktreeId,
@@ -205,7 +205,7 @@ export class RuntimeBrowserTabCreation {
         ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
       })
     }
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'offscreen',
       browserPageId: created.browserPageId,
       worktreeId,

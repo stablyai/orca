@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnMock, reclaimStaleLockMock, printReclaimResultMock } = vi.hoisted(() => ({

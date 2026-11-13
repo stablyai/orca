@@ -50,9 +50,9 @@ type Reachability = WslHostReachability
 export function createWslHostConnector(options: {
   userDataPath: string
   onChange: NonNullable<WslOrcadConnectionDependencies['onChange']>
-  hasUserVisibleWork: (distro: string) => boolean
+  hasUserVisibleWork: (distro: string) => boolean | Promise<boolean>
   /** False once a distro's host is gone: nothing may be spawned for it again. */
-  isKnownDistro: (distro: string) => boolean
+  isKnownDistro: (distro: string) => boolean | Promise<boolean>
   runtime: WslHostRuntimeAccess
 }): WslHostConnector {
   const refuseUnknown = (distro: string): Error =>
@@ -66,8 +66,8 @@ export function createWslHostConnector(options: {
   // Guard here because liveness recovery and deploy can bypass the service.
   const holder: WslDistroHolder = {
     ...unguardedHolder,
-    ensureHeld: (distro, ensureOptions) =>
-      options.isKnownDistro(distro)
+    ensureHeld: async (distro, ensureOptions) =>
+      (await options.isKnownDistro(distro))
         ? unguardedHolder.ensureHeld(distro, ensureOptions)
         : Promise.reject(refuseUnknown(distro))
   }
@@ -82,15 +82,15 @@ export function createWslHostConnector(options: {
         events: wslHostBridgeEvents(bridgeActivity, listenOptions)
       }),
     pairingRecovery,
-    getPairingOffer: (environmentId) =>
-      findWslHostDeployment(options.userDataPath, environmentId)
-        ? resolveEnvironmentPairingOffer(options.userDataPath, environmentId)
+    getPairingOffer: async (environmentId) =>
+      (await findWslHostDeployment(options.userDataPath, environmentId))
+        ? await resolveEnvironmentPairingOffer(options.userDataPath, environmentId)
         : null,
-    recordedLocalPort: (environmentId) =>
-      findWslHostDeployment(options.userDataPath, environmentId)?.localPort ?? null,
+    recordedLocalPort: async (environmentId) =>
+      (await findWslHostDeployment(options.userDataPath, environmentId))?.localPort ?? null,
     onChange: options.onChange,
-    deployAndLaunch: (distro, deployOptions) =>
-      options.isKnownDistro(distro)
+    deployAndLaunch: async (distro, deployOptions) =>
+      (await options.isKnownDistro(distro))
         ? deployAndLaunchWslOrcad(distro, deployOptions)
         : Promise.reject(refuseUnknown(distro))
   })
@@ -112,8 +112,9 @@ export function createWslHostConnector(options: {
     requireConfirmedRunning(await readSettledConfirmedRunningWslDistros(distro), distro)
   // A ready client can outlive its distro by a moment; only a settled running read lets it skip
   // the cold check, which never dials a stopped distro (E9). Reads the cache: no probe per call.
-  const readyWhileRunning = (distro: string, environmentId: string): boolean =>
-    Boolean(options.runtime.isReady?.(environmentId)) && wasWslDistroLastSeenRunningSettled(distro)
+  const readyWhileRunning = async (distro: string, environmentId: string): Promise<boolean> =>
+    Boolean(await options.runtime.isReady?.(environmentId)) &&
+    wasWslDistroLastSeenRunningSettled(distro)
   const coldProbes = new Map<
     string,
     {
@@ -135,10 +136,10 @@ export function createWslHostConnector(options: {
     if (!confirmsRunning(running, wslDistroHolderKey(distro))) {
       return 'stopped'
     }
-    if (!options.isKnownDistro(distro) || manager.get(distro) !== connection) {
+    if (!(await options.isKnownDistro(distro)) || manager.get(distro) !== connection) {
       return 'unreachable'
     }
-    if (options.runtime.isReady?.(environmentId)) {
+    if ((await options.runtime.isReady?.(environmentId)) && manager.get(distro) === connection) {
       return 'available'
     }
     if (!connection) {
@@ -203,11 +204,11 @@ export function createWslHostConnector(options: {
     forgetPairingFailures: (environmentId) => pairingRecovery.repairs.forgetFailures(environmentId),
     get: (distro) => manager.get(distro),
     isReachable: async (distro, environmentId) =>
-      readyWhileRunning(distro, environmentId) ||
+      (await readyWhileRunning(distro, environmentId)) ||
       (await coldReachability(distro, environmentId)) === 'available',
     isSettling: (distro) => liveness.isSettling(distro),
     reachability: async (distro, environmentId) =>
-      readyWhileRunning(distro, environmentId)
+      (await readyWhileRunning(distro, environmentId))
         ? 'available'
         : coldReachability(distro, environmentId),
     disconnect: (distro) => liveness.stop(distro),
@@ -239,7 +240,7 @@ export function createWslHostConnector(options: {
     },
     adoptHolders: async (isWanted) => {
       for (const { distro } of await holder.adoptHolders()) {
-        if (!isWanted(distro)) {
+        if (!(await isWanted(distro))) {
           // Verified by pid, start time and command line; an unverifiable holder is kept.
           await holder.release(distro)
         }

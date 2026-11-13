@@ -27,7 +27,7 @@ it.each([750, 7500])(
       tabs: []
     }))
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
     const stream = openRecoveryTabsStream(runtime, 'filtered-stream', `id:${WORKSPACE}`)
     const facts = runtime.sidebarFacts!
     const refresh = vi.spyOn(facts.workspaceActivityFacts, 'refreshWorkspace')
@@ -46,7 +46,7 @@ it.each([750, 7500])(
       refresh.mockClear()
       const sequence = runtime.sessionTabsSequence()
       const delivered = stream.frames.length
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(0)
       expect(runtime.sessionTabsSequence()).toBe(sequence)
       expect(stream.frames).toHaveLength(delivered)
@@ -67,7 +67,7 @@ it.each(['workspace', 'all'])(
     const h = createReconciliationDeliveryRuntime()
     const runtime = h.hostRuntime
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -106,11 +106,11 @@ it.each(['workspace', 'all'])(
       expect(stream.frames.at(-1)?.clientHostedPagesUnreconciled).toBeUndefined()
       runtime.projectedFrames = 0
       const delivered = stream.frames.length
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(1)
       expect(stream.frames).toHaveLength(delivered + 1)
       expect(stream.frames.at(-1)?.clientHostedPagesUnreconciled).toBeUndefined()
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(1)
       expect(stream.frames).toHaveLength(delivered + 1)
       stream.stop()
@@ -122,9 +122,9 @@ it.each(['workspace', 'all'])(
         removed.frames.findLast((frame) => frame.worktree === WORKSPACE)
           ?.clientHostedPagesUnreconciled
       ).toBe(true)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
       runtime.projectedFrames = 0
-      runtime.markClientHostedPagesReconciled('device-b')
+      await runtime.markClientHostedPagesReconciled('device-b')
       expect(runtime.projectedFrames).toBe(0)
       removed.stop()
       await removed.completion
@@ -149,7 +149,7 @@ it('cannot recreate a raw observation when its listener unsubscribes during deli
     h.hostRuntime.notifyMobileSessionTabsChanged(WORKSPACE)
     h.hostRuntime.onMobileSessionTabsChanged(() => {}, 'flush-device', 'mobile')()
     h.hostRuntime.projectedFrames = 0
-    h.hostRuntime.markClientHostedPagesReconciled('device-a')
+    await h.hostRuntime.markClientHostedPagesReconciled('device-a')
     expect(h.hostRuntime.projectedFrames).toBe(0)
   } finally {
     unsubscribe()
@@ -162,7 +162,7 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
   async (method) => {
     const h = createReconciliationDeliveryRuntime()
     h.hostRuntime.attachWindow(1)
-    h.hostRuntime.syncWindowGraph(1, {
+    await h.hostRuntime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -203,7 +203,7 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
       )
       expect(supplied).toBe(true)
       h.hostRuntime.projectedFrames = 0
-      h.hostRuntime.markClientHostedPagesReconciled('device-a')
+      await h.hostRuntime.markClientHostedPagesReconciled('device-a')
       expect(h.hostRuntime.projectedFrames).toBe(0)
     } finally {
       stopped.abort()
@@ -227,7 +227,7 @@ it.each([750, 7500])(
       tabs: []
     }))
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
     const departed = openRecoveryTabsStream(runtime, 'departing-device-stream')
     const other = openRecoveryTabsStream(
       runtime,
@@ -259,7 +259,7 @@ it.each([750, 7500])(
       refresh.mockClear()
       const sequence = runtime.sessionTabsSequence()
       const delivered = other.frames.length
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(0)
       expect(runtime.sessionTabsSequence()).toBe(sequence)
       expect(other.frames).toHaveLength(delivered)

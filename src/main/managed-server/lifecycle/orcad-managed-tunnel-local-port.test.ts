@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -21,7 +22,7 @@ function listen(port = 0): Promise<Server> {
   return new Promise((resolve, reject) => {
     const server = createServer()
     server.once('error', reject)
-    server.listen(port, '127.0.0.1', () => resolve(server))
+    server.listen(port, '127.0.0.1', async () => await resolve(server))
   })
 }
 
@@ -43,7 +44,7 @@ describe('managed tunnel on an unbindable saved local port', () => {
     // Stands in for a Windows excluded range or another app's listener on the saved port.
     occupied = await listen()
     savedPort = portOf(occupied)
-    addManagedOrcadEnvironment(userDataPath, {
+    await addManagedOrcadEnvironment(userDataPath, {
       id: 'environment-1',
       name: 'Builder',
       pairingCode: encodePairingOffer({
@@ -117,12 +118,12 @@ describe('managed tunnel on an unbindable saved local port', () => {
       } as unknown as SshPortForwardManager,
       ensureServing: vi.fn().mockResolvedValue({ state: 'serving' })
     })
-    const resolve = () => resolveEnvironment(userDataPath, 'environment-1')
+    const resolve = async () => await resolveEnvironment(userDataPath, 'environment-1')
     const retired = vi.fn()
     setManagedOrcadPairingRepairedListener(retired)
     const ensure = () =>
-      buildOnBindableLocalPort(userDataPath, 'environment-1', () =>
-        manager.ensure(resolve(), resolve)
+      buildOnBindableLocalPort(userDataPath, 'environment-1', async () =>
+        manager.ensure(await resolve(), resolve)
       )
     return { addForward, ensure, resolve, retired }
   }
@@ -135,11 +136,11 @@ describe('managed tunnel on an unbindable saved local port', () => {
     ]
   ])('moves to a free port and saves it with the same pairing when %s', async (_case, error) => {
     const { addForward, ensure, resolve, retired } = setup(error)
-    const before = resolve()
+    const before = await resolve()
 
     await ensure()
 
-    const moved = resolve()
+    const moved = await resolve()
     const movedPort = getRuntimeSshAccess(moved)?.localPort
     expect(movedPort).not.toBe(savedPort)
     expect(addForward).toHaveBeenLastCalledWith(
@@ -166,7 +167,7 @@ describe('managed tunnel on an unbindable saved local port', () => {
 
     await expect(Promise.all([ensure(), ensure(), ensure()])).resolves.toHaveLength(3)
 
-    expect(getRuntimeSshAccess(resolve())?.localPort).not.toBe(savedPort)
+    expect(getRuntimeSshAccess(await resolve())?.localPort).not.toBe(savedPort)
     expect(retired).toHaveBeenCalledOnce()
   })
 
@@ -175,7 +176,7 @@ describe('managed tunnel on an unbindable saved local port', () => {
 
     await expect(ensure()).rejects.toThrow('ssh exited')
 
-    expect(getRuntimeSshAccess(resolve())?.localPort).toBe(savedPort)
+    expect(getRuntimeSshAccess(await resolve())?.localPort).toBe(savedPort)
     expect(retired).not.toHaveBeenCalled()
   })
 })

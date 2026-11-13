@@ -10,7 +10,7 @@ import {
   markEnvironmentUsed,
   removeEnvironment,
   updateEnvironmentFromPairingCode
-} from './runtime-environment-store'
+} from './runtime-environment-store-operations'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 import { getPreferredPairingOffer } from '../host-catalog/runtime-environments'
 import {
@@ -19,7 +19,7 @@ import {
   prepareRuntimeEnvironmentSshAccessUnlink,
   completeRuntimeEnvironmentSshAccessUnlink,
   cancelRuntimeEnvironmentSshAccessLink
-} from './runtime-environment-ssh-access-store'
+} from './runtime-environment-ssh-access-operations'
 
 const pairing = {
   v: 2 as const,

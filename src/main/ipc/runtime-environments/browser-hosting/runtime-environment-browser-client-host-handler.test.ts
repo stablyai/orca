@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../../shared/protocol-version'
 import {

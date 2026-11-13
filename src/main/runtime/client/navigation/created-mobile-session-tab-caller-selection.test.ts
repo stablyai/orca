@@ -51,7 +51,9 @@ it('selects a launched terminal for the caller only, without spawning again', as
   expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
   const previous = caller.at(-1)!
 
-  expect(runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(true)
+  expect(await runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(
+    true
+  )
 
   const selected = caller.at(-1)!
   expect(selected.activeTabId).toBe(launched.id)

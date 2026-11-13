@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,8 +35,8 @@ function preferenceStore(activeId: string | null) {
   return { getSettings: () => settings, updateSettings }
 }
 
-function saveEnvironment(name = 'server') {
-  return addEnvironmentFromPairingCode(userDataPath, {
+async function saveEnvironment(name = 'server') {
+  return await addEnvironmentFromPairingCode(userDataPath, {
     name,
     pairingCode: encodePairingOffer({
       v: 2,
@@ -48,8 +49,8 @@ function saveEnvironment(name = 'server') {
 }
 
 describe('Active Server after a saved host is removed', () => {
-  it('survives a failed watch installation and repairs on the next settings read', () => {
-    const environment = saveEnvironment()
+  it('survives a failed watch installation and repairs on the next settings read', async () => {
+    const environment = await saveEnvironment()
     const store = preferenceStore(environment.id)
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let stopWatching: (() => void) | undefined
@@ -60,7 +61,8 @@ describe('Active Server after a saved host is removed', () => {
       mkdirSync(userDataPath)
       writeFileSync(getEnvironmentStorePath(userDataPath), '{"version":1,"environments":[]}')
       expect(
-        readSettingsWithRuntimeEnvironmentPreference(store, userDataPath).activeRuntimeEnvironmentId
+        (await readSettingsWithRuntimeEnvironmentPreference(store, userDataPath))
+          .activeRuntimeEnvironmentId
       ).toBeNull()
     } finally {
       stopWatching?.()
@@ -68,15 +70,16 @@ describe('Active Server after a saved host is removed', () => {
     }
   })
 
-  it('does not select a same-name replacement or another saved server', () => {
-    const removed = saveEnvironment()
+  it('does not select a same-name replacement or another saved server', async () => {
+    const removed = await saveEnvironment()
     const store = preferenceStore(removed.id)
-    removeEnvironment(userDataPath, removed.id)
-    saveEnvironment()
-    saveEnvironment('other')
+    await removeEnvironment(userDataPath, removed.id)
+    await saveEnvironment()
+    await saveEnvironment('other')
 
     expect(
-      readSettingsWithRuntimeEnvironmentPreference(store, userDataPath).activeRuntimeEnvironmentId
+      (await readSettingsWithRuntimeEnvironmentPreference(store, userDataPath))
+        .activeRuntimeEnvironmentId
     ).toBeNull()
   })
 })

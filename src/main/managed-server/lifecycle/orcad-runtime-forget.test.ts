@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
@@ -43,7 +44,7 @@ const {
   stopManagedOrcadEnvironment
 } = await import('./orcad-runtime-decommission')
 
-let harness: ReturnType<typeof createManagedLifecycleHarness>
+let harness: Awaited<ReturnType<typeof createManagedLifecycleHarness>>
 
 const policy = (isActive = false) => ({
   isActiveEnvironment: () => isActive,
@@ -51,9 +52,9 @@ const policy = (isActive = false) => ({
   releaseHostTransport: mocks.releaseHost
 })
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.resetAllMocks()
-  harness = createManagedLifecycleHarness()
+  harness = await createManagedLifecycleHarness()
   mocks.state.store = harness.targetStore
   mocks.connect.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:2841'))
   mocks.resolveContext.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:2841'))
@@ -66,7 +67,7 @@ describe('a managed server whose host is gone (P1-E)', () => {
     await expect(
       stopManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' }, policy())
     ).rejects.toThrow('ECONNREFUSED')
-    expect(listEnvironments(harness.userDataPath)).toHaveLength(1)
+    expect(await listEnvironments(harness.userDataPath)).toHaveLength(1)
     expect(isManagedOrcadSshTarget(harness.current())).toBe(true)
   })
 
@@ -87,7 +88,7 @@ describe('a managed server whose host is gone (P1-E)', () => {
     })
     expect(mocks.connect).not.toHaveBeenCalled()
     expect(mocks.resolveContext).not.toHaveBeenCalled()
-    expect(listEnvironments(harness.userDataPath)).toEqual([])
+    expect(await listEnvironments(harness.userDataPath)).toEqual([])
     expect(getManagedOrcadFenceEnvironmentId(harness.current())).toBeNull()
     expect(isManagedOrcadSshTarget(harness.current())).toBe(false)
     expect(harness.flushes).toHaveLength(1)
@@ -102,7 +103,7 @@ describe('a managed server whose host is gone (P1-E)', () => {
     await expect(
       forgetManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' }, policy(true))
     ).resolves.toMatchObject({ outcome: 'refused', code: 'orcad_forget_active_environment' })
-    expect(listEnvironments(harness.userDataPath)).toHaveLength(1)
+    expect(await listEnvironments(harness.userDataPath)).toHaveLength(1)
     expect(getManagedOrcadFenceEnvironmentId(harness.current())).toBe('environment-1')
     expect(mocks.retire).not.toHaveBeenCalled()
     expect(mocks.closeTunnel).not.toHaveBeenCalled()
@@ -112,8 +113,8 @@ describe('a managed server whose host is gone (P1-E)', () => {
 
 describe('a managed server saved under a second SSH alias', () => {
   // Same host key in its padded spelling, reached through its own SSH target.
-  const addTwin = () =>
-    addManagedOrcadEnvironment(harness.userDataPath, {
+  const addTwin = async () =>
+    await addManagedOrcadEnvironment(harness.userDataPath, {
       id: 'environment-2',
       name: 'Managed alias',
       pairingCode: encodePairingOffer({
@@ -131,7 +132,7 @@ describe('a managed server saved under a second SSH alias', () => {
     })
 
   it('forgets the redundant entry and leaves the other one managing the server', async () => {
-    addTwin()
+    await addTwin()
     await expect(
       forgetRedundantManagedOrcadEnvironment(
         harness.userDataPath,
@@ -140,7 +141,9 @@ describe('a managed server saved under a second SSH alias', () => {
       )
     ).resolves.toMatchObject({ outcome: 'forgotten', environmentId: 'environment-1' })
     expect(mocks.connect).not.toHaveBeenCalled()
-    expect(listEnvironments(harness.userDataPath).map(({ id }) => id)).toEqual(['environment-2'])
+    expect((await listEnvironments(harness.userDataPath)).map(({ id }) => id)).toEqual([
+      'environment-2'
+    ])
   })
 
   it('refuses when the other entry is gone by the time the removal runs', async () => {
@@ -151,7 +154,7 @@ describe('a managed server saved under a second SSH alias', () => {
         policy()
       )
     ).resolves.toMatchObject({ outcome: 'refused', code: 'orcad_forget_no_managed_twin' })
-    expect(listEnvironments(harness.userDataPath)).toHaveLength(1)
+    expect(await listEnvironments(harness.userDataPath)).toHaveLength(1)
     expect(getManagedOrcadFenceEnvironmentId(harness.current())).toBe('environment-1')
     expect(mocks.closeTunnel).not.toHaveBeenCalled()
   })

@@ -1,3 +1,5 @@
+import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { runtimeEnvironmentConnectionPairingKey } from '../connections/runtime-environment-capability-evidence'
 import { errorMessage } from '../../../../shared/error-message'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -6,16 +8,16 @@ import {
   managedOrcadPairingFailureStands,
   recoverRefusedManagedOrcadPairing
 } from '../../../managed-server/lifecycle/orcad-managed-tunnel'
-import { getRuntimeEnvironmentStatusOwner } from '../connections/runtime-environment-request-connections'
+import { withRuntimeEnvironmentStatusOwner } from '../connections/runtime-environment-request-connections'
 
 /** Null leaves user-managed pairing recovery to the caller. */
-export function recoverRefusedManagedPairing(
+export async function recoverRefusedManagedPairing(
   userDataPath: string,
   environmentId: string,
   recover: typeof recoverRefusedManagedOrcadPairing = recoverRefusedManagedOrcadPairing
-): Promise<'built' | 'repaired'> | null {
+): Promise<'built' | 'repaired' | null> {
   try {
-    if (!getOrcadSshDeployment(resolveEnvironment(userDataPath, environmentId))) {
+    if (!getOrcadSshDeployment(await resolveEnvironment(userDataPath, environmentId))) {
       return null
     }
   } catch {
@@ -25,40 +27,51 @@ export function recoverRefusedManagedPairing(
 }
 
 /** Null preserves ordinary reconnect; a promise owns the refused socket recovery. */
-export function handleManagedSharedControlRefusal(
+export async function handleManagedSharedControlRefusal(
   userDataPath: string,
   environmentId: string,
   recover: typeof recoverRefusedManagedOrcadPairing = recoverRefusedManagedOrcadPairing,
   failureStands: typeof managedOrcadPairingFailureStands = managedOrcadPairingFailureStands
-): Promise<'retry' | 'stop'> | null {
-  const recovery = recoverRefusedManagedPairing(userDataPath, environmentId, recover)
-  if (!recovery) {
-    return null
-  }
-  return recovery.then(
-    // A re-pair retired this socket for one on the new pairing; otherwise retry with backoff.
-    (outcome) => (outcome === 'repaired' ? 'stop' : 'retry'),
-    (error: unknown) => {
-      // A concurrent pairing has a successor owner this failure never judged.
-      const code = managedOrcadRefusalNeedingUserCode(error)
-      if (code && error instanceof Error && failureStands(userDataPath, environmentId)) {
-        // Authentication refusal blocks retries until an explicit user connect.
-        try {
-          getRuntimeEnvironmentStatusOwner(userDataPath, environmentId).authenticationRejected(
-            error.message,
-            code
-          )
-        } catch {
-          // Removed while it re-paired: nothing is left to report on.
-        }
-        return 'stop'
+): Promise<'retry' | 'stop' | null> {
+  const expected = await resolveEnvironment(userDataPath, environmentId).catch(() => null)
+  try {
+    const outcome = await recoverRefusedManagedPairing(userDataPath, environmentId, recover)
+    return outcome === null ? null : outcome === 'repaired' ? 'stop' : 'retry'
+  } catch (error: unknown) {
+    // A concurrent pairing has a successor owner this failure never judged.
+    const code = managedOrcadRefusalNeedingUserCode(error)
+    if (code && error instanceof Error && (await failureStands(userDataPath, environmentId))) {
+      // Authentication refusal blocks retries until an explicit user connect.
+      try {
+        await withRuntimeEnvironmentStatusOwner(
+          userDataPath,
+          environmentId,
+          (environment, owner) => {
+            if (
+              expected &&
+              (environment.pairingRevision ?? environment.createdAt) ===
+                (expected.pairingRevision ?? expected.createdAt) &&
+              runtimeEnvironmentConnectionPairingKey(
+                getPreferredPairedRuntimeConnection(environment)
+              ) ===
+                runtimeEnvironmentConnectionPairingKey(
+                  getPreferredPairedRuntimeConnection(expected)
+                )
+            ) {
+              owner.authenticationRejected(error.message, code)
+            }
+          }
+        )
+      } catch {
+        // Removed while it re-paired: nothing is left to report on.
       }
-      // Lost contact or a foreign answer is not a verdict on the pairing.
-      console.warn(
-        '[runtime-environments] Could not re-pair the managed Orca server:',
-        errorMessage(error)
-      )
-      return 'retry'
+      return 'stop'
     }
-  )
+    // Lost contact or a foreign answer is not a verdict on the pairing.
+    console.warn(
+      '[runtime-environments] Could not re-pair the managed Orca server:',
+      errorMessage(error)
+    )
+    return 'retry'
+  }
 }

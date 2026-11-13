@@ -55,7 +55,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     refuseReservedEnvironmentName(name)
     const pairingCode = await exchangeCliPairingCode(getRequiredStringFlag(flags, 'pairing-code'))
     const environment = redactRuntimeEnvironment(
-      addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
+      await addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
         name,
         pairingCode
       })
@@ -84,7 +84,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     }))
     // Read the local pairing store without dialing every server, so listing works offline.
     const localStatus = await readLocalHostDescriptor(client)
-    const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
+    const environments = (await listEnvironments(getDefaultUserDataPath())).map((environment) => ({
       kind: 'environment' as const,
       name: environment.name,
       id: environment.id,
@@ -140,13 +140,15 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca environment list`. Paired servers are stored on this machine, so there is no other host to ask.',
       'Run `orca environment list` on that machine to see the servers paired with it.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map(redactRuntimeEnvironment)
+    const environments = (await listEnvironments(getDefaultUserDataPath())).map(
+      redactRuntimeEnvironment
+    )
     printResult(localSuccess({ environments }), json, formatEnvironmentList)
   },
   'environment show': async ({ flags, json }) => {
     const selector = getRequiredStringFlag(flags, 'environment')
     const environment = redactRuntimeEnvironment(
-      resolveEnvironment(getDefaultUserDataPath(), selector)
+      await resolveEnvironment(getDefaultUserDataPath(), selector)
     )
     printResult(localSuccess({ environment }), json, ({ environment: value }) =>
       formatEnvironment(value)
@@ -154,7 +156,9 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   },
   'environment rm': async ({ flags, json }) => {
     const selector = getRequiredStringFlag(flags, 'environment')
-    const removed = redactRuntimeEnvironment(removeEnvironment(getDefaultUserDataPath(), selector))
+    const removed = redactRuntimeEnvironment(
+      await removeEnvironment(getDefaultUserDataPath(), selector)
+    )
     printResult(
       localSuccess({ removed }),
       json,

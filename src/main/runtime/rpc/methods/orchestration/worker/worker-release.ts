@@ -39,7 +39,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
         db.endFederatedHomeAutoRelease(params.dispatch)
         return releaseFederatedWorker({
           runtime,
-          server: resolvePinnedFederatedServer(runtime, federated),
+          server: await resolvePinnedFederatedServer(runtime, federated),
           federated,
           dispatchId: params.dispatch,
           requestId: orchestrationMutation.requestId
@@ -113,7 +113,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
         db.endFederatedHomeAutoRelease(params.dispatch)
         const forwarded = await retainFederatedWorker({
           runtime,
-          server: resolvePinnedFederatedServer(runtime, federated),
+          server: await resolvePinnedFederatedServer(runtime, federated),
           federated,
           dispatchId: params.dispatch,
           requestId: orchestrationMutation.requestId

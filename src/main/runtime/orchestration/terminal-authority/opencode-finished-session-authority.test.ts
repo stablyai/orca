@@ -189,8 +189,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       })
     ).not.toBeNull()
 
-    pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
-    await settle()
+    pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07\x1b]133;C\x07', 100)
 
     // Every later shell child inherits the launch token; finished sessions must stop attesting it.
     expect(

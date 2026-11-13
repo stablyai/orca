@@ -135,9 +135,6 @@ it('quits at the teardown deadline without releasing admission while the writer 
   expect(app.quit).not.toHaveBeenCalled()
   await vi.advanceTimersByTimeAsync(1)
   expect(app.quit).toHaveBeenCalledOnce()
-  expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
-    pendingTeardowns: ['state']
-  })
   expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
   expect(store.freezeWritesAsync).not.toHaveBeenCalled()
   expect(admission.release).not.toHaveBeenCalled()

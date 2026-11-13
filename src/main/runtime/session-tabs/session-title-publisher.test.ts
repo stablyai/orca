@@ -43,7 +43,7 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
   })
   afterEach(() => vi.useRealTimers())
 
-  function host() {
+  async function host() {
     const session = makeWorkspaceSessionWithHeadlessTerminal()
     const saved = session.tabsByWorktree[TEST_WORKTREE_ID][0]
     saved.ptyId = surface.ptyId!
@@ -53,7 +53,7 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
     })
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore)
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     runtime.registerPty(surface.ptyId!, TEST_WORKTREE_ID, null, {
       tabId: surface.parentTabId,
       leafId: surface.leafId
@@ -61,14 +61,14 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
     runtime.attachWindow(1)
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((frame) => events.push(frame))
-    function publish(
+    async function publish(
       windowId: number,
       version: number,
       rows: RuntimeMobileSessionTerminalTab[] = [surface],
       includeWorktree = true,
       generation = `renderer-${windowId}`
     ) {
-      runtime.syncWindowGraph(windowId, {
+      await runtime.syncWindowGraph(windowId, {
         rendererGeneration: generation,
         tabs: [],
         leaves: [],
@@ -98,9 +98,9 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
   }
 
   it('revokes authoritative null and publishes a newer terminal-only frame when its window closes', async () => {
-    const h = host()
+    const h = await host()
     try {
-      h.publish(1, 1, [{ ...surface, aiVaultTitle: null }])
+      await h.publish(1, 1, [{ ...surface, aiVaultTitle: null }])
       const before = await h.latest()
       expect(before.tabs[0]).toMatchObject({ resolvesSessionTitle: true, aiVaultTitle: null })
       h.events.length = 0
@@ -119,9 +119,9 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
   it.each(['window', 'renderer'])(
     'requires a successor %s to publish the surface before owning its retained name',
     async (successor) => {
-      const h = host()
+      const h = await host()
       try {
-        h.publish(1, 1)
+        await h.publish(1, 1)
         expect((await h.latest()).tabs[0]).toHaveProperty('resolvesSessionTitle', true)
         const windowId = successor === 'window' ? 2 : 1
         if (successor === 'window') {
@@ -131,11 +131,11 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
           h.runtime.markRendererReloading(1)
           expect((await h.latest()).tabs[0]).not.toHaveProperty('resolvesSessionTitle')
         }
-        h.publish(windowId, 1, [], true, 'successor-renderer')
+        await h.publish(windowId, 1, [], true, 'successor-renderer')
         const retained = await h.latest()
         expect(retained.tabs[0]).not.toHaveProperty('resolvesSessionTitle')
         expect(retained.tabs[0]).toHaveProperty('aiVaultTitle', name)
-        h.publish(windowId, 2, [surface], true, 'successor-renderer')
+        await h.publish(windowId, 2, [surface], true, 'successor-renderer')
         expect((await h.latest()).tabs[0]).toHaveProperty('resolvesSessionTitle', true)
       } finally {
         h.unsubscribe()
@@ -146,13 +146,13 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
   it.each([true, false])(
     'revokes an omitted retained surface when workspace remains=%s',
     async (includeWorktree) => {
-      const h = host()
+      const h = await host()
       try {
-        h.publish(1, 1)
+        await h.publish(1, 1)
         const before = await h.latest()
         expect(before.tabs[0]).toHaveProperty('resolvesSessionTitle', true)
         h.events.length = 0
-        h.publish(1, 2, [], includeWorktree)
+        await h.publish(1, 2, [], includeWorktree)
         const after = await h.latest()
         expect(after.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
         expect(after.tabs[0]).not.toHaveProperty('resolvesSessionTitle')

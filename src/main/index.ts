@@ -55,8 +55,10 @@ import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
 
-function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
-  return openMainWindowController(options)
+async function openMainWindow(
+  options: { revealOnDidFinishLoad?: boolean } = {}
+): Promise<BrowserWindow> {
+  return await openMainWindowController(options)
 }
 
 setMainWindowOpener(openMainWindow)
@@ -141,7 +143,7 @@ if (preflightReady) {
   enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
   // Before any gate check: saved WSL work keeps a closed gate serving it.
-  configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
+  const wslHostsGateReady = configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
   configureRemoteRuntimeE2EEV2HostLatch(app.getPath('userData'))
   // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
   if (process.platform === 'win32') {
@@ -177,6 +179,7 @@ if (preflightReady) {
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
     try {
+      await wslHostsGateReady
       await initializeMainProcessReady({
         openMainWindow,
         handleMacAppActivation

@@ -44,7 +44,7 @@ async function listPairedEnvironments(): Promise<{ id: string; name: string }[]>
     import('../runtime/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
-  return listEnvironments(getDefaultUserDataPath()).map((environment) => ({
+  return (await listEnvironments(getDefaultUserDataPath())).map((environment) => ({
     id: environment.id,
     name: environment.name
   }))

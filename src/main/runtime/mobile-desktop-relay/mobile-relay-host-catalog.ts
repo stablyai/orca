@@ -35,7 +35,7 @@ export type MobileRelayRecipeEnvironmentLookup = (
 
 /** Sidebar live rows or per-phone-request fetches, always read as the desktop. */
 export type ServerWorktreeRows = {
-  sync: () => void
+  sync: () => void | Promise<void>
   /** Fetch now or join the in-flight fetch. */
   refresh: (environmentId: string) => Promise<void>
   /** Last-fetched rows under this pairing; null before a successful fetch. */
@@ -86,12 +86,12 @@ export class MobileRelayHostCatalog {
       return null
     }
     const { environmentId } = parsed
-    this.options.serverRows.sync()
-    const cached = this.cachedWorkspaceContext(hostId, environmentId, worktreeId)
+    await this.options.serverRows.sync()
+    const cached = await this.cachedWorkspaceContext(hostId, environmentId, worktreeId)
     if (cached !== undefined && cached !== null) {
       return cached
     }
-    const host = describeRelayHosts(this.options.hosts).find(
+    const host = (await describeRelayHosts(this.options.hosts)).find(
       (entry) => entry.environmentId === environmentId
     )
     if (host?.health !== 'available') {
@@ -111,7 +111,7 @@ export class MobileRelayHostCatalog {
       this.options.serverRows.refresh(environmentId).catch(() => {}),
       PAIRED_WORKSPACE_CONTEXT_FETCH_TIMEOUT_MS
     )
-    const fetched = this.cachedWorkspaceContext(hostId, environmentId, worktreeId) ?? null
+    const fetched = (await this.cachedWorkspaceContext(hostId, environmentId, worktreeId)) ?? null
     if (fetched) {
       this.contextMissFetchedAt.delete(missKey)
     }
@@ -119,14 +119,14 @@ export class MobileRelayHostCatalog {
   }
 
   /** undefined: no rows under the current pairing; null: rows hold no such workspace. */
-  private cachedWorkspaceContext(
+  private async cachedWorkspaceContext(
     hostId: ExecutionHostId,
     environmentId: string,
     worktreeId: string
-  ): PairedWorkspaceContext | null | undefined {
-    const current = this.options.hosts
-      .list()
-      .environments.find((environment) => environment.id === environmentId)
+  ): Promise<PairedWorkspaceContext | null | undefined> {
+    const current = (await this.options.hosts.list()).environments.find(
+      (environment) => environment.id === environmentId
+    )
     const rows = current
       ? this.options.serverRows.rows(environmentId, relayHostFence(current))
       : null
@@ -155,15 +155,19 @@ export class MobileRelayHostCatalog {
 
   private announcer: RelayHostListAnnouncer | null = null
 
-  list(): MobileRelayHostsListResult {
-    const result = this.describe()
+  async list(): Promise<MobileRelayHostsListResult> {
+    const result = await this.describe()
     this.announcer?.listed(result)
     return result
   }
 
   /** Calls `changed` whenever list() would answer differently, so phones need not poll it. */
   publishListChanges(sources: RelayHostListAnnouncerSources): () => void {
-    const announcer = new RelayHostListAnnouncer(this.options.hosts, () => this.describe(), sources)
+    const announcer = new RelayHostListAnnouncer(
+      this.options.hosts,
+      async () => await this.describe(),
+      sources
+    )
     this.announcer = announcer
     return () => {
       announcer.dispose()
@@ -173,9 +177,9 @@ export class MobileRelayHostCatalog {
     }
   }
 
-  private describe(): MobileRelayHostsListResult {
+  private async describe(): Promise<MobileRelayHostsListResult> {
     return {
-      hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
+      hosts: (await describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides())).map(
         ({
           hostId,
           label,
@@ -203,7 +207,7 @@ export class MobileRelayHostCatalog {
     this.options.serverRows.sync()
     const host =
       parsed?.kind === 'runtime'
-        ? describeRelayHosts(this.options.hosts).find(
+        ? (await describeRelayHosts(this.options.hosts)).find(
             (entry) => entry.environmentId === parsed.environmentId
           )
         : undefined
@@ -216,7 +220,7 @@ export class MobileRelayHostCatalog {
         SERVER_FETCH_TIMEOUT_MS
       )
     }
-    const { environments, statusByEnvironmentId } = this.options.hosts.list()
+    const { environments, statusByEnvironmentId } = await this.options.hosts.list()
     const current = environments.find((environment) => environment.id === host.environmentId)
     // Re-pairing during fetch can leave old-server rows; recheck identity afterward.
     const rows = current

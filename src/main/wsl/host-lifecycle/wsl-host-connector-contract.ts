@@ -30,7 +30,7 @@ export type WslHostConnector = {
   resolveDistroName(distro: string, distroId?: string): Promise<string | false | null>
   releaseHolder(distro: string): Promise<void>
   /** Startup: keeps the holders an earlier run left and releases those `isWanted` refuses. */
-  adoptHolders(isWanted: (distro: string) => boolean): Promise<void>
+  adoptHolders(isWanted: (distro: string) => boolean | Promise<boolean>): Promise<void>
   dispose(): Promise<void>
 }
 

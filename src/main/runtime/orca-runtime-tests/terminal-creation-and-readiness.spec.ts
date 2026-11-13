@@ -51,7 +51,7 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
@@ -119,7 +119,7 @@ describe('OrcaRuntimeService', () => {
       'terminal_liveness_unavailable'
     )
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId: 'host-tab',

@@ -49,7 +49,7 @@ export async function ensureWslHostForRuntimeCall(
   }
   assertWslHostRunAllowed(deps, port.removing, environmentId)
   // A pending host never reconnects for a runtime call.
-  admitConnectToPendingHost(deps.userDataPath(), record, false)
+  await admitConnectToPendingHost(deps.userDataPath(), record, false)
   if (reachability === 'stopped') {
     parkStopped(record, port)
   }

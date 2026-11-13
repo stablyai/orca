@@ -16,7 +16,7 @@ export async function savedEnvironmentNamedLocal(): Promise<{ id: string } | und
     import('../runtime/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
-  return listEnvironments(getDefaultUserDataPath()).find((environment) =>
+  return (await listEnvironments(getDefaultUserDataPath())).find((environment) =>
     isLocalEnvironmentSelector(environment.name)
   )
 }

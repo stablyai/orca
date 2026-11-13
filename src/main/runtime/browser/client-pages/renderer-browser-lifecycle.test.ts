@@ -60,8 +60,8 @@ function browserRuntime(closeTab = vi.fn(async (_pageId: string) => {}), runtime
     id === 1 ? { isDestroyed: () => false } : null
   )
   runtime.attachWindow(1)
-  const sync = (snapshots: RuntimeMobileSessionTabsSnapshot[]) =>
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+  const sync = async (snapshots: RuntimeMobileSessionTabsSnapshot[]) =>
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
   // Desktop webviews share the bridge inventory with offscreen pages but the backend does not own them.
   const addDesktopPage = (browserPageId: string) => {
     desktopPageIds.add(browserPageId)

@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -108,8 +109,8 @@ beforeEach(() => {
       if (!owner) {
         throw new Error('deploy without a fence')
       }
-      if (!environments.listEnvironments(path).some((entry) => entry.id === owner)) {
-        addManagedOrcadEnvironment(path, {
+      if (!(await environments.listEnvironments(path)).some((entry) => entry.id === owner)) {
+        await addManagedOrcadEnvironment(path, {
           id: owner,
           name: args.name,
           pairingCode: encodePairingOffer({
@@ -168,12 +169,12 @@ const serverRepoIds = () =>
 // #29560: `orca environment stop` unlinks the server but leaves its profile on the host.
 describe('moving the host again after its server was stopped', () => {
   // The local half of stop (unlinkEnvironmentLocally); the server keeps its profile.
-  function stopServer(): void {
+  async function stopServer(): Promise<void> {
     const owner = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))
     if (!owner) {
       throw new Error('no managed server to stop')
     }
-    removeManagedOrcadEnvironment(userDataPath, owner)
+    await removeManagedOrcadEnvironment(userDataPath, owner)
     targetStore.getOrcadRuntimeClaims().release(TARGET.id, owner)
     removeOrcadMigrationJournalsForDestination(userDataPath, TARGET.id, owner)
   }
@@ -186,7 +187,7 @@ describe('moving the host again after its server was stopped', () => {
     server.setWorktreeMeta(onServer('desktop-repo::/root/migrepo'), {
       comment: 'edited on the server'
     })
-    stopServer()
+    await stopServer()
 
     await expect(convert()).resolves.toMatchObject({
       outcome: 'converted',

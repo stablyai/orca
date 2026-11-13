@@ -8,14 +8,14 @@ import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.s
 import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../terminal/output/decorative-title-fact-emission'
 
 describe('terminal side-effect fact channel', () => {
-  it('bounds decorative title delivery per paired client below the local heartbeat', () => {
+  it('bounds decorative title delivery per paired client below the local heartbeat', async () => {
     // Clear the local heartbeat each round so only the per-client gate can collapse repeats.
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       const { runtime, batches } = createSideEffectRuntime()
       const firstClientEvents: RuntimeClientEvent[] = []
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       runtime.onClientEvent((event) => firstClientEvents.push(event))
 
       const ptyIds = Array.from({ length: 64 }, (_, index) => `pty-remote-${index}`)

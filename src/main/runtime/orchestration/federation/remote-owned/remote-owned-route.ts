@@ -78,7 +78,7 @@ export async function routeRemoteOwnedCall(
   const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined
   if (request.method === 'orchestration.workerShow' && record) {
     // A status read is this Orca's record, never a call there: instant whatever the server is doing.
-    return { handled: true, result: remoteWorkerShow(runtime, record) }
+    return { handled: true, result: await remoteWorkerShow(runtime, record) }
   }
   const forward = remoteForwardKey(
     runtime,
@@ -104,7 +104,7 @@ export async function routeRemoteOwnedCall(
       }
       return {
         handled: true,
-        result: settleUnansweredAbandon(runtime, subject.link, subject.dispatchId)
+        result: await settleUnansweredAbandon(runtime, subject.link, subject.dispatchId)
       }
     }
   }
@@ -128,7 +128,7 @@ async function routeServerCall(
     return LOCAL
   }
   checkDeclaredOrchestrationAccess(access, values, ctx)
-  const server = runtime.resolveOrchestrationWorkerServer(on)
+  const server = await runtime.resolveOrchestrationWorkerServer(on)
   const db = runtime.getOrchestrationDb()
   if (request.method === 'orchestration.workerStart') {
     if (
@@ -259,7 +259,7 @@ async function forwardToLink(
   forward?: RemoteForwardKey
 ): Promise<unknown> {
   const db = runtime.getOrchestrationDb()
-  const server = remoteServerName(runtime, link.environment_id)
+  const server = await remoteServerName(runtime, link.environment_id)
   const params = paramsForServer(access, values)
   try {
     const answer = await callRemoteOwnedServer(runtime, link, {

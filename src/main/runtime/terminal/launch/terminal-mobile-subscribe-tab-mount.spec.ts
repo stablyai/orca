@@ -30,8 +30,8 @@ export function registerTerminalMobileSubscribeTabMountTests(): void {
   describe('mobile terminal subscribe tab mount', () => {
     it('keeps a waiting real-tab handle usable when the mount binds its first PTY', async () => {
       const runtime = new OrcaRuntimeService()
-      const syncGraph = (ptyId: string | null): void => {
-        runtime.syncWindowGraph(1, {
+      const syncGraph = async (ptyId: string | null): Promise<void> => {
+        await runtime.syncWindowGraph(1, {
           tabs: [
             {
               tabId: 'tab-1',

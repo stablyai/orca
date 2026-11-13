@@ -16,7 +16,7 @@ vi.mock('../ipc/filesystem/access/local-file-access-resolution', () => ({
 }))
 
 vi.mock('../ipc/runtime-environments/catalog/runtime-environment-registry-root', () => ({
-  readRegisteredPairingRevision: vi.fn(() => 9)
+  readRegisteredPairingRevision: vi.fn(async () => 9)
 }))
 vi.mock('./remote-file-preview-reader', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteFilePreviewReader>()),
@@ -25,7 +25,13 @@ vi.mock('./remote-file-preview-reader', async (importOriginal) => ({
   readRemotePreviewRange: vi.fn(),
   assertRemoteChunkReadsSupported: vi.fn()
 }))
-import { handleMediaPreviewRequest, readLocalFilePreview } from './media-preview-protocol'
+import {
+  handleMediaPreviewRequest,
+  readLocalFilePreview,
+  grantRemoteFilePreview
+} from './media-preview-protocol'
+import { readRegisteredPairingRevision } from '../ipc/runtime-environments/catalog/runtime-environment-registry-root'
+import { statRemotePreviewFile } from './remote-file-preview-reader'
 import type * as RemoteFilePreviewReader from './remote-file-preview-reader'
 
 function png(width: number, height: number): Uint8Array {
@@ -67,5 +73,22 @@ describe('media preview protocol', () => {
     const result = await readLocalFilePreview(event, { filePath }, store, { documents: true })
     await writeFile(filePath, png(100_000, 100_000))
     expect((await handleMediaPreviewRequest(new Request(result?.mediaUrl ?? ''))).status).toBe(404)
+  })
+  it('cancels a remote preview when the renderer reloads during pairing resolution', async () => {
+    let complete!: (revision: number) => void
+    vi.mocked(readRegisteredPairingRevision).mockReturnValueOnce(
+      new Promise((resolve) => {
+        complete = resolve
+      })
+    )
+    const pending = grantRemoteFilePreview(
+      event,
+      { environmentId: 'remote', worktree: 'worktree', relativePath: 'clip.mp4' },
+      store
+    )
+    emitter.emit('did-navigate')
+    complete(9)
+    await expect(pending).rejects.toThrow()
+    expect(statRemotePreviewFile).not.toHaveBeenCalled()
   })
 })

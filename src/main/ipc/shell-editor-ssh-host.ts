@@ -10,20 +10,19 @@ import {
 import type { SshTarget } from '../../shared/ssh-types'
 import { fingerprintRuntimeSshTarget } from '../ssh/runtime-access/runtime-ssh-target-fingerprint'
 
-export type ListRuntimeEnvironments = () => readonly Pick<
-  KnownRuntimeEnvironment,
-  'id' | 'orcadDeployment' | 'sshAccess'
->[]
+export type ListRuntimeEnvironments = () => Promise<
+  readonly Pick<KnownRuntimeEnvironment, 'id' | 'orcadDeployment' | 'sshAccess'>[]
+>
 
-export const listAppRuntimeEnvironments: ListRuntimeEnvironments = () =>
-  listEnvironments(getAppEnvironment().getPath('userData'))
+export const listAppRuntimeEnvironments: ListRuntimeEnvironments = async () =>
+  await listEnvironments(getAppEnvironment().getPath('userData'))
 
 /** Whether `target` is the SSH host that owns the path: that host, or the one its server runs on. */
-export function isEditorSshHostForOwner(
+export async function isEditorSshHostForOwner(
   target: SshTarget,
   ownerHostId: unknown,
   listRuntimeEnvironments: ListRuntimeEnvironments
-): boolean {
+): Promise<boolean> {
   if (ownerHostId === toSshExecutionHostId(target.id)) {
     return true
   }
@@ -31,9 +30,9 @@ export function isEditorSshHostForOwner(
   if (owner?.kind !== 'runtime') {
     return false
   }
-  let environments: ReturnType<ListRuntimeEnvironments>
+  let environments: Awaited<ReturnType<ListRuntimeEnvironments>>
   try {
-    environments = listRuntimeEnvironments()
+    environments = await listRuntimeEnvironments()
   } catch {
     return false
   }

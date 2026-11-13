@@ -40,7 +40,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -97,7 +97,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -199,7 +199,7 @@ describe('OrcaRuntimeService', () => {
       payload: { state: 'working', prompt: 'earlier hook row', agentType: 'codex' }
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -260,7 +260,7 @@ describe('OrcaRuntimeService', () => {
       })
       // Keep the tab present: this test varies freshness, not the closed-tab filter (#6072).
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'tab-1',

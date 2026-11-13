@@ -90,11 +90,11 @@ describe('graph-sync deletion fence', () => {
     const internals = runtime as unknown as FenceInternals
     const events: RuntimeMobileSessionTabsResult[] = []
     runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
-    const sync = (
+    const sync = async (
       mobileSessionTabs: RuntimeMobileSessionTabsSnapshot[],
       extra: { rendererGeneration?: string; unchanged?: string[] } = {}
     ) =>
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         ...(extra.rendererGeneration ? { rendererGeneration: extra.rendererGeneration } : {}),

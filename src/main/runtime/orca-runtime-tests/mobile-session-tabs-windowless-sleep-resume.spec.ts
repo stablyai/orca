@@ -53,7 +53,7 @@ function withClaudeLaunchedTab(fixture: ReturnType<typeof makeWorkingSleepStore>
   fixture.setSession(session)
 }
 
-function openPane(
+async function openPane(
   runtimeStore: RuntimeStore,
   windowStatus: 'blocked' | 'openable',
   opts: { spawn?: () => Promise<{ id: string }>; withWindow?: boolean; tap?: boolean } = {}
@@ -69,7 +69,7 @@ function openPane(
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   electronMocks.BrowserWindow.fromId.mockReturnValue(null)
   const opened = (async () => {
     if (opts.withWindow) {
@@ -112,9 +112,11 @@ describe('opening a workspace-slept running agent on a host with no window', () 
       launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
     })
     withClaudeLaunchedTab(fixture)
-    await openPane(fixture.runtimeStore, 'openable').opened
+    await (
+      await openPane(fixture.runtimeStore, 'openable')
+    ).opened
 
-    const restarted = openPane(fixture.runtimeStore, 'openable')
+    const restarted = await openPane(fixture.runtimeStore, 'openable')
     await restarted.opened
     const command = spawnedCommand(restarted.spawn)
     expect(command).toContain('provider-session-1')
@@ -125,7 +127,7 @@ describe('opening a workspace-slept running agent on a host with no window', () 
   it('resumes from both of two overlapping opens of the pane, never a plain shell', async () => {
     const fixture = makeWorkingSleepStore()
     withClaudeLaunchedTab(fixture)
-    const { opened, spawn, runtime } = openPane(fixture.runtimeStore, 'openable')
+    const { opened, spawn, runtime } = await openPane(fixture.runtimeStore, 'openable')
     const second = runtime.activateMobileSessionTab(
       `id:${TEST_WORKTREE_ID}`,
       'host-tab',
@@ -142,7 +144,7 @@ describe('opening a workspace-slept running agent on a host with no window', () 
 
   it('keeps the record for the next open when the pane resume fails to spawn', async () => {
     const fixture = makeWorkingSleepStore()
-    const { opened, spawn } = openPane(fixture.runtimeStore, 'openable', {
+    const { opened, spawn } = await openPane(fixture.runtimeStore, 'openable', {
       spawn: () => Promise.reject(new Error('spawn failed'))
     })
 
@@ -151,7 +153,7 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject(
       PANE_OWNED
     )
-    const retried = openPane(fixture.runtimeStore, 'openable')
+    const retried = await openPane(fixture.runtimeStore, 'openable')
     await retried.opened
     expect(spawnedCommand(retried.spawn)).toContain('provider-session-1')
   })

@@ -43,12 +43,12 @@ class ExitAuthorityRuntime extends OrcaRuntimeService {
   }
 }
 
-function graph(
+async function graph(
   runtime: OrcaRuntimeService,
   ptyId: string | null = PTY,
   snapshotVersion?: number
-): void {
-  runtime.syncWindowGraph(1, {
+): Promise<void> {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       { tabId: TAB, worktreeId: WORKTREE, title: 'terminal', activeLeafId: LEAF, layout: null }
     ],
@@ -141,13 +141,13 @@ describe('host exit authority over queued renderer graphs', () => {
     let pending: Promise<unknown> | undefined
     try {
       register(runtime)
-      graph(runtime, PTY, 1)
+      await graph(runtime, PTY, 1)
       pending = runtime.stopExactTerminalsForWorktree(`id:${WORKTREE}`, [PTY], {
         keepHistory: true,
         targetOnly: true
       })
       await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce())
-      graph(runtime, PTY, 2)
+      await graph(runtime, PTY, 2)
       expect(runtime.history()).toEqual({
         surfaces: 1,
         leaves: [{ connected: false, writable: false }],
@@ -155,7 +155,7 @@ describe('host exit authority over queued renderer graphs', () => {
       })
       finishStop()
       await expect(pending).resolves.toMatchObject({ postStopVerified: true })
-      graph(runtime, null, 3)
+      await graph(runtime, null, 3)
       expect(runtime.history().surfaces).toBe(1)
     } finally {
       finishStop()
@@ -166,23 +166,23 @@ describe('host exit authority over queued renderer graphs', () => {
     }
   })
 
-  it('admits a registered successor and ignores the predecessor exit', () => {
+  it('admits a registered successor and ignores the predecessor exit', async () => {
     const runtime = new ExitAuthorityRuntime()
     register(runtime)
     runtime.onPtyExit(PTY, 0, FIRST)
     register(runtime, NEXT)
     runtime.onPtyExit(PTY, 0, FIRST)
-    graph(runtime)
+    await graph(runtime)
     expect(runtime.capture()).toEqual({ connected: true, incarnationId: NEXT })
     expect(runtime.getPtyLivenessVerdict(PTY)).toBeNull()
   })
 
-  it('admits a same-ID spawn before its registration commits', () => {
+  it('admits a same-ID spawn before its registration commits', async () => {
     const runtime = new ExitAuthorityRuntime()
     register(runtime)
     runtime.onPtyExit(PTY, 0, FIRST)
     runtime.onPtySpawned(PTY, NEXT)
-    graph(runtime)
+    await graph(runtime)
     expect(runtime.capture()).toEqual({ connected: true, incarnationId: NEXT })
     expect(runtime.getPtyLivenessVerdict(PTY)).toBeNull()
   })
@@ -198,7 +198,7 @@ describe('host exit authority over queued renderer graphs', () => {
       listProcesses: async () => [{ id: PTY, incarnationId: NEXT, cwd: '', title: 'terminal' }]
     })
     await runtime.listTerminals()
-    graph(runtime)
+    await graph(runtime)
     expect(runtime.capture()).toEqual({ connected: true, incarnationId: NEXT })
     expect(runtime.getPtyLivenessVerdict(PTY)?.status).toBe('live')
   })

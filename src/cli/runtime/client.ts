@@ -58,7 +58,9 @@ const loadWebSocketTransport = async () => await import('./websocket-transport.j
 
 export class RuntimeClient {
   readonly userDataPath: string
-  private readonly remote: PairedRuntimeConnection | null
+  private remote: Promise<PairedRuntimeConnection | null> | undefined
+  private readonly resolveRemote: () => Promise<PairedRuntimeConnection | null>
+  private readonly remoteSelected: boolean
   readonly environmentSelector: string | null
   private readonly cliExecutable: string
   private readonly originalArgs: readonly string[] | undefined
@@ -80,13 +82,15 @@ export class RuntimeClient {
     this.environmentSelector = environmentSelector
     this.cliExecutable = cliExecutable
     this.originalArgs = originalArgs ? [...originalArgs] : undefined
-    this.remote = resolveRemoteConnection(userDataPath, remotePairingCode, environmentSelector)
+    this.remoteSelected = Boolean(remotePairingCode || environmentSelector)
+    this.resolveRemote = async () =>
+      await resolveRemoteConnection(userDataPath, remotePairingCode, environmentSelector)
     this.remoteCompat = new RemoteRuntimeCompatGate(userDataPath, environmentSelector)
     this.runtimeSourceFence = createRuntimeSourceFence(process.env, userDataPath, requestTimeoutMs)
   }
 
   get isRemote(): boolean {
-    return this.remote !== null
+    return this.remoteSelected
   }
 
   async call<TResult>(
@@ -133,7 +137,7 @@ export class RuntimeClient {
       }
     }
     const compatibilityEnvelope = this.requestEvidence.envelopeFor(method, {
-      remote: this.remote !== null,
+      remote: this.remoteSelected,
       mutation: orchestrationMutation,
       requestId: orchestrationRequestId
     })
@@ -145,13 +149,13 @@ export class RuntimeClient {
       orchestrationRequestId,
       ...compatibilityEnvelope
     }
-    if (this.remote) {
+    if (this.remoteSelected) {
       const transport = await loadWebSocketTransport()
       let response
       try {
         response = await this.remoteCompat.send<TResult>({
           transport,
-          connection: this.remote,
+          connection: (await (this.remote ??= this.resolveRemote()))!,
           method,
           params,
           timeoutMs: effectiveTimeoutMs,
@@ -226,7 +230,7 @@ export class RuntimeClient {
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    if (this.remote) {
+    if (this.remoteSelected) {
       const response = await this.call<RuntimeStatus>('status.get')
       this.remoteCompat.noteVerifiedStatus(response.result)
       const graphState = response.result.graphStatus
@@ -265,7 +269,7 @@ export class RuntimeClient {
   }
 
   async getOfflineRuntimeAdmission(): Promise<OfflineRuntimeAdmission> {
-    if (this.remote) {
+    if (this.remoteSelected) {
       const status = await this.getCliStatus()
       return {
         reachable: status.result.runtime.reachable,
@@ -291,7 +295,7 @@ export class RuntimeClient {
 
   private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<void> {
     const response = await this.call<RuntimeStatus>('status.get', undefined, { timeoutMs })
-    if (this.remote) {
+    if (this.remoteSelected) {
       this.remoteCompat.noteVerifiedStatus(response.result)
     }
     if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
@@ -304,6 +308,8 @@ export class RuntimeClient {
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
+    return this.remoteSelected
+      ? this.getCliStatus()
+      : openLocalOrca(() => this.getCliStatus(), timeoutMs)
   }
 }

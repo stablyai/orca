@@ -103,8 +103,8 @@ function prepareHost(
     {
       readRunningDistros: readConfirmedRunningWslDistros,
       isHostReady,
-      removalPending: () => wslHostRemovalPending(userDataPath, distro),
-      hasHost: () => service.recordForEnvironment(environmentId) !== null,
+      removalPending: async () => await wslHostRemovalPending(userDataPath, distro),
+      hasHost: async () => (await service.recordForEnvironment(environmentId)) !== null,
       connect: () => service.connect(environmentId),
       // Re-checked here: a block learned after the step began must still stop the add.
       add: () =>
@@ -137,10 +137,11 @@ function createOrchestrator(
       process.env[WSL_MOVE_ORCHESTRATOR_AUTO_ENV] !== '0' && wslHostsOptedIn(store.getSettings()),
     autoMovesBridgeProjects: wslMoveAutoMovesBridgeProjects,
     prepareHost: (distro, stillWanted) => prepareHost(userDataPath, distro, stillWanted),
-    isDistroInUse: (distro) => isDistroInUse(store, userDataPath, distro),
-    hostRemovalPending: (distro) => wslHostRemovalPending(userDataPath, distro),
-    hasHost: (distro) =>
-      getWslHostService()?.recordForEnvironment(defaultWslOrcadEnvironmentId(distro)) != null,
+    isDistroInUse: async (distro) => await isDistroInUse(store, userDataPath, distro),
+    hostRemovalPending: async (distro) => await wslHostRemovalPending(userDataPath, distro),
+    hasHost: async (distro) =>
+      (await getWslHostService()?.recordForEnvironment(defaultWslOrcadEnvironmentId(distro))) !=
+      null,
     isHostReady,
     preview: async (distro, userAsked) =>
       previewWslMove(
@@ -289,11 +290,11 @@ export function registerWslMoveOrchestrator(
     const created = createOrchestrator(store, driverDeps)
     orchestrator = created
     followHostReadiness(created)
-    onWslMoveReleasedByUser((distro) => created.releasedByUser(distro, 'released-here'))
+    onWslMoveReleasedByUser(async (distro) => await created.releasedByUser(distro, 'released-here'))
     // A Remove is the user declining the host; only their own Add (or Retry) takes it back.
-    onWslHostUserAction(({ kind, distro }) =>
+    onWslHostUserAction(async ({ kind, distro }) =>
       kind === 'removed'
-        ? created.releasedByUser(distro, 'removed')
+        ? await created.releasedByUser(distro, 'removed')
         : created.hostAddedByUser(distro)
     )
   } catch (error) {

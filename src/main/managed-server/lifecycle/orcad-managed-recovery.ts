@@ -7,11 +7,11 @@ import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refre
 import type { LifecycleArgs } from './orcad-managed-lifecycle'
 import { withManagedOrcadLifecycle, followLaunchedServerPort } from './orcad-managed-lifecycle'
 
-export function recoverManagedOrcadEnvironment(
+export async function recoverManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs & { acceptChangedState?: boolean }
 ): Promise<OrcadManagedRecoveryResult> {
-  return withManagedOrcadLifecycle(
+  return await withManagedOrcadLifecycle(
     userDataPath,
     args.selector,
     async ({ environment, deployment }) => {
@@ -24,7 +24,7 @@ export function recoverManagedOrcadEnvironment(
         return result
       }
       const updated = result.readiness
-        ? refreshMaintainedOrcadPairing(userDataPath, environment.id, result.readiness)
+        ? await refreshMaintainedOrcadPairing(userDataPath, environment.id, result.readiness)
         : environment
       if (result.activeVersion) {
         await followLaunchedServerPort(userDataPath, environment.id)

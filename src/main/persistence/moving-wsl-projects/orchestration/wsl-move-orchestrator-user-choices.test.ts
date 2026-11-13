@@ -22,7 +22,7 @@ describe('WslMoveOrchestrator: user choices, races and failures', () => {
       const orchestrator = new WslMoveOrchestrator(ports)
       const step = orchestrator.trigger('Ubuntu', 'connect')
       await vi.waitFor(() => expect(ports.preview).toHaveBeenCalled())
-      orchestrator.releasedByUser('Ubuntu', 'released-here')
+      await orchestrator.releasedByUser('Ubuntu', 'released-here')
       release()
       await step
       expect(ports.start).not.toHaveBeenCalled()

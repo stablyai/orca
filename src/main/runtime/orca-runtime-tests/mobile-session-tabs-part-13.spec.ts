@@ -61,7 +61,7 @@ describe('OrcaRuntimeService', () => {
     })
     webContents.send = send
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
       webContents
@@ -81,7 +81,7 @@ describe('OrcaRuntimeService', () => {
       )
       expect(createRequests).toHaveLength(2)
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [
         {
@@ -188,7 +188,7 @@ describe('OrcaRuntimeService', () => {
       })
       webContents.send = send
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents
@@ -204,7 +204,7 @@ describe('OrcaRuntimeService', () => {
       })
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -295,7 +295,7 @@ describe('OrcaRuntimeService', () => {
       })
       webContents.send = send
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents
@@ -310,7 +310,7 @@ describe('OrcaRuntimeService', () => {
       )
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -363,7 +363,7 @@ describe('OrcaRuntimeService', () => {
       })
       webContents.send = send
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents
@@ -380,7 +380,7 @@ describe('OrcaRuntimeService', () => {
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       // A later PTY rescue must fill launch props missing from the shell-only snapshot.
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -450,7 +450,7 @@ describe('OrcaRuntimeService', () => {
       })
       webContents.send = send
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents
@@ -515,7 +515,7 @@ describe('OrcaRuntimeService', () => {
       })
       webContents.send = send
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents

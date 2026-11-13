@@ -73,6 +73,7 @@ export class RelayLink {
     const disconnects = hosts.userDisconnects?.(this.environmentId)
     // An ended link (its phone gone) stops waiting on a VM wake.
     const host = await hosts.resolve(this.environmentId, openingMethod, this.abortController.signal)
+    this.abortController.signal.throwIfAborted()
     // Retired while preparing: only the re-pair this link's own open woke is allowed through.
     if (this.retiredWhilePreparing && !host?.wokenByOpening) {
       throw unavailable('The server connection was reset.')
@@ -89,17 +90,18 @@ export class RelayLink {
   /** Whether this link may carry a request. One that opens a workspace while the recipe VM behind
    *  this link's server is waking or asleep must not: that server is going or gone. The link then
    *  ends, and the open gets a fresh link whose preparation holds it until the VM is up. */
-  carries(
+  async carries(
     method: string,
     hosts: Pick<MobileDesktopRelayHosts, 'serverStateForOpening'>,
     end: (refusal: RemoteRuntimeClientError) => void
-  ): boolean {
+  ): Promise<boolean> {
     // A link still preparing for an open is the one this open would get, so it joins that wait.
     if (recipeVmWakeIntentFor(method) !== 'wake' || (!this.paired && this.preparingOpen)) {
       return true
     }
     // Any other link carries it only while the VM behind its server is up.
-    const state = hosts.serverStateForOpening?.(this.environmentId) ?? 'up'
+    const state = (await hosts.serverStateForOpening?.(this.environmentId)) ?? 'up'
+    this.abortController.signal.throwIfAborted()
     if (state === 'up') {
       return true
     }

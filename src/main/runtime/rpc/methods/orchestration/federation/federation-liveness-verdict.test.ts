@@ -111,7 +111,7 @@ describe('federation host liveness verdicts', () => {
     const hostRuntime = new OrcaRuntimeService(realRuntimeStore() as never)
     hostRuntime.setOrchestrationDb(hostDb)
     hostRuntime.attachWindow(1)
-    hostRuntime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await hostRuntime.syncWindowGraph(1, { tabs: [], leaves: [] })
     registerBoundPty(hostRuntime, REAL_PTY_ID, REAL_WORKTREE_ID, connectionId, {
       tabId: 'tab_federation_liveness',
       leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',

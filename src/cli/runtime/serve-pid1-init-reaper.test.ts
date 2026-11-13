@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'

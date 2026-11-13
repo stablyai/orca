@@ -58,50 +58,54 @@ type SlotReclaim =
   /** Slots without nonce pinning require manual reclamation. */
   | { status: 'unsupported' | 'unpinned' | 'no-answer' | 'busy'; message: string }
 
-export function runManagedOrcadStaleLockReclaim(
+export async function runManagedOrcadStaleLockReclaim(
   userDataPath: string,
   selector: string,
   request: OrcadManagedStaleLockReclaimRequest
 ): Promise<OrcadManagedStaleLockReclaimResult> {
-  return withManagedOrcadLifecycle(userDataPath, selector, async ({ environment, deployment }) => {
-    const context = await resolveLinkedOrcadContext(environment, deployment)
-    if (context.host.os !== 'linux') {
-      return unsupported('This host’s Orca server has no stale-lock recovery.')
+  return await withManagedOrcadLifecycle(
+    userDataPath,
+    selector,
+    async ({ environment, deployment }) => {
+      const context = await resolveLinkedOrcadContext(environment, deployment)
+      if (context.host.os !== 'linux') {
+        return unsupported('This host’s Orca server has no stale-lock recovery.')
+      }
+      const slot = managedOrcadSlot(context, deployment.remotePort)
+      // Serialize reclamation with launch so wake cannot race lock removal.
+      const ran = await withOrcadActivationLock(
+        slot,
+        () => runOnActiveSlot(slot, request),
+        (): SlotReclaim => ({
+          status: 'busy',
+          message: 'An update, rollback or recovery holds this host; try again when it finishes.'
+        })
+      )
+      if (ran.status === 'unsupported') {
+        const lockPath = joinRemotePath(slot.host, slot.userDataDir, ORCAD_LOCK_FILE_NAME)
+        return { status: 'unsupported', message: ran.message, lockPath }
+      }
+      if (ran.status === 'unpinned') {
+        return { status: 'unsupported', message: ran.message, reclaimWithoutPin: true }
+      }
+      if (ran.status !== 'answered') {
+        return { status: ran.status, message: ran.message }
+      }
+      const { answer } = ran
+      if (answer.status !== 'reclaimed') {
+        return { ...answer, status: answer.status }
+      }
+      const reclaimed = {
+        status: 'reclaimed',
+        environmentId: environment.id,
+        message: answer.message,
+        lockPath: answer.lockPath,
+        ...(answer.evidence ? { evidence: answer.evidence } : {})
+      } as const
+      const notRestarted = await restartAfterReclaim(userDataPath, environment.id, slot)
+      return notRestarted ? { ...reclaimed, notRestarted } : reclaimed
     }
-    const slot = managedOrcadSlot(context, deployment.remotePort)
-    // Serialize reclamation with launch so wake cannot race lock removal.
-    const ran = await withOrcadActivationLock(
-      slot,
-      () => runOnActiveSlot(slot, request),
-      (): SlotReclaim => ({
-        status: 'busy',
-        message: 'An update, rollback or recovery holds this host; try again when it finishes.'
-      })
-    )
-    if (ran.status === 'unsupported') {
-      const lockPath = joinRemotePath(slot.host, slot.userDataDir, ORCAD_LOCK_FILE_NAME)
-      return { status: 'unsupported', message: ran.message, lockPath }
-    }
-    if (ran.status === 'unpinned') {
-      return { status: 'unsupported', message: ran.message, reclaimWithoutPin: true }
-    }
-    if (ran.status !== 'answered') {
-      return { status: ran.status, message: ran.message }
-    }
-    const { answer } = ran
-    if (answer.status !== 'reclaimed') {
-      return { ...answer, status: answer.status }
-    }
-    const reclaimed = {
-      status: 'reclaimed',
-      environmentId: environment.id,
-      message: answer.message,
-      lockPath: answer.lockPath,
-      ...(answer.evidence ? { evidence: answer.evidence } : {})
-    } as const
-    const notRestarted = await restartAfterReclaim(userDataPath, environment.id, slot)
-    return notRestarted ? { ...reclaimed, notRestarted } : reclaimed
-  })
+  )
 }
 
 /** Preserve successful reclamation even if restart fails; return the restart warning. */

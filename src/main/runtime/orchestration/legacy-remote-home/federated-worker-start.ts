@@ -72,7 +72,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     model: params.model,
     effort: params.effort
   })
-  const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
+  const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
   const status = (await runtime.callOrchestrationWorkerServer(

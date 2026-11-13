@@ -56,7 +56,7 @@ describe('display surfaces after the stale-working title clear', () => {
         getForegroundProcess: async () => null
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       const register = () =>
         registerBoundPty(runtime, sshPtyId, TEST_WORKTREE_ID, 'conn-1', {
           tabId: 'tab-1',
@@ -147,7 +147,7 @@ describe('display surfaces after the stale-working title clear', () => {
         getForegroundProcess: async () => 'Python'
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
         tabId: 'bg-tab',
         leafId: HEADLESS_LEAF_ID
