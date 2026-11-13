@@ -58,6 +58,12 @@ export type CloudOomEvent = {
   at: number
 }
 
+/**
+ * The person's own standing on a GitHub repository: admin on it (an owner of a personal account,
+ * or an org owner or repository admin), and whether its owner is a user or an organization.
+ */
+export type GitHubInstallRights = { admin: boolean; ownerType: 'User' | 'Organization' }
+
 /** The status panel's read plus what the desktop needs from the sandbox view alongside it. */
 export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
   /** GIT-SETUP: commits and pushes are refused in the VM until a boot installs the identities. */
@@ -110,6 +116,13 @@ export type OrcaCloudWorkspaceApi = {
     repoUrl: string
     setupSessionId?: string
   }) => Promise<CloudWorkspaceResult<HostedGithubRepoAccessResponse>>
+  /**
+   * Whether the person can install the Orca GitHub App on this repository's owner, read with their
+   * own GitHub CLI login; null when gh can't tell (not installed, signed out, slow).
+   */
+  gitHubInstallRights: (args: {
+    repoUrl: string
+  }) => Promise<CloudWorkspaceResult<GitHubInstallRights | null>>
   /** One page of the repositories the account's GitHub installations reach (cloud-start N12). */
   listGitHubRepositories: (args: {
     cursor?: string | null
@@ -148,6 +161,7 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   gitHubUserConnectLink: 'orcaCloudWorkspace:gitHubUserConnectLink',
   disconnectGitHubUser: 'orcaCloudWorkspace:disconnectGitHubUser',
   getRepoAccess: 'orcaCloudWorkspace:getRepoAccess',
+  gitHubInstallRights: 'orcaCloudWorkspace:gitHubInstallRights',
   listGitHubRepositories: 'orcaCloudWorkspace:listGitHubRepositories',
   createFromGitHub: 'orcaCloudWorkspace:createFromGitHub',
   wakeProgress: 'orcaCloudWorkspace:wakeProgress',

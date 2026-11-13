@@ -25,6 +25,7 @@ export const orcaCloudWorkspaceApi = {
   gitHubUserConnectLink: () => ipcRenderer.invoke(CH.gitHubUserConnectLink),
   disconnectGitHubUser: () => ipcRenderer.invoke(CH.disconnectGitHubUser),
   getRepoAccess: (args) => ipcRenderer.invoke(CH.getRepoAccess, args),
+  gitHubInstallRights: (args) => ipcRenderer.invoke(CH.gitHubInstallRights, args),
   listGitHubRepositories: (args) => ipcRenderer.invoke(CH.listGitHubRepositories, args),
   createFromGitHub: (args) => ipcRenderer.invoke(CH.createFromGitHub, args),
   onWakeProgress: (callback) => {

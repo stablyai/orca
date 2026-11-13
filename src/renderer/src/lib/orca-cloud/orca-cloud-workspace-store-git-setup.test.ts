@@ -50,6 +50,7 @@ function stub(
     gitHubUserConnectLink: vi.fn(unused),
     disconnectGitHubUser: vi.fn(unused),
     getRepoAccess: vi.fn(unused),
+    gitHubInstallRights: vi.fn(unused),
     listGitHubRepositories: vi.fn(unused),
     createFromGitHub: vi.fn(unused),
     onWakeProgress: vi.fn(() => () => {}),

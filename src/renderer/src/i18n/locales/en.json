@@ -28500,7 +28500,21 @@
       "fetchFailedNoRepo": "This workspace can’t reach its Git remote right now.",
       "checking": "Checking…",
       "checkAgain": "Check again",
-      "fetchFailedMeaning": "Pulls and pushes won’t work until it can."
+      "fetchFailedMeaning": "Pulls and pushes won’t work until it can.",
+      "toolMissing": "{{command}} isn’t installed in this sandbox, but {{reason}} needs it.",
+      "toolMissingNoReason": "{{command}} isn’t installed in this sandbox.",
+      "toolMissingMeaning": "Install it from a terminal here, or add it to your project’s setup script so new workspaces have it.",
+      "diskLow": "Only {{free}} GB of disk space is free in this sandbox.",
+      "diskVeryLowMeaning": "Installs and builds may fail. Delete caches or build output you don’t need.",
+      "diskLowMeaning": "Large dependency installs may run out of space.",
+      "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
+      "copied": "Copied",
+      "copyRequest": "Copy request for an owner",
+      "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
+      "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
+      "pushRequestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
+      "pushRequestCopyFailed": "Couldn’t copy it."
     },
     "toast": {
       "dismiss": "Dismiss"

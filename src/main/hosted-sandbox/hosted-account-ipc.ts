@@ -5,7 +5,13 @@ import { ORCA_CLOUD_WORKSPACE_CHANNELS as CH } from '../../shared/hosted-sandbox
 import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { failure } from './hosted-workspace-runtime'
-import { githubRepoSlug, lookupGitHubRepoIds, type GitHubRepoIds } from './github-repo-ids'
+import {
+  githubRepoSlug,
+  lookupGitHubInstallRights,
+  lookupGitHubRepoIds,
+  type GitHubRepoIds
+} from './github-repo-ids'
+import type { GitHubInstallRights } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import {
   CLOUD_CREATE_IDEMPOTENCY_KEY,
   CLOUD_CREATE_PROVISION_ID,
@@ -24,6 +30,7 @@ export const HOSTED_ACCOUNT_CHANNELS = [
   CH.getConfig,
   CH.connectGitHub,
   CH.getRepoAccess,
+  CH.gitHubInstallRights,
   CH.listGitHubRepositories,
   CH.createFromGitHub,
   ...HOSTED_GITHUB_USER_CHANNELS
@@ -59,9 +66,13 @@ export function registerHostedAccountHandlers(
     | 'connectGitHubUser'
     | 'disconnectGitHubUser'
   >,
-  options: { repoIds?: (repoUrl: string) => Promise<GitHubRepoIds | null> } = {}
+  options: {
+    repoIds?: (repoUrl: string) => Promise<GitHubRepoIds | null>
+    installRights?: (repoUrl: string) => Promise<GitHubInstallRights | null>
+  } = {}
 ): void {
   const repoIds = options.repoIds ?? lookupGitHubRepoIds
+  const installRights = options.installRights ?? lookupGitHubInstallRights
   registerHostedGitHubUserHandlers(client)
   // The Worker re-measures every 5 minutes; match it so each new build sheet sees a fresh median.
   let config: { at: number; value: Promise<HostedSandboxConfigResponse | null> } | null = null
@@ -126,6 +137,15 @@ export function registerHostedAccountHandlers(
     } catch (error) {
       return failure(error)
     }
+  })
+
+  // Read with the person's own gh login; the control plane never sees a user token.
+  ipcMain.handle(CH.gitHubInstallRights, async (_event, args?: RepoArgs) => {
+    const target = repoTarget(args)
+    if (!target) {
+      return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
+    }
+    return { ok: true, value: await installRights(target.repo).catch(() => null) }
   })
 
   ipcMain.handle(CH.listGitHubRepositories, async (_event, args?: { cursor?: unknown }) => {
