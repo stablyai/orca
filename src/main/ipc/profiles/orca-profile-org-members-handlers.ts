@@ -13,6 +13,20 @@ import type {
 } from '../../../shared/orca-profiles'
 import type { OrcaAccountMfaResult } from '../../../shared/orca-account-mfa'
 import { getOrcaProfileAccountMfa } from '../../orca-profiles/cloud-mfa/profile-cloud-mfa-service'
+import {
+  ORCA_TEAM_MFA_GRACE_CHOICES,
+  type OrcaTeamMfaGrace,
+  type OrcaTeamMfaPendingResult,
+  type OrcaTeamMfaPolicyResult,
+  type OrcaTeamMfaPolicySetResult,
+  type OrcaTeamMfaRemindResult
+} from '../../../shared/orca-team-mfa-policy'
+import {
+  getOrcaTeamMfaPolicy,
+  listOrcaTeamMfaPending,
+  remindOrcaTeamMfa,
+  setOrcaTeamMfaPolicy
+} from '../../orca-profiles/cloud-mfa/profile-cloud-team-mfa-service'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import {
   changeOrcaProfileOrgMemberRole,
@@ -149,6 +163,44 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
   ipcMain.handle(
     'orcaProfiles:accountMfa',
     async (): Promise<OrcaAccountMfaResult> => getOrcaProfileAccountMfa(getProfileUserDataPath())
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaPolicy',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaPolicyResult> =>
+      getOrcaTeamMfaPolicy(getProfileUserDataPath(), orgMembersScopedArgs(rawArgs).orgId)
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaPolicySet',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaPolicySetResult> => {
+      const { orgId, record } = orgMembersScopedArgs(rawArgs)
+      const enforce = record.enforce
+      // Only the fixed choices cross to the server; anything else is refused here.
+      if (enforce !== 'off' && !ORCA_TEAM_MFA_GRACE_CHOICES.some((choice) => choice === enforce)) {
+        return { status: 'failed', error: 'invalid_enforce' }
+      }
+      return setOrcaTeamMfaPolicy(getProfileUserDataPath(), {
+        orgId,
+        enforce: enforce as OrcaTeamMfaGrace | 'off'
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaPending',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaPendingResult> =>
+      listOrcaTeamMfaPending(getProfileUserDataPath(), orgMembersScopedArgs(rawArgs).orgId)
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaRemind',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaRemindResult> => {
+      const { orgId, record } = orgMembersScopedArgs(rawArgs)
+      const userId =
+        typeof record.userId === 'string' && record.userId.length <= 128 ? record.userId : undefined
+      return remindOrcaTeamMfa(getProfileUserDataPath(), { orgId, ...(userId ? { userId } : {}) })
+    }
   )
 
   ipcMain.handle(

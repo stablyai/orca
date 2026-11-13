@@ -66,6 +66,10 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
         auth: await webOrcaProfileAuthStatus()
       }),
       accountMfa: async () => ({ status: 'unconfigured' }),
+      teamMfaPolicy: async () => ({ status: 'unconfigured' }),
+      teamMfaPolicySet: async () => ({ status: 'unconfigured' }),
+      teamMfaPending: async () => ({ status: 'unconfigured' }),
+      teamMfaRemind: async () => ({ status: 'unconfigured' }),
       orgMembersList: async () => ({ status: 'unconfigured' }),
       orgMemberInvite: async () => ({ status: 'unconfigured' }),
       orgInviteRevoke: async () => ({ status: 'unconfigured' }),
