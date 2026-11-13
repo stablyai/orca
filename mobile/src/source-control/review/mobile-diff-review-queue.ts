@@ -5,16 +5,18 @@ import type {
   DiffReviewScope,
   MobileDiffReviewState
 } from '../../../../src/shared/diff-comment-types'
-import type { MobileGitBranchChangeEntry, MobileGitChangedFile } from '../git-compare-reply-schema'
+import type {
+  MobileGitBranchChangeEntry,
+  MobileGitChangedFile
+} from '../branches/git-compare-reply-schema'
 import {
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
-  isMobileGitUnstageableEntry,
-  type MobileGitFileStatus,
-  type MobileGitStagingArea
-} from '../mobile-git-status'
-import '../git-status-reply-schema'
-import type { MobileGitStatusEntry } from '../git-status-reply-schema'
+  isMobileGitUnstageableEntry
+} from '../changes/mobile-git-status'
+import type * as GitStatus from '../../../../src/shared/git/status/git-status-types'
+import '../git/git-status-reply-schema'
+import type { MobileGitStatusEntry } from '../git/git-status-reply-schema'
 import {
   buildMobileDiffIdentity,
   didMobileDiffReviewFileChangeSinceReview,
@@ -28,10 +30,10 @@ export type MobileDiffReviewQueueFilter = 'all' | MobileDiffReviewSection
 export type MobileDiffReviewQueueItem = {
   key: string
   scope: MobileDiffReviewSection
-  area: MobileGitStagingArea | 'branch' | 'commit'
+  area: GitStatus.GitStagingArea | 'branch' | 'commit'
   filePath: string
   oldPath?: string
-  status: MobileGitFileStatus
+  status: GitStatus.GitFileStatus
   title: string
   subtitle: string
   added?: number
@@ -68,7 +70,7 @@ const SCOPE_SORT_ORDER: Record<MobileDiffReviewSection, number> = {
   commit: 3
 }
 
-function scopeForStatusArea(area: MobileGitStagingArea): DiffReviewScope {
+function scopeForStatusArea(area: GitStatus.GitStagingArea): DiffReviewScope {
   return area === 'staged' ? 'staged' : 'unstaged'
 }
 
@@ -170,7 +172,7 @@ function queueNoteCounts(
   return { noteCount, unsentNoteCount, staleNoteCount }
 }
 
-type PlaceableStatusEntry = MobileGitStatusEntry & { area: MobileGitStagingArea }
+type PlaceableStatusEntry = MobileGitStatusEntry & { area: GitStatus.GitStagingArea }
 
 function isPlaceableStatusEntry(entry: MobileGitStatusEntry): entry is PlaceableStatusEntry {
   return entry.area !== undefined

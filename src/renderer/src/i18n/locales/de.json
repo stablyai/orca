@@ -19012,7 +19012,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Öffnen mit (wenn der Fokus nicht in einem bearbeitbaren Feld liegt)"
+            "openWith": "Öffnen mit (außer beim Tippen in einem Orca-Textfeld)"
           }
         },
         "pluginInstallCount": {
@@ -19781,8 +19781,7 @@
         "stateIdleCount_one": "{{value0}} gestoppt",
         "stateIdleCount_other": "{{value0}} gestoppt",
         "stateUnverifiableCount_one": "{{value0}} mit nicht verfügbarem Status",
-        "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status",
-        "showAgent": "{{value0}} im Gespräch anzeigen"
+        "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
       "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
@@ -21958,6 +21957,11 @@
         "reasonSharedSession": "Auch in einem anderen Bereich geöffnet",
         "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
         "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen."
+      },
+      "oauthUsage": {
+        "title": "Claude-Nutzungsabfrage",
+        "description": "Verwendet deine Claude-Code-Anmeldung, um Nutzung, Guthaben und inaktive Konten abzufragen. Deaktiviere diese Option, um nur Live-Daten aus Terminalsitzungen zu verwenden.",
+        "about": "Über die Claude-Nutzungsabfrage"
       }
     },
     "managedData": {

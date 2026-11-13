@@ -20,7 +20,7 @@ vi.mock(
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
 
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { FolderWorkspaceCreate } from '../../../../../../shared/rpc-contract/folder-workspace-params'
+import { FolderWorkspaceCreate } from '../../../../../../shared/rpc-contract/workspaces/folder-workspace-params'
 import { FolderWorkspaceCreateArgs } from '../../../../../../main/ipc/repos/repo-ipc-arg-schemas'
 import {
   buildWorktreeStartupForAgent,

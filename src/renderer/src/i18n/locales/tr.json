@@ -18989,7 +18989,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Birlikte aç (odak düzenlenebilir bir alanda değilken)"
+            "openWith": "Birlikte aç (bir Orca metin alanına yazarken hariç)"
           }
         },
         "pluginInstallCount": {
@@ -19759,8 +19759,7 @@
         "stateIdleCount_one": "{{value0}} durduruldu",
         "stateIdleCount_other": "{{value0}} durduruldu",
         "stateUnverifiableCount_one": "Durum bilgisi alınamıyor: {{value0}}",
-        "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}",
-        "showAgent": "{{value0}} öğesini konuşmada göster"
+        "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
       "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
@@ -21928,6 +21927,11 @@
         "reasonSharedSession": "Başka bir bölmede de açık",
         "sharedOne": "Aynı konuşma başka bir bölmede açık olduğu için 1 Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
         "sharedOther": "Aynı konuşma başka bir bölmede açık olduğu için {{count}} Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir."
+      },
+      "oauthUsage": {
+        "title": "Claude kullanımını sorgula",
+        "description": "Kullanımı, kredileri ve etkin olmayan hesapları kontrol etmek için Claude Code oturumunuzu kullanır. Yalnızca çalışan terminal oturumlarından gelen canlı verileri kullanmak için kapatın.",
+        "about": "Claude kullanım sorgulaması hakkında"
       }
     },
     "managedData": {

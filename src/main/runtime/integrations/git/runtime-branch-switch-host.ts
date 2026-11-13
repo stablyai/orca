@@ -3,7 +3,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   HOSTED_REVIEW_LINK_KEYS
-} from '../../../../shared/worktree/hosted-review-links'
+} from '../../../../shared/worktree/hosted-review/hosted-review-links'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'

@@ -1,5 +1,5 @@
 import type { WorktreeCreateTiming } from '../../../shared/worktree/create-types'
-import type { WorkspaceCreateEntryPoint } from '../../../shared/worktree/create-timing-vocabulary'
+import type { WorkspaceCreateEntryPoint } from '../../../shared/worktree/creation/create-timing-vocabulary'
 import { workspaceSourceSchema } from '../../../shared/telemetry-property-schemas'
 import type { EventProps } from '../../../shared/telemetry-event-classification'
 import type { WorkspaceSource } from '../../../shared/workspace-source'

@@ -9,7 +9,7 @@ import {
   ProjectGroupSelector,
   ProjectGroupUpdate,
   ProjectGroupUpdateMany
-} from '../../../../../shared/rpc-contract/repo-params'
+} from '../../../../../shared/rpc-contract/projects/repo-params'
 
 export const PROJECT_GROUP_METHODS = [
   defineMethod({

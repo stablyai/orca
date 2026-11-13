@@ -1,4 +1,4 @@
-import type { WorktreeSetupLaunch } from '../../../../../shared/worktree/launch-types'
+import type { WorktreeSetupLaunch } from '../../../../../shared/worktree/creation/launch-types'
 import { toast } from 'sonner'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'

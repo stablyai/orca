@@ -10,7 +10,7 @@ import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import {
   FolderWorkspaceHookCreateShape,
   assertFolderWorkspaceStartup
-} from '../../../shared/rpc-contract/folder-workspace-params'
+} from '../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),

@@ -1,4 +1,4 @@
-import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/repo-params'
+import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/projects/repo-params'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'

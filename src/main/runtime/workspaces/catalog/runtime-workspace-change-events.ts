@@ -3,8 +3,8 @@ import type { AutomationsChangedPayload } from '../../../../shared/runtime-clien
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { wakeFolderRepoGitUpgradeWatch } from '../../../ipc/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
-import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import { NativeChatLaunchDraftOwner } from '../../agent-session/launch/native-chat-launch-draft-owner'
 
 export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraftOwner {

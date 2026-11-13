@@ -1,3 +1,4 @@
+import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -58,7 +59,7 @@ function remountTerminalTabsAwaitingHostHydration(): void {
 }
 
 export function installAppLifetimeIpcEvents(): () => void {
-  const unsubs: (() => void)[] = []
+  const unsubs: (() => void)[] = [installBrowserInitializationPresentationLifetime()]
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
   unsubs.push(

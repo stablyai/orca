@@ -3,7 +3,6 @@
   "include": [
     "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
     "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
-    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",

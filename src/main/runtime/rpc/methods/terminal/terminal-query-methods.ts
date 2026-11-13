@@ -19,7 +19,7 @@ import {
   TerminalResolveActive,
   TerminalResolvePane,
   TerminalSetPaneTitle
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 
 export const TERMINAL_QUERY_METHODS = [
   defineMethod({

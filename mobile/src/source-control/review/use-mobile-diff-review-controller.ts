@@ -14,7 +14,7 @@ import { useMobileDiffReviewSelection } from './use-mobile-diff-review-selection
 import type { MobileDiffReviewInitialTarget } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewSnapshot } from './use-mobile-diff-review-snapshot'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
-import { canOpenMobileBranchCompareDiff } from '../mobile-branch-compare'
+import { canOpenMobileBranchCompareDiff } from '../branches/mobile-branch-compare'
 import {
   NO_REVIEW_SHEETS,
   reduceReviewSheets,

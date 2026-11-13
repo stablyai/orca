@@ -60,6 +60,7 @@ import { withEditorBufferRecords } from '../slices/editor/buffers/editor-buffer-
 import { withAgentConversationRetention } from '../slices/agent-status/agent-conversation-retention'
 import { TEST_REPO } from '../repos/repo.test-fixture'
 import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/observations/provider-runtime-context'
+import { markHydratedBrowserPageHandles } from '../slices/browser/hosts/browser-initialization-presentation-ownership'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
   withEditorBufferRecords(withAgentConversationRetention(creator), check)
@@ -136,6 +137,12 @@ export function seedStore(
   state: Partial<AppState>
 ): void {
   // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.
+  if (
+    state.remoteBrowserPageHandlesByPageId &&
+    state.remoteBrowserPageHandlesByPageId !== store.getState().remoteBrowserPageHandlesByPageId
+  ) {
+    markHydratedBrowserPageHandles(state.remoteBrowserPageHandlesByPageId)
+  }
   store.setState({
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state

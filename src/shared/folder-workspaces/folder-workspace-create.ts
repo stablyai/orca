@@ -1,6 +1,6 @@
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { CreateWorktreeArgs, CreateWorktreeResult } from '../worktree/create-types'
-import type { WorktreeStartupLaunch } from '../worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../worktree/creation/launch-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { AgentLaunchPreferences } from '../agent-session/agent-session-host-authority'
 

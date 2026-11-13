@@ -4,7 +4,7 @@ import type { GitStatusResult } from '../../../shared/git/status/git-status-type
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
-import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
+import type { PRCacheView } from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import {
   isWorkspaceCleanupHeadLanded,
   type WorkspaceCleanupBlocker,
@@ -17,7 +17,7 @@ import {
 import {
   hasWorktreeAtRiskLocalFiles,
   type WorktreeAtRiskLocalFiles
-} from '../../../shared/worktree/at-risk-local-files'
+} from '../../../shared/worktree/removal/at-risk-local-files'
 import { readWorktreeAtRiskLocalFiles } from '../../git/worktrees/removal/worktree-at-risk-local-files'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
