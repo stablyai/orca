@@ -183,7 +183,34 @@ describe('OrcaRuntimeService', () => {
           title: 'Claude'
         }))
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: fixture.getSession().terminalLayoutsByTabId['host-tab'] ?? null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'persisted-pty'
+        },
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_SECOND_LEAF_ID,
+          paneRuntimeId: 2,
+          ptyId: 'sibling-pty'
+        }
+      ]
+    })
 
     const sleeping = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     await probeStarted.promise
