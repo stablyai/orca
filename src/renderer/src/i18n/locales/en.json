@@ -2434,7 +2434,6 @@
         "backgroundFailedCloud": "A new cloud workspace couldn’t start. Open it in the sidebar to continue."
       },
       "orcaCloudSession": {
-        "seePlans": "See plans",
         "workspaceGone": "That workspace is no longer in Orca.",
         "thisWorkspaceLower": "this workspace",
         "sandboxRestartSoonDetail": "Cloud sandboxes restart after 24 hours. Files are kept and Orca resumes your agents after the restart.",
@@ -21331,7 +21330,6 @@
         "upgrade": {
           "askOwner": "Ask an owner or admin to upgrade.",
           "bodyNoPrice": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop.",
-          "cta": "See plans",
           "menuItem": "Upgrade to Orca Cloud",
           "title": "Upgrade to use Orca Cloud",
           "body3": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{price}} per seat per month."
@@ -27597,7 +27595,8 @@
       "vmLost": "Orca lost contact with the build sandbox.",
       "canceled": "The build was canceled.",
       "unknownPlain": "Something went wrong during the build.",
-      "saveEnvironmentFailed": "Saving the environment failed."
+      "saveEnvironmentFailed": "Saving the environment failed.",
+      "secretLeftOnDisk": "The install script left a secret on disk, so the environment wasn’t saved. Remove it before the script ends, then save again."
     },
     "failedAtStep": "Build #{{number}} failed at {{step}}.",
     "failedPlain": "Build #{{number}} failed.",

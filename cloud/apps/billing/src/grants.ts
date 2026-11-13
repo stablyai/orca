@@ -395,6 +395,49 @@ export async function putManualGrant(
   })
 }
 
+/**
+ * Ops: put a team on a contact-sales plan (Enterprise). The plan's current version is projected
+ * as a manual grant that names the real plan and version, so the audit row and /v1/entitlements
+ * show e.g. enterprise@2. `sourceId` is `plan:<planId>:<ticket>`. Sandbox hours and limits still
+ * come from the team's subscription: manual grants add to one, they do not replace it.
+ */
+export async function grantContactSalesPlan(
+  db: D1Database,
+  catalog: Catalog,
+  args: { subjectId: string; planId: string; sourceId: string; startsAt: number; endsAt: number | null; actor: string; now: number }
+): Promise<{ changed: boolean; planVersion: number }> {
+  const plan = catalog.plans.get(args.planId)
+  if (!plan || plan.kind !== 'contact_sales') {
+    throw new Error(`not_a_contact_sales_plan:${args.planId}`)
+  }
+  const entitlements: Partial<Record<EntitlementKey, { value: unknown; perSeat: boolean }>> = {}
+  for (const [key, entry] of Object.entries(planVersion(plan, plan.currentVersion).entitlements)) {
+    if (entry) {
+      entitlements[key as EntitlementKey] = parseEntitlementValue(key, entry)
+    }
+  }
+  const { changed } = await applyProjection(db, {
+    subjectId: args.subjectId,
+    source: 'manual',
+    sourceId: args.sourceId,
+    projection: {
+      state: 'active',
+      holdReason: null,
+      heldSince: null,
+      planId: plan.id,
+      planVersion: plan.currentVersion,
+      entitlements,
+      seatQuantity: null,
+      startsAt: args.startsAt,
+      endsAt: args.endsAt
+    },
+    syncedAt: args.now,
+    now: args.now,
+    actor: args.actor
+  })
+  return { changed, planVersion: plan.currentVersion }
+}
+
 export async function revokeManualGrant(
   db: D1Database,
   args: { subjectId: string; source: 'manual' | 'promo'; sourceId: string; reason: string; actor: string; now: number }

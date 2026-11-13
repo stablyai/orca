@@ -5,6 +5,7 @@
 //   DELETE /v1/sandboxes/:id/shares/:shareId                              -> {share}
 //   POST   /v1/shares/:token/visit -> {url}  (team-only: a one-time sign-in URL for this viewer)
 // The public side is src/share-gateway.ts.
+import { auditSession } from './api/audit'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import type { Env } from './env'
@@ -353,6 +354,12 @@ export async function handleShareRoute(method: string, pathname: string, ctx: Sh
       expires_at: ctx.now + SHARE_EXPIRY_MS[parsed.data.expiresIn]
     })
     console.log(JSON.stringify({ event: 'share_created', sandboxId: sandbox.id, audience: link.audience, expiresIn: parsed.data.expiresIn }))
+    await auditSession(
+      ctx.db,
+      ctx.caller,
+      { action: 'workspace.share_create', targetType: 'workspace', targetId: sandbox.id, detail: { shareId: link.id, port: link.port, audience: link.audience, expiresIn: parsed.data.expiresIn } },
+      ctx.now
+    )
     return { status: 200, body: { share: await view(link) } }
   }
   if (shareId && method === 'DELETE') {
@@ -363,6 +370,7 @@ export async function handleShareRoute(method: string, pathname: string, ctx: Sh
     const revoked = await revokeShareLink(ctx.db, link, ctx.now)
     ctx.forget(link.id)
     console.log(JSON.stringify({ event: 'share_revoked', sandboxId: sandbox.id }))
+    await auditSession(ctx.db, ctx.caller, { action: 'workspace.share_revoke', targetType: 'workspace', targetId: sandbox.id, detail: { shareId: link.id } }, ctx.now)
     return { status: 200, body: { share: await view(revoked) } }
   }
   return notFound

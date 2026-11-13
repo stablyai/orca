@@ -233,7 +233,7 @@ export function TeamUpgradeCard({
         </div>
         {entitlement.canManageBilling ? (
           <Button type="button" onClick={onSeePlans}>
-            {t('auto.components.billing.upgrade.cta', 'See plans')}
+            {t('auto.components.billing.comparePlans', 'Compare plans')}
             <ArrowRight />
           </Button>
         ) : null}

@@ -120,11 +120,11 @@ export function installOrcaCloudSessionEvents(): () => void {
   }
 }
 
-/** "See plans" on the create failure when the team has no plan with sandbox hours. */
+/** "Compare plans" on the create failure when the team has no plan with sandbox hours. */
 export function showOrcaCloudPlanUpsell(message: string): void {
   toast.error(message, {
     action: {
-      label: translate('auto.lib.orcaCloudSession.seePlans', 'See plans'),
+      label: translate('auto.components.billing.comparePlans', 'Compare plans'),
       onClick: () => openPlansPage('sandbox')
     }
   })
