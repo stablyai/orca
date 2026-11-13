@@ -4,6 +4,7 @@ import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/app-shell/chrome/titlebar-left-chrome'
+import { useTitlebarChromeFoldObserver } from '@/app-shell/chrome/use-titlebar-chrome-fold-observer'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import { useAppStore } from '../store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -107,6 +108,11 @@ export function useAppChromeLayout() {
     leftTitlebarChromeLayout.isFloating,
     sidebarOpen
   ])
+  useTitlebarChromeFoldObserver({
+    active: leftTitlebarChromeLayout.isFloating && workspaceChromeActive,
+    controlsRef: titlebarLeftControlsRef,
+    headerShapeKey: `${isFullScreen}|${settings?.showTitlebarAppName !== false}|${activeView}`
+  })
 
   return {
     activeView,

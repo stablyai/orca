@@ -148,7 +148,7 @@ test('floating panel group bodies and panes own real pixels, single group and sp
   await expect(openPanel.locator(`[data-tab-id="${first.id}"]`)).toBeVisible()
 })
 
-test('floating tabs keep their preferred width and share constrained space before overflowing', async ({
+test('floating tabs keep their preferred width and share constrained space before condensing', async ({
   orcaPage
 }) => {
   const titles = [
@@ -223,17 +223,18 @@ test('floating tabs keep their preferred width and share constrained space befor
       .evaluateAll((slots) => slots.map((element) => element.getBoundingClientRect().width))
   const crowdedWidths = await widths()
   const stripWidth = await strip.evaluate((element) => element.clientWidth)
-  expect(crowdedWidths.every((value) => value >= 144)).toBe(true)
+  expect(crowdedWidths.every((value) => value >= 80)).toBe(true)
   expect(crowdedWidths.reduce((sum, value) => sum + value, 0)).toBeCloseTo(stripWidth, 0)
   expect(crowdedWidths[0]).toBeCloseTo(crowdedWidths[2], 0)
   expect(crowdedWidths[1]).toBeCloseTo(crowdedWidths[0], 0)
 
+  // Past the 80px floor, inactive tabs become 32px icons beside the titled active tab; nothing scrolls.
   await seedFloatingTerminalTabs(12)
   await expect(panel.locator('[data-tab-strip-slot]')).toHaveCount(12)
   await expect
     .poll(() => strip.evaluate((element) => element.scrollWidth > element.clientWidth))
-    .toBe(true)
-  expect(await widths()).toEqual(Array(12).fill(144))
+    .toBe(false)
+  expect((await widths()).filter((value) => value !== 32)).toHaveLength(1)
 })
 
 // Real pointer capture requires the isolated visible-window project.

@@ -17,6 +17,7 @@ import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store/index'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+import { useTitlebarChromeFoldLevel } from './chrome/titlebar-chrome-fold'
 
 /** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
@@ -28,6 +29,9 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
+  // Only the floating header folds: it shares the top-left pane's strip.
+  const storedFoldLevel = useTitlebarChromeFoldLevel()
+  const foldLevel = layout.leftTitlebarChromeLayout.isFloating ? storedFoldLevel : 0
 
   return (
     // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
@@ -62,24 +66,31 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         ) : (
           <div className="pl-2" />
         )}
-        {layout.showSidebar && !hasCustomTitleBar && layout.showTitlebarAppName && (
-          <ContextMenu>
-            <ContextMenuTrigger asChild>
-              <div className="titlebar-app-name" aria-label={t('auto.App.5096cbbc86', 'Orca')}>
-                <span className="titlebar-app-name-main">{t('auto.App.5096cbbc86', 'Orca')}</span>
-              </div>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem
-                onSelect={() => {
-                  void updateSettings({ showTitlebarAppName: false })
-                }}
-              >
-                {t('auto.App.e81217c1b7', 'Hide App Name')}
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        )}
+        {layout.showSidebar &&
+          !hasCustomTitleBar &&
+          layout.showTitlebarAppName &&
+          foldLevel === 0 && (
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <div
+                  className="titlebar-app-name"
+                  aria-label={t('auto.App.5096cbbc86', 'Orca')}
+                  data-titlebar-fold-step="1"
+                >
+                  <span className="titlebar-app-name-main">{t('auto.App.5096cbbc86', 'Orca')}</span>
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem
+                  onSelect={() => {
+                    void updateSettings({ showTitlebarAppName: false })
+                  }}
+                >
+                  {t('auto.App.e81217c1b7', 'Hide App Name')}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+          )}
         {layout.showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -100,9 +111,10 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         )}
       </div>
       {/* Show shared workspace/page history wherever its shortcut is available. */}
-      {shouldShowWorktreeHistoryControls(layout.activeView) && (
+      {/* Folded, Back stays (dimmed without history so nothing shifts); Forward and then Back move into the pane ⋯. */}
+      {shouldShowWorktreeHistoryControls(layout.activeView) && foldLevel < 2 && (
         // Collapsed headers shrink-wrap, so ml-auto alone cannot leave a history-button gutter.
-        <div className="ml-auto mr-3 flex items-center pl-2">
+        <div className="ml-auto mr-3 flex items-center pl-2" data-titlebar-fold-step="2">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -120,23 +132,26 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
               })}
             </TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="sidebar-toggle sidebar-toggle-compact"
-                onClick={() => useAppStore.getState().goForwardWorktree()}
-                disabled={!canGoForwardWorktree}
-                aria-label={t('auto.App.cf9099fe98', 'Go forward')}
-              >
-                <ArrowRight size={12} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {t('auto.App.f7aa73e785', 'Go forward ({{value0}})', {
-                value0: historyForwardShortcutLabel
-              })}
-            </TooltipContent>
-          </Tooltip>
+          {foldLevel === 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="sidebar-toggle sidebar-toggle-compact"
+                  data-titlebar-fold-step="1"
+                  onClick={() => useAppStore.getState().goForwardWorktree()}
+                  disabled={!canGoForwardWorktree}
+                  aria-label={t('auto.App.cf9099fe98', 'Go forward')}
+                >
+                  <ArrowRight size={12} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {t('auto.App.f7aa73e785', 'Go forward ({{value0}})', {
+                  value0: historyForwardShortcutLabel
+                })}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       )}
     </div>

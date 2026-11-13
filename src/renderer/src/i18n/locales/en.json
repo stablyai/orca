@@ -25444,5 +25444,18 @@
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
     }
+  },
+  "tabStrip": {
+    "overflow": {
+      "chipOnlyName_one": "{{title}}, {{count}} tab",
+      "chipOnlyName_other": "{{title}}, {{count}} tabs",
+      "entryNeedsAttention": "{{title}}, needs attention",
+      "moreTabs_one": "{{count}} more tab",
+      "moreTabs_other": "{{count}} more tabs",
+      "needAttention_one": ", {{count}} needs attention",
+      "needAttention_other": ", {{count}} need attention",
+      "openTabs_one": "{{count}} open tab",
+      "openTabs_other": "{{count}} open tabs"
+    }
   }
 }

@@ -11,12 +11,14 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from './drop-indicator'
+import type { HoveredTabInsertion } from '../tab-group/tab-insertion'
 import { sameStringArray } from '@/runtime/web-session-tabs-sync/state-equality-core'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
   sortableIds: string[]
   dropIndicatorByVisibleId: Map<string, DropIndicator>
+  hoveredInsertion: HoveredTabInsertion | null
   activeVisibleTabId: string | null
   tabStripLayoutKey: string
 }
@@ -156,6 +158,7 @@ export function useTabBarItemProjection({
     orderedItems,
     sortableIds,
     dropIndicatorByVisibleId,
+    hoveredInsertion: activeIndicator,
     activeVisibleTabId,
     tabStripLayoutKey
   }

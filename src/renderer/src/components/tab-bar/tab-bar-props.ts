@@ -56,4 +56,8 @@ export type TabBarProps = {
   hoveredTabInsertion?: HoveredTabInsertion | null
   /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
   tabStripChrome?: 'default' | 'floating-panel'
+  /** Chrome fold step 2 moved "+" into the pane ⋯ (⌘T still works). */
+  newTabButtonFolded?: boolean
+  /** Shortcut digits act on the focused group; the open-tabs list shows them only there. */
+  isGroupFocused?: boolean
 }
