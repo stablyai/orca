@@ -3,7 +3,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  sleepPairedCloudSandboxes: vi.fn(async (_ids: readonly string[]): Promise<string[]> => [])
+  sleepPairedCloudSandboxes: vi.fn(
+    async (_ids: readonly string[]): Promise<{ stillRunning: string[]; refused: string[] }> => ({
+      stillRunning: [],
+      refused: []
+    })
+  ),
+  toastPairedSleepRefused: vi.fn()
+}))
+
+vi.mock('@/lib/orca-cloud/paired-sleep-refused-toast', () => ({
+  toastPairedSleepRefused: mocks.toastPairedSleepRefused
 }))
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), error: vi.fn() } }))
@@ -39,7 +49,8 @@ beforeEach(() => {
   vi.setSystemTime(T0)
   resetWorktreeSleepViewForTests()
   mocks.sleepPairedCloudSandboxes.mockReset()
-  mocks.sleepPairedCloudSandboxes.mockResolvedValue([])
+  mocks.sleepPairedCloudSandboxes.mockResolvedValue({ stillRunning: [], refused: [] })
+  mocks.toastPairedSleepRefused.mockReset()
   seedCloudWorkspaceSnapshot({ paired: { [PAIRED]: 'env-paired' }, idsLoaded: true })
   vi.stubGlobal('window', {
     api: {
@@ -66,11 +77,12 @@ describe('runSleepWorktrees on a paired cloud workspace', () => {
   })
 
   it('stays going to sleep until the paired sandbox slept, so no reconnect banner shows (SLEEP-RECONNECT-BANNER)', async () => {
-    let finishPairedSleep: (stillRunning: string[]) => void = () => undefined
+    let finishPairedSleep: (outcome: { stillRunning: string[]; refused: string[] }) => void = () =>
+      undefined
     let goingDuringPairedSleep: { paired: boolean; local: boolean } | null = null
     mocks.sleepPairedCloudSandboxes.mockImplementation(
       () =>
-        new Promise<string[]>((resolve) => {
+        new Promise<{ stillRunning: string[]; refused: string[] }>((resolve) => {
           goingDuringPairedSleep = {
             paired: isWorktreeGoingToSleep(PAIRED),
             local: isWorktreeGoingToSleep(LOCAL)
@@ -82,15 +94,22 @@ describe('runSleepWorktrees on a paired cloud workspace', () => {
     await vi.waitFor(() => expect(goingDuringPairedSleep).not.toBeNull())
     // The control plane is still suspending the paired sandbox: it is going to sleep, not down.
     expect(goingDuringPairedSleep).toEqual({ paired: true, local: false })
-    finishPairedSleep([])
+    finishPairedSleep({ stillRunning: [], refused: [] })
     await done
     expect(isWorktreeGoingToSleep(PAIRED)).toBe(false)
   })
 
   it('clears it when the control plane left the paired sandbox running', async () => {
-    mocks.sleepPairedCloudSandboxes.mockResolvedValue([PAIRED])
+    mocks.sleepPairedCloudSandboxes.mockResolvedValue({ stillRunning: [PAIRED], refused: [] })
     await runSleepWorktrees([PAIRED])
     expect(sleepCopySave(PAIRED)).toBeNull()
+  })
+
+  it('a refused member sleep clears the saving copy and says who can sleep it (SHARED-MEMBER-SLEEP-HANG)', async () => {
+    mocks.sleepPairedCloudSandboxes.mockResolvedValue({ stillRunning: [PAIRED], refused: [PAIRED] })
+    await runSleepWorktrees([PAIRED])
+    expect(sleepCopySave(PAIRED)).toBeNull()
+    expect(mocks.toastPairedSleepRefused).toHaveBeenCalledWith([PAIRED])
   })
 })
 

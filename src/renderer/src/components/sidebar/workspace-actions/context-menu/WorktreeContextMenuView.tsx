@@ -6,6 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { usePairedSleepRefusalHint } from '../sleep/use-paired-sleep-refusal'
 import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
@@ -85,6 +86,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   usePrimeCloudRowBindings()
   // Paired rows too (PAIRED-CHROME): a workspace opened here but created elsewhere is still cloud.
   const isCloud = useIsCloudHostRow(worktree)
+  const sleepRefusedHint = usePairedSleepRefusalHint(worktree.id)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -94,6 +96,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
       onSleep={handleCloseTerminals}
       onSleepSubtree={handleSleepSubtree}
+      sleepRefusedHint={sleepRefusedHint}
     />
   )
   return (

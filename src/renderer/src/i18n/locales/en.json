@@ -28242,7 +28242,10 @@
       "title": "{{name}} isn’t linked to this computer",
       "body": "Open it again to link it. Your files and chats are saved.",
       "titleUnnamed": "This workspace isn’t linked to this computer"
-    }
+    },
+    "sleepOwnerOnly": "Only its owner or a team admin can put it to sleep.",
+    "sleepRefusedTitle": "Couldn’t put {{name}} to sleep",
+    "sleepRefusedDescription": "Only its owner or a team admin can do that."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

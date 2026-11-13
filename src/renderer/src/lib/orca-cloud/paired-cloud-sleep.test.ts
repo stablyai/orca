@@ -6,6 +6,7 @@ const rows = vi.hoisted(
   () => new Map<string, { id: string; hostId?: string; isMainWorktree?: boolean }>()
 )
 const owned = vi.hoisted(() => new Set<string>())
+const pairedRegistry = vi.hoisted((): Record<string, string> => ({}))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
@@ -13,7 +14,7 @@ vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
 }))
 const refreshStatus = vi.hoisted(() => vi.fn(async () => undefined))
 vi.mock('./orca-cloud-workspace-store', () => ({
-  getCloudWorkspaceSnapshot: () => ({ ids: owned, paired: {}, status: {} }),
+  getCloudWorkspaceSnapshot: () => ({ ids: owned, paired: pairedRegistry, status: {} }),
   useIsCloudWorkspace: () => false,
   refreshCloudWorkspaceStatus: refreshStatus
 }))
@@ -39,6 +40,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
   rows.clear()
   owned.clear()
+  for (const key of Object.keys(pairedRegistry)) {
+    delete pairedRegistry[key]
+  }
   resetCloudWorkspaceIdentityForTests()
 })
 
@@ -46,7 +50,10 @@ describe('PAIRED-SLEEP', () => {
   it('a paired cloud workspace: its sandbox sleeps through the control plane', async () => {
     rows.set('wt-paired', { id: 'wt-paired', hostId: 'runtime:env-paired', isMainWorktree: true })
     const sleep = stub(async () => ({ ok: true, value: undefined }))
-    await expect(sleepPairedCloudSandboxes(['wt-paired'])).resolves.toEqual([])
+    await expect(sleepPairedCloudSandboxes(['wt-paired'])).resolves.toEqual({
+      stillRunning: [],
+      refused: []
+    })
     expect(sleep).toHaveBeenCalledWith('sbx_paired')
     expect(isPairedCloudSleepTarget('wt-paired')).toBe(true)
     // Its row re-reads status at once, so it says Asleep (not Active) and an open wakes it.
@@ -56,7 +63,10 @@ describe('PAIRED-SLEEP', () => {
   it('a refused sleep is reported: the sandbox is still running (cloud toast, Try again)', async () => {
     rows.set('wt-paired', { id: 'wt-paired', hostId: 'runtime:env-paired', isMainWorktree: true })
     stub(async () => ({ ok: false, error: 'conflict' }))
-    await expect(sleepPairedCloudSandboxes(['wt-paired'])).resolves.toEqual(['wt-paired'])
+    await expect(sleepPairedCloudSandboxes(['wt-paired'])).resolves.toEqual({
+      stillRunning: ['wt-paired'],
+      refused: []
+    })
   })
 
   it('this desktop’s own sandbox and a local workspace are left to the ordinary Sleep', async () => {
@@ -64,7 +74,10 @@ describe('PAIRED-SLEEP', () => {
     owned.add('wt-owned')
     rows.set('wt-local', { id: 'wt-local', hostId: 'local', isMainWorktree: true })
     const sleep = stub(async () => ({ ok: true, value: undefined }))
-    await expect(sleepPairedCloudSandboxes(['wt-owned', 'wt-local'])).resolves.toEqual([])
+    await expect(sleepPairedCloudSandboxes(['wt-owned', 'wt-local'])).resolves.toEqual({
+      stillRunning: [],
+      refused: []
+    })
     expect(sleep).not.toHaveBeenCalled()
   })
 
@@ -73,5 +86,27 @@ describe('PAIRED-SLEEP', () => {
     const sleep = stub(async () => ({ ok: true, value: undefined }))
     await sleepPairedCloudSandboxes(['wt-other'])
     expect(sleep).not.toHaveBeenCalled()
+  })
+
+  it("a teammate's shared workspace: its registered linked row sleeps the sandbox (SHARED-MEMBER-SLEEP-HANG)", async () => {
+    rows.set('wt-linked', { id: 'wt-linked', hostId: 'runtime:env-paired', isMainWorktree: false })
+    pairedRegistry['wt-linked'] = 'env-paired'
+    const sleep = stub(async () => ({ ok: true, value: undefined }))
+    expect(isPairedCloudSleepTarget('wt-linked')).toBe(true)
+    await expect(sleepPairedCloudSandboxes(['wt-linked'])).resolves.toEqual({
+      stillRunning: [],
+      refused: []
+    })
+    expect(sleep).toHaveBeenCalledWith('sbx_paired')
+  })
+
+  it("a member's sleep the control plane refuses is still running and refused, never left pending", async () => {
+    rows.set('wt-linked', { id: 'wt-linked', hostId: 'runtime:env-paired', isMainWorktree: false })
+    pairedRegistry['wt-linked'] = 'env-paired'
+    stub(async () => ({ ok: false, error: 'not_found', status: 404 }))
+    await expect(sleepPairedCloudSandboxes(['wt-linked'])).resolves.toEqual({
+      stillRunning: ['wt-linked'],
+      refused: ['wt-linked']
+    })
   })
 })

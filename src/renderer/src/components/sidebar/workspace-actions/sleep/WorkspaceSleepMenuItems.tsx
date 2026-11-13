@@ -17,6 +17,8 @@ type WorkspaceSleepMenuItemsProps = {
   subtreeSleepDisabled: boolean
   onSleep: () => void
   onSleepSubtree: () => void
+  /** SHARED-MEMBER-SLEEP-HANG: Sleep is someone else's (the owner's or an admin's); shown disabled with why. */
+  sleepRefusedHint?: string | null
 }
 
 export function WorkspaceSleepMenuItems({
@@ -26,9 +28,25 @@ export function WorkspaceSleepMenuItems({
   descendantCount,
   subtreeSleepDisabled,
   onSleep,
-  onSleepSubtree
+  onSleepSubtree,
+  sleepRefusedHint = null
 }: WorkspaceSleepMenuItemsProps): JSX.Element {
   const t = useTranslate()
+  if (sleepRefusedHint && !isMultiContext) {
+    return (
+      <DropdownMenuItem disabled>
+        <span className="flex flex-col gap-0.5">
+          <span className="flex items-center gap-2">
+            <Moon className="size-3.5" />
+            {sleepLabel}
+          </span>
+          <span className="text-muted-foreground pl-5.5 text-xs text-pretty">
+            {sleepRefusedHint}
+          </span>
+        </span>
+      </DropdownMenuItem>
+    )
+  }
   const sleepDescription = isMultiContext
     ? t(
         'auto.components.sidebar.WorktreeContextMenu.7d190f7d2b',

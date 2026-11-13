@@ -15,22 +15,44 @@ function rowFor(worktreeId: string): Row | null {
   return getWorktreeOnHostFromState(useAppStore.getState(), worktreeId, undefined) ?? null
 }
 
-/** A paired cloud workspace's own row: its Sleep must reach the sandbox through the control plane. */
+/**
+ * A paired cloud workspace's own row: its Sleep must reach the sandbox through the control plane.
+ * SHARED-MEMBER-SLEEP-HANG: the row the paired registry names (a teammate's shared workspace is its
+ * linked worktree since #690, not the main checkout); a main checkout still counts before it loads.
+ */
 export function isPairedCloudSleepTarget(worktreeId: string): boolean {
-  if (getCloudWorkspaceSnapshot().ids.has(worktreeId)) {
+  const snapshot = getCloudWorkspaceSnapshot()
+  if (snapshot.ids.has(worktreeId)) {
     // This desktop's own sandbox: the ordinary Sleep suspends its VM.
     return false
+  }
+  if (worktreeId in snapshot.paired) {
+    return true
   }
   const row = rowFor(worktreeId)
   return row !== null && isCloudPrimaryRowNow(row)
 }
 
-/** Sleeps each paired target's sandbox; returns the ids whose sandbox is still running. */
-export async function sleepPairedCloudSandboxes(worktreeIds: readonly string[]): Promise<string[]> {
-  const stillRunning: string[] = []
+/** The control plane refused the sleep: only the owner or a team admin may sleep it (404). */
+function isSleepRefused(result: { ok: false; error: string; status?: number }): boolean {
+  return result.error === 'not_found' || result.error === 'forbidden' || result.status === 403
+}
+
+export type PairedSleepOutcome = {
+  /** Still running: not slept (refused, failed, or no sandbox found for the row). */
+  stillRunning: string[]
+  /** Of those, refused because this account may not sleep it (a member on a teammate's workspace). */
+  refused: string[]
+}
+
+/** Sleeps each paired target's sandbox; every target ends slept, still running or refused. */
+export async function sleepPairedCloudSandboxes(
+  worktreeIds: readonly string[]
+): Promise<PairedSleepOutcome> {
+  const outcome: PairedSleepOutcome = { stillRunning: [], refused: [] }
   const api = typeof window !== 'undefined' ? window.api?.cloudWorkspaces : undefined
   if (!api) {
-    return stillRunning
+    return outcome
   }
   // Sleep can run before any menu loaded the pairings (card action, shortcut): read them first.
   await refreshCloudWorktreeBindings().catch(() => undefined)
@@ -42,11 +64,15 @@ export async function sleepPairedCloudSandboxes(worktreeIds: readonly string[]):
     const sandboxId = row ? await resolveCloudRowSandboxId(row) : null
     const result = sandboxId ? await api.sleep(sandboxId).catch(() => null) : null
     if (!result?.ok) {
-      stillRunning.push(id)
+      // Never left "going to sleep": not slept here is still running (and says why).
+      outcome.stillRunning.push(id)
+      if (result && isSleepRefused(result)) {
+        outcome.refused.push(id)
+      }
     } else {
       // The row says Asleep (not Active) now, and opening it wakes it (n38 GATE).
       await notePairedCloudSlept(id)
     }
   }
-  return stillRunning
+  return outcome
 }

@@ -5,6 +5,7 @@ import {
   sleepPairedCloudSandboxes
 } from '@/lib/orca-cloud/paired-cloud-sleep'
 import { isPairedCloudWorkspace } from '@/lib/orca-cloud/paired-cloud-wake'
+import { toastPairedSleepRefused } from '@/lib/orca-cloud/paired-sleep-refused-toast'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -121,14 +122,19 @@ export async function runSleepWorktrees(
   }
   // A paired cloud workspace's sandbox sleeps through the control plane (PAIRED-SLEEP).
   const unslept = new Set(unsleptWorktreeIds)
-  const pairedStillRunning = await sleepPairedCloudSandboxes(
-    worktreeIds.filter((id) => !unslept.has(id))
-  ).finally(() => {
-    for (const id of pairedIds) {
-      clearWorktreeGoingToSleep(id)
-    }
-  })
-  const stillRunningIds = [...vmStillRunningIds, ...pairedStillRunning]
+  const { stillRunning: pairedStillRunning, refused: pairedRefused } =
+    await sleepPairedCloudSandboxes(worktreeIds.filter((id) => !unslept.has(id))).finally(() => {
+      for (const id of pairedIds) {
+        clearWorktreeGoingToSleep(id)
+      }
+    })
+  // A member can't sleep a teammate's workspace: that says so, not "still running, try again".
+  toastPairedSleepRefused(pairedRefused)
+  const refusedIds = new Set(pairedRefused)
+  const stillRunningIds = [
+    ...vmStillRunningIds,
+    ...pairedStillRunning.filter((id) => !refusedIds.has(id))
+  ]
   // The paired sandbox kept running: no sealed copy is coming either.
   for (const id of pairedStillRunning) {
     clearSleepCopySave(id)
