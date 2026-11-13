@@ -9,6 +9,7 @@
     "../src/shared/**/*.spec.tsx"
   ],
   "include": [
+    "../src/types/build-constants.d.ts",
     "../src/renderer/src/env.d.ts",
     "../src/renderer/src/**/*",
     "../src/renderer/src/**/*.tsx",
