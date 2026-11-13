@@ -29454,6 +29454,20 @@
       "raiseCapAndContinue": "Raise spend cap and continue",
       "backToDraft": "Back to draft",
       "saveFailed": "Couldn’t save that. Try again, or change it in Plan & billing."
+    },
+    "cloneAccess": {
+      "reachableTitle": "Couldn’t clone {{repo}}",
+      "reachableBody": "GitHub refused the clone, but Orca can reach this repository now. Try again. The sandbox was deleted.",
+      "title": "Orca can’t access {{repo}}",
+      "askOwnerBody": "Ask an owner of {{owner}} to give Orca access. Orca tries again once they do. The sandbox was deleted.",
+      "body": "The Orca GitHub App on {{owner}} doesn’t include this repository. Give Orca access, and Orca tries again. The sandbox was deleted.",
+      "chooseAnother": "Choose another repository",
+      "copyRequest": "Copy request for an owner",
+      "waiting": "Waiting for GitHub…",
+      "giveAccess": "Give Orca access",
+      "requestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
+      "requestCopied": "Request copied.",
+      "requestCopyFailed": "Couldn’t copy it."
     }
   },
   "renderer": {

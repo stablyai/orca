@@ -100,8 +100,8 @@ export default function WorktreeCreationPanel({
             onCancel={dismiss}
             onRetry={() => retryBackgroundWorktreeCreation(creationId)}
             onDismiss={leave}
-            onReturnToComposer={({ local }) => {
-              const data = composerDataFromRefusedCreate(entry, { local })
+            onReturnToComposer={({ local, pickRepo }) => {
+              const data = composerDataFromRefusedCreate(entry, { local, pickRepo })
               dismiss()
               const store = useAppStore.getState()
               // Never replace a dialog the user opened meanwhile.

@@ -31,6 +31,7 @@ import {
 import { ORCA_SUPPORT_URL, PUSH_TO_GITHUB_URL } from './vm-build-repo-actions'
 import { gitHubInstallLinkSource } from '@/lib/orca-cloud/github-link-sources'
 import type { VmBuildFailure } from './vm-build-failure'
+import { cloneFailedActions, type CloneAccessHandlers } from './clone-access-actions'
 
 export type VmBuildFailureActions = {
   onFixWithAgent: () => void
@@ -49,6 +50,10 @@ export type VmBuildFailureActions = {
   onContactSupport: () => void
   onConnectGitHub: () => void
   onPushToGitHub: () => void
+  /** CLONE-ACCESS-ERROR: back to the draft with the Project picker open. */
+  onChooseAnotherRepo?: () => void
+  /** CLONE-ACCESS-ERROR: what GitHub says about Orca's access to the refused repository. */
+  cloneAccess?: CloneAccessHandlers
 }
 
 type Action = {
@@ -296,10 +301,11 @@ function failureActions(
         ],
         more: []
       }
+    case 'cloneFailed':
+      return { primary: cloneFailedActions(failure.reason, actions, tryAgain, t), more: [] }
     case 'unavailable':
     case 'network':
     case 'create':
-    case 'cloneFailed':
       return { primary: [tryAgain], more: [] }
   }
 }
