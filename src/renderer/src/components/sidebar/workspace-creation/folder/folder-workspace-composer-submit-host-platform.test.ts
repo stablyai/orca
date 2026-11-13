@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-// oxlint-disable-next-line typescript/triple-slash-reference -- The cross-process composition imports main runtime types whose build constants are ambient globals, not a module.
-/// <reference path="../../../../../../types/build-constants.d.ts" />
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-composer-submit-fixtures'
