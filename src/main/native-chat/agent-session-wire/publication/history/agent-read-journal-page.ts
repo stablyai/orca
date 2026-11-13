@@ -22,8 +22,13 @@ import {
 } from './agent-read-row-progress'
 
 /** Where an agent read continues: rows through `sequence` are read, and `partial` names the next
- *  row when part of it was (one row can name several items). */
-export type AgentReadJournalPosition = { cursor: AgentJournalCursor; partial?: AgentReadPartialRow }
+ *  row when part of it was (one row can name several items). `floor`: the `/clear` divider the
+ *  read's current context starts at, absent before any. */
+export type AgentReadJournalPosition = {
+  cursor: AgentJournalCursor
+  partial?: AgentReadPartialRow
+  floor?: number
+}
 
 /** Cursor bytes the history envelope reserve carries; a row needing more takes the rest from its
  *  page's content budget. */
@@ -47,10 +52,13 @@ export function readAgentJournalPage(
 ): AgentReadJournalPage {
   const { limit, after } = request
   const page = new PageBudget(limit)
+  const index = journalAgentReadIndex(journal)
+  const floor = index.contextFloor()
+  const bound = floor > 0 ? { floor } : {}
   if (!after) {
     const newestFirst: AgentReadEntry[] = []
     let limited = false
-    for (const item of journalAgentReadIndex(journal).newestFirst()) {
+    for (const item of index.newestFirst()) {
       const entry = entryOf(item, waiting)
       if (!entry) {
         continue
@@ -64,7 +72,7 @@ export function readAgentJournalPage(
     return {
       ok: true,
       entries: newestFirst.toReversed(),
-      next: { cursor: journal.cursor() },
+      next: { cursor: journal.cursor(), ...bound },
       limited
     }
   }
@@ -76,7 +84,9 @@ export function readAgentJournalPage(
         since.rows.map((row) => row.seq),
         after.cursor.sequence + 1
       )) ||
-    (after.partial && since.rows[0]?.seq !== after.partial.row)
+    (after.partial && since.rows[0]?.seq !== after.partial.row) ||
+    // A `/clear` since this cursor was cut starts a context it never read.
+    (after.floor ?? 0) !== floor
   ) {
     return { ok: false }
   }
@@ -89,7 +99,8 @@ export function readAgentJournalPage(
       journal,
       display,
       row,
-      row.seq === after.partial?.row ? after.partial : null
+      row.seq === after.partial?.row ? after.partial : null,
+      floor
     )
     if (!read) {
       return { ok: false }
@@ -106,7 +117,8 @@ export function readAgentJournalPage(
           entries,
           next: {
             cursor: { epoch: after.cursor.epoch, sequence: consumed },
-            partial: read.partial()
+            partial: read.partial(),
+            ...bound
           },
           limited: true
         }
@@ -120,7 +132,10 @@ export function readAgentJournalPage(
   return {
     ok: true,
     entries,
-    next: { cursor: { epoch: after.cursor.epoch, sequence: more ? consumed : since.through } },
+    next: {
+      cursor: { epoch: after.cursor.epoch, sequence: more ? consumed : since.through },
+      ...bound
+    },
     limited: more
   }
 }
@@ -129,12 +144,14 @@ type RowGroup = { item: AgentJournalRenderItem; slots: number[] }
 
 /** One row's current unrepresented items in presented order, over its raw slots: a canonical
  *  item with any represented slot is represented, wherever it now sorts, and hidden or missing
- *  items are left unrepresented. Null when `partial` was cut from a different row. */
+ *  items, and items placed before the current context's `floor`, are left unrepresented. Null
+ *  when `partial` was cut from a different row. */
 function readRow(
   journal: AgentSessionJournal,
   display: Parameters<typeof renderJournalStatusItem>[0],
   row: JournalReadRow,
-  partial: AgentReadPartialRow | null
+  partial: AgentReadPartialRow | null,
+  floor: number
 ) {
   const slots = journalRowRawSlots(row)
   const fingerprint = agentReadRowFingerprint(row.kind, slots)
@@ -158,7 +175,7 @@ function readRow(
       continue
     }
     const item = renderJournalStatusItem(display, id)
-    if (item) {
+    if (item && item.sequence >= floor) {
       groups.push({ item, slots: indexes })
     }
   }

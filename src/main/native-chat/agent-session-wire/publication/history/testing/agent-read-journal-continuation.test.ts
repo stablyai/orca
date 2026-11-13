@@ -21,6 +21,7 @@ import {
   publicEntries,
   readThrough,
   remove,
+  resetWork,
   reply,
   roots,
   rowAfterReply,
@@ -281,12 +282,15 @@ it.each([1_000, 10_000])(
       ['a-answer', 'answer'],
       ['m-more', 'more']
     ])
+    // The owner's index is built once, by the first read of any kind.
+    tail(journal, 1)
     renders.count = 0
 
     const { read } = await readThrough(journal, 1, start, [() => remove(journal, 'z-question')])
 
     expect(read).toEqual(['question', 'answer', 'more'])
-    expect(renders.count).toBe(7)
+    // Seven renders read the row; one keeps the index current through the deletion.
+    expect(renders.count).toBe(8)
   }
 )
 
@@ -384,4 +388,202 @@ it('resumes a row read in part after the journal reopens, and refuses a cursor c
   }
   await reopened.rollEpoch('corruption', 1)
   expect(resume(first.next)).toEqual({ ok: false })
+})
+
+const clear = (journal: AgentSessionJournal, operationId: string) =>
+  journal.context.clear(
+    { operationId, afterFence: 1, clearedAt: 1_000 },
+    { write: () => {}, committed: () => {} }
+  )
+const CLEARED = { kind: 'message', role: 'system', text: 'Context cleared' } as const
+
+/** APPLE and BANANA, then `/clear`, then CHERRY, with cursors cut before the clear. */
+async function clearedChat() {
+  const journal = await seed(0, () => null)
+  await write(journal, 'apple', [['apple', 'APPLE']])
+  await write(journal, 'banana', [['banana', 'BANANA']])
+  const full = tail(journal, 100)
+  const start: AgentReadJournalPosition = { cursor: { epoch: journal.cursor().epoch, sequence: 1 } }
+  const partial = readAgentJournalPage(journal, { limit: 1, after: start }, waiting)
+  await clear(journal, 'clear-1')
+  return { journal, full, partial }
+}
+
+it('reads only the current context after /clear, from its divider', async () => {
+  const { journal } = await clearedChat()
+  expect(tail(journal, 100)).toMatchObject({ entries: [CLEARED], limited: false })
+
+  await write(journal, 'cherry', [['cherry', 'CHERRY']])
+
+  expect(tail(journal, 100)).toMatchObject({
+    entries: [CLEARED, { text: 'CHERRY' }],
+    limited: false
+  })
+  expect(tail(journal, 1)).toMatchObject({ entries: [{ text: 'CHERRY' }], limited: true })
+  expect(tail(journal, 2)).toMatchObject({ entries: [CLEARED, { text: 'CHERRY' }], limited: false })
+  // The archive keeps the old context.
+  expect(journal.statusRead().items.some((item) => item.itemId === 'apple')).toBe(true)
+})
+
+it('refuses a cursor cut before /clear, and follows one cut after it', async () => {
+  const { journal, full, partial } = await clearedChat()
+  expect(partial.ok && partial.limited).toBe(true)
+
+  for (const before of [full.next, partial.ok ? partial.next : full.next]) {
+    expect(readAgentJournalPage(journal, { limit: 5, after: before }, waiting)).toEqual({
+      ok: false
+    })
+  }
+  const fresh = tail(journal, 100)
+  await write(journal, 'cherry', [['cherry', 'CHERRY']])
+  // An old item revised after the clear stays out of the current context.
+  await write(journal, 'apple again', [['apple', 'APPLE revised']])
+
+  await expect(readThrough(journal, 1, fresh.next, [])).resolves.toMatchObject({ read: ['CHERRY'] })
+  expect(texts(tail(journal, 100))).toEqual(['Context cleared', 'CHERRY'])
+})
+
+it('starts the current context at the newest of repeated clears, and after reopening', async () => {
+  const { journal } = await clearedChat()
+  await write(journal, 'cherry', [['cherry', 'CHERRY']])
+  await clear(journal, 'clear-2')
+  await write(journal, 'date', [['date', 'DATE']])
+  expect(texts(tail(journal, 100))).toEqual(['Context cleared', 'DATE'])
+
+  await journal.close()
+  const reopened = await journals.open({ identity, stateDirectory: roots.at(-1) ?? '' })
+
+  expect(texts(tail(reopened, 100))).toEqual(['Context cleared', 'DATE'])
+})
+
+it.each([1_000, 10_000])(
+  'reads the current context after %i cleared replies without walking them',
+  async (count) => {
+    const journal = await seed(count, (index) => message(`reply ${index}`))
+    tail(journal, 1)
+    const work = resetWork(journal)
+    await clear(journal, 'clear')
+    await write(journal, 'cherry', [['cherry', 'CHERRY']])
+
+    expect(texts(tail(journal, 100))).toEqual(['Context cleared', 'CHERRY'])
+    // Two placements and a walk of the two current entries: tree paths, never the old context.
+    expect({ upkeep: work.upkeep, builds: work.builds, reads: work.reads }).toEqual({
+      upkeep: 2,
+      builds: 0,
+      reads: 2
+    })
+    expect(work.nodes).toBeLessThan(80)
+  }
+)
+
+/** One completed Claude turn, written in the order QA 5385's real chat committed it (recovered
+ *  from that run's journal; see `orca-qa/pr-41815/qa5385-artifacts/banana-sequence.md`): the
+ *  send, its hand-over, the previous turn's two late usage revisions, the new turn opening, the
+ *  provider accepting the send, the reply written twice with the same text, and three turn
+ *  revisions. Identities are shortened; their order and repetitions are the run's. */
+async function completedTurn(
+  journal: AgentSessionJournal,
+  word: string,
+  previous?: string,
+  answer = word
+) {
+  const id = `send-${word}`
+  const user = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text: `Reply with the single word ${word}` }]
+  }
+  const turn = {
+    provider: 'codex' as const,
+    threadId: 'thread-1',
+    turnId: `turn-${word}`,
+    ordinal: 0
+  }
+  const turnBody = (state: 'running' | 'completed', durationMs?: number) => ({
+    kind: 'turn' as const,
+    turnId: word,
+    state,
+    ...(state === 'completed' ? { outcome: 'success' as const } : {}),
+    ...(durationMs === undefined ? {} : { durationMs })
+  })
+  await journal.appendSubmission({
+    clientMessageId: id,
+    payloadFingerprint: id,
+    fence: 1,
+    handoverRecorded: true,
+    body: user
+  })
+  await journal.resolveDispatch({
+    clientMessageId: id,
+    state: 'pending',
+    fence: 1,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  if (previous) {
+    const prior = {
+      provider: 'codex' as const,
+      threadId: 'thread-1',
+      turnId: `turn-${previous}`,
+      ordinal: 0
+    }
+    for (const durationMs of [5, 6]) {
+      await journal.appendItem(prior, turnBody('completed', durationMs), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    }
+  }
+  await journal.appendItem(turn, turnBody('running'), {
+    fence: 1,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  await journal.resolveDispatch({
+    clientMessageId: id,
+    state: 'accepted',
+    providerIdentity: { ...turn, turnId: `user-${word}` },
+    fence: 1
+  })
+  for (let revision = 0; revision < 2; revision++) {
+    await journal.appendItem({ ...turn, turnId: `reply-${word}` }, message(answer), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+  }
+  for (const [state, durationMs] of [
+    ['running', 1],
+    ['completed', 2],
+    ['completed', 3]
+  ] as const) {
+    await journal.appendItem(turn, turnBody(state, durationMs), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+  }
+}
+
+// QA 5385 Q-11: awaits the conversation-unit forward read (plan amendment "#41815
+// conversation-unit forward read"). Expected to fail until then. The byte-split case keeps the
+// run's write order with a 3 MiB answer, so its pages split by bytes.
+it.fails.each([
+  ['limit 1', 1, 'BANANA'],
+  ['limit 2', 2, 'BANANA'],
+  ['the default limit', 100, 'BANANA'],
+  ['a byte split', 100, `BANANA:${'y'.repeat(3 * 1024 * 1024)}`]
+])('reads a completed turn once each, user then answer, at %s', async (_, limit, answer) => {
+  const journal = await seed(0, () => null)
+  await completedTurn(journal, 'APPLE')
+  const after = tail(journal, 100).next
+  await completedTurn(journal, 'BANANA', 'APPLE', answer)
+
+  const { pages, read, after: end } = await readThrough(journal, limit, after, [])
+
+  expect(read.map((text) => text.split(':')[0])).toEqual([
+    'Reply with the single word BANANA',
+    'BANANA'
+  ])
+  expect(pages.filter((page) => page.limited && page.entries.length === 0)).toEqual([])
+  expect(readAgentJournalPage(journal, { limit, after: end }, waiting)).toMatchObject({
+    entries: [],
+    limited: false
+  })
 })

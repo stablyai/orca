@@ -7,6 +7,7 @@ import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { journalRowItemIds } from '../replay/journal-row-item-ids'
 import { putOrdered, type OrderedTree } from '../input-order/journal-ordered-tree'
 import { renderJournalStatusItem } from './journal-public-read'
+import { isAgentSessionContextClear } from '../../../../shared/agent-session/agent-session-context-clear'
 
 /** One eligible entry's presented position. */
 type Placement = { id: string; sequence: number; sequenceIndex: number }
@@ -67,11 +68,21 @@ export class JournalAgentReadIndex {
   /** Interrupted-Stop notes by the turn whose state decides how they render. */
   private readonly notesByTurn = new Map<string, Set<string>>()
   private readonly turnOfNote = new Map<string, string>()
+  /** `/clear` dividers by presented sequence; the newest is where the current context starts. */
+  private readonly clears = new Map<string, number>()
+  private floor = 0
   readonly work: AgentReadIndexWork = { builds: 0, builtItems: 0, upkeep: 0, nodes: 0, reads: 0 }
 
   constructor(private readonly journal: AgentSessionJournal) {}
 
-  /** Current entries, newest first, rendered as the public timeline presents them. */
+  /** Where the current context starts: the latest `/clear` divider's sequence, or 0. */
+  contextFloor(): number {
+    this.ensureBuilt()
+    return this.floor
+  }
+
+  /** Current-context entries, newest first, rendered as the public timeline presents them; the
+   *  walk stops at the latest `/clear` divider, as the chat does. */
   *newestFirst(): Generator<AgentJournalRenderItem> {
     this.ensureBuilt()
     const display = this.journal.queuedMessages.displayState()
@@ -84,7 +95,7 @@ export class JournalAgentReadIndex {
         node = node.right
       }
       const next = stack.pop()
-      if (!next) {
+      if (!next || next.value.sequence < this.floor) {
         return
       }
       this.work.reads++
@@ -151,6 +162,8 @@ export class JournalAgentReadIndex {
     this.placed.clear()
     this.notesByTurn.clear()
     this.turnOfNote.clear()
+    this.clears.clear()
+    this.floor = 0
     this.work.builds++
     const display = this.journal.queuedMessages.displayState()
     for (const id of display.items.keys()) {
@@ -163,6 +176,7 @@ export class JournalAgentReadIndex {
     this.work.upkeep++
     this.indexNote(id, display.items.get(id))
     const item = renderJournalStatusItem(display, id)
+    this.indexClear(id, item)
     const next =
       item && agentChatEntryOf(item, () => false)
         ? { id, sequence: item.sequence, sequenceIndex: item.sequenceIndex ?? 0 }
@@ -182,6 +196,27 @@ export class JournalAgentReadIndex {
       this.root = putOrdered(placements, this.root, next, false, visit)
       this.placed.set(id, next)
     }
+  }
+
+  /** Keeps the dividers and the latest one exact for one touched item. */
+  private indexClear(id: string, item: AgentJournalRenderItem | null): void {
+    const sequence = item && isAgentSessionContextClear(item.body) ? item.sequence : undefined
+    const prior = this.clears.get(id)
+    if (prior === sequence) {
+      return
+    }
+    if (sequence === undefined) {
+      this.clears.delete(id)
+    } else {
+      this.clears.set(id, sequence)
+    }
+    // Only losing the latest divider needs the others; dividers are few.
+    this.floor =
+      sequence !== undefined && sequence >= this.floor
+        ? sequence
+        : prior === this.floor
+          ? Math.max(0, ...this.clears.values())
+          : this.floor
   }
 
   /** Keeps the turn → Stop-note map exact for one touched item. */

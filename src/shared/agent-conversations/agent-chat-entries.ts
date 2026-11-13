@@ -2,16 +2,18 @@ import type { AgentJournalRenderItem } from '../agent-session/journal/agent-sess
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import { agentSessionPromptQuestions } from '../agent-session/agent-session-question-answer'
 import type { AgentReadEntry } from './agent-conversation-contracts'
+import { isAgentSessionContextClear } from '../agent-session/agent-session-context-clear'
 
 /** Whether a chat item can become an `orca agent read` entry by its kind alone: its own
- *  messages, failures, tool calls, approvals and questions. Status frames, turn markers and
- *  subagent rows never do. */
+ *  messages, failures, tool calls, approvals and questions, and the `/clear` divider the chat
+ *  shows. Other status frames, turn markers and subagent rows never do. */
 export function isAgentChatEntryKind(item: AgentJournalRenderItem): boolean {
   if (!isRootAgentJournalItem(item)) {
     return false
   }
   const { body } = item
   return (
+    isAgentSessionContextClear(body) ||
     (body.kind === 'message' && body.role !== 'reasoning') ||
     (body.kind === 'status' && body.tone === 'error') ||
     body.kind === 'tool-call' ||
@@ -41,7 +43,10 @@ export function agentChatEntryOf(
     return text.length > 0 ? { kind: 'message', role: body.role, text } : null
   }
   if (body.kind === 'status') {
-    return { kind: 'error', text: String(body.text) }
+    // The divider is Orca's own line, like the history's other host notices.
+    return isAgentSessionContextClear(body)
+      ? { kind: 'message', role: 'system', text: String(body.text) }
+      : { kind: 'error', text: String(body.text) }
   }
   if (body.kind === 'tool-call') {
     return { kind: 'tool', name: body.name, state: body.state }

@@ -20,6 +20,7 @@ import { createWorkerOutputSourceIdentity } from '../orchestration/workers/trans
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
 import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
+import { needsWslHostTranslation } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import {
   isReverseLookupUnavailable,
   type ReverseLookupUnavailable
@@ -85,10 +86,15 @@ async function readChat(
       s: 'chat',
       session: sessionId,
       journal: next.cursor,
-      ...(next.partial ? { partial: next.partial } : {})
+      ...(next.partial ? { partial: next.partial } : {}),
+      ...(next.floor ? { floor: next.floor } : {})
     })
   const after = cursor
-    ? { cursor: cursor.journal, ...(cursor.partial ? { partial: cursor.partial } : {}) }
+    ? {
+        cursor: cursor.journal,
+        ...(cursor.partial ? { partial: cursor.partial } : {}),
+        ...(cursor.floor ? { floor: cursor.floor } : {})
+      }
     : undefined
   // A follower re-reading with its cursor does no journal work until the journal moves; a cursor
   // inside a row always reads it.
@@ -164,6 +170,17 @@ async function readTerminalTranscript(
     )
   }
   const { key, providerSession } = source
+  if (
+    !key.wslDistro &&
+    providerSession.transcriptPath &&
+    needsWslHostTranslation(providerSession.transcriptPath)
+  ) {
+    // Hooks that skipped the WSL relay never said which distro holds this guest path.
+    throw new AgentConversationRefusal(
+      CODES.noTranscript,
+      `Agent ${orcaSessionId}'s transcript is inside WSL, but Orca heard from it without its WSL relay, so it can't tell which distro to read it from.`
+    )
+  }
   const transcript = await readWorkerTranscript({
     agent: key.agent,
     sessionId: providerSession.id,

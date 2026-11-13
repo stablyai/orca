@@ -39,7 +39,7 @@ it.each([750, 7_500])(
       (paneKey: string) => rows.get(paneKey) ?? []
     )
     const runtime = {
-      getWorkspaceDisplayName: vi.fn(() => 'Workspace'),
+      getWorkspaceLabel: vi.fn(() => ({ workspace: 'Workspace', repo: 'repo' })),
       getWorktreePs: vi.fn()
     }
 
@@ -49,9 +49,14 @@ it.each([750, 7_500])(
     })
 
     expect(places.map((place) => place.paneKey)).toEqual(panes)
-    expect(places[0]).toMatchObject({ workspace: 'Workspace', state: 'working', kind: 'terminal' })
+    expect(places[0]).toMatchObject({
+      workspace: 'Workspace',
+      repo: 'repo',
+      state: 'working',
+      kind: 'terminal'
+    })
     expect(hookServer.getPublicStatusSnapshotForPane).toHaveBeenCalledTimes(2)
-    expect(runtime.getWorkspaceDisplayName).toHaveBeenCalledTimes(2)
+    expect(runtime.getWorkspaceLabel).toHaveBeenCalledTimes(2)
     expect(runtime.getWorktreePs).not.toHaveBeenCalled()
   }
 )

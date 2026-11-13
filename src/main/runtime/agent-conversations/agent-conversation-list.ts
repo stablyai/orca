@@ -56,7 +56,7 @@ export function projectAgentConversationList(
 /** Where one resolved conversation is open now, from its own keyed status rows: never a listing
  *  of every workspace. A closed chat or a terminal agent with no live pane has none. */
 export async function agentConversationPlaces(
-  runtime: { getWorkspaceDisplayName(worktreeId: string): string | null },
+  runtime: { getWorkspaceLabel(worktreeId: string): { workspace: string; repo?: string } | null },
   resolved: ResolvedAgentConversation
 ): Promise<AgentConversationRow[]> {
   const { orcaSessionId } = resolved
@@ -93,7 +93,7 @@ export async function agentConversationPlaces(
               agent: status.agentType ?? null,
               state: status.state,
               worktreeId,
-              workspace: runtime.getWorkspaceDisplayName(worktreeId) ?? worktreeId,
+              ...(runtime.getWorkspaceLabel(worktreeId) ?? { workspace: worktreeId }),
               paneKey: status.paneKey,
               title: null,
               lastAssistantMessage: status.lastAssistantMessage ?? null,

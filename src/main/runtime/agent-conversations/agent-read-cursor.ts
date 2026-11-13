@@ -12,7 +12,8 @@ const PREFIXES = { 1: 'oar1_', 2: 'oar2_' } as const
 
 /** Where the next `orca agent read` continues, pinned to one agent and one source. */
 export type ReadCursor =
-  /** `partial`: the next journal row, when part of it was read. */
+  /** `partial`: the next journal row, when part of it was read. `floor`: the `/clear` divider
+   *  the read's context starts at. */
   | {
       v: 2
       id: string
@@ -20,6 +21,7 @@ export type ReadCursor =
       session: string
       journal: AgentJournalCursor
       partial?: AgentReadPartialRow
+      floor?: number
     }
   | { v: 1; id: string; s: 'transcript'; i: string; p: number; c?: string }
 
@@ -72,7 +74,11 @@ function isReadCursor(cursor: unknown): cursor is ReadCursor {
       Number.isSafeInteger(cursor.journal.sequence) &&
       cursor.journal.sequence >= 0 &&
       (cursor.partial === undefined ||
-        isAgentReadPartialRow(cursor.partial, cursor.journal.sequence))
+        isAgentReadPartialRow(cursor.partial, cursor.journal.sequence)) &&
+      (cursor.floor === undefined ||
+        (typeof cursor.floor === 'number' &&
+          Number.isSafeInteger(cursor.floor) &&
+          cursor.floor > 0))
     )
   }
   return (
