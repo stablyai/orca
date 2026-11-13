@@ -95,6 +95,8 @@ docs/**
 !docs/site/**
 !docs/assets/
 !docs/assets/**
+!docs/schemas/
+!docs/schemas/**
 !docs/readme/
 !docs/readme/**
 !docs/bug-reproductions/
