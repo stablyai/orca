@@ -1618,7 +1618,13 @@
           "mfaPolicyChanged": "Changed the two-factor authentication date",
           "mfaPolicyDisabled": "Stopped requiring two-factor authentication",
           "mfaReminderResent": "Sent a two-factor authentication reminder",
-          "mfaMemberReset": "Reset a member’s two-factor authentication"
+          "mfaMemberReset": "Reset a member’s two-factor authentication",
+          "wsShareTeam": "Shared a workspace with the team",
+          "wsShareTeamNamed": "Shared workspace “{{name}}” with the team",
+          "wsMakePrivate": "Made a workspace private",
+          "wsMakePrivateNamed": "Made workspace “{{name}}” private",
+          "wsOwnerChanged": "Changed the owner of a workspace",
+          "wsOwnerChangedNamed": "Changed the owner of workspace “{{name}}”"
         },
         "interval": {
           "month": "monthly",

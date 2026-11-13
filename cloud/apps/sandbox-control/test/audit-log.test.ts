@@ -444,6 +444,47 @@ describe('the older GET /v1/audit', () => {
 })
 
 describe('what is recorded', () => {
+  it('sharing a workspace with the team and making it private again, by whom, with from and to (EP-3)', async () => {
+    const h = await createHarness()
+    h.billing.features = { auditLog: true }
+    const owner = await h.token('olga', 'acme', 'sandbox', { org_role: 'member', name: 'Olga Owner' })
+    const admin = await h.token('ada', 'acme', 'sandbox', { org_role: 'admin', name: 'Ada Admin' })
+    const created = await h.call('POST', '/v1/sandboxes', { bearer: owner, body: { workspaceId: 'ws-1', machineSize: 'standard' } })
+    const id: string = created.body.sandbox.id
+    const patch = (bearer: string, body: unknown) => h.call('PATCH', `/v1/team/workspaces/${id}`, { bearer, body })
+    h.advance(1000)
+    expect((await patch(owner, { title: 'checkout-redesign', visibility: 'team' })).status).toBe(200)
+    h.advance(1000)
+    // The same value again, and an edit that does not touch visibility: nothing to record.
+    expect((await patch(owner, { visibility: 'team' })).status).toBe(200)
+    expect((await patch(owner, { title: 'checkout' })).status).toBe(200)
+    h.advance(1000)
+    // An admin makes it private: they are the actor, not the workspace's owner.
+    expect((await patch(admin, { visibility: 'private' })).status).toBe(200)
+    const events: Event[] = (await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events
+    expect(events.map((event) => [event.action, event.actor.userId, event.target, event.detail])).toEqual([
+      ['workspace.made_private', 'ada', { type: 'workspace', id, label: 'checkout' }, { from: 'team', to: 'private' }],
+      ['workspace.shared_with_team', 'olga', { type: 'workspace', id, label: 'checkout' }, { from: 'private', to: 'team' }],
+      ['workspace.create', 'olga', { type: 'workspace', id, label: 'checkout' }, { origin: 'desktop', visibility: 'private' }]
+    ])
+    // A refused change records nothing: a plain member cannot change someone else's workspace.
+    const other = await h.token('bob', 'acme', 'sandbox', { org_role: 'member' })
+    expect((await patch(other, { visibility: 'team' })).status).not.toBe(200)
+    expect(((await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[]).length).toBe(3)
+  })
+
+  it('handing a workspace to a new owner is recorded with both people', async () => {
+    const h = await createHarness()
+    h.billing.features = { auditLog: true }
+    const admin = await h.token('ada', 'acme', 'sandbox', { org_role: 'admin', name: 'Ada Admin' })
+    const created = await h.call('POST', '/v1/sandboxes', { bearer: admin, body: { workspaceId: 'ws-1', machineSize: 'standard' } })
+    const id: string = created.body.sandbox.id
+    h.advance(1000)
+    expect((await h.call('PATCH', `/v1/team/workspaces/${id}`, { bearer: admin, body: { ownerUserId: 'bob' } })).status).toBe(200)
+    const [changed] = (await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[]
+    expect(changed).toMatchObject({ action: 'workspace.owner_changed', actor: { userId: 'ada' }, target: { type: 'workspace', id }, detail: { fromUserId: 'ada', toUserId: 'bob' } })
+  })
+
   it('desktop workspace changes: create, share, stop sharing, archive, unarchive and delete, each by the person who did it', async () => {
     const h = await createHarness({ SHARE_LINK_SECRET: 's'.repeat(40), SHARE_HOST_SUFFIX: 'share.test' })
     h.billing.features = { auditLog: true }

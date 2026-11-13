@@ -8,6 +8,7 @@ import type {
   CloudAuditEvent
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { ACCOUNT_AUDIT_ACTIONS, type ActionCopy } from './enterprise-audit-account-copy'
+import { WORKSPACE_AUDIT_ACTIONS } from './enterprise-audit-workspace-copy'
 import { SSO_AUDIT_ACTIONS } from './enterprise-audit-sso-copy'
 
 export function auditCategoryLabel(category: CloudAuditCategory, t: Translate = translate): string {
@@ -53,109 +54,6 @@ const ACTIONS: Record<string, ActionCopy> = {
   'settings.update': {
     plain: (t) =>
       t('auto.components.settings.cloudApi.audit.action.settings', 'Changed agent access')
-  },
-  'workspace.create': {
-    plain: (t) =>
-      t('auto.components.settings.cloudApi.audit.action.wsCreate', 'Started a workspace'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.wsCreateNamed', 'Started workspace “{{name}}”', { name })
-  },
-  'workspace.destroy': {
-    plain: (t) =>
-      t('auto.components.settings.cloudApi.audit.action.wsDestroy', 'Deleted a workspace'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.wsDestroyNamed', 'Deleted workspace “{{name}}”', { name })
-  },
-  'workspace.sleep': {
-    plain: (t) =>
-      t('auto.components.settings.cloudApi.audit.action.wsSleep', 'Put a workspace to sleep'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.wsSleepNamed', 'Put workspace “{{name}}” to sleep', {
-        name
-      })
-  },
-  'workspace.wake': {
-    plain: (t) => t('auto.components.settings.cloudApi.audit.action.wsWake', 'Woke a workspace'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.wsWakeNamed', 'Woke workspace “{{name}}”', { name })
-  },
-  'workspace.archive': {
-    plain: (t) =>
-      t('auto.components.settings.cloudApi.audit.action.wsArchive', 'Archived a workspace'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.wsArchiveNamed', 'Archived workspace “{{name}}”', {
-        name
-      })
-  },
-  'workspace.unarchive': {
-    plain: (t) => t('settings.enterprise.audit.action.wsUnarchive', 'Restored a workspace'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.wsUnarchiveNamed', 'Restored workspace “{{name}}”', {
-        name
-      })
-  },
-  'workspace.rename': {
-    plain: (t) => t('settings.enterprise.audit.action.wsRename', 'Renamed a workspace'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.wsRenameNamed', 'Renamed a workspace to “{{name}}”', {
-        name
-      })
-  },
-  'workspace.share_create': {
-    plain: (t) =>
-      t('settings.enterprise.audit.action.wsShare', 'Shared a link to a workspace port'),
-    named: (t, name) =>
-      t(
-        'settings.enterprise.audit.action.wsShareNamed',
-        'Shared a link to a port on workspace “{{name}}”',
-        { name }
-      )
-  },
-  'workspace.share_revoke': {
-    plain: (t) =>
-      t('settings.enterprise.audit.action.wsUnshare', 'Turned off a workspace share link'),
-    named: (t, name) =>
-      t(
-        'settings.enterprise.audit.action.wsUnshareNamed',
-        'Turned off a share link on workspace “{{name}}”',
-        { name }
-      )
-  },
-  'workspace.message': {
-    plain: (t) => t('auto.components.settings.cloudApi.audit.action.wsMessage', 'Messaged an agent')
-  },
-  'workspace.attachment': {
-    plain: (t) => t('settings.enterprise.audit.action.wsAttachment', 'Sent a file to an agent')
-  },
-  'workspace.session.create': {
-    plain: (t) => t('settings.enterprise.audit.action.sessionCreate', 'Started an agent')
-  },
-  'workspace.session.cancel': {
-    plain: (t) => t('settings.enterprise.audit.action.sessionCancel', 'Stopped an agent')
-  },
-  'workspace.session.rename': {
-    plain: (t) => t('settings.enterprise.audit.action.sessionRename', 'Renamed an agent session')
-  },
-  'sandbox.ssh_key_added': {
-    plain: (t) => t('settings.enterprise.audit.action.sshAdd', 'Added an SSH key to a workspace'),
-    named: (t, name) =>
-      t(
-        'settings.enterprise.audit.action.sshAddNamed',
-        'Added an SSH key to workspace “{{name}}”',
-        {
-          name
-        }
-      )
-  },
-  'sandbox.ssh_key_removed': {
-    plain: (t) =>
-      t('settings.enterprise.audit.action.sshRemove', 'Removed an SSH key from a workspace'),
-    named: (t, name) =>
-      t(
-        'settings.enterprise.audit.action.sshRemoveNamed',
-        'Removed an SSH key from workspace “{{name}}”',
-        { name }
-      )
   },
   'project.create': {
     plain: (t) =>
@@ -270,7 +168,8 @@ const ACTIONS: Record<string, ActionCopy> = {
   'routine.rotate_webhook': {
     plain: (t) =>
       t('settings.enterprise.audit.action.routineWebhook', 'Replaced a routine’s webhook URL')
-  }
+  },
+  ...WORKSPACE_AUDIT_ACTIONS
 }
 
 /** The name to put in the sentence: what the control plane labelled the target, else a recorded name. */
