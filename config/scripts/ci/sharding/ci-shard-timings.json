@@ -3903,7 +3903,6 @@
       "src/main/text-generation/requests/jira-issue-summary-requests.test.ts": 276,
       "src/main/text-generation/failures/kimi-generation-failure.test.ts": 151,
       "src/main/text-generation/execution/source-control-agent-cli-path.test.ts": 615,
-      "src/main/text-generation/execution/source-control-agent-launch.test.ts": 1879,
       "src/main/text-generation/execution/source-control-local-process.test.ts": 1834,
       "src/main/text-generation/prompts/source-control-omp-prompt-file.test.ts": 6676,
       "src/main/text-generation/execution/source-control-wsl-launch.test.ts": 482,
