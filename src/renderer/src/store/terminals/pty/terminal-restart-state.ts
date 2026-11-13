@@ -1,6 +1,11 @@
+import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import { createCodexAccountRestartActions } from '../codex-account-restart-actions'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { currentCodexRestartPanes } from '../codex-account-restart-continuation'
+import {
+  isCodexAccountRestart,
+  currentCodexAccountRestart,
+  currentCodexRestartPanes
+} from '../codex-account-restart-continuation'
 import type { PaneAccountRestart, AccountRestartAgent } from '../terminal-contracts'
 import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-identity'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
@@ -27,6 +32,7 @@ export function createTerminalRestartActions(
   | 'retryCodexAccountRestart'
   | 'markCodexRestartNotices'
   | 'clearCodexRestartNotice'
+  | 'retireCodexRestartEndpoint'
   | 'dismissCodexRestartNotices'
   | 'reopenCodexRestartPrompt'
 > {
@@ -68,6 +74,9 @@ export function createTerminalRestartActions(
       }))
     },
     consumePendingPaneAccountRestart: (ptyId) => {
+      if (get().paneAccountRestarts[ptyId] === 'codex') {
+        get().reopenCodexRestartPrompt(ptyId)
+      }
       let queuedAgent: AccountRestartAgent | null = null
       set((s) => {
         const agent = s.paneAccountRestarts[ptyId]
@@ -77,7 +86,7 @@ export function createTerminalRestartActions(
         if (typeof agent !== 'string') {
           return s
         }
-        queuedAgent = agent
+        queuedAgent = agent === 'claude' ? agent : null
         const next = { ...s.paneAccountRestarts }
         delete next[ptyId]
         return { paneAccountRestarts: next }
@@ -103,8 +112,13 @@ export function createTerminalRestartActions(
             (notice.origin.key !== pane.key ||
               notice.origin.tabCreatedAt !== pane.tabCreatedAt ||
               notice.origin.layout !== s.terminalLayoutsByTabId[pane.tabId] ||
-              notice.origin.hostId !== getExecutionHostIdForWorktree(s, pane.worktreeId))
+              notice.origin.hostId !== getExecutionHostIdForWorktree(s, pane.worktreeId) ||
+              notice.origin.lifetime !== getTerminalNoticeLifetime(notice.ptyId))
           ) {
+            continue
+          }
+          const incarnation = getTerminalNoticeLifetime(notice.ptyId)?.incarnationId
+          if (incarnation && notice.incarnationId && incarnation !== notice.incarnationId) {
             continue
           }
           const existing = next[notice.ptyId]
@@ -123,7 +137,9 @@ export function createTerminalRestartActions(
             continue
           }
           next[notice.ptyId] = {
-            ...(notice.incarnationId ? { incarnationId: notice.incarnationId } : {}),
+            ...(notice.incarnationId || incarnation
+              ? { incarnationId: notice.incarnationId ?? incarnation }
+              : {}),
             previousAccountLabel: launch.previousAccountLabel,
             nextAccountLabel: notice.nextAccountLabel,
             ...(launch.previousAccountId === undefined
@@ -150,6 +166,40 @@ export function createTerminalRestartActions(
         }
       })
       return noticedPtyIds
+    },
+    retireCodexRestartEndpoint: (ptyId, incarnationId, currentAttempt) => {
+      set((s) => {
+        let notices = s.codexRestartNoticeByPtyId
+        let requests = s.paneAccountRestarts
+        const notice = notices[ptyId]
+        if (notice?.incarnationId && notice.incarnationId !== incarnationId) {
+          notices = { ...notices }
+          delete notices[ptyId]
+        }
+        for (const [key, request] of Object.entries(requests)) {
+          if (!isCodexAccountRestart(request) || request.oldPtyId !== ptyId) {
+            continue
+          }
+          if (currentAttempt && currentCodexAccountRestart(s, currentAttempt) === request) {
+            continue
+          }
+          const oldIncarnation =
+            request.oldIncarnationId ??
+            (request.condition?.expected.kind === 'endpoint'
+              ? request.condition.expected.incarnationId
+              : undefined)
+          if (!oldIncarnation || oldIncarnation === incarnationId) {
+            continue
+          }
+          if (requests === s.paneAccountRestarts) {
+            requests = { ...requests }
+          }
+          delete requests[key]
+        }
+        return notices === s.codexRestartNoticeByPtyId && requests === s.paneAccountRestarts
+          ? s
+          : { codexRestartNoticeByPtyId: notices, paneAccountRestarts: requests }
+      })
     },
     clearCodexRestartNotice: (ptyId) => {
       set((s) => {

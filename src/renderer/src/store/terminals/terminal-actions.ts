@@ -1,3 +1,4 @@
+import type { TerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import type { CodexAccountRestartToken } from './codex-account-restart-continuation'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
@@ -209,9 +210,15 @@ export type TerminalActions = {
           tabCreatedAt: number
           hostId: string
           layout: TerminalLayoutSnapshot | undefined
+          lifetime?: TerminalNoticeLifetime
         }
       })[]
   ) => string[]
+  retireCodexRestartEndpoint: (
+    ptyId: string,
+    incarnationId: string,
+    currentAttempt?: CodexAccountRestartToken
+  ) => void
   clearCodexRestartNotice: (ptyId: string) => void
   dismissCodexRestartNotices: (ptyIds: string[]) => void
   reopenCodexRestartPrompt: (ptyId: string) => void

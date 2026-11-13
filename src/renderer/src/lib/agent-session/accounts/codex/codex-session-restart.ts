@@ -1,3 +1,4 @@
+import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import { currentCodexRestartPanes } from '@/store/terminals/codex-account-restart-continuation'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
@@ -30,12 +31,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 
 export type CodexPaneScanResult = {
   ptyId: string
-  origin?: {
-    key: string
-    tabCreatedAt: number
-    hostId: string
-    layout: AppState['terminalLayoutsByTabId'][string] | undefined
-  }
+  origin?: Parameters<AppState['markCodexRestartNotices']>[0][number]['origin']
   incarnationId?: string
   /** The pane may be shown a restart prompt (see isCodexRestartEligiblePane). */
   eligible: boolean
@@ -100,20 +96,21 @@ async function scanCodexPanes(
           (ptyId) =>
             eligiblePanes.has(ptyId) && (args.ptyIdFilter === null || args.ptyIdFilter.has(ptyId))
         )
-        .map((ptyId) => ({ tab, ptyId }))
+        .map((ptyId) => ({ tab, ptyId, lifetime: getTerminalNoticeLifetime(ptyId) }))
     )
   const recordedLanes = await readRecordedCodexPaneLanes(panes.map((pane) => pane.ptyId))
 
   // Labels can remain fallback names; use live process evidence plus recorded launchAgent to find Codex.
   return Promise.all(
-    panes.map(async ({ tab, ptyId }) => {
+    panes.map(async ({ tab, ptyId, lifetime }) => {
       const pane = eligiblePanes.get(ptyId)
       const origin = pane
         ? {
             key: pane.key,
             tabCreatedAt: pane.tabCreatedAt,
             hostId: getExecutionHostIdForWorktree(state, pane.worktreeId),
-            layout: state.terminalLayoutsByTabId[pane.tabId]
+            layout: state.terminalLayoutsByTabId[pane.tabId],
+            lifetime
           }
         : undefined
       const lane = resolveCodexPaneSelectionLane({

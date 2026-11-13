@@ -1,3 +1,7 @@
+import { agentSessionOwners } from './pane/agent-session-owners'
+import { accountRestartErrorReceipt } from './pane/account-restart-owner'
+import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import { mapRuntimeError } from '../../runtime/rpc/responses/rpc-response'
 import {
   readAccountRestartReceipt,
   type AccountRestartCondition
@@ -169,7 +173,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
     }
     h.providerSpawn.mockRejectedValueOnce(new Error('launch refused'))
     const failure = await controller.spawn(args).catch((error: unknown) => error)
-    expect(readAccountRestartReceipt(failure)).toMatchObject({
+    expect(accountRestartErrorReceipt(failure)).toMatchObject({
       stop: 'confirmed-retired',
       outcome: 'terminal',
       current: { kind: 'empty', bindingGeneration: 2 }
@@ -200,5 +204,112 @@ describe('conditional Codex account restart at the IPC boundary', () => {
     registerWithFakes(mainWindow, h.runtime, h.store)
     await expect(invoke()).rejects.toThrow('terminal_pane_owner_changed')
     expect(h.leafBinding()).toBe('successor')
+  })
+  it('preserves the Windows capacity diagnostic and stop proof through the final IPC formatter', async () => {
+    const h = installRestartHarness()
+    h.store.trackPtyBindingGeneration('local', leafId)
+    h.providerSpawn.mockRejectedValueOnce(
+      terminalStartError(
+        'provider stopped',
+        { kind: 'exited', exitCode: 1, initialOutputDiagnostic: 'git-bash-console-capacity' },
+        'inc-new'
+      )
+    )
+    registerWithFakes(mainWindow, h.runtime, h.store)
+    const error = await invoke().catch((failure: unknown) => failure)
+    expect(error).toBeInstanceOf(Error)
+    expect(error instanceof Error && error.message).toContain('128 open terminals')
+    expect(readAccountRestartReceipt(error)).toMatchObject({
+      requestId: 'account-request',
+      attemptId: 'account-attempt',
+      stop: 'confirmed-retired',
+      outcome: 'terminal',
+      current: { kind: 'empty', bindingGeneration: 2 }
+    })
+  })
+
+  it('preserves the same proof in the RPC error data after Windows formatting', async () => {
+    const h = installRestartHarness()
+    h.store.trackPtyBindingGeneration('local', leafId)
+    h.providerSpawn.mockRejectedValueOnce(
+      terminalStartError(
+        'provider stopped',
+        { kind: 'exited', exitCode: 1, initialOutputDiagnostic: 'git-bash-console-capacity' },
+        'inc-new'
+      )
+    )
+    registerWithFakes(mainWindow, h.runtime, h.store)
+    const controller = h.runtime.setPtyController.mock.lastCall?.[0]
+    if (!controller?.spawn) {
+      throw new Error('runtime controller not installed')
+    }
+    const error = await controller
+      .spawn({
+        ...restartSpawnArgs(),
+        accountRestart: condition(),
+        launchAgent: 'codex',
+        commandDelivery: 'provider',
+        persistHostSessionBinding: true,
+        spawnIntent: 'user-resume'
+      })
+      .catch((failure: unknown) => failure)
+    const response = mapRuntimeError('rpc-create', { runtimeId: 'runtime-local' }, error)
+    expect(response.error.code).toBe('runtime_error')
+    expect(response.error.message).toContain('128 open terminals')
+    expect(readAccountRestartReceipt({ response })).toMatchObject({
+      requestId: 'account-request',
+      attemptId: 'account-attempt',
+      stop: 'confirmed-retired',
+      outcome: 'terminal',
+      current: { kind: 'empty', bindingGeneration: 2 }
+    })
+  })
+  it('refuses an ensure adoption from another provider-session owner without touching that owner', async () => {
+    const h = installRestartHarness()
+    h.store.trackPtyBindingGeneration('local', leafId)
+    registerWithFakes(mainWindow, h.runtime, h.store)
+    const controller = h.runtime.setPtyController.mock.lastCall?.[0]
+    if (!controller?.spawn) {
+      throw new Error('runtime controller not installed')
+    }
+    const claim = {
+      digestVersion: 1 as const,
+      keyId: 'f2-key',
+      identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      agent: 'codex' as const
+    }
+    agentSessionOwners.register({
+      claim,
+      ptyId: 'provider-owner-elsewhere',
+      phase: 'live',
+      generation: 'foreign-generation',
+      surface: {
+        worktreeId,
+        tabId: 'another-tab',
+        leafId: '00000000-0000-4000-8000-000000000003',
+        terminalHandle: 'foreign-handle'
+      }
+    })
+    try {
+      await expect(
+        controller.spawn({
+          ...restartSpawnArgs(),
+          accountRestart: condition(),
+          launchAgent: 'codex',
+          commandDelivery: 'provider',
+          persistHostSessionBinding: true,
+          spawnIntent: 'user-resume',
+          agentSessionEnsure: {
+            claim,
+            surface: { worktreeId, tabId, leafId, terminalHandle: 'requested-handle' }
+          }
+        })
+      ).rejects.toThrow('agent_session_conflict')
+      expect(h.providerSpawn).not.toHaveBeenCalled()
+      expect(h.leafBinding()).toBeUndefined()
+    } finally {
+      agentSessionOwners.release('provider-owner-elsewhere', 'foreign-generation')
+    }
   })
 })

@@ -24,19 +24,29 @@ export function hasCodexRestartNotices(
 export function isCodexPaneStale(args: {
   tabId: string
   worktreeId: string
+  leafId: string
   panePtyId: string | null
+  paneIncarnationId?: string | null
 }): boolean {
   const state = useAppStore.getState()
   const { codexRestartNoticeByPtyId } = state
   if (args.panePtyId) {
-    const layout = state.terminalLayoutsByTabId[args.tabId]
-    const leafId = Object.keys(layout?.ptyIdsByLeafId ?? {}).find(
-      (leaf) => layout.ptyIdsByLeafId?.[leaf] === args.panePtyId
-    )
-    const request = leafId ? state.paneAccountRestarts[`${args.tabId}:${leafId}`] : undefined
+    const request =
+      state.paneAccountRestarts[`${args.tabId}:${args.leafId}`] ??
+      state.paneAccountRestarts[`${args.tabId}:unresolved`]
+    const expectedIncarnation = isCodexAccountRestart(request)
+      ? (request.oldIncarnationId ??
+        (request.condition?.expected.kind === 'endpoint'
+          ? request.condition.expected.incarnationId
+          : undefined))
+      : undefined
     if (
       isCodexAccountRestart(request) &&
       request.oldPtyId === args.panePtyId &&
+      request.worktreeId === args.worktreeId &&
+      (!args.paneIncarnationId ||
+        !expectedIncarnation ||
+        args.paneIncarnationId === expectedIncarnation) &&
       isCurrentCodexAccountRestart(state, request)
     ) {
       return true
@@ -47,7 +57,13 @@ export function isCodexPaneStale(args: {
   }
   // The bound PTY owns this pane’s input; tab.ptyId may name a sibling whose notice must not block this keyboard.
   if (args.panePtyId) {
-    return blocksCodexPaneInput(codexRestartNoticeByPtyId[args.panePtyId])
+    const notice = codexRestartNoticeByPtyId[args.panePtyId]
+    return (
+      blocksCodexPaneInput(notice) &&
+      (!args.paneIncarnationId ||
+        !notice?.incarnationId ||
+        notice.incarnationId === args.paneIncarnationId)
+    )
   }
 
   return false

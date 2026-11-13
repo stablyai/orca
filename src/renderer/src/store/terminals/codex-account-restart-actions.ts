@@ -1,3 +1,4 @@
+import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -76,7 +77,8 @@ export function createCodexAccountRestartActions(
             tabCreatedAt: pane.tabCreatedAt,
             leafId: pane.leafId,
             oldPtyId: ptyId,
-            oldIncarnationId: notices[ptyId]?.incarnationId,
+            oldIncarnationId:
+              notices[ptyId]?.incarnationId ?? getTerminalNoticeLifetime(ptyId)?.incarnationId,
             environmentId,
             ...(environmentId
               ? {
@@ -136,11 +138,20 @@ export function createCodexAccountRestartActions(
         if (!request) {
           return s
         }
+        const oldIncarnationId =
+          request.oldIncarnationId ??
+          (request.condition?.expected.kind === 'endpoint'
+            ? request.condition.expected.incarnationId
+            : undefined) ??
+          (patch?.condition?.expected.kind === 'endpoint'
+            ? patch.condition.expected.incarnationId
+            : undefined)
         const next = { ...s.paneAccountRestarts }
         if (patch) {
           next[token.key] = {
             ...request,
             ...patch,
+            oldIncarnationId,
             ...(patch.phase === 'accepted'
               ? {
                   executorId: undefined,
@@ -151,8 +162,24 @@ export function createCodexAccountRestartActions(
         } else {
           delete next[token.key]
         }
+        const notices = s.codexRestartNoticeByPtyId
+        const notice = notices[request.oldPtyId]
+        const retireNotice =
+          (!patch || patch.condition?.expected.kind === 'empty') &&
+          notice?.restartRequested &&
+          (!notice.incarnationId || notice.incarnationId === oldIncarnationId)
+        const nextNotices = retireNotice ? { ...notices } : notices
+        if (retireNotice) {
+          delete nextNotices[request.oldPtyId]
+        }
+        const common = {
+          paneAccountRestarts: next,
+          ...(nextNotices !== notices ? { codexRestartNoticeByPtyId: nextNotices } : {})
+        }
         if (
-          (patch?.phase === 'failed' || patch?.phase === 'deferred') &&
+          (patch?.phase === 'failed' ||
+            patch?.phase === 'deferred' ||
+            patch?.phase === 'unresolved') &&
           patch.condition?.expected.kind === 'empty' &&
           request.leafId
         ) {
@@ -164,7 +191,7 @@ export function createCodexAccountRestartActions(
               (id) => id !== request.oldPtyId
             )
             return {
-              paneAccountRestarts: next,
+              ...common,
               terminalLayoutsByTabId: {
                 ...s.terminalLayoutsByTabId,
                 [request.tabId]: { ...layout, ptyIdsByLeafId: bindings }
@@ -181,7 +208,7 @@ export function createCodexAccountRestartActions(
             }
           }
         }
-        return { paneAccountRestarts: next }
+        return common
       })
     },
     retryCodexAccountRestart: (token) => {
@@ -197,18 +224,17 @@ export function createCodexAccountRestartActions(
           if (!pane?.leafId) {
             return s
           }
+          const input = request.leafId
+            ? request.startupInput
+            : captureAgentAccountRestartResumeInput('codex', { ...pane, leafId: pane.leafId })
           const startup = structuredClone(
-            buildPaneAccountRestartStartup(
-              'codex',
-              { ...pane, leafId: pane.leafId },
-              request.startupInput
-            )
+            buildPaneAccountRestartStartup('codex', { ...pane, leafId: pane.leafId }, input)
           )
           if (!startup) {
             return s
           }
           key = pane.key
-          nextRequest = { ...request, leafId: pane.leafId, startup }
+          nextRequest = { ...request, leafId: pane.leafId, startup, startupInput: null }
         }
         const next = { ...s.paneAccountRestarts }
         delete next[token.key]

@@ -18,6 +18,7 @@ import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-ter
 import type { AccountRestartCondition } from '../../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import {
   prepareCodexAccountRestart,
+  isObsoleteCodexRestartResult,
   failCodexAccountRestart
 } from '../codex-account-restart-execution'
 import { clearRetainedInlineScrollback } from '../../snapshots/terminal-scrollback-ref-hydration'
@@ -52,7 +53,7 @@ function prepareDetachedRequest(
 function dispatchDetachedRequest(
   token: CodexAccountRestartToken,
   condition: AccountRestartCondition
-): Promise<string> | null {
+): Promise<{ id: string; incarnationId?: string | null }> | null {
   const state = useAppStore.getState(),
     request = currentCodexAccountRestart(state, token)
   if (!request?.startup || !request.leafId) {
@@ -88,7 +89,10 @@ function dispatchDetachedRequest(
         expectedEnvironmentPairingRevision: request.pairingRevision,
         expectedEnvironmentRuntimeId: request.runtimeId
       }
-    ).then((result) => toRemoteRuntimePtyId(result.terminal.handle, environmentId))
+    ).then((result) => ({
+      id: toRemoteRuntimePtyId(result.terminal.handle, environmentId),
+      incarnationId: result.terminal.incarnationId
+    }))
   }
   return window.api.pty
     .spawn({
@@ -110,7 +114,7 @@ function dispatchDetachedRequest(
       ...(request.projectRuntime ? { projectRuntime: request.projectRuntime } : {}),
       initiallyHidden: true
     })
-    .then((result) => result.id)
+    .then((result) => ({ id: result.id, incarnationId: result.incarnationId }))
 }
 
 export async function restartDetachedAccountRequest(
@@ -137,10 +141,15 @@ export async function restartDetachedAccountRequest(
     if (!pending) {
       return
     }
-    const id = await pending
+    const result = await pending
+    const { id } = result
     const state = useAppStore.getState(),
       request = currentCodexAccountRestart(state, token)
     if (!request?.leafId) {
+      return
+    }
+    if (isObsoleteCodexRestartResult(request, result)) {
+      state.updateCodexAccountRestart(token, null)
       return
     }
     state.updateCodexAccountRestart(token, { resultPtyId: id })

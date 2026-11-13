@@ -1,3 +1,5 @@
+import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { awaitsCodexRestartAnswer } from '@/components/codex-restart-notice-state'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
@@ -37,12 +39,10 @@ export function currentCodexRestartPanes(
     for (const tab of tabs) {
       const layout = state.terminalLayoutsByTabId[tab.id]
       const ids = state.ptyIdsByTabId[tab.id] ?? []
+      const bound = new Set(ids)
+      const leaves = new Set(collectLeafIds(layout?.root))
       for (const [leaf, ptyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
-        if (
-          !ids.includes(ptyId) ||
-          !isTerminalLeafId(leaf) ||
-          !layoutContainsLeafId(layout.root, leaf)
-        ) {
+        if (!bound.has(ptyId) || !isTerminalLeafId(leaf) || !leaves.has(leaf)) {
           continue
         }
         panes.set(ptyId, {
@@ -81,7 +81,7 @@ export function isCodexAccountRestart(
 export function isCurrentCodexAccountRestart(
   state: CodexRestartPopulationState,
   request: CodexAccountRestart,
-  tabs?: ReadonlyMap<string, AppState['tabsByWorktree'][string][number]>
+  tabs?: ReadonlyMap<string, CodexRestartTabScope>
 ): boolean {
   if (getExecutionHostIdForWorktree(state, request.worktreeId) !== request.hostId) {
     return false
@@ -97,17 +97,21 @@ export function isCurrentCodexAccountRestart(
       return false
     }
   }
-  const tab = tabs
-    ? tabs.get(`${request.worktreeId}\0${request.tabId}`)
-    : state.tabsByWorktree[request.worktreeId]?.find((t) => t.id === request.tabId)
-  if (!tab || tab.createdAt !== request.tabCreatedAt) {
+  const scope = tabs?.get(`${request.worktreeId}\0${request.tabId}`)
+  const createdAt = tabs
+    ? scope?.createdAt
+    : state.tabsByWorktree[request.worktreeId]?.find((t) => t.id === request.tabId)?.createdAt
+  if (createdAt === undefined || createdAt !== request.tabCreatedAt) {
     return false
   }
   if (!request.leafId) {
     return (state.ptyIdsByTabId[request.tabId] ?? []).includes(request.oldPtyId)
   }
   const layout = state.terminalLayoutsByTabId[request.tabId]
-  if (!layout || !layoutContainsLeafId(layout.root, request.leafId)) {
+  if (
+    !layout ||
+    !(tabs ? scope?.leaves.has(request.leafId) : layoutContainsLeafId(layout.root, request.leafId))
+  ) {
     return false
   }
   const current = layout.ptyIdsByLeafId?.[request.leafId]
@@ -167,6 +171,43 @@ export function currentCodexAccountRestart(
     : null
 }
 
+function reconcileRetiredCodexNotices(
+  before: AppState,
+  next: AppState
+): AppState['codexRestartNoticeByPtyId'] {
+  let notices = next.codexRestartNoticeByPtyId
+  let panes: ReturnType<typeof currentCodexRestartPanes> | undefined
+  for (const [key, request] of Object.entries(before.paneAccountRestarts)) {
+    if (!isCodexAccountRestart(request) || isCodexAccountRestart(next.paneAccountRestarts[key])) {
+      continue
+    }
+    const notice = notices[request.oldPtyId]
+    if (
+      !notice?.restartRequested ||
+      (notice.incarnationId && notice.incarnationId !== request.oldIncarnationId)
+    ) {
+      continue
+    }
+    panes ??= currentCodexRestartPanes(next)
+    const pane = panes.get(request.oldPtyId)
+    const incarnation = getTerminalNoticeLifetime(request.oldPtyId)?.incarnationId
+    const originalStillCurrent =
+      pane &&
+      getExecutionHostIdForWorktree(next, pane.worktreeId) === request.hostId &&
+      (!incarnation || !request.oldIncarnationId || incarnation === request.oldIncarnationId)
+    if (notices === next.codexRestartNoticeByPtyId) {
+      notices = { ...notices }
+    }
+    if (originalStillCurrent) {
+      const { restartRequested: _answered, ...unanswered } = notice
+      notices[request.oldPtyId] = unanswered
+    } else {
+      delete notices[request.oldPtyId]
+    }
+  }
+  return notices
+}
+
 export function withCodexAccountRestartPruning(
   state: AppState,
   patch: Partial<AppState>
@@ -181,15 +222,28 @@ export function withCodexAccountRestartPruning(
   }
   const next = { ...state, ...patch }
   const requests = pruneCodexAccountRestarts(next)
-  return requests === next.paneAccountRestarts ? patch : { ...patch, paneAccountRestarts: requests }
+  const notices = reconcileRetiredCodexNotices(state, { ...next, paneAccountRestarts: requests })
+  return requests === next.paneAccountRestarts && notices === next.codexRestartNoticeByPtyId
+    ? patch
+    : { ...patch, paneAccountRestarts: requests, codexRestartNoticeByPtyId: notices }
 }
 
+type CodexRestartTabScope = { createdAt: number; leaves: ReadonlySet<string> }
 export function codexRestartTabIndex(
-  state: Pick<CodexRestartPopulationState, 'tabsByWorktree'>
-): ReadonlyMap<string, AppState['tabsByWorktree'][string][number]> {
+  state: Pick<CodexRestartPopulationState, 'tabsByWorktree' | 'terminalLayoutsByTabId'>
+): ReadonlyMap<string, CodexRestartTabScope> {
   return new Map(
     Object.entries(state.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
-      tabs.map((tab) => [`${worktreeId}\0${tab.id}`, tab] as const)
+      tabs.map(
+        (tab) =>
+          [
+            `${worktreeId}\0${tab.id}`,
+            {
+              createdAt: tab.createdAt,
+              leaves: new Set(collectLeafIds(state.terminalLayoutsByTabId[tab.id]?.root))
+            }
+          ] as const
+      )
     )
   )
 }

@@ -1,4 +1,7 @@
-import { failCodexAccountRestart } from '../../account-restart/codex-account-restart-execution'
+import {
+  isObsoleteCodexRestartResult,
+  failCodexAccountRestart
+} from '../../account-restart/codex-account-restart-execution'
 import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { useAppStore } from '@/store'
 import { armPaneOwnerRetry } from '../host-ownership/pane-owner-recovery'
@@ -32,6 +35,15 @@ export function settleFreshPaneSpawn(
     if (spawnedPtyId) {
       const request = currentCodexAccountRestart(useAppStore.getState(), accountToken)
       if (!request) {
+        return
+      }
+      if (
+        isObsoleteCodexRestartResult(request, {
+          id: spawnedPtyId,
+          incarnationId: session.remotePtyIncarnationId
+        })
+      ) {
+        useAppStore.getState().updateCodexAccountRestart(accountToken, null)
         return
       }
       if (session.disposed || generation !== session.transportStreamGeneration) {

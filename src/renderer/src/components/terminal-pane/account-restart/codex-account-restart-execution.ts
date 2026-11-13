@@ -1,3 +1,4 @@
+import { getTerminalNoticeLifetime } from '../provider-notices/terminal-notice-lifetime'
 import { waitForPromiseWithSignal } from '../../../../../shared/abort-signal-reason'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
@@ -18,6 +19,19 @@ import {
   type CodexAccountRestartToken
 } from '@/store/terminals/codex-account-restart-continuation'
 import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
+
+export function isObsoleteCodexRestartResult(
+  request: CodexAccountRestart,
+  result: { id: string; incarnationId?: string | null }
+): boolean {
+  const current = getTerminalNoticeLifetime(result.id)?.incarnationId
+  return Boolean(
+    current &&
+    result.incarnationId &&
+    current !== result.incarnationId &&
+    !(result.id === request.oldPtyId && current === request.oldIncarnationId)
+  )
+}
 
 export function prepareCodexAccountRestart(
   request: CodexAccountRestart
@@ -70,6 +84,9 @@ async function prepareCodexAccountRestartOwner(
     ) {
       throw new Error('terminal_account_restart_unsupported')
     }
+    if (!currentCodexAccountRestart(useAppStore.getState(), token)) {
+      return null
+    }
   }
   const hostPane = parsePaneKey(toHostSessionPaneKey(makePaneKey(request.tabId, request.leafId)))
   if (!hostPane) {
@@ -94,13 +111,16 @@ async function prepareCodexAccountRestartOwner(
     'accountRestart' in terminal ? terminal.accountRestart : undefined
   )
   const latest = currentCodexAccountRestart(useAppStore.getState(), token)
-  if (!latest) {
+  if (!latest || latest.phase !== 'claimed') {
     return null
   }
   if (
     getExecutionHostIdForWorktree(useAppStore.getState(), request.worktreeId) !== request.hostId ||
     runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), request.worktreeId) !== environmentId
   ) {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  if (snapshot.tabCreatedAt !== request.tabCreatedAt) {
     throw new Error('terminal_pane_owner_changed')
   }
   const previous = request.condition
@@ -160,14 +180,13 @@ export function failCodexAccountRestart(
     state.updateCodexAccountRestart(token, null)
     return
   }
-  const receipt = readAccountRestartReceipt(error)
+  const parsedReceipt = readAccountRestartReceipt(error)
+  const receipt =
+    parsedReceipt?.requestId === token.requestId && parsedReceipt.attemptId === token.attemptId
+      ? parsedReceipt
+      : undefined
   let condition = request.condition
-  if (
-    receipt?.requestId === token.requestId &&
-    receipt.attemptId === token.attemptId &&
-    condition &&
-    receipt.current
-  ) {
+  if (receipt && condition && receipt.current) {
     if (receipt.current.kind === 'empty' && receipt.stop === 'confirmed-retired') {
       condition = {
         ...condition,
@@ -193,72 +212,76 @@ export function failCodexAccountRestart(
   })
 }
 
-export async function retryCodexAccountRestarts(
-  requests: readonly CodexAccountRestart[]
+export function retryCodexAccountRestarts(requests: readonly CodexAccountRestart[]): Promise<void> {
+  const identities = requests.map(
+    ({ startup: _startup, startupInput: _startupInput, ...identity }) => identity
+  )
+  return Promise.all(identities.map(retryCodexAccountRestartIdentity)).then(() => undefined)
+}
+
+async function retryCodexAccountRestartIdentity(
+  request: Omit<CodexAccountRestart, 'startup' | 'startupInput'>
 ): Promise<void> {
-  await Promise.all(
-    requests.map(async (request) => {
-      const token = codexAccountRestartToken(request),
-        state = useAppStore.getState()
-      if (!currentCodexAccountRestart(state, token)) {
-        return
-      }
-      if (request.phase === 'failed') {
-        if (!request.leafId) {
-          state.updateCodexAccountRestart(token, { phase: 'claimed' })
-          try {
-            await waitForPromiseWithSignal(
-              callRuntimeRpc(
-                request.environmentId
-                  ? { kind: 'environment', environmentId: request.environmentId }
-                  : { kind: 'local' },
-                'session.tabs.list',
-                { worktree: `id:${request.worktreeId}` },
-                {
-                  timeoutMs: 15000,
-                  expectedEnvironmentPairingRevision: request.pairingRevision,
-                  expectedEnvironmentRuntimeId: request.runtimeId
-                }
-              ),
-              AbortSignal.timeout(15000)
-            )
-          } catch (error) {
-            failCodexAccountRestart(token, error)
-          } finally {
-            useAppStore.getState().updateCodexAccountRestart(token, { phase: 'failed' })
-          }
-        }
-        try {
-          useAppStore.getState().retryCodexAccountRestart(token)
-        } catch (error) {
-          failCodexAccountRestart(token, error)
-        }
-        return
-      }
-      if (request.phase !== 'unresolved') {
-        return
-      }
+  const token = codexAccountRestartToken(request),
+    state = useAppStore.getState()
+  const current = currentCodexAccountRestart(state, token)
+  if (!current || current.phase !== request.phase) {
+    return
+  }
+  if (request.phase === 'failed') {
+    if (!request.leafId) {
       state.updateCodexAccountRestart(token, { phase: 'claimed' })
       try {
-        await prepareCodexAccountRestart(request)
+        await waitForPromiseWithSignal(
+          callRuntimeRpc(
+            request.environmentId
+              ? { kind: 'environment', environmentId: request.environmentId }
+              : { kind: 'local' },
+            'session.tabs.list',
+            { worktree: `id:${request.worktreeId}` },
+            {
+              timeoutMs: 15000,
+              expectedEnvironmentPairingRevision: request.pairingRevision,
+              expectedEnvironmentRuntimeId: request.runtimeId
+            }
+          ),
+          AbortSignal.timeout(15000)
+        )
       } catch (error) {
-        const latest = currentCodexAccountRestart(useAppStore.getState(), token)
-        if (latest) {
-          if (error instanceof Error && error.message.includes('terminal_pane_owner_changed')) {
-            useAppStore.getState().updateCodexAccountRestart(token, null)
-          } else {
-            useAppStore.getState().updateCodexAccountRestart(token, {
-              error: error instanceof Error ? error.message : String(error)
-            })
-          }
-        }
+        failCodexAccountRestart(token, error)
       } finally {
-        // Reconciliation never creates a second process while the original outcome is unknown.
-        const latest = currentCodexAccountRestart(useAppStore.getState(), token)
-        if (latest && (latest.phase === 'claimed' || latest.phase === 'dispatched')) {
-          useAppStore.getState().updateCodexAccountRestart(token, { phase: 'unresolved' })
-        }
+        useAppStore.getState().updateCodexAccountRestart(token, { phase: 'failed' })
       }
-    })
-  )
+    }
+    try {
+      useAppStore.getState().retryCodexAccountRestart(token)
+    } catch (error) {
+      failCodexAccountRestart(token, error)
+    }
+    return
+  }
+  if (request.phase !== 'unresolved') {
+    return
+  }
+  state.updateCodexAccountRestart(token, { phase: 'claimed' })
+  try {
+    await prepareCodexAccountRestartOwner(request)
+  } catch (error) {
+    const latest = currentCodexAccountRestart(useAppStore.getState(), token)
+    if (latest && (latest.phase === 'claimed' || latest.phase === 'dispatched')) {
+      if (error instanceof Error && error.message.includes('terminal_pane_owner_changed')) {
+        useAppStore.getState().updateCodexAccountRestart(token, null)
+      } else {
+        useAppStore.getState().updateCodexAccountRestart(token, {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+  } finally {
+    // Reconciliation never creates a second process while the original outcome is unknown.
+    const latest = currentCodexAccountRestart(useAppStore.getState(), token)
+    if (latest && (latest.phase === 'claimed' || latest.phase === 'dispatched')) {
+      useAppStore.getState().updateCodexAccountRestart(token, { phase: 'unresolved' })
+    }
+  }
 }

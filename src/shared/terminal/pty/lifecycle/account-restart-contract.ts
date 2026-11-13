@@ -80,6 +80,11 @@ export function formatAccountRestartFailure(
   return `${message} ${PREFIX}${encoded}`
 }
 
+const receiptSuffix = new RegExp(`(?:^|[\\t ]+)${PREFIX}[\\w-]+[\\t ]*$`, 'gm')
+export function withoutAccountRestartReceipt(message: string): string {
+  return message.replace(receiptSuffix, '').trimEnd()
+}
+
 export function readAccountRestartReceipt(error: unknown): AccountRestartReceipt | undefined {
   if (
     error &&

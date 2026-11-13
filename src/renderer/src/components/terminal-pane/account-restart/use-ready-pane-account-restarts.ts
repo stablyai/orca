@@ -57,21 +57,18 @@ export function useReadyPaneAccountRestarts({
         const token = codexAccountRestartToken(request)
         void prepareCodexAccountRestart(request)
           .then((condition) => {
-            if (
-              !condition ||
-              !request.startup ||
-              !currentCodexAccountRestart(useAppStore.getState(), token)
-            ) {
+            const latest = currentCodexAccountRestart(useAppStore.getState(), token)
+            if (!condition || !latest?.startup) {
               return
             }
             if (
               managerRef.current !== manager ||
-              !manager.getPanes().some((p) => p.id === pane.id && p.leafId === request.leafId)
+              !manager.getPanes().some((p) => p.id === pane.id && p.leafId === latest.leafId)
             ) {
               useAppStore.getState().updateCodexAccountRestart(token, { phase: 'accepted' })
               return
             }
-            handleRestartPane(pane.id, request.startup, {
+            handleRestartPane(pane.id, latest.startup, {
               focus: true,
               accountRestart: condition,
               accountRestartToken: token

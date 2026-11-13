@@ -1,3 +1,8 @@
+import {
+  admitTerminalNoticeLifetime,
+  getTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout/terminal-layout-normalization'
 import { selectCodexStaleSessionCount } from '@/components/status-bar/codex-restart-status-summary'
 import { sweepUnclaimedCodexPaneRestarts } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart'
@@ -165,5 +170,29 @@ describe('spurious shell readings on Codex-launched panes', () => {
     expect(useAppStore.getState().terminalLayoutsByTabId['tab-1'].root).toBeNull()
     expect(window.api.pty.spawn).not.toHaveBeenCalled()
     expect(window.api.pty.kill).not.toHaveBeenCalled()
+  })
+  it('drops a delayed same-ID scan when its admitted process incarnation was replaced', async () => {
+    const initial = admitTerminalNoticeLifetime('pty-1', { incarnationId: 'inc-old', fresh: true })
+    const inspection = Promise.withResolvers<{
+      foregroundProcess: string
+      hasChildProcesses: boolean
+    }>()
+    vi.mocked(window.api.pty.inspectProcess).mockReturnValue(inspection.promise)
+    const scanning = markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
+    })
+    admitTerminalNoticeLifetime('pty-1', { incarnationId: 'inc-successor', fresh: true })
+    inspection.resolve({ foregroundProcess: 'codex', hasChildProcesses: true })
+    await scanning
+    expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
+    expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+    const current = getTerminalNoticeLifetime('pty-1')
+    if (current) {
+      retireTerminalNoticeLifetime(current)
+    }
+    retireTerminalNoticeLifetime(initial)
   })
 })
