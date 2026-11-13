@@ -39,6 +39,7 @@ import {
 } from './runtime-environment-support-routing'
 import { shouldUseSharedControlEnvelope } from './runtime-environment-shared-control-envelope'
 import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
+import { noteRuntimeEnvironmentFailure } from './runtime-environment-rejection-observer'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -169,6 +170,7 @@ export async function callRuntimeEnvironment(
       options?.lane
     )
   } catch (error) {
+    noteRuntimeEnvironmentFailure(environment.id, error)
     if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRuntimeUnreachableHint(environment, error.message, endpoint)
     }
@@ -286,6 +288,7 @@ export async function subscribeRuntimeEnvironment(
     }
     return subscription
   } catch (error) {
+    noteRuntimeEnvironmentFailure(environment.id, error)
     if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRuntimeUnreachableHint(
         environment,

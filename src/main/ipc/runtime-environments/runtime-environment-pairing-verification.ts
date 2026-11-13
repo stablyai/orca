@@ -130,10 +130,12 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
 /** Replace pairing only after verifying the saved host key; invalid or foreign links leave it untouched. */
 export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { selector: string; pairingCode: string }
+  args: { selector: string; pairingCode: string },
+  /** EP-8: a fresh Orca Cloud grant for this computer may repair a cloud workspace's own server. */
+  options: { allowCloudWorkspace?: boolean } = {}
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
   const existing = resolveEnvironment(userDataPath, args.selector)
-  if (isEphemeralVmRuntimeEnvironment(existing)) {
+  if (isEphemeralVmRuntimeEnvironment(existing) && !options.allowCloudWorkspace) {
     return pairingSaveFailure(null, 'repairCloudWorkspace')
   }
   // SSH tunnel pairings legitimately use loopback links.

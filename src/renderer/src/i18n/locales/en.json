@@ -29790,5 +29790,10 @@
       "check": "Orca’s sandboxes run Ubuntu, and these lines still use dnf. Check them before saving:",
       "translated": "Orca’s sandboxes run Ubuntu, so this script’s dnf install lines now use apt-get."
     }
+  },
+  "cloudAccessLost": {
+    "title": "You can’t open this cloud workspace anymore",
+    "description": "Its owner or a team admin changed who can open it. Ask them for access, or remove it from this computer. This doesn’t delete the workspace.",
+    "remove": "Remove from this computer"
   }
 }

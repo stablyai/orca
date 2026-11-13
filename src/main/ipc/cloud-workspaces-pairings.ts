@@ -131,6 +131,13 @@ function updateBindings(
 
 let pairings: CloudWorkspacesPairings | null = null
 
+/** EP-8: a paired workspace was re-granted for this computer; its binding names the new grant. */
+export async function rebindCloudPairingGrant(sandboxId: string, grantId: string): Promise<void> {
+  await updateBindings((current) =>
+    current[sandboxId] ? { ...current, [sandboxId]: { ...current[sandboxId], grantId } } : current
+  )
+}
+
 /** The active Orca account, the id bindings are stamped with ("org:<id>" or "user:<id>"). */
 function activeAccountId(): string | null {
   return orcaCloudAccountId(ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud)
