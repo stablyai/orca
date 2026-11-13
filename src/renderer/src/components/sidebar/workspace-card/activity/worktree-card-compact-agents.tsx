@@ -90,7 +90,8 @@ export function CompactAgentSummaryButton({
   const unreadSummary =
     unreadCount > 0
       ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
-          count: unreadCount
+          count: unreadCount,
+          defaultValue_one: '{{count}} unread'
         })
       : ''
   const visibleGroups = groups.slice(0, 3)

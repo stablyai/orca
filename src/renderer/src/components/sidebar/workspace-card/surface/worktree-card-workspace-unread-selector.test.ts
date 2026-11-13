@@ -3,7 +3,7 @@ import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type * as WorkspaceLiveMarkers from '@/store/slices/workspace-attention/workspace-live-markers'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createWorkspaceUnreadSelector } from './worktree-card-workspace-unread-selector'
 
