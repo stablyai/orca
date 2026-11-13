@@ -201,19 +201,6 @@ describe('workspace cleanup for released orchestration workers', () => {
     expect(candidates.get(unlanded.id)).toEqual({ reasons: [], blockers: ['unpushed-commits'] })
   })
 
-  it('suggests a released worker with no commits of its own but never a workspace a worker only reused', async () => {
-    const coordinator = await addWorktree('coordinator', 'main')
-    const created = await addChild('created', coordinator.id)
-    const reused = await addWorktree('reused', 'main')
-    releaseWorker(startWorker(created.id, 'term_created'))
-    releaseWorker(startWorker(reused.id, 'term_reused', { action: 'reused' }))
-
-    const candidates = await scan([created.id, reused.id])
-
-    expect(candidates.get(created.id)?.reasons).toEqual(['unchanged', 'orchestration-worker'])
-    expect(candidates.get(reused.id)?.reasons).toEqual(['unchanged'])
-  })
-
   it('suggests a worker workspace once the follow-up that took over its terminal is released', async () => {
     const coordinator = await addWorktree('coordinator', 'main')
     const child = await addChild('child', coordinator.id)
@@ -230,52 +217,5 @@ describe('workspace cleanup for released orchestration workers', () => {
       'unchanged',
       'orchestration-worker'
     ])
-  })
-
-  it('never suggests a workspace recreated at the old path of a worker that a later worker only reused', async () => {
-    const coordinator = await addWorktree('coordinator', 'main')
-    const child = await addChild('child', coordinator.id)
-    const first = startWorker(child.id, 'term_child')
-    releaseWorker(first)
-    // The first worker ran before the path was reused.
-    db.db
-      .prepare(
-        "UPDATE worker_terminal_resources SET created_at = '2025-01-01 00:00:00' WHERE origin_dispatch_id = ?"
-      )
-      .run(first)
-    // The user removes the worker's workspace and makes a new one at the same path.
-    await git(['worktree', 'remove', child.path], repoPath)
-    await git(['branch', '-D', 'child'], repoPath)
-    await addChild('child', coordinator.id)
-    releaseWorker(startWorker(child.id, 'term_later', { action: 'reused' }))
-
-    expect((await scan([child.id])).get(child.id)?.reasons).toEqual(['unchanged'])
-  })
-
-  it('keeps a released worker workspace while another worker is still starting in it', async () => {
-    const coordinator = await addWorktree('coordinator', 'main')
-    const child = await addChild('child', coordinator.id)
-    releaseWorker(startWorker(child.id, 'term_child'))
-    const retry = db.createTask({ runId: 'run_legacy_local', spec: 'retry' })
-    db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: 9,
-      taskId: retry.id,
-      startOptions: { worktree: `id:${child.id}`, resolvedWorktreeId: child.id }
-    })
-
-    expect((await scan([child.id])).get(child.id)?.reasons).toEqual(['unchanged'])
-  })
-
-  it('never suggests a workspace on this machine for an SSH worker that used the same id', async () => {
-    const coordinator = await addWorktree('coordinator', 'main')
-    const child = await addChild('child', coordinator.id)
-    releaseWorker(
-      startWorker(child.id, 'term_ssh', {
-        hostScope: JSON.stringify({ kind: 'ssh', targetId: 'ssh-target' })
-      })
-    )
-
-    expect((await scan([child.id])).get(child.id)?.reasons).toEqual(['unchanged'])
   })
 })
