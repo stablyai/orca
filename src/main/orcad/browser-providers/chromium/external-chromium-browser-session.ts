@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { chmod, mkdir, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { BrowserError } from '../../../browser/browser-error'
@@ -80,15 +80,26 @@ export function externalChromiumAgentBrowserEnvironment(options: {
   executablePath: string
   profilePath: string
   sessionName: string
+  configPath: string
   browserArgs?: readonly string[]
 }): NodeJS.ProcessEnv {
+  // Only the socket location is inherited: a user's AGENT_BROWSER_HEADED or _EXTENSIONS would open a
+  // visible window. Windows env keys ignore case.
+  const env = Object.fromEntries(
+    Object.entries(options.inheritedEnv).filter(([key]) => {
+      const upper = key.toUpperCase()
+      return !upper.startsWith('AGENT_BROWSER_') || upper === 'AGENT_BROWSER_SOCKET_DIR'
+    })
+  )
   return {
-    ...options.inheritedEnv,
+    ...env,
     AGENT_BROWSER_IDLE_TIMEOUT_MS:
       options.inheritedEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim() || '0',
     AGENT_BROWSER_EXECUTABLE_PATH: options.executablePath,
     AGENT_BROWSER_PROFILE: options.profilePath,
     AGENT_BROWSER_SESSION: options.sessionName,
+    // An explicit config skips ~/.agent-browser/config.json and ./agent-browser.json.
+    AGENT_BROWSER_CONFIG: options.configPath,
     AGENT_BROWSER_ARGS: options.browserArgs?.join('\n') ?? ''
   }
 }
@@ -105,6 +116,7 @@ export class ExternalChromiumBrowserSession {
   private readonly identity: string
   private readonly sessionName: string
   private profilePathResolution: Promise<string> | null = null
+  private configPathWrite: Promise<string> | null = null
 
   constructor(
     private readonly agentBrowserPath: string,
@@ -125,6 +137,17 @@ export class ExternalChromiumBrowserSession {
       this.identity
     )
     return this.profilePathResolution
+  }
+
+  // Empty, so agent-browser's defaults (headless, no extensions) apply instead of a user's config.
+  private configPath(): Promise<string> {
+    this.configPathWrite ??= (async () => {
+      const path = join(this.statePath, 'agent-browser-config.json')
+      await mkdir(this.statePath, { recursive: true, mode: 0o700 })
+      await writeFile(path, '{}\n', { mode: 0o600 })
+      return path
+    })()
+    return this.configPathWrite
   }
 
   async start(signal?: AbortSignal): Promise<string> {
@@ -267,7 +290,10 @@ export class ExternalChromiumBrowserSession {
     signal?.throwIfAborted()
     const profilePath = await this.profilePath()
     signal?.throwIfAborted()
-    const args = ['--session', this.sessionName, '--profile', profilePath]
+    const configPath = await this.configPath()
+    signal?.throwIfAborted()
+    // Pinned per command so a daemon started headed by an older environment relaunches headless.
+    const args = ['--session', this.sessionName, '--profile', profilePath, '--headed', 'false']
     if (this.launch.browserArgs?.length) {
       args.push('--args', this.launch.browserArgs.join('\n'))
     }
@@ -277,6 +303,7 @@ export class ExternalChromiumBrowserSession {
       executablePath: this.launch.executablePath,
       profilePath,
       sessionName: this.sessionName,
+      configPath,
       browserArgs: this.launch.browserArgs
     })
     const result = await runProcess({
