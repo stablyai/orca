@@ -10,9 +10,7 @@ export function nativeChatSlotKey(slot: NativeChatTranscriptSlot): string {
     case 'message':
       return slot.message.id
     case 'subagent':
-      return `subagent-section:${slot.agentId}`
-    case 'subagent-entries':
-      return `subagent-entries:${slot.rosterRowId}:${slot.agents[0]?.id}`
+      return `subagent-head:${slot.agentId}`
   }
 }
 

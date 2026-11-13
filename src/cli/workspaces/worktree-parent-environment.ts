@@ -3,7 +3,7 @@ import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
-import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage-row-identity'
+import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage/lineage-row-identity'
 import {
   supportsCrossStoreLineage,
   WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY

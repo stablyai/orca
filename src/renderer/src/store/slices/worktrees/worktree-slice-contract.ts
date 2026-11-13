@@ -17,20 +17,20 @@ import type {
   CreateWorktreeCallOptions,
   CreatedWorktreeResult
 } from './create/worktree-create-payload'
-import type { WorktreeCatalogVersion } from '../../../../../shared/worktree/catalog-version'
+import type { WorktreeCatalogVersion } from '../../../../../shared/worktree/catalog/catalog-version'
 import type { WorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
-} from '../../../../../shared/worktree/base-ref-drift-types'
+} from '../../../../../shared/worktree/base-refs/base-ref-drift-types'
 import type {
   CreateSparseCheckoutRequest,
   ForceDeleteWorktreeBranchResult,
   SetupDecision
 } from '../../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../../shared/worktree/creation/launch-types'
 import type {
   WorkspaceLineage,
   WorktreeLineage
@@ -43,7 +43,7 @@ import type {
   WorkspaceStatus,
   Worktree
 } from '../../../../../shared/worktree/types'
-import type { WorktreeRemovalTarget } from '../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../shared/worktree/removal/removal'
 import type { TerminalGitHubPRLink } from '../../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TerminalPaneRecoveryOutcome } from '../../../../../shared/workspace-layout/terminal-tab-types'

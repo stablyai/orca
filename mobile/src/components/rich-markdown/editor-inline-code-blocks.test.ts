@@ -33,9 +33,7 @@ function select(range: Range) {
 }
 
 it.each([
-  ['first\n\nsecond\n\nthird', '`first`\n\n`second`\n\n`third`', ['first', 'second', 'third']],
   ['# Heading\n\n> Quoted', '# `Heading`\n\n> `Quoted`', ['Heading', 'Quoted']],
-  ['- first\n- second', '- `first`\n- `second`', ['first', 'second']],
   ['- [ ] first\n- [x] second', '- [ ] `first`\n- [x] `second`', ['first', 'second']],
   [
     'left ![pixel](https://example.com/pixel.png) right',

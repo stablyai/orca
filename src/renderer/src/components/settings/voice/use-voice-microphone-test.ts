@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DICTATION_SAMPLE_RATE } from '../../../../../shared/rpc-contract/speech-params'
+import { DICTATION_SAMPLE_RATE } from '../../../../../shared/rpc-contract/speech/speech-params'
 import {
   DEFAULT_DICTATION_METER,
   type DictationMeterState

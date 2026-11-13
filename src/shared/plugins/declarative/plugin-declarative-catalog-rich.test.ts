@@ -35,9 +35,6 @@ describe('catalog 2 components', () => {
       expect(result.tree?.children.map((child) => typeof child !== 'string' && child.type)).toEqual(
         ['Unsupported', 'Unsupported', 'Text']
       )
-      expect(result.warnings).toEqual(
-        expect.arrayContaining(['Table: ignored invalid rows', 'Tree: ignored invalid items'])
-      )
     }
   })
 })

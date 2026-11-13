@@ -2,7 +2,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { WorkspaceReviewFactsSnapshotSchema } from '../../src/shared/sidebar-list/workspace-review-facts'
+import { WorkspaceReviewFactsSnapshotSchema } from '../../src/shared/sidebar-list/feed-facts/workspace-review-facts'
 import { getWorktreeIdFromHostIdentity } from '../../src/shared/worktree/host-qualified-identity'
 
 test.skip(

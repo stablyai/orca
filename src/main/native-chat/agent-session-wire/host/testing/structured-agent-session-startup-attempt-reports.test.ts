@@ -5,6 +5,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import {
   acquire,
+  advanceHostWallClock,
   eventually,
   heldBehindStart,
   host,
@@ -39,5 +40,16 @@ describe('what a started child reports', () => {
     })
     await host.flushStreamedEvents(SESSION)
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'picked' })
+  })
+})
+
+describe('a start across a sleep', () => {
+  it('lets a start that a sleep held past the idle window finish and deliver its message', async () => {
+    await restartWith(publishFirst)
+    const id = await heldBehindStart('hello')
+    advanceHostWallClock(2 * 60 * 60_000)
+    await host.collaboratorsForTests().lifetime.idleSweep.tick()
+    await proveOpen()
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
   })
 })

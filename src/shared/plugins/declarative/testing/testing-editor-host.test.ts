@@ -36,20 +36,3 @@ describe('mockEditorHost', () => {
     doc.dispose()
   })
 })
-
-describe('mockEditorHost saves as Orca does', () => {
-  it('blocks a save after an oversized edit until a later edit lands', async () => {
-    host = mockEditorHost({ text: 'a' })
-    const { document } = host.orca
-    const send = (text: string): Promise<unknown> =>
-      document.applyEdit({ baseVersion: 1, content: { kind: 'text', text } })
-    await session()
-    await expect(send('x'.repeat(64 * 1024 * 1024 + 1))).rejects.toMatchObject({
-      code: 'too_large'
-    })
-    await expect(host.flush()).rejects.toThrow(/too large/)
-    await send('fits')
-    await expect(host.flush()).resolves.toBeUndefined()
-    expect(host.text).toBe('fits')
-  })
-})

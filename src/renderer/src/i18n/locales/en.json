@@ -19998,7 +19998,7 @@
         },
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Open with (when focus is not in an editable field)"
+            "openWith": "Open with (except while typing in an Orca text field)"
           }
         },
         "pluginInstallCount": {
@@ -20926,7 +20926,7 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "showAgent": "Show {{value0}} in the conversation"
+        "openAgent": "Open {{value0}}"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -21077,7 +21077,25 @@
         "started_one": "Kicked off {{count}} subagent",
         "started_other": "Kicked off {{count}} subagents",
         "ran_one": "Ran {{count}} subagent",
-        "ran_other": "Ran {{count}} subagents"
+        "ran_other": "Ran {{count}} subagents",
+        "backToMain": "Back to main agent",
+        "mainAgent": "Main agent",
+        "promptFromMain": "Prompt from main agent",
+        "clickToOpen": "Click to open",
+        "backTo": "Back to {{value0}}",
+        "path": "Subagent path",
+        "stateHeading": {
+          "completed": "Completed",
+          "working": "Working",
+          "idle": "Idle",
+          "failed": "Failed",
+          "stopped": "Stopped",
+          "unverifiable": "Status unavailable"
+        },
+        "noSteps": "No steps yet",
+        "beforeClear": "This subagent ran before the chat was cleared",
+        "stoppedBeforeReply": "Stopped before replying",
+        "noReply": "Ended without a reply"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",
@@ -23494,6 +23512,11 @@
         "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "restartCount_one": "Restart {{count}} session"
+      },
+      "oauthUsage": {
+        "title": "Claude usage polling",
+        "description": "Uses your Claude Code sign-in to check usage, credits, and inactive accounts. Turn off to use live terminal readings only.",
+        "about": "About Claude usage polling"
       }
     },
     "managedData": {
@@ -25438,6 +25461,21 @@
       "refresh": "The previous Refresh could not be completed. Try Refresh again.",
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
+    }
+  },
+  "crashReport": {
+    "freeze": {
+      "attach": "Attach saved freeze report and diagnostic logs",
+      "attachDescription": "Sends the saved freeze report with a capped, redacted log bundle.",
+      "attachmentsOmitted": "The saved freeze report and diagnostic logs were not attached: {{value0}}",
+      "description": "Send the saved freeze report to help us understand what happened.",
+      "notSent": "Freeze report wasn't sent",
+      "notes": "Optional: what were you doing before Orca froze?",
+      "sent": "Freeze report sent.",
+      "sentWithoutAttachments": "Details sent without the saved freeze report or diagnostic logs",
+      "summary": "Orca stopped responding",
+      "title": "Report a freeze",
+      "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
   }
 }

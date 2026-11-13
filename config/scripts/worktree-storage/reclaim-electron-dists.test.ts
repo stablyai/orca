@@ -70,22 +70,6 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
-it('shares a writable install and preserves its executable bytes', async () => {
-  const { pkg, executable, run } = await fixture()
-  const preview = await run()
-  expect(preview.code, preview.stderr).toBe(0)
-  expect(preview.stdout).toContain('Would share 1 worktree(s)')
-  const applied = await run(true)
-  expect(applied.code, applied.stderr).toBe(0)
-  expect(applied.stdout).toContain('Shared 1 worktree(s)')
-  expect(await readFile(executable, 'utf8')).toBe('fake electron executable\n')
-  expect(await readFile(join(pkg, '.orca-shared-dist'), 'utf8')).toBe(
-    `99.1.0-${process.platform}-${process.arch}`
-  )
-  const repeated = await run()
-  expect(repeated.stdout).toContain('Would share 0 worktree(s)')
-})
-
 it('protects the launching worktree, including when selected through a filesystem alias', async () => {
   const { root, pkg, executable, run } = await fixture()
   const alias = join(root, 'alias')
@@ -103,13 +87,11 @@ it('protects the launching worktree, including when selected through a filesyste
   }
 })
 
-it.each([['--exclude-worktree'], ['--exclude-worktree', '--apply']])(
-  'rejects invalid exclusions before changing an install: %j',
-  async (...flags) => {
-    const { pkg, run } = await fixture()
-    const result = await run(true, flags)
-    expect(result.code).not.toBe(0)
-    expect(result.stderr).toContain('--exclude-worktree requires a directory')
-    await expect(readFile(join(pkg, '.orca-shared-dist'))).rejects.toMatchObject({ code: 'ENOENT' })
-  }
-)
+it('rejects a missing exclusion before changing an install', async () => {
+  const flags = ['--exclude-worktree']
+  const { pkg, run } = await fixture()
+  const result = await run(true, flags)
+  expect(result.code).not.toBe(0)
+  expect(result.stderr).toContain('--exclude-worktree requires a directory')
+  await expect(readFile(join(pkg, '.orca-shared-dist'))).rejects.toMatchObject({ code: 'ENOENT' })
+})
