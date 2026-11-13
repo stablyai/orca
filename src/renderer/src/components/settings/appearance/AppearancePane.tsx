@@ -1,6 +1,5 @@
 import type React from 'react'
-import { useLayoutEffect, useState } from 'react'
-import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
+import { useLayoutEffect } from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
@@ -8,7 +7,7 @@ import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
@@ -40,8 +39,6 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
 
-import { resolveInterfaceSectionSummary } from './appearance-interface-summary'
-
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -53,14 +50,6 @@ type AppearancePaneProps = {
   terminalConfigImport: UseTerminalConfigImportReturn
   warpThemes: UseWarpThemeImportReturn
 }
-
-type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
-
-const ALL_APPEARANCE_SECTIONS = [
-  'interface',
-  'terminal',
-  'window'
-] as const satisfies readonly AppearanceSectionKey[]
 
 export function AppearancePane({
   settings,
@@ -79,32 +68,16 @@ export function AppearancePane({
   const clearAppearanceAccordionDeepLink = useAppStore(
     (state) => state.clearAppearanceAccordionDeepLink
   )
-  const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const isWebClient = isWebClientLocation()
   // Windows web clients have no local system tray; require desktop Electron.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
 
-  // Expand by default so Terminal/Window controls remain discoverable; sections still collapse independently.
-  const [openSections, setOpenSections] = useState<ReadonlySet<AppearanceSectionKey>>(
-    () => new Set(ALL_APPEARANCE_SECTIONS)
-  )
-
-  // Expand deep-link parents before scrolling so the target row is visible.
   useLayoutEffect(() => {
     if (!appearanceAccordionDeepLink) {
       return
     }
-    setOpenSections((current) => {
-      if (current.has(appearanceAccordionDeepLink)) {
-        return current
-      }
-      const next = new Set(current)
-      next.add(appearanceAccordionDeepLink)
-      return next
-    })
     clearAppearanceAccordionDeepLink()
-    // Scroll next frame after synchronous expansion so the target has nonzero height.
     const frameId = requestAnimationFrame(() => {
       document
         .getElementById(USAGE_PERCENTAGE_DISPLAY_SETTING_ID)
@@ -166,53 +139,10 @@ export function AppearancePane({
   })
   const appIconMatches = matchesSettingsSearch(searchQuery, getAppIconEntries())
 
-  // Search reveals matching sections, including advanced controls, without replacing saved disclosure state.
-  function isSectionOpen(key: AppearanceSectionKey): boolean {
-    if (isSearching) {
-      return key === 'interface'
-        ? interfaceMatches
-        : key === 'terminal'
-          ? terminalMatches
-          : windowMatches
-    }
-    return openSections.has(key)
-  }
-
-  function toggleSection(key: AppearanceSectionKey): void {
-    setOpenSections((current) => {
-      const next = new Set(current)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next
-    })
-  }
-
-  const interfaceSummary = resolveInterfaceSectionSummary(settings, t)
-  const terminalSummary = `${
-    settings.terminalFontFamily ||
-    t('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')
-  } · ${settings.terminalFontSize}px`
-
   return (
     <>
       {interfaceMatches ? (
-        <SettingsGroup
-          title={
-            <span className="flex items-center gap-2">
-              <AppWindow aria-hidden="true" className="size-4" />
-              {interfaceTitle}
-            </span>
-          }
-          collapse={{
-            open: isSectionOpen('interface'),
-            onToggle: () => toggleSection('interface'),
-            disabled: isSearching,
-            summary: interfaceSummary
-          }}
-        >
+        <SettingsGroup title={interfaceTitle}>
           <AppearanceInterfaceSection
             settings={settings}
             updateSettings={updateSettings}
@@ -227,20 +157,7 @@ export function AppearancePane({
       ) : null}
 
       {terminalMatches ? (
-        <SettingsGroup
-          title={
-            <span className="flex items-center gap-2">
-              <TerminalSquare aria-hidden="true" className="size-4" />
-              {terminalTitle}
-            </span>
-          }
-          collapse={{
-            open: isSectionOpen('terminal'),
-            onToggle: () => toggleSection('terminal'),
-            disabled: isSearching,
-            summary: terminalSummary
-          }}
-        >
+        <SettingsGroup title={terminalTitle}>
           <TerminalAppearanceSection
             settings={settings}
             updateSettings={updateSettings}
@@ -255,20 +172,7 @@ export function AppearancePane({
       ) : null}
 
       {windowMatches ? (
-        <SettingsGroup
-          title={
-            <span className="flex items-center gap-2">
-              <PanelLeft aria-hidden="true" className="size-4" />
-              {windowSidebarTitle}
-            </span>
-          }
-          collapse={{
-            open: isSectionOpen('window'),
-            onToggle: () => toggleSection('window'),
-            disabled: isSearching,
-            summary: windowSidebarSummary
-          }}
-        >
+        <SettingsGroup title={windowSidebarTitle}>
           <AppearanceWindowSidebarSection
             settings={settings}
             updateSettings={updateSettings}

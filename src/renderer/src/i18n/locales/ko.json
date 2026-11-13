@@ -7030,8 +7030,6 @@
             "df205a675e": "색조 강도",
             "ba1d9a0607": "사이드바 색조"
           },
-          "interfaceDefaultFont": "기본 글꼴",
-          "terminalDefaultFont": "기본 글꼴",
           "interfaceTitle": "인터페이스",
           "terminalTitle": "터미널",
           "windowSidebarSummary": "사이드바, 상태 표시줄 및 파일 탐색기",
