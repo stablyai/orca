@@ -21631,6 +21631,11 @@
         "reasonSharedSession": "在另一個窗格中也已開啟",
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。"
+      },
+      "oauthUsage": {
+        "title": "Claude 用量輪詢",
+        "description": "使用 Claude Code 登入憑證查詢用量、額度和非使用中帳戶。關閉後，僅顯示執行中終端機工作階段提供的即時用量。",
+        "about": "關於 Claude 用量輪詢"
       }
     },
     "managedData": {

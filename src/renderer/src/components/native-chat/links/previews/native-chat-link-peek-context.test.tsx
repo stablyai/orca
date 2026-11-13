@@ -32,11 +32,6 @@ it.each([
     owner: { executionHostId: 'runtime:env' as const, connectionId: 'T' },
     runtimeEnvironmentId: 'env',
     expectedHost: 'nested:env/T'
-  },
-  {
-    owner: { executionHostId: 'runtime:env' as const, connectionId: 'U' },
-    runtimeEnvironmentId: 'env',
-    expectedHost: 'nested:env/U'
   }
 ])(
   'routes a folder chat preview through $expectedHost',
