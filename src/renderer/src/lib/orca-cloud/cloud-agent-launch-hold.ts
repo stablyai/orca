@@ -11,6 +11,7 @@ import {
   ensureFreshOrcaCloudAgentAccounts,
   isOrcaCloudAgentAccountsFresh,
   readOrcaCloudAgentAccounts,
+  reloadOrcaCloudAgentAccounts,
   subscribeOrcaCloudAgentAccounts,
   type OrcaCloudAgentAccountsState
 } from './orca-cloud-agent-accounts-store'
@@ -89,9 +90,10 @@ export type CloudAgentHold = {
   reason: CloudAgentHoldReason
   /**
    * Why an 'awaitingStart' hold waits: the account covers the agent now, Orca couldn't read it,
-   * or an expired sign-in was renewed (V3-01). Absent for every other reason.
+   * or an expired sign-in was renewed (V3-01), or the one-time setup just finished here ('setUp',
+   * HELD-STALE-COVERED: "is set up · Start", no longer the amber key). Absent for every other reason.
    */
-  awaiting?: 'covered' | 'unread' | 'renewed'
+  awaiting?: 'covered' | 'unread' | 'renewed' | 'setUp'
 }
 
 /** The hold key of a host-published tab (RA-1): its first pane shows the strip. */
@@ -110,7 +112,11 @@ type HoldRequest = Omit<CloudAgentHold, 'reason' | 'awaiting'> & {
   restored?: boolean
 }
 
-type Entry = CloudAgentHold & { release: (outcome: 'proceed' | 'cancel') => void }
+type Entry = CloudAgentHold & {
+  release: (outcome: 'proceed' | 'cancel') => void
+  /** Renewed or covered, it waits for the person's Start instead of starting (restored, or setup). */
+  askFirst: boolean
+}
 
 const holds = new Map<string, Entry>()
 /** Each live hold's outcome, so a second launch for the same key joins it instead of holding twice. */
@@ -269,57 +275,15 @@ async function placeCloudAgentHold({
     reason === 'awaitingStart' ? (accountsRead ? ('covered' as const) : ('unread' as const)) : null
   return new Promise<'proceed' | 'cancel'>((resolve) => {
     const stop = subscribeOrcaCloudAgentAccounts(() => {
-      // Renewed (or a key now covers it): every pane held on recovery starts. A first-time setup
-      // waits for its "Start {{agent}}" click instead (PC-3b), so it never starts unasked.
       const entry = holds.get(hold.paneKey)
       if (entry?.release !== finish) {
         return
       }
-      // V3-01b: a restored hold placed before the account read could land ('unread') takes the
-      // read's answer once it arrives: "isn't set up", "expired" or covered. It still never starts.
-      if (entry.reason === 'awaitingStart' && entry.awaiting === 'unread') {
-        const read = readOrcaCloudAgentAccounts()
-        if (read.load.kind !== 'ready') {
-          return
-        }
-        const answer = cloudAgentHoldReason(hold.agent, read)
-        holds.set(
-          hold.paneKey,
-          answer
-            ? { ...entry, reason: answer, awaiting: undefined }
-            : { ...entry, awaiting: 'covered' }
-        )
-        notify()
-        return
-      }
-      if (entry.reason !== 'accountExpired') {
-        return
-      }
       const accounts = readOrcaCloudAgentAccounts()
-      const now = accounts.load.kind === 'ready' ? cloudAgentHoldReason(hold.agent, accounts) : null
-      if (accounts.load.kind !== 'ready' || now === 'accountExpired') {
+      if (accounts.load.kind !== 'ready') {
         return
       }
-      if (now === 'notSetUp') {
-        // The sign-in was removed, not renewed: nothing covers the agent, so it never starts here;
-        // the hold becomes the one-time setup.
-        holds.set(hold.paneKey, { ...entry, reason: 'notSetUp' })
-        notify()
-        return
-      }
-      // Only a real renewal (the account or a key covers it) starts it; a paused or withdrawn agent
-      // (kill switch, never offered) or an unknown coverage stays held.
-      const coverage = orcaCloudAgentCoverageFromAccounts(hold.agent, accounts)?.kind
-      if (coverage !== 'account' && coverage !== 'key') {
-        return
-      }
-      if (restored) {
-        // After a restart the person starts it: renewed, it waits for Start (V3-01).
-        holds.set(hold.paneKey, { ...entry, reason: 'awaitingStart', awaiting: 'renewed' })
-        notify()
-        return
-      }
-      finish('proceed')
+      redecide(entry, accounts)
     })
     function finish(outcome: 'proceed' | 'cancel'): void {
       if (holds.get(hold.paneKey)?.release !== finish) {
@@ -330,9 +294,97 @@ async function placeCloudAgentHold({
       notify()
       resolve(outcome)
     }
-    holds.set(hold.paneKey, { ...hold, reason, ...(awaiting ? { awaiting } : {}), release: finish })
+    holds.set(hold.paneKey, {
+      ...hold,
+      reason,
+      ...(awaiting ? { awaiting } : {}),
+      release: finish,
+      askFirst: Boolean(restored) || reason !== 'accountExpired'
+    })
     notify()
   })
+}
+
+/**
+ * HELD-STALE-COVERED: every account change re-decides a live hold, whatever it waits on. A sign-in
+ * that expires or is revoked under "is set up · Start" goes back to Renew; one removed goes back to
+ * "Set up once"; covered again, it waits for Start (or, held on recovery in this session, starts).
+ * A paused or withdrawn agent (kill switch, never offered) keeps the hold as it is.
+ */
+function redecide(entry: Entry, accounts: OrcaCloudAgentAccountsState): void {
+  const now = cloudAgentHoldReason(entry.agent, accounts)
+  if (now !== null) {
+    if (now !== entry.reason) {
+      // A removed sign-in becomes the one-time setup, which never starts unasked (PC-3b), even
+      // for a hold placed on an expired sign-in in this session.
+      holds.set(entry.paneKey, {
+        ...entry,
+        reason: now,
+        awaiting: undefined,
+        askFirst: entry.askFirst || now === 'notSetUp'
+      })
+      notify()
+    }
+    return
+  }
+  const coverage = orcaCloudAgentCoverageFromAccounts(entry.agent, accounts)?.kind
+  if (coverage !== 'account' && coverage !== 'key') {
+    return
+  }
+  if (entry.reason === 'awaitingStart') {
+    // V3-01b: an unread restored hold takes the read's answer; it still never starts.
+    if (entry.awaiting === 'unread') {
+      holds.set(entry.paneKey, { ...entry, awaiting: 'covered' })
+      notify()
+    }
+    return
+  }
+  if (!entry.askFirst) {
+    // Renewed in this session: every pane held on recovery starts.
+    entry.release('proceed')
+    return
+  }
+  const awaiting = entry.reason === 'notSetUp' ? 'setUp' : 'renewed'
+  holds.set(entry.paneKey, { ...entry, reason: 'awaitingStart', awaiting })
+  notify()
+}
+
+/**
+ * The strip's Start (HELD-STALE-COVERED): never trusts the cached read. It reads the account again
+ * and starts only if that read covers the agent; otherwise the hold takes the read's answer (Renew,
+ * Set up once) and nothing launches. A failed read keeps it held ("couldn't check", Start to retry).
+ */
+export async function startCloudAgentHold(paneKey: string): Promise<'started' | 'held'> {
+  if (!holds.has(paneKey)) {
+    return 'held'
+  }
+  await reloadOrcaCloudAgentAccounts().catch(() => undefined)
+  const entry = holds.get(paneKey)
+  if (!entry) {
+    return 'held'
+  }
+  const accounts = readOrcaCloudAgentAccounts()
+  if (accounts.load.kind !== 'ready' || !isOrcaCloudAgentAccountsFresh()) {
+    holds.set(paneKey, { ...entry, reason: 'awaitingStart', awaiting: 'unread' })
+    notify()
+    return 'held'
+  }
+  const now = cloudAgentHoldReason(entry.agent, accounts)
+  const coverage = orcaCloudAgentCoverageFromAccounts(entry.agent, accounts)?.kind
+  if (now !== null || (coverage !== 'account' && coverage !== 'key')) {
+    if (now !== null && now !== entry.reason) {
+      holds.set(paneKey, {
+        ...entry,
+        reason: now,
+        awaiting: undefined,
+        askFirst: entry.askFirst || now === 'notSetUp'
+      })
+      notify()
+    }
+    return 'held'
+  }
+  releaseCloudAgentHold(paneKey, 'proceed')
+  return 'started'
 }
 
 /**

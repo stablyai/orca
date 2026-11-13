@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => ({ stop: vi.fn(), run: vi.fn(), reload: vi.fn() }))
-const hold = vi.hoisted(() => ({ release: vi.fn() }))
+const hold = vi.hoisted(() => ({ release: vi.fn(), start: vi.fn(async () => 'held') }))
 
 vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
   runOrcaCloudAgentSetups: store.run,
@@ -10,7 +10,8 @@ vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
   reloadOrcaCloudAgentAccounts: store.reload
 }))
 vi.mock('@/lib/orca-cloud/cloud-agent-launch-hold', () => ({
-  releaseCloudAgentHold: hold.release
+  releaseCloudAgentHold: hold.release,
+  startCloudAgentHold: hold.start
 }))
 
 // The strip reads the agents bridge at build time; these tests never reach it.
@@ -33,6 +34,7 @@ describe('cloudSetupStripActions (PC-3b, RR-a)', () => {
   beforeEach(() => {
     store.stop.mockReset()
     hold.release.mockReset()
+    hold.start.mockClear()
   })
 
   it('Cancel during a setup stops only the setup: the launch stays held', () => {
@@ -47,8 +49,9 @@ describe('cloudSetupStripActions (PC-3b, RR-a)', () => {
     expect(hold.release).toHaveBeenCalledExactlyOnceWith('tab:1', 'cancel')
   })
 
-  it('Start releases the held launch', () => {
+  it('Start re-checks the account before it releases the held launch (HELD-STALE-COVERED)', () => {
     actions(false).primary({ kind: 'start' })
-    expect(hold.release).toHaveBeenCalledExactlyOnceWith('tab:1', 'proceed')
+    expect(hold.start).toHaveBeenCalledExactlyOnceWith('tab:1')
+    expect(hold.release).not.toHaveBeenCalled()
   })
 })
