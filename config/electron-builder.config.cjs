@@ -727,6 +727,10 @@ module.exports = {
         from: 'native/computer-use-linux/runtime.py',
         to: 'computer-use-linux/runtime.py'
       },
+      {
+        from: 'native/linux-launcher-badge/launcher-badge.py',
+        to: 'linux-launcher-badge/launcher-badge.py'
+      },
       featureWallResources
     ],
     // Keep local artifacts aligned with the release pipeline.
