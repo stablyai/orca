@@ -63,4 +63,26 @@ describe('gentle-shell hook route', () => {
       server.stop()
     }
   })
+
+  it('clears the previous tool while a gentle-shell dialog owns input, like Pi', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    const post = (payload: Record<string, unknown>) =>
+      postHookEvent(server, buildBody(payload), '/hook/gentle-shell')
+    try {
+      await post({ hook_event_name: 'before_agent_start', prompt: 'ask me' })
+      await post({
+        hook_event_name: 'tool_execution_start',
+        tool_name: 'read',
+        tool_input: { path: 'README.md' }
+      })
+      expect(server.getStatusSnapshot()[0]).toEqual(expect.objectContaining({ toolName: 'read' }))
+
+      await post({ hook_event_name: 'ui_prompt_start' })
+
+      expect(server.getStatusSnapshot()[0]?.toolName).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
 })
