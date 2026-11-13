@@ -34,6 +34,20 @@ export async function recordMemberChange(
  * (`iat` has second precision, so a token from the same second counts as stale). Device tokens
  * and personal accounts never predate a change: their identity is not pushed by auth.
  */
+/** Orca auth issues sandbox tokens with `iat` 30 s in the past (clock-skew allowance). */
+export const AUTH_IAT_BACKDATE_MS = 30_000
+
+/**
+ * ORG-TOKEN-STALE routes (create, secrets, GitHub): same rule, allowing for auth's 30 s iat backdate, so a
+ * token the desktop re-mints just after the change counts as fresh and its one retry succeeds.
+ */
+export async function tokenMintedBeforeMemberChange(db: D1Database, caller: SandboxCaller): Promise<boolean> {
+  if (caller.tokenIssuedAt === undefined) {
+    return false
+  }
+  return tokenPredatesMemberChange(db, { ...caller, tokenIssuedAt: caller.tokenIssuedAt + AUTH_IAT_BACKDATE_MS })
+}
+
 export async function tokenPredatesMemberChange(db: D1Database, caller: SandboxCaller): Promise<boolean> {
   if (caller.tokenIssuedAt === undefined || caller.deviceSessionId || !caller.orgId) {
     return false
