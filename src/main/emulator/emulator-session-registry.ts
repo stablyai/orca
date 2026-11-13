@@ -102,6 +102,15 @@ export class EmulatorSessionRegistry {
     return [...this.sessions.values()]
   }
 
+  hasControlStreamUrl(url: string): boolean {
+    for (const session of this.sessions.values()) {
+      if (session.wsUrl === url) {
+        return true
+      }
+    }
+    return false
+  }
+
   clearSessionAndWorktrees(key: string): void {
     this.sessions.delete(key)
     for (const [worktreeId, activeKey] of this.activeByWorktree.entries()) {

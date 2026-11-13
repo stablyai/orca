@@ -71,6 +71,8 @@ export class EmulatorBridge {
     return this.sessionRegistry.getActiveForWorktree(worktreeId)
   }
 
+  hasControlStreamUrl = (url: string): boolean => this.sessionRegistry.hasControlStreamUrl(url)
+
   // Keep slow-booting Android devices alive across switches for fast reattachment.
   async stopActiveForSwitch(worktreeId: string): Promise<string | null> {
     const keepAlive = this.backendForActiveWorktree(worktreeId)?.kind === 'android'
@@ -133,10 +135,9 @@ export class EmulatorBridge {
     if (!backend) {
       return null
     }
-    const sessionInfo = this.sessionRegistry.toSessionInfo(session)
     await this.startLeases.cleanupWhenIdle(
       backend,
-      sessionInfo,
+      this.sessionRegistry.toSessionInfo(session),
       (info) => this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid),
       {
         includeOrphaned: !options.managedOnly,

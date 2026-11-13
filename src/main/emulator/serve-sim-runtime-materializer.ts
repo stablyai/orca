@@ -75,6 +75,13 @@ function isMaterializedRuntimeCurrent(bundledPackageDir: string, versionDir: str
     return false
   }
   try {
+    // The cache is keyed by Orca's version, so a same-version build can bundle a newer serve-sim.
+    if (
+      readFileSync(join(bundledPackageDir, 'package.json'), 'utf8') !==
+      readFileSync(join(nodeModulesDir, 'serve-sim', 'package.json'), 'utf8')
+    ) {
+      return false
+    }
     return bundledDependencyLinks(bundledPackageDir, nodeModulesDir).every(
       ({ linkPath, targetPath }) => realpathSync(linkPath) === realpathSync(targetPath)
     )

@@ -26,7 +26,11 @@ async function createBundledServeSimPackage(root: string): Promise<string> {
   await writeFile(join(nodeModulesDir, 'ws', 'package.json'), '{"name":"ws"}')
   await writeFile(
     join(packageDir, 'package.json'),
-    JSON.stringify({ name: 'serve-sim', dependencies: { ws: '^8', 'not-bundled': '^1' } })
+    JSON.stringify({
+      name: 'serve-sim',
+      version: '0.1.47',
+      dependencies: { ws: '^8', 'not-bundled': '^1' }
+    })
   )
   await writeFile(join(packageDir, 'dist', 'serve-sim.js'), 'console.log("serve-sim")')
   await writeFile(join(packageDir, 'dist', 'simcam', 'libSimCameraInjector.dylib'), DYLIB_CONTENT, {
@@ -95,6 +99,7 @@ describe('materializeServeSimRuntime', () => {
       version: '1.2.3',
       clearQuarantine: () => {
         mkdirSync(join(winnerPackageDir, 'dist'), { recursive: true })
+        cpSync(join(bundledPackageDir, 'package.json'), join(winnerPackageDir, 'package.json'))
         writeFileSync(join(winnerPackageDir, 'dist', 'serve-sim.js'), 'winner')
         symlinkDir(join(root, 'bundle', 'node_modules', 'ws'), join(winnerNodeModulesDir, 'ws'))
       }
@@ -143,6 +148,30 @@ describe('materializeServeSimRuntime', () => {
     expect(seenEntries).toHaveLength(1)
     expect(seenEntries[0][0]).toMatch(/\.staging-1\.2\.3-\d+[/\\]node_modules[/\\]serve-sim$/)
     expect(seenEntries[0].slice(1)).toEqual(['serve-sim'])
+  })
+
+  it('replaces a cached helper after a dependency upgrade without an app version change', async () => {
+    const root = await createRoot()
+    const bundledPackageDir = await createBundledServeSimPackage(root)
+    const options = {
+      bundledPackageDir,
+      targetRootDir: join(root, 'runtime'),
+      version: '1.2.3',
+      clearQuarantine: () => {}
+    }
+    materializeServeSimRuntime(options)
+    await writeFile(
+      join(bundledPackageDir, 'package.json'),
+      JSON.stringify({ name: 'serve-sim', version: '0.1.49', dependencies: { ws: '^8' } })
+    )
+    await writeFile(join(bundledPackageDir, 'dist', 'serve-sim.js'), 'upgraded helper')
+
+    const materialized = materializeServeSimRuntime(options)
+
+    expect(materialized).not.toBeNull()
+    expect(await readFile(join(materialized!, 'dist', 'serve-sim.js'), 'utf8')).toBe(
+      'upgraded helper'
+    )
   })
 
   it('rebuilds when the app moved and the dependency links dangle', async () => {
