@@ -16,7 +16,7 @@ import { replyAccess } from './reply-access'
 import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
 import { replyOverPeerMail } from './peer-mail-reply'
 import { withAnswerNext } from '../receipt-next'
-import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import {
   completionReportDispatchId,
   reportFollowUpAction

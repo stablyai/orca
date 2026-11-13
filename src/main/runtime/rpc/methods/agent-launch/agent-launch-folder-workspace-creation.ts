@@ -6,7 +6,7 @@ import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent
 import type { HostLaunchContext } from './agent-launch-surfaces'
 import { assertAgentPromptRequestActive } from '../../../terminal/input/agent-prompt-signals'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 
 type FolderWorkspaceCreateParams = Extract<
   AgentLaunchParams['target'],

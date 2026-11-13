@@ -2,7 +2,7 @@ import { defineMethod } from '../../../core'
 import {
   RepoSelector,
   RepoWithGitHubAccountExpectation
-} from '../../../../../../shared/rpc-contract/github-repo-target-params'
+} from '../../../../../../shared/rpc-contract/github/github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
@@ -11,7 +11,7 @@ import {
   WorkItemDetails,
   WorkItemsCount,
   WorkItemsList
-} from '../../../../../../shared/rpc-contract/github-repo-work-item-params'
+} from '../../../../../../shared/rpc-contract/github/github-repo-work-item-params'
 
 export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({

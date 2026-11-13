@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-workspace-view-params'
+import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-ui/client-workspace-view-params'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { tryRuntimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
 import { onScreenHostId } from '@/store/slices/workspace-attention/workspace-unread-flag'

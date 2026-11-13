@@ -6,7 +6,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
-import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { parseMessageTaskId } from './message-payload'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import type { SendParams } from './send-params'

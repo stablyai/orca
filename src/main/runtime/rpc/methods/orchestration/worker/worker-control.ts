@@ -23,7 +23,7 @@ import { showFederatedWorker } from '../../../../orchestration/legacy-remote-hom
 import {
   WorkerDispatchParams,
   WorkerReadParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineOrchestrationMethod({

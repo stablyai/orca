@@ -1,7 +1,7 @@
 // Bound output to avoid V8 string overflow; match the relay's MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 export type GitExecOptions = {
   cwd: string

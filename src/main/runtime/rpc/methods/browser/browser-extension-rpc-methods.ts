@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   ExtensionList,
   ExtensionReload
-} from '../../../../../shared/rpc-contract/browser-extension-params'
+} from '../../../../../shared/rpc-contract/browser/browser-extension-params'
 import { getRuntimeBrowserExtensions } from '../../../browser/installation/runtime-browser-commands-factory'
 
 export const BROWSER_EXTENSION_METHODS = [

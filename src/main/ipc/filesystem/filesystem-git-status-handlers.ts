@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/git/status/git-status-types'
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusRefBindingRequest as GitStatusUpstreamRefWatchRequest } from '../worktrees/git/worktree-git-status-ref-watch'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { getStatus } from '../../git/source-control/status/status-read'
 import { getSubmoduleStatus } from '../../git/source-control/submodules/submodule-status'
 import {

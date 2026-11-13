@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 

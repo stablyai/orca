@@ -8,7 +8,7 @@ import {
   hostQualifiedRepoSelector,
   type RuntimeRepoSelector
 } from '../../../workspaces/catalog/runtime-repo-selector'
-import type { WorktreeCreate } from '../../../../../shared/rpc-contract/worktree-create-params'
+import type { WorktreeCreate } from '../../../../../shared/rpc-contract/workspaces/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]

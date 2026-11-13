@@ -8,7 +8,7 @@ import type {
   AutomationWorkspaceProvenance,
   AutomationWorkspaceProvenanceRequest
 } from '../../../shared/worktree/types'
-import { ClientAutomationWorkspaceProvenance } from '../../../shared/rpc-contract/worktree-params'
+import { ClientAutomationWorkspaceProvenance } from '../../../shared/rpc-contract/workspaces/worktree-params'
 import {
   beginAutomationDispatchTokenUse,
   finishAutomationDispatchTokenUse,

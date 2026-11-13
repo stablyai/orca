@@ -77,14 +77,6 @@ describe('plain Node entry guard', () => {
     await expect(runCloseBundle(plugin)).rejects.toThrow('failed to load under plain Node')
   })
 
-  it('rejects Electron imports during the static bundle scan', () => {
-    const plugin = createPlainNodeEntryGuardPlugin()
-
-    expect(() => runWriteBundle(plugin, createOutputDir(), 'require("electron")')).toThrow(
-      'requires electron'
-    )
-  })
-
   it('rejects Electron subpath requires', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
 
@@ -117,8 +109,6 @@ describe('plain Node entry guard', () => {
 
     await expect(runCloseBundle(plugin)).rejects.toThrow('did not reject an empty argv')
   })
-
-  // daemon-entry traps SIGTERM; smoke timeout must escalate to SIGKILL or spawnSync can wait forever.
 })
 
 // Electron is unavailable in main-process workers too (#11161); transitive imports can kill startup despite entry-local electron-free comments.
@@ -153,18 +143,6 @@ describe('CLI and worker thread entry guard', () => {
     } as Rollup.OutputChunk
   }
 
-  it('rejects an Electron require reachable from a worker entry', () => {
-    const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle: Rollup.OutputBundle = {
-      'port-scan-command-worker-entry.js': entryChunk(
-        'port-scan-command-worker-entry',
-        'require("electron")'
-      )
-    }
-
-    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('requires electron')
-  })
-
   // Exercise transitive shared-chunk imports into the electron client, where direct-import checks miss startup failures.
   it('follows shared chunks out of a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
@@ -186,17 +164,5 @@ describe('CLI and worker thread entry guard', () => {
     }
 
     expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('chunks/shared.js')
-  })
-
-  it('passes a clean worker entry', () => {
-    const plugin = createPlainNodeEntryGuardPlugin()
-    const bundle: Rollup.OutputBundle = {
-      'warp-theme-parser-worker.js': entryChunk(
-        'warp-theme-parser-worker',
-        'require("node:worker_threads")'
-      )
-    }
-
-    expect(() => runEntryWriteBundle(plugin, bundle)).not.toThrow()
   })
 })

@@ -21,7 +21,7 @@ import {
   TapParams,
   TypeParams,
   WorktreeParam
-} from '../../../../../shared/rpc-contract/emulator-params'
+} from '../../../../../shared/rpc-contract/emulator/emulator-params'
 
 const InstallParams = z.object({
   path: z.string().refine((value) => path.isAbsolute(value), {

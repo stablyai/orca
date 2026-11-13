@@ -4,7 +4,7 @@ import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrenc
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { WORKER_SETTLED_STATES } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
+import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-stop-params'
 import type {
   HelperStopOutcome,
   WorkerStopReceipt

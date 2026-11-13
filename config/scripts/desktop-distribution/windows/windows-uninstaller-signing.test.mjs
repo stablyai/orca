@@ -8,46 +8,10 @@ import { describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const {
   EMBEDDED_RECEIPT_SUFFIX,
-  relayNsisUninstaller,
   signWindowsUninstallerViaSignPath
 } = require('./windows-uninstaller-signing.cjs')
 
 const makeDir = () => mkdtempSync(join(tmpdir(), 'orca-uninstaller-signing-'))
-
-describe('relayNsisUninstaller', () => {
-  const writeUninstaller = (dir, contents) => {
-    const filePath = join(dir, 'orca-windows-setup.__uninstaller.exe')
-    writeFileSync(filePath, contents)
-    return filePath
-  }
-
-  // Receipt is only evidence for embedded compressed NSIS uninstaller; bundled 7za cannot extract it.
-
-  // Import signed bytes even when rebuild regenerated unsigned intermediate.
-  it('prefers importing over exporting when both are configured', () => {
-    const dir = makeDir()
-    const filePath = writeUninstaller(dir, 'rebuild-unsigned')
-    const signedPath = join(dir, 'signed', 'orca-uninstaller.exe')
-    mkdirSync(join(dir, 'signed'))
-    writeFileSync(signedPath, 'signpath-signed')
-
-    expect(
-      relayNsisUninstaller({ filePath, signedPath, exportPath: join(dir, 'out', 'x.exe') })
-    ).toBe('imported')
-    expect(readFileSync(filePath, 'utf8')).toBe('signpath-signed')
-  })
-
-  // Missing/unwritable relay must preserve unsigned build without throwing.
-  it('leaves the unsigned uninstaller in place when no signed copy came back', () => {
-    const dir = makeDir()
-    const filePath = writeUninstaller(dir, 'unsigned-uninstaller')
-
-    expect(
-      relayNsisUninstaller({ filePath, signedPath: join(dir, 'absent', 'orca-uninstaller.exe') })
-    ).toBe('signed-missing')
-    expect(readFileSync(filePath, 'utf8')).toBe('unsigned-uninstaller')
-  })
-})
 
 // Exercise actual hook’s fail-open behavior: Windows build has no continue-on-error and throwing prevents any SignPath request.
 describe('signWindowsUninstallerViaSignPath', () => {

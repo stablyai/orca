@@ -17,10 +17,10 @@ import {
 import { CodexUsageApiKeyAuthError } from '../../../../../rate-limits/providers/codex/codex-rpc-rate-limit-mapper'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
-import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 
 export function sessionAccountUsageOffer(
   record: AgentSessionRecord,

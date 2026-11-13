@@ -19,7 +19,7 @@ import {
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
-} from '../../../../../shared/rpc-contract/preflight-params'
+} from '../../../../../shared/rpc-contract/preflight/preflight-params'
 
 /** This host's command overrides, so a configured CLI outside PATH is listed like a detected one. */
 function hostDetectionOptions(

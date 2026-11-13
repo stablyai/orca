@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UpdatePaneLayout } from '../../rpc-contract/session-tabs-schemas-params'
+import { UpdatePaneLayout } from '../../rpc-contract/session-tabs/session-tabs-schemas-params'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { translateUpdatePaneLayout } from './old-client-pane-layout-translation'
 import {

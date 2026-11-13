@@ -7,7 +7,7 @@ import {
   isAttachmentImageGrantCurrent
 } from '../../../../../jira/attachments/image-grants'
 import { readGrantedAttachmentImage } from '../../../../../jira/attachments/image-read'
-import { AttachmentImage } from '../../../../../../shared/rpc-contract/jira-params'
+import { AttachmentImage } from '../../../../../../shared/rpc-contract/jira/jira-params'
 import { defineStreamingMethod } from '../../../core'
 
 export const JIRA_ATTACHMENT_IMAGE_METHODS = [

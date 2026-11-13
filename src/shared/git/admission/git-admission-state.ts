@@ -1,5 +1,5 @@
 import * as os from 'node:os'
-import type { GitAdmissionTier } from '../../rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../rpc-contract/source-control/git-admission-tier-params'
 
 // Older relay hosts lack availableParallelism; keep their concurrency conservative.
 const parallelism = typeof os.availableParallelism === 'function' ? os.availableParallelism() : 1

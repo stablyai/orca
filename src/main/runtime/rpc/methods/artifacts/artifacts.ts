@@ -4,7 +4,7 @@ import {
   ListOptions,
   SourceRequest,
   WriteRequest
-} from '../../../../../shared/rpc-contract/artifacts-params'
+} from '../../../../../shared/rpc-contract/artifacts/artifacts-params'
 
 export const ARTIFACT_METHODS = [
   defineMethod({

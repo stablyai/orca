@@ -11,7 +11,7 @@ const { saveClipboardImageBufferAsTempFile } = vi.hoisted(() => ({
 vi.mock('../../../../window/clipboard/clipboard-image-temp-file', () => ({
   saveClipboardImageBufferAsTempFile
 }))
-import '../../../../../shared/rpc-contract/clipboard-params'
+import '../../../../../shared/rpc-contract/clipboard/clipboard-params'
 import { CLIPBOARD_METHODS, resetClipboardImageUploadsForTest } from './clipboard'
 import {
   hasMobileClipboardImagePath,

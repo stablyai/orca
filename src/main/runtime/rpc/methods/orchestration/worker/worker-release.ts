@@ -17,7 +17,7 @@ import {
 import {
   WorkerDispatchParams,
   WorkerRetainParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [

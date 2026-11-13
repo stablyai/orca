@@ -6,7 +6,7 @@ import {
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {

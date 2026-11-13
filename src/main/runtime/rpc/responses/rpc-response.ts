@@ -14,7 +14,7 @@ import {
   type AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from '../core'
-import { CONNECTOR_REPLY_ERROR_CODES } from '../../../../shared/rpc-contract/connector-params'
+import { CONNECTOR_REPLY_ERROR_CODES } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../../shared/orchestration/orchestration-federation-error-codes'
 import { computerUseErrorRecoveryData } from '../../../../shared/computer-use-error-recovery'
