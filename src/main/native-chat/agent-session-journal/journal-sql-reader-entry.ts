@@ -7,7 +7,7 @@ import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
-import { journalSqlFailure } from './journal-sql-failure'
+import { journalSqlFailure, journalSqlSourceFailure } from './journal-sql-failure'
 import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-sql-reader-protocol'
 import { prepareJournalDomainImport, type JournalDomainImport } from './journal-domain-import'
 import { readJournalSqlDatabase } from './journal-sql-database-read'
@@ -165,6 +165,13 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       port.close()
       return
     }
-    reply({ type: 'failed', id, error: journalSqlFailure(error) })
+    reply({
+      type: 'failed',
+      id,
+      error:
+        operation.kind === 'conversion-prepare'
+          ? journalSqlSourceFailure(error)
+          : journalSqlFailure(error)
+    })
   }
 })

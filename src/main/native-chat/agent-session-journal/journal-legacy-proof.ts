@@ -8,6 +8,7 @@ import {
 } from './journal-legacy-proof-frontier'
 import {
   decodeLegacySourceRefusal,
+  LEGACY_SOURCE_REFUSAL_POLICY,
   type LegacySourceRefusal,
   type Retirement
 } from './journal-legacy-retirement-state'
@@ -133,7 +134,7 @@ export class JournalLegacyProof {
         this.refusal = {
           version: 1,
           phase: 'refused',
-          policy: 1,
+          policy: LEGACY_SOURCE_REFUSAL_POLICY,
           proof: observation.proof,
           observed: observation.observed,
           destination: observation.destination,

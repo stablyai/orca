@@ -4,6 +4,7 @@ import {
 } from './journal-legacy-retention-error'
 import type { LegacyCompanionManifest } from './journal-legacy-retirement-files'
 
+export const LEGACY_SOURCE_REFUSAL_POLICY = 2
 export const LEGACY_RETIREMENT_WEEK = 7 * 24 * 60 * 60 * 1000
 export type Retirement = {
   version: 1
@@ -21,7 +22,7 @@ export type Retirement = {
 export type LegacySourceRefusal = {
   version: 1
   phase: 'refused'
-  policy: 1
+  policy: typeof LEGACY_SOURCE_REFUSAL_POLICY
   proof: string
   observed: string
   destination: string
@@ -37,7 +38,7 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     !('version' in data) ||
     data.version !== 1 ||
     !('policy' in data) ||
-    data.policy !== 1 ||
+    data.policy !== LEGACY_SOURCE_REFUSAL_POLICY ||
     !('proof' in data) ||
     typeof data.proof !== 'string' ||
     !('observed' in data) ||
@@ -54,7 +55,7 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     ? {
         version: 1,
         phase: 'refused',
-        policy: 1,
+        policy: LEGACY_SOURCE_REFUSAL_POLICY,
         proof: data.proof,
         observed: data.observed,
         destination: data.destination,

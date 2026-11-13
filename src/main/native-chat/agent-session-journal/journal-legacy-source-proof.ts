@@ -1,3 +1,4 @@
+import { JOURNAL_DOMAIN_PROFILE_TABLES } from './database/journal-domain-profile-columns'
 import {
   JournalLegacyRetentionError,
   readJournalLegacySource,
@@ -7,20 +8,7 @@ import { readStoredQueuedMessageRow } from './queued-messages/queued-message-sto
 import type Database from '../../sqlite/sync-database'
 
 const PROFILE_TABLES = new Set([
-  'agent_session_records',
-  'agent_session_operations',
-  'agent_session_retired_claim_keys',
-  'agent_session_tabs',
-  'agent_session_store_meta',
-  'agent_session_command_receipts',
-  'agent_session_attachment_claims',
-  'agent_session_attachment_sweeps',
-  'pr_chat_actions',
-  'pr_check_events',
-  'pr_event_deliveries',
-  'pr_pending_heads',
-  'pr_pending_actions',
-  'pr_check_contexts',
+  ...JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name }) => name),
   'sqlite_sequence'
 ])
 const CONTENT_TABLES: readonly string[] = [
@@ -39,6 +27,9 @@ const SOURCE_COLUMNS: Readonly<Record<string, string>> = {
   queued_messages:
     'session_id message_id position body_json fingerprint created_at host_instance state hold_reason returned_reason returned_rejection settled_at settled_by_op consumed_as carried_from queued_epoch queued_sequence options_json'
 }
+const PROFILE_COLUMNS = new Map(
+  JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name, columns }) => [name, new Set<unknown>(columns)])
+)
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
 export type LegacyProofCursor = { table: number; after: string | null; epoch?: string }
 export type LegacySourceSession = {
@@ -60,30 +51,23 @@ export function readJournalLegacyProofPage(
   cursor: LegacyProofCursor,
   destination: Database.Database
 ): LegacyProofPage {
-  const copiedColumns = new Map<string, Set<unknown>>()
   if (cursor.table === 0 && cursor.after === null) {
-    for (const table of PROFILE_TABLES) {
-      if (table !== 'sqlite_sequence') {
-        copiedColumns.set(
-          table,
-          new Set(
-            destination
-              .prepare(`PRAGMA table_info(${table})`)
-              .all()
-              .map((column) => column.name)
-          )
-        )
+    for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
+      const present = new Set(
+        destination
+          .prepare(`PRAGMA table_info(${name})`)
+          .all()
+          .map((column) => column.name)
+      )
+      if (columns.some((column) => !present.has(column))) {
+        throw new Error(`legacy proof requires complete destination table ${name}`)
       }
     }
   }
-  return readJournalLegacySource(() => readSourcePage(db, cursor, copiedColumns))
+  return readJournalLegacySource(() => readSourcePage(db, cursor))
 }
 
-function readSourcePage(
-  db: Database.Database,
-  cursor: LegacyProofCursor,
-  copiedColumns: Map<string, Set<unknown>>
-): LegacyProofPage {
+function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): LegacyProofPage {
   const tables = new Set(
     db
       .prepare("SELECT name FROM sqlite_schema WHERE type='table'")
@@ -100,7 +84,7 @@ function readSourcePage(
     }
     for (const table of tables) {
       const columns =
-        copiedColumns.get(table) ??
+        PROFILE_COLUMNS.get(table) ??
         (SOURCE_COLUMNS[table] ? new Set(SOURCE_COLUMNS[table]!.split(' ')) : undefined)
       if (columns) {
         if (

@@ -1,3 +1,4 @@
+import { journalSqlSourceContent } from './journal-sql-failure'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -9,7 +10,6 @@ export type LegacyProofFrontier = {
   page?: LegacyProofPage
   session: number
   pending: boolean
-  converted?: boolean
 }
 
 export function createLegacyProofFrontier(): LegacyProofFrontier {
@@ -48,11 +48,21 @@ export async function completeJournalLegacyProof(
       const source = page.sessions[frontier.session]!
       if (!frontier.pending) {
         frontier.pending = true
-        await conversions.ensure(source.sessionId, false)
-        frontier.converted = true
+        try {
+          await conversions.ensure(source.sessionId, false)
+        } catch (error) {
+          const content = journalSqlSourceContent(error)
+          if (content) {
+            throw new JournalLegacyRetentionError(
+              'legacy source has unreadable journal content',
+              content === 'journalCorrupt' ? 'source-corrupt' : 'source-newer'
+            )
+          }
+          throw error
+        }
       }
       let state = await readers.importState(source.sessionId)
-      if (state.state !== 'ready' && source.empty && frontier.converted) {
+      if (state.state !== 'ready' && source.empty) {
         const epoch = await writer.maintain({
           kind: 'import-finish',
           header: {
@@ -81,7 +91,6 @@ export async function completeJournalLegacyProof(
       }
       frontier.session++
       frontier.pending = false
-      frontier.converted = false
     }
     frontier.cursor = page.next
     frontier.page = undefined

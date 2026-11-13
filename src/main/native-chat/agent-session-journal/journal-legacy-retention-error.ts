@@ -6,7 +6,8 @@ export const LEGACY_SOURCE_REFUSALS = [
   'source-orphan',
   'source-queue',
   'source-queued-only-v1',
-  'source-corrupt'
+  'source-corrupt',
+  'source-newer'
 ] as const
 export type LegacySourceRefusalReason = (typeof LEGACY_SOURCE_REFUSALS)[number]
 

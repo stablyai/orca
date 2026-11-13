@@ -48,7 +48,7 @@ it('persists one late source refusal across 1 and 10 owners at N and 10N history
     expect(test.receiptState()).toMatchObject({
       phase: 'refused',
       reason: 'source-orphan',
-      policy: 1
+      policy: 2
     })
     test.retirement.stop()
     await test.retirement.flushCredit()
@@ -77,7 +77,7 @@ it('invalidates every saved refusal descriptor component and rejects unsupported
   const refused = test.receiptState()
   const proof = vi.spyOn(test.readers, 'legacyProof')
   for (const changed of ['proof', 'observed', 'destination', 'policy', 'reason']) {
-    test.saveState({ ...refused, [changed]: changed === 'policy' ? 2 : 'unsupported-or-old' })
+    test.saveState({ ...refused, [changed]: changed === 'policy' ? 99 : 'unsupported-or-old' })
     proof.mockClear()
     await test.reopen().run()
     expect(proof.mock.calls.length).toBeGreaterThan(0)
@@ -235,6 +235,7 @@ it('yields a failed conversion to its normal owner and probes only the pending s
       }
       return normal(id)
     })
+    const maintain = vi.spyOn(test.writer, 'maintain')
     const state = vi.spyOn(test.readers, 'importState')
     let now = 0
     vi.spyOn(performance, 'now').mockImplementation(() => now)
@@ -254,6 +255,11 @@ it('yields a failed conversion to its normal owner and probes only the pending s
         )
         .get()
     ).toBeUndefined()
+    expect(
+      maintain.mock.calls.filter(
+        ([op]) => op.kind === 'import-finish' && op.header.sessionId === 'unopened'
+      )
+    ).toEqual([])
     await normal('unopened')
     now += 3600001
     await test.retirement.run()

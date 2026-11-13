@@ -1,3 +1,4 @@
+import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
 import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
@@ -20,12 +21,42 @@ export type JournalSqlFailure = {
   message: string
   code?: string
   errcode?: number
+  sourceContent?: JournalSourceContent
   receipt?: CommandReceiptExistsError['result']
   refusal?: AgentSessionWireRefusal
   expired?: AgentSessionAttachmentExpiredError['expired']
   needs?: JournalHostFactsNeeded
   /** Queue refusals keep their identity for the host's retry and refusal paths. */
   queued?: { messageId: string; expected?: 'waiting' | 'returned'; owed?: 'stale' | 'unavailable' }
+}
+
+type JournalSourceContent = 'journalCorrupt' | 'journalWrittenByNewerOrca'
+const SOURCE_CONTENT = Symbol('journal source content diagnosis')
+
+/** Only the original-source preparation transport supplies this marker. */
+export function journalSqlSourceContent(error: unknown): JournalSourceContent | undefined {
+  if (error instanceof Error && SOURCE_CONTENT in error) {
+    const content = error[SOURCE_CONTENT]
+    if (content === 'journalCorrupt' || content === 'journalWrittenByNewerOrca') {
+      return content
+    }
+  }
+  return undefined
+}
+
+export function journalSqlSourceFailure(error: unknown): JournalSqlFailure {
+  const failure = journalSqlFailure(error)
+  if (isSqliteCorruption(error)) {
+    failure.sourceContent = 'journalCorrupt'
+  }
+  const refusal = failure.refusal
+  if (refusal?.code === 'agent_session_journal_unreadable') {
+    const reason = refusal.details?.reason
+    if (reason === 'journalCorrupt' || reason === 'journalWrittenByNewerOrca') {
+      failure.sourceContent = reason
+    }
+  }
+  return failure
 }
 
 export function journalSqlFailure(error: unknown): JournalSqlFailure {
@@ -40,6 +71,7 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
       error instanceof Error && 'errcode' in error && typeof error.errcode === 'number'
         ? error.errcode
         : undefined,
+    sourceContent: journalSqlSourceContent(error),
     receipt: error instanceof CommandReceiptExistsError ? error.result : undefined,
     refusal: error instanceof AgentSessionRefusalError ? error.refusal : undefined,
     expired: error instanceof AgentSessionAttachmentExpiredError ? error.expired : undefined,
@@ -55,6 +87,14 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
 
 /** Error identity is part of the host's existing retry/refusal contract. */
 export function restoreJournalSqlFailure(error: JournalSqlFailure): Error {
+  const restored = restoreFailure(error)
+  if (error.sourceContent) {
+    Object.defineProperty(restored, SOURCE_CONTENT, { value: error.sourceContent })
+  }
+  return restored
+}
+
+function restoreFailure(error: JournalSqlFailure): Error {
   if (error.expired) {
     return new AgentSessionAttachmentExpiredError(error.expired)
   }
