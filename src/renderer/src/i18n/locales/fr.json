@@ -20827,7 +20827,7 @@
         "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",
         "scrollToLatestOnSendSearchPosition": "position",
         "markNewMessagesTitle": "Signaler les nouveaux messages au retour dans un chat",
-        "markNewMessagesCopy": "Quand vous revenez dans un chat, une ligne Nouveau marque ce que vous avez manqué si c'est long ou si quelqu'un d'autre a écrit, et y fait défiler la vue. Elle s'estompe une fois vue.",
+        "markNewMessagesCopy": "En revenant dans un chat, une ligne Nouveau s'affiche au-dessus de ce qui est arrivé pendant votre absence, et le chat y défile si vous lisiez les derniers messages.",
         "markNewMessagesSearchUnread": "non lu",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message et, si rien n’est saisi, dirige la première carte en attente vers le tour en cours. Les messages contenant des images attendent aussi sous forme de cartes.",
         "inlineVisualsTitle": "Visuels intégrés",
