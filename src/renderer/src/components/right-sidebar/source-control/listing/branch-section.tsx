@@ -128,7 +128,9 @@ export function SourceControlBranchSection({
               }
             }}
           >
-            {t('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
+            <span className="truncate">
+              {t('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
+            </span>
           </Button>
         }
       />

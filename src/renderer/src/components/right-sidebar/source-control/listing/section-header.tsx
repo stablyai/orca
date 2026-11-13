@@ -46,6 +46,8 @@ export function SectionHeader({
           size={compact ? 'chip' : 'xs'}
           className={cn(
             'h-auto min-w-0 flex-1 justify-start text-left',
+            // Narrow rows reserve chevron, 4ch of title, count and icon chip; the actions yield the rest.
+            status && '@max-[15rem]/section-header:min-w-[6.5rem]',
             compact ? 'min-h-4' : 'min-h-6'
           )}
           onClick={onToggle}
@@ -77,7 +79,13 @@ export function SectionHeader({
             )}
           </span>
         </Button>
-        <div className={cn('ml-auto flex shrink-0 items-center justify-end', compact && '-my-1')}>
+        <div
+          className={cn(
+            'ml-auto flex items-center justify-end',
+            status ? 'min-w-0 shrink [&>*]:min-w-0 [&>*]:shrink' : 'shrink-0',
+            compact && '-my-1'
+          )}
+        >
           {actions}
         </div>
       </div>
