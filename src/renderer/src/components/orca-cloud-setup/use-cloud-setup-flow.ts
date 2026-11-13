@@ -4,6 +4,7 @@
 // tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
 import { usePlanCatalog } from '@/components/billing/plans/use-plan-catalog'
 import { cloudContactUrl } from './cloud-contact-url'
+import { recheckCloudCapability } from './cloud-capability-recheck'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { claimOrcaCloudTrial } from '@/components/billing/claim-trial'
@@ -272,10 +273,24 @@ export function useCloudSetupFlow(
   }, [markInBrowser, openInstall])
 
   const checkAgain = useCallback(() => {
-    void prefetchOrcaCloudBilling(true)
-    // CAP-GATE: Orca Cloud may have been turned on for the team since; the page moves on by itself.
-    rereadAvailability()
+    // CAP-GATE: Orca Cloud may have been turned on for the team since (or the team started paying,
+    // which auth counts as access); the page moves on by itself once the fresh capabilities land.
+    void recheckCloudCapability({
+      refreshAuth: () => useAppStore.getState().refreshCurrentOrcaProfileAuth(),
+      prefetchBilling: () => prefetchOrcaCloudBilling(true),
+      rereadAvailability
+    })
   }, [rereadAvailability])
+  // The capabilities main read may predate the team's plan: ask auth once when the step first shows,
+  // so a paying team never has to press "Try again" to get past it.
+  const capabilityRechecked = useRef(false)
+  useEffect(() => {
+    if (model.action !== 'capability-off' || capabilityRechecked.current) {
+      return
+    }
+    capabilityRechecked.current = true
+    checkAgain()
+  }, [model.action, checkAgain])
   // "Contact us" (CAP-GATE): billing catalog's contact target, never a hard-coded address.
   const catalog = usePlanCatalog(model.action === 'capability-off')
   const contactUrl = cloudContactUrl(catalog.result)
