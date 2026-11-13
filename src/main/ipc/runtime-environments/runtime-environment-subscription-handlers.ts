@@ -15,6 +15,7 @@ import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { retiredSetupError } from './runtime-environment-subscription-retired-setup'
 
 export type {
   RetainedRemoteRuntimeSubscription,
@@ -98,12 +99,15 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
           rendererLifetime.dispose()
           rendererLifetime.signal.removeEventListener('abort', closeSubscription)
         }
-        const closeSubscription = (): void => {
-          rendererGone = true
-          setupController.abort()
+        const dropPending = (): void => {
           if (pendingSubscriptions.get(subscriptionId) === pending) {
             pendingSubscriptions.delete(subscriptionId)
           }
+        }
+        const closeSubscription = (): void => {
+          rendererGone = true
+          setupController.abort()
+          dropPending()
           const retained = remoteRuntimeSubscriptions.get(subscriptionId) ?? null
           if (retained?.setupController === setupController) {
             remoteRuntimeSubscriptions.delete(subscriptionId)
@@ -201,15 +205,11 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
               : undefined
           )
         } catch (error) {
-          if (pendingSubscriptions.get(subscriptionId) === pending) {
-            pendingSubscriptions.delete(subscriptionId)
-          }
+          dropPending()
           disposeRendererLifetime()
-          throw error
+          throw retiredSetupError(error, transportIsCurrent())
         }
-        if (pendingSubscriptions.get(subscriptionId) === pending) {
-          pendingSubscriptions.delete(subscriptionId)
-        }
+        dropPending()
         assertSettledCrewSubscriptionCurrent(
           crewResult,
           assertCrewCurrent,

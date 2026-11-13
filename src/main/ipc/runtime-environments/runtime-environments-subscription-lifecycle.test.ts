@@ -71,7 +71,11 @@ vi.mock('./runtime-environment-request-connections', async () => {
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
   })
 })
-import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import {
+  invalidateRuntimeEnvironmentTransport,
+  registerRuntimeEnvironmentHandlers
+} from './runtime-environments'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
 
 const handler = channelHandlerLookup(handleMock)
@@ -227,5 +231,65 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       subscriptionId: 'chat-sub',
       type: 'close'
     })
+  })
+  // RESTART-ABORT-BANNER: a Restart invalidates the transport on purpose. A stream still being set
+  // up must fail as recoverable (the pane resubscribes), never "This operation was aborted".
+  it('a stream set up while its transport is invalidated fails as recoverable, not aborted', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      (...args: unknown[]) =>
+        new Promise((_resolve, reject) => {
+          const options = args[5]
+          const signal =
+            options && typeof options === 'object' && 'signal' in options ? options.signal : null
+          if (!(signal instanceof AbortSignal)) {
+            return
+          }
+          signal.addEventListener('abort', () =>
+            reject(new DOMException('This operation was aborted', 'AbortError'))
+          )
+        })
+    )
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const { environment } = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const pending = Promise.resolve(
+      subscribe(
+        {
+          sender: {
+            id: 1,
+            isDestroyed: () => false,
+            send: vi.fn(),
+            on: vi.fn(),
+            removeListener: vi.fn()
+          }
+        },
+        {
+          selector: 'desk',
+          method: 'terminal.subscribe',
+          params: { terminal: 't1' },
+          subscriptionId: 'restart-sub'
+        }
+      )
+    )
+    const outcome = pending.then(
+      () => null,
+      (error: unknown) => (error instanceof Error ? error : null)
+    )
+    await vi.waitFor(() => expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalled())
+    await invalidateRuntimeEnvironmentTransport(environment.id)
+    const error = await outcome
+    if (!error) {
+      throw new Error('the subscribe should have failed')
+    }
+    expect(error.name).not.toBe('AbortError')
+    expect(error.message).not.toMatch(/aborted/i)
+    expect(isRecoverableRemoteRuntimeConnectionError({ message: error.message })).toBe(true)
   })
 })
