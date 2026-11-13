@@ -2,6 +2,15 @@ import type { StructuredAgentResolutionOperation } from '../agent-launch/structu
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
+export type AgentModelCatalogProgress = ((
+  success: AgentModelCatalogSuccess,
+  accountKnown?: boolean
+) => void) & {
+  /** Retain the latest accumulator; only real reads or settlement materialize it. */
+  defer?: (read: () => AgentModelCatalogSuccess, known: (model: string) => boolean) => void
+  demanded?: () => ReadonlySet<string>
+}
+
 export type AgentModelCatalogResolvedProbe = {
   identity: unknown
   inputStamp?: string
@@ -9,7 +18,8 @@ export type AgentModelCatalogResolvedProbe = {
   run: (
     signal?: AbortSignal,
     operation?: StructuredAgentResolutionOperation,
-    selectedModels?: readonly string[]
+    selectedModels?: readonly string[],
+    publish?: AgentModelCatalogProgress
   ) => Promise<AgentModelCatalogSuccess>
 }
 
@@ -24,6 +34,7 @@ export type AgentModelCatalogProbe = ((
     cwd?: string
     selectedModels?: readonly string[]
     operation?: StructuredAgentResolutionOperation
+    publish?: AgentModelCatalogProgress
   }
 ) => Promise<AgentModelCatalogSuccess>) & {
   resolveLegacy?: (

@@ -129,11 +129,16 @@ function writeAgentModelCatalogSuccess(
   fingerprint: string,
   agent: string,
   success: AgentModelCatalogSuccess,
-  source: AgentModelCatalogSource
+  source: AgentModelCatalogSource,
+  settled = true,
+  accountKnown = settled,
+  unchanged = false
 ): AgentModelCatalogEntry | null {
-  const entry = state.entryFromSuccess(fingerprint, agent, success, source)
+  const entry =
+    (unchanged ? state.entries.get(fingerprint) : undefined) ??
+    state.entryFromSuccess(fingerprint, agent, success, source)
   if (!entry) {
-    if (source === 'discovery' && independentAgentModelCatalog(agent)) {
+    if (settled && source === 'discovery' && independentAgentModelCatalog(agent)) {
       state.failures.probeFailed(fingerprint, agent, new Error('agent listed no models'))
     }
     return null
@@ -144,18 +149,22 @@ function writeAgentModelCatalogSuccess(
   state.entries.set(fingerprint, entry)
   // Live listings cannot clear discovery failures or account-unavailability verdicts.
   if (source === 'discovery') {
-    state.dueEntries.delete(fingerprint)
-    state.failures.listed(fingerprint, agent, success.origin, success.unavailable)
-  }
-  if (source === 'discovery' && independentAgentModelCatalog(agent)) {
-    state.efforts.catalogAttempted(fingerprint, agent, success.complete === true)
-    if (success.complete !== true) {
+    if (settled) {
+      state.dueEntries.delete(fingerprint)
+    }
+    if (accountKnown || success.unavailable) {
       state.failures.listed(fingerprint, agent, success.origin, success.unavailable)
     }
   }
+  if (settled && source === 'discovery' && independentAgentModelCatalog(agent)) {
+    state.efforts.catalogAttempted(fingerprint, agent, success.complete === true)
+  }
   state.evict()
   // Unchanged per-turn listings need no disk write.
-  if (!previous || agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry)) {
+  if (
+    previous !== entry &&
+    (!previous || agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry))
+  ) {
     state.persistence?.save(() => [...state.entries.values()])
   }
   return entry
@@ -163,7 +172,24 @@ function writeAgentModelCatalogSuccess(
 
 export function createAgentModelCatalogSuccessWriter(
   readState: () => Parameters<typeof writeAgentModelCatalogSuccess>[0]
-): ReturnType<typeof createAgentModelCatalogEntryFactory> {
-  return (fingerprint, agent, success, source) =>
-    writeAgentModelCatalogSuccess(readState(), fingerprint, agent, success, source)
+) {
+  return (
+    fingerprint: string,
+    agent: string,
+    success: AgentModelCatalogSuccess,
+    source: AgentModelCatalogSource,
+    settled = true,
+    accountKnown = settled,
+    unchanged = false
+  ) =>
+    writeAgentModelCatalogSuccess(
+      readState(),
+      fingerprint,
+      agent,
+      success,
+      source,
+      settled,
+      accountKnown,
+      unchanged
+    )
 }

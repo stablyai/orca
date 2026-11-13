@@ -19,6 +19,7 @@ export type AgentCliVersionCheck =
 
 export type AgentCliVersionInput = Pick<ProcessSpec, 'program' | 'cwd' | 'env'> & {
   operation?: StructuredAgentResolutionOperation
+  timeoutMs?: number | null
   prefixArgs?: readonly string[]
 }
 
@@ -65,7 +66,7 @@ export async function readAgentCliVersion(
   input: AgentCliVersionInput,
   parseVersion: typeof parseCliVersion = parseCliVersion
 ): Promise<{ version: string | null; started?: false }> {
-  const { prefixArgs = [], operation, ...launch } = input
+  const { prefixArgs = [], operation, timeoutMs = 5_000, ...launch } = input
   assertStructuredAgentResolutionCurrent(operation)
   let result
   try {
@@ -74,13 +75,16 @@ export async function readAgentCliVersion(
       args: [...prefixArgs, '--version'],
       terminationBarrier: true,
       signal: operation?.signal,
-      timeoutMs: Math.max(
-        1,
-        Math.min(
-          5_000,
-          operation?.deadline === undefined ? Infinity : operation.deadline - Date.now()
-        )
-      ),
+      timeoutMs:
+        timeoutMs === null
+          ? null
+          : Math.max(
+              1,
+              Math.min(
+                timeoutMs,
+                operation?.deadline === undefined ? Infinity : operation.deadline - Date.now()
+              )
+            ),
       maxOutputBytes: 4_096,
       killOnOutputLimit: true
     })

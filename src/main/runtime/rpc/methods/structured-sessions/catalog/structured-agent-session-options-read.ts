@@ -1,4 +1,7 @@
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
+  AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY
+} from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 // options reads at-rest records/catalogs or the live provider; modelCatalog reads stored/start-published facts without waiting on attach.
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
@@ -113,6 +116,10 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         const request = {
           ...params,
           ...scope,
+          progress:
+            ctx.clientKind === undefined ||
+            ctx.clientCapabilities?.includes(AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY) ===
+              true,
           ...(waits && resolving ? { deadline } : {}),
           ...(launchDirectory
             ? { workspacePath: launchDirectory }
@@ -140,7 +147,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           )
         }
         // A floating read lists the folder it resolves to (above), never the unresolved one.
-        if (!host && !params.savedOnly && !follows) {
+        if (!waits && !host && !params.savedOnly && !follows) {
           void catalog.demand(request)
         }
         const result = host ? await host.readModelCatalog(request) : await catalog.read(request)

@@ -1,3 +1,4 @@
+import { readAgentCliVersion } from '../../agent-launch/preflight/agent-cli-version-probe'
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -7,6 +8,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type {
+  AgentModelCatalogProgress,
   AgentModelCatalogProbe,
   AgentModelCatalogLookup
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
@@ -100,7 +102,8 @@ export function createAcpModelCatalogProbe(
       run: async (
         signal?: AbortSignal,
         runOperation = operation,
-        selectedModels?: readonly string[]
+        selectedModels?: readonly string[],
+        publish?: AgentModelCatalogProgress
       ) => {
         const options = { signal, operation: runOperation, selectedModels }
         const operation = runOperation
@@ -109,7 +112,7 @@ export function createAcpModelCatalogProbe(
           spec,
           { command, prefixArgs, cwd, env, operation },
           acpListingDependsOnRelease(discovery),
-          deps.probeVersion
+          deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null }))
         )
         assertStructuredAgentResolutionCurrent(operation)
         if (release.status === 'tooOld') {
@@ -126,7 +129,7 @@ export function createAcpModelCatalogProbe(
           env,
           envToDelete
         }
-        const run = { label: spec.agent, signal: options?.signal }
+        const run = { label: spec.agent, signal: options?.signal, timeoutMs: null }
         // OMP records every model switch as account usage; starting on the picked model records none.
         const launchedModel =
           spec.launchesWithModel && usesModelSpecificAcpEfforts(spec.agent)
@@ -143,7 +146,7 @@ export function createAcpModelCatalogProbe(
               env,
               envToDelete
             },
-            { site: `${spec.agent}-model-catalog-probe`, signal: options?.signal }
+            { site: `${spec.agent}-model-catalog-probe`, signal: options?.signal, timeoutMs: null }
           )
           models = listing.parse(stdout)
         } else if (listing.kind === 'session') {
@@ -177,7 +180,28 @@ export function createAcpModelCatalogProbe(
                     operation,
                     options?.selectedModels,
                     model,
-                    spec.dialect.effortChangesModel ? ready : undefined
+                    spec.dialect.effortChangesModel ? ready : undefined,
+                    (result) =>
+                      publish?.(
+                        {
+                          ...result,
+                          models: [...result.models],
+                          attemptedModels: [...result.attemptedModels],
+                          origin: 'probe',
+                          complete: false
+                        },
+                        true
+                      ),
+                    publish?.defer && publish.demanded
+                      ? {
+                          defer: (read, known) =>
+                            publish.defer?.(
+                              () => ({ ...read(), origin: 'probe', complete: false }),
+                              known
+                            ),
+                          demanded: publish.demanded
+                        }
+                      : undefined
                   ),
                 run
               )
@@ -221,7 +245,7 @@ export function createAcpModelCatalogProbe(
     try {
       return await (
         await resolve(home, options?.workspacePath ?? '', 'recover', options?.operation)
-      ).run(options?.signal, options?.operation, options?.selectedModels)
+      ).run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
     } catch (error) {
       if (error instanceof AcpAgentError && error.code === -32000) {
         throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })

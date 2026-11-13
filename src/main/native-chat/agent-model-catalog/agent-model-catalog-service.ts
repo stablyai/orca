@@ -82,9 +82,18 @@ export function createAgentModelCatalogService(
     const operation = params.operation ?? captureRead(params)
     await waitWithinAgentModelCatalogRead(operation, lookup.request(params, operation)?.done)
   }
+  const flush = (params: AgentModelCatalogReadParams) => {
+    const bound = memoryBinding(params)
+    if (!params.savedOnly && bound?.current()) {
+      deps.store.flushProgress(bound.fingerprint)
+    }
+  }
   return {
     captureRead,
-    snapshot,
+    snapshot: (params) => {
+      flush(params)
+      return snapshot(params)
+    },
     demand: async (params) => {
       if (!params.savedOnly) {
         await demand(params)
@@ -112,7 +121,7 @@ export function createAgentModelCatalogService(
           params,
           reader: { deadline, signal: operation.signal },
           store: deps.store,
-          refresh: lookup.request(params, operation),
+          refresh: () => lookup.request(params, operation),
           binding: () => bindings.get(requestKey(params))
         })
       }
@@ -122,6 +131,7 @@ export function createAgentModelCatalogService(
         expired && params.operation?.current({ ignoreDeadline: true })
           ? { ...params, operation: undefined }
           : params
+      flush(answerParams)
       const result = snapshot(answerParams)
       const answer = lifetime.signal.aborted
         ? result

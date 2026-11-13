@@ -42,9 +42,6 @@ import {
 export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, AGENT_MODEL_CATALOG_PICKER_WAIT_MS }
 export type { AgentModelCatalogFailure }
 
-// Persist successful catalogs only; failures/unavailability are held separately.
-// Saved display data may be stale, while launch proof requires fresh discovery in this process.
-
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
 import {
@@ -256,7 +253,6 @@ export class AgentModelCatalogStore {
     evict: () => this.evictOverCap()
   }))
 
-  /** One probe per canonical scope; failures resolve null. Its starter's budget bounds it. */
   refresh(
     fingerprint: string,
     agent: string,
@@ -286,6 +282,8 @@ export class AgentModelCatalogStore {
       writeSuccess: (...args) => this.writeSuccess(...args)
     })
   }
+
+  flushProgress = (key: string): void => this.refreshes.get(key)?.flush()
 
   isListing(fingerprint: string): boolean {
     const flight = this.refreshes.get(fingerprint)

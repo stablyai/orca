@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { checkAgentCliVersion } from './agent-cli-version-probe'
+import { checkAgentCliVersion, readAgentCliVersion } from './agent-cli-version-probe'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess }))
@@ -57,4 +57,16 @@ describe('checkAgentCliVersion', () => {
       minimumVersion: '0.84.0'
     })
   })
+})
+
+it('allows a catalog version prerequisite to complete late without changing normal preflight limits', async () => {
+  const answer = Promise.withResolvers<unknown>()
+  runProcess.mockReturnValueOnce(answer.promise)
+  const catalog = readAgentCliVersion({ ...INPUT, timeoutMs: null })
+  expect(runProcess.mock.lastCall?.[0].timeoutMs).toBeNull()
+  answer.resolve({ code: 0, stdout: '1.18.31', stderr: '', timedOut: false })
+  expect(await catalog).toEqual({ version: '1.18.31' })
+  runProcess.mockResolvedValueOnce({ code: null, stdout: '', stderr: '', timedOut: true })
+  expect(await readAgentCliVersion(INPUT)).toEqual({ version: null })
+  expect(runProcess.mock.lastCall?.[0].timeoutMs).toBe(5_000)
 })

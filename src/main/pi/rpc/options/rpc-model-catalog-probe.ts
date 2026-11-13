@@ -8,9 +8,13 @@ import { homedir } from 'node:os'
 import { z } from 'zod'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../../../shared/node-cli-command-resolution'
-import type { AgentCliVersionReader } from '../../../agent-launch/preflight/agent-cli-version-probe'
+import {
+  readAgentCliVersion,
+  type AgentCliVersionReader
+} from '../../../agent-launch/preflight/agent-cli-version-probe'
 import { JsonlRpcAgentConnection } from '../../../jsonl-rpc/agent-connection'
 import type {
+  AgentModelCatalogProgress,
   AgentModelCatalogProbe,
   AgentModelCatalogLookup
 } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
@@ -87,14 +91,16 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
       inputStamp: await agentModelCatalogInputStamp({ command, prefixArgs, cwd, env }),
       run: async (
         signal?: AbortSignal,
-        runOperation = operation
+        runOperation = operation,
+        _selectedModels?: readonly string[],
+        publish?: AgentModelCatalogProgress
       ): Promise<AgentModelCatalogSuccess> => {
         const operation = runOperation
         const options = { signal }
         assertStructuredAgentResolutionCurrent(operation)
         const release = await checkPiRpcVersion(
           { command, prefixArgs, cwd, env, operation },
-          deps.probeVersion
+          deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null }))
         )
         assertStructuredAgentResolutionCurrent(operation)
         if (release.status === 'tooOld') {
@@ -116,35 +122,55 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
           async (connection): Promise<AgentModelCatalogSuccess> => {
             let configured: AgentModelCatalogSuccess['configured']
             let unknownProvider = false
-            try {
-              const state = discoveryStateSchema.safeParse(await connection.request('get_state'))
-              unknownProvider = state.success && state.data.model?.provider === 'unknown'
-              if (state.success && state.data.model && !unknownProvider) {
-                configured = {
-                  model: piModelOptionId(state.data.model.provider, state.data.model.id),
-                  ...(typeof state.data.thinkingLevel === 'string' && state.data.thinkingLevel
-                    ? { effort: state.data.thinkingLevel }
-                    : {})
-                }
+            let stateKnown = false
+            let models: AgentModelCatalogSuccess['models'] | undefined
+            const progress = () => {
+              assertStructuredAgentResolutionCurrent(operation)
+              if (models?.length) {
+                publish?.(
+                  { models, origin: 'probe', ...(configured ? { configured } : {}) },
+                  stateKnown
+                )
               }
-            } catch {
-              // Optional default facts cannot prevent a usable inventory from being discovered.
             }
-            assertStructuredAgentResolutionCurrent(operation)
-            options?.signal?.throwIfAborted()
-            // Pi's own "No models available" condition: no selected provider and nothing listable.
-            const models = await readPiRpcModelOptions(connection).catch((error: unknown) => {
+            const state = connection
+              .request('get_state', undefined, { timeoutMs: null })
+              .catch(() => undefined)
+              .then((response) => {
+                assertStructuredAgentResolutionCurrent(operation)
+                const parsed = discoveryStateSchema.safeParse(response)
+                stateKnown = parsed.success
+                unknownProvider = parsed.success && parsed.data.model?.provider === 'unknown'
+                if (parsed.success && parsed.data.model && !unknownProvider) {
+                  configured = {
+                    model: piModelOptionId(parsed.data.model.provider, parsed.data.model.id),
+                    ...(typeof parsed.data.thinkingLevel === 'string' && parsed.data.thinkingLevel
+                      ? { effort: parsed.data.thinkingLevel }
+                      : {})
+                  }
+                }
+                progress()
+              })
+            void state.catch(() => {})
+            try {
+              models = await readPiRpcModelOptions(connection, { timeoutMs: null })
+            } catch (error) {
+              await state
               if (unknownProvider) {
                 throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
               }
               throw error
-            })
+            }
+            progress()
+            await state
+            assertStructuredAgentResolutionCurrent(operation)
+            options.signal?.throwIfAborted()
             if (unknownProvider && models.length === 0) {
               throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
             }
             return { models, origin: 'probe', ...(configured ? { configured } : {}) }
           },
-          { label: 'pi', signal: options?.signal }
+          { label: 'pi', signal: options?.signal, timeoutMs: null }
         )
         if (success.models.length === 0) {
           throw new Error('pi listed no models')
@@ -155,7 +181,12 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
   }
   return Object.assign<AgentModelCatalogProbe, Pick<AgentModelCatalogProbe, 'resolve'>>(
     async (home, options) =>
-      (await resolve(home, '', 'recover', options?.operation)).run(options?.signal),
+      (await resolve(home, '', 'recover', options?.operation)).run(
+        options?.signal,
+        options?.operation,
+        options?.selectedModels,
+        options?.publish
+      ),
     { resolve }
   )
 }
