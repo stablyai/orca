@@ -152,6 +152,17 @@ export function NativeChatSubagentEntries({
   )
 }
 
+/** A hidden row opens no preview; nor does focus handed back after a click, only keyboard focus or a hover. */
+function previewAllowed(trigger: HTMLElement | null): boolean {
+  return (
+    trigger === null ||
+    (!trigger.closest('[inert]') &&
+      (!trigger.matches(':focus') ||
+        trigger.matches(':focus-visible') ||
+        trigger.matches(':hover')))
+  )
+}
+
 /** Hover preview: role, model, timing and the longer text the row truncates. */
 function SubagentEntryPreview({
   agent,
@@ -182,7 +193,7 @@ function SubagentEntryPreview({
   return (
     <HoverCard
       open={open}
-      onOpenChange={(next) => setOpen(next && !triggerRef.current?.closest('[inert]'))}
+      onOpenChange={(next) => setOpen(next && previewAllowed(triggerRef.current))}
       openDelay={300}
       closeDelay={100}
     >

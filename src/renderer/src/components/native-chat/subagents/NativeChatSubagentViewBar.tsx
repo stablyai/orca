@@ -88,7 +88,7 @@ export function NativeChatSubagentViewBar({
         <span aria-hidden className="shrink-0 text-xs text-chat-foreground-faint">
           /
         </span>
-        <DropdownMenu modal={false}>
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
