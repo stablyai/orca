@@ -110,11 +110,9 @@ function BackgroundTaskRow(props: {
           <button
             type="button"
             className="-mx-1 flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={t(
-              'components.native-chat.backgroundTasks.showAgent',
-              'Show {{value0}} in the conversation',
-              { value0: agentChildRowName(row) }
-            )}
+            aria-label={t('components.native-chat.backgroundTasks.openAgent', 'Open {{value0}}', {
+              value0: agentChildRowName(row)
+            })}
             onClick={() => props.onShowAgent?.(shownId)}
           >
             {content}

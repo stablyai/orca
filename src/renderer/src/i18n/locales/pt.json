@@ -21009,8 +21009,7 @@
         "stateIdleCount_many": "Parado: {{value0}}",
         "stateUnverifiableCount_one": "Status indisponível: {{value0}}",
         "stateUnverifiableCount_other": "Status indisponível: {{value0}}",
-        "stateUnverifiableCount_many": "Status indisponível: {{value0}}",
-        "showAgent": "Mostrar {{value0}} na conversa"
+        "stateUnverifiableCount_many": "Status indisponível: {{value0}}"
       },
       "jumpToLatest": "Ir para o mais recente",
       "toggle": {

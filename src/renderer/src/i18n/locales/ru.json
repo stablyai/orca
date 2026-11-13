@@ -20422,8 +20422,7 @@
         "stateIdleCount_few": "Остановлено: {{value0}}",
         "stateIdleCount_many": "Остановлено: {{value0}}",
         "stateUnverifiableCount_few": "Статус недоступен: {{value0}}",
-        "stateUnverifiableCount_many": "Статус недоступен: {{value0}}",
-        "showAgent": "Показать {{value0}} в разговоре"
+        "stateUnverifiableCount_many": "Статус недоступен: {{value0}}"
       },
       "jumpToLatest": "К последним сообщениям",
       "newRowsAnnouncement": "Пока вас не было, появились новые сообщения",

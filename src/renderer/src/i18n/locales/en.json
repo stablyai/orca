@@ -20926,7 +20926,7 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "showAgent": "Show {{value0}} in the conversation"
+        "openAgent": "Open {{value0}}"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",

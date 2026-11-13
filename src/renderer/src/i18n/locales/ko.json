@@ -19141,8 +19141,7 @@
         "stateMonitoringCount": "{{value0}} 모니터링",
         "stateUnverifiableCount": "{{value0}} 상태를 확인할 수 없음",
         "stateWaitingCount": "{{value0}} 대기 중",
-        "stateWorkingCount": "{{value0}} 작업 중",
-        "showAgent": "대화에 {{value0}} 표시"
+        "stateWorkingCount": "{{value0}} 작업 중"
       },
       "railLabel": "귀하의 메시지",
       "railImageMessage": "이미지 첨부",

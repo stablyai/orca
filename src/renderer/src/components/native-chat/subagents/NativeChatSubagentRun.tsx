@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -174,9 +175,20 @@ function SubagentEntryPreview({
     state === 'working' && agent.operation
       ? detail
       : subagentMessageText(agent.lastMessage ?? '') || null
+  // Opening the subagent hides this row under its view without a pointer leave: the press closes
+  // the preview, and a hidden row opens none (an open one would take the view's Esc).
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLAnchorElement>(null)
   return (
-    <HoverCard openDelay={300} closeDelay={100}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+    <HoverCard
+      open={open}
+      onOpenChange={(next) => setOpen(next && !triggerRef.current?.closest('[inert]'))}
+      openDelay={300}
+      closeDelay={100}
+    >
+      <HoverCardTrigger ref={triggerRef} asChild onClick={() => setOpen(false)}>
+        {children}
+      </HoverCardTrigger>
       <HoverCardContent side="top" align="start" variant="workspace-details" className="w-72">
         <div className="space-y-1">
           <div className="truncate text-sm font-medium text-foreground">{agent.label}</div>
