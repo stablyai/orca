@@ -224,6 +224,7 @@
     "repro:live-remote-realistic-freeze": "node config/scripts/diagnostics/remote-freeze/live-remote-realistic-freeze-repro.mjs",
     "audit:anti-slop": "node config/scripts/static-analysis/oxlint-contracts/sync-anti-slop-plugin.mjs && bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
     "sync:anti-slop-plugin": "node config/scripts/static-analysis/oxlint-contracts/sync-anti-slop-plugin.mjs",
+    "sync:win-unpacked": "node config/scripts/sync-win-unpacked.mjs",
     "build:packages": "node config/scripts/workspace-package-build/build-workspace-packages.mjs",
     "check:process-host-imports": "node config/scripts/static-analysis/process-boundaries/check-process-host-imports.mjs",
     "check:main-sync-spawn-ratchet": "node config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs",
