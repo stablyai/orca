@@ -1,3 +1,4 @@
+import { JOURNAL_DOMAIN_PROFILE_TABLES } from './journal-domain-profile-columns'
 import type Database from '../../../sqlite/sync-database'
 import {
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
@@ -26,138 +27,9 @@ export function importJournalDomainProfile(
     )
   }
   copyChatCatalog(source, destination)
-  copyProfileTable(
-    source,
-    destination,
-    'agent_session_records',
-    ['session_id', 'record_json'],
-    version < 4
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'agent_session_operations',
-    ['operation_key', 'row_json'],
-    version < 4
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'agent_session_retired_claim_keys',
-    ['key_id', 'retired_at'],
-    version < 4
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'agent_session_tabs',
-    ['tab_id', 'session_id', 'position'],
-    version < 4
-  )
-  copyProfileTable(source, destination, 'agent_session_store_meta', ['key', 'value'], version < 4)
-  copyProfileTable(
-    source,
-    destination,
-    'agent_session_command_receipts',
-    [
-      'operation_id',
-      'session_id',
-      'caller_key',
-      'method',
-      'fingerprint',
-      'status',
-      'result_json',
-      'rejection_json',
-      'accepted_at'
-    ],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'agent_session_attachment_claims',
-    ['upload_id', 'session_id', 'claimed_at'],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'agent_session_attachment_sweeps',
-    ['upload_id', 'started_at'],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'pr_chat_actions',
-    [
-      'chat_id',
-      'anchor_item_id',
-      'anchor_revision',
-      'forge_host',
-      'owner',
-      'repo',
-      'number',
-      'kind',
-      'head_sha',
-      'observed_at'
-    ],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'pr_check_events',
-    [
-      'id',
-      'pr_key',
-      'head_sha',
-      'occurrence',
-      'verdict',
-      'completed_at',
-      'observed_at',
-      'is_current_head'
-    ],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'pr_event_deliveries',
-    ['chat_id', 'event_id', 'state', 'item_id'],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'pr_pending_heads',
-    ['pr_key', 'head_sha', 'first_seen_at', 'moved_at', 'expires_at'],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'pr_pending_actions',
-    [
-      'chat_id',
-      'anchor_item_id',
-      'anchor_revision',
-      'evidence_json',
-      'finished_at',
-      'resolve_deadline_at',
-      'verify_deadline_at',
-      'next_attempt_at',
-      'attempts'
-    ],
-    true
-  )
-  copyProfileTable(
-    source,
-    destination,
-    'pr_check_contexts',
-    ['pr_key', 'head_sha', 'context', 'last_state', 'last_run_id', 'pending_seen'],
-    true
-  )
+  for (const { name, columns, requiredFrom } of JOURNAL_DOMAIN_PROFILE_TABLES) {
+    copyProfileTable(source, destination, name, columns, version < (requiredFrom ?? Infinity))
+  }
   if (source.prepare("SELECT 1 FROM sqlite_schema WHERE name='sqlite_sequence'").get()) {
     const highWater = source
       .prepare("SELECT seq FROM sqlite_sequence WHERE name='pr_check_events'")
@@ -195,7 +67,7 @@ function copyChatCatalog(source: Database.Database, destination: Database.Databa
   })
 }
 
-/** The fixed schema above is the whole copy surface; no JSON is interpreted or rewritten. */
+/** The fixed profile contract is the whole copy surface; no JSON is interpreted or rewritten. */
 function copyProfileTable(
   source: Database.Database,
   destination: Database.Database,
