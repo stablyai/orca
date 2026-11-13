@@ -42,7 +42,7 @@ export function cloudWakeBillingCopy(
     // Running limits and anything unknown: the shared workspace copy (it says what to do).
     return { body: describeError('entitlement_denied', reason, t), fix: null }
   }
-  const copy = blockerCopy(kind, t)
+  const copy = blockerCopy(kind, t, reason)
   // The sheet's payment line is about new sandboxes; this one already exists.
   const body =
     kind === 'payment'

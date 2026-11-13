@@ -29682,7 +29682,10 @@
       "plan": {
         "title": "Choose a plan",
         "ask": "Ask an owner or admin to choose a plan.",
-        "body2": "Your team’s plan has ended."
+        "body2": "Your team’s plan has ended.",
+        "bodyTrialUsedUp": "Your team’s trial is used up.",
+        "bodyNoPlan": "Your team doesn’t have a plan yet.",
+        "bodyNeedsPlan": "Your team needs a plan to use Orca Cloud."
       },
       "hours": {
         "title": "Out of sandbox hours",

@@ -38,7 +38,17 @@ afterEach(() => {
 
 function renderBlocker(
   kind: BillingBlockKind,
-  { canManageBilling = true, capCents = 2500, offers = true } = {}
+  {
+    canManageBilling = true,
+    capCents = 2500,
+    offers = true,
+    reason
+  }: {
+    canManageBilling?: boolean
+    capCents?: number
+    offers?: boolean
+    reason?: string | null
+  } = {}
 ): {
   onContinue: ReturnType<typeof vi.fn>
   onBackToDraft: ReturnType<typeof vi.fn>
@@ -53,7 +63,8 @@ function renderBlocker(
       entitlement={{
         ...sampleTeam,
         offers: offers ? sampleTeam.offers : null,
-        overage: { ...sampleTeam.overage, spendCapCents: capCents }
+        overage: { ...sampleTeam.overage, spendCapCents: capCents },
+        ...(reason !== undefined ? { reason: reason as never } : {})
       }}
       onContinue={onContinue}
       onBackToDraft={onBackToDraft}
@@ -145,6 +156,20 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Compare plans' }))
     expect(requestOrcaCloudAfterCheckout).toHaveBeenCalledWith({ kind: 'retry', creationId: 'c1' })
     expect(openPlansPage).toHaveBeenCalledWith('sandbox')
+  })
+
+  it.each([
+    ['subscription_inactive', 'Your team’s plan has ended.'],
+    ['trial_used_up', 'Your team’s trial is used up.'],
+    ['no_subscription', 'Your team doesn’t have a plan yet.'],
+    ['trial_unavailable', 'Your team doesn’t have a plan yet.'],
+    [null, 'Your team needs a plan to use Orca Cloud.']
+  ] as const)('no plan (%s): only a plan that existed has "ended" (EP-11)', (reason, body) => {
+    renderBlocker('plan', { reason })
+    expect(screen.getByText(body)).toBeTruthy()
+    if (reason !== 'subscription_inactive') {
+      expect(screen.queryByText('Your team’s plan has ended.')).toBeNull()
+    }
   })
 
   it.each([
