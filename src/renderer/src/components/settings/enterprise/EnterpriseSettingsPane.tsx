@@ -84,7 +84,12 @@ function EnterpriseSettingsPaneBody(): React.JSX.Element | null {
       }
       policies={
         orgId ? (
-          <EnterpriseMfaPolicy orgId={orgId} contact={contact} onContactSales={openUrl} />
+          <EnterpriseMfaPolicy
+            orgId={orgId}
+            contact={contact}
+            onContactSales={openUrl}
+            underBanner={ssoLocked === true && audit.log.status === 'upsell'}
+          />
         ) : undefined
       }
       audit={{

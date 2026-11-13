@@ -234,9 +234,12 @@ export function RequireMfaRow({
                     ) : null}
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {member.mfa === 'blocked'
-                      ? t('auto.components.teamMfa.memberBlocked', 'No access')
-                      : t('auto.components.teamMfa.memberPending', 'Pending')}
+                    {member.userId === null
+                      ? // No account to remind yet, which is why this row has no Remind button.
+                        t('auto.components.teamMfa.memberNotSignedIn', 'Hasn’t signed in yet')
+                      : member.mfa === 'blocked'
+                        ? t('auto.components.teamMfa.memberBlocked', 'No access')
+                        : t('auto.components.teamMfa.memberPending', 'Pending')}
                   </span>
                   {member.userId ? (
                     <Button

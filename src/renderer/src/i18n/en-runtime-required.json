@@ -2731,6 +2731,9 @@
         "sendingNotConfigured": "sending diagnostics is not configured for this build"
       }
     },
+    "enterprise": {
+      "bannerTitle": "Single sign-on and the audit log are part of {{plan}}"
+    },
     "groups": {
       "orcaCloud": "Orca Cloud"
     },

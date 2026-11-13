@@ -6,7 +6,7 @@ import type { OrcaTeamMfaPolicy } from '../../../../shared/orca-team-mfa-policy'
 import { RequireMfaRow, type RequireMfaRowProps } from './RequireMfaRow'
 import { TeamMfaBanner } from './TeamMfaBanner'
 import { TeamMfaBlockedScreen } from './TeamMfaBlockedScreen'
-import { mfaChangeError } from './EnterpriseMfaPolicy'
+import { EnterpriseMfaGroup, mfaChangeError } from './EnterpriseMfaPolicy'
 import {
   claimMfaToast,
   mfaCountdownLabel,
@@ -356,5 +356,115 @@ describe('single sign-on', () => {
     expect(mfaChangeError('sso-needs-notice', translate)).toContain('at least 7 days out')
     expect(mfaChangeError('actor-needs-mfa', translate)).toContain('your own account first')
     expect(mfaChangeError('other', translate)).toBe('Couldn’t save the change. Try again.')
+  })
+})
+
+describe('design follow-ups', () => {
+  const noop = (): void => {}
+  it('says a member has not signed in yet where there is no Remind button', () => {
+    const view = render(
+      <RequireMfaRow
+        policy={policy({
+          self: 'on',
+          manage: { available: true, pendingMembers: 2, ssoHandled: false }
+        })}
+        pending={[
+          { userId: 'u-ada', email: 'ada@acme.dev', mfa: 'pending' },
+          { userId: null, email: 'linus@acme.dev', mfa: 'pending' }
+        ]}
+        now={NOW}
+        busy={false}
+        notice={null}
+        onRequire={noop}
+        onTurnOff={noop}
+        onRemind={noop}
+        onSetUpOwn={noop}
+      />
+    )
+    const rows = Array.from(view.container.querySelectorAll('li')).map((row) => row.textContent)
+    expect(rows[0]).toContain('Pending')
+    expect(rows[1]).toContain('Hasn’t signed in yet')
+    expect(rows[1]).not.toContain('Pending')
+    expect(view.getAllByRole('button', { name: 'Remind' })).toHaveLength(1)
+  })
+
+  it('underlines the personal-account link at rest', () => {
+    const view = render(
+      <TeamMfaBlockedScreen
+        teamName="Acme"
+        enforceAt={NOW - DAY}
+        setupUrl={setupUrl}
+        checking={false}
+        stillMissing={false}
+        onSetUp={noop}
+        onRecheck={noop}
+        onUsePersonal={noop}
+      />
+    )
+    const link = view.getByRole('button', { name: 'Use my personal account for now' })
+    expect(link.className).toMatch(/(^| )underline( |$)/)
+  })
+
+  it('shows the single sign-on note only for a team whose identity provider handles it', () => {
+    const group = (ssoHandled: boolean): string => {
+      const manage = { available: true, pendingMembers: 0, ssoHandled }
+      const text =
+        render(
+          <EnterpriseMfaGroup
+            policy={policy({ self: 'on', manage })}
+            manage={manage}
+            pending={[]}
+            now={NOW}
+            busy={false}
+            notice={null}
+            contact={{ planName: 'Enterprise', contactUrl: 'https://orca.dev/enterprise' }}
+            onRequire={noop}
+            onTurnOff={noop}
+            onRemind={noop}
+            onSetUpOwn={noop}
+            onContactSales={noop}
+          />
+        ).container.textContent ?? ''
+      cleanup()
+      return text
+    }
+    expect(group(true)).toContain(
+      'Members who sign in with single sign-on use your identity provider’s two-factor settings. This requirement applies only to members who sign in another way.'
+    )
+    expect(group(false)).not.toContain('identity provider')
+  })
+})
+
+describe('locked on a team without Enterprise', () => {
+  const noop = (): void => {}
+  const locked = (underBanner: boolean) => {
+    const manage = { available: false, pendingMembers: 0, ssoHandled: false }
+    return render(
+      <EnterpriseMfaGroup
+        policy={policy({ policy: null, self: 'on', manage })}
+        manage={manage}
+        pending={null}
+        now={NOW}
+        busy={false}
+        notice={null}
+        contact={{ planName: 'Enterprise', contactUrl: 'https://orca.dev/enterprise' }}
+        onRequire={noop}
+        onTurnOff={noop}
+        onRemind={noop}
+        onSetUpOwn={noop}
+        onContactSales={noop}
+        underBanner={underBanner}
+      />
+    )
+  }
+
+  it('has its own Contact sales when the page has no banner', () => {
+    expect(locked(false).getAllByRole('button', { name: /Contact sales/ })).toHaveLength(1)
+  })
+
+  it('is a plain line with no button under the page banner', () => {
+    const view = locked(true)
+    expect(view.queryByRole('button')).toBeNull()
+    expect(view.container.textContent).toContain('Set a date after which members need')
   })
 })
