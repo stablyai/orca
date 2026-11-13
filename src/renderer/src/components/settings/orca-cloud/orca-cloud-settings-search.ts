@@ -52,6 +52,22 @@ export const getOrcaCloudEnterpriseSearchEntries = createLocalizedCatalog(() => 
   }
 ])
 
+export const getOrcaCloudWorkspacesSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.teamWorkspaces.title', 'Workspaces'),
+    description: translate(
+      'settings.teamWorkspaces.searchDescription',
+      'Every cloud workspace on your team, to open, sleep or archive.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.teamWorkspaces.keywordCloud', 'cloud workspaces'),
+      ...translateSearchKeyword('settings.teamWorkspaces.keywordTeam', 'team workspaces'),
+      ...translateSearchKeyword('settings.teamWorkspaces.keywordSandboxes', 'sandboxes'),
+      ...translateSearchKeyword('settings.teamWorkspaces.keywordArchive', 'archive')
+    ]
+  }
+])
+
 export const getOrcaCloudSecretsSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('cloudSecrets.title', 'Cloud secrets'),
