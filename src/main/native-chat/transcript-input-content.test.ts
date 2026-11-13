@@ -7,6 +7,10 @@ import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-d
 import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 import { prepareNativeChatMessages } from '../../shared/native-chat/transcript/native-chat-message-preparation'
 import {
+  nativeChatSourceMessageKey,
+  nativeChatSourcePendingKeys
+} from '../../shared/native-chat/transcript/native-chat-input-content-key'
+import {
   prunePendingSends,
   type NativeChatPendingSend
 } from '../../shared/native-chat/transcript/native-chat-pending-sends'
@@ -82,29 +86,57 @@ function reconcile(payload: Record<string, unknown>, entry = pending) {
   return prunePendingSends([entry], prepareNativeChatMessages([user, answer], 'codex'))
 }
 
-it('settles exact submitted Codex text while retaining literal image markers and spacing', () => {
+it('keeps exact Codex evidence distinct while allowing normalized main text to settle', () => {
   const payload = { message: 'literal [Image #1]\nkeep  spaceshere', local_images: [], images: [] }
   const entry = { ...pending, text: 'literal [Image #1]\nkeep  spaces\u0085here' }
   expect(reconcile(payload, entry)).toEqual([])
-  expect(reconcile({ ...payload, local_images: ['/tmp/one.png'] }, entry)).toEqual([entry])
+  expect(nativeChatSourcePendingKeys(entry)).toEqual([
+    '["codex","46d3874abddd0edb743ee8ce66b04dcd7ff56d2a39b86f2b91117732b5811f6e",[]]'
+  ])
+  expect(
+    nativeChatSourceMessageKey(
+      read({ type: 'user_message', ...payload, local_images: ['/tmp/one.png'] })
+    )
+  ).toBe(
+    '["codex","46d3874abddd0edb743ee8ce66b04dcd7ff56d2a39b86f2b91117732b5811f6e",["/tmp/one.png"]]'
+  )
+  expect(reconcile({ ...payload, local_images: ['/tmp/one.png'] }, entry)).toEqual([])
+  const spaced = { ...payload, message: payload.message.replace('keep  spaces', 'keep spaces') }
+  expect(nativeChatSourceMessageKey(read({ type: 'user_message', ...spaced }))).toBe(
+    '["codex","79c33fbfce729c64f7e199c1174cd8f1fd99df3f796221777cd1578e40eb4f0d",[]]'
+  )
   expect(
     reconcile(
       { ...payload, message: payload.message.replace('keep  spaces', 'keep spaces') },
       entry
     )
-  ).toEqual([entry])
+  ).toEqual([])
 })
 
-it('does not turn unaccounted file-backed attachments or literal-marker differences into text-only delivery', () => {
+it('does not invent source evidence for file-backed attachments or literal markers', () => {
   const textOnly = { ...pending, imagePaths: [], text: 'literal [Image #1]' }
   expect(reconcile({ message: 'literal [Image #1]', local_images: [] }, textOnly)).toEqual([])
-  expect(reconcile({ message: 'literal', local_images: [] }, textOnly)).toEqual([textOnly])
+  expect(nativeChatSourcePendingKeys(textOnly)).toEqual([
+    '["codex","8f1481ff383be647ce2e68924aa56c6d37f128d6af98563324a9d265bee49532",[]]'
+  ])
+  expect(
+    nativeChatSourceMessageKey(read({ type: 'user_message', message: 'literal', local_images: [] }))
+  ).toBe('["codex","829f8d848b44fa3098194754af5b60e2fb1517b0195956841beb6cac9bc68067",[]]')
+  expect(reconcile({ message: 'literal', local_images: [] }, textOnly)).toEqual([])
+  expect(
+    read({
+      type: 'user_message',
+      message: 'literal [Image #1]',
+      local_images: [],
+      file_ids: ['image-file']
+    }).inputContent
+  ).toBeUndefined()
   expect(
     reconcile(
       { message: 'literal [Image #1]', local_images: [], file_ids: ['image-file'] },
       textOnly
     )
-  ).toEqual([textOnly])
+  ).toEqual([])
 })
 
 it('matches the complete submitted file-mention text without inventing attachment evidence from its expansion', () => {
@@ -131,9 +163,13 @@ it('matches the complete submitted file-mention text without inventing attachmen
     []
   )
   const extraImage = readOmp([{ type: 'image', data: 'AAAA', mimeType: 'image/png' }])
+  expect(nativeChatSourcePendingKeys(entry)).toEqual([
+    '["omp","199cf2ad43a1160a2fa05c229885b2847869eb2b63e9f871dd149e0d890f7ebb",[]]'
+  ])
+  expect(extraImage.inputContent).toBeUndefined()
   expect(
     prunePendingSends([entry], prepareNativeChatMessages([extraImage, answer], 'omp'))
-  ).toEqual([entry])
+  ).toEqual([])
 })
 
 it('keeps captured idle and human queued image inputs incomplete when Claude persisted no original paths', () => {
@@ -160,7 +196,13 @@ it('keeps captured idle and human queued image inputs incomplete when Claude per
     source: 'transcript' as const
   }
   const prepared = prepareNativeChatMessages([...rows, answer], 'claude')
-  expect(prunePendingSends([entry], prepareNativeChatMessages(prepared, 'claude'))).toEqual([entry])
+  expect(rows.map((row) => row.inputContent)).toEqual([undefined, undefined])
+  const twice = prepareNativeChatMessages(prepared, 'claude')
+  expect(twice.filter((row) => row.role === 'user').map((row) => row.inputContent)).toEqual([
+    undefined,
+    undefined
+  ])
+  expect(prunePendingSends([entry], twice)).toEqual([])
 })
 
 it('settles OpenCode multiline input and both real long-paste modes without reusing one source occurrence', () => {
@@ -185,7 +227,13 @@ it('settles OpenCode multiline input and both real long-paste modes without reus
     sentAt: 1
   }
   expect(prunePendingSends([first], [decode('  alpha\nbeta  '), answer])).toEqual([])
-  expect(prunePendingSends([first], [decode('alpha\nbeta'), answer])).toEqual([first])
+  expect(nativeChatSourcePendingKeys(first)).toEqual([
+    '["opencode","c4011b3d9d3b7c5e6b017ef0b4d4724010e7e7f4743bb9303ef8ab72ca56c53e",[]]'
+  ])
+  expect(nativeChatSourceMessageKey(decode('alpha\nbeta'))).toBe(
+    '["opencode","bbfb79e82216bd2db1ad2c507d44ddf80aeb12f64f9562056afe93aad43154d9",[]]'
+  )
+  expect(prunePendingSends([first], [decode('alpha\nbeta'), answer])).toEqual([])
   const long: NativeChatPendingSend = { ...first, text: '  alpha\nbeta\ngamma  ' }
   const second = { ...long, id: 'second', text: 'alpha\nbeta\ngamma' }
   expect(prunePendingSends([long], [decode('  alpha\nbeta\ngamma  '), answer])).toEqual([])
@@ -231,7 +279,7 @@ it('does not allocate a recorded Codex response/completed pair to two sends', ()
   ).toEqual(['second'])
 })
 
-it('matches OpenCode text trimming and C1 paste sanitization without normalizing short typed input', () => {
+it('keeps OpenCode paste and short-input evidence exact alongside normalized main matching', () => {
   const decode = (text: string, id = 'user') =>
     opencodeMessages(
       { id, role: 'user', timestamp: null },
@@ -254,8 +302,21 @@ it('matches OpenCode text trimming and C1 paste sanitization without normalizing
   }
   expect(prunePendingSends([input], [decode('alpha\nbeta\ngamma'), answer])).toEqual([])
   expect(prunePendingSends([input], [decode('  alpha\nbeta\ngamma  '), answer])).toEqual([])
-  expect(prunePendingSends([input], [decode('alpha beta gamma'), answer])).toEqual([input])
+  expect(nativeChatSourcePendingKeys(input)).toEqual([
+    '["opencode","f3220283d05d1ff2ae350cfe9e0e367cb5aef46e10efb203c8a53c678e2218c8",[]]',
+    '["opencode","9eec1a8a581114cbb62c6aa5e6887771e8d6ea3261d5fd6604f08e3cc25c6858",[]]'
+  ])
+  expect(nativeChatSourceMessageKey(decode('alpha beta gamma'))).toBe(
+    '["opencode","64989ccbf3efa9c84e2afe7cee9bc5828bf0fcb91e44f8c1e591638a2c2e90e3",[]]'
+  )
+  expect(prunePendingSends([input], [decode('alpha beta gamma'), answer])).toEqual([])
   const short = { ...input, id: 'short', text: `  ${'x'.repeat(160)}  `, imagePaths: [] }
-  expect(prunePendingSends([short], [decode('x'.repeat(160)), answer])).toEqual([short])
+  expect(nativeChatSourcePendingKeys(short)).toEqual([
+    '["opencode","0b845328e1730cfad1388fc8a9293afd163f832305e9d6e7bb5dd89453eab3c0",[]]'
+  ])
+  expect(nativeChatSourceMessageKey(decode('x'.repeat(160)))).toBe(
+    '["opencode","60ba0840031727513556758984811b638f10d19eff569b7ceeab609c72dbe193",[]]'
+  )
+  expect(prunePendingSends([short], [decode('x'.repeat(160)), answer])).toEqual([])
   expect(prunePendingSends([short], [decode(`  ${'x'.repeat(160)}  `), answer])).toEqual([])
 })

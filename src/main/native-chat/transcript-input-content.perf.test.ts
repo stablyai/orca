@@ -10,6 +10,7 @@ import { opencodeMessages } from './transcript-history/opencode/transcript-openc
 import { boundWorkerTranscriptMessages } from '../runtime/orchestration/workers/transcripts/worker-transcript-payload'
 import { transcriptInputContent } from './transcript-input-content'
 import { nativeChatRpcAppendBatches } from '../runtime/rpc/methods/native-chat/native-chat-rpc-page-bounds'
+import { reconcileNativeChatPendingSends } from '../../shared/native-chat/transcript/native-chat-pending-reconciliation'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   prunePendingSends,
@@ -70,23 +71,68 @@ it.each([10, 100])('measures each of %i appended rows once before transport', (s
 it.each([100, 1000])(
   'derives only the appended source key with %i old rows and eight pending sends',
   (size) => {
+    const context = {
+      owner: 'read',
+      sessionId: 'session',
+      targetPtyId: 'pty',
+      runtimeEnvironmentId: null
+    }
+    const retainedUser = (text: string, id: string) =>
+      decodeClaudeTranscriptLine(
+        JSON.stringify({
+          type: 'user',
+          uuid: id,
+          message: { role: 'user', content: [{ type: 'text', text }] }
+        }),
+        id
+      )!
     const pending: NativeChatPendingSend[] = Array.from({ length: 8 }, (_, index) => ({
       id: `send-${index}`,
-      sourceAgent: 'opencode',
+      sourceAgent: 'claude',
       text: `arriving-${index}`,
-      sentAt: 1
+      sentAt: 1,
+      sourceContext: context,
+      promptBinding: {
+        runtimeId: 'host',
+        ptyId: 'pty',
+        generation: 1,
+        processIncarnation: 'pty:1',
+        terminalHandle: 'terminal',
+        targetPtyId: 'pty',
+        runtimeEnvironmentId: null
+      },
+      promptSubmission: {
+        observation: {
+          origin: 'hook',
+          authorityId: 'host',
+          incarnation: 1,
+          revision: 2,
+          observedAt: 10
+        },
+        sessionId: 'session',
+        textDigest: crypto.createHash('sha256').update(`arriving-${index}`).digest('hex'),
+        connectionId: null,
+        process: { pid: 42, platform: 'linux', startTime: '1' }
+      }
     }))
-    const history = Array.from({ length: size }, (_, index) => user(`old-${index}`, `old-${index}`))
-    expect(prunePendingSends(pending, history)).toBe(pending)
+    const history = Array.from({ length: size }, (_, index) =>
+      retainedUser(`old-${index}`, `old-${index}`)
+    )
+    expect(prunePendingSends(pending, history, 'session', context)).toBe(pending)
     const messages = [
       ...history,
-      user('arriving-0', 'new'),
+      retainedUser('arriving-0', 'new'),
       { ...user('answer', 'answer'), role: 'assistant' as const, inputContent: undefined }
     ]
     const serialize = vi.spyOn(JSON, 'stringify')
-    const remaining = prunePendingSends(pending, messages)
-    const visible = visibleNativeChatPendingSends(pending, messages)
+    const remaining = prunePendingSends(pending, messages, 'session', context)
+    const visible = visibleNativeChatPendingSends(pending, messages, 'session', context)
     expect(serialize).toHaveBeenCalledTimes(1)
+    expect(
+      reconcileNativeChatPendingSends(pending, messages, 'session', context).witnesses.map(
+        (witness) => witness.proof
+      )
+    ).toEqual(['source'])
     expect(remaining.map((entry) => entry.id)).toEqual([
       'send-1',
       'send-2',

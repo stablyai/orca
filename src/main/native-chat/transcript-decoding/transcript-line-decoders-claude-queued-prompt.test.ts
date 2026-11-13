@@ -38,6 +38,7 @@ describe('Claude queued_command attachment', () => {
       inputContent: {
         images: [],
         provider: 'claude',
+        retained: true,
         textDigest: 'c403486dbaf2f30f3b83b738763684a0c5b7ac69da4e2ece472858a19fffdce3'
       }
     })
