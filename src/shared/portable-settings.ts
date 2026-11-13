@@ -109,6 +109,12 @@ export type PortableSettings = Partial<Pick<GlobalSettings, PortableSettingKey>>
 /** A settings store's values as read, before the schema checks them. */
 export type StoredPortableSettings = Partial<Record<PortableSettingKey, unknown>>
 
+/** Settings that passed the schema, and the keys that did not. */
+export type CheckedPortableSettings = {
+  settings: PortableSettings
+  skipped: string[]
+}
+
 export type PortableSettingsImportResult = {
   /** Settings the receiving Orca changed (or would change, in a dry run). */
   changed: string[]
@@ -130,8 +136,8 @@ function copySetting<K extends PortableSettingKey>(
   target[key] = value
 }
 
-/** This Orca's own portable settings, minus any stored value the schema refuses. */
-export function pickPortableSettings(settings: StoredPortableSettings): PortableSettings {
+/** This Orca's own portable settings; a stored value the schema refuses comes back as skipped. */
+export function pickPortableSettings(settings: StoredPortableSettings): CheckedPortableSettings {
   return readPortableSettings(
     Object.fromEntries(
       PORTABLE_SETTING_KEYS.filter((key) => settings[key] !== undefined).map((key) => [
@@ -139,14 +145,11 @@ export function pickPortableSettings(settings: StoredPortableSettings): Portable
         settings[key]
       ])
     )
-  ).settings
+  )
 }
 
 /** Keeps what this Orca copies; a newer sender's other settings and values come back as skipped. */
-export function readPortableSettings(input: Record<string, unknown>): {
-  settings: PortableSettings
-  skipped: string[]
-} {
+export function readPortableSettings(input: Record<string, unknown>): CheckedPortableSettings {
   const settings: PortableSettings = {}
   const skipped: string[] = []
   for (const [key, value] of Object.entries(input)) {

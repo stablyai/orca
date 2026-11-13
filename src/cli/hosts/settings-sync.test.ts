@@ -14,13 +14,13 @@ function ok<T>(result: T) {
   return { id: '1', ok: true as const, result, _meta: { runtimeId: 'r' } }
 }
 
-async function run(command: 'settings push' | 'settings pull', flags = new Map()) {
+async function run(command: 'settings push' | 'settings pull', flags = new Map(), json = true) {
   await SETTINGS_SYNC_HANDLERS[command]?.({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read only call, isRemote and environmentSelector.
     client: paired as unknown as RuntimeClient,
     flags,
     cwd: '/',
-    json: true
+    json
   })
 }
 
@@ -33,7 +33,7 @@ afterEach(() => {
 describe('orca settings push and pull', () => {
   it('pull reads the paired Orca and writes this computer', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    paired.call.mockResolvedValueOnce(ok({ settings: { theme: 'dark' } }))
+    paired.call.mockResolvedValueOnce(ok({ settings: { theme: 'dark' }, skipped: [] }))
     thisComputer.call.mockResolvedValueOnce(ok({ changed: ['theme'], skipped: [] }))
 
     await run('settings pull', new Map([['dry-run', true]]))
@@ -45,8 +45,26 @@ describe('orca settings push and pull', () => {
     })
   })
 
+  it('push names the settings this computer kept back instead of saying they match', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    thisComputer.call.mockResolvedValueOnce(
+      ok({ settings: { theme: 'dark' }, skipped: ['terminalThemeLight'] })
+    )
+    paired.call.mockResolvedValueOnce(ok({ changed: [], skipped: [] }))
+
+    await run('settings push', new Map(), false)
+
+    expect(paired.call).toHaveBeenCalledWith('settings.importPortable', {
+      settings: { theme: 'dark' },
+      dryRun: false
+    })
+    expect(log).toHaveBeenCalledWith(
+      'Nothing to change on work-mac.\nNot sent from this computer: terminalThemeLight'
+    )
+  })
+
   it('names the computer whose Orca cannot take the settings', async () => {
-    thisComputer.call.mockResolvedValueOnce(ok({ settings: { theme: 'dark' } }))
+    thisComputer.call.mockResolvedValueOnce(ok({ settings: { theme: 'dark' }, skipped: [] }))
     paired.call.mockRejectedValueOnce(new RuntimeClientError('method_not_found', 'Unknown method'))
 
     await expect(run('settings push')).rejects.toThrow(

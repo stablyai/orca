@@ -4,11 +4,20 @@ import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
 import { callerOrcaClient } from '../workspaces/worktree-parent-fields'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import type { PortableSettings, PortableSettingsImportResult } from '../../shared/portable-settings'
+import type {
+  CheckedPortableSettings,
+  PortableSettingsImportResult
+} from '../../shared/portable-settings'
 
 type SettingsSide = { client: RuntimeClient; label: string }
 
-type SettingsCopyResult = PortableSettingsImportResult & { to: string; dryRun: boolean }
+type SettingsCopyResult = PortableSettingsImportResult & {
+  /** Settings the sending Orca kept back, such as a custom terminal theme. */
+  notSent: string[]
+  from: string
+  to: string
+  dryRun: boolean
+}
 
 export const SETTINGS_SYNC_HANDLERS: Record<string, CommandHandler> = {
   'settings push': async ({ client, flags, json }) => {
@@ -40,10 +49,7 @@ async function copySettings(
   dryRun: boolean,
   json: boolean
 ): Promise<void> {
-  const exported = await callSettingsSync<{ settings: PortableSettings }>(
-    from,
-    'settings.exportPortable'
-  )
+  const exported = await callSettingsSync<CheckedPortableSettings>(from, 'settings.exportPortable')
   const imported = await callSettingsSync<PortableSettingsImportResult>(
     to,
     'settings.importPortable',
@@ -51,7 +57,13 @@ async function copySettings(
   )
   const response: RuntimeRpcSuccess<SettingsCopyResult> = {
     ...imported,
-    result: { ...imported.result, to: to.label, dryRun }
+    result: {
+      ...imported.result,
+      notSent: exported.result.skipped,
+      from: from.label,
+      to: to.label,
+      dryRun
+    }
   }
   printResult(response, json, formatSettingsCopy)
 }
@@ -75,15 +87,23 @@ async function callSettingsSync<TResult>(
 }
 
 function formatSettingsCopy(result: SettingsCopyResult): string {
+  const anySkipped = result.notSent.length > 0 || result.skipped.length > 0
   const lines =
     result.changed.length === 0
-      ? [`Settings on ${result.to} already match.`]
+      ? [
+          anySkipped
+            ? `Nothing to change on ${result.to}.`
+            : `Settings on ${result.to} already match.`
+        ]
       : [
           `${result.dryRun ? 'Would change' : 'Changed'} ${result.changed.length} ${
             result.changed.length === 1 ? 'setting' : 'settings'
           } on ${result.to}:`,
           ...result.changed.map((key) => `  ${key}`)
         ]
+  if (result.notSent.length > 0) {
+    lines.push(`Not sent from ${result.from}: ${result.notSent.join(', ')}`)
+  }
   if (result.skipped.length > 0) {
     lines.push(`Not copied by ${result.to}: ${result.skipped.join(', ')}`)
   }

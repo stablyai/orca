@@ -30,7 +30,7 @@ import {
   type DesktopSettingsWriter
 } from './settings/runtime-portable-settings'
 import type {
-  PortableSettings,
+  CheckedPortableSettings,
   PortableSettingsImportResult
 } from '../../../shared/portable-settings'
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
@@ -248,7 +248,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     this.desktopSettingsWriter = writer
   }
 
-  getClientPortableSettings(): PortableSettings {
+  getClientPortableSettings(): CheckedPortableSettings {
     return exportPortableSettings(this.store)
   }
 

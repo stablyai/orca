@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StoredPortableSettings } from '../../../../shared/portable-settings'
-import { importPortableSettings } from './runtime-portable-settings'
+import { exportPortableSettings, importPortableSettings } from './runtime-portable-settings'
 
 function storeWith(settings: StoredPortableSettings) {
   return { getSettings: () => settings, updateSettings: vi.fn() }
 }
 
 const incoming = { theme: 'dark', terminalFontSize: 13, workspaceDir: '/Users/other' }
+
+describe('exportPortableSettings', () => {
+  it('names the stored selections it keeps back', () => {
+    expect(
+      exportPortableSettings(storeWith({ theme: 'dark', terminalThemeLight: 'custom:my-theme' }))
+    ).toEqual({ settings: { theme: 'dark' }, skipped: ['terminalThemeLight'] })
+  })
+})
 
 describe('importPortableSettings', () => {
   it('writes only the changed settings, through the desktop Settings path', async () => {

@@ -110,7 +110,7 @@ export const CLIENT_UI_METHODS = [
     name: 'settings.exportPortable',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => ({ settings: runtime.getClientPortableSettings() })
+    handler: (_params, { runtime }) => runtime.getClientPortableSettings()
   }),
   defineMethod({
     name: 'settings.importPortable',
