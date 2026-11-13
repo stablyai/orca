@@ -7,7 +7,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
-import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useSourceControlPanelViewState } from '../panel/use-panel-view-state'
 import { SourceControlBranchSection } from './branch-section'
 
@@ -184,11 +184,14 @@ it('keeps the chip but not the collapse while uncommitted changes remain', async
   expect(isExpanded()).toBe(true)
 })
 
-it('shows no chip when HEAD is not the merged review head', async () => {
-  await render({ worktreeId: nextWorktreeId(), statusHeadOid: 'feedbeef' })
-
+it('shows the chip only once HEAD is the merged review head', async () => {
+  const worktreeId = nextWorktreeId()
+  await render({ worktreeId, statusHeadOid: 'feedbeef' })
   expect(hasMergedChip()).toBe(false)
   expect(isExpanded()).toBe(true)
+
+  await render({ worktreeId })
+  expect(hasMergedChip()).toBe(true)
 })
 
 it('waits for a known HEAD and keeps the last state through unknown reads', async () => {
@@ -258,6 +261,7 @@ it('never collapses a user-toggled section', async () => {
   await clickToggle()
 
   await render({ worktreeId })
+  expect(hasMergedChip()).toBe(true)
   expect(isExpanded()).toBe(true)
 })
 
@@ -340,8 +344,9 @@ it('remembers collapse ownership after other workspaces evict the disclosure cac
   const userExpanded = nextWorktreeId()
   const autoCollapsed = nextWorktreeId()
   const others = Array.from({ length: 512 }, () => nextWorktreeId())
-  const previousWorktreesByRepo = useAppStore.getState().worktreesByRepo
+  const { worktreesByRepo: previousWorktreesByRepo, repos: previousRepos } = useAppStore.getState()
   useAppStore.setState({
+    repos: [makeRepo()],
     worktreesByRepo: {
       'repo-1': [userExpanded, autoCollapsed, ...others].map((id) => makeWorktree(id, id))
     }
@@ -360,6 +365,6 @@ it('remembers collapse ownership after other workspaces evict the disclosure cac
     await render({ worktreeId: autoCollapsed })
     expect(isExpanded()).toBe(false)
   } finally {
-    useAppStore.setState({ worktreesByRepo: previousWorktreesByRepo })
+    useAppStore.setState({ worktreesByRepo: previousWorktreesByRepo, repos: previousRepos })
   }
 })
