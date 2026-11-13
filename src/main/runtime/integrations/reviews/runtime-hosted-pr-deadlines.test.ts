@@ -3,6 +3,41 @@ import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/r
 import { makeCandidate } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 import { fixture, found, mocks, read, rpcRead } from './runtime-hosted-pr-snapshot-test-harness'
 
+it('delivers an unrelated row without a spacing delay after joining an existing producer', async () => {
+  const coordinator = await import('../../../github/pull-requests/refresh/pr-refresh-coordinator')
+  const result = Promise.withResolvers<PRRefreshOutcome>()
+  mocks.resolve.mockReturnValueOnce(result.promise)
+  const producer = read('joining', 'active')
+  await vi.advanceTimersByTimeAsync(0)
+  const delivered: { branch: string; outcome: PRRefreshOutcome }[] = []
+  const remove = coordinator.addPRRefreshOutcomeObserver((candidate, outcome) => {
+    delivered.push({ branch: candidate.branch, outcome })
+  })
+  try {
+    for (const branch of ['joining', 'unrelated']) {
+      coordinator.enqueuePRRefresh(
+        makeCandidate({ branch, cacheKey: `/repo::${branch}`, currentHeadOid: 'head-a' }),
+        'swr'
+      )
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    fixture.title = 'shared answer'
+    result.resolve(found())
+    await producer
+    await vi.advanceTimersByTimeAsync(0)
+    expect(delivered).toContainEqual({
+      branch: 'unrelated',
+      outcome: {
+        kind: 'found',
+        fetchedAt: 1_000,
+        pr: expect.objectContaining({ title: 'shared answer' })
+      }
+    })
+  } finally {
+    remove()
+  }
+})
+
 it.each([false, true])(
   'delivers post-push data while another row waits for a later rate-limit reset (clock jump: %s)',
   async (clockJump) => {

@@ -58,6 +58,7 @@ export class PRRefreshQueueScheduler {
     candidate: GitHubPRRefreshCandidate,
     aliases: GitHubPRRefreshAlias[],
     prepared: PreparedPRBranchRead,
+    requestSequence: number,
     hosted = false
   ): PRReadSettlement {
     return (outcome, producer) => {
@@ -66,6 +67,7 @@ export class PRRefreshQueueScheduler {
       }
       const settled =
         producer.retained &&
+        this.queue.ownsRequest(key, requestSequence) &&
         outcome.kind === 'upstream-error' &&
         (hosted || this.visibility.has(key))
           ? this.retry.settleProducerError(

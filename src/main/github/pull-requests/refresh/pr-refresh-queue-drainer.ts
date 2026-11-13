@@ -160,7 +160,7 @@ export class PRRefreshQueueDrainer {
             requestSequence
           )
         }
-        const joinedRead = next.hosted?.prepared.pending()
+        let joinedRead = next.hosted?.prepared.pending()
         if (isBackground(next.reason) && !joinedRead) {
           const checkRateLimit = () => prRefreshRateLimitPausedUntil(next.candidate, true)
           const pausedUntil = await (next.hosted
@@ -222,6 +222,7 @@ export class PRRefreshQueueDrainer {
               watchPRKey: next.watch?.prKey
             })
           ))
+        joinedRead ??= prepared.pending()
         const admitted = admitPreparedPRRead(
           { queue, pacing, events, scheduler, watchJobs },
           next,
@@ -239,6 +240,7 @@ export class PRRefreshQueueDrainer {
           next.candidate,
           aliases,
           prepared,
+          requestSequence,
           Boolean(next.hosted)
         )
         const result = await (joinedRead ?? prepared.readResult(settle, Boolean(next.hosted)))

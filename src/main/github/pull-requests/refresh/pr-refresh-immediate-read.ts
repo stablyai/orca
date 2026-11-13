@@ -118,7 +118,7 @@ export async function runImmediatePRRefresh(
   )
   try {
     const result = await prepared.readResult(
-      drainer.scheduler.settleRead(key, candidate, aliases, prepared)
+      drainer.scheduler.settleRead(key, candidate, aliases, prepared, requestSequence)
     )
     if (!result) {
       throw new Error('An unrestricted PR read must return its own result')
