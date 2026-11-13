@@ -115,6 +115,18 @@ export function setupFailureCopy(
         ),
         detail: nothingChanged
       }
+    case 'device_auth_disabled':
+      // RS-3: the broker started but ChatGPT refused to issue a device code for this account.
+      return {
+        title: t(
+          'orcaCloudAccounts.error.deviceAuthDisabled',
+          'Device code sign-in is turned off for this ChatGPT account.'
+        ),
+        detail: t(
+          'orcaCloudAccounts.error.deviceAuthDisabledDetail',
+          'Turn on device code sign-in for Codex in ChatGPT’s security settings, then try again.'
+        )
+      }
     case 'invalid_token':
       return {
         title: t(
