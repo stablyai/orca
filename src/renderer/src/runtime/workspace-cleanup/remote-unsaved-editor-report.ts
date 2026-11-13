@@ -5,6 +5,7 @@ import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-cod
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { onServerControlConnected } from '../workspace-layout/server/server-layout-view-report'
@@ -27,39 +28,69 @@ function unsavedWorktreeIdsByEnvironment(state: AppState): Map<string, string[]>
   return new Map([...byEnvironment].map(([environmentId, ids]) => [environmentId, [...ids].sort()]))
 }
 
+const UNKNOWN = '\0unknown'
+const REPORTER_ID_KEY = 'orca.workspaceCleanup.unsavedEditorReporterId'
+
+// Windows share main's control socket; a per-window id keeps one window's report from replacing another's. Survives reload.
+function windowReporterId(): string {
+  try {
+    const existing = window.sessionStorage.getItem(REPORTER_ID_KEY)
+    if (existing) {
+      return existing
+    }
+    const created = createNonSecureContextUuid()
+    window.sessionStorage.setItem(REPORTER_ID_KEY, created)
+    return created
+  } catch {
+    return createNonSecureContextUuid()
+  }
+}
+
 /** Reports changes per host, and again whenever contact with it is regained: a host drops a closed socket's report. */
 export function installRemoteUnsavedEditorReport(): () => void {
+  const reporterId = windowReporterId()
   const sent = new Map<string, string>()
   const unsupported = new Set<string>()
   const stopWatches = new Map<string, () => void>()
+  // One report in flight per host, so an older list can never land after a newer one.
+  const inFlight = new Set<string>()
 
   const send = (environmentId: string, worktreeIds: string[]): void => {
     sent.set(environmentId, worktreeIds.join('\n'))
+    inFlight.add(environmentId)
     callRuntimeRpc(
       { kind: 'environment', environmentId },
       'workspaceCleanup.reportUnsavedEditors',
-      {
-        worktreeIds
-      }
-    ).catch((error: unknown) => {
-      if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
-        // A host from before automatic cleanup removes nothing on its own.
-        unsupported.add(environmentId)
-        return
-      }
-      // Kept as sent so typing does not retry a host that is down; regaining contact sends it again.
-      console.warn(
-        '[workspace-cleanup] a host did not take the unsaved-editor report:',
-        errorMessage(error)
-      )
-    })
+      { worktreeIds, reporterId }
+    )
+      .catch((error: unknown) => {
+        if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+          // A host from before automatic cleanup removes nothing on its own.
+          unsupported.add(environmentId)
+          return
+        }
+        // Kept as sent so typing does not retry a host that is down; regaining contact sends it again.
+        console.warn(
+          '[workspace-cleanup] a host did not take the unsaved-editor report:',
+          errorMessage(error)
+        )
+      })
+      .finally(() => {
+        inFlight.delete(environmentId)
+        // Edits made while it was in flight go out now, as the latest list only.
+        sync(useAppStore.getState())
+      })
   }
 
   const sync = (state: AppState): void => {
     const current = unsavedWorktreeIdsByEnvironment(state)
     for (const environmentId of new Set([...sent.keys(), ...current.keys()])) {
       const worktreeIds = current.get(environmentId) ?? []
-      if (unsupported.has(environmentId) || sent.get(environmentId) === worktreeIds.join('\n')) {
+      if (
+        inFlight.has(environmentId) ||
+        unsupported.has(environmentId) ||
+        sent.get(environmentId) === worktreeIds.join('\n')
+      ) {
         continue
       }
       watch(environmentId)
@@ -73,7 +104,8 @@ export function installRemoteUnsavedEditorReport(): () => void {
     }
     const resend = (): void => {
       // A new socket, or an upgraded host that now has the method.
-      sent.delete(environmentId)
+      // Unknown, not absent: an empty list must still go out to clear what the host holds.
+      sent.set(environmentId, UNKNOWN)
       unsupported.delete(environmentId)
       sync(useAppStore.getState())
     }
@@ -96,7 +128,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
     for (const environmentId of state.runtimeStatusByEnvironmentId.keys()) {
       if (configured.has(environmentId) && !known.has(environmentId)) {
         known.add(environmentId)
-        sent.set(environmentId, '\0unknown')
+        sent.set(environmentId, UNKNOWN)
       }
     }
   }

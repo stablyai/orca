@@ -37,7 +37,7 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
       if (!connectionId || signal?.aborted) {
         return { recorded: false }
       }
-      reportClientUnsavedEditors(runtime, connectionId, params.worktreeIds)
+      reportClientUnsavedEditors(runtime, connectionId, params.reporterId ?? '', params.worktreeIds)
       return { recorded: true }
     }
   })

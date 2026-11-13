@@ -1,12 +1,16 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
-// Per host runtime, per client socket: the workspaces that client holds unsaved editor buffers in.
-const reportsByRuntime = new WeakMap<OrcaRuntimeService, Map<string, ReadonlySet<string>>>()
+// Per host runtime, per client socket, per reporting window: the workspaces holding unsaved editor buffers.
+const reportsByRuntime = new WeakMap<
+  OrcaRuntimeService,
+  Map<string, Map<string, ReadonlySet<string>>>
+>()
 
-/** Replaces what one client reported; its report goes away when its socket closes. */
+/** Replaces what one client window reported; every report on a socket goes away when it closes. */
 export function reportClientUnsavedEditors(
   runtime: OrcaRuntimeService,
   connectionId: string,
+  reporterId: string,
   worktreeIds: readonly string[]
 ): void {
   let reports = reportsByRuntime.get(runtime)
@@ -14,7 +18,10 @@ export function reportClientUnsavedEditors(
     reports = new Map()
     reportsByRuntime.set(runtime, reports)
   }
-  if (!reports.has(connectionId)) {
+  let byReporter = reports.get(connectionId)
+  if (!byReporter) {
+    byReporter = new Map()
+    reports.set(connectionId, byReporter)
     const owned = reports
     runtime.registerSubscriptionCleanup(
       `workspace-cleanup-unsaved-editors:${connectionId}`,
@@ -24,15 +31,17 @@ export function reportClientUnsavedEditors(
       connectionId
     )
   }
-  reports.set(connectionId, new Set(worktreeIds))
+  byReporter.set(reporterId, new Set(worktreeIds))
 }
 
 /** Workspaces any connected client has unsaved editor buffers in. */
 export function listClientUnsavedEditorWorktreeIds(runtime: OrcaRuntimeService): Set<string> {
   const ids = new Set<string>()
-  for (const reported of reportsByRuntime.get(runtime)?.values() ?? []) {
-    for (const id of reported) {
-      ids.add(id)
+  for (const byReporter of reportsByRuntime.get(runtime)?.values() ?? []) {
+    for (const reported of byReporter.values()) {
+      for (const id of reported) {
+        ids.add(id)
+      }
     }
   }
   return ids
