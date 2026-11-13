@@ -1,4 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
+import { SYSTEM_PRESENCE_DEFAULTS } from './system-presence-defaults'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal/appearance/terminal-fonts'
@@ -126,11 +127,7 @@ export function buildDefaultSettings(args: {
     terminalScrollOnUserInput: true,
     windowBackgroundBlur: false,
     reduceVisualEffects: false,
-    minimizeToTrayOnClose: false,
-    // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
-    showMenuBarIcon: true,
-    // Why default-on: the indicator only helps if it is already there when an agent blocks.
-    showNotchStatus: true,
+    ...SYSTEM_PRESENCE_DEFAULTS,
     terminalClipboardOnSelect: false,
     // Trim only the shared leading-space gutter, preserving relative indentation.
     terminalCopyTrimsGutter: true,
