@@ -19,7 +19,12 @@ export type CloudRecoveryContext = {
 export function useCloudRecoveryContext(
   worktreeId: string | null | undefined
 ): CloudRecoveryContext | null {
-  const isCloud = useIsCloudWorkspace(worktreeId)
+  // ASLEEP-SR-RECONNECTING: a paired cloud workspace is cloud here too. Owned-only left its asleep
+  // and waking states unknown to the recovery notices, so the outage notice ("Reconnecting to …",
+  // a polite live region) stayed up under the asleep view and a screen reader announced it.
+  const owned = useIsCloudWorkspace(worktreeId)
+  const paired = useCloudWorkspace((s) => Boolean(worktreeId && worktreeId in s.paired))
+  const isCloud = owned || paired
   const wake = useCloudWorkspace((s) => (worktreeId ? s.wake[worktreeId] : undefined))
   const phase = wake?.phase
   const status = useCloudWorkspace((s) => (worktreeId ? s.status[worktreeId]?.status : undefined))

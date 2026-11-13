@@ -100,3 +100,23 @@ describe('terminal recovery for an asleep Orca Cloud workspace (RA-12)', () => {
     expect(result.current).toBeNull()
   })
 })
+
+describe('a paired cloud workspace (ASLEEP-SR-RECONNECTING)', () => {
+  it('is cloud and asleep, so the outage notice stays silent under the asleep view', () => {
+    act(() =>
+      seedCloudWorkspaceSnapshot({
+        paired: { ws: 'env-paired' },
+        idsLoaded: true,
+        status: { ws: { status: status('sleeping'), loading: false, error: null, fetchedAt: T0 } }
+      })
+    )
+    const { result } = renderHook(() => useCloudRecoveryContext('ws'))
+    expect(result.current).toMatchObject({ asleep: true, waking: false })
+  })
+
+  it('a workspace that is neither owned nor paired is still not cloud', () => {
+    act(() => seedCloudWorkspaceSnapshot({ idsLoaded: true }))
+    const { result } = renderHook(() => useCloudRecoveryContext('ws'))
+    expect(result.current).toBeNull()
+  })
+})
