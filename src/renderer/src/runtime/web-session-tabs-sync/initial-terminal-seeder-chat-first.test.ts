@@ -4,11 +4,14 @@
 // holds the seeder off while its chat launches.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({
-  tabsByWorktree: {} as Record<string, unknown[]>,
-  unifiedTabsByWorktree: {} as Record<string, { id: string; contentType: string }[]>,
-  owner: 'runtime:env-vm' as string
-}))
+const state = vi.hoisted(() => {
+  const value: {
+    tabsByWorktree: Record<string, unknown[]>
+    unifiedTabsByWorktree: Record<string, { id: string; contentType: string }[]>
+    owner: string
+  } = { tabsByWorktree: {}, unifiedTabsByWorktree: {}, owner: 'runtime:env-vm' }
+  return value
+})
 vi.mock('../../store', () => ({ useAppStore: { getState: () => state } }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => state } }))
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
