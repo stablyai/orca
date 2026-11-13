@@ -36,6 +36,7 @@ export function createWebCloudWorkspacesApi(): PreloadApi['cloudWorkspaces'] {
     setPokesEnabled: () => Promise.resolve(NOT_CONFIGURED),
     markPokesSeen: () => Promise.resolve(NOT_CONFIGURED),
     onOpenLink: () => () => {},
+    onAccessLost: () => () => {},
     consumePendingLink: () => Promise.resolve(null)
   }
 }

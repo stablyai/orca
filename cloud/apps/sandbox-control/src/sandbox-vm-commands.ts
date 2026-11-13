@@ -11,7 +11,7 @@ export const START_COMMAND = '/opt/orca/bin/orca-sandbox-start'
 export const DRAIN_COMMAND = '/opt/orca/bin/orca-sandbox-drain'
 export const ENV_COMMAND = '/opt/orca/bin/orca-sandbox-env'
 const ENV_TIMEOUT_MS = 30_000
-const START_TIMEOUT_MS = 120_000
+export const START_TIMEOUT_MS = 120_000
 /** Matches the parity plan: in-flight turns get up to 5 min to become durable restart offers. */
 export const DRAIN_TIMEOUT_MS = 5 * 60_000
 

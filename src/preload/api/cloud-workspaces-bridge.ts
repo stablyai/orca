@@ -44,5 +44,13 @@ export const cloudWorkspacesApi = {
     ipcRenderer.on('ui:openCloudWorkspaceLink', listener)
     return () => ipcRenderer.removeListener('ui:openCloudWorkspaceLink', listener)
   },
-  consumePendingLink: () => ipcRenderer.invoke('ui:consumePendingCloudWorkspaceLink')
+  consumePendingLink: () => ipcRenderer.invoke('ui:consumePendingCloudWorkspaceLink'),
+  onAccessLost: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      lost: { environmentId: string; sandboxId: string }
+    ): void => callback(lost)
+    ipcRenderer.on('cloudWorkspaces:accessLost', listener)
+    return () => ipcRenderer.removeListener('cloudWorkspaces:accessLost', listener)
+  }
 } satisfies PreloadApi['cloudWorkspaces']

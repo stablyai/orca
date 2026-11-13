@@ -236,7 +236,7 @@ export function CloudSecretsPane({
   )
 
   return (
-    // Settings › Orca Cloud › Cloud secrets owns the title and the "never written to the sandbox" line.
+    // Settings › Orca Cloud › Cloud secrets owns the title and the edge-swap description line.
     <div className="space-y-4">
       <Tabs
         value={tab}

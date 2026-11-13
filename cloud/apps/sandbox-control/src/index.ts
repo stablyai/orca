@@ -85,7 +85,8 @@ import {
   rolloverSandbox,
   suspendSandbox,
   type LifecycleDeps,
-  type Ready
+  type Ready,
+  CREATE_CANCELLED
 } from './lifecycle'
 import { createGitHubAppMinter, parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
@@ -146,7 +147,7 @@ import {
   runningSandboxesForDefault
 } from './agent-sources'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
-import { gitBasicAuthorization, parseEgressPreset } from './network-policy'
+import { egressProxyMissing, gitBasicAuthorization, parseEgressPreset } from './network-policy'
 import { cachedProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
@@ -1293,6 +1294,11 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (!env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
         return fail('not_configured', 503)
       }
+      // Second lock (EGRESS-SWAP-FAIL-CLOSED): with no proxy URL configured nothing should forward here, and rows
+      // may carry withheld-key routes; never swap a real credential in that state.
+      if (egressProxyMissing({ egressProxyUrl: env.EGRESS_PROXY_URL, environment: env.SANDBOX_ENV })) {
+        return fail('egress_proxy_missing', 503)
+      }
       return await handleEgressProxy(request, {
         teamId: env.VERCEL_TEAM_ID,
         projectId: env.VERCEL_PROJECT_ID,
@@ -1435,7 +1441,16 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
     if (url.pathname === '/v1/health' && request.method === 'GET') {
       // Post-deploy smoke: no auth, no DB. 503 names a config error a deploy must not ship.
       const platform = egressAllowlistSetting(env.ORCA_PLATFORM_HOST_SUFFIXES)
-      return platform.error ? platformHostsMisconfigured(platform.error) : json({ ok: true }, 200)
+      if (platform.error) {
+        return platformHostsMisconfigured(platform.error)
+      }
+      // EGRESS-SWAP-FAIL-CLOSED: without the proxy no key reaches an agent and open egress is off.
+      if (egressProxyMissing({ egressProxyUrl: env.EGRESS_PROXY_URL, environment: env.SANDBOX_ENV })) {
+        console.error(JSON.stringify({ event: 'config_error', variable: 'EGRESS_PROXY_URL', environment: env.SANDBOX_ENV }))
+        return json({ error: 'egress_proxy_missing', keySwap: 'off' }, 503)
+      }
+      // keySwap: whether model keys can be swapped at egress (the launch smoke asserts "on").
+      return json({ ok: true, keySwap: env.EGRESS_PROXY_URL ? 'on' : 'off' }, 200)
     }
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
@@ -1817,22 +1832,38 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       // with the sandbox the first one made, for 24 h, instead of starting another (PC-8).
       let timings: Ready['timings']
       try {
-        const response = await withIdempotency(
+        // EP-5: a create outlives its request (ctx.waitUntil), like a wake. A desktop that cancels mid-create
+        // disconnects; the create still finishes (or fails and frees its VM) and stores its answer, so the
+        // cancel's replay gets the sandbox to delete instead of 409 `idempotency_in_progress` for minutes.
+        const response = await outlivingRequest(
+          life,
+          withIdempotency(
           life.db,
           { accountId: caller.accountId, scope: `sandbox.create:${caller.userId}`, key: readIdempotencyKey(request), body: raw, now: life.now() },
           async () => {
             // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
             // Member identities install after the response; the VM's git holds commits and pushes until then.
-            const ready = await createSandbox(life, caller, {
-              ...body.data,
-              cloneInBackground: features.includes('clone-progress'),
-              deferMemberGit: true
-            })
+            let ready: Ready
+            try {
+              ready = await createSandbox(life, caller, {
+                ...body.data,
+                cloneInBackground: features.includes('clone-progress'),
+                deferMemberGit: true
+              })
+            } catch (error) {
+              // EP-5: cancelled (its owner deleted it mid-create). Kept under the key: a replay of the
+              // cancelled create answers this instead of making a new sandbox.
+              if (error instanceof LifecycleError && error.reason === CREATE_CANCELLED) {
+                return { status: 409, body: { error: 'conflict', reason: CREATE_CANCELLED } }
+              }
+              throw error
+            }
             await recordOwnerDeviceForCreate(life, ready)
             await auditSession(life.db, caller, { action: 'workspace.create', targetType: 'workspace', targetId: ready.row.id, detail: { origin: 'desktop', visibility: ready.row.visibility } }, life.now())
             timings = ready.timings
             return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
           }
+          )
         )
         const timing = Object.entries(timings ?? {})
           .map(([phase, ms]) => `${phase};dur=${ms}`)

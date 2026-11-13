@@ -8,7 +8,7 @@ import {
   HOST_AGENT_SIGN_IN_AGENT_NAME,
   type HostAgentSignInAgent
 } from '../../../../shared/host-agent-sign-in-status'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { chatCloudEnvironmentId } from './chat-cloud-environment'
 import { useCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import {
   orcaCloudAgentAccountsLoadedAt,
@@ -28,18 +28,9 @@ import type { CloudHeldStrip } from './use-cloud-held-strip'
 import { cloudChatRunningStripModel } from './cloud-running-strip-model'
 import { openOrcaCloudAccountsSettings, withRenewInPlace } from './cloud-renew-in-place'
 
-/** The Orca Cloud environment a structured chat's tab runs on, or null. */
+/** The Orca Cloud environment a structured chat's tab runs on (END-PASS CHAT-RENEW: shared rule). */
 function useChatEnvironmentId(tabId: string): string | null {
-  return useAppStore((state) => {
-    for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
-      const tab = tabs?.find((candidate) => candidate.id === tabId)
-      if (tab) {
-        const host = parseExecutionHostId(tab.executionHostId)
-        return host?.kind === 'runtime' ? host.environmentId : null
-      }
-    }
-    return null
-  })
+  return useAppStore((state) => chatCloudEnvironmentId(state, tabId))
 }
 
 type ChatAccountArgs = {

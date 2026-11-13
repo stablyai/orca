@@ -80,6 +80,8 @@ describe('wake', () => {
     const { body } = await h.call('POST', '/v1/sandboxes', { body: create })
     const id = body.sandbox.id
     await h.call("POST", `/v1/sandboxes/${id}/suspend`)
+    // Only the wake's own background work counts (the create outlives its request too, EP-5).
+    await Promise.all(background.splice(0))
     const answer = HostedWakeResponseSchema.parse((await h.call('POST', `/v1/sandboxes/${id}/wake`)).body)
     // The fake provider is synchronous enough that the wake may already be done; either is valid.
     expect(['waking', 'ready']).toContain(answer.state)

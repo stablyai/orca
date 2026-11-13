@@ -300,13 +300,18 @@ export async function startBuild(
   }
   const now = deps.now()
   const id = randomId()
-  const config: BuildConfig = options.config ?? {
+  const base: BuildConfig = options.config ?? {
     revision: environment.revision,
     repos,
     installScript: environment.install_script,
     envVarNames: parseNames(environment),
     machineSize: environment.machine_size
   }
+  // AUTO-ENV-DEPS-NOT-RUNNING: every build of an automatic environment clones blobless and installs
+  // from the lockfile, whatever started it (create, golden refresh reusing an older build's config,
+  // a manual Rebuild). Decided here, from the environment's kind, not from a stored config.
+  const config: BuildConfig =
+    environment.kind === 'auto' ? { ...base, cloneFilter: 'blob:none', autoInstall: true } : base
   // Number allocation and insert in one batch: two admins clicking Build cannot share a number.
   const bumped = await allocate().catch((error: unknown) => {
     // A stale environment read collides on UNIQUE(environment_id, number): someone else just started one.

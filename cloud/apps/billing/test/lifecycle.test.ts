@@ -197,3 +197,44 @@ describe('reconciliation (ENTITLEMENTS_MODE=on)', () => {
     expect(await reconcile(h.env, createStripeClient(h.env, h.stripe.fetchImpl), Date.now())).toBeNull()
   })
 })
+
+describe('EP-9: a portal cancel (cancel_at) on one of two teams of the same owner', () => {
+  it('shows the cancelling team its own plan ending on cancel_at; the other team is untouched', async () => {
+    const h = await createHarness()
+    const as = async (org: string) => ({ authorization: `Bearer ${await h.desktopToken({ sub: 'owner', org, orgRole: 'owner', email: 'o@example.com' })}` })
+    const eval3 = await as('eval')
+    const paid1 = await as('paid')
+    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 3 }, headers: eval3 })
+    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 1 }, headers: paid1 })
+    const [evalCustomer, paidCustomer] = [...h.stripe.customers.keys()]
+    expect(evalCustomer).not.toBe(paidCustomer)
+    const evalSub = h.stripe.putSubscription({ customer: evalCustomer!, accountId: 'org:eval', basePrice: 'price_team_month', quantity: 3, periodStart: PERIOD_START, periodEnd: PERIOD_END })
+    const paidSub = h.stripe.putSubscription({ customer: paidCustomer!, accountId: 'org:paid', basePrice: 'price_team_month', quantity: 1, periodStart: PERIOD_START, periodEnd: PERIOD_END + 3 * 24 * HOUR })
+    await h.webhook(checkoutCompleted({ customer: evalCustomer!, subscription: evalSub.id, accountId: 'org:eval' }))
+    await h.webhook(checkoutCompleted({ customer: paidCustomer!, subscription: paidSub.id, accountId: 'org:paid' }))
+
+    // The portal's cancel on API 2025-09-30.clover: cancel_at set, cancel_at_period_end stays false.
+    const cancelAt = PERIOD_END + 3 * 24 * HOUR
+    paidSub.cancel_at = cancelAt
+    await h.webhook(stripeEvent('customer.subscription.updated', paidSub))
+
+    const paid = await entitlement(h, paid1)
+    expect(paid).toMatchObject({ plan: 'team', seats: 1, status: 'active', cancelAtPeriodEnd: true, cancelAt: cancelAt * 1000, canStartSandbox: true })
+    expect(paid.includedSeconds).toBe(60 * HOUR)
+    const other = await entitlement(h, eval3)
+    expect(other).toMatchObject({ plan: 'team', seats: 3, cancelAtPeriodEnd: false, cancelAt: null })
+    expect(other.includedSeconds).toBe(180 * HOUR)
+    if (h.env.ENTITLEMENTS_MODE === 'on' || h.env.ENTITLEMENTS_MODE === 'shadow') {
+      const ends = h.raw.prepare("SELECT DISTINCT subject_id, ends_at FROM entitlement_grants WHERE source_type = 'subscription' ORDER BY subject_id").all()
+      expect(ends).toEqual([
+        { subject_id: 'org:eval', ends_at: null },
+        { subject_id: 'org:paid', ends_at: cancelAt * 1000 }
+      ])
+    }
+    // Un-cancelling in the portal clears it.
+    paidSub.cancel_at = null
+    await h.webhook(stripeEvent('customer.subscription.updated', paidSub))
+    expect(await entitlement(h, paid1)).toMatchObject({ cancelAtPeriodEnd: false, cancelAt: null })
+  })
+})
+

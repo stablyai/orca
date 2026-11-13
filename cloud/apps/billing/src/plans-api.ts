@@ -136,7 +136,8 @@ export async function entitlementsView(env: Env, accountId: string, canManageBil
           interval: entitlement.interval,
           seats: entitlement.seats,
           period: entitlement.period,
-          cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd
+          cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd,
+          cancelAt: entitlement.cancelAt
         }
       : null,
     trial: entitlement.trial,

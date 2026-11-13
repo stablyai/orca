@@ -53,6 +53,7 @@ function stub(
     gitHubInstallRights: vi.fn(unused),
     listGitHubRepositories: vi.fn(unused),
     createFromGitHub: vi.fn(unused),
+    retryCancelledCreate: vi.fn(unused),
     onWakeProgress: vi.fn(() => () => {}),
     onOom: vi.fn(() => () => {})
   }

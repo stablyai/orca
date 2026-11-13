@@ -15,7 +15,7 @@ export type NetworkPolicyRule =
       transform: { headers: Record<string, string> }[]
     }
   | { match?: { headers?: { key: Matcher; value: Matcher }[] }; forwardURL: string }
-  | { response: { statusCode: number; body: string; contentType: string } }
+  | { match?: { headers?: { key: Matcher; value: Matcher }[] }; response: { statusCode: number; body: string; contentType: string } }
 
 export type NetworkPolicy = { allow: Record<string, NetworkPolicyRule[]> }
 
@@ -166,6 +166,25 @@ export function parseEgressPreset(value: string | undefined): EgressPreset {
   return preset === 'open' ? 'open' : 'limited'
 }
 
+/** Environments where running without the egress proxy is expected (dev loops, the unit harness). */
+export function isLocalEnvironment(environment: string | undefined): boolean {
+  return environment === 'local' || environment === 'test'
+}
+
+/**
+ * A deployed env with no EGRESS_PROXY_URL: nothing can swap credentials at egress, so open egress falls back
+ * to limited (E3-PROD-GUARD) and swappable keys are withheld from the VM (EGRESS-SWAP-FAIL-CLOSED).
+ */
+export function egressProxyMissing(config: { egressProxyUrl?: string; environment?: string }): boolean {
+  return !config.egressProxyUrl && !isLocalEnvironment(config.environment)
+}
+
+/** What an agent sees when its model key was withheld (design-squad wording). */
+export const KEYS_WITHHELD_MESSAGE =
+  "Orca Cloud didn't send your model API key or sign-in because of a problem on Orca's side, not with your key. Contact Orca support."
+/** Provider-style error JSON: Anthropic clients read error.message, OpenAI-compatible ones too. */
+export const KEYS_WITHHELD_BODY = JSON.stringify({ type: 'error', error: { type: 'permission_error', message: KEYS_WITHHELD_MESSAGE } })
+
 export type CredentialRoute = {
   host: string
   /** Header the VM sends with a placeholder value, matched exactly (one claim rule per value). */
@@ -176,6 +195,8 @@ export type CredentialRoute = {
 } & (
   | { via: 'transform'; value: string }
   | { via: 'forward'; forwardURL: string }
+  /** Answered by Vercel's firewall itself; nothing reaches the host (EGRESS-SWAP-FAIL-CLOSED). */
+  | { via: 'respond'; statusCode: number; body: string }
 )
 
 export type EgressPolicyInput = {
@@ -206,9 +227,13 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
     const header = route.header.toLowerCase()
     const claims = route.placeholders.map((placeholder): NetworkPolicyRule => {
       const match = { headers: [{ key: { exact: header }, value: { exact: placeholder } }] }
-      return route.via === 'transform'
-        ? { match, transform: [{ headers: { [header]: route.value } }] }
-        : { match, forwardURL: route.forwardURL }
+      if (route.via === 'transform') {
+        return { match, transform: [{ headers: { [header]: route.value } }] }
+      }
+      if (route.via === 'respond') {
+        return { match, response: { statusCode: route.statusCode, body: route.body, contentType: 'application/json' } }
+      }
+      return { match, forwardURL: route.forwardURL }
     })
     allow[host] = [...(allow[host] ?? []), ...claims]
     // One route that wants the deny is enough: a shared host fails closed.

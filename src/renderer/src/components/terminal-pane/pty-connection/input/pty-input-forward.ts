@@ -26,6 +26,7 @@ import {
 } from '../../input/wake-input-buffer'
 import { findColdRestoreResumeSource } from '../startup/cold-restore-resume-startup'
 import { registerWakePane } from '../../input/wake-pane-attach'
+import { isAttachedForWakeInput } from './wake-input-attached'
 import { noteCloudTerminalTyping } from './cloud-terminal-typing'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
@@ -167,28 +168,16 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
   // The layout leaf outlives a remount, so held typing finds this pane's newest session.
   const wakeInputKey = session.pane.leafId ?? String(session.pane.id)
-  const wakeInputReady = (): boolean => {
-    if (session.disposed) {
-      return false
-    }
-    const transport = session.deps.paneTransportsRef.current.get(session.pane.id)
-    const phase = transport?.getRecoveryState?.()?.phase
-    return Boolean(transport?.isConnected() && (phase ?? 'connected') === 'connected')
-  }
+  // Held typing goes in only once the pane is attached to the woken terminal (isAttachedForWakeInput).
+  const wakeInputReady = (): boolean =>
+    !session.disposed &&
+    isAttachedForWakeInput(session.deps.paneTransportsRef.current.get(session.pane.id))
   rebindWakeInputTarget(session.deps.worktreeId, wakeInputKey, forwardUserInput, wakeInputReady)
   // The waking pill stays until the pane in front is attached again (it can take keys then).
   const unregisterWakePane = registerWakePane(session.deps.worktreeId, wakeInputKey, {
     // Input reaches the terminal: attached to one, and nothing typed into it still unsent (a pane
     // that looks connected but drops input stays "Connecting…" and then fails visibly).
-    isReady: () => {
-      const transport = session.deps.paneTransportsRef.current.get(session.pane.id)
-      return (
-        wakeInputReady() &&
-        Boolean(transport?.getPtyId()) &&
-        transport?.isConnectPending?.() !== true &&
-        transport?.hasUndeliveredInput?.() !== true
-      )
-    },
+    isReady: wakeInputReady,
     retry: () => {
       const transport = session.deps.paneTransportsRef.current.get(session.pane.id)
       return Boolean(transport?.retryRecovery?.() || transport?.reopenAfterHostReturned?.())

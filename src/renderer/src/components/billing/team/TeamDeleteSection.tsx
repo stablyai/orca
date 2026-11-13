@@ -2,13 +2,21 @@ import { useId } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import type { OrcaOrgDeleteBlocker } from '../../../../../shared/orca-org-delete'
+import type {
+  OrcaOrgDeleteBlocker,
+  OrcaOrgDeleteCancelsSubscription
+} from '../../../../../shared/orca-org-delete'
 import { teamDeleteBlockerLines } from './team-delete-copy'
 
 /** The pre-check: `checking` until auth answers; a failed check shows no blockers (auth re-checks). */
 export type TeamDeleteCheck =
   | { state: 'checking' }
-  | { state: 'ready'; blockers: OrcaOrgDeleteBlocker[] }
+  | {
+      state: 'ready'
+      blockers: OrcaOrgDeleteBlocker[]
+      /** EP-10: the plan is set to end; deleting ends it now (no refund for the rest). */
+      cancelsSubscription?: OrcaOrgDeleteCancelsSubscription
+    }
 
 /** Each blocker's way out, shown as a link after its line. */
 export function TeamDeleteBlockers({

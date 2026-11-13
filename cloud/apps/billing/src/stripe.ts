@@ -225,6 +225,8 @@ export type StripeSubscription = {
   customer: string | { id: string }
   status: string
   cancel_at_period_end: boolean
+  /** Set by the portal's cancel (newer API versions) instead of cancel_at_period_end; epoch seconds. */
+  cancel_at?: number | null
   livemode: boolean
   metadata?: Record<string, string>
   current_period_start?: number

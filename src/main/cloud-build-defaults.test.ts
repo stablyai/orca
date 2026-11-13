@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cloudDevSigningAllowed, withCloudBuildDefaults } from './cloud-build-defaults'
+import {
+  buildServiceUrlDefault,
+  cloudDevSigningAllowed,
+  withCloudBuildDefaults
+} from './cloud-build-defaults'
 
 describe('withCloudBuildDefaults', () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -22,6 +26,20 @@ describe('withCloudBuildDefaults', () => {
       ORCA_BILLING_API_URL: 'https://billing.dev.example',
       ORCA_CLOUD_SANDBOX_URL: 'https://override.example'
     })
+  })
+
+  it('returns a build-time service URL default, else the fallback', () => {
+    expect(buildServiceUrlDefault('pushGatewayUrl', 'https://fallback.example')).toBe(
+      'https://fallback.example'
+    )
+    vi.stubGlobal('ORCA_CLOUD_BUILD_DEFAULTS', { pushGatewayUrl: '  ' })
+    expect(buildServiceUrlDefault('pushGatewayUrl', 'https://fallback.example')).toBe(
+      'https://fallback.example'
+    )
+    vi.stubGlobal('ORCA_CLOUD_BUILD_DEFAULTS', { pushGatewayUrl: 'https://push.example' })
+    expect(buildServiceUrlDefault('pushGatewayUrl', 'https://fallback.example')).toBe(
+      'https://push.example'
+    )
   })
 
   it('allows dev signing in packaged builds only when the build opts in', () => {

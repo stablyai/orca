@@ -86,7 +86,9 @@ export async function deleteOrcaProfileOrg(
     case 'ok':
       return result.value.kind === 'deleted'
         ? { status: 'deleted' }
-        : { status: 'blocked', blockers: result.value.blockers }
+        : result.value.kind === 'failed-after-cancel'
+          ? { status: 'failed-after-cancel', cause: result.value.cause }
+          : { status: 'blocked', blockers: result.value.blockers }
     case 'reconnect-required':
       return { status: 'reconnect-required' }
     case 'request-error':

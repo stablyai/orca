@@ -27,20 +27,50 @@ const ready = {
 const PAIRED_ROW = 'push-test::/workspace/orca-sandbox-push-test'
 
 describe('which rows are paired cloud workspaces', () => {
-  it('the main checkout on a server the catalog marks paired, and nothing else', () => {
+  const environments = [{ id: 'env-gh', orcaCloudPaired: true as const }, { id: 'env-box' }]
+  const local = { id: 'local::/repo', hostId: 'local', isMainWorktree: true }
+  const box = { id: 'box::/srv/app', hostId: 'runtime:env-box', isMainWorktree: true }
+
+  it("a GitHub-only workspace: its server's main checkout, and nothing else", () => {
     expect(
       pairedCloudWorkspacesFromState({
-        runtimeEnvironments: [{ id: 'env-gh', orcaCloudPaired: true }, { id: 'env-box' }],
+        runtimeEnvironments: environments,
         worktreesByRepo: {
-          gh: [
-            { id: PAIRED_ROW, hostId: 'runtime:env-gh', isMainWorktree: true },
-            { id: 'gh::/workspace/feature', hostId: 'runtime:env-gh', isMainWorktree: false }
-          ],
-          box: [{ id: 'box::/srv/app', hostId: 'runtime:env-box', isMainWorktree: true }],
-          local: [{ id: 'local::/repo', hostId: 'local', isMainWorktree: true }]
+          gh: [{ id: PAIRED_ROW, hostId: 'runtime:env-gh', isMainWorktree: true, branch: 'main' }],
+          box: [box],
+          local: [local]
         }
       })
     ).toEqual({ [PAIRED_ROW]: 'env-gh' })
+  })
+
+  it("a teammate's shared workspace: its linked worktree, never the hidden base checkout (PAIRED-REGISTRY-ROW)", () => {
+    const linked = 'gh::/home/vercel/ws/Hello-World/endpass-n44'
+    expect(
+      pairedCloudWorkspacesFromState({
+        runtimeEnvironments: environments,
+        worktreesByRepo: {
+          gh: [
+            { id: PAIRED_ROW, hostId: 'runtime:env-gh', isMainWorktree: true, branch: 'master' },
+            { id: linked, hostId: 'runtime:env-gh', isMainWorktree: false, branch: 'endpass-n44' }
+          ],
+          box: [box],
+          local: [local]
+        }
+      })
+    ).toEqual({ [linked]: 'env-gh' })
+  })
+
+  it("leaves this computer's own rows and other servers alone", () => {
+    expect(
+      pairedCloudWorkspacesFromState({
+        runtimeEnvironments: environments,
+        worktreesByRepo: {
+          local: [local, { id: 'local::/wt', hostId: 'local', isMainWorktree: false }],
+          box: [box, { id: 'box::/srv/wt', hostId: 'runtime:env-box', isMainWorktree: false }]
+        }
+      })
+    ).toEqual({})
   })
 })
 

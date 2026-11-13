@@ -253,6 +253,12 @@ describe('billing client', () => {
       })
     )
     expect(unsafe.offers).toBeNull()
+    // A portal cancel's end date (cancel_at) comes through; older services omit it.
+    expect(
+      (await fetchEntitlement(endpoints, 'bt', response({ cancelAtPeriodEnd: true, cancelAt: 1797167516000 })))
+        .cancelAt
+    ).toBe(1797167516000)
+    expect((await fetchEntitlement(endpoints, 'bt', response({}))).cancelAt).toBeNull()
     // A plan this desktop doesn't know (a newer service) is still a plan, never "no plan".
     expect(
       (await fetchEntitlement(endpoints, 'bt', response({ plan: 'pro', offers: undefined }))).plan
