@@ -5,7 +5,7 @@ import { CloudRequestError } from './cloud-control-plane-request'
 import type { CloudReadSnapshotRefusedError } from './cloud-read-snapshot'
 import { CloudAttachError, type CloudAttachPhase } from './cloud-workspace-attach'
 import { entitlementDeniedMessage } from './cloud-entitlement-copy'
-import { formatElapsed } from './cloud-workspace-display'
+import { cloudRepoLine, formatElapsed } from './cloud-workspace-display'
 
 // What the cloud workspace screen says about each state and failure.
 
@@ -173,8 +173,11 @@ export function cloudPromptErrorMessage(code: string | undefined, t: Translate):
 export function createErrorMessage(
   error: unknown,
   t: Translate,
-  role: CloudRole | null = null
+  role: CloudRole | null = null,
+  /** The repository URL asked for, so the message names what Orca couldn't reach. */
+  repoUrl: string | null = null
 ): string {
+  const repo = repoUrl ? cloudRepoLine({ repo: { url: repoUrl, branch: null } }) : null
   if (error instanceof CloudRequestError) {
     if (error.status === 401) {
       return t(
@@ -185,11 +188,32 @@ export function createErrorMessage(
     if (error.code === 'entitlement_denied') {
       return entitlementDeniedMessage(error, role, 'create', t)
     }
+    // Not public, and no GitHub connection covers it (private, or a mistyped name). A phone can't
+    // connect GitHub, so the fix points at the computer, like the desktop's "Give Orca access".
+    if (error.reason === 'github_not_connected') {
+      return repo
+        ? t(
+            'cloud.error.repoAccess',
+            'Orca can’t access {{repo}}. Check the name. If it’s private, give Orca access to it from Orca on your computer. Nothing was created, and you weren’t charged.',
+            { repo }
+          )
+        : t(
+            'cloud.error.repoAccessUnnamed',
+            'Orca can’t access this repository. Check the name. If it’s private, give Orca access to it from Orca on your computer. Nothing was created, and you weren’t charged.'
+          )
+    }
+    // The clone runs in a sandbox that already booted (and was metered): it's deleted, not "never created".
     if (error.code === 'provider_unavailable' && error.reason === 'orcad_start_failed') {
-      return t(
-        'cloud.error.clone',
-        'Couldn’t clone the repository. Check the name and that the Orca Cloud GitHub app can see it. Nothing was created, and you weren’t charged.'
-      )
+      return repo
+        ? t(
+            'cloud.error.cloneNamed',
+            'Couldn’t clone {{repo}}. Check the name, and that Orca has access to it (Give Orca access, in Orca on your computer). The sandbox was deleted.',
+            { repo }
+          )
+        : t(
+            'cloud.error.cloneDeleted',
+            'Couldn’t clone the repository. Check the name, and that Orca has access to it (Give Orca access, in Orca on your computer). The sandbox was deleted.'
+          )
     }
     if (error.code === 'timeout' || error.code === 'network_error' || error.status >= 500) {
       return t(

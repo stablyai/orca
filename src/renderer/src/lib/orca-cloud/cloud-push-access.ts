@@ -55,6 +55,14 @@ export async function fetchCloudPushAccess(
   if (access !== 'missing' && access !== 'public') {
     return cloudPushAccess(access, null)
   }
+  // The control plane knows from the person's own GitHub (REPO-CAN-INSTALL, #645). Only when it
+  // can't tell (null: no connected GitHub, GitHub refused) or is older (absent) is gh asked.
+  if (answer?.canInstall === true) {
+    return 'install'
+  }
+  if (answer?.canInstall === false) {
+    return 'cantInstall'
+  }
   const rights = await cloudWorkspaceApi()
     ?.gitHubInstallRights({ repoUrl })
     .then((result) => (result.ok ? result.value : null))

@@ -23,17 +23,19 @@ export function memberMfaLabel(
 ): string | null {
   switch (member.mfa) {
     case 'on':
-      return t('auto.components.billing.team.mfaOn', 'MFA on')
+      return t('auto.components.billing.team.mfaOn', '2FA on')
     case 'off':
-      return t('auto.components.billing.team.mfaOff', 'MFA off')
+      return t('auto.components.billing.team.mfaOff', '2FA off')
     case 'pending':
       return member.mfaDeadline === undefined
-        ? t('auto.components.billing.team.mfaPending', 'MFA pending')
-        : t('auto.components.billing.team.mfaPendingBy', 'MFA due {{value0}}', {
+        ? t('auto.components.billing.team.mfaPending', '2FA pending')
+        : t('auto.components.billing.team.mfaPendingBy', '2FA due {{value0}}', {
             value0: new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(
               member.mfaDeadline
             )
           })
+    case 'sso':
+      return t('auto.components.billing.team.mfaSso', '2FA via SSO')
     case undefined:
       return null
   }

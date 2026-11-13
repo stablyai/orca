@@ -4,7 +4,7 @@ import { cn } from '@/lib/class-names'
 import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
-import { mfaCountdownLabel, mfaDeadlineDate, mfaSoonTitle, mfaUrgency } from './team-mfa-copy'
+import { mfaDeadlineDate, mfaSoonTitle, mfaUrgency } from './team-mfa-copy'
 
 export type TeamMfaBannerProps = {
   teamName: string
@@ -48,8 +48,8 @@ export function TeamMfaBanner({
           )
         : t(
             'auto.components.teamMfa.bannerTitle',
-            '{{value0}} requires two-factor authentication. {{value1}}.',
-            { value0: teamName, value1: mfaCountdownLabel(enforceAt, now, t) }
+            '{{value0}} requires two-factor authentication from {{value1}}',
+            { value0: teamName, value1: mfaDeadlineDate(enforceAt, locale) }
           )
   const detail = blocked
     ? t(
@@ -63,7 +63,7 @@ export function TeamMfaBanner({
       )
   const action = (
     <OpenExternalSplitButton variant="outline" size="xs" link={setupUrl} onClick={onSetUp}>
-      {t('auto.components.teamMfa.setUp', 'Set up MFA')}
+      {t('auto.components.teamMfa.setUp', 'Set up two-factor')}
     </OpenExternalSplitButton>
   )
   if (variant === 'sidebar') {

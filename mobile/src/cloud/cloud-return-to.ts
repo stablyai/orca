@@ -6,8 +6,8 @@ const TTL_MS = 10 * 60_000
 let returnTo: { path: string; at: number } | null = null
 
 export function setCloudReturnTo(path: string, now: number = Date.now()): void {
-  // Only an in-app cloud route, never an arbitrary destination.
-  returnTo = /^\/cloud\/[A-Za-z0-9_-]+$/.test(path) ? { path, at: now } : null
+  // Only an in-app cloud route (a workspace id, or a team slug and W-number), never anywhere else.
+  returnTo = /^\/cloud\/[A-Za-z0-9_-]+(?:\/W-[0-9]+)?$/.test(path) ? { path, at: now } : null
 }
 
 export function takeCloudReturnTo(now: number = Date.now()): string | null {

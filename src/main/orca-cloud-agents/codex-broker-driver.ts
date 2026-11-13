@@ -44,8 +44,13 @@ const POLL_MS = 3_000
 const MAX_WAIT_MS = 20 * 60_000
 // A transient poll failure is retried; this many in a row ends the setup.
 const MAX_POLL_FAILURES = 5
-function isBrokerFailure(error: string): error is 'not_a_chatgpt_login' | 'store_failed' {
-  return error === 'not_a_chatgpt_login' || error === 'store_failed'
+function isBrokerFailure(
+  error: string
+): error is 'not_a_chatgpt_login' | 'store_failed' | 'device_auth_disabled' {
+  // RS-3: device-code sign-in turned off on the ChatGPT account gets its own words, not "couldn't save".
+  return (
+    error === 'not_a_chatgpt_login' || error === 'store_failed' || error === 'device_auth_disabled'
+  )
 }
 
 function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {

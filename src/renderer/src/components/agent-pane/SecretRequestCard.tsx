@@ -250,64 +250,64 @@ export function SecretRequestCard({
                   density="compact"
                 />
               ) : (
-              <div data-secret-request-field="" className="flex flex-col gap-1.5">
-                <Label htmlFor={`${id}-value`} className="sr-only">
-                  {t('secretRequest.valueLabel', 'Value for {{name}}', { name: model.name })}
-                </Label>
-                <div className="flex items-start gap-2">
-                  <div
-                    className="min-w-0 flex-1"
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && canSave) {
-                        event.preventDefault()
-                        actions.onAdd()
-                      }
-                    }}
-                  >
-                    <SecretValueInput
-                      id={`${id}-value`}
-                      value={model.value}
-                      onChange={actions.onValueChange}
-                      placeholder={t('secretRequest.valuePlaceholder', 'Value')}
-                      invalid={model.fieldError !== null}
+                <div data-secret-request-field="" className="flex flex-col gap-1.5">
+                  <Label htmlFor={`${id}-value`} className="sr-only">
+                    {t('secretRequest.valueLabel', 'Value for {{name}}', { name: model.name })}
+                  </Label>
+                  <div className="flex items-start gap-2">
+                    <div
+                      className="min-w-0 flex-1"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && canSave) {
+                          event.preventDefault()
+                          actions.onAdd()
+                        }
+                      }}
+                    >
+                      <SecretValueInput
+                        id={`${id}-value`}
+                        value={model.value}
+                        onChange={actions.onValueChange}
+                        placeholder={t('secretRequest.valuePlaceholder', 'Value')}
+                        invalid={model.fieldError !== null}
+                        disabled={saving}
+                        describedBy={model.fieldError ? `${errorId} ${helpId}` : helpId}
+                      />
+                    </div>
+                    <SecretRequestScopeControl
+                      name={model.name}
+                      scopes={model.scopes}
+                      scope={model.scope}
                       disabled={saving}
-                      describedBy={model.fieldError ? `${errorId} ${helpId}` : helpId}
+                      onChange={actions.onScopeChange}
                     />
                   </div>
-                  <SecretRequestScopeControl
-                    name={model.name}
-                    scopes={model.scopes}
-                    scope={model.scope}
-                    disabled={saving}
-                    onChange={actions.onScopeChange}
-                  />
+                  {model.fieldError ? (
+                    <p id={errorId} role="alert" className="text-xs text-destructive">
+                      {model.fieldError}
+                    </p>
+                  ) : null}
+                  <p id={helpId} className="text-xs leading-5 text-muted-foreground">
+                    {t(
+                      'secretRequest.helpBeforeSave',
+                      'Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.',
+                      { name: model.name }
+                    )}
+                    {model.sharedWorkspace
+                      ? ` ${t(
+                          'secretRequest.sharedRepoOnly',
+                          'This workspace is shared, so it only gets repository and shared values.'
+                        )}`
+                      : null}
+                  </p>
+                  {model.suggestedRepo && model.scopes.includes('repo') ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t('secretRequest.repoHint', '{{agent}} suggested Repository', {
+                        agent: agentName
+                      })}
+                    </p>
+                  ) : null}
                 </div>
-                {model.fieldError ? (
-                  <p id={errorId} role="alert" className="text-xs text-destructive">
-                    {model.fieldError}
-                  </p>
-                ) : null}
-                <p id={helpId} className="text-xs leading-5 text-muted-foreground">
-                  {t(
-                    'secretRequest.helpBeforeSave',
-                    'Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.',
-                    { name: model.name }
-                  )}
-                  {model.sharedWorkspace
-                    ? ` ${t(
-                        'secretRequest.sharedRepoOnly',
-                        'This workspace is shared, so it only gets repository and shared values.'
-                      )}`
-                    : null}
-                </p>
-                {model.suggestedRepo && model.scopes.includes('repo') ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t('secretRequest.repoHint', '{{agent}} suggested Repository', {
-                      agent: agentName
-                    })}
-                  </p>
-                ) : null}
-              </div>
               )}
               {model.phase === 'failed' ? (
                 <InlineError

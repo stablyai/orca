@@ -50,3 +50,24 @@ export function cloudHostGate(args: {
   }
   return args.status === 'sleeping' ? 'asleep' : 'pass'
 }
+
+export type CloudNumberLinkState = 'signin' | 'found' | 'missing'
+
+/**
+ * A W-number link (orca://cloud/<org>/W-123). Only the control plane can say which workspace it
+ * names, so a phone not connected to Orca Cloud asks to sign in, like a share link does, rather
+ * than calling the workspace private or deleted. A malformed link is missing either way.
+ */
+export function cloudNumberLinkState(args: {
+  validLink: boolean
+  enrolled: boolean
+  sandboxId: string | null
+}): CloudNumberLinkState {
+  if (!args.validLink) {
+    return 'missing'
+  }
+  if (!args.enrolled) {
+    return 'signin'
+  }
+  return args.sandboxId ? 'found' : 'missing'
+}

@@ -2,7 +2,10 @@
 // once" runs the same one-time setup as Settings › Accounts › Orca Cloud (S0) right in the pane,
 // and once it's saved the strip offers "Start {{agent}}". Pure: the strip renders what this returns.
 import type { Translate } from '@/i18n/use-translate'
-import { setupFailureCopy } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
+import {
+  setupFailureCopy,
+  setupFailureTone
+} from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
 import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
@@ -206,7 +209,7 @@ export function cloudAgentSetupStripModel(args: {
       const copy = setupFailureCopy(args.agent, setup.error, t)
       return {
         ...need,
-        status: 'error',
+        status: setupFailureTone(setup.error),
         title: copy.title,
         detail: copy.detail ?? need.detail,
         // An expired sign-in: "Open again" starts a fresh one with a new link (main restarts it).

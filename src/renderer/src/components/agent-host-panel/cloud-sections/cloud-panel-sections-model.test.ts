@@ -113,8 +113,10 @@ describe('shared workspaces (D13)', () => {
     expect(owner.withoutPersonal).toBe(true)
     expect(owner.missing).toEqual(['NPM_TOKEN'])
     expect(
-      cloudPanelSectionsData({ ...base, sharing: { shared: false, ownerName: null, isOwner: true } })
-        .missing
+      cloudPanelSectionsData({
+        ...base,
+        sharing: { shared: false, ownerName: null, isOwner: true }
+      }).missing
     ).toEqual([])
   })
 

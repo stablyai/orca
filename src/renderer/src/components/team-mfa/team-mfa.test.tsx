@@ -6,6 +6,7 @@ import type { OrcaTeamMfaPolicy } from '../../../../shared/orca-team-mfa-policy'
 import { RequireMfaRow, type RequireMfaRowProps } from './RequireMfaRow'
 import { TeamMfaBanner } from './TeamMfaBanner'
 import { TeamMfaBlockedScreen } from './TeamMfaBlockedScreen'
+import { mfaChangeError } from './EnterpriseMfaPolicy'
 import {
   claimMfaToast,
   mfaCountdownLabel,
@@ -55,7 +56,7 @@ describe('what the member sees', () => {
     )
   })
 
-  it('is nothing with MFA on, an unknown state, or no policy', () => {
+  it('is nothing with 2FA on, an unknown state, or no policy', () => {
     expect(teamMfaSurface(policy({ self: 'on' }))).toBe('none')
     expect(teamMfaSurface(policy({ self: 'unknown' }))).toBe('none')
     expect(teamMfaSurface(policy({ policy: null, self: 'off' }))).toBe('none')
@@ -76,9 +77,11 @@ describe('banner', () => {
         onSetUp={onSetUp}
       />
     )
-    expect(container.textContent).toContain('Acme requires two-factor authentication. 6 days left.')
+    expect(container.textContent).toContain(
+      'Acme requires two-factor authentication from November 24, 2026'
+    )
     expect(container.textContent).toContain('November 24, 2026')
-    fireEvent.click(getByRole('button', { name: 'Set up MFA' }))
+    fireEvent.click(getByRole('button', { name: 'Set up two-factor' }))
     expect(onSetUp).toHaveBeenCalledTimes(1)
   })
 })
@@ -103,7 +106,7 @@ describe('blocked screen', () => {
     const view = screen()
     expect(view.container.textContent).toContain('Set up two-factor authentication to use Acme')
     expect(view.container.textContent).toContain('Your workspaces and files are safe')
-    fireEvent.click(view.getByRole('button', { name: 'Set up MFA' }))
+    fireEvent.click(view.getByRole('button', { name: 'Set up two-factor' }))
     fireEvent.click(view.getByRole('button', { name: 'I’ve set it up' }))
     fireEvent.click(view.getByRole('button', { name: 'Use my personal account for now' }))
     expect(view.onSetUp).toHaveBeenCalledTimes(1)
@@ -122,8 +125,8 @@ describe('blocked screen', () => {
   })
 })
 
-describe('Require MFA row', () => {
-  const manage = { available: true, pendingMembers: 2 }
+describe('Require two-factor row', () => {
+  const manage = { available: true, pendingMembers: 2, ssoHandled: false }
   const row = (props: Partial<RequireMfaRowProps> = {}) => {
     const handlers = {
       onRequire: vi.fn(),
@@ -147,18 +150,18 @@ describe('Require MFA row', () => {
 
   it('requires MFA with the chosen grace period, 14 days by default', () => {
     const view = row()
-    fireEvent.click(view.getByRole('button', { name: 'Require MFA' }))
+    fireEvent.click(view.getByRole('button', { name: 'Require two-factor' }))
     expect(view.onRequire).toHaveBeenCalledWith(14)
   })
 
   it('holds the change back from an admin without MFA, and points them to setup', () => {
     const view = row({ policy: policy({ policy: null, self: 'off', manage }) })
-    fireEvent.click(view.getByRole('button', { name: 'Require MFA' }))
+    fireEvent.click(view.getByRole('button', { name: 'Require two-factor' }))
     expect(view.onRequire).not.toHaveBeenCalled()
     expect(view.container.textContent).toContain(
       'Set up two-factor authentication on your own account first'
     )
-    fireEvent.click(view.getByRole('button', { name: 'Set up MFA' }))
+    fireEvent.click(view.getByRole('button', { name: 'Set up two-factor' }))
     expect(view.onSetUpOwn).toHaveBeenCalledTimes(1)
   })
 
@@ -243,7 +246,7 @@ describe('banner after the deadline', () => {
     expect(container.textContent).toContain('until you set it up')
     expect(container.textContent).toContain('Your personal account isn’t affected')
     expect(container.textContent).not.toContain('days left')
-    expect(getByRole('button', { name: 'Set up MFA' })).toBeTruthy()
+    expect(getByRole('button', { name: 'Set up two-factor' })).toBeTruthy()
   })
 })
 
@@ -259,9 +262,15 @@ describe('escalation', () => {
   })
 
   it('names the days in the title once it is close', () => {
-    expect(mfaSoonTitle('Acme', NOW + 2 * DAY, NOW, translate)).toBe('Acme requires MFA in 2 days')
-    expect(mfaSoonTitle('Acme', NOW + DAY, NOW, translate)).toBe('Acme requires MFA in 1 day')
-    expect(mfaSoonTitle('Acme', NOW - 1, NOW, translate)).toBe('Acme requires MFA now')
+    expect(mfaSoonTitle('Acme', NOW + 2 * DAY, NOW, translate)).toBe(
+      'Acme requires two-factor authentication in 2 days'
+    )
+    expect(mfaSoonTitle('Acme', NOW + DAY, NOW, translate)).toBe(
+      'Acme requires two-factor authentication in 1 day'
+    )
+    expect(mfaSoonTitle('Acme', NOW - 1, NOW, translate)).toBe(
+      'Acme requires two-factor authentication now'
+    )
   })
 
   it('marks the sidebar card with its urgency', () => {
@@ -313,5 +322,39 @@ describe('one-time toast', () => {
       setItem: () => {}
     }
     expect(claimMfaToast(broken, 'org_1', 100)).toBe(true)
+  })
+})
+
+describe('single sign-on', () => {
+  const manage = { available: true, pendingMembers: 0, ssoHandled: true }
+
+  it('shows nothing to a member whose two-factor is handled by their identity provider', () => {
+    expect(teamMfaSurface(policy({ self: 'delegated' }))).toBe('none')
+  })
+
+  it('lets an admin who signs in through SSO change the policy without their own factor', () => {
+    const onRequire = vi.fn()
+    const view = render(
+      <RequireMfaRow
+        policy={policy({ policy: null, self: 'delegated', manage })}
+        pending={null}
+        now={NOW}
+        busy={false}
+        notice={null}
+        onRequire={onRequire}
+        onTurnOff={() => {}}
+        onRemind={() => {}}
+        onSetUpOwn={() => {}}
+      />
+    )
+    expect(view.container.textContent).not.toContain('on your own account first')
+    fireEvent.click(view.getByRole('button', { name: 'Require two-factor' }))
+    expect(onRequire).toHaveBeenCalledWith(14)
+  })
+
+  it('explains a refused immediate deadline for a single sign-on team', () => {
+    expect(mfaChangeError('sso-needs-notice', translate)).toContain('at least 7 days out')
+    expect(mfaChangeError('actor-needs-mfa', translate)).toContain('your own account first')
+    expect(mfaChangeError('other', translate)).toBe('Couldn’t save the change. Try again.')
   })
 })

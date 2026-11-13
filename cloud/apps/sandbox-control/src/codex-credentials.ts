@@ -174,6 +174,18 @@ export const codexAccount: AccountProvider = {
     log('codex_token_unauthorized', { userId })
     waitUntil(refreshCodexCredential({ db, keyring, now: () => now }, userId))
   },
+  // RS-4: a request still carrying this sandbox's placeholder once the account no longer applies gets a
+  // message saying what to do, not a bare proxy 403. Still a 403, never a 401: on a 401 from chatgpt.com
+  // Codex runs its own token refresh (against auth.openai.com, with a placeholder refresh token) and
+  // retries, so a 401 would only cost refresh attempts. On any other status Codex prints
+  // `unexpected status <code>: <body>`, so the body is the message, in ChatGPT's own error shape.
+  signedOut: {
+    status: 403,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Agent accounts.'
+    })
+  },
   credential: async (db, keyring, userId, now) => {
     const value = await readUsableAgentCredential(db, keyring, userId, 'codex', now)
     const tokens = value ? parseStoredCodex(value) : null
