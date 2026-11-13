@@ -27,6 +27,7 @@ import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-adm
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/composer/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/composer/NewWorkspaceComposerAgentSection'
+import { NewWorkspaceComposerAgentDraftSection } from './new-workspace/composer/NewWorkspaceComposerAgentDraftSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/composer/NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './new-workspace/composer/NewWorkspaceComposerNameSection'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/composer/NewWorkspaceComposerProjectSection'
@@ -341,6 +342,7 @@ export default function NewWorkspaceComposerCard(
           visibleQuickAgents={visibleQuickAgents}
           defaultTuiAgent={defaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}
+          agentDraftSection={<NewWorkspaceComposerAgentDraftSection {...props} />}
         />
         <NewWorkspaceComposerAdvancedSection
           {...props}

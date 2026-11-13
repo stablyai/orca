@@ -12,6 +12,7 @@ import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-ena
 import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
 import { handlePluginPanelStateRequest } from '../plugins/panels/panel-lifetime/plugin-panel-state'
 import type { PluginService } from '../plugins/plugin-service'
+import { invokePluginTaskSource } from '../plugins/plugin-task-source-invocation'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
@@ -197,6 +198,11 @@ export function registerPluginHandlers(
     const parsed = invokeCommandArgsSchema.parse(args)
     const startBy = parsed.timeoutMs === undefined ? undefined : askedAt + parsed.timeoutMs
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args, startBy)
+  })
+
+  ipcMain.handle('plugins:invokeTaskSource', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    return invokePluginTaskSource(pluginService, args)
   })
 
   ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>

@@ -11,6 +11,7 @@ import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../..
 import type { WorkspaceStatus } from '../../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
+import type { PluginTaskLaunch } from './use-plugin-task-launch'
 
 export type ComposerModalData = {
   recovery?: {
@@ -38,4 +39,4 @@ export type ComposerModalData = {
   telemetrySource?: WorkspaceCreateTelemetrySource
   contextualTourSource?: string
   setupGuideTourRequestId?: string
-}
+} & PluginTaskLaunch

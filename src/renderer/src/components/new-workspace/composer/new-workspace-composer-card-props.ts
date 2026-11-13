@@ -5,6 +5,7 @@ import type {
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
+import type { PluginTaskSessionOptions } from '@/lib/plugin-task-session-options'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
 import type { SetupConfig } from '../../../../../shared/orca-hook-setup-config'
@@ -53,6 +54,11 @@ export type NewWorkspaceComposerCardProps = {
   ) => void
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
+  /** Present only when the opener prefilled an agent prompt. */
+  agentDraft?: string | null
+  onAgentDraftChange?: (value: string) => void
+  /** Session options the opener pinned; described under the agent prompt. */
+  agentSessionOptions?: PluginTaskSessionOptions
   eligibleRepos: readonly RepoOption[]
   selectedRepo?: RepoOption | null
   repoId: string

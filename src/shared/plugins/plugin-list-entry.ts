@@ -111,6 +111,8 @@ export type PluginHostListEntry = {
    *  hosts. */
   hooks?: string[]
   hasWorker: boolean
+  /** Absent on hosts that predate plugin task sources. */
+  taskSources?: { id: string; title: string; icon?: string }[]
   vmRecipes?: {
     id: string
     name: string

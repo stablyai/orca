@@ -20,6 +20,7 @@ import {
   removeWorktreeMetadataForHost
 } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { normalizeLinkedPluginTask } from '../../../shared/plugins/tasks/plugin-task-link'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/worktree-metadata/local-only-worktree-meta-rehoming'
@@ -110,6 +111,14 @@ function normalizeLinkedMetadata(meta: WorktreeMeta): boolean {
   }
   if (!areTaskSourceContextsEqual(meta.linkedTaskSourceContext, linkedTaskSourceContext)) {
     meta.linkedTaskSourceContext = linkedTaskSourceContext
+    changed = true
+  }
+  if (
+    meta.linkedPluginTask !== undefined &&
+    meta.linkedPluginTask !== null &&
+    !normalizeLinkedPluginTask(meta.linkedPluginTask)
+  ) {
+    meta.linkedPluginTask = null
     changed = true
   }
   return changed

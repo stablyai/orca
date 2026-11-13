@@ -34,9 +34,13 @@ import {
 } from '../../../../shared/plugins/workers/plugin-worker-hooks'
 import {
   createPluginWorkerApiTables,
-  createPluginWorkerOrcaApi,
-  type PluginWorkerOrcaApi
+  createPluginWorkerOrcaApi
 } from '../../../../shared/plugins/workers/plugin-worker-orca-api'
+import {
+  answerWorkerTaskSourceRequest,
+  createWorkerTaskSources,
+  withWorkerTaskSources
+} from './plugin-worker-task-sources'
 
 export type PluginHostCallError = Error & {
   code: PluginErrorCode
@@ -88,6 +92,7 @@ export function createPluginWorkerRuntime(
   const tables = createPluginWorkerApiTables()
   const commandHandlers = tables.commands
   const eventHandlers = tables.events
+  const taskSources = createWorkerTaskSources()
   const pendingHostCalls = new Map<number, (response: PluginResponse) => void>()
   const runningCommands = new Map<number, AbortController>()
   let nextHostCallId = 0
@@ -143,7 +148,7 @@ export function createPluginWorkerRuntime(
       throw new Error(`plugin entry ${input.mainEntry} has a non-function deactivate export`)
     }
     deactivate = deactivateExport === undefined ? null : () => deactivateExport()
-    const orca: PluginWorkerOrcaApi = createPluginWorkerOrcaApi({
+    const api = createPluginWorkerOrcaApi({
       tables,
       hostCall: (method, params, callOptions) => hostCall(method, params, callOptions?.signal),
       postToPanels: (post) => send(pluginEvent(WORKER_EVENTS.panelPost, post)),
@@ -151,8 +156,8 @@ export function createPluginWorkerRuntime(
       grantedCapabilities: input.grantedCapabilities,
       allowProposed: input.allowProposed === true
     })
-    await activate(orca)
-    send(pluginEvent(WORKER_EVENTS.ready, { commands: [...commandHandlers.keys()] }))
+    await activate(withWorkerTaskSources(api, taskSources))
+    send(pluginEvent(WORKER_EVENTS.ready, taskSources.ready([...commandHandlers.keys()])))
   }
 
   async function handleRequest(request: PluginRequest): Promise<void> {
@@ -179,6 +184,9 @@ export function createPluginWorkerRuntime(
       } finally {
         runningCommands.delete(request.id)
       }
+      return
+    }
+    if (await answerWorkerTaskSourceRequest(taskSources, request, send, runningCommands)) {
       return
     }
     if (request.method === WORKER_METHODS.panelRequest) {

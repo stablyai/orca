@@ -60,4 +60,26 @@ describe('worktree metadata write normalization', () => {
     const unlinked = mergeWorktreeMetaForWrite(selected, { linkedPR: null })
     expect(unlinked.linkedItems?.map((item) => item.number)).toEqual([32201, 32206, 32216, 32218])
   })
+
+  it('keeps a valid plugin task link and drops a malformed one', () => {
+    const link = {
+      pluginKey: 'orca-samples.roadmap',
+      sourceId: 'roadmap',
+      itemId: 'plan',
+      title: 'Plan',
+      sourceTitle: 'Roadmap'
+    }
+
+    expect(
+      mergeWorktreeMetaForWrite(existingMeta, { linkedPluginTask: link }).linkedPluginTask
+    ).toEqual(link)
+    expect(
+      mergeWorktreeMetaForWrite(existingMeta, {
+        linkedPluginTask: { ...link, pluginKey: 'not a key' }
+      }).linkedPluginTask
+    ).toBeNull()
+    expect(mergeWorktreeMetaForWrite(existingMeta, { comment: 'x' })).not.toHaveProperty(
+      'linkedPluginTask'
+    )
+  })
 })

@@ -16,6 +16,8 @@ function worker(lastActivity = 1_000): TestWorker {
   return {
     commands: ['run'],
     invokeCommand: vi.fn(async () => null),
+    taskSources: [],
+    invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
     requestFromPanel: vi.fn(),
     runHook: vi.fn(),

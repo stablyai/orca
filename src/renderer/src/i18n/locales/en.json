@@ -1827,6 +1827,9 @@
       }
     },
     "lib": {
+      "gitRemoteProjectMatch": {
+        "noProject": "No Git project in Orca has the remote {{remote}}. Add a clone of it as a project, then start again."
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -2252,6 +2255,9 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
+      },
+      "pluginTaskWorkspaceLink": {
+        "saveFailed": "Workspace created, but its link to the plugin task could not be saved."
       },
       "worktreeJumpNavigation": {
         "filteredNotice": "This worktree is hidden by sidebar filters. The workspace was opened, but it is not shown in Spaces."
@@ -3199,11 +3205,19 @@
         "runCommandsNow": "Run commands now",
         "skipForNow": "Skip for now",
         "skipCommands": "Skip commands",
-        "connectProject": "Connect {{name}}"
+        "connectProject": "Connect {{name}}",
+        "agentDraftLabel": "Agent prompt",
+        "agentDraftHelp": "Typed into the agent as a draft. Review it there before sending.",
+        "agentSessionModelEffort": "Starts with model {{model}}, effort {{effort}}.",
+        "agentSessionModel": "Starts with model {{model}}.",
+        "agentSessionEffort": "Starts with effort {{effort}}.",
+        "agentSessionOtherAgent": "The task's model and effort are for {{agent}}, so this agent starts with its own."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
-        "createWorkspace": "Create workspace"
+        "createWorkspace": "Create workspace",
+        "agentDraftFolderGroup": "Folder workspaces do not take an agent prompt, so this one will not be sent.",
+        "agentDraftNoAgent": "Pick an agent to send this prompt."
       },
       "PullRequestConfirmation": {
         "closeTitle": "Close PR #{{number}}?",
@@ -3733,6 +3747,26 @@
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
         "linearWorktreesColumn": "Workspaces",
+        "pluginTaskDetailDescription": "Preview and start work from the selected task.",
+        "pluginTaskOpenLink": "Open link",
+        "pluginTaskCloseDetail": "Close",
+        "pluginTaskNoBody": "No description provided.",
+        "pluginTaskRefresh": "Refresh {{value0}}",
+        "pluginTaskSearch": "Search {{value0}}",
+        "pluginTaskNotStartable": "This task cannot start a workspace",
+        "pluginTaskSourceContext": "{{value0}} · plugin",
+        "pluginTaskEmpty": "No tasks found",
+        "pluginTaskEmptyHint": "Try different search terms or filters.",
+        "pluginTaskLoadMore": "Load more",
+        "pluginTaskProjectMissing": "No Orca project is at {{path}}. Add it as a project, then start again.",
+        "pluginTaskProjectSourceUnsupported": "Orca cannot find a project for {{source}}. Add it as a project, then start again.",
+        "pluginTaskOpenWorkspaceAction": "Open workspace",
+        "pluginTaskStartAnotherShort": "Start another",
+        "pluginTaskWorkspacesLabel": "Workspaces",
+        "pluginTaskOpenWorkspace": "Open workspace {{value0}}",
+        "pluginTaskWorkspaces": "Workspaces: {{value0}}",
+        "pluginTaskStartAnother": "Start another workspace",
+        "pluginTaskWorkspaceOpenFailed": "Unable to open that workspace.",
         "jiraBoardEmptyColumn": "No issues",
         "backToPullRequests": "Pull requests",
         "backToGitHubList": "GitHub list",
@@ -7130,7 +7164,11 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} disconnected",
           "runtimeHostProject": "Project on Orca server",
           "runtimeHostProjectNamed": "Project on {{hostName}}",
-          "ef18787206": "Queued for deletion"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path",
+          "ef18787206": "Queued for deletion",
+          "openPluginTask": "Open in {{value0}}"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -12693,7 +12731,8 @@
             "terminalRun": "Run commands in your terminals, including SSH",
             "terminalRead": "Read the output of your terminals, including SSH",
             "workspaceWrite": "Open your workspaces and files, and run built-in commands",
-            "agentLaunch": "Start agents in your workspaces, including SSH"
+            "agentLaunch": "Start agents in your workspaces, including SSH",
+            "tasksProvide": "Add task lists to the Tasks page, with prompts you review before an agent starts"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
           "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.",
@@ -13553,6 +13592,11 @@
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
         },
+        "PluginSettingsSection": {
+          "default": "Default: {{value0}}",
+          "title": "Settings",
+          "loading": "Loading…"
+        },
         "SettingsHostScopePicker": {
           "label": "Host",
           "unavailable": "{{value0}} (unavailable)",
@@ -13913,6 +13957,7 @@
           "command": "Command",
           "panel": "Sidebar panel",
           "recipe": "Machine recipe",
+          "taskSource": "Task list",
           "access": "Can access",
           "accessLoading": "Reading the plugin…",
           "logs": "Logs",

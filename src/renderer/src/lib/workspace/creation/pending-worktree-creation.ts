@@ -25,6 +25,7 @@ import type {
   WorkspaceRunContext
 } from '../../../../../shared/work-items/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
+import type { LinkedPluginTask } from '../../../../../shared/plugins/tasks/plugin-task-link'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { EnvironmentDoctorCheck } from '../../../../../shared/environment-doctor-types'
@@ -45,6 +46,8 @@ export type WorktreeCreationRequest = {
   taskSourceContext?: TaskSourceContext | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
+  /** Plugin task this workspace is started from; written to its metadata once it exists. */
+  linkedPluginTask?: LinkedPluginTask
   // Preserve project-first host intent for retry/diagnostics/metadata; repoId remains for older create APIs.
   workspaceRunContext?: WorkspaceRunContext | null
   // Best-effort cleanup owns this VM runtime until workspace handoff succeeds.

@@ -169,6 +169,19 @@ export function getLaunchableWorkItemDraftContent(args: {
   return args.url
 }
 
+/** Appends a caller-supplied agent draft (e.g. a plugin task's start prompt)
+ *  after any linked-item draft; the result is still delivered as a draft. */
+export function appendAgentLaunchDraft(
+  draftPrompt: string | null,
+  agentDraft: string | null | undefined
+): string | null {
+  const extra = agentDraft?.trim()
+  if (!extra) {
+    return draftPrompt
+  }
+  return formatDraftContextBlock(draftPrompt ? `${draftPrompt.trimEnd()}\n\n${extra}` : extra)
+}
+
 export function resolveQuickCreateLinkedWorkItemPrompt(
   linkedWorkItem:
     | (Pick<
@@ -183,7 +196,9 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
-  note: string
+  note: string,
+  /** Appended after the linked-item draft, e.g. a plugin task's start prompt. */
+  agentDraft?: string | null
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
   const linearBlock = isLinearWorkItemReference(linkedWorkItem)
@@ -204,6 +219,6 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
   return {
     prompt: isLinearTypedOnly ? trimmedNote : '',
-    draftPrompt
+    draftPrompt: appendAgentLaunchDraft(draftPrompt, agentDraft)
   }
 }

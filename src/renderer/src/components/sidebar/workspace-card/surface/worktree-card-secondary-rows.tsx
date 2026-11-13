@@ -7,6 +7,7 @@ import {
   WorktreeCardRemoteBranchConflict
 } from '../metadata/worktree-card-meta-items'
 import { WorktreeLineageToggle } from '../identity/WorktreeLineageToggle'
+import { WorktreeCardPluginTaskLink } from '../metadata/WorktreeCardPluginTaskLink'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -48,6 +49,10 @@ export function WorktreeCardSecondaryRows({
       {/* The host retains failed deletes until resolved; show its path-leading error in a tooltip. */}
       {worktree.removalError && !isDeleting ? (
         <WorktreeCardDeleteFailed error={worktree.removalError} />
+      ) : null}
+
+      {worktree.linkedPluginTask ? (
+        <WorktreeCardPluginTaskLink link={worktree.linkedPluginTask} />
       ) : null}
 
       {isActive && worktree.linkedLinearIssue ? (

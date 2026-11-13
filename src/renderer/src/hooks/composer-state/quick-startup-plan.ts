@@ -36,6 +36,8 @@ export type QuickComposerStartupInput = {
   telemetrySource: WorktreeCreationRequest['telemetrySource']
   launchInputs?: WorktreeCreationRequest['launchInputs']
   route?: WorktreeCreationRequest['agentLaunchRoute']
+  /** Explicit options for this launch (e.g. a plugin task's model/effort); they win over agent args. */
+  sessionOptionOverrides?: Record<string, string>
 }
 
 export type QuickComposerStartup = {
@@ -55,7 +57,10 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           agent,
           settings: settings ?? {},
           agentArgs: input.launchInputs?.agentArgs,
-          sessionOptions: input.launchInputs?.sessionOptions,
+          // Why: the opener's options (a plugin task's model/effort) are the base; picker edits win.
+          sessionOptions: input.sessionOptionOverrides
+            ? { ...input.sessionOptionOverrides, ...input.launchInputs?.sessionOptions }
+            : input.launchInputs?.sessionOptions,
           platform: requireExecutionHostPlatform(input.launchHost),
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
@@ -120,6 +125,8 @@ export async function prepareQuickComposerStartup(
     note: string
     legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
     ephemeralVm?: boolean
+    /** Appended after the linked-item draft, e.g. a plugin task's start prompt. */
+    agentDraft?: string | null
   }
 ): Promise<QuickComposerStartup & { prompt: string; draftPrompt: string | null }> {
   const preferences = input.agent
@@ -131,7 +138,8 @@ export async function prepareQuickComposerStartup(
     : undefined
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     input.agent ? input.linkedWorkItem : null,
-    input.note
+    input.note,
+    input.agentDraft
   )
   const settings = input.settings
     ? {

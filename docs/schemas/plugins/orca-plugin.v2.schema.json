@@ -345,6 +345,38 @@
             "$ref": "#/$defs/StatusBarItemContribution"
           }
         },
+        "taskSources": {
+          "default": [],
+          "description": "Task lists shown on the Tasks page, filled by the plugin worker. At most 8.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "icon": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "additionalProperties": false
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -361,13 +393,6 @@
         },
         "mcpServers": {
           "description": "Reserved for MCP server definitions; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "taskSources": {
-          "description": "Reserved for task sources; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -1585,7 +1610,8 @@
             "workspace:create",
             "automation:read",
             "automation:write",
-            "history:read"
+            "history:read",
+            "tasks:provide"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1604,7 +1630,8 @@
             "workspace:create": "1.4.259",
             "automation:read": "1.4.259",
             "automation:write": "1.4.259",
-            "history:read": "1.4.259"
+            "history:read": "1.4.259",
+            "tasks:provide": "1.4.245"
           }
         }
       },

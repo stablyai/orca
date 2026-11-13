@@ -117,6 +117,7 @@ export async function buildPluginList(
           newFiles: [],
           commands: [],
           hasWorker: false,
+          taskSources: [],
           vmRecipes: [],
           restarts: 0,
           ...lockEntrySource(lockEntry)
@@ -233,6 +234,11 @@ export async function buildPluginList(
         statusBarItems: plugin.manifest.contributes.statusBarItems,
         hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
+        taskSources: plugin.manifest.contributes.taskSources.map((source) => ({
+          id: source.id,
+          title: source.title,
+          ...(source.icon ? { icon: source.icon } : {})
+        })),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
           name: recipe.name,

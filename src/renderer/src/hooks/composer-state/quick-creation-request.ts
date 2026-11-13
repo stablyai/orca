@@ -4,6 +4,7 @@ import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/t
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { LinkedPluginTask } from '../../../../shared/plugins/tasks/plugin-task-link'
 import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
@@ -16,6 +17,7 @@ export type QuickCreationRequestInput = {
   indeterminateProgress: boolean
   taskSourceContext: TaskSourceContext | null
   linkedWorkItem: LinkedWorkItemSummary | null
+  linkedPluginTask?: WorktreeCreationRequest['linkedPluginTask']
   workspaceRunContext: WorktreeCreationRequest['workspaceRunContext']
   workspaceName: string
   nameWasGenerated: boolean
@@ -66,6 +68,12 @@ export type QuickSubmitOptions = {
   launchChoice?: AgentLaunchChoice
   launchInputs?: WorktreeCreationRequest['launchInputs']
   legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
+  /** Draft typed into the agent after launch (not sent for folder-group targets). */
+  agentDraft?: string
+  /** Session options (e.g. model, effort) layered over the agent's defaults for this launch. */
+  sessionOptions?: Record<string, string>
+  /** Plugin task the new workspace links back to. */
+  linkedPluginTask?: LinkedPluginTask
 }
 
 export function buildQuickCreationRequest(
@@ -78,6 +86,7 @@ export function buildQuickCreationRequest(
     ...(input.taskSourceContext ? { taskSourceContext: input.taskSourceContext } : {}),
     linkedWorkItem: toFolderWorkspaceLinkedTask(input.linkedWorkItem),
     linkedTaskSourceContext: input.taskSourceContext,
+    ...(input.linkedPluginTask ? { linkedPluginTask: input.linkedPluginTask } : {}),
     ...(input.workspaceRunContext ? { workspaceRunContext: input.workspaceRunContext } : {}),
     name: input.workspaceName,
     ...(input.nameWasGenerated ? { nameWasGenerated: true } : {}),
