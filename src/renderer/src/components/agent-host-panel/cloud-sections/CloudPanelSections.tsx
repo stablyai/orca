@@ -21,10 +21,7 @@ import {
   type CloudKeyRow,
   type ShadowedKey
 } from './cloud-panel-sections-model'
-import {
-  type CloudPanelAddSecret,
-  type CloudPanelSectionsLoad
-} from './use-cloud-panel-sections'
+import type { CloudPanelAddSecret, CloudPanelSectionsLoad } from './use-cloud-panel-sections'
 
 const OWNER_LABEL: Record<Exclude<CloudKeyOwner, 'gateway' | 'aws' | 'other'>, string> = {
   claude: 'Claude',
