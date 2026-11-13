@@ -136,24 +136,53 @@ describe('buildDashboardSnapshot', () => {
     const state = baseState({
       repos: [],
       worktreesByRepo: {},
-      folderWorkspaces: [{
-        id: 'folder-1', projectGroupId: 'group-1', name: 'Docs workspace',
-        folderPath: '/workspace/docs', connectionId: 'ssh-1', linkedTask: null,
-        comment: '', isArchived: false, isUnread: false, isPinned: false,
-        sortOrder: 0, lastActivityAt: NOW, createdAt: NOW, updatedAt: NOW
-      }],
-      projectGroups: [{
-        id: 'group-1', name: 'Documentation', parentPath: '/workspace',
-        connectionId: 'ssh-1', parentGroupId: null, createdFrom: 'folder-scan',
-        tabOrder: 0, isCollapsed: false, color: null, createdAt: NOW, updatedAt: NOW
-      }],
+      folderWorkspaces: [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          name: 'Docs workspace',
+          folderPath: '/workspace/docs',
+          connectionId: 'ssh-1',
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: NOW,
+          createdAt: NOW,
+          updatedAt: NOW
+        }
+      ],
+      projectGroups: [
+        {
+          id: 'group-1',
+          name: 'Documentation',
+          parentPath: '/workspace',
+          connectionId: 'ssh-1',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: NOW,
+          updatedAt: NOW
+        }
+      ],
       tabsByWorktree: { local: [tab(TAB_ID, 'local')] },
       agentStatusByPaneKey: acceptedAgentStatuses([
         [PANE_KEY, entry({ connectionId: 'ssh-1', worktreeId: workspaceId })]
       ])
     })
-    expect(buildDashboardSnapshot(state, NOW).cards.map((card) => card.worktreeId)).toEqual([workspaceId])
-    expect(buildDashboardBucketCounts(state, NOW)).toEqual({ attention: 0, working: 1, done: 0, idle: 0 })
+    expect(buildDashboardSnapshot(state, NOW).cards.map((card) => card.worktreeId)).toEqual([
+      workspaceId
+    ])
+    expect(buildDashboardBucketCounts(state, NOW)).toEqual({
+      attention: 0,
+      working: 1,
+      done: 0,
+      idle: 0
+    })
   })
 
   it('names each pane of a split tab from its own title', () => {
