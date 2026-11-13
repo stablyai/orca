@@ -5,11 +5,11 @@ import { cloudAgentStripModel } from './cloud-agent-strip-model'
 const base = { agent: 'claude' as const, hostLabel: 'the sandbox', t: translate }
 
 describe('cloudAgentStripModel', () => {
-  it('account recovery (S4-c): Renew, account-level wording, no per-workspace words', () => {
+  it('account recovery (S4-c), held: Renew, "Renew to start Claude." (CHAT-RENEW-INPLACE copy)', () => {
     const model = cloudAgentStripModel({ ...base, reason: 'accountExpired', view: null })
     expect(model).toMatchObject({
       title: 'Your Claude sign-in expired',
-      detail: 'Sign in once to fix every workspace.',
+      detail: 'Renew to start Claude.',
       primary: { label: 'Renew', action: { kind: 'renew' } }
     })
   })

@@ -31,7 +31,7 @@ export function cloudSetupStripActions(args: {
   keepHoldOnCancel?: boolean
 }): CloudStripActions {
   const { agent, holdKey } = args
-  const api = window.api.orcaCloudAgents
+  const api = window.api?.orcaCloudAgents
   return {
     primary: (action) => {
       if (action.kind === 'setUpOnce') {

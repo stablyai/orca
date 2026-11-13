@@ -29017,6 +29017,10 @@
     "nothingNeedsAttention": "Nothing needs attention."
   },
   "agentSignInStrip": {
+    "renewInSettings": "Renew in Settings",
+    "finishRenewing": "Finish renewing",
+    "expiredHeldDetail": "Renew to start {{agent}}.",
+    "expiredHeldAnnounce": "Your {{agent}} sign-in expired. Renew to start {{agent}}.",
     "rowNeedsSignIn": "Needs sign-in",
     "rowNeedsSignInTooltip": "Set up once for Orca Cloud",
     "rowExpired": "Sign-in expired",

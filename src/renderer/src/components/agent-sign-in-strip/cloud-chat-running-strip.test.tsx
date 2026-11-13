@@ -21,7 +21,8 @@ const stub = vi.hoisted(() => {
     cleared: string[]
     calls: { paneKey: string; turnEndedFallback?: boolean }[]
     openedSettings: number
-  } = { strip: null, held: false, cleared: [], calls: [], openedSettings: 0 }
+    renewsRun: string[][]
+  } = { strip: null, held: false, cleared: [], calls: [], openedSettings: 0, renewsRun: [] }
   return state
 })
 
@@ -47,6 +48,9 @@ vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
   orcaCloudAgentAccountsLoadedAt: () => 1,
+  runOrcaCloudAgentSetups: (agents: string[]) => stub.renewsRun.push(agents),
+  stopOrcaCloudAgentSetups: () => undefined,
+  reloadOrcaCloudAgentAccounts: async () => undefined,
   useOrcaCloudAgentAccounts: () => ({
     load: { kind: 'loading' },
     keyKinds: {},
@@ -118,7 +122,9 @@ describe('the running strip on a structured chat (B2)', () => {
     mount()
     expect(screen.getAllByText(/Claude sign-in expired/).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /Renew/ }))
-    expect(stub.openedSettings).toBe(1)
+    // CHAT-RENEW-INPLACE: Renew runs the renewal right here, never Settings.
+    expect(stub.renewsRun).toEqual([['claude']])
+    expect(stub.openedSettings).toBe(0)
     expect(stub.calls.at(-1)).toEqual({ paneKey: STATUS_KEY, turnEndedFallback: true })
   })
 

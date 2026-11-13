@@ -26,12 +26,7 @@ import {
 import type { CloudStripActions } from './CloudAgentSignInStrip'
 import type { CloudHeldStrip } from './use-cloud-held-strip'
 import { cloudChatRunningStripModel } from './cloud-running-strip-model'
-
-function openAccounts(): void {
-  const store = useAppStore.getState()
-  store.openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
-  store.openSettingsPage()
-}
+import { openOrcaCloudAccountsSettings, withRenewInPlace } from './cloud-renew-in-place'
 
 /** The Orca Cloud environment a structured chat's tab runs on, or null. */
 function useChatEnvironmentId(tabId: string): string | null {
@@ -94,7 +89,8 @@ export function useCloudChatAccountStrip(args: ChatAccountArgs): CloudRunningStr
   }
   return cloudRunningStrip({
     paneKey: args.statusKey,
-    entry: status ?? { agentType: agent, state: 'idle' },
+    // An idle chat (no message yet) has no status entry: decided from its own agent.
+    entry: status ?? { agentType: agent, state: 'waiting' },
     accounts,
     held,
     now: orcaCloudAgentAccountsLoadedAt(),
@@ -108,11 +104,12 @@ export function useCloudChatAccountStrip(args: ChatAccountArgs): CloudRunningStr
 export function useCloudChatRunningStrip(args: ChatAccountArgs): CloudHeldStrip | null {
   const t = useTranslate()
   const strip = useCloudChatAccountStrip(args)
+  const accounts = useOrcaCloudAgentAccounts(strip !== null)
   if (!strip) {
     return null
   }
   const actions: CloudStripActions = {
-    primary: (action) => (action.kind === 'renew' ? openAccounts() : undefined),
+    primary: (action) => (action.kind === 'renew' ? openOrcaCloudAccountsSettings() : undefined),
     submitCode: () => undefined,
     pasteCode: () => undefined,
     useCode: () => undefined,
@@ -120,7 +117,20 @@ export function useCloudChatRunningStrip(args: ChatAccountArgs): CloudHeldStrip 
     // Expired has no ×; renewed's × dismisses.
     cancel: () => (strip.phase === 'renewed' ? clearCloudRunningSignout(args.statusKey) : undefined)
   }
-  return { model: cloudChatRunningStripModel(strip, t), prompt: null, actions }
+  const model = cloudChatRunningStripModel(strip, t)
+  // CHAT-RENEW-INPLACE: the chat's "sign-in expired · Renew" renews right here.
+  const shown =
+    strip.phase === 'expired'
+      ? withRenewInPlace({
+          agent: strip.agent,
+          setup: accounts.setups[strip.agent],
+          model,
+          actions,
+          key: args.statusKey,
+          t
+        })
+      : { model, actions }
+  return { ...shown, prompt: null }
 }
 
 /**
