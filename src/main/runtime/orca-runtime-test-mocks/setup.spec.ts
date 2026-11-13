@@ -1,6 +1,7 @@
 export * from './github-hosted-review-test-harness'
 export * from './gitlab-test-harness'
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as ResolutionScanModule from '../workspaces/catalog/repo-worktree-resolution-scan'
 import { vi, type Mock } from 'vitest'
 
 import type * as GitUsernameModule from '../../git/git-username'
@@ -225,7 +226,8 @@ vi.mock('../../git/worktrees/removal/worktree-branch-removal', async (importOrig
   forceDeleteLocalBranch: (await getWorktreeOwnerMocks()).forceDeleteLocalBranch
 }))
 
-vi.mock('../workspaces/catalog/repo-worktree-resolution-scan', () => ({
+vi.mock('../workspaces/catalog/repo-worktree-resolution-scan', async (importOriginal) => ({
+  ...(await importOriginal<typeof ResolutionScanModule>()),
   scanLocalRepoWorktreesForResolution: scanLocalRepoWorktreesForResolutionMock
 }))
 
