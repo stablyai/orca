@@ -24,6 +24,7 @@ import {
 import { replayOutstandingBrowserHostCommands } from './browser-host-command-replay'
 import {
   hasOutstandingBrowserHostReconciliation,
+  hasOutstandingBrowserHostPageCreation,
   isBrowserHostReconciliationResult,
   isBrowserHostUnplacedPageResult,
   replaySettledBrowserHostCommand
@@ -89,7 +90,10 @@ export class BrowserHostCommandLedger {
     this.delivery = undefined
   }
 
-  issue(input: BrowserHostCommandInput): {
+  issue(
+    input: BrowserHostCommandInput,
+    onAdmitted?: () => void
+  ): {
     event: BrowserClientHostCommandEvent
     result: Promise<BrowserClientHostCommandResult>
   } {
@@ -136,6 +140,7 @@ export class BrowserHostCommandLedger {
     page.nextIssueSequence += 1
     page.outstanding += 1
     this.outstandingCommands += 1
+    onAdmitted?.()
     try {
       this.delivery(event)
     } catch {
@@ -155,6 +160,14 @@ export class BrowserHostCommandLedger {
 
   hasOutstandingReconciliation(): boolean {
     return hasOutstandingBrowserHostReconciliation(this.pages)
+  }
+
+  isClosed(): boolean {
+    return this.closed
+  }
+
+  hasOutstandingPageCreation(browserPageId: string, generation: number): boolean {
+    return hasOutstandingBrowserHostPageCreation(this.pages.get(browserPageId), generation)
   }
 
   settle(params: BrowserHostCommandResultParams): boolean {

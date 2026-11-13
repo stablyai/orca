@@ -10,6 +10,8 @@ import {
 } from './browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION } from './browser-client-file-channel-protocol'
 
+export const BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY = 'page-initialization-commit-v1'
+
 const Generation = z.number().int().min(1).max(0xffff_ffff)
 const Identity = z.string().min(1).max(256)
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES = 384
@@ -205,6 +207,7 @@ const BrowserClientPageCommandAuthority = BrowserClientHostLeaseAuthority.extend
 
 const BrowserClientHostCreatePageCommand = z.object({
   type: z.literal('createPage'),
+  initialUrl: z.string().min(1).optional(),
   browserProfileId: Identity,
   // Sent only to profile-switch-v1 desktops, for host-owned profiles the desktop does not know.
   profile: BrowserClientProfileMetadata.optional(),
@@ -215,7 +218,7 @@ const BrowserClientHostCreatePageCommand = z.object({
 
 const BrowserClientHostNavigateCommand = z.object({
   type: z.literal('navigate'),
-  url: z.string().min(1).max(8192)
+  url: z.string().min(1)
 })
 
 const BrowserClientHostReclaimPageCommand = z.object({

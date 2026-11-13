@@ -1,3 +1,5 @@
+import { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'
+import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import { BrowserRoutePageAvailability } from '../../routing/guest-authority/browser-route-page-availability'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -49,6 +51,93 @@ async function fixture(
 }
 
 describe('staged client page profile switching', () => {
+  it('finishes failed old-generation renderer cleanup on teardown without repeating its releases', async () => {
+    const h = await fixture()
+    h.renderer.retirePage.mockRejectedValueOnce(new Error('old-retirement-reply-lost'))
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toMatchObject({
+        status: 'completed'
+      })
+      expect(h.executor.snapshotPageInventory()).toMatchObject([
+        { pageHostGeneration: 8, state: 'active' }
+      ])
+      expect(h.routeSession.release).toHaveBeenCalledTimes(1)
+      await h.executor.close()
+      expect(h.renderer.retirePage).toHaveBeenCalledTimes(3)
+      expect(h.routeSession.release).toHaveBeenCalledTimes(1)
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
+  it('finishes independent pages, retained profile cleanup and uploads after one initializer cleanup fails', async () => {
+    const h = await fixture()
+    const signal = new AbortController().signal
+    h.renderer.retirePage.mockRejectedValueOnce(new Error('old-profile-retirement'))
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const removeDirectory = vi.fn(async () => {})
+    const uploads = new BrowserClientUploadStaging('/virtual/pr41490-uploads', {
+      mkdir: async () => {},
+      writeFile: async () => {},
+      removeDirectory,
+      removeDirectorySync: () => {}
+    })
+    Object.assign(h.dependencies, { uploadStaging: uploads })
+    try {
+      expect(await h.executor.handle(switchCommand(), signal)).toMatchObject({
+        status: 'completed'
+      })
+      for (const [index, id] of ['initializer-first', 'initializer-second'].entries()) {
+        expect(
+          await h.executor.handle(
+            createCommand('createPage', {
+              browserPageId: id,
+              pageHostGeneration: 9 + index,
+              command: {
+                type: 'createPage',
+                browserProfileId: 'remote-isolated',
+                executionHostKey: 'execution-host-a',
+                initialUrl: 'https://example.internal/held'
+              }
+            }),
+            signal
+          )
+        ).toMatchObject({ status: 'completed' })
+      }
+      await uploads.stage({
+        browserPageId: 'independent-upload',
+        pageHostGeneration: 1,
+        files: [{ remotePath: 'proof.txt', contents: Buffer.from('proof') }]
+      })
+      const retired: string[] = []
+      Object.assign(h.renderer, {
+        retirePage: vi.fn(async (page: BrowserClientPageRendererIdentity) => {
+          retired.push(`${page.browserPageId}:${page.pageHostGeneration}`)
+          if (page.browserPageId === 'initializer-first') {
+            throw new Error('first-cleanup-failed')
+          }
+        })
+      })
+      await expect(h.executor.close()).rejects.toThrow(
+        'Browser client page executor cleanup failed'
+      )
+      expect(retired).toEqual([
+        'initializer-first:9',
+        'initializer-second:10',
+        'page-a:7',
+        'page-a:8'
+      ])
+      expect(removeDirectory).toHaveBeenCalledOnce()
+      await expect(h.executor.close()).rejects.toThrow(
+        'Browser client page executor cleanup failed'
+      )
+      expect(retired).toHaveLength(4)
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
   it('restores the old guest when replacement navigation fails', async () => {
     const h = await fixture()
     await h.executor.handle(

@@ -134,16 +134,17 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.tabCreate',
     permission: 'workspace',
     params: BrowserTabCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientKind }) =>
+    handler: async (params, { runtime, pairedDeviceId, clientKind, signal }) =>
       pairedDeviceId
-        ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind })
-        : runtime.browserTabCreate(params, { clientKind })
+        ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind, signal })
+        : runtime.browserTabCreate(params, { clientKind, signal })
   }),
   defineMethod({
     name: 'browser.openUrl',
     permission: 'workspace',
     params: BrowserOpenUrlParams,
-    handler: async (params, { runtime }) => runtime.browserOpenUrlOnClient(params)
+    handler: async (params, { runtime, signal }) =>
+      runtime.browserOpenUrlOnClient(params, { signal })
   }),
   defineMethod({
     name: 'browser.tabClose',

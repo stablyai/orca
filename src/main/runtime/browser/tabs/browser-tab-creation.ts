@@ -58,6 +58,7 @@ export class RuntimeBrowserTabCreation {
       pairedDeviceId?: string
       clientKind?: 'mobile' | 'runtime'
       opensPageLink?: boolean
+      signal?: AbortSignal
     }
   ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
@@ -187,10 +188,13 @@ export class RuntimeBrowserTabCreation {
     return { browserPageId }
   }
 
-  async browserOpenUrlOnClient(params: {
-    url: string
-    worktree: string
-  }): Promise<{ browserPageId: string }> {
-    return openBrowserUrlOnClient(this.host, params)
+  async browserOpenUrlOnClient(
+    params: {
+      url: string
+      worktree: string
+    },
+    options?: { signal?: AbortSignal }
+  ): Promise<{ browserPageId: string }> {
+    return openBrowserUrlOnClient(this.host, params, options?.signal)
   }
 }

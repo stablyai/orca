@@ -1,3 +1,6 @@
+import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
+import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
+import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
@@ -12,6 +15,8 @@ export async function routeRuntimeBrowserClientAutomation(options: {
   caller: RpcCallerIdentity | undefined
   pages: RuntimeBrowserPageRegistry
   leases: BrowserHostLeaseRegistry
+  resolveExecutionHostKey?(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
+  notifyWorkspace?(workspaceId: string): void
   resolveWorkspace(selector: string): Promise<{ id: string }>
 }): Promise<ClientHostedBrowserRpcRoute> {
   const method = BrowserClientAutomationMethod.safeParse(options.method)
@@ -21,6 +26,38 @@ export async function routeRuntimeBrowserClientAutomation(options: {
   const page = await resolveTargetPage(options.params, options.pages, options.resolveWorkspace)
   if (!page) {
     return { handled: false }
+  }
+  if (
+    method.data === 'browser.goto' &&
+    typeof options.params.url === 'string' &&
+    options.leases.clientPageInitializations.lease(page.browserPageId, page.placement) &&
+    options.resolveExecutionHostKey &&
+    options.notifyWorkspace
+  ) {
+    if (
+      typeof options.params.expectUrl === 'string' &&
+      !isSameBrowserUrl(options.params.expectUrl, page.url)
+    ) {
+      throw browserExpectedUrlMismatchError({
+        expectedUrl: options.params.expectUrl,
+        actualUrl: page.url,
+        browserPageId: page.browserPageId,
+        mayHaveStarted: false
+      })
+    }
+    const url = await actOnRuntimeBrowserInitialization({
+      pages: options.pages,
+      authority: options.leases,
+      page,
+      action: { type: 'navigate', url: options.params.url },
+      resolveExecutionHostKey: options.resolveExecutionHostKey,
+      notifyWorkspace: options.notifyWorkspace
+    })
+    const current = options.pages.getPage(page.browserPageId)
+    if (!current || !url) {
+      throw new Error('browser_page_placement_stale')
+    }
+    return { handled: true, result: { url, title: current.title } }
   }
   const issued = options.leases.issueClientPageCommand(
     {
