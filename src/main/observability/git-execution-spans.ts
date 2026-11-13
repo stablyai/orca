@@ -1,5 +1,12 @@
 import { hasActiveTraceSink, startSpan, withSpan, type ActiveSpan } from './tracer'
 import { getGitOperationCause } from './git-operation-cause'
+import { resolveGitAdmissionTier } from '../git/command-runner/admission/git-operation-executor'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
+
+const GIT_ACTION_NAMES: Record<string, readonly string[]> = {
+  worktree: ['list', 'add', 'remove', 'move', 'prune', 'lock', 'unlock', 'repair'],
+  remote: ['get-url', 'set-url', 'add', 'remove', 'rename', 'show']
+}
 
 const GIT_FAST_SUCCESS_THRESHOLD_MS = 250
 const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
@@ -75,6 +82,34 @@ function gitSubcommandIndex(args: readonly string[]): number {
 
 function gitSubcommandFromArgs(args: readonly string[]): string {
   return args[gitSubcommandIndex(args)] ?? '<none>'
+}
+
+function gitArgvShape(args: readonly string[]): string {
+  const index = gitSubcommandIndex(args)
+  if (index < 0) {
+    return '<none>'
+  }
+  const subcommand = args[index] ?? '<none>'
+  let name = /^[a-z][a-z0-9-]*$/.test(subcommand) ? subcommand : '<none>'
+  const action = args[index + 1]
+  if (
+    Object.hasOwn(GIT_ACTION_NAMES, subcommand) &&
+    GIT_ACTION_NAMES[subcommand].includes(action)
+  ) {
+    name += ` ${action}`
+  }
+  for (let i = index + 1; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--') {
+      break
+    }
+    // Discard option values, including attached short-option operands.
+    const flag = /^(--[a-z][a-z0-9-]*)(?:=|$)/.exec(arg)?.[1] ?? /^(-[a-zA-Z])/.exec(arg)?.[1]
+    if (flag) {
+      return `${name} ${flag}`
+    }
+  }
+  return name
 }
 
 function gitCommandVariant(args: readonly string[]): string {
@@ -177,6 +212,11 @@ function addGitAttributes(span: ActiveSpan, meta: GitSpanArgs): void {
   span.setAttribute('git.arg_count', meta.args.length)
   span.setAttribute('git.variant', gitCommandVariant(meta.args))
   const cause = getGitOperationCause()
+  span.setAttribute('git.caller', cause?.reason ?? 'unattributed')
+  span.setAttribute('git.argv_shape', gitArgvShape(meta.args))
+  const tier = resolveGitAdmissionTier(meta.admissionTier)
+  span.setAttribute('git.admission_tier', tier)
+  span.setAttribute('git.foreground', tier === 'status' ? 'unknown' : tier === 'interactive')
   if (cause) {
     span.setAttribute('git.operation', cause.family)
     span.setAttribute('git.reason', cause.reason)
@@ -199,6 +239,7 @@ export function _gitSpanSamplingBucketCountForTests(): number {
 export type GitSpanArgs = {
   readonly args: readonly string[]
   readonly cwd?: string
+  readonly admissionTier?: GitAdmissionTier
 }
 
 export async function withGitSpan<T>(

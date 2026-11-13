@@ -41,7 +41,7 @@ async function gitExecFileAsyncUnlocked(
 ): Promise<{ stdout: string; stderr: string }> {
   // Trace caller intent rather than the resolved binary so WSL and native commands group together.
   return withGitSpan(
-    { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
+    { args, cwd: options.cwd, admissionTier: options.admissionTier },
     async (span) => {
       if (options.onStderr && options.terminationBarrier) {
         throw new Error('onStderr is not supported with terminationBarrier.')
@@ -234,7 +234,8 @@ async function gitExecFileAsyncBufferInSpan(
     stdin?: string
   }
 ): Promise<{ stdout: Buffer }> {
-  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
+  const meta = { args, cwd: options.cwd, admissionTier: options.admissionTier }
+  return withGitSpan(meta, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
     if (checkoutRoutingReady) {
       await checkoutRoutingReady

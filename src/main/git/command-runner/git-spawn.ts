@@ -69,7 +69,7 @@ export async function withGitAdmission(
   if (admission) {
     await admission
   }
-  const span = startGitSpan({ args, cwd: options.cwd })
+  const span = startGitSpan({ args, cwd: options.cwd, admissionTier: options.admissionTier })
   let grant: Awaited<ReturnType<typeof acquireGitAdmission>> | null = null
   try {
     grant = await acquireGitAdmission({
