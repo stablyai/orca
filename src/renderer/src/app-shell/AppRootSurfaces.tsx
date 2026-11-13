@@ -65,6 +65,9 @@ const AiVaultSessionHistoryDialog = lazy(
 const NativeChatAccountUsageDialog = lazy(
   () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
 )
+const NativeChatMcpServersDialog = lazy(
+  () => import('../components/native-chat/mcp/NativeChatMcpServersDialog')
+)
 const DeleteWorktreeDialog = lazy(
   () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')
 )
@@ -210,7 +213,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <ProjectAddedDialog />
           </ModalBoundary>
         ) : null}
-        {/* Root hosting prevents chat capture handlers receiving /resume and /usage dialog events. */}
+        {/* Root hosting prevents chat capture handlers receiving /resume, /usage and /mcp dialog events. */}
         {activeModal === 'agent-session-history' ? (
           <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
             <AiVaultSessionHistoryDialog />
@@ -219,6 +222,11 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         {activeModal === 'chat-account-usage' ? (
           <ModalBoundary boundaryId="modal.chat-account-usage" resetKey>
             <NativeChatAccountUsageDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'chat-mcp-servers' ? (
+          <ModalBoundary boundaryId="modal.chat-mcp-servers" resetKey>
+            <NativeChatMcpServersDialog />
           </ModalBoundary>
         ) : null}
         {/* Own store, not activeModal: another modal must never evict a running move. */}
