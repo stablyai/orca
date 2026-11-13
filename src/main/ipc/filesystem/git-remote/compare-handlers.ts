@@ -3,8 +3,8 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult
 } from '../../../../shared/git/diff/git-diff-compare-types'
-import { getBranchCompare } from '../../../git/source-control/branch-compare'
-import { getCommitCompare } from '../../../git/source-control/commit-compare'
+import { getBranchCompare } from '../../../git/source-control/comparisons/branch-compare'
+import { getCommitCompare } from '../../../git/source-control/comparisons/commit-compare'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { validateFullGitObjectId } from '../access/filesystem-path-containment'
