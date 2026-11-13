@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import {
   PR_DETAIL_RECOVERY_LEASE_MS,
-  PR_DETAIL_RECOVERY_MAX_TICKETS,
   PR_DETAIL_RECOVERY_PREPARE_TTL_MS,
   PR_DETAIL_RECOVERY_RETENTION_MS,
-  prDetailRecoveryIdentityDigest,
   type PRDetailRecoveryCommitArgs,
   type PRDetailRecoveryNotAdmittedReason,
   type PRDetailRecoverySnapshot,
@@ -20,17 +18,13 @@ import {
 } from './pr-detail-recovery-submission'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { expirePRDetailRecoveryTickets } from './pr-detail-recovery-expiry'
-import {
-  isAdmissibleEpochScope,
-  PRDetailRecoveryEpochWatermarks
-} from './pr-detail-recovery-epoch-watermarks'
+import { PRDetailRecoveryStarts } from './pr-detail-recovery-starts'
 import {
   bumpTicket,
   retireTicketGrant,
   recoveryQueueEntry,
   recoveryQueueKey,
   waitForTicketChange,
-  refusedSnapshot,
   snapshotTicket,
   type PRDetailRecoveryCaller,
   type PRDetailRecoveryTicket
@@ -46,9 +40,24 @@ type Deps = {
 /** Queued detail-recovery tickets: correlated, one-shot reads owned by the PR refresh coordinator. */
 export class PRDetailRecoveryTickets {
   private readonly tickets = new Map<string, PRDetailRecoveryTicket>()
-  private readonly byEpoch = new Map<string, string>()
-  private readonly watermarks = new PRDetailRecoveryEpochWatermarks()
-  private acceptSequence = 0
+  private readonly starts = new PRDetailRecoveryStarts({
+    create: (start, candidate, acceptSequence) => {
+      const ticket = createPRDetailRecoveryTicket(this.deps.queue, this.deps.requests, {
+        caller: start.caller,
+        args: start.args,
+        candidate,
+        epochKey: start.key,
+        digest: start.digest,
+        acceptSequence
+      })
+      this.tickets.set(ticket.ticketId, ticket)
+      this.advance(ticket)
+      this.deps.scheduleDrain()
+      return ticket
+    },
+    revoke: (ticket) => this.revoke(ticket),
+    schedule: () => this.deps.scheduleDrain()
+  })
   private prepareSequence = 0
 
   constructor(private readonly deps: Deps) {}
@@ -62,60 +71,15 @@ export class PRDetailRecoveryTickets {
     args: PRDetailRecoveryStartArgs,
     resolved: GitHubPRRefreshCandidate | PRDetailRecoveryNotAdmittedReason
   ): PRDetailRecoverySnapshot {
-    if (caller.isCredentialCurrent?.() === false) {
-      this.cancelCaller(caller.callerKey)
-      return refusedSnapshot(args.identity, { kind: 'not-admitted', reason: 'validation' })
-    }
-    const epochKey = `${caller.callerKey}|${args.clientEpoch.scope}`
-    const digest = prDetailRecoveryIdentityDigest(args.identity)
-    const existing = this.tickets.get(this.byEpoch.get(epochKey) ?? '')
-    if (existing && existing.counter === args.clientEpoch.counter) {
-      if (existing.digest !== digest) {
-        return refusedSnapshot(args.identity, { kind: 'not-admitted', reason: 'epoch-conflict' })
-      }
-      this.renew(existing)
-      return snapshotTicket(existing)
-    }
-    if (
-      this.watermarks.isStale(caller.callerKey, args.clientEpoch.scope, args.clientEpoch.counter)
-    ) {
-      return refusedSnapshot(args.identity, { kind: 'expired' })
-    }
-    // Refusals allocate nothing; only an accepted epoch records a watermark.
-    if (typeof resolved === 'string' || !isAdmissibleEpochScope(args.clientEpoch.scope)) {
-      return refusedSnapshot(args.identity, {
-        kind: 'not-admitted',
-        reason: typeof resolved === 'string' ? resolved : 'validation'
-      })
-    }
-    while (
-      this.tickets.size >= PR_DETAIL_RECOVERY_MAX_TICKETS ||
-      !this.watermarks.canAccept(caller.callerKey)
-    ) {
-      const retired = this.watermarks.retiredCaller()
-      if (retired === null) {
-        return refusedSnapshot(args.identity, { kind: 'not-admitted', reason: 'capacity' })
-      }
-      this.cancelCaller(retired)
-    }
-    if (existing && !existing.terminal) {
-      this.close(existing, { kind: 'cancelled' })
-    }
-    this.watermarks.accept(caller, args.clientEpoch.scope, args.clientEpoch.counter)
-    this.acceptSequence += 1
-    const ticket = createPRDetailRecoveryTicket(this.deps.queue, this.deps.requests, {
-      caller,
-      args,
-      candidate: resolved,
-      epochKey,
-      digest,
-      acceptSequence: this.acceptSequence
-    })
-    this.tickets.set(ticket.ticketId, ticket)
-    this.byEpoch.set(epochKey, ticket.ticketId)
-    this.advance(ticket)
-    this.deps.scheduleDrain()
-    return snapshotTicket(ticket)
+    return this.starts.start(caller, args, resolved)
+  }
+
+  startResolving(
+    caller: PRDetailRecoveryCaller,
+    args: PRDetailRecoveryStartArgs,
+    resolve: () => Promise<GitHubPRRefreshCandidate | PRDetailRecoveryNotAdmittedReason>
+  ): Promise<PRDetailRecoverySnapshot> {
+    return this.starts.startResolving(caller, args, resolve)
   }
 
   /** Move a ticket whose predecessors settled into the queue; never re-enqueue a closed one. */
@@ -269,22 +233,20 @@ export class PRDetailRecoveryTickets {
     return snapshotTicket(ticket)
   }
 
-  /** The caller is gone for good (window closed or reloaded): nothing it owned can be observed or replayed. */
+  private revoke(ticket: PRDetailRecoveryTicket): void {
+    // Even a settled outcome that has not been delivered loses its grant on revocation.
+    ticket.terminal = undefined
+    retireTicketGrant(ticket)
+    this.close(ticket, { kind: 'cancelled' })
+  }
+
   cancelCaller(callerKey: string): void {
-    for (const ticket of Array.from(this.tickets.values())) {
-      if (ticket.caller.callerKey === callerKey) {
-        this.close(ticket, { kind: 'cancelled' })
-        this.forget(ticket)
-      }
-    }
-    this.watermarks.forgetCaller(callerKey)
+    this.starts.cancelCaller(callerKey)
   }
 
   private forget(ticket: PRDetailRecoveryTicket): void {
     this.tickets.delete(ticket.ticketId)
-    if (this.byEpoch.get(ticket.epochKey) === ticket.ticketId) {
-      this.byEpoch.delete(ticket.epochKey)
-    }
+    this.starts.forgetTicket(ticket)
   }
 
   /** Bounded observation; it never enqueues, admits or reads. */
@@ -309,15 +271,24 @@ export class PRDetailRecoveryTickets {
 
   /** Expire leases, preparations, settlement budgets and retention; returns the next deadline. */
   tick(now = Date.now()): number | null {
-    return expirePRDetailRecoveryTickets(this.tickets.values(), now, this.deps.queue, {
+    const pending = this.starts.tick(now)
+    const tickets = expirePRDetailRecoveryTickets(this.tickets.values(), now, this.deps.queue, {
       close: (ticket, terminal) => this.close(ticket, terminal),
       forget: (ticket) => this.forget(ticket)
     })
+    const next = Math.min(pending ?? Infinity, tickets ?? Infinity)
+    return Number.isFinite(next) ? next : null
   }
 
   private owned(callerKey: string, ticketId: string): PRDetailRecoveryTicket | undefined {
     const ticket = this.tickets.get(ticketId)
-    return ticket?.caller.callerKey === callerKey ? ticket : undefined
+    if (ticket?.caller.callerKey !== callerKey) {
+      return undefined
+    }
+    if (ticket.caller.authority?.signal.aborted) {
+      this.revoke(ticket)
+    }
+    return ticket
   }
 
   private renew(ticket: PRDetailRecoveryTicket): void {

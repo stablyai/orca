@@ -31,7 +31,7 @@ import type {
   PRDetailRecoverySnapshot,
   PRDetailRecoveryStartArgs,
   PRDetailRecoveryWaitArgs
-} from '../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
+} from '../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
 
 export type GithubPullRequestApi = {
   viewer: () => Promise<GitHubViewer | null>

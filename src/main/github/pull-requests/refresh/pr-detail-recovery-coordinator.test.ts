@@ -228,7 +228,7 @@ describe('PR detail recovery tickets', () => {
     expect(getPRForBranchOutcomeMock.mock.calls[0][4]).toBe(7)
   })
 
-  it('treats start and commit as idempotent and refuses reused or stale epochs', async () => {
+  it('reuses a retained ticket across newer starts without accepting a conflicting identity', async () => {
     const api = await load()
     getPRForBranchOutcomeMock.mockResolvedValue(noPR())
     const started = api.startPRDetailRecovery(CALLER, startArgs(1), H2)
@@ -247,13 +247,13 @@ describe('PR detail recovery tickets', () => {
     api.commitPRDetailRecovery(CALLER.callerKey, commitArgs)
     api.commitPRDetailRecovery(CALLER.callerKey, commitArgs)
     await vi.advanceTimersByTimeAsync(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-    expect(api.commitPRDetailRecovery('ipc:2', commitArgs)).toBeNull()
-
-    expect(api.startPRDetailRecovery(CALLER, startArgs(2), H2).terminal).toBeUndefined()
-    expect(api.startPRDetailRecovery(CALLER, startArgs(1), H2).terminal).toEqual({
-      kind: 'expired'
+    expect((await api.snapshot(started.ticketId)).terminal).toEqual({
+      kind: 'settled',
+      outcome: noPR()
     })
+    expect(api.commitPRDetailRecovery('ipc:2', commitArgs)).toBeNull()
+    api.startPRDetailRecovery(CALLER, startArgs(2), H2)
+    expect(api.startPRDetailRecovery(CALLER, startArgs(1), H2).ticketId).toBe(started.ticketId)
   })
 
   it('wakes promptly after a host-only direct predecessor settles, honouring its cooldown', async () => {
@@ -287,36 +287,59 @@ describe('PR detail recovery tickets', () => {
     expect((await api.snapshot(started.ticketId)).phase).toBe('preparing')
   })
 
-  it('admits the next caller after credential churn without retiring a live caller or replaying a retired one', async () => {
+  it('honors revocation while the final asynchronous dispatch gate is held', async () => {
     const api = await load()
-    const live = { ...CALLER, isCredentialCurrent: () => true }
-    const active = api.startPRDetailRecovery(live, startArgs(1), H2)
-    let retired = false
-    const previous = { callerKey: 'rpc:old-1', isCredentialCurrent: () => !retired }
-    api.startPRDetailRecovery(previous, startArgs(1), H2)
-    for (let index = 2; index < 1_000; index += 1) {
-      api.startPRDetailRecovery(
-        { callerKey: `rpc:old-${index}`, isCredentialCurrent: () => !retired },
-        startArgs(1),
-        H2
-      )
-    }
-    retired = true
-
-    expect(
-      api.startPRDetailRecovery(
-        { callerKey: 'rpc:new', isCredentialCurrent: () => true },
-        startArgs(1),
-        H2
-      ).phase
-    ).toBe('queued')
-    expect(api.startPRDetailRecovery(previous, startArgs(1), H2).terminal).toEqual({
-      kind: 'not-admitted',
-      reason: 'validation'
+    const controller = new AbortController()
+    const caller = { ...CALLER, authority: { id: 'paired-incarnation', signal: controller.signal } }
+    const started = api.startPRDetailRecovery(caller, startArgs(1), H2)
+    await vi.advanceTimersByTimeAsync(0)
+    await api.commit(started.ticketId)
+    const gate = deferred<{ ok: boolean }>()
+    coordinatorMocks.getRateLimitMock.mockReturnValueOnce(gate.promise)
+    await vi.advanceTimersByTimeAsync(0)
+    controller.abort()
+    gate.resolve({ ok: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await api.snapshot(started.ticketId)).toMatchObject({
+      admitted: false,
+      terminal: { kind: 'cancelled' }
     })
-    expect(api.startPRDetailRecovery(live, startArgs(1), H2).ticketId).toBe(active.ticketId)
-
-    await vi.advanceTimersByTimeAsync(200_000)
-    expect(api.startPRDetailRecovery(live, startArgs(1), H2).terminal).toEqual({ kind: 'expired' })
   })
+
+  it.each(['pending wait', 'settled but unobserved'] as const)(
+    'fences a %s outcome and its grant after revocation',
+    async (stage) => {
+      const api = await load()
+      const controller = new AbortController()
+      const caller = {
+        ...CALLER,
+        authority: { id: 'paired-incarnation', signal: controller.signal }
+      }
+      const result = deferred<PRRefreshOutcome>()
+      getPRForBranchOutcomeMock.mockReturnValueOnce(result.promise)
+      const started = api.startPRDetailRecovery(caller, startArgs(1), H2)
+      await vi.advanceTimersByTimeAsync(0)
+      await api.commit(started.ticketId)
+      await vi.advanceTimersByTimeAsync(0)
+      const admitted = await api.snapshot(started.ticketId)
+      expect(admitted.admitted).toBe(true)
+      const pending =
+        stage === 'pending wait'
+          ? api.waitPRDetailRecovery(CALLER.callerKey, started.ticketId, admitted.revision)
+          : null
+      if (stage === 'settled but unobserved') {
+        result.resolve({ kind: 'found', pr: makePR({ number: 99 }), fetchedAt: START_AT })
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      controller.abort()
+      expect((await (pending ?? api.snapshot(started.ticketId)))?.terminal).toEqual({
+        kind: 'cancelled'
+      })
+      result.resolve({ kind: 'found', pr: makePR({ number: 99 }), fetchedAt: START_AT })
+      await vi.advanceTimersByTimeAsync(0)
+      const closed = await api.snapshot(started.ticketId)
+      expect(closed.terminal).toEqual({ kind: 'cancelled' })
+      expect(closed.publicationGrantId).toBeUndefined()
+    }
+  )
 })

@@ -52,10 +52,9 @@ export class DeviceRegistrySightings extends DeviceRegistryStore {
       return existing ? this.updateLastSeen(deviceId, sourceClass, framing) : undefined
     }
     const seenAt = Date.now()
-    this.devices = this.devices.map((device) =>
-      device === existing
-        ? withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
-        : device
+    this.updateSighting(
+      deviceId,
+      withDeviceSighting(seen(existing, seenAt, sourceClass), seenAt, framing)
     )
     this.scheduleLastSeenFlush(LAST_SEEN_FLUSH_DELAY_MS)
   }
