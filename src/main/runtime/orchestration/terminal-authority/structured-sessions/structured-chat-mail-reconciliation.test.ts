@@ -1,4 +1,5 @@
 import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
+import { busyChat, settleTurn } from './structured-chat-mail-custody.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
@@ -22,19 +23,8 @@ import {
   restartRuntime,
   dispatcher,
   request,
-  sendUserMessage,
-  settleTurn,
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
-
-async function busyChat(sessionId: string) {
-  const chat = await openChat(sessionId)
-  expect(await sendUserMessage(sessionId, 'go')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-  chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
-  await host.flushStreamedEvents(sessionId)
-  return chat
-}
 
 function readsOf(sessionId: string) {
   return journalSqlReads(host.deps.journalDatabase.readers, sessionId)
