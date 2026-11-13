@@ -1,4 +1,4 @@
-import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { watchCommunitySync } from './watch-community-sync'
 import { communityRequestResult } from './community-request-result'
 import type { CommunitySyncStatus } from '../../../../shared/community-catalog'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -66,42 +66,12 @@ export function useCommunityCatalog(target: RuntimeClientTarget, query: Communit
     if (!refreshing && !page?.status.running) {
       return
     }
-    let cancelled = false
-    let pending = false
-    let failures = 0
-    let retryAt = 0
-    const stop = installWindowVisibilityInterval({
-      intervalMs: 1000,
-      slowWhileUnfocused: true,
-      run: () => {
-        if (pending || Date.now() < retryAt) {
-          return
-        }
-        pending = true
-        void client
-          .status()
-          .then((status) => {
-            failures = 0
-            retryAt = 0
-            if (!cancelled) {
-              setSync(status)
-              if (!status.running && !refreshing) {
-                void load()
-              }
-            }
-          })
-          .catch(() => {
-            retryAt = Date.now() + Math.min(30_000, 1000 * 2 ** ++failures)
-          })
-          .finally(() => {
-            pending = false
-          })
+    return watchCommunitySync(client.status, (status) => {
+      setSync(status)
+      if (!status.running && !refreshing) {
+        void load()
       }
     })
-    return () => {
-      cancelled = true
-      stop()
-    }
   }, [client, refreshing, page?.status.running, load])
   const refresh = async (): Promise<void> => {
     const id = generation.current
