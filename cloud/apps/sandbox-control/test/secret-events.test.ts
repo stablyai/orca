@@ -140,10 +140,12 @@ describe('activity window and pagination', () => {
     const { h, admin, put, activity } = await setup()
     await put('org', 'OLD_VAR', VALUES[1]!, admin)
     h.advance(ACTIVITY_WINDOW_MS - 1_000)
-    await put('org', 'NEW_VAR', VALUES[1]!, admin)
-    expect((await activity(admin)).body.events.map((e: any) => e.name)).toEqual(['NEW_VAR', 'OLD_VAR'])
+    // Tokens live 5 minutes: mint new ones as the clock jumps.
+    const later = await h.token('alice', 'acme', 'sandbox', { org_role: 'admin' })
+    await put('org', 'NEW_VAR', VALUES[1]!, later)
+    expect((await activity(later)).body.events.map((e: any) => e.name)).toEqual(['NEW_VAR', 'OLD_VAR'])
     h.advance(2_000)
-    expect((await activity(admin)).body.events.map((e: any) => e.name)).toEqual(['NEW_VAR'])
+    expect((await activity(later)).body.events.map((e: any) => e.name)).toEqual(['NEW_VAR'])
   })
 
   it('pages newest first with a cursor, including many events in the same millisecond', async () => {

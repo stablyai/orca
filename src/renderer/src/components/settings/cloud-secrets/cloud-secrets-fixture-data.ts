@@ -147,9 +147,9 @@ export const FIXTURE_TEAM_ACTIVITY: CloudSecretEvent[] = [
 ]
 
 export const FIXTURE_PERSONAL_ACTIVITY: CloudSecretEvent[] = [
-  event(11, 'created', 'personal', 'OPENROUTER_API_KEY', 8),
+  event(13, 'created', 'personal', 'ANTHROPIC_API_KEY', 2),
   event(12, 'updated', 'personal', 'AWS_SECRET_ACCESS_KEY', 6),
-  event(13, 'created', 'personal', 'ANTHROPIC_API_KEY', 2)
+  event(11, 'created', 'personal', 'OPENROUTER_API_KEY', 8)
 ]
 
 export const FIXTURE_NAMES: Record<string, string> = { u_dana: 'Dana Reyes', u_ravi: 'Ravi Shah' }
