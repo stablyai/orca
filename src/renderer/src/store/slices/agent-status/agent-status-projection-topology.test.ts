@@ -8,6 +8,8 @@ import { acceptedAgentStatuses, AcceptedAgentStatuses } from './accepted-agent-s
 afterEach(() => vi.restoreAllMocks())
 
 it.each([100, 1000])('addresses tab changes beside %i unrelated recognized chats', (count) => {
+  const now = 1000
+  vi.spyOn(Date, 'now').mockReturnValue(now)
   const store = createTestStore()
   const visits: string[] = []
   const chats = Array.from({ length: count }, (_, index) => {
@@ -30,7 +32,6 @@ it.each([100, 1000])('addresses tab changes beside %i unrelated recognized chats
     return tab
   })
   const key = structuredAgentSessionPaneKey('native-0', 'session-0')
-  const now = Date.now()
   const terminal = makeUnifiedTab({
     id: 'target',
     worktreeId: 'target-workspace',

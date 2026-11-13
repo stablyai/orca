@@ -3,6 +3,7 @@ import {
   type AcceptedAgentStatuses
 } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import type { AppState } from '@/store/types'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -29,7 +30,7 @@ type MockState = {
   agentStatusEpoch: number
   agentStatusByPaneKey: AcceptedAgentStatuses
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
-  migrationUnsupportedByPtyId: Record<string, never>
+  migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   unifiedTabsByWorktree: Record<string, Tab[]>
   structuredChatSleptAtByPaneKey: Record<string, number | null>
   wslHostStatuses?: Record<string, { state: string; distro: string }>
