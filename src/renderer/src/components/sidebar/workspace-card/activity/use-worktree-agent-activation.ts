@@ -7,8 +7,10 @@ import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 
 export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
@@ -44,6 +46,17 @@ export function activateWorktreeAgentPane(
       paneKey
     })
     dismissStaleAgentRowByKey(paneKey)
+    return
+  }
+  const layout = state.terminalLayoutsByTabId[tabId]
+  const terminalHost = getPtyExecutionHost(
+    layout?.ptyIdsByLeafId?.[parsed.leafId] ?? state.ptyIdsByTabId[tabId]?.[0]
+  )
+  if (
+    executionHostId &&
+    terminalHost &&
+    !isExecutionHostForWorktree(state, worktreeId, executionHostId, terminalHost)
+  ) {
     return
   }
   // Use shared activation for cross-repo reveal and navigation history.

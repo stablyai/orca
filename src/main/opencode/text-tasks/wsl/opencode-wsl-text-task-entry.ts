@@ -26,7 +26,7 @@ const request = z.object({
       'branch-name',
       'jira-issue-summary',
       'conversation-name',
-      'dictation-cleanup',
+      'dictation-cleanup'
     ])
     .optional(),
   timeoutMs: z.number().int().positive()

@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
 import { workspaceMarkerTabs, type MarkerTab } from './workspace-live-markers'
+import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 
 type WorkspaceTabIndex = {
   terminalPtyById: ReadonlyMap<string, string | null | undefined>
@@ -76,6 +77,15 @@ export function workspaceMarkerTabIdsForHost(
   }
   const index = indexWorkspaceTabs(state, workspaceId)
   return new Set(
-    tabs.filter((tab) => markerTabHost(state, index, tab) === executionHostId).map((tab) => tab.id)
+    tabs
+      .filter((tab) =>
+        isExecutionHostForWorktree(
+          state,
+          workspaceId,
+          executionHostId,
+          markerTabHost(state, index, tab)
+        )
+      )
+      .map((tab) => tab.id)
   )
 }

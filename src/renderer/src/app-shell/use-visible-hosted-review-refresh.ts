@@ -20,6 +20,9 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
     let hostedTargets: ReturnType<typeof getVisibleHostedReviewRefreshTargets> = []
     let referenceTargets: ReturnType<typeof selectReferences> = []
     const update = (reviewInputsChanged: boolean): void => {
+      if (!isWindowVisible()) {
+        return
+      }
       const state = useAppStore.getState()
       const references = selectReferences(state, reviewInputsChanged)
       if (!reviewInputsChanged && references === referenceTargets) {

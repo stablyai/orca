@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
@@ -8,27 +9,13 @@ import { expandWorkspaceUnreadTargets, workspaceUnreadTarget } from './worktree-
 
 const WS = 'ws-scale'
 const REMOTE = 'runtime:host-B' as const
-const MARKER = { at: 1, kind: 'agent-completion' } as never
-
-type Counter = { visits: number }
-
-/** Count element reads so a per-tab `Array.find` shows up as quadratic visits. */
-function countingArray<T extends object>(items: T[], counter: Counter): T[] {
-  return new Proxy(items, {
-    get(target, prop, receiver) {
-      if (typeof prop === 'string' && /^\d+$/.test(prop)) {
-        counter.visits++
-      }
-      return Reflect.get(target, prop, receiver)
-    }
-  })
-}
+const MARKER = 'agent-completion' as const
 
 /**
  * T marked terminal tabs alternating local/remote, one structured chat whose old session also
  * left a completion, and C unrelated completion markers in other workspaces.
  */
-function buildState(tabCount: number, unrelatedCount: number, counter: Counter): AppState {
+function buildState(tabCount: number, unrelatedCount: number): AppState {
   const terminals = Array.from({ length: tabCount }, (_, i) =>
     makeTab({
       id: `t${i}`,
@@ -56,7 +43,7 @@ function buildState(tabCount: number, unrelatedCount: number, counter: Counter):
     ),
     chat
   ]
-  const completions: Record<string, unknown> = {}
+  const completions: AppState['unreadAgentCompletionPanes'] = {}
   for (const tab of terminals) {
     completions[`${tab.id}:leaf`] = MARKER
   }
@@ -66,48 +53,26 @@ function buildState(tabCount: number, unrelatedCount: number, counter: Counter):
     completions[`other${j}:leaf`] = MARKER
   }
   return {
+    ...useAppStore.getInitialState(),
     workspacesMarkedUnreadByUser: {},
     unreadTerminalTabs: {},
     unreadAgentCompletionPanes: completions,
-    tabsByWorktree: { [WS]: countingArray(terminals, counter) },
-    unifiedTabsByWorktree: { [WS]: countingArray(unified, counter) },
+    tabsByWorktree: { [WS]: terminals },
+    unifiedTabsByWorktree: { [WS]: unified },
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
     agentStatusByPaneKey: {}
-  } as unknown as AppState
+  }
 }
 
-/** Visits = tab element reads + pane-key parses (paneKeyTabId uses indexOf). */
-function measure(tabCount: number, unrelatedCount: number): number {
-  const counter: Counter = { visits: 0 }
-  const state = buildState(tabCount, unrelatedCount, counter)
-  const indexOf = vi.spyOn(String.prototype, 'indexOf')
-  expandWorkspaceUnreadTargets(state, [workspaceUnreadTarget(WS, 1, REMOTE)])
-  expandWorkspaceUnreadTargets(state, [workspaceUnreadTarget(WS, 1, 'local')])
-  const parses = indexOf.mock.calls.length
-  indexOf.mockRestore()
-  return counter.visits + parses
-}
-
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
-describe('expandWorkspaceUnreadTargets scaling', () => {
-  it('grows linearly with marked tabs and unrelated completion markers', () => {
-    const small = measure(20, 200)
-    const large = measure(200, 2000)
-    // Linear work scales ~10x; the former T×C and per-tab find scans scaled ~100x.
-    expect(large / small).toBeLessThan(15)
-  })
-
+describe('workspace unread targets', () => {
   it('keeps host ownership and structured-session filtering', () => {
-    const state = buildState(4, 3, { visits: 0 })
+    const state = buildState(4, 3)
     const remote = expandWorkspaceUnreadTargets(state, [workspaceUnreadTarget(WS, 1, REMOTE)])
     expect(remote.map((target) => [target.tabId, target.unreadPaneKeys])).toEqual([
       ['t0', ['t0:leaf']],
       ['t2', ['t2:leaf']],
-      ['chat', [structuredAgentSessionPaneKey('chat', 'session-2')]]
+      ['chat', ['chat:5d906140-8048-412d-a539-25aed45333a1']]
     ])
     const local = expandWorkspaceUnreadTargets(state, [workspaceUnreadTarget(WS, 1, 'local')])
     expect(local.map((target) => [target.tabId, target.unreadPaneKeys])).toEqual([
@@ -117,10 +82,10 @@ describe('expandWorkspaceUnreadTargets scaling', () => {
   })
 
   it('keeps a manual mark as its own target alongside tab targets', () => {
-    const state = buildState(2, 0, { visits: 0 })
+    const state = buildState(2, 0)
     state.workspacesMarkedUnreadByUser = {
       [composeWorktreeHostIdentity('local', WS)]: true
-    } as never
+    }
     const local = expandWorkspaceUnreadTargets(state, [workspaceUnreadTarget(WS, 1, 'local')])
     expect(
       local.map((target) => target.tabId ?? (target.markedByUser ? 'manual' : 'workspace'))

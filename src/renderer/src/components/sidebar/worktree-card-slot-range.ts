@@ -143,7 +143,8 @@ export function createLineageSlotReader(
     if (end <= index + 1) {
       return []
     }
-    return refreshRange(state, tree, index + 1, end).own.slice(index + 1, end) as WorkspaceSlot[]
+    const slots = refreshRange(state, tree, index + 1, end)
+    return Array.from({ length: end - index - 1 }, (_, offset) => slots.own[index + 1 + offset]!)
   }
 
   /** Range queries and localized updates merge O(log N) records, without reprojecting siblings. */

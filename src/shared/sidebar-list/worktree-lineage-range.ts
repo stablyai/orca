@@ -38,6 +38,8 @@ const rangesByPlan = new WeakMap<
   Map<string, WorktreeLineageRange>
 >()
 
+let previousPlan: WorktreeOccurrencePlan<Worktree> | undefined
+
 /** One preorder table per section; ranges share it instead of copying every ancestor's subtree. */
 export function buildWorktreeLineageRanges(
   plan: WorktreeOccurrencePlan<Worktree>
@@ -47,7 +49,28 @@ export function buildWorktreeLineageRanges(
     return cached
   }
   const result = new Map<string, WorktreeLineageRange>()
-  for (const occurrences of plan.bySection.values()) {
+  const previousRanges = previousPlan ? rangesByPlan.get(previousPlan) : undefined
+  for (const [sectionKey, occurrences] of plan.bySection) {
+    const previous = previousPlan?.bySection.get(sectionKey)
+    // Review/group labels can rebuild the plan without changing its lineage or fallback rows.
+    if (
+      previous &&
+      previousRanges &&
+      previous.length === occurrences.length &&
+      occurrences.every((occurrence, index) => {
+        const before = previous[index]!
+        return (
+          before.row === occurrence.row &&
+          before.depth === occurrence.depth &&
+          before.key === occurrence.key
+        )
+      })
+    ) {
+      for (const { key } of occurrences) {
+        result.set(key, previousRanges.get(key)!)
+      }
+      continue
+    }
     const tree: WorktreeLineageTree = {
       identities: [],
       worktrees: [],
@@ -66,9 +89,11 @@ export function buildWorktreeLineageRanges(
       tree.ends[index] = occurrences.length
     }
     occurrences.forEach((occurrence, index) => {
-      result.set(occurrence.key, { tree, index, length: tree.ends[index]! - index - 1 })
+      const range = { tree, index, length: tree.ends[index]! - index - 1 }
+      result.set(occurrence.key, range)
     })
   }
   rangesByPlan.set(plan, result)
+  previousPlan = plan
   return result
 }

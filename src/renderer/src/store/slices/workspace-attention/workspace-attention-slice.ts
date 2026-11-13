@@ -15,8 +15,9 @@ import {
   noteWorkspaceRead,
   forgetMarkerRaise
 } from './workspace-unread-flag'
-import { onScreenHostId } from './workspace-unread-flag-reads'
-import { workspaceMarkerTabs, paneKeyTabId } from './workspace-live-markers'
+import { isWorkspaceFlagSet, onScreenHostId } from './workspace-unread-flag-reads'
+import { paneKeyTabId } from './workspace-live-markers'
+import { workspaceAgentPaneKeys } from './workspace-agent-pane-index'
 import { workspaceMarkerTabIdsForHost } from './workspace-marker-host'
 import {
   composeWorktreeHostIdentity,
@@ -24,7 +25,7 @@ import {
 } from '../../../../../shared/worktree/host-qualified-identity'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
-import { resolveAgentStatusWorktreeId } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
+import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
@@ -139,14 +140,31 @@ export const createWorkspaceAttentionSlice: StateCreator<
       // Arriving fulfils "come back to this", even while other tabs still hold markers.
       if (screenArrived) {
         const state = get()
+        const arrivals = workspaceIds.flatMap((id) => {
+          const host = onScreenHostId(state, id) ?? getResolvedExecutionHostIdForWorktree(state, id)
+          return host
+            ? [
+                {
+                  identity: composeWorktreeHostIdentity(host, id),
+                  unread: isWorkspaceFlagSet(state, id, host)
+                }
+              ]
+            : []
+        })
         setWorkspacesMarkedUnreadByUser(
-          workspaceIds.flatMap((id) => {
-            const host =
-              onScreenHostId(state, id) ?? getResolvedExecutionHostIdForWorktree(state, id)
-            return host ? [composeWorktreeHostIdentity(host, id)] : []
-          }),
+          arrivals.map(({ identity }) => identity),
           false
         )
+        const pending = arrivals.filter(({ unread }) => unread)
+        if (pending.length > 0) {
+          // Arrival consumes the original flag; remaining markers now own its settlement.
+          set((s) => ({
+            workspaceUnreadRaisedByMarkers: {
+              ...s.workspaceUnreadRaisedByMarkers,
+              ...Object.fromEntries(pending.map(({ identity }) => [identity, true]))
+            }
+          }))
+        }
       }
       // Agent acknowledgement may already have removed this scan's completion markers.
       if (
@@ -173,7 +191,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
         isUnread
       )
       // The user owns the flag now: a later marker's removal must not lower their mark.
-      forgetMarkerRaise(set, get, worktreeId, { evenIfFlagged: true })
+      forgetMarkerRaise(set, get, worktreeId, { evenIfFlagged: true, executionHostId })
       if (isUnread) {
         void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
         return
@@ -197,9 +215,11 @@ export const createWorkspaceAttentionSlice: StateCreator<
         const entry = state.agentStatusByPaneKey[paneKey] ?? retained?.entry
         const tabId = paneKeyTabId(paneKey)
         const tab = tabId ? tabsById.get(tabId) : undefined
-        return (
-          getAgentPaneExecutionHost(state, paneKey, entry, tab?.ptyId ?? retained?.tab.ptyId) ===
-          executionHostId
+        return isExecutionHostForWorktree(
+          state,
+          worktreeId,
+          executionHostId,
+          getAgentPaneExecutionHost(state, paneKey, entry, tab?.ptyId ?? retained?.tab.ptyId)
         )
       })
       if (hostPaneKeys.length > 0) {
@@ -207,29 +227,4 @@ export const createWorkspaceAttentionSlice: StateCreator<
       }
     }
   }
-}
-
-/** Every agent pane, live or retained, that belongs to the workspace. */
-function workspaceAgentPaneKeys(state: AppState, worktreeId: string): string[] {
-  const keys: string[] = []
-  const tabOwners = new Map<string, string>()
-  for (const id of new Set([
-    ...Object.keys(state.tabsByWorktree),
-    ...Object.keys(state.unifiedTabsByWorktree)
-  ])) {
-    for (const tab of workspaceMarkerTabs(state, id)) {
-      tabOwners.set(tab.id, id)
-    }
-  }
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    if (resolveAgentStatusWorktreeId(entry, tabOwners) === worktreeId) {
-      keys.push(paneKey)
-    }
-  }
-  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
-    if (retained.worktreeId === worktreeId) {
-      keys.push(paneKey)
-    }
-  }
-  return keys
 }

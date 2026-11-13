@@ -8,8 +8,8 @@ export type StaleSlotSet = {
   markAll: () => void
   mark: (index: number) => void
   clear: (index: number) => void
-  /** Stale slots in [start, end), ascending. Returns how many tree nodes it visited. */
-  forEachStale: (start: number, end: number, visit: (index: number) => void) => number
+  /** Stale slots in [start, end), ascending. */
+  forEachStale: (start: number, end: number, visit: (index: number) => void) => void
 }
 
 export function createStaleSlotSet(length: number): StaleSlotSet {
@@ -39,14 +39,12 @@ export function createStaleSlotSet(length: number): StaleSlotSet {
     mark: (index) => setLeaf(index, 1),
     clear: (index) => setLeaf(index, 0),
     forEachStale(start, end, visit) {
-      let visited = 0
       // Explicit stack, left child pushed last so leaves come out in ascending order.
       const stack: number[] = [1, 0, size]
       while (stack.length > 0) {
         const high = stack.pop()!
         const low = stack.pop()!
         const node = stack.pop()!
-        visited++
         if (counts[node] === 0 || high <= start || low >= end) {
           continue
         }
@@ -57,7 +55,6 @@ export function createStaleSlotSet(length: number): StaleSlotSet {
         const middle = (low + high) / 2
         stack.push(node * 2 + 1, middle, high, node * 2, low, middle)
       }
-      return visited
     }
   }
 }

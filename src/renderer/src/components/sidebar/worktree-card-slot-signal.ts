@@ -114,11 +114,15 @@ function mergeSameKind(a: SlotException, b: SlotException): SlotException {
   if (a.kind === 'needs' && b.kind === 'needs') {
     return { kind: 'needs', count: a.count + b.count }
   }
-  if (
-    (a.kind === 'unread' && b.kind === 'unread') ||
-    (a.kind === 'working' && b.kind === 'working')
-  ) {
-    return (b.at ?? 0) > (a.at ?? 0) ? b : a
+  if (a.kind === 'working' && b.kind === 'working') {
+    return {
+      kind: 'working',
+      at: maxAt(a.at, b.at),
+      monitoring: a.monitoring === true && b.monitoring === true
+    }
+  }
+  if (a.kind === 'unread' && b.kind === 'unread') {
+    return { kind: 'unread', at: maxAt(a.at, b.at), manual: a.manual || b.manual }
   }
   return a
 }

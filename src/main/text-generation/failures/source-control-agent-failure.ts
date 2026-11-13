@@ -95,7 +95,7 @@ const EMPTY_RESULT_FAILURES = {
 const UNCODED_EMPTY_RESULT_NAMES = {
   'branch-name': 'branch name',
   'conversation-name': 'chat name',
-  'dictation-cleanup': 'cleanup',
+  'dictation-cleanup': 'cleanup'
 } as const
 
 export function emptyResultFailure(

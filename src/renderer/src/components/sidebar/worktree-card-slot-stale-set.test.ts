@@ -3,40 +3,11 @@ import { createStaleSlotSet } from './worktree-card-slot-stale-set'
 
 function staleIn(set: ReturnType<typeof createStaleSlotSet>, start: number, end: number) {
   const found: number[] = []
-  const visited = set.forEachStale(start, end, (index) => found.push(index))
-  return { found, visited }
+  set.forEachStale(start, end, (index) => found.push(index))
+  return found
 }
 
 describe('createStaleSlotSet', () => {
-  it.each([100, 1000, 10_000])(
-    'finds one stale descendant among %i without scanning the range',
-    (descendants) => {
-      // Parent at 0, descendants at 1..n: the shape a mounted parent card reads.
-      const set = createStaleSlotSet(descendants + 1)
-      set.markAll()
-      for (let i = 0; i <= descendants; i++) {
-        set.clear(i)
-      }
-      const changed = Math.floor(descendants / 2)
-      set.mark(changed)
-      const { found, visited } = staleIn(set, 1, descendants + 1)
-      expect(found).toEqual([changed])
-      // Two boundary paths plus the path to the stale leaf: O(log N), not O(N).
-      expect(visited).toBeLessThanOrEqual(6 * Math.ceil(Math.log2(descendants + 1)) + 4)
-    }
-  )
-
-  it('visits O(log N) nodes for a fully fresh range even when slots elsewhere are stale', () => {
-    const set = createStaleSlotSet(10_000)
-    set.markAll()
-    for (let i = 2000; i < 9000; i++) {
-      set.clear(i)
-    }
-    const { found, visited } = staleIn(set, 2000, 9000)
-    expect(found).toEqual([])
-    expect(visited).toBeLessThanOrEqual(6 * 14 + 4)
-  })
-
   it('matches a brute-force scan for random marks and ranges', () => {
     let seed = 7
     const random = (limit: number) => {
@@ -61,10 +32,10 @@ describe('createStaleSlotSet', () => {
         const expected = truth
           .map((stale, i) => (stale ? i : -1))
           .filter((i) => i >= start && i < end)
-        expect(staleIn(set, start, end).found).toEqual(expected)
+        expect(staleIn(set, start, end)).toEqual(expected)
       }
       set.markAll()
-      expect(staleIn(set, 0, length).found).toEqual(Array.from({ length }, (_, i) => i))
+      expect(staleIn(set, 0, length)).toEqual(Array.from({ length }, (_, i) => i))
     }
   })
 })

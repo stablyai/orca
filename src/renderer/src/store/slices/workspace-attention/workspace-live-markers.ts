@@ -26,7 +26,7 @@ export function paneKeyTabId(paneKey: string): string | null {
 }
 
 const completionKeysByTabCache = new WeakMap<MarkerRecord, ReadonlyMap<string, readonly string[]>>()
-let previousCompletionKeysByTab: ReadonlyMap<string, readonly string[]> = new Map()
+let previousCompletionKeysByTab: ReadonlyMap<string, string[]> = new Map()
 
 function sameKeys(left: readonly string[], right: readonly string[] | undefined): boolean {
   return (
@@ -65,7 +65,7 @@ export function completionPaneKeysByTabId(
   for (const [tabId, keys] of byTab) {
     const previous = previousCompletionKeysByTab.get(tabId)
     if (previous !== keys && sameKeys(keys, previous)) {
-      byTab.set(tabId, previous as string[])
+      byTab.set(tabId, previous!)
     }
   }
   completionKeysByTabCache.set(completions, byTab)

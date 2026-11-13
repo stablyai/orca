@@ -2,6 +2,8 @@ import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   completionPaneKeysByTabId,
   workspaceMarkerTabs
@@ -20,10 +22,18 @@ import {
  */
 export function workspaceUnreadInputs(state: AppState, worktree: Worktree): unknown[] {
   const identity = composeWorktreeHostIdentity(worktree.hostId ?? 'local', worktree.id)
+  const owner = resolveQualifiedWorktreeExecutionOwner(
+    selectWorktreesByRepo(state),
+    state.repos,
+    worktree.id,
+    worktree.hostId ?? 'local'
+  )?.worktree
   const inputs: unknown[] = [
     state.workspacesMarkedUnreadByUser[identity],
     state.tabsByWorktree[worktree.id],
-    state.unifiedTabsByWorktree[worktree.id]
+    state.unifiedTabsByWorktree[worktree.id],
+    owner?.hostId,
+    owner?.runtimeOwnerEnvironmentId
   ]
   const completions = completionPaneKeysByTabId(state.unreadAgentCompletionPanes)
   let hasStructuredTab = false
@@ -55,12 +65,41 @@ export function createWorkspaceUnreadSelector(
     worktree.lastActivityAt || null,
     worktree.hostId
   )
+  const identity = composeWorktreeHostIdentity(worktree.hostId ?? 'local', worktree.id)
+  let sources: readonly unknown[] = []
+  let unifiedTabs: AppState['unifiedTabsByWorktree'][string] | undefined
+  let hasStructuredTab = false
   let inputs: readonly unknown[] | null = null
   let unread = false
   return (state: AppState) => {
     if (!worktree.isUnread) {
       return false
     }
+    const nextUnifiedTabs = state.unifiedTabsByWorktree[worktree.id]
+    if (nextUnifiedTabs !== unifiedTabs) {
+      unifiedTabs = nextUnifiedTabs
+      hasStructuredTab = unifiedTabs?.some((tab) => tab.contentType === 'agent-session') ?? false
+    }
+    const nextSources = [
+      state.workspacesMarkedUnreadByUser[identity],
+      state.tabsByWorktree[worktree.id],
+      unifiedTabs,
+      state.unreadTerminalTabs,
+      state.unreadAgentCompletionPanes,
+      state.terminalLayoutsByTabId,
+      state.ptyIdsByTabId,
+      state.agentStatusByPaneKey,
+      selectWorktreesByRepo(state),
+      state.repos,
+      ...(hasStructuredTab ? structuredAgentSessionOwnerInputs(state) : [])
+    ]
+    if (
+      sources.length === nextSources.length &&
+      nextSources.every((value, index) => value === sources[index])
+    ) {
+      return unread
+    }
+    sources = nextSources
     const next = workspaceUnreadInputs(state, worktree)
     if (
       inputs === null ||

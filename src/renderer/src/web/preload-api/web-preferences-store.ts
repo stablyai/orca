@@ -223,9 +223,10 @@ export async function syncRuntimeBackedSettings(
     Object.assign(runtimeUpdates, await chatSettings.updates(updates, requestedEnvironment))
     if (Object.keys(runtimeUpdates).length > 0) {
       try {
-        // Consent is written only to the host it was chosen for; other settings keep the common path.
+        // Host-gated settings are written only to the host whose support was checked.
         const result =
-          typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean'
+          typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean' ||
+          typeof runtimeUpdates.worktreeCardDetailsRow === 'boolean'
             ? await chatSettings.call<SettingsResult>(
                 requestedEnvironment,
                 'settings.update',

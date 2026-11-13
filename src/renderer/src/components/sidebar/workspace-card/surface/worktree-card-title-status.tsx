@@ -14,11 +14,7 @@ import { selectAgentRowsUnread } from '../activity/worktree-card-agent-ack-input
 import { selectSendTargetControlInputs } from '../activity/worktree-card-send-target-inputs'
 import { useWorktreeAgentExpansionState } from '../activity/worktree-card-agents-expansion-state'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
-import {
-  collectLineageSlotTargets,
-  useCollapsedLineageSlots,
-  useLineageLatestAt
-} from '../../worktree-card-slot-rollup'
+import { collectLineageSlotTargets, useLineageSlotSummary } from '../../worktree-card-slot-rollup'
 import {
   buildSlotAgentSignals,
   type SlotAgentSignals
@@ -92,8 +88,8 @@ export function WorktreeCardTitleStatusProvider({
   const linesShown = showInlineAgentList && signals.rootCount > 0 && !foldedBehindSummary
   const descendants = lineageDescendantIdentities ?? NO_DESCENDANTS
   const hiddenDescendants = lineageCollapsed ? descendants : NO_DESCENDANTS
-  const collapsedLineage = useCollapsedLineageSlots(hiddenDescendants)
-  const lineageLatestAt = useLineageLatestAt(descendants)
+  const lineage = useLineageSlotSummary(descendants, lineageCollapsed)
+  const collapsedLineage = lineage.exceptions
   const lastActivityAt = worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null
   const visibleAgentTargets = useMemo(
     () => (linesShown ? slotTargetsFromAgentLines(worktree.id, signals, worktree.hostId) : []),
@@ -111,7 +107,7 @@ export function WorktreeCardTitleStatusProvider({
     workspaceUnread: workspaceUnread ? { manual: markedByUser } : null,
     ownLinesShown: linesShown,
     lastActivityAt,
-    lineageLatestAt
+    lineageLatestAt: lineage.latestAt
   })
   const resolveTargets = useCallback(
     (kind: SlotException['kind']) => {

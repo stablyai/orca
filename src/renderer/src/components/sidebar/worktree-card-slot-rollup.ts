@@ -1,9 +1,11 @@
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { createLineageSlotReader, type WorkspaceSlot } from './worktree-card-slot-range'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   toLineageSlotRecord,
   fromLineageSlotRecord,
+  mergeRecord,
   type LineageSlotRecord
 } from './worktree-card-slot-summary'
 import { useMemo } from 'react'
@@ -12,6 +14,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   getWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
@@ -24,6 +27,7 @@ import {
   type WorktreeLineageSource
 } from '../../../../shared/sidebar-list/worktree-lineage-range'
 import {
+  EMPTY_AGENT_ROWS,
   getSharedWorktreeAgentRowsSelector,
   worktreeAgentProjectionInputs
 } from './workspace-card/activity/worktree-agent-rows-projection'
@@ -51,6 +55,7 @@ const ownSlots = new Map<
   HostScopedWorktreeKey,
   {
     worktree: Worktree | undefined
+    hostId: ExecutionHostId | null
     slot: WorkspaceSlot
     agents: DashboardAgentRow[]
     unread: boolean[]
@@ -64,14 +69,18 @@ function ownSlot(
 ): WorkspaceSlot {
   const cached = ownSlots.get(identity)
   const worktree = worktreeForIdentity(state, identity) ?? fallback ?? cached?.worktree
-  const agents = getSharedWorktreeAgentRowsSelector(
-    getWorktreeIdFromHostIdentity(identity),
-    getExecutionHostIdFromWorktreeHostIdentity(identity)
-  )(state)
+  const worktreeId = getWorktreeIdFromHostIdentity(identity)
+  const hostId =
+    getExecutionHostIdFromWorktreeHostIdentity(identity) ??
+    getResolvedExecutionHostIdForWorktree(state, worktreeId)
+  const agents = hostId
+    ? getSharedWorktreeAgentRowsSelector(worktreeId, hostId)(state)
+    : EMPTY_AGENT_ROWS
   const unread = selectAgentRowsUnread(state, agents)
   if (
     cached &&
     cached.worktree === worktree &&
+    cached.hostId === hostId &&
     cached.agents === agents &&
     unread.length === cached.unread.length &&
     unread.every((value, index) => value === cached.unread[index])
@@ -91,14 +100,10 @@ function ownSlot(
     )
   )
   const signals = buildSlotAgentSignals(agents, unread)
-  const targets = slotTargetsFromAgentLines(
-    getWorktreeIdFromHostIdentity(identity),
-    signals,
-    getExecutionHostIdFromWorktreeHostIdentity(identity)
-  )
+  const targets = slotTargetsFromAgentLines(worktreeId, signals, hostId ?? undefined)
   if (worktree?.isUnread) {
     targets.push(
-      workspaceUnreadTarget(worktree.id, worktree.lastActivityAt || null, worktree.hostId)
+      workspaceUnreadTarget(worktree.id, worktree.lastActivityAt || null, hostId ?? undefined)
     )
   }
   const at = Math.max(
@@ -111,7 +116,7 @@ function ownSlot(
     latestAt: at > 0 ? at : null
   }
   ownSlots.delete(identity)
-  ownSlots.set(identity, { worktree, slot: result, agents, unread })
+  ownSlots.set(identity, { worktree, hostId, slot: result, agents, unread })
   if (ownSlots.size > 2048) {
     ownSlots.delete(ownSlots.keys().next().value!)
   }
@@ -147,58 +152,67 @@ export function selectCollapsedLineageSlots(
   state: AppState,
   source: WorktreeLineageSource
 ): LineageSlotRecord {
-  return isLineageRange(source)
-    ? descendantSlot(state, source.tree, source.index).record
-    : toLineageSlotRecord(slotExceptionsFor(collectLineageSlotTargets(state, source)))
+  return selectLineageSlot(state, source).record
 }
 
-function createCollapsedLineageSlotsSelector(source: WorktreeLineageSource) {
+function selectLineageSlot(
+  state: AppState,
+  source: WorktreeLineageSource
+): Pick<WorkspaceSlot, 'record' | 'latestAt'> {
+  if (isLineageRange(source)) {
+    return descendantSlot(state, source.tree, source.index)
+  }
+  const record = toLineageSlotRecord([])
+  let latestAt = 0
+  for (const identity of lineageIdentities(source)) {
+    const slot = ownSlot(state, identity)
+    mergeRecord(record, slot.record)
+    latestAt = Math.max(latestAt, slot.latestAt ?? 0)
+  }
+  return { record, latestAt: latestAt || null }
+}
+
+function createLineageSlotSummarySelector(source: WorktreeLineageSource, collapsed: boolean) {
   let inputs: readonly unknown[] = []
-  let record = toLineageSlotRecord([])
+  let summary: LineageSlotRecord & { latestAt: number | null } = {
+    ...toLineageSlotRecord([]),
+    latestAt: null
+  }
   return (state: AppState) => {
     const next = worktreeAgentProjectionInputs(state)
     if (!next.every((value, index) => value === inputs[index])) {
       inputs = next
-      record = selectCollapsedLineageSlots(state, source)
+      const slot = selectLineageSlot(state, source)
+      summary = {
+        ...(collapsed ? slot.record : toLineageSlotRecord([])),
+        latestAt: slot.latestAt
+      }
     }
-    return record
+    return summary
   }
 }
 
-export function useCollapsedLineageSlots(source: WorktreeLineageSource): SlotException[] {
-  const select = useMemo(() => createCollapsedLineageSlotsSelector(source), [source])
-  const record = useAppStore(useShallow(select))
-  return useMemo(() => fromLineageSlotRecord(record), [record])
+export function useLineageSlotSummary(
+  source: WorktreeLineageSource,
+  collapsed: boolean
+): {
+  exceptions: SlotException[]
+  latestAt: number | null
+} {
+  const select = useMemo(
+    () => createLineageSlotSummarySelector(source, collapsed),
+    [source, collapsed]
+  )
+  const summary = useAppStore(useShallow(select))
+  return useMemo(
+    () => ({ exceptions: fromLineageSlotRecord(summary), latestAt: summary.latestAt }),
+    [summary]
+  )
 }
 
 export function selectLineageLatestAt(
   state: AppState,
   source: WorktreeLineageSource
 ): number | null {
-  if (isLineageRange(source)) {
-    return descendantSlot(state, source.tree, source.index).latestAt
-  }
-  let at = 0
-  for (const identity of lineageIdentities(source)) {
-    at = Math.max(at, ownSlot(state, identity).latestAt ?? 0)
-  }
-  return at || null
-}
-
-function createLineageLatestAtSelector(source: WorktreeLineageSource) {
-  let inputs: readonly unknown[] = []
-  let at: number | null = null
-  return (state: AppState) => {
-    const next = worktreeAgentProjectionInputs(state)
-    if (!next.every((value, index) => value === inputs[index])) {
-      inputs = next
-      at = selectLineageLatestAt(state, source)
-    }
-    return at
-  }
-}
-
-export function useLineageLatestAt(source: WorktreeLineageSource): number | null {
-  const select = useMemo(() => createLineageLatestAtSelector(source), [source])
-  return useAppStore(select)
+  return selectLineageSlot(state, source).latestAt
 }

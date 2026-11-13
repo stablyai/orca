@@ -108,9 +108,16 @@ export function deriveWorktreeCardPrDisplay(
         ((cachedBranchPRFetchedAt !== undefined &&
           cachedBranchPRFetchedAt > (hostedReviewEntry?.fetchedAt ?? 0)) ||
           cachedMergedBranchPRMatchesCurrentHead)))
+  const staleUnlinkedMergedReview =
+    !hasLinkedReview &&
+    hostedReview?.provider === 'github' &&
+    hostedReview.state === 'merged' &&
+    !isCachedMergedBranchPRCurrentForWorktree(hostedReview, worktree)
   const cachedBranchReview = useCachedBranchReview
     ? hostedReviewInfoFromGitHubPRInfo(cachedBranchPR)
-    : hostedReview
+    : staleUnlinkedMergedReview
+      ? null
+      : hostedReview
   // Why: branch provenance does not supersede the head-ownership gate for merged PRs.
   const branchLookupGitHubPRNumber =
     hostedReview?.provider === 'github' &&

@@ -17,7 +17,7 @@ export function read(
       typeof host.worktreeCardDetailsRow === 'boolean' ? environmentId : null
   }
   return {
-    ...(typeof host.worktreeCardDetailsRow === 'boolean'
+    ...(environmentStillActive && typeof host.worktreeCardDetailsRow === 'boolean'
       ? { worktreeCardDetailsRow: host.worktreeCardDetailsRow }
       : {}),
     ...(typeof host.compactWorktreeCards === 'boolean'

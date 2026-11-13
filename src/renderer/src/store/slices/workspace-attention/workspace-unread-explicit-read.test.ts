@@ -11,6 +11,8 @@ import {
   type PaneTarget
 } from './workspace-unread-characterization-fixture'
 import { completeAgentTurn, toggleUnreadByUser } from './workspace-unread-characterization-driver'
+import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { isWorkspaceFlagSet } from './workspace-unread-flag-reads'
 import { selectAgentRowsUnread } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-ack-inputs'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
@@ -326,4 +328,89 @@ describe('explicit workspace and agent reads', () => {
     store.getState().setWorkspaceUnreadByUser(WS_A, false, 'runtime:box')
     expect(selectAgentRowsUnread(store.getState(), [{ paneKey }])).toEqual([false])
   })
+
+  it('Mark read on an SSH workspace reads its paired chat and preserves another runtime', () => {
+    const { store } = createAttentionStore({ windowOnScreen: false })
+    const terminal = finishedAgentOffScreen(store)
+    const entry = store.getState().agentStatusByPaneKey[terminal.paneKey]!
+    const chats = ['box', 'other'].map((host) =>
+      makeUnifiedTab({
+        id: `native-${host}`,
+        entityId: `session-${host}`,
+        worktreeId: WS_A,
+        groupId: 'group',
+        contentType: 'agent-session',
+        agentSessionAgent: 'claude',
+        executionHostId: `runtime:${host}`
+      })
+    )
+    const keys = chats.map((tab) => structuredAgentSessionPaneKey(tab.id, tab.entityId))
+    store.setState({
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: WS_A,
+            repoId: 'repo1',
+            hostId: 'ssh:server',
+            runtimeOwnerEnvironmentId: 'box',
+            isUnread: true
+          })
+        ]
+      },
+      unifiedTabsByWorktree: { [WS_A]: chats },
+      agentStatusByPaneKey: Object.fromEntries(
+        keys.map((paneKey) => [paneKey, { ...entry, paneKey }])
+      ),
+      unreadAgentCompletionPanes: Object.fromEntries(
+        keys.map((paneKey) => [paneKey, 'agent-completion'])
+      )
+    })
+
+    store.getState().setWorkspaceUnreadByUser(WS_A, false, 'ssh:server')
+
+    expect(
+      selectAgentRowsUnread(
+        store.getState(),
+        keys.map((paneKey) => ({ paneKey }))
+      )
+    ).toEqual([false, true])
+    expect(Object.values(store.getState().unreadAgentCompletionPanes)).toEqual(['agent-completion'])
+  })
+})
+
+it('settles a marker-raised folder flag without clearing a same-ID host’s manual unread', () => {
+  const { store } = createAttentionStore({ windowOnScreen: false })
+  const workspaceId = folderWorkspaceKey('same-folder')
+  store.setState({
+    folderWorkspaces: [
+      makeFolderWorkspace({ id: 'same-folder', executionHostId: 'local' }),
+      makeFolderWorkspace({ id: 'same-folder', executionHostId: 'runtime:box', isUnread: true })
+    ],
+    activeWorktreeId: workspaceId,
+    activeWorkspaceExecutionHostId: 'local'
+  })
+  const pane = addLiveTerminalTab(store, workspaceId, 'folder-agent')
+  completeAgentTurn(store, pane)
+  expect(isWorkspaceFlagSet(store.getState(), workspaceId, 'local')).toBe(true)
+
+  store.getState().setWorkspaceUnreadByUser(workspaceId, true, 'runtime:box')
+  store.getState().closeTab(pane.tabId)
+
+  expect(isWorkspaceFlagSet(store.getState(), workspaceId, 'local')).toBe(false)
+  expect(isWorkspaceFlagSet(store.getState(), workspaceId, 'runtime:box')).toBe(true)
+})
+
+it('settles an arrived manual flag when the last background marker closes', () => {
+  const { store } = createAttentionStore({ windowOnScreen: false })
+  store.getState().setWorkspaceUnreadByUser(WS_A, true, 'local')
+  const pane = finishedAgentOffScreen(store)
+  store.setState({ activeWorktreeId: WS_A, activeWorkspaceExecutionHostId: 'local' })
+  store
+    .getState()
+    .readOnScreenAttention({ workspaceIds: [WS_A], targets: [] }, { screenArrived: true })
+  expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
+
+  store.getState().closeTab(pane.tabId)
+
+  expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(false)
 })

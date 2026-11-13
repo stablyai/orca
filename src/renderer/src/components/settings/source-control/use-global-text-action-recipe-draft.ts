@@ -5,7 +5,7 @@ import { normalizeSourceControlAiSettings } from '../../../../../shared/source-c
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   setSourceControlActionDefault,
-  type GlobalOnlyAiTextActionId
+  type GlobalAiTextActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { CUSTOM_AGENT_ID } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -20,7 +20,7 @@ export function useGlobalTextActionRecipeDraft({
   onDirtyChange,
   onSaveError
 }: {
-  actionId: GlobalOnlyAiTextActionId
+  actionId: GlobalAiTextActionId
   settings: GlobalSettings
   writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onDirtyChange?: (dirty: boolean) => void

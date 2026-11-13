@@ -14,7 +14,10 @@ import {
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { readWorkspaceReferenceDetails } from './workspace-reference-detail-read'
 import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'
-import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
+import {
+  selectIsSleepingWorktree,
+  selectWorktreeIdsWithLiveAgent
+} from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
 function workspaceReferenceWorkspaces(state: AppState, options?: { selectedOnly?: boolean }) {
   return [...getVisibleHostedReviewWorkspaces(state, options)].filter(({ worktree }) =>
@@ -27,7 +30,8 @@ export function createWorkspaceReferenceRefreshTargetsSelector(options?: {
 }) {
   let workspaces: ReturnType<typeof workspaceReferenceWorkspaces> = []
   let inputs: readonly unknown[] = []
-  let sleeping: boolean[] = []
+  let sleeping = new Map<string, boolean>()
+  let liveWorktreeIds: ReadonlySet<string> = new Set()
   let result: VisibleHostedReviewRefreshTarget[] = []
   return (state: AppState, reviewInputsChanged: boolean): VisibleHostedReviewRefreshTarget[] => {
     const reset = inputs.length === 0 || reviewInputsChanged
@@ -46,25 +50,59 @@ export function createWorkspaceReferenceRefreshTargetsSelector(options?: {
     if (!reset && next.every((value, index) => value === inputs[index])) {
       return result
     }
+    const topologyChanged =
+      reset || next.slice(0, 5).some((value, index) => value !== inputs[index])
     inputs = next
-    const nextSleeping = workspaces.map(({ worktree }) =>
-      selectIsSleepingWorktree(state, worktree.id)
-    )
-    if (reset || nextSleeping.some((value, index) => value !== sleeping[index])) {
-      result = referenceRefreshTargets(state, workspaces)
+    const nextLiveWorktreeIds =
+      workspaces.length > 0 ? selectWorktreeIdsWithLiveAgent(state) : liveWorktreeIds
+    let changed = reset
+    if (topologyChanged) {
+      const nextSleeping = new Map<string, boolean>()
+      for (const { worktree } of workspaces) {
+        if (nextSleeping.has(worktree.id)) {
+          continue
+        }
+        const value = selectIsSleepingWorktree(state, worktree.id)
+        changed ||= value !== sleeping.get(worktree.id)
+        nextSleeping.set(worktree.id, value)
+      }
+      sleeping = nextSleeping
+    } else {
+      const updateSleep = (id: string): void => {
+        if (!sleeping.has(id)) {
+          return
+        }
+        const value = selectIsSleepingWorktree(state, id)
+        changed ||= value !== sleeping.get(id)
+        sleeping.set(id, value)
+      }
+      for (const id of liveWorktreeIds) {
+        if (!nextLiveWorktreeIds.has(id)) {
+          updateSleep(id)
+        }
+      }
+      for (const id of nextLiveWorktreeIds) {
+        if (!liveWorktreeIds.has(id)) {
+          updateSleep(id)
+        }
+      }
     }
-    sleeping = nextSleeping
+    liveWorktreeIds = nextLiveWorktreeIds
+    if (changed) {
+      result = referenceRefreshTargets(state, workspaces, sleeping)
+    }
     return result
   }
 }
 
 function referenceRefreshTargets(
   state: AppState,
-  workspaces: ReturnType<typeof workspaceReferenceWorkspaces>
+  workspaces: ReturnType<typeof workspaceReferenceWorkspaces>,
+  sleeping: ReadonlyMap<string, boolean>
 ): VisibleHostedReviewRefreshTarget[] {
   const targets = new Map<string, VisibleHostedReviewRefreshTarget>()
   for (const { worktree, repo, candidate, selected } of workspaces) {
-    if (selectIsSleepingWorktree(state, worktree.id)) {
+    if (sleeping.get(worktree.id)) {
       continue
     }
     const branchKey = getHostedReviewCacheKey(

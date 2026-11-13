@@ -25,7 +25,7 @@ export type SlotSnapshot = {
    * host aliasing reads tab and pty provenance), so it is diffed by its per-workspace output.
    */
   orchestration: ReturnType<typeof selectWorktreeAgentOrchestrationIndex>
-  worktreesByRepo: AppState['worktreesByRepo']
+  worktrees: AppState['worktreesByRepo']
   /** Workspace selection, settings and catalog: only consulted for chats with no stamped host. */
   owner: readonly unknown[]
   live: AppState['agentStatusByPaneKey']
@@ -66,7 +66,7 @@ export function slotSnapshot(state: AppState): SlotSnapshot {
         paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey
       },
       orchestration: selectWorktreeAgentOrchestrationIndex(state),
-      worktreesByRepo: selectWorktreesByRepo(state),
+      worktrees: selectWorktreesByRepo(state),
       owner: structuredAgentSessionOwnerInputs(state),
       live: state.agentStatusByPaneKey,
       acknowledgements: state.acknowledgedAgentsByPaneKey,
@@ -238,8 +238,8 @@ function changedBetween(
     return null
   }
   addChangedOrchestrationWorkspaces(result, before.orchestration, after.orchestration)
-  if (before.worktreesByRepo !== after.worktreesByRepo) {
-    addChangedCatalogWorkspaces(result, before.worktreesByRepo, after.worktreesByRepo)
+  if (before.worktrees !== after.worktrees) {
+    addChangedCatalogWorkspaces(result, before.worktrees, after.worktrees)
   }
   if (!sameInputs(after.owner, before.owner)) {
     addUnstampedChatWorkspaces(result, state)

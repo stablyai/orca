@@ -1,3 +1,6 @@
+import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
+import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
@@ -30,14 +33,24 @@ export const EMPTY_AGENT_ROWS: DashboardAgentRow[] = []
 function rowBelongsToHost(
   state: AppState,
   row: DashboardAgentRow,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  owner: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'> | undefined
 ): boolean {
   const paneKey = row.activationPaneKey ?? row.paneKey
   const entry =
     state.agentStatusByPaneKey[paneKey] ??
     state.retainedAgentsByPaneKey[paneKey]?.entry ??
     row.entry
-  return getAgentPaneExecutionHost(state, paneKey, entry, row.tab.ptyId) === hostId
+  const paneHost = getAgentPaneExecutionHost(state, paneKey, entry, row.tab.ptyId)
+  return (
+    paneHost === hostId ||
+    Boolean(
+      paneHost &&
+      paneHost !== 'foreign' &&
+      owner &&
+      isExecutionHostAliasForWorktree(paneHost, owner)
+    )
+  )
 }
 
 /** The row model shared by mounted cards and hidden-workspace summaries. */
@@ -45,6 +58,8 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
   const selectFreshness = createWorktreeAgentFreshnessSelector(worktreeId, () => Date.now())
   let previous: readonly unknown[] = []
   let result = EMPTY_AGENT_ROWS
+  let ownerTabs: ReturnType<typeof getStructuredAgentSessionTabsByPaneKey> | undefined
+  let needsWorkspaceOwner = false
   return (state: AppState): DashboardAgentRow[] => {
     const tabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
     const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
@@ -61,8 +76,24 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
     const representedTabs = getStructuredAgentSessionTabsByPaneKey(
       state.unifiedTabsByWorktree[worktreeId]
     )
-    const needsWorkspaceOwner =
-      hostId && [...representedTabs.values()].some((tab) => !tab.executionHostId)
+    const workspaceOwner = hostId
+      ? resolveQualifiedWorktreeExecutionOwner(
+          selectWorktreesByRepo(state),
+          state.repos,
+          worktreeId,
+          hostId
+        )?.worktree
+      : undefined
+    if (hostId && ownerTabs !== representedTabs) {
+      ownerTabs = representedTabs
+      needsWorkspaceOwner = false
+      for (const tab of representedTabs.values()) {
+        if (!tab.executionHostId) {
+          needsWorkspaceOwner = true
+          break
+        }
+      }
+    }
     const inputs = [
       tabs,
       liveEntries,
@@ -75,6 +106,8 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       paneForegroundAgentByPaneKey,
       selectFreshness(state),
       representedTabs,
+      workspaceOwner?.hostId,
+      workspaceOwner?.runtimeOwnerEnvironmentId,
       ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : [])
     ]
     if (
@@ -107,7 +140,7 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       now: Date.now()
     })
     result = applyAgentRowLineage(
-      hostId ? rows.filter((row) => rowBelongsToHost(state, row, hostId)) : rows
+      hostId ? rows.filter((row) => rowBelongsToHost(state, row, hostId, workspaceOwner)) : rows
     )
     return result
   }
@@ -136,8 +169,8 @@ export function getSharedWorktreeAgentRowsSelector(worktreeId: string, hostId?: 
   return selector
 }
 
-/** Tab and pane layout inputs; a change here can move any agent between workspaces. */
-export function worktreeAgentLayoutInputs(state: AppState): readonly unknown[] {
+/** Structural ownership, live status, and acknowledgements used by lineage summaries. */
+export function worktreeAgentProjectionInputs(state: AppState): readonly unknown[] {
   return [
     state.tabsByWorktree,
     state.unifiedTabsByWorktree,
@@ -146,22 +179,8 @@ export function worktreeAgentLayoutInputs(state: AppState): readonly unknown[] {
     state.ptyIdsByTabId,
     state.terminalLayoutsByTabId,
     state.runtimeAgentOrchestrationByPaneKey,
-    state.paneForegroundAgentByPaneKey
-  ]
-}
-
-/** Structural changes can alter agent ownership; live status and acknowledgements invalidate only their owners. */
-export function worktreeAgentStructureInputs(state: AppState): readonly unknown[] {
-  return [
-    ...worktreeAgentLayoutInputs(state),
-    selectWorktreesByRepo(state),
-    ...structuredAgentSessionOwnerInputs(state)
-  ]
-}
-
-export function worktreeAgentProjectionInputs(state: AppState): readonly unknown[] {
-  return [
-    ...worktreeAgentStructureInputs(state),
+    state.paneForegroundAgentByPaneKey,
+    ...structuredAgentSessionOwnerInputs(state),
     state.runtimePaneTitlesByTabId,
     state.agentStatusByPaneKey,
     state.agentStatusEpoch,

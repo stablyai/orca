@@ -1,3 +1,10 @@
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import {
+  composeWorktreeHostIdentity,
+  getExecutionHostIdFromWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity,
+  parseWorktreeHostIdentity
+} from '../../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates } from '../worktrees/metadata/worktree-meta-update-application'
 import {
@@ -78,39 +85,63 @@ function noteMarkerRaise(
   worktreeId: string
 ): void {
   const state = get()
-  if (state.workspaceUnreadRaisedByMarkers[worktreeId]) {
-    return
-  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
-  const row =
+  const folderRow =
     workspaceScope?.type === 'folder'
       ? folderRowToMark(state, worktreeId, workspaceScope.folderWorkspaceId)
-      : findKnownWorktreeById(state, worktreeId)
-  if (!row || row.isUnread) {
+      : undefined
+  const row = folderRow ?? findKnownWorktreeById(state, worktreeId)
+  const hostId = folderRow
+    ? getFolderWorkspaceHostId(folderRow, state.projectGroups)
+    : getResolvedExecutionHostIdForWorktree(state, worktreeId)
+  if (!row || row.isUnread || !hostId) {
+    return
+  }
+  const identity = composeWorktreeHostIdentity(hostId, worktreeId)
+  if (state.workspaceUnreadRaisedByMarkers[identity]) {
     return
   }
   set((s) => ({
-    workspaceUnreadRaisedByMarkers: { ...s.workspaceUnreadRaisedByMarkers, [worktreeId]: true }
+    workspaceUnreadRaisedByMarkers: { ...s.workspaceUnreadRaisedByMarkers, [identity]: true }
   }))
 }
 
-/** Drop the marker-raised record once no row of the workspace is flagged, or when the user takes the flag over. */
+function markerRaiseIdentities(
+  state: ReturnType<WorkspaceAttentionGet>,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId | null
+) {
+  return Object.keys(state.workspaceUnreadRaisedByMarkers).flatMap((key) => {
+    const identity = parseWorktreeHostIdentity(key)
+    return identity &&
+      getWorktreeIdFromHostIdentity(identity) === worktreeId &&
+      (!executionHostId || getExecutionHostIdFromWorktreeHostIdentity(identity) === executionHostId)
+      ? [identity]
+      : []
+  })
+}
+
+/** Drop provenance for cleared host rows, or the row whose flag the user takes over. */
 export function forgetMarkerRaise(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,
   worktreeId: string,
-  options?: { evenIfFlagged?: boolean }
+  options?: { evenIfFlagged?: boolean; executionHostId?: ExecutionHostId | null }
 ): void {
   const state = get()
-  if (!state.workspaceUnreadRaisedByMarkers[worktreeId]) {
-    return
-  }
-  if (!options?.evenIfFlagged && isWorkspaceFlagSet(state, worktreeId)) {
+  const cleared = markerRaiseIdentities(state, worktreeId, options?.executionHostId).filter(
+    (identity) =>
+      options?.evenIfFlagged ||
+      !isWorkspaceFlagSet(state, worktreeId, getExecutionHostIdFromWorktreeHostIdentity(identity))
+  )
+  if (cleared.length === 0) {
     return
   }
   set((s) => {
     const next = { ...s.workspaceUnreadRaisedByMarkers }
-    delete next[worktreeId]
+    for (const identity of cleared) {
+      delete next[identity]
+    }
     return { workspaceUnreadRaisedByMarkers: next }
   })
 }
@@ -198,7 +229,7 @@ export function clearWorkspaceUnreadFlag(
   executionHostId?: ExecutionHostId | null
 ): void {
   lowerWorkspaceUnreadFlag(set, get, worktreeId, executionHostId)
-  forgetMarkerRaise(set, get, worktreeId)
+  forgetMarkerRaise(set, get, worktreeId, { executionHostId })
 }
 
 function lowerWorkspaceUnreadFlag(
@@ -297,7 +328,11 @@ export function settleWorkspaceUnreadFlag(
   if (workspaceHasLiveMarker(state, worktreeId)) {
     return
   }
-  if (cause === 'markers' && !state.workspaceUnreadRaisedByMarkers[worktreeId]) {
+  if (cause === 'markers') {
+    for (const identity of markerRaiseIdentities(state, worktreeId, executionHostId)) {
+      const hostId = getExecutionHostIdFromWorktreeHostIdentity(identity)
+      clearWorkspaceUnreadFlag(set, get, worktreeId, hostId)
+    }
     return
   }
   clearWorkspaceUnreadFlag(set, get, worktreeId, executionHostId)

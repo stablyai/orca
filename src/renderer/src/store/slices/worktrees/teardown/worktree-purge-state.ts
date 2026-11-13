@@ -25,6 +25,7 @@ import { collectHostTwinPurgeScopes } from './host-twin-purge-scopes'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../../types'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
+import { removeWorkspaceUnreadState } from '../../workspace-attention/workspace-unread-removal'
 
 /**
  * Builds a bulk cleanup patch and clears auxiliary warning records without requiring individual
@@ -77,6 +78,7 @@ export function buildWorktreePurgeState(
   const next = { ...s, ...patch }
   return {
     ...patch,
+    ...removeWorkspaceUnreadState(next, hostKeys),
     lastVisitedAtByWorktreeId: removeWorktreeVisitEntriesForTargets(
       next.lastVisitedAtByWorktreeId,
       hostKeys
@@ -159,6 +161,10 @@ export function buildFullWorktreePurgeState(
 
   return {
     editorBufferKeepRequest,
+    ...removeWorkspaceUnreadState(
+      s,
+      [...worktreeIdSet].map((id) => ({ id }))
+    ),
     ...removeWorktreeLayout(s, {
       worktreeIds: worktreeIdSet,
       tabIds: doomed.doomedTabIds,

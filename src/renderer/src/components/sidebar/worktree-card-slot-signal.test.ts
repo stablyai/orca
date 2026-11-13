@@ -52,6 +52,22 @@ describe('titleRowSlot quiet timestamp', () => {
   })
 })
 
+it('keeps active work visible when collapsed descendants are monitoring', () => {
+  expect(
+    titleRowSlot({
+      ...base,
+      ownLinesShown: false,
+      lines: [{ kind: 'working', at: 1_000 }],
+      collapsedLineage: [{ kind: 'working', at: 2_000, monitoring: true }],
+      lastActivityAt: null
+    })
+  ).toEqual({
+    kind: 'status',
+    exceptions: [{ kind: 'working', at: 2_000, monitoring: false }],
+    at: 2_000
+  })
+})
+
 describe('titleRowUnread', () => {
   const unreadChild = [{ kind: 'unread' as const, at: 1_000, manual: false }]
 
@@ -106,4 +122,16 @@ describe('titleRowUnread', () => {
       })
     ).toBe(false)
   })
+})
+
+it.each([1_000, 2_000])('preserves a manual unread mark alongside an agent at %i', (at) => {
+  expect(
+    titleRowSlot({
+      ...base,
+      ownLinesShown: false,
+      lines: [{ kind: 'unread', at }],
+      workspaceUnread: { manual: true },
+      lastActivityAt: 1_000
+    })
+  ).toMatchObject({ exceptions: [{ kind: 'unread', at, manual: true }] })
 })

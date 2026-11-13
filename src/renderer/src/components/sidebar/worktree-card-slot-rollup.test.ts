@@ -311,3 +311,78 @@ it('refreshes unstamped structured agent summaries when workspace ownership chan
     count: 1
   })
 })
+
+it('resolves unqualified rows to their owner and omits agent targets when ownership is unknown', () => {
+  const unqualified = composeWorktreeHostIdentity(undefined, 'child')
+  useAppStore.setState({
+    repos: [{ ...TEST_REPO, executionHostId: 'local' }],
+    worktreesByRepo: { repo1: [makeWorktree({ id: 'child', repoId: 'repo1' })] },
+    agentStatusByPaneKey: {
+      [pane('local')]: entry('local'),
+      [pane('remote')]: entry('remote', { state: 'blocked', connectionId: 'box' })
+    }
+  })
+  expect(
+    collectLineageSlotTargets(useAppStore.getState(), [unqualified]).map((target) => [
+      target.kind,
+      target.executionHostId
+    ])
+  ).toEqual([['working', 'local']])
+  useAppStore.setState({ repos: [] })
+  expect(collectLineageSlotTargets(useAppStore.getState(), [unqualified])).toEqual([])
+})
+
+it('includes SSH panes and paired-runtime chat panes belonging to the same workspace', () => {
+  const chat = makeUnifiedTab({
+    id: 'paired-chat',
+    entityId: 'session',
+    worktreeId: 'child',
+    groupId: 'group',
+    contentType: 'agent-session',
+    executionHostId: 'runtime:box',
+    agentSessionAgent: 'claude'
+  })
+  const chatPane = structuredAgentSessionPaneKey(chat.id, chat.entityId)
+  useAppStore.setState({
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({
+          id: 'child',
+          repoId: 'repo1',
+          hostId: 'ssh:remote',
+          runtimeOwnerEnvironmentId: 'box'
+        })
+      ]
+    },
+    unifiedTabsByWorktree: { child: [chat] },
+    runtimeEnvironments: [publicRuntimeEnvironment({ id: 'box' })],
+    agentStatusByPaneKey: {
+      [pane('ssh')]: entry('ssh', { connectionId: 'remote' }),
+      [chatPane]: entry('paired-chat', { paneKey: chatPane, state: 'blocked' }),
+      [pane('other')]: entry('other', { connectionId: 'other-host' })
+    }
+  })
+  expect(
+    collectLineageSlotTargets(useAppStore.getState(), [
+      composeWorktreeHostIdentity('ssh:remote', 'child')
+    ])
+      .map((target) => target.paneKey)
+      .sort()
+  ).toEqual([chatPane, pane('ssh')].sort())
+})
+
+it('deduplicates an omitted local host against an explicitly local unread agent', () => {
+  const agent = {
+    ...workspaceUnreadTarget('child', 2, 'local'),
+    paneKey: pane('agent')
+  }
+  const tab = { ...workspaceUnreadTarget('child', 1), tabId: 'agent' }
+  expect(slotTargetsOfKind([agent, tab], 'unread').map((target) => target.paneKey)).toEqual([
+    'agent:11111111-1111-4111-8111-111111111111'
+  ])
+  expect(
+    slotTargetsOfKind([{ ...tab, unreadPaneKeys: [pane('agent')] }, agent], 'unread').map(
+      (target) => target.paneKey
+    )
+  ).toEqual(['agent:11111111-1111-4111-8111-111111111111'])
+})

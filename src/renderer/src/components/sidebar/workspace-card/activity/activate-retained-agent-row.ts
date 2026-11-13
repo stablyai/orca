@@ -12,6 +12,7 @@ import {
 import { stablePaneHasLivePty } from '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
+import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 
 export function activateRetainedAgentRow(
   worktreeId: string,
@@ -46,7 +47,9 @@ export function activateRetainedAgentRow(
   if (
     (nativeTab ? !target : !hasLiveTerminal) ||
     owner === 'foreign' ||
-    (executionHostId && owner && owner !== executionHostId)
+    (executionHostId &&
+      owner &&
+      !isExecutionHostForWorktree(state, worktreeId, executionHostId, owner))
   ) {
     return
   }

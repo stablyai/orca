@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
-import { useAppStateView } from '@/store/retained-views/app-state-view'
+import { useAppStateView, useAppStateViewActive } from '@/store/retained-views/app-state-view'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   createWorktreeAgentRowsSelector,
@@ -13,7 +12,7 @@ const subscribeToNothing = (): (() => void) => () => {}
 export function useWorktreeAgentRows(worktreeId: string, active = true, hostId?: ExecutionHostId) {
   const store = useAppStateView()
   // Live reads share the rollup's selector; a retained view's frozen state keeps its own memo.
-  const live = store === useAppStore
+  const live = useAppStateViewActive()
   const selectRows = useMemo(
     () =>
       live

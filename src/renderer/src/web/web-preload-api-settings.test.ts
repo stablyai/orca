@@ -76,6 +76,105 @@ describe('web settings preload API', () => {
     expect((await globals.window.api.settings.get()).worktreeCardDetailsRow).toBe(false)
   })
 
+  it('ignores a stale details-row reply after another host has answered', async () => {
+    let answer!: (response: RuntimeRpcResponse<unknown>) => void
+    let started!: () => void
+    const readStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    let hold = true
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          if (hold) {
+            hold = false
+            return new Promise((resolve) => {
+              answer = resolve
+              started()
+            })
+          }
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: { worktreeCardDetailsRow: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    installWebPreloadApi()
+    const api = globals.window.api.settings
+    const pending = api.get()
+    await readStarted
+    webRuntimeState.activeEnvironment = { ...webRuntimeState.activeEnvironment!, id: 'host-B' }
+    expect((await api.get()).worktreeCardDetailsRow).toBe(false)
+    answer({
+      id: 'late',
+      ok: true,
+      result: { settings: { worktreeCardDetailsRow: true } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    expect((await pending).worktreeCardDetailsRow).toBe(false)
+    expect(api.getSync()?.worktreeCardDetailsRow).toBe(false)
+  })
+
+  it('does not write a details-row preference to a host selected during a capability check', async () => {
+    let answer!: (response: RuntimeRpcResponse<unknown>) => void
+    let started!: () => void
+    const statusStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    let hostDetailsRow = false
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'status.get') {
+            return new Promise((resolve) => {
+              answer = resolve
+              started()
+            })
+          }
+          if (method === 'settings.update') {
+            hostDetailsRow = true
+          }
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: { worktreeCardDetailsRow: hostDetailsRow } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    installWebPreloadApi()
+    const api = globals.window.api.settings
+    await api.get()
+    const pending = api.set({
+      worktreeCardDetailsRow: true,
+      nativeChatAutoContinueAfterUsageLimit: true
+    })
+    await statusStarted
+    webRuntimeState.activeEnvironment = { ...webRuntimeState.activeEnvironment!, id: 'host-B' }
+    answer({
+      id: 'status',
+      ok: true,
+      result: { capabilities: [] },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await pending
+    expect((await api.get()).worktreeCardDetailsRow).toBe(false)
+  })
+
   it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
     // Seed after module load to model another tab’s storage update; first ui.get must migrate settings before snapshotting UI or it erases the one-shot notice arm.
     const globals = installBrowserGlobals('Linux')

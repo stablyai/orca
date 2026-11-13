@@ -6,7 +6,9 @@ const LANE_URGENCY: Partial<Record<WorktreeStatus, number>> = {
   permission: 0,
   failed: 1,
   working: 2,
-  monitoring: 3
+  monitoring: 3,
+  unconfirmed: 4,
+  interrupted: 5
 }
 
 /** The lane status collapsed descendants would claim: needs you, then failed, then working. */

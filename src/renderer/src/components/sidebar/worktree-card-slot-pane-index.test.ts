@@ -13,7 +13,11 @@ import {
   resetSlotPaneIndexForTests
 } from './worktree-card-slot-pane-index'
 
-function entry(paneKey: string, evidenceAt: number, extra?: Partial<AgentStatusEntry>) {
+function entry(
+  paneKey: string,
+  evidenceAt: number,
+  extra?: Partial<AgentStatusEntry>
+): AgentStatusEntry {
   return {
     state: 'working',
     prompt: '',
@@ -23,7 +27,7 @@ function entry(paneKey: string, evidenceAt: number, extra?: Partial<AgentStatusE
     stateHistory: [],
     paneKey,
     ...extra
-  } as AgentStatusEntry
+  }
 }
 
 function displayers(paneKey: string): string[] {

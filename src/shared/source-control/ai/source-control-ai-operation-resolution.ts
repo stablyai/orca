@@ -88,7 +88,7 @@ const COMMAND_TEMPLATE_EMPTY = {
   pullRequest: 'commandTemplateEmptyPullRequest',
   branchName: 'commandTemplateEmptyBranchName',
   conversationName: 'commandTemplateEmptyChatName',
-  dictationCleanup: 'commandTemplateEmptyDictationCleanup',
+  dictationCleanup: 'commandTemplateEmptyDictationCleanup'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 const AGENT_CANNOT_GENERATE = {
@@ -96,7 +96,7 @@ const AGENT_CANNOT_GENERATE = {
   pullRequest: 'agentCannotGeneratePullRequest',
   branchName: 'agentCannotGenerateBranchName',
   conversationName: 'agentCannotGenerateChatName',
-  dictationCleanup: 'agentCannotGenerateDictationCleanup',
+  dictationCleanup: 'agentCannotGenerateDictationCleanup'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 // Each failure names the settings page where the action's agent is chosen.
@@ -105,7 +105,7 @@ const AGENT_UNSUPPORTED = {
   pullRequest: 'sourceControlAgentUnsupported',
   branchName: 'sourceControlAgentUnsupported',
   conversationName: 'chatNameAgentUnsupported',
-  dictationCleanup: 'dictationCleanupAgentUnsupported',
+  dictationCleanup: 'dictationCleanupAgentUnsupported'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 const CUSTOM_COMMAND_EMPTY = {
@@ -114,7 +114,7 @@ const CUSTOM_COMMAND_EMPTY = {
   branchName: 'sourceControlCustomCommandEmpty',
   conversationName: 'chatNameCustomCommandEmpty',
   // The custom command is set under Source Control AI for every action that isn't a chat name.
-  dictationCleanup: 'sourceControlCustomCommandEmpty',
+  dictationCleanup: 'sourceControlCustomCommandEmpty'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 function supportedAgentLabels(): string {

@@ -134,7 +134,7 @@ function unreadPaneKeysForTab(
 }
 
 function workspaceKey(target: SlotTarget) {
-  return composeWorktreeHostIdentity(target.executionHostId, target.worktreeId)
+  return composeWorktreeHostIdentity(target.executionHostId ?? 'local', target.worktreeId)
 }
 
 /** Targets for the one kind a slot shows, newest first; workspace-level unread yields to the agents that explain it. */
