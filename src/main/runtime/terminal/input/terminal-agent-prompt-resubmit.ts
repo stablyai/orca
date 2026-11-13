@@ -10,6 +10,7 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { watchHeldLaunchpadPrompt } from './held-launchpad-prompt-watch'
 
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity
@@ -19,7 +20,8 @@ type HeldAgentPrompt = {
 }
 
 export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithTitlelessPaneAgentIdentity {
-  /** Retry blind Enter and drafts held by Windows input-record pastes or unopened dsh launchpads; retries cannot fail a submitted prompt. */
+  /** Retry blind Enter and drafts held by Windows input-record pastes or unopened dsh launchpads; retries cannot fail a submitted prompt.
+   *  A dsh launchpad still holding the prompt at the budget's end hands it to a detached watch. */
   protected async resubmitHeldAgentPrompt(
     ptyId: string,
     generation: number,
@@ -39,6 +41,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     const deadline = Date.now() + held.heldBudgetMs
     let resubmits = 0
     let gatedResubmits = 0
+    let expiredHolding = false
     try {
       do {
         const waitMs = blind ? retryDelayMs : Math.min(retryDelayMs, deadline - Date.now())
@@ -64,8 +67,12 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         }
         await options.beforeWrite?.(ptyId)
         // Recheck after yielding: read the screen before the synchronous deadline/turn checks to avoid stale writes.
-        if (!blind && (!(await holdsPrompt()) || Date.now() >= deadline)) {
+        if (!blind && !(await holdsPrompt())) {
           return resubmits
+        }
+        if (!blind && Date.now() >= deadline) {
+          expiredHolding = true
+          break
         }
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
@@ -80,10 +87,63 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
           gatedResubmits += 1
         }
       } while (gated && Date.now() < deadline)
+      expiredHolding ||= gated
     } catch {
       // Why: a refused retry leaves the first Enter's verdict to the verification that follows.
+      expiredHolding = false
+    }
+    if (expiredHolding && readsLaunchDraft && prompt !== undefined) {
+      this.watchHeldLaunchpadPrompt(ptyId, generation, options, held, prompt, {
+        retryDelayMs,
+        absorbedEnters: 1 + resubmits
+      })
     }
     return resubmits
+  }
+
+  private readonly heldLaunchpadPromptWatches = new Map<string, AbortController>()
+
+  /** Detached from the send: its caller's wait and prompt lock end with the in-band budget. */
+  private watchHeldLaunchpadPrompt(
+    ptyId: string,
+    generation: number,
+    options: RuntimeAgentPromptWriteOptions,
+    held: HeldAgentPrompt,
+    prompt: string,
+    args: { retryDelayMs: number; absorbedEnters: number }
+  ): void {
+    this.heldLaunchpadPromptWatches.get(ptyId)?.abort()
+    const stop = new AbortController()
+    this.heldLaunchpadPromptWatches.set(ptyId, stop)
+    void watchHeldLaunchpadPrompt(
+      {
+        isLive: () => {
+          try {
+            this.assertAgentPromptGeneration(ptyId, generation)
+            return !this.isPtyStopRequested(ptyId)
+          } catch {
+            return false
+          }
+        },
+        readLastInputAt: () => this.terminalRunFacts.readLastInputAt(ptyId),
+        settled: () => agentPromptSettledWithin(held, 0, stop.signal),
+        holdsPrompt: async (absorbedEnters) =>
+          isHeldAgentPromptDraft(
+            (await this.readCurrentTerminalWaitScreen(ptyId))?.draft,
+            prompt,
+            absorbedEnters
+          ),
+        pressEnter: () =>
+          this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) === true
+      },
+      { ...args, signal: stop.signal }
+    )
+      .catch(() => 0)
+      .finally(() => {
+        if (this.heldLaunchpadPromptWatches.get(ptyId) === stop) {
+          this.heldLaunchpadPromptWatches.delete(ptyId)
+        }
+      })
   }
 }
 

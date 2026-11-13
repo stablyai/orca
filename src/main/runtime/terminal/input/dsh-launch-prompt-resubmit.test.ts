@@ -52,7 +52,12 @@ const DSH_TURN_STARTED = '\x1b]0;⠂ 🐋 \x07\x1b]7501;state=working:app=dsh-tu
 describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   afterEach(() => vi.useRealTimers())
 
-  async function launchDsh(screen: string, acceptingEnter: number, dispatch = false) {
+  async function launchDsh(
+    screen: string,
+    acceptingEnter: number,
+    dispatch = false,
+    afterSendMs = 0
+  ) {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
       (runtime, data) => {
@@ -82,6 +87,7 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
     )
     await vi.advanceTimersByTimeAsync(40_000)
     await expect(submission).resolves.toMatchObject({ accepted: true })
+    await vi.advanceTimersByTimeAsync(afterSendMs)
     return {
       enters: writes.filter((write) => write === '\r').length,
       pastes: writes.filter((write) => write.includes(AGENT_PROMPT_BRACKETED_PASTE_END)).length
@@ -107,6 +113,47 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
       enters: 1,
       pastes: 1
     })
+  })
+
+  // #33499: a loaded host can open dsh's session after the send's 30 s budget has returned.
+  it('keeps pressing Enter after the send returns until a slow session opens', async () => {
+    await expect(
+      launchDsh(fixture('launchpad-draft-starting'), 45, false, 30_000)
+    ).resolves.toEqual({ enters: 45, pastes: 1 })
+  })
+
+  it('keeps pressing Enter for a worker dispatch whose session opens late', async () => {
+    await expect(launchDsh(fixture('launchpad-draft-starting'), 45, true, 30_000)).resolves.toEqual(
+      { enters: 45, pastes: 1 }
+    )
+  })
+
+  it('stops pressing Enter once someone else types into the pane', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (runtime, data) => {
+        if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+          runtime.onPtyData('pty-prompt', fixture('launchpad-draft-starting'), Date.now())
+        }
+      },
+      'dsh'
+    )
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 120, rows: 40 })
+    const enters = (): number => writes.filter((write) => write === '\r').length
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'say hi in one word', {
+      inputKind: 'launch',
+      composerReady: true,
+      acceptQueued: true,
+      requestId: 'dsh-launch',
+      observationTimeoutMs: 0
+    })
+    await vi.advanceTimersByTimeAsync(40_000)
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    const beforeTyping = enters()
+    runtime.terminalRunFacts.recordInput('pty-prompt', 'driving', 'x')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(beforeTyping).toBeGreaterThan(30)
+    expect(enters()).toBe(beforeTyping)
   })
 
   // #30778: a fresh worker's tui-idle settles on dsh 0.17's boot `OSC 7501 idle`, before its session opens.
