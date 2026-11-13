@@ -61,17 +61,21 @@ function indexSubtreeSnapshot(
   rootElementIndex: number
 ): { shown: BridgeSnapshot; cached: BridgeSnapshot } {
   const baseElements = base.elements ?? []
-  const baseByRuntimeId = new Map<string, BridgeElement[]>()
+  const baseByIdentity = new Map<string, BridgeElement[]>()
   let nextIndex = base.nextElementIndex ?? 0
   for (const element of baseElements) {
     nextIndex = Math.max(nextIndex, element.index + 1)
-    const key = runtimeIdKey(element)
-    const candidates = key === null ? undefined : baseByRuntimeId.get(key)
+    const key = elementIdentityKey(element)
+    const candidates = key === null ? undefined : baseByIdentity.get(key)
     if (candidates) {
       candidates.push(element)
     } else if (key !== null) {
-      baseByRuntimeId.set(key, [element])
+      baseByIdentity.set(key, [element])
     }
+  }
+  // Pop the earliest matching candidate without rescanning duplicate runtime ids.
+  for (const candidates of baseByIdentity.values()) {
+    candidates.reverse()
   }
   const requestedRoot = baseElements.find((element) => element.index === rootElementIndex)
   const requestedRootKey = requestedRoot ? runtimeIdKey(requestedRoot) : null
@@ -82,12 +86,12 @@ function indexSubtreeSnapshot(
     // Why: the provider resolved the rendered root from the requested handle, so it is that element
     // even if its name changed; Windows resolves index 0 only as the window, never by runtime id.
     const isRequestedRoot = position === 0 && key !== null && key === requestedRootKey
-    // Why: Linux runtime ids are tree positions, so a replacement there must not take the old index.
-    const known = isRequestedRoot
-      ? requestedRoot
-      : (key === null ? undefined : baseByRuntimeId.get(key))?.find(
-          (candidate) => !claimed.has(candidate.index) && sameElementSignature(candidate, element)
-        )
+    const identityKey = isRequestedRoot ? null : elementIdentityKey(element)
+    const candidates = identityKey === null ? undefined : baseByIdentity.get(identityKey)
+    let known = isRequestedRoot ? requestedRoot : candidates?.pop()
+    while (known && claimed.has(known.index)) {
+      known = candidates?.pop()
+    }
     const index = known?.index ?? nextIndex++
     claimed.add(index)
     indexes.set(element.index, index)
@@ -141,15 +145,15 @@ function runtimeIdKey(element: BridgeElement): string | null {
     : null
 }
 
-// Mirrors the Linux resolver's same_element_signature check.
-function sameElementSignature(left: BridgeElement, right: BridgeElement): boolean {
-  const leftActions = left.actions ?? []
-  const rightActions = right.actions ?? []
-  return (
-    (left.controlType ?? '') === (right.controlType ?? '') &&
-    (left.name ?? '') === (right.name ?? '') &&
-    (left.automationId ?? '') === (right.automationId ?? '') &&
-    leftActions.length === rightActions.length &&
-    leftActions.every((action, position) => action === rightActions[position])
-  )
+// Linux runtime ids are tree positions; require the resolver's signature as well.
+function elementIdentityKey(element: BridgeElement): string | null {
+  return !Array.isArray(element.runtimeId) || element.runtimeId.length === 0
+    ? null
+    : JSON.stringify([
+        element.runtimeId,
+        element.controlType ?? '',
+        element.name ?? '',
+        element.automationId ?? '',
+        element.actions ?? []
+      ])
 }

@@ -134,61 +134,28 @@ describe('DesktopScriptProviderClient repeated subtree reads', () => {
     })
   })
 
-  it('gives a different element at the same runtime id a new index', async () => {
-    const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
-    mockBridgeResponse({
-      ok: true,
-      snapshot: bridgeSnapshot(
-        ['0 frame Mail', '\t1 list Inbox', '\t\t2 button Archive'],
-        [
-          { index: 0, runtimeId: [0] },
-          { index: 1, runtimeId: [0, 0] },
-          { index: 2, runtimeId: [0, 0, 0], name: 'Archive' }
-        ]
-      )
-    })
-    await client.snapshot({ app: 'Mail' })
-
-    // Linux runtime ids are tree positions, so a replacement can arrive at the same id.
-    mockBridgeResponse({
-      ok: true,
-      snapshot: bridgeSnapshot(
-        ['0 list Inbox', '\t1 button Delete'],
-        [
-          { index: 0, runtimeId: [0, 0] },
-          { index: 1, runtimeId: [0, 0, 0], name: 'Delete' }
-        ]
-      )
-    })
-    const read = await client.snapshot({ app: 'Mail', rootElementIndex: 1 })
-
-    expect(read.snapshot.treeText.split('\n').slice(4, 6)).toEqual([
-      '1 list Inbox',
-      '\t3 button Delete'
-    ])
-  })
-
-  it('keeps the requested root’s index when its name changed', async () => {
+  it('renumbers a different element at a known runtime id but keeps the requested root', async () => {
     const client = await createDesktopScriptProviderClient('windows', 'runtime.ps1')
     mockBridgeResponse({
       ok: true,
       snapshot: bridgeSnapshot(
-        ['0 window Inbox - Mail', '\t1 list Inbox'],
+        ['0 window Inbox - Mail', '\t1 button Archive'],
         [
           { index: 0, runtimeId: [42, 7], name: 'Inbox - Mail' },
-          { index: 1, runtimeId: [42, 8] }
+          { index: 1, runtimeId: [42, 8], name: 'Archive' }
         ]
       )
     })
     await client.snapshot({ app: 'Mail' })
 
+    // Both renamed; only the root is known to be the same element, since the read started from it.
     mockBridgeResponse({
       ok: true,
       snapshot: bridgeSnapshot(
-        ['0 window Sent - Mail', '\t1 list Sent'],
+        ['0 window Sent - Mail', '\t1 button Delete'],
         [
           { index: 0, runtimeId: [42, 7], name: 'Sent - Mail' },
-          { index: 1, runtimeId: [42, 8] }
+          { index: 1, runtimeId: [42, 8], name: 'Delete' }
         ]
       )
     })
@@ -196,7 +163,7 @@ describe('DesktopScriptProviderClient repeated subtree reads', () => {
 
     expect(read.snapshot.treeText.split('\n').slice(4, 6)).toEqual([
       '0 window Sent - Mail',
-      '\t1 list Sent'
+      '\t2 button Delete'
     ])
   })
 
