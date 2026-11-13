@@ -7,7 +7,7 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import type { LaunchedAgentForeground } from '../../../../terminal/wait/launched-agent-foreground'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
+import { configureFederationWorkerRuntime } from './testing/federation-runtime.test-support'
 
 const PTY_ID = 'pty_worker'
 

@@ -547,6 +547,32 @@ class RuntimeRenderTest(unittest.TestCase):
                         self.assertEqual(result["action"]["path"], "accessibility")
                         self.assertEqual(result["action"]["verification"]["state"], "verified")
 
+    def test_element_text_entry_targets_the_named_field_and_never_types_at_focus(self):
+        for editable in (True, False):
+            focused = FakeAccessible("text", "Search", value="")
+            focused.caret, focused.selection = 0, None
+            focused.get_state_set = lambda: FakeStateSet(FakeStateType.FOCUSED, FakeStateType.EDITABLE)
+            focused.get_editable_text_iface = lambda: focused
+            target = FakeAccessible("text", "Message", value="Hello ")
+            target.caret, target.selection = 6, None
+            target.get_state_set = (lambda: FakeStateSet(FakeStateType.EDITABLE)) if editable else (lambda: FakeStateSet())
+            target.get_editable_text_iface = lambda: target
+            with self.subTest(editable=editable), SnapshotFixture(FakeAccessible("frame", "Editor", children=[focused, target])) as fixture, \
+                 patch.object(runtime, "type_text") as keys:
+                fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+                element = next(item for item in runtime.make_snapshot("Fixture", False)["elements"] if item["name"] == "Message")
+                request = {"tool": "type_text", "app": "Fixture", "element": element, "text": "🚀 café", "noScreenshot": True}
+                if editable:
+                    result = runtime.run_operation(request)
+                    self.assertEqual(target.value, "Hello 🚀 café")
+                    self.assertEqual(result["action"]["verification"], {"state": "verified", "property": "elementText"})
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "not settable"):
+                        runtime.run_operation(request)
+                    self.assertEqual(target.value, "Hello ")
+                self.assertEqual(focused.value, "")
+                keys.assert_not_called()
+
     def test_text_entry_without_an_editable_focused_field_still_requires_window_focus(self):
         cases = [
             ("not-editable", 1, (6, 11)),

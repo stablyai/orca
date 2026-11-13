@@ -55,7 +55,7 @@
 1 src/main/runtime/rpc/transports/websocket/remote-runtime-server-heartbeat.ts
 1 src/main/runtime/rpc/server/runtime-metadata-ownership-watch.ts
 1 src/main/runtime/rpc/transports/unix-socket-transport.ts
-1 src/main/runtime/sidebar-inputs/paired-server-rows-producer.ts
+1 src/main/runtime/sidebar-inputs/workspace-rows/paired-server-rows-producer.ts
 1 src/main/runtime/terminal/input/agent-prompt-permission-hold.ts
 1 src/main/runtime/terminal/output/terminal-derived-agent-facts.ts
 1 src/main/runtime/terminal/wait/terminal-idle-polls.ts

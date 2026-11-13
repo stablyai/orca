@@ -1,3 +1,4 @@
+import '../main/agent-hooks/server/testing/memory-agent-identity-store.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

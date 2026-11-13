@@ -65,9 +65,9 @@ export function updateSelection(params: {
 export function pruneSelection(
   selectedIds: ReadonlySet<string>,
   anchorId: string | null,
-  visibleIds: readonly string[]
+  visibleIds: readonly string[] | ReadonlySet<string>
 ): { selectedIds: Set<string>; anchorId: string | null } {
-  const visible = new Set(visibleIds)
+  const visible = 'has' in visibleIds ? visibleIds : new Set(visibleIds)
   const next = new Set<string>()
   for (const id of selectedIds) {
     if (visible.has(id)) {
