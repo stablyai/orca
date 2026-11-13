@@ -74,7 +74,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     revealInExplorer,
     selectedKeySet,
     setBaseRefDialogOpen,
-    setBranchSectionCollapsed,
+    setBranchSectionAutoCollapsed,
     sourceControlAiActionsVisible,
     sourceControlViewMode,
     statusReadError,
@@ -233,7 +233,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           totalBranchEntryCount={branchEntries.length}
           collapsedSections={collapsedSections}
           toggleSection={toggleSection}
-          setBranchSectionCollapsed={setBranchSectionCollapsed}
+          setBranchSectionAutoCollapsed={setBranchSectionAutoCollapsed}
+          worktreeOwner={activeWorktree}
           review={model.isFolder ? null : model.hostedReview}
           statusHeadOid={statusHeadOid}
           uncommittedCount={model.entries.length}

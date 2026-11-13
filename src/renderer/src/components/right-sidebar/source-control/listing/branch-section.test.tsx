@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
@@ -43,6 +44,8 @@ const mergedReview: HostedReviewInfo = {
 
 type SectionInputs = {
   worktreeId: string
+  hostId?: ExecutionHostId
+  instanceId?: string
   review?: HostedReviewInfo | null
   statusHeadOid?: string | null
   uncommittedCount?: number
@@ -53,6 +56,8 @@ type SectionInputs = {
 
 function Panel({
   worktreeId,
+  hostId,
+  instanceId,
   review = mergedReview,
   statusHeadOid = PR_HEAD,
   uncommittedCount = 0,
@@ -60,8 +65,10 @@ function Panel({
   isBranchDiffEditorActive = false,
   tree = false
 }: SectionInputs) {
+  const owner = { id: worktreeId, hostId, instanceId }
   const view = useSourceControlPanelViewState({
     activeWorktreeId: worktreeId,
+    activeWorktreeOwner: owner,
     settings: null,
     updateSettings: async () => {}
   })
@@ -81,7 +88,8 @@ function Panel({
       totalBranchEntryCount={entries.length}
       collapsedSections={view.collapsedSections}
       toggleSection={view.toggleSection}
-      setBranchSectionCollapsed={view.setBranchSectionCollapsed}
+      setBranchSectionAutoCollapsed={view.setBranchSectionAutoCollapsed}
+      worktreeOwner={owner}
       review={review}
       statusHeadOid={statusHeadOid}
       uncommittedCount={uncommittedCount}
@@ -253,13 +261,60 @@ it('never collapses a user-toggled section', async () => {
   expect(isExpanded()).toBe(true)
 })
 
-it('waits until no branch diff is the active editor before collapsing', async () => {
+it('skips the collapse for the session when a branch diff is active as the workspace turns safe', async () => {
   const worktreeId = nextWorktreeId()
   await render({ worktreeId, isBranchDiffEditorActive: true })
   expect(isExpanded()).toBe(true)
 
   await render({ worktreeId })
+  expect(isExpanded()).toBe(true)
+  expect(hasMergedChip()).toBe(true)
+})
+
+it('reopens an automatic collapse when the review is no longer merged', async () => {
+  const worktreeId = nextWorktreeId()
+  await render({ worktreeId })
   expect(isExpanded()).toBe(false)
+
+  await render({ worktreeId, review: { ...mergedReview, state: 'open' } })
+  expect(isExpanded()).toBe(true)
+  expect(hasMergedChip()).toBe(false)
+})
+
+it('names a merge request by its host label', async () => {
+  await render({ worktreeId: nextWorktreeId(), review: { ...mergedReview, provider: 'gitlab' } })
+
+  expect(toggle().textContent).toContain('MR #412 is merged')
+})
+
+it('keeps disclosure and merged proof apart for same-ID workspaces on other hosts', async () => {
+  const worktreeId = nextWorktreeId()
+  await render({ worktreeId, hostId: 'ssh:host-a' })
+  await clickToggle()
+  expect(isExpanded()).toBe(true)
+
+  await render({ worktreeId, hostId: 'ssh:host-b', review: null })
+  expect(hasMergedChip()).toBe(false)
+  await render({ worktreeId, hostId: 'ssh:host-b' })
+  expect(isExpanded()).toBe(false)
+
+  await render({ worktreeId, hostId: 'ssh:host-a', review: null })
+  expect(isExpanded()).toBe(true)
+  expect(hasMergedChip()).toBe(true)
+})
+
+it('starts a recreated workspace fresh and leaves the old checkout restorable', async () => {
+  const worktreeId = nextWorktreeId()
+  await render({ worktreeId, instanceId: 'first' })
+  expect(isExpanded()).toBe(false)
+
+  await render({ worktreeId, instanceId: 'second', review: null })
+  expect(isExpanded()).toBe(true)
+  expect(hasMergedChip()).toBe(false)
+
+  await render({ worktreeId, instanceId: 'first', review: null })
+  expect(isExpanded()).toBe(false)
+  expect(hasMergedChip()).toBe(true)
 })
 
 it('moves focus from a row to the header when collapsing', async () => {

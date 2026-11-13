@@ -37,8 +37,10 @@ function BranchSectionFrame({
   uncommittedCount?: number
   isMainWorktree?: boolean
 }) {
+  const owner = { id: worktreeId }
   const view = useSourceControlPanelViewState({
     activeWorktreeId: worktreeId,
+    activeWorktreeOwner: owner,
     settings: null,
     updateSettings: async () => {}
   })
@@ -59,7 +61,8 @@ function BranchSectionFrame({
         totalBranchEntryCount={entries.length}
         collapsedSections={view.collapsedSections}
         toggleSection={view.toggleSection}
-        setBranchSectionCollapsed={view.setBranchSectionCollapsed}
+        setBranchSectionAutoCollapsed={view.setBranchSectionAutoCollapsed}
+        worktreeOwner={owner}
         review={review}
         statusHeadOid={statusHeadOid}
         uncommittedCount={uncommittedCount}
@@ -128,9 +131,18 @@ export const minimumSidebarWidth = defineFixture({
   interact: expandBranchSection
 })
 
+const germanSettings = { ...getDefaultSettings('/home/test'), uiLanguage: 'de' as const }
+
 export const longLocale = defineFixture({
-  width: 300,
-  store: { settings: { ...getDefaultSettings('/home/test'), uiLanguage: 'de' } },
+  width: 308,
+  store: { settings: germanSettings },
   render: () => <BranchSectionFrame worktreeId="fixture-long-locale" />,
+  interact: expandBranchSection
+})
+
+export const longLocaleMinimumWidth = defineFixture({
+  width: RIGHT_SIDEBAR_MIN_WIDTH,
+  store: { settings: germanSettings },
+  render: () => <BranchSectionFrame worktreeId="fixture-long-locale-min" />,
   interact: expandBranchSection
 })

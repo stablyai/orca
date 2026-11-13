@@ -16,6 +16,7 @@ import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
 import { VirtualizedList } from '../../../virtualized-list'
 import { MergedBranchChip } from './merged-branch-chip'
 import { useMergedBranchSectionDisclosure } from './use-merged-branch-section-disclosure'
+import type { MergedBranchSectionOwner } from './merged-branch-section-disclosure'
 
 export function SourceControlBranchSection({
   activeOpenRowKeys,
@@ -24,7 +25,8 @@ export function SourceControlBranchSection({
   totalBranchEntryCount,
   collapsedSections,
   toggleSection,
-  setBranchSectionCollapsed,
+  setBranchSectionAutoCollapsed,
+  worktreeOwner,
   review,
   statusHeadOid,
   uncommittedCount,
@@ -49,7 +51,8 @@ export function SourceControlBranchSection({
   totalBranchEntryCount: number
   collapsedSections: Set<string>
   toggleSection: (section: string) => void
-  setBranchSectionCollapsed: (collapsed: boolean) => void
+  setBranchSectionAutoCollapsed: (collapsed: boolean) => void
+  worktreeOwner: MergedBranchSectionOwner
   /** Null for folder workspaces and branches without a review. */
   review: HostedReviewInfo | null
   /** HEAD from the latest successful status read; null while unknown. */
@@ -93,13 +96,13 @@ export function SourceControlBranchSection({
 
   const sectionRef = useRef<HTMLDivElement | null>(null)
   const { mergedReview } = useMergedBranchSectionDisclosure({
-    worktreeId: currentWorktreeId,
+    owner: worktreeOwner,
     isMainWorktree,
     review,
     statusHeadOid,
     uncommittedCount,
     branchDiffEditorActive: isBranchDiffEditorActive,
-    setBranchSectionCollapsed,
+    setBranchSectionAutoCollapsed,
     sectionRef
   })
 
