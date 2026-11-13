@@ -1,5 +1,5 @@
 import { stopSupervisedChildProcess } from './supervised-child-process-stop'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +13,13 @@ import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import type { HostedProviderState } from '../daemon/protocol/daemon-provider-process-protocol'
 import { ProviderOwnerListener } from './provider-owner-channels'
 import { createSupervisorOutputGate } from './provider-supervisor-output-gate.test-support'
+
+vi.mock('../daemon/executable-host/macos/daemon-mac-code-identity', () => ({
+  inspectMacProcessCodeIdentity: vi.fn(async () => ({
+    identity: 'resolved',
+    executablePath: '/fake/Orca Agents'
+  }))
+}))
 
 describe.skipIf(process.platform === 'win32')('hosted provider production transport', () => {
   let directory: string

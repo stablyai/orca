@@ -10,6 +10,8 @@ import { ProviderOwnerListener, watchProviderControl } from './provider-owner-ch
 import { ProviderChildHandle } from './provider-child-handle'
 import type { createProviderSpawnSpec } from './provider-process-supervisor'
 import { probeAgentSessionProcessIdentity } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
+import { sameDaemonIdentity } from '../daemon/transport/client/daemon-client-hello-handshake'
+import { createHostedEnv, inspectHostedIdentity } from './hosted-provider-launch'
 
 type ProviderSpawnSpec = ReturnType<typeof createProviderSpawnSpec>
 const START_TIMEOUT_MS = 10_000
@@ -96,25 +98,22 @@ export class HostedProviderChild extends ProviderChildHandle {
       if (this.canceled) {
         return this.failBeforeDispatch(new Error('Provider launch canceled'))
       }
-      const identity = this.client.getDaemonIdentity()
-      if (!identity?.providerSpawn) {
+      const identity = await inspectHostedIdentity(this.client)
+      if (this.canceled) {
+        return this.failBeforeDispatch(new Error('Provider launch canceled'))
+      }
+      const currentIdentity = this.client.getDaemonIdentity()
+      if (
+        !identity ||
+        !currentIdentity?.providerSpawn ||
+        !sameDaemonIdentity(identity, currentIdentity)
+      ) {
         return this.launchDirect()
       }
-      const env = Object.fromEntries(
-        Object.entries(this.spec.env).filter(
-          (entry): entry is [string, string] => entry[1] !== undefined
-        )
-      )
-      const supervisor = JSON.parse(
-        Buffer.from(env.ORCA_PROVIDER_SUPERVISOR_SPEC, 'base64').toString('utf8')
-      )
-      env.ORCA_PROVIDER_SUPERVISOR_SPEC = Buffer.from(
-        JSON.stringify({
-          ...supervisor,
-          ownerPid: identity.pid
-        })
-      ).toString('base64')
-      env.ORCA_PROVIDER_OWNER_CHANNEL = JSON.stringify({ path, nonce: this.listener.nonce })
+      const env = createHostedEnv(this.spec, identity.pid, {
+        path,
+        nonce: this.listener.nonce
+      })
       this.removeEvents = this.client.onProviderExit(
         this.listener.nonce,
         (outcome) => this.observeOutcome(outcome),

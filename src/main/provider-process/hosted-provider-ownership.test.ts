@@ -2,8 +2,14 @@ import type * as ProcessTable from '../../shared/libproc-process-table'
 import type * as ProcessHost from '@orca/process-host'
 import type * as OwnerChannels from './provider-owner-channels'
 import type { PassThrough } from 'node:stream'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-protocol'
+import {
+  inspectMacProcessCodeIdentity,
+  type MacProcessCodeIdentity
+} from '../daemon/executable-host/macos/daemon-mac-code-identity'
 import { spawnProviderProcess, installProviderProcessHost } from './provider-process-spawn'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { runPsInProcess } from '../../shared/libproc-process-table'
 import { HostedProviderChild } from './hosted-provider-child'
@@ -21,6 +27,17 @@ const { owners } = vi.hoisted(
     owners: []
   })
 )
+
+vi.mock('../daemon/executable-host/macos/daemon-mac-code-identity', () => ({
+  inspectMacProcessCodeIdentity: vi.fn()
+}))
+
+beforeEach(() => {
+  vi.mocked(inspectMacProcessCodeIdentity).mockReset().mockResolvedValue({
+    identity: 'resolved',
+    executablePath: '/fake/Orca Agents'
+  })
+})
 
 vi.mock('@orca/process-host', async (original) => ({
   ...(await original<typeof ProcessHost>()),
@@ -68,7 +85,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function pendingChild() {
+function pendingChild(
+  fallback: () => ChildProcessWithoutNullStreams = () => {
+    throw new Error('Duplicate spawn')
+  }
+) {
   let disconnected = () => {}
   let exit = (_outcome: HostedProviderOutcome) => {}
   const spec = createProviderSpawnSpec(
@@ -77,7 +98,12 @@ function pendingChild() {
     'darwin'
   )
   const client = {
-    getDaemonIdentity: () => ({ providerSpawn: true, pid: 300 }),
+    getDaemonIdentity: (): DaemonEndpointIdentity | null => ({
+      providerSpawn: true,
+      pid: 300,
+      startedAtMs: 1,
+      launchNonce: 'original-host'
+    }),
     ensureConnectedWithin: async () => {},
     request: async (type: string) =>
       type === 'spawnProvider' ? { pid: 42 } : { state: 'unknown' },
@@ -94,9 +120,7 @@ function pendingChild() {
     spec,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements the daemon methods exercised by the hosted child without opening real daemon sockets.
     async () => client as never,
-    () => {
-      throw new Error('Duplicate spawn')
-    }
+    fallback
   )
   child.on('error', () => {})
   const channels = owners.at(-1)!
@@ -113,6 +137,117 @@ function pendingChild() {
     }
   }
 }
+
+it.each<{
+  label: string
+  image: MacProcessCodeIdentity
+  replacement?: DaemonEndpointIdentity | null
+  hosted: boolean
+}>([
+  {
+    label: 'resolved copy',
+    image: { identity: 'resolved', executablePath: '/old-copy/Orca Agents' },
+    hosted: true
+  },
+  {
+    label: 'parked copy',
+    image: { identity: 'parked', executablePath: '/ShipIt/Orca Agents' },
+    hosted: true
+  },
+  {
+    label: 'unlinked image',
+    image: { identity: 'unresolvable', executablePath: null },
+    hosted: false
+  },
+  {
+    label: 'failed probe',
+    image: { identity: 'probe-failed', executablePath: null },
+    hosted: false
+  },
+  {
+    label: 'incomplete display',
+    image: { identity: 'resolved', executablePath: null },
+    hosted: false
+  },
+  {
+    label: 'replaced incarnation',
+    image: { identity: 'resolved', executablePath: '/old-copy/Orca Agents' },
+    replacement: { providerSpawn: true, pid: 300, startedAtMs: 2, launchNonce: 'replacement-host' },
+    hosted: false
+  },
+  {
+    label: 'disconnected host',
+    image: { identity: 'resolved', executablePath: '/old-copy/Orca Agents' },
+    replacement: null,
+    hosted: false
+  },
+  {
+    label: 'lost capability',
+    image: { identity: 'resolved', executablePath: '/old-copy/Orca Agents' },
+    replacement: { pid: 300, startedAtMs: 1, launchNonce: 'original-host' },
+    hosted: false
+  }
+])('selects exactly one launch for a $label', async ({ image, replacement, hosted }) => {
+  const { EventEmitter } = await import('node:events')
+  const { PassThrough } = await import('node:stream')
+  const direct = Object.assign(new EventEmitter(), {
+    pid: 400,
+    connected: false,
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn(() => true)
+  })
+  const fallback = vi.fn(() => {
+    queueMicrotask(() => direct.emit('spawn'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake direct child implements the streams, events and PID consumed by direct adoption.
+    return direct as never
+  })
+  const handle = pendingChild(fallback)
+  const request = vi.spyOn(handle.client, 'request')
+  vi.mocked(inspectMacProcessCodeIdentity).mockImplementation(async () => {
+    if (replacement !== undefined) {
+      vi.spyOn(handle.client, 'getDaemonIdentity').mockReturnValue(replacement)
+    }
+    return image
+  })
+  await handle.child.ready
+  expect(handle.child.pid).toBe(hosted ? 42 : 400)
+  expect(fallback).toHaveBeenCalledTimes(hosted ? 0 : 1)
+  expect(request.mock.calls.filter(([type]) => type === 'spawnProvider')).toHaveLength(
+    hosted ? 1 : 0
+  )
+  handle.child.stdout.resume()
+  handle.child.stderr.resume()
+  if (hosted) {
+    handle.exit(0)
+  } else {
+    direct.stdout.end()
+    direct.stderr.end()
+    direct.emit('exit', 0, null)
+    direct.emit('close', 0, null)
+  }
+})
+
+it('does not launch either route after Stop during image inspection', async () => {
+  const inspection = Promise.withResolvers<MacProcessCodeIdentity>()
+  const started = Promise.withResolvers<void>()
+  vi.mocked(inspectMacProcessCodeIdentity).mockImplementation(() => {
+    started.resolve()
+    return inspection.promise
+  })
+  const fallback = vi.fn(() => {
+    throw new Error('Canceled launch')
+  })
+  const handle = pendingChild(fallback)
+  const request = vi.spyOn(handle.client, 'request')
+  await started.promise
+  handle.child.kill('SIGTERM')
+  inspection.resolve({ identity: 'resolved', executablePath: '/old-copy/Orca Agents' })
+  await expect(handle.child.ready).rejects.toThrow('Provider launch canceled')
+  expect(fallback).not.toHaveBeenCalled()
+  expect(request.mock.calls.filter(([type]) => type === 'spawnProvider')).toHaveLength(0)
+})
 
 it('keeps a paused final answer until it is read, independently of dead transport cleanup', async () => {
   vi.useFakeTimers()
