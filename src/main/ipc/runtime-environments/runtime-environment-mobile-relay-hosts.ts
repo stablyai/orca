@@ -264,7 +264,7 @@ function watchRuntimeEnvironmentChanges(
           const { response } = payload
           // A replay may stand for missed events of any kind.
           const change = isRuntimeSubscriptionReplayResponse(response)
-            ? { catalog: true }
+            ? ({ catalog: true, live: true } as const)
             : workspaceChangeOfClientEvent(response.result)
           if (change) {
             callbacks.onChange(change)

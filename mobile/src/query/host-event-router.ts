@@ -7,6 +7,7 @@ import {
 } from '../transport/connection/shared-client-events'
 import type { HostQuerySignal, HostSignalEvent } from './host-query'
 import { hostScopeKey, type HostQueryKey } from './host-query-key'
+import { HostReadGate } from '../../../src/shared/remote-runtime/host-change-read-gate'
 
 function signalOf(query: Query): HostQuerySignal | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hostQueryOptions writes `signal` from the family's HostQuerySignal.
@@ -18,48 +19,78 @@ function targetOf(query: Query): HostQueryKey[3] {
   return (query.queryKey as HostQueryKey)[3]
 }
 
-// What to do once a read already out settles: read again, or only mark the answer stale.
-type AfterRead = 'refetch' | 'stale'
+const gates = new WeakMap<QueryClient, Map<string, HostReadGate>>()
 
-const afterReads = new WeakMap<QueryClient, Map<string, AfterRead>>()
+function readsNow(query: Query): boolean {
+  // Unobserved or hidden: stale only, so the next mount or foreground reads it.
+  return query.isActive() && focusManager.isFocused()
+}
 
-function afterReadsOf(queryClient: QueryClient): Map<string, AfterRead> {
-  const existing = afterReads.get(queryClient)
+function gatesOf(queryClient: QueryClient): Map<string, HostReadGate> {
+  const existing = gates.get(queryClient)
   if (existing) {
     return existing
   }
-  const pending = new Map<string, AfterRead>()
-  afterReads.set(queryClient, pending)
-  // One cache listener per world, for as long as the world's client lives.
+  const byQuery = new Map<string, HostReadGate>()
+  gates.set(queryClient, byQuery)
+  // One cache listener per world: TanStack's own reads (mounts, polls, focus) count toward the floor too.
   queryClient.getQueryCache().subscribe(({ type, query }) => {
-    const after = pending.get(query.queryHash)
-    if (type === 'updated' && after && query.state.fetchStatus === 'idle') {
-      pending.delete(query.queryHash)
-      if (after === 'refetch') {
-        refetchHostQueryAfterInFlight(queryClient, query)
-      } else {
-        void markStale(queryClient, query)
-      }
+    const gate = byQuery.get(query.queryHash)
+    if (!gate) {
+      return
+    }
+    if (type === 'removed') {
+      gate.dispose()
+      byQuery.delete(query.queryHash)
+    } else if (query.state.fetchStatus === 'fetching') {
+      gate.readStarted()
+    } else {
+      gate.readSettled()
     }
   })
-  return pending
+  return byQuery
 }
 
-function markStale(queryClient: QueryClient, query: Query): Promise<void> {
-  return queryClient.invalidateQueries({
-    queryKey: query.queryKey,
-    exact: true,
-    refetchType: 'none'
-  })
-}
-
-// A read already out may predate the change, and its answer would clear the mark; mark again once it lands.
-function markStaleAfterInFlight(queryClient: QueryClient, query: Query): void {
-  void markStale(queryClient, query)
-  const pending = afterReadsOf(queryClient)
-  if (query.state.fetchStatus === 'fetching' && !pending.has(query.queryHash)) {
-    pending.set(query.queryHash, 'stale')
+/** The query's read gate (host-change-read-gate), started from what TanStack already read. */
+function gateOf(queryClient: QueryClient, query: Query): HostReadGate {
+  const byQuery = gatesOf(queryClient)
+  const existing = byQuery.get(query.queryHash)
+  if (existing) {
+    return existing
   }
+  const { fetchStatus, dataUpdatedAt, errorUpdatedAt } = query.state
+  const settledAt = Math.max(dataUpdatedAt, errorUpdatedAt)
+  const gate: HostReadGate = new HostReadGate(
+    {
+      floorMs: signalOf(query)?.floorMs ?? 0,
+      read: () => {
+        void queryClient.refetchQueries(
+          { queryKey: query.queryKey, exact: true, type: 'active' },
+          { cancelRefetch: false }
+        )
+        // An inactive query starts no read.
+        if (query.state.fetchStatus !== 'fetching') {
+          gate.readSettled()
+        }
+      },
+      watching: () => readsNow(query),
+      // The connected edge re-reads every observed query (host-connection-invalidation).
+      connected: () => true,
+      onStale: () =>
+        void queryClient.invalidateQueries({
+          queryKey: query.queryKey,
+          exact: true,
+          refetchType: 'none'
+        })
+    },
+    {
+      inFlight: fetchStatus === 'fetching',
+      startedAt: fetchStatus === 'fetching' ? Date.now() : dataUpdatedAt,
+      settledAt
+    }
+  )
+  byQuery.set(query.queryHash, gate)
+  return gate
 }
 
 /**
@@ -67,14 +98,7 @@ function markStaleAfterInFlight(queryClient: QueryClient, query: Query): void {
  * have been sent before the change that asked. TanStack's own refetch would join it or cancel it.
  */
 export function refetchHostQueryAfterInFlight(queryClient: QueryClient, query: Query): void {
-  if (query.state.fetchStatus === 'fetching') {
-    afterReadsOf(queryClient).set(query.queryHash, 'refetch')
-    return
-  }
-  void queryClient.refetchQueries(
-    { queryKey: query.queryKey, exact: true, type: 'active' },
-    { cancelRefetch: false }
-  )
+  gateOf(queryClient, query).request()
 }
 
 type RouterHandle = {
@@ -100,7 +124,6 @@ function startHostEventRouter(
   }
   // When the stream last said it was live (0: never); a replayed ready may have missed events since.
   let readyAt = 0
-  const floorTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const signalledQueries = (matches: (signal: HostQuerySignal, query: Query) => boolean): Query[] =>
     queryClient.getQueryCache().findAll({
       queryKey: hostScopeKey(hostId),
@@ -109,53 +132,11 @@ function startHostEventRouter(
         return signal !== undefined && matches(signal, query)
       }
     })
-  // Unobserved or hidden: stale only, so the next mount or foreground reads it.
-  const readsNow = (query: Query): boolean => query.isActive() && focusManager.isFocused()
 
-  const onChange = (query: Query): void => {
-    markStaleAfterInFlight(queryClient, query)
-    if (!readsNow(query) || floorTimers.has(query.queryHash)) {
-      return
-    }
-    // Change events can come per agent step; keep reads `floorMs` apart, polls, failed reads and reads in flight included.
-    const lastReadAt =
-      query.state.fetchStatus === 'fetching'
-        ? Date.now()
-        : Math.max(query.state.dataUpdatedAt, query.state.errorUpdatedAt)
-    const wait = lastReadAt + (signalOf(query)?.floorMs ?? 0) - Date.now()
-    if (wait <= 0) {
-      refetchHostQueryAfterInFlight(queryClient, query)
-      return
-    }
-    floorTimers.set(
-      query.queryHash,
-      setTimeout(() => {
-        floorTimers.delete(query.queryHash)
-        if (readsNow(query)) {
-          refetchHostQueryAfterInFlight(queryClient, query)
-        }
-      }, wait)
-    )
-  }
-
-  // Reads again (or marks stale, when no one watches) every answer older than `readSince`.
-  // `readSince` Infinity is a stream reopened on the same connection: a read already out may predate the gap.
-  const catchUp = (readSince: number): void => {
+  // `since` Infinity is a stream reopened on the same connection: a read already out may predate the gap.
+  const catchUp = (since: number): void => {
     for (const query of signalledQueries(() => true)) {
-      if (query.state.fetchStatus === 'fetching') {
-        if (readSince === Infinity) {
-          onChange(query)
-        }
-        continue
-      }
-      if (query.state.dataUpdatedAt >= readSince) {
-        continue
-      }
-      if (readsNow(query)) {
-        void queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true })
-      } else {
-        void markStale(queryClient, query)
-      }
+      gateOf(queryClient, query).live(since)
     }
   }
 
@@ -188,7 +169,7 @@ function startHostEventRouter(
       signal.events.includes(signalled.type) &&
       (signal.matches?.(signalled, targetOf(query)) ?? true)
     for (const query of signalledQueries(named)) {
-      onChange(query)
+      gateOf(queryClient, query).changed()
     }
   }
 
@@ -196,10 +177,9 @@ function startHostEventRouter(
   return {
     stop: () => {
       stopStream()
-      for (const timer of floorTimers.values()) {
-        clearTimeout(timer)
+      for (const query of signalledQueries(() => true)) {
+        gates.get(queryClient)?.get(query.queryHash)?.dispose()
       }
-      floorTimers.clear()
       readyListeners.clear()
     },
     isReady: () => ready,

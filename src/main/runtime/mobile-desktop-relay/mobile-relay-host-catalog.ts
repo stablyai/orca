@@ -36,7 +36,7 @@ export type MobileRelayRecipeEnvironmentLookup = (
 /** Sidebar live rows or per-phone-request fetches, always read as the desktop. */
 export type ServerWorktreeRows = {
   sync: () => void
-  /** Fetch now or join the in-flight fetch. */
+  /** Read the server, at most once per read floor however many readers ask; settles once that read does. */
   refresh: (environmentId: string) => Promise<void>
   /** Last-fetched rows under this pairing; null before a successful fetch. */
   rows: (environmentId: string, fence: string) => readonly MobileRelayServerWorktreeRow[] | null

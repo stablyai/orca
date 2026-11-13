@@ -3,7 +3,6 @@ import { replaceEqualDeep } from '@tanstack/react-query'
 import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
 import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
 import {
-  HOST_LIST_POLL_MS,
   HOST_LIST_TARGET,
   hostServerWorkspacesQuery,
   hostWorktreeCatalogQuery,
@@ -25,6 +24,7 @@ import {
   type FolderListRow
 } from './mobile-folder-attached-worktrees'
 import type { Worktree } from '../../worktree/workspace-list-types'
+import { HOST_READ_FLOOR_MS } from '../../../../src/shared/remote-runtime/host-change-read-gate'
 
 type FolderLineage = {
   /** The catalog rows last seen. */
@@ -90,7 +90,7 @@ export function useMobileFolderAttachedWorktrees(
     HOST_LIST_TARGET,
     { deltas: desktopCapabilities.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY) },
     // Execution hosts' notices are not relayed, so server rows keep the host list's poll.
-    { enabled: relays, subscribed, refetchInterval: HOST_LIST_POLL_MS }
+    { enabled: relays, subscribed, refetchInterval: HOST_READ_FLOOR_MS }
   )
   const ownRows = catalog.data?.worktrees
   const serverRows = servers.data?.worktrees

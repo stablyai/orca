@@ -6,56 +6,30 @@ import {
   normalizePairedServerRow,
   type PairedServerRowsSnapshot
 } from '../../../../shared/sidebar-list/paired-server-rows'
-import type {
-  MobileDesktopRelayHostListing,
-  MobileDesktopRelayHosts,
-  MobileDesktopRelayHostWatch
-} from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
+import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import {
   describeRelayHosts,
   relayHostFence
 } from '../../mobile-desktop-relay/mobile-relay-host-descriptions'
 import type { ServerWorktreeRows } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import {
-  SERVER_WORKTREE_LIMIT,
-  serverRowDeltas,
-  stampServerWorktreeRows,
-  type ServerWorktreeRow
+  readServerWorktreeRows,
+  stampServerWorktreeRows
 } from '../../mobile-desktop-relay/server-worktree-fetch'
-import type { WorktreeCatalogSnapshot } from '../../../../shared/worktree/catalog-row-delta'
-import type { PairedServerCatalog } from '../../../../shared/sidebar-list/sidebar-project-catalog'
 import { fetchPairedServerCatalog } from '../../../../shared/sidebar-list/paired-server-catalog'
+import type { PairedServerCatalog } from '../../../../shared/sidebar-list/sidebar-project-catalog'
+import {
+  newPairedServerEntry,
+  wakePairedServerReaders,
+  type PairedServerEntry
+} from './paired-server-entry'
 
 // Backstop for changes a server announces no event for (terminal counts, unread, PR badge) and for older servers.
 export const FALLBACK_REFRESH_MS = 30_000
 
-type ServerEntry = {
-  environmentId: string
-  fence: string
-  identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
-  inContact: boolean
-  /** Moves on every contact change, so an answer can tell it predates a gap. */
-  contactGeneration: number
-  /** Null until a fetch under this pairing answered. */
-  rows: MobileRelayServerWorktreeRow[] | null
-  /** The server's rows under its snapshot id, the base of the next delta read; null asks in full. */
-  delta: WorktreeCatalogSnapshot<ServerWorktreeRow> | null
-  /** An agent status notice arrived while nothing consumed rows; the next consumer read catches up. */
-  agentRowsStale: boolean
-  /** The rows are the server's answer since it last came into contact; else unverifiable. */
-  confirmed: boolean
-  /** Its repos and project groups as last fetched under this pairing; null until one answered. */
-  catalog: PairedServerCatalog | null
-  /** A catalog change may have gone unread: set on contact and on a catalog change event. */
-  catalogStale: boolean
-  watch: MobileDesktopRelayHostWatch | null
-  refreshing: Promise<void> | null
-  refreshAgain: boolean
-}
-
-/** Cache paired-server rows without a window; refresh on contact/events/reads and every 30s while visible. Contact gaps make rows unverifiable until a post-gap fetch; only removal/re-pair drops them. */
+/** Cache paired-server rows without a window; read on contact, change events and every 30s while visible, at most once per floor. Contact gaps make rows unverifiable until a post-gap fetch; only removal/re-pair drops them. */
 export class PairedServerRowsProducer implements ServerWorktreeRows {
-  private readonly servers = new Map<string, ServerEntry>()
+  private readonly servers = new Map<string, PairedServerEntry>()
   private hosts: MobileDesktopRelayHosts | null = null
   readonly revision = new ProducerRevision()
 
@@ -70,13 +44,10 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     this.hosts = hosts
     const stopStatus = hosts.onStatusChanged(() => this.sync())
     const stopRetired = hosts.onEnvironmentRetired(() => this.sync())
+    // Unwatched, it only marks rows stale; the next consumer read reads them.
     const fallback = setInterval(() => {
-      if (this.options.hasDemand()) {
-        for (const entry of this.servers.values()) {
-          if (entry.inContact) {
-            void this.refresh(entry.environmentId)
-          }
-        }
+      for (const entry of this.servers.values()) {
+        entry.gate.changed()
       }
     }, FALLBACK_REFRESH_MS)
     fallback.unref?.()
@@ -86,7 +57,7 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
       stopStatus()
       stopRetired()
       for (const entry of this.servers.values()) {
-        entry.watch?.close()
+        this.drop(entry)
       }
       this.servers.clear()
       this.hosts = null
@@ -105,7 +76,7 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     )
     for (const [environmentId, entry] of this.servers) {
       if (fences.get(environmentId) !== entry.fence) {
-        entry.watch?.close()
+        this.drop(entry)
         this.servers.delete(environmentId)
         this.revision.bump()
       }
@@ -114,22 +85,18 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     const shown = new Map(describeRelayHosts(hosts).map((host) => [host.environmentId, host]))
     for (const host of shown.values()) {
       if (!this.servers.has(host.environmentId)) {
-        this.servers.set(host.environmentId, {
-          environmentId: host.environmentId,
-          fence: relayHostFence(host.identity),
-          identity: host.identity,
-          inContact: false,
-          contactGeneration: 0,
-          rows: null,
-          delta: null,
-          agentRowsStale: false,
-          confirmed: false,
-          catalog: null,
-          catalogStale: true,
-          watch: null,
-          refreshing: null,
-          refreshAgain: false
-        })
+        this.servers.set(
+          host.environmentId,
+          newPairedServerEntry(host, {
+            read: (entry) =>
+              void this.fetch(hosts, entry).finally(() => {
+                entry.gate.readSettled()
+                this.settleReaders(entry)
+              }),
+            watching: () => this.options.hasDemand(),
+            connected: (entry) => this.reachable(entry)
+          })
+        )
         this.revision.bump()
       }
     }
@@ -152,22 +119,22 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
         entry.watch.close()
         entry.watch = null
       }
+      if (!inContact) {
+        this.settleReaders(entry)
+      }
     }
   }
 
-  /** Fetches now, or joins the fetch in flight. */
+  /** A reader's own read: settles after the gate's next read of the server, at most a floor away. */
   refresh(environmentId: string): Promise<void> {
     const entry = this.servers.get(environmentId)
-    if (!entry || !this.hosts) {
+    if (!entry) {
       return Promise.resolve()
     }
-    if (!entry.refreshing) {
-      const refreshing = this.fetchUntilCurrent(this.hosts, entry).finally(() => {
-        entry.refreshing = null
-      })
-      entry.refreshing = refreshing
-    }
-    return entry.refreshing
+    entry.gate.polled()
+    const settled = new Promise<void>((resolve) => entry.waiters.push(resolve))
+    this.settleReaders(entry)
+    return settled
   }
 
   /** The server's raw rows as last fetched under this pairing; null when none were. */
@@ -176,13 +143,13 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     if (!entry || entry.fence !== fence) {
       return null
     }
-    this.catchUp(entry)
+    entry.gate.watched()
     return entry.rows
   }
 
   snapshot(): PairedServerRowsSnapshot {
     for (const entry of this.servers.values()) {
-      this.catchUp(entry)
+      entry.gate.watched()
     }
     const shown = new Map(
       (this.hosts
@@ -221,23 +188,20 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     return [...this.servers.values()].flatMap((entry) => entry.catalog ?? [])
   }
 
-  private watch(hosts: MobileDesktopRelayHosts, entry: ServerEntry): void {
+  private watch(hosts: MobileDesktopRelayHosts, entry: PairedServerEntry): void {
     const current = (): boolean => this.servers.get(entry.environmentId) === entry
     // Ready fires on every (re)connect, so contact and a missed-event replay both count as changes.
     const watch = hosts.watchChanges({ environmentId: entry.environmentId }, entry.identity, {
-      onChange: ({ catalog, agentRowsOnly }) => {
+      onChange: ({ catalog, live }) => {
         if (!current()) {
           return
         }
-        // A busy agent announces every step; nobody needs those rows until something reads them.
-        if (agentRowsOnly && !this.options.hasDemand()) {
-          entry.agentRowsStale = true
-          return
-        }
-        // A fetch already in flight may predate this change, so one more runs after it.
-        entry.refreshAgain ||= entry.refreshing !== null
         entry.catalogStale ||= catalog
-        void this.refresh(entry.environmentId)
+        if (live) {
+          entry.gate.live()
+        } else {
+          entry.gate.changed()
+        }
       },
       onClose: () => {
         if (current() && entry.watch === watch) {
@@ -248,29 +212,33 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     entry.watch = watch
   }
 
-  private catchUp(entry: ServerEntry): void {
-    if (entry.agentRowsStale && entry.inContact) {
-      entry.agentRowsStale = false
-      entry.refreshAgain ||= entry.refreshing !== null
-      void this.refresh(entry.environmentId)
+  private drop(entry: PairedServerEntry): void {
+    entry.watch?.close()
+    entry.gate.dispose()
+    if (!entry.gate.reading) {
+      wakePairedServerReaders(entry)
     }
   }
 
-  private unconfirm(entry: ServerEntry): void {
+  private reachable(entry: PairedServerEntry): boolean {
+    return entry.inContact && this.servers.get(entry.environmentId) === entry
+  }
+
+  // Readers wait for the read the gate holds; once none will run, they take the rows last answered.
+  private settleReaders(entry: PairedServerEntry): void {
+    if (!entry.gate.reading && (entry.gate.current || !this.reachable(entry))) {
+      wakePairedServerReaders(entry)
+    }
+  }
+
+  private unconfirm(entry: PairedServerEntry): void {
     if (entry.confirmed) {
       entry.confirmed = false
       this.revision.bump()
     }
   }
 
-  private async fetchUntilCurrent(hosts: MobileDesktopRelayHosts, entry: ServerEntry) {
-    do {
-      entry.refreshAgain = false
-      await this.fetch(hosts, entry)
-    } while (entry.refreshAgain && this.servers.get(entry.environmentId) === entry)
-  }
-
-  private async fetch(hosts: MobileDesktopRelayHosts, entry: ServerEntry): Promise<void> {
+  private async fetch(hosts: MobileDesktopRelayHosts, entry: PairedServerEntry): Promise<void> {
     const { contactGeneration } = entry
     const call = async (method: string, params?: unknown) =>
       hosts.call({ environmentId: entry.environmentId }, method, params, {
@@ -280,21 +248,9 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     // Only on contact, ready, a replay or reposChanged, which every catalog write announces.
     const readCatalog = entry.catalogStale
     entry.catalogStale = false
-    entry.agentRowsStale = false
     const held = entry.delta
     const [read, catalog] = await Promise.all([
-      serverRowDeltas
-        .read(async (snapshot) => {
-          const response = await call('worktree.ps', {
-            limit: SERVER_WORKTREE_LIMIT,
-            supportsWorktreeVisibilitySourceDefaults: true,
-            ...snapshot
-          })
-          return response.ok
-            ? { accepted: true as const, value: response.result }
-            : { accepted: false as const, code: 'request_failed' }
-        }, held)
-        .catch(() => null), // An unreachable server keeps its last rows.
+      readServerWorktreeRows(call, held),
       readCatalog
         ? fetchPairedServerCatalog(entry.environmentId, call, entry.catalog).catch(() => null)
         : null
