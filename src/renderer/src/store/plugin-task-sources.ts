@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import type { PluginHostListEntry } from '../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
 import {
   ensurePluginPanelsLoaded,
   usePluginPanelsStore
