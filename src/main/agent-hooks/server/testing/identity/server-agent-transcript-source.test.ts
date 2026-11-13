@@ -20,8 +20,10 @@ afterEach(() => {
 })
 
 class IdentityTestServer extends AgentHookServer {
+  readonly identityClient = new InProcessAgentIdentityClient()
+
   protected override createAgentIdentityClient(): AgentIdentityClient {
-    return new InProcessAgentIdentityClient()
+    return this.identityClient
   }
 }
 
@@ -70,12 +72,12 @@ it('reads a terminal agent by its own conversation, never by the pane it was att
   expect(second).toMatch(/^claude_/)
   expect(second).not.toBe(first)
 
-  expect(await server.terminalAgentTranscriptSource(second!, () => [])).toMatchObject({
+  expect(await server.terminalAgentTranscriptSource(second!, () => ({}))).toMatchObject({
     key: { wslDistro: 'Ubuntu', agent: 'claude', providerSessionId: 'session-b' },
     providerSession: { id: 'session-b', transcriptPath: '/home/u/.claude/projects/p/b.jsonl' }
   })
   // The first conversation's pane now shows the second: it has no transcript location, not b's.
-  expect(await server.terminalAgentTranscriptSource(first!, () => [])).toBeNull()
+  expect(await server.terminalAgentTranscriptSource(first!, () => ({}))).toBeNull()
   expect(await server.terminalAgentIdsOfProviderSession('session-a')).toEqual([first])
 })
 
@@ -97,15 +99,23 @@ it.skipIf(process.platform === 'win32')(
       connectionId: WSL
     })
 
-    expect(await server.terminalAgentTranscriptSource(id!, () => [sleeping('other')])).toBeNull()
     expect(
-      await server.terminalAgentTranscriptSource(id!, () => [
-        sleeping('other'),
-        sleeping('session-a')
-      ])
-    ).toMatchObject({
+      await server.terminalAgentTranscriptSource(id!, () => ({ other: sleeping('other') }))
+    ).toBeNull()
+    let partitionReads = 0
+    const records = () => {
+      partitionReads++
+      return { other: sleeping('other'), a: sleeping('session-a') }
+    }
+    server.identityClient.providerKeyRequests = 0
+    const found = await server.terminalAgentTranscriptSource(id!, records)
+    expect(found).toMatchObject({
       key: { wslDistro: 'Ubuntu', providerSessionId: 'session-a' },
       providerSession: { transcriptPath: '/home/u/.claude/projects/p/session-a.jsonl' }
     })
+    // The post-read recheck reuses the key it was given: one partition read, no store question.
+    expect(await server.terminalAgentTranscriptSource(id!, records, found!.key)).toEqual(found)
+    expect(server.identityClient.providerKeyRequests).toBe(1)
+    expect(partitionReads).toBe(2)
   }
 )

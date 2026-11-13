@@ -196,17 +196,20 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   /** Where terminal agent `id`'s transcript is: a current row carrying the id, in any state (a read
    *  needs no running agent), else a sleeping record naming its provider key. The session id and
    *  path come from one payload, never from a pane, so a row attributed to the wrong pane still
-   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer. */
+   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer.
+   *  `knownKey` is the key an earlier answer gave: an id is never relinked, so a recheck needs no
+   *  second store question. */
   async terminalAgentTranscriptSource(
     id: string,
-    listSleeping: () => readonly SleepingAgentSighting[]
+    readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
+    knownKey?: AgentProviderKey
   ): Promise<TerminalAgentTranscriptSource | null | undefined> {
     const authority = this.agentIdentities.authority()
     const live = this.liveTranscriptSource(id)
     if (live) {
       return live
     }
-    const linked = await this.agentIdentities.providerKeyOf(id)
+    const linked = knownKey ? { key: knownKey } : await this.agentIdentities.providerKeyOf(id)
     if (!linked || authority !== this.agentIdentities.generation) {
       return undefined
     }
@@ -215,7 +218,10 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     if (!key || process.platform === 'win32') {
       return null
     }
-    for (const record of listSleeping()) {
+    for (const record of Object.values(readSleeping())) {
+      if (record.providerSession.id !== key.providerSessionId) {
+        continue
+      }
       const recordKey = agentProviderKeyOf({
         agent: record.agent,
         providerSession: record.providerSession,

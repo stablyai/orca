@@ -70,7 +70,7 @@ If a launch reply is lost, use the returned `operationId` to re-issue the exact 
 
 ## Agents by ID
 
-Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<agent>_<uuid>`; what Copy Orca Session ID copies on a chat and Copy Agent ID on a terminal). Use it to find and read agents:
+Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<agent>_<uuid>`; what Copy Orca Session ID copies). Use it to find and read agents:
 
 - `ORCA agent list --json` lists the agents open in this host's workspaces, with `orcaSessionId`, `kind` (chat or terminal), state, workspace and last reply. A terminal agent has no ID until it first reports to Orca. Agents on other hosts are not listed; the output names those hosts and the `--environment` to use.
 - `ORCA agent show <id> --json` shows where one agent is open (none if closed, two if resumed in two panes).

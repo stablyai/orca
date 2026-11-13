@@ -57,6 +57,8 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   return {
     journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) =>
       (await context().conversation(sessionId)).journal.currentRead(inputIds),
+    /** The journal's head, opened at rest: a reader skips an unchanged history. */
+    journalCursor: async (sessionId: string) => (await journalOf(sessionId)).cursor(),
 
     readModelCatalog,
     attentionReads: {

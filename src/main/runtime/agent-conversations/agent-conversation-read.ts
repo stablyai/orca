@@ -5,6 +5,7 @@ import {
   type AgentReadResult
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { agentSessionPromptQuestions } from '../../../shared/agent-session/agent-session-question-answer'
@@ -23,7 +24,10 @@ import {
 import { createWorkerOutputSourceIdentity } from '../orchestration/workers/transcripts/worker-output-cursor'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
-import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
+import {
+  sameProviderKey,
+  type AgentProviderKey
+} from '../../agent-hooks/identity/agent-provider-key'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
 import {
@@ -78,18 +82,39 @@ async function readChat(
     throw sourceChanged(orcaSessionId)
   }
   const host = await requireInstalledStructuredHost(ctx, sessionId)
+  const encode = (journal: AgentJournalCursor): string =>
+    encodeReadCursor({ v: 1, id: orcaSessionId, s: 'chat', session: sessionId, journal })
+  // A follower re-reading with its cursor costs no history work until the journal moves.
+  const head = cursor ? await host.reads.journalCursor(sessionId) : null
+  if (
+    cursor &&
+    head &&
+    head.epoch === cursor.journal.epoch &&
+    head.sequence <= cursor.journal.sequence
+  ) {
+    return {
+      orcaSessionId,
+      kind: 'chat',
+      agent: record.provider,
+      source: 'chat',
+      entries: [],
+      cursor: encode(cursor.journal),
+      limited: false
+    }
+  }
+  // A cursor read takes at most `limit` journal rows, each at most one entry, and continues
+  // from the last row it took, so none are skipped or repeated.
   const history = await host.history({
     sessionId,
     direction: cursor ? 'after' : 'tail',
     ...(cursor ? { cursor: cursor.journal } : {}),
-    limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+    limit: cursor ? limit : AGENT_SESSION_HISTORY_MAX_LIMIT
   })
   if (!history.ok && cursor) {
     throw sourceChanged(orcaSessionId)
   }
   const { page } = history
   const all = chatEntries(page.items, page.actionablePromptIds)
-  // A first read is the latest entries; a cursor read is everything after it, so none are skipped.
   const entries = cursor ? all : all.slice(-limit)
   const next = cursor ? page.window.nextCursor : (page.liveCursor ?? page.window.newest)
   return {
@@ -98,9 +123,7 @@ async function readChat(
     agent: record.provider,
     source: 'chat',
     entries,
-    cursor: next
-      ? encodeReadCursor({ v: 1, id: orcaSessionId, s: 'chat', session: sessionId, journal: next })
-      : null,
+    cursor: next ? encode(next) : null,
     limited: cursor ? page.hasNewer : page.hasOlder || all.length > limit
   }
 }
@@ -114,9 +137,13 @@ async function readTerminalTranscript(
   if (cursor && cursor.s !== 'transcript') {
     throw invalidCursor()
   }
-  const locate = (): Promise<TerminalAgentTranscriptSource | null | undefined> =>
-    agentHookServer.terminalAgentTranscriptSource(orcaSessionId, () =>
-      ctx.runtime.listSleepingAgentSessionRecords()
+  const locate = (
+    knownKey?: AgentProviderKey
+  ): Promise<TerminalAgentTranscriptSource | null | undefined> =>
+    agentHookServer.terminalAgentTranscriptSource(
+      orcaSessionId,
+      () => ctx.runtime.readLocalSleepingAgentSessions(),
+      knownKey
     )
   const source = await locate()
   if (source === undefined) {
@@ -165,7 +192,7 @@ async function readTerminalTranscript(
     transcript.sourceFingerprint
   ])
   // The conversation must still name the file just read: its row may have moved on meanwhile.
-  const after = await locate()
+  const after = await locate(key)
   if (
     (cursor?.s === 'transcript' && cursor.i !== sourceIdentity) ||
     !after ||
@@ -245,6 +272,8 @@ function chatEntries(
   return entries
 }
 
+/** One entry per transcript message, its tool calls folded in, so `limit` messages are at most
+ *  `limit` entries and the cursor after them skips nothing. */
 function transcriptEntries(messages: readonly NativeChatMessage[]): AgentReadEntry[] {
   const entries: AgentReadEntry[] = []
   for (const message of messages) {
@@ -256,17 +285,18 @@ function transcriptEntries(messages: readonly NativeChatMessage[]): AgentReadEnt
       .filter((part) => part.length > 0)
       .join('\n')
       .trim()
-    if (text.length > 0) {
-      entries.push({ kind: 'message', role: message.role, text })
-    }
-    for (const block of message.blocks) {
-      if (block.type === 'tool-call') {
-        entries.push({
-          kind: 'tool',
-          name: block.name,
-          ...(block.state ? { state: block.state } : {})
-        })
-      }
+    const tools = message.blocks.flatMap((block) =>
+      block.type === 'tool-call'
+        ? [{ name: block.name, ...(block.state ? { state: block.state } : {}) }]
+        : []
+    )
+    if (text.length > 0 || tools.length > 0) {
+      entries.push({
+        kind: 'message',
+        role: message.role,
+        text,
+        ...(tools.length > 0 ? { tools } : {})
+      })
     }
   }
   return entries

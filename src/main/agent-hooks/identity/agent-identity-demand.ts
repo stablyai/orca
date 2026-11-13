@@ -117,11 +117,12 @@ export class AgentIdentityDemand {
   }
 
   /** Membership shares the failure gate: during the backoff it answers unavailable at once. */
-  has = (id: string) => this.lookup((client, path) => client.has(path, id))
+  has = (id: string) => this.lookup(`has\0${id}`, (client, path) => client.has(path, id))
 
-  /** An explicit read-only question under the store's one-at-a-time queue and failure gate;
-   *  undefined when the store cannot answer now. A sent question leaves `lookups`. */
+  /** An explicit read-only question under the store's one-at-a-time queue and failure gate,
+   *  shared by simultaneous callers of one `key`; undefined when the store cannot answer now. */
   async lookup<T>(
+    key: string,
     run: (client: AgentIdentityClient, path: string) => Promise<T | undefined>
   ): Promise<T | undefined> {
     this.syncAuthority()
@@ -129,9 +130,11 @@ export class AgentIdentityDemand {
       return undefined
     }
     const generation = this.generationValue
-    const answer = this.lookups.enqueue(run)
+    const pending = this.lookups.enqueue(key, run)
     this.schedulePump()
-    return generation === this.generationValue ? await answer : undefined
+    const answer = await pending
+    // An answer accepted before the owner closed is not this generation's to give.
+    return generation === this.generationValue ? answer : undefined
   }
 
   /** A different store path is a different authority: nothing carries across. */

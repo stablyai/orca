@@ -9,7 +9,10 @@ import type {
   AgentReadResult,
   AgentShowResult
 } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
-import { projectAgentConversationList } from '../../../agent-conversations/agent-conversation-list'
+import {
+  agentConversationPlaces,
+  projectAgentConversationList
+} from '../../../agent-conversations/agent-conversation-list'
 import { resolveAgentConversation } from '../../../agent-conversations/agent-conversation-address'
 import { readAgentConversation } from '../../../agent-conversations/agent-conversation-read'
 
@@ -32,13 +35,10 @@ export const AGENT_CONVERSATION_METHODS = [
     params: AgentShowParams,
     handler: async (params, { runtime }): Promise<AgentShowResult> => {
       const resolved = await resolveAgentConversation(runtime, params.id)
-      const { agents } = projectAgentConversationList(
-        await runtime.getWorktreePs(AGENT_LIST_WORKTREE_LIMIT)
-      )
       return {
         orcaSessionId: resolved.orcaSessionId,
         kind: resolved.kind,
-        places: agents.filter((row) => row.orcaSessionId === resolved.orcaSessionId)
+        places: await agentConversationPlaces(runtime, resolved)
       }
     }
   }),

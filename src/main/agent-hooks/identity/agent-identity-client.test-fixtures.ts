@@ -14,6 +14,7 @@ import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-sessio
 export class InProcessAgentIdentityClient implements AgentIdentityClient {
   identifyRequests = 0
   hasRequests = 0
+  providerKeyRequests = 0
   /** When set, `identify` waits for `release()` before answering. */
   hold = false
   /** Answers the next N identify requests as unavailable after running their SQL. */
@@ -47,6 +48,7 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
     path: string,
     orcaSessionId: string
   ): Promise<{ key: AgentProviderKey | null } | undefined> {
+    this.providerKeyRequests++
     const response = handleAgentIdentityRequest({
       id: 0,
       kind: 'providerKeyOf',

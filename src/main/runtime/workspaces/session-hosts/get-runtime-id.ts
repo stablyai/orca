@@ -1,8 +1,9 @@
 import { crewWorkspaceNames } from '../../orchestration/crew/crew-workspace-names'
 import { isDeepStrictEqual } from 'node:util'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { readStructuredAttentionWorkspaceLabels } from '../../agent-session/structured-agent-session-mobile-attention'
 import { TerminalListHostScope } from '../../terminal/query/terminal-list-host-scope'
 
 export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope {
@@ -50,18 +51,21 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
     }
   }
 
-  /** Every saved sleeping-agent record, for an explicit lookup by conversation (never per hook). */
-  listSleepingAgentSessionRecords(): SleepingAgentSessionRecord[] {
-    const sessions = new Set<WorkspaceSessionState>()
-    for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
-      const session = this.workspaceSessions.get(worktreeId)
-      if (session) {
-        sessions.add(session)
-      }
-    }
-    return [...sessions].flatMap((session) =>
-      Object.values(session.sleepingAgentSessionsByPaneKey ?? {})
+  /** This host's own saved sleeping-agent records, folder workspaces included: terminal agent
+   *  ids name conversations on this host only, so no other partition or workspace is visited. */
+  readLocalSleepingAgentSessions(): Readonly<Record<string, SleepingAgentSessionRecord>> {
+    return (
+      this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.sleepingAgentSessionsByPaneKey ??
+      {}
     )
+  }
+
+  /** One workspace's display name by id, without listing every workspace. */
+  getWorkspaceDisplayName(worktreeId: string): string | null {
+    return this.store
+      ? (readStructuredAttentionWorkspaceLabels(this.store, { workspaceId: worktreeId })
+          .worktreeLabel ?? null)
+      : null
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

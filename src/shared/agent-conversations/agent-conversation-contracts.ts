@@ -30,13 +30,17 @@ export type AgentListResult = {
 export type AgentShowResult = {
   orcaSessionId: string
   kind: AgentConversationKind
-  /** Where it is open now: none when it isn't open, two for one conversation resumed in two panes. */
+  /** Where it is open now: none when it isn't open, two for one conversation resumed in two panes.
+   *  Read from the conversation's own status rows, so they carry no title (`list` does). */
   places: AgentConversationRow[]
 }
 
+export type AgentReadTool = { name: string; state?: string }
+
 export type AgentReadEntry =
-  | { kind: 'message'; role: string; text: string }
-  | { kind: 'tool'; name: string; state?: string }
+  /** `tools`: the tool calls a transcript message made, folded into its one entry. */
+  | { kind: 'message'; role: string; text: string; tools?: AgentReadTool[] }
+  | ({ kind: 'tool' } & AgentReadTool)
   | { kind: 'approval' | 'question'; text: string; pending: boolean }
   | { kind: 'error'; text: string }
 

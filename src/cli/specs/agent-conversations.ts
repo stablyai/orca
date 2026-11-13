@@ -22,7 +22,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'id'],
     positionalArgs: ['id'],
     notes: [
-      '<id> is the `orca_session_id:` ID from `orca agent list`, Copy Orca Session ID on a chat or Copy Agent ID on a terminal.',
+      '<id> is the `orca_session_id:` ID from `orca agent list` or Copy Orca Session ID.',
       'An agent resumed in two panes shows both; one that is not open shows none.'
     ],
     examples: ['orca agent show orca_session_id:claude_1234 --json']

@@ -84,7 +84,7 @@ export async function resolveAgentConversation(
       )
     : new AgentConversationRefusal(
         CODES.invalidId,
-        `${text || 'That'} is not an Orca session ID. Find agents' IDs with \`orca agent list\`, or copy one with Copy Orca Session ID (Copy Agent ID on a terminal).`
+        `${text || 'That'} is not an Orca session ID. Find agents' IDs with \`orca agent list\`, or copy one with Copy Orca Session ID.`
       )
 }
 

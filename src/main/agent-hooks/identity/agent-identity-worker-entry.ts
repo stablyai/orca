@@ -30,11 +30,15 @@ CREATE TABLE IF NOT EXISTS provider_links(
 
 const SELECT_LINK = `SELECT orca_session_id FROM provider_links
   WHERE execution_host = ? AND wsl_distro = ? AND agent = ? AND provider_session_id = ? AND locator = ?`
-// Reverse lookups for `orca agent` reads; indexes only, so older builds open the file unchanged.
+// Reverse lookups for `orca agent` reads: indexes only, so older builds open the file unchanged.
 const LOOKUP_INDEX_SQL = `CREATE INDEX IF NOT EXISTS provider_links_by_orca_session
   ON provider_links(orca_session_id);
 CREATE INDEX IF NOT EXISTS provider_links_by_provider_session
   ON provider_links(provider_session_id);`
+const LOOKUP_INDEX_NAMES = [
+  'provider_links_by_orca_session',
+  'provider_links_by_provider_session'
+] as const
 const PROVIDER_SESSION_ID_MATCH_LIMIT = 8
 
 /** Orca ids for provider conversations, which nothing can rebuild: the file is never deleted, and
@@ -45,11 +49,34 @@ export class AgentIdentityStore {
   /** A newer build's file: existing ids resolve, nothing is minted. */
   readonly readOnly: boolean
 
+  /** Reverse lookups run only on their indexes, never as a scan of every link. */
+  private lookupIndexed = false
+
   constructor(path: string, busyTimeoutMs = 25) {
     const opened = openIdentityDatabase(path, busyTimeoutMs)
     this.db = opened.db
     this.readOnly = opened.readOnly
     hardenSqliteDatabaseFiles(path)
+  }
+
+  /** Adds the lookup indexes on first use; a busy or read-only file throws, so the caller's
+   *  failure backoff retries it rather than scanning. */
+  private requireLookupIndexes(): void {
+    if (this.lookupIndexed) {
+      return
+    }
+    if (!this.readOnly) {
+      this.db.exec(LOOKUP_INDEX_SQL)
+    }
+    const present = this.db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name IN (${LOOKUP_INDEX_NAMES.map(() => '?').join(', ')})`
+      )
+      .get(...LOOKUP_INDEX_NAMES)
+    if (Number(present?.count) !== LOOKUP_INDEX_NAMES.length) {
+      throw new Error('agent identity lookup indexes unavailable')
+    }
+    this.lookupIndexed = true
   }
 
   lookup(key: AgentProviderKey): OrcaSessionId | null {
@@ -105,6 +132,7 @@ export class AgentIdentityStore {
 
   /** The provider conversation `id` names: each mint links exactly one key. */
   providerKeyOf(id: string): AgentProviderKey | null {
+    this.requireLookupIndexes()
     const row = this.db
       .prepare(
         `SELECT execution_host, wsl_distro, agent, provider_session_id, locator
@@ -124,6 +152,7 @@ export class AgentIdentityStore {
 
   /** Orca ids linked to a provider's own session id, so a caller can be told which to use. */
   idsOfProviderSession(providerSessionId: string): OrcaSessionId[] {
+    this.requireLookupIndexes()
     return this.db
       .prepare(
         `SELECT DISTINCT orca_session_id FROM provider_links WHERE provider_session_id = ? LIMIT ${PROVIDER_SESSION_ID_MATCH_LIMIT}`
@@ -175,12 +204,6 @@ function openIdentityDatabase(
         }
         throw error
       }
-    }
-    try {
-      db.exec(LOOKUP_INDEX_SQL)
-    } catch (error) {
-      // A busy file still answers lookups, by scan; the next open adds the indexes.
-      console.warn('[agent-hooks] agent identity lookup indexes deferred', error)
     }
     return { db, readOnly: false }
   } catch (error) {

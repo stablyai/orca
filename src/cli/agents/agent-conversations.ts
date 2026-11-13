@@ -18,6 +18,7 @@ import {
   type AgentConversationRow,
   type AgentListResult,
   type AgentReadResult,
+  type AgentReadTool,
   type AgentShowResult
 } from '../../shared/agent-conversations/agent-conversation-contracts'
 import { AGENT_STATUS_STATES } from '../../shared/agent-status/contracts/agent-status-types'
@@ -143,16 +144,23 @@ function formatAgentShow(result: AgentShowResult): string {
   return result.places.map(formatAgentRow).join('\n\n')
 }
 
+function formatTool(tool: AgentReadTool): string {
+  return `[tool ${tool.name}${tool.state ? `: ${tool.state}` : ''}]`
+}
+
 function formatAgentRead(result: AgentReadResult): string {
   const lines = result.entries.map((entry) => {
     if (entry.kind === 'message') {
-      return `${entry.role}: ${entry.text}`
+      return [
+        ...(entry.text ? [`${entry.role}: ${entry.text}`] : []),
+        ...(entry.tools ?? []).map((tool) => formatTool(tool))
+      ].join('\n')
     }
     if (entry.kind === 'error') {
       return `[error] ${entry.text}`
     }
     if (entry.kind === 'tool') {
-      return `[tool ${entry.name}${entry.state ? `: ${entry.state}` : ''}]`
+      return formatTool(entry)
     }
     return `[${entry.kind}${entry.pending ? ', waiting for an answer' : ''}] ${entry.text}`
   })
