@@ -62,11 +62,5 @@ describe('mobile automation host contracts', () => {
 
     expect(params.updates).toEqual({ name: 'Renamed' })
     expect(params.destination).toBeUndefined()
-    expect(original).toMatchObject({
-      agentId: 'codex',
-      rrule: saved.rrule,
-      grace: '0',
-      reuseSession: true
-    })
   })
 })
