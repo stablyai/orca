@@ -173,6 +173,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     this.inactiveCodexFetching.clear()
     this.resolveAndClearFetchIdleWaiters()
     this.stopTimer()
+    this.clearStaleClaudeTokenRetry()
     this.clearDeferredStartupRefresh()
     this.detachWindowListeners?.()
     this.detachWindowListeners = null
