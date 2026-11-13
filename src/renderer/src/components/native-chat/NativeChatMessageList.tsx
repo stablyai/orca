@@ -5,13 +5,11 @@ import { NativeChatTranscriptColumn } from './NativeChatTranscriptColumn'
 import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
-import { withoutPullRequestEventRows } from '../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
+import { useNativeChatCiLineRows } from './conversation/slots/use-native-chat-ci-line-rows'
+import { useNativeChatResponseFolding } from './messages/disclosure/native-chat-collapsed-responses'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import {
-  nativeChatShowsCiResultLines,
-  nativeChatShowsTurnDiffSummary
-} from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { nativeChatShowsTurnDiffSummary } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
 import { useNativeChatQuestionReceipts } from './conversation/projection/use-native-chat-question-receipts'
@@ -175,12 +173,7 @@ export function NativeChatMessageList({
   const loadedMessageIds = useMemo(() => new Set(messages.map(({ id }) => id)), [messages])
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
   const { liveTurnKey } = turnRows
-  const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
-  // Hidden lines leave the transcript entirely, so they reserve no row or gap.
-  const { messages: rows, turnKeys } = useMemo(
-    () => (showCiResultLines ? turnRows : withoutPullRequestEventRows(turnRows)),
-    [showCiResultLines, turnRows]
-  )
+  const { messages: rows, turnKeys } = useNativeChatCiLineRows(turnRows)
   const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turns = scope.conversationTurns
@@ -231,7 +224,8 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
-  const { slots: allSlots, liveLine } = transcript
+  const folding = useNativeChatResponseFolding(transcript, { liveTurnKey, awaitingInput, hostWork })
+  const allSlots = folding.slots
   useNativeChatSideChatForkPointReport(transcript.forkPoint)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
@@ -407,11 +401,12 @@ export function NativeChatMessageList({
                   timedRows={timedRows}
                   loadedMessageIds={loadedMessageIds}
                   context={rowContext}
+                  collapsedResponses={folding.responses}
                   window={transcriptWindow}
                   newRowsMarker={newRows.marker}
                 />
-                {liveLine ? (
-                  <NativeChatTurnActivityLine line={liveLine} />
+                {transcript.liveLine ? (
+                  <NativeChatTurnActivityLine line={transcript.liveLine} />
                 ) : tailRow === 'awaiting-input' ? (
                   <NativeChatAwaitingInputRow subject={null} pending />
                 ) : null}
