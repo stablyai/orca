@@ -146,7 +146,8 @@ export class HostedPRReadJobs {
                 `hosted::${prepared.key}`,
                 { ...candidate, isSelected: false },
                 prepared,
-                this.queue
+                this.queue,
+                true
               )
             : outcome
         this.observe(candidate, settled)
