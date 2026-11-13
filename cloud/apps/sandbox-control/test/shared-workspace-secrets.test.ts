@@ -191,8 +191,8 @@ describe('personal model keys in shared workspaces with egress placeholders (SEC
     expect(env).not.toHaveProperty('OPENAI_API_KEY')
     expect(env).not.toHaveProperty('DB_PASSWORD')
     const [box] = [...h.vercel.boxes.values()]
-    // No forward rule for the personal key: the host is plain allowlisted, nothing is swapped there.
-    expect(box!.policy.allow['api.openai.com']).toEqual([])
+    // No forward rule for the personal key: nothing is swapped there (no entry under open egress).
+    expect(box!.policy.allow['api.openai.com'] ?? []).toEqual([])
     expect(await proxied(id, 'api.openai.com', { authorization: `Bearer orca-ph-openai-api-key-${id}` })).toBe(403)
     expect(await proxied(id, 'api.anthropic.com', { 'x-api-key': `orca-ph-anthropic-api-key-${id}` })).toBe(200)
     expect(upstream).toHaveLength(1)
