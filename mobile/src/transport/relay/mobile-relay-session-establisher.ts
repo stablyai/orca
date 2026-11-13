@@ -2,9 +2,9 @@ import type { MobileEndpointSupervisorDependencies } from '../connection/mobile-
 import {
   dialRelayThroughDirectorFallback,
   RelayDialAbortedError,
-  RelayHostOfflineStreak,
   toError
 } from './mobile-relay-director-fallback'
+import { RelayHostOfflineStreak } from './relay-host-offline-streak'
 import { RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
@@ -24,7 +24,7 @@ function directWon(logical: StableLogicalRpcClient): boolean {
 // Own candidate relays through cell resolution, logical migration and best-effort resume bookkeeping.
 export class MobileRelaySessionEstablisher {
   private relay: MobileRelayEndpoint
-  private readonly hostOfflineStreak = new RelayHostOfflineStreak()
+  private readonly hostOfflineStreak: RelayHostOfflineStreak
   private readonly resolveTimeout = new RelayResolveTimeoutBudget()
 
   constructor(
@@ -52,6 +52,7 @@ export class MobileRelaySessionEstablisher {
     }
   ) {
     this.relay = args.relay
+    this.hostOfflineStreak = new RelayHostOfflineStreak(() => args.logical.getLastConnectedAt())
   }
 
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {

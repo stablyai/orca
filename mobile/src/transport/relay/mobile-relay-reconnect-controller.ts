@@ -33,6 +33,7 @@ export class RelayReconnectController {
   private activeRelayConnectedAt: number | null = null
   private nextAttemptAt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
+  // Due time of a gate reprobe tick (the only timer that runs under a gate); 0 when none is armed.
   private timerDueAt = 0
   private activeSession: RetainableRelaySession | null = null
   private recoveryGate: RecoveryGate | null = null
@@ -303,6 +304,7 @@ export class RelayReconnectController {
   }
 
   private clearTimer(): void {
+    this.timerDueAt = 0
     if (this.timer) {
       this.dependencies.clearTimer(this.timer)
       this.timer = null
@@ -314,7 +316,6 @@ export class RelayReconnectController {
       return
     }
     const delay = delayMs ?? Math.max(0, this.nextAttemptAt - this.dependencies.now())
-    this.timerDueAt = this.dependencies.now() + delay
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
       this.onRetry()

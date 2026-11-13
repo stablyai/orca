@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  dialRelayThroughDirectorFallback,
-  RelayDialAbortedError,
-  RelayHostOfflineStreak
-} from './mobile-relay-director-fallback'
+import { dialRelayThroughDirectorFallback } from './mobile-relay-director-fallback'
+import { RelayHostOfflineStreak } from './relay-host-offline-streak'
 import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
 
 const relay = {
@@ -21,9 +18,13 @@ const attachTimeout = {
   error: new RelayOuterError(4404, false, 'attach-timeout')
 }
 
-function dialer(results: { ok: boolean; error?: Error }[]) {
-  const streak = new RelayHostOfflineStreak()
-  const resolveRelay = vi.fn(async () => ({ ...relay, cellUrl: 'https://relay-hk.onorca.dev' }))
+function dialer(
+  results: { ok: boolean; error?: Error }[],
+  resolved: typeof relay = { ...relay, cellUrl: 'https://relay-hk.onorca.dev', assignmentEpoch: 8 }
+) {
+  const streak = new RelayHostOfflineStreak(() => null)
+  const resolveRelay = vi.fn(async () => resolved)
+  const persistResolvedRelay = vi.fn(async () => {})
   const queue = [...results]
   const dial = vi.fn(async () => {
     const next = queue.shift() ?? { ok: true }
@@ -36,13 +37,13 @@ function dialer(results: { ok: boolean; error?: Error }[]) {
       relay: () => relay,
       dial,
       resolveRelay,
-      persistResolvedRelay: async () => {}
+      persistResolvedRelay
     })
-  return { attempt, dial, resolveRelay }
+  return { attempt, dial, resolveRelay, persistResolvedRelay }
 }
 
 describe('dialRelayThroughDirectorFallback on host-offline', () => {
-  it('resolves on the second consecutive 4404 and redials the resolved cell once', async () => {
+  it('resolves on the second consecutive 4404 and redials the moved cell once', async () => {
     const { attempt, dial, resolveRelay } = dialer([hostOffline, hostOffline, { ok: true }])
     await expect(attempt()).resolves.toEqual(hostOffline)
     expect(resolveRelay).not.toHaveBeenCalled()
@@ -52,45 +53,23 @@ describe('dialRelayThroughDirectorFallback on host-offline', () => {
     expect(dial).toHaveBeenCalledTimes(3)
   })
 
-  it('paces resolves to every other 4404 while the edge keeps answering it', async () => {
-    const { attempt, resolveRelay } = dialer(Array.from({ length: 8 }, () => hostOffline))
-    // Each resolve redials once; 4 recovery cycles = 6 dials incl. the 2 post-resolve redials.
-    for (let i = 0; i < 4; i++) {
-      await attempt()
-    }
-    expect(resolveRelay).toHaveBeenCalledTimes(2)
+  it('does not redial when the director still names the same cell', async () => {
+    const { attempt, dial, resolveRelay, persistResolvedRelay } = dialer(
+      [hostOffline, hostOffline],
+      relay
+    )
+    await attempt()
+    await expect(attempt()).resolves.toEqual(hostOffline)
+    expect(resolveRelay).toHaveBeenCalledOnce()
+    expect(persistResolvedRelay).not.toHaveBeenCalled()
+    expect(dial).toHaveBeenCalledTimes(2)
   })
 
   it('never resolves on attach timeouts, which prove the desktop is seated on this cell', async () => {
-    const { attempt, resolveRelay } = dialer([
-      attachTimeout,
-      attachTimeout,
-      hostOffline,
-      attachTimeout,
-      hostOffline
-    ])
-    for (let i = 0; i < 5; i++) {
+    const { attempt, resolveRelay } = dialer([attachTimeout, attachTimeout, attachTimeout])
+    for (let i = 0; i < 3; i++) {
       await attempt()
     }
     expect(resolveRelay).not.toHaveBeenCalled()
-  })
-
-  it('restarts the streak after a success or another failure, but not after a local abort', async () => {
-    const aborted = { ok: false as const, error: new RelayDialAbortedError() }
-    const { attempt, resolveRelay } = dialer([
-      hostOffline,
-      { ok: true },
-      hostOffline,
-      { ok: false, error: new RelayOuterError(4408) },
-      hostOffline,
-      aborted,
-      hostOffline
-    ])
-    for (let i = 0; i < 6; i++) {
-      await attempt()
-    }
-    expect(resolveRelay).not.toHaveBeenCalled()
-    await attempt()
-    expect(resolveRelay).toHaveBeenCalledOnce()
   })
 })
