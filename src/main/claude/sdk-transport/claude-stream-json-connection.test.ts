@@ -19,6 +19,13 @@ import { DaemonClient } from '../../daemon/transport/client/daemon-client'
 import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
 import * as identityProbe from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
+vi.mock('../../daemon/executable-host/macos/daemon-mac-code-identity', () => ({
+  inspectMacProcessCodeIdentity: vi.fn(async () => ({
+    identity: 'resolved',
+    executablePath: '/fake/Orca Agents'
+  }))
+}))
+
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '../__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
