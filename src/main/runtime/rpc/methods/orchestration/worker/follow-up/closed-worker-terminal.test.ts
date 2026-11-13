@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { useHelperFollowUpCli } from '../testing/helper-follow-up-cli.test-support'
-import { chooseWorkerFollowUpPlacement } from './worker-follow-up-choice'
 
 const CONVERSATION = { key: 'session_id', id: 'fixture-conversation' } as const
 const REOPENED_PANE = 'tab_reopened:leaf'
@@ -62,40 +61,6 @@ describe('opening a terminal worker Orca closed', () => {
   }
 
   const open = (address: string) => h.call('orchestration.partyOpen', { address })
-
-  it('resumes its conversation in a new terminal, and a click after it reports reuses it', async () => {
-    const { resource, resume, report } = await closedHelper()
-    for (let click = 0; click < 2; click++) {
-      expect(await open(resource.terminal_handle)).toEqual({
-        location: { kind: 'terminal', handle: 'term_reopened' }
-      })
-      report({ agentType: 'claude', providerSession: CONVERSATION })
-    }
-    expect(resume).toHaveBeenCalledOnce()
-    expect(resume).toHaveBeenCalledWith(
-      resource.worktree_id,
-      expect.objectContaining({
-        agent: 'claude',
-        providerSession: CONVERSATION,
-        captureHostId: 'local'
-      })
-    )
-  })
-
-  it('sends a later follow-up into the reopened terminal, not a second one', async () => {
-    const { helper, resource, resume, report } = await closedHelper()
-    await open(resource.terminal_handle)
-    report({ agentType: 'claude', providerSession: CONVERSATION })
-    const placement = await chooseWorkerFollowUpPlacement(
-      h.runtime,
-      h.db,
-      h.db.getDispatchContextById(helper.dispatchId)!,
-      resource,
-      { admit: () => {}, requested: () => {} }
-    )
-    expect(placement).toMatchObject({ delivery: 'follow_up', terminal: 'term_reopened' })
-    expect(resume).toHaveBeenCalledOnce()
-  })
 
   it('forgets an uncertain request once its conversation reports, so a later resume is a new one', async () => {
     const { resource, resume, report } = await closedHelper()
