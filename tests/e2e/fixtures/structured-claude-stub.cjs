@@ -30,7 +30,8 @@ const initializeResponse = {
 }
 
 // A prompt containing "slow" runs until it is interrupted; one containing "plugin-ui" first gets the
-// frames a plugin's `$.ui.status` and `$.ui.toast` calls produce in stream-json mode.
+// frames a plugin's `$.ui.status` and `$.ui.toast` calls produce in stream-json mode; one containing
+// "api-retry" first reports a retried API request.
 const TURN_MS = 500
 const SLOW_TURN_MS = 60_000
 let turnTimer = null
@@ -41,6 +42,19 @@ function startTurn(frame) {
   const prompt = JSON.stringify(frame.message ?? '')
   const slow = prompt.includes('slow')
   const pluginUi = prompt.includes('plugin-ui')
+  if (prompt.includes('api-retry')) {
+    write({
+      type: 'system',
+      subtype: 'api_retry',
+      session_id: sessionId,
+      uuid: randomUUID(),
+      attempt: 1,
+      max_retries: 10,
+      retry_delay_ms: 500,
+      error_status: 529,
+      error: 'overloaded'
+    })
+  }
   if (prompt.includes('plugin-focus')) {
     write({
       type: 'system',
