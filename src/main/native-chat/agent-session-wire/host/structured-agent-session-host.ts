@@ -223,7 +223,7 @@ export class StructuredAgentSessionHost {
   private serialize = this.tasks.serialize.bind(this.tasks)
   withForkSourceAdmission = this.serialize
 
-  private readonly entry = structuredAgentSessionEntryDelegates(() => this.attachContext())
+  readonly entry = structuredAgentSessionEntryDelegates(() => this.attachContext())
   attach = this.entry.attach
   create = this.entry.create
 
