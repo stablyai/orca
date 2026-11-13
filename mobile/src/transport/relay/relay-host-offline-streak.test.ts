@@ -10,25 +10,30 @@ describe('RelayHostOfflineStreak', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  // 4404 retries are paced 5-15s; use 10s.
-  function resolvesOver(ms: number, streak: RelayHostOfflineStreak): number {
-    let resolves = 0
+  // 4404 retries are paced 5-15s; use 10s. Returns the minute of each resolve.
+  function resolveMinutesOver(ms: number, streak: RelayHostOfflineStreak): number[] {
+    const startedAt = Date.now()
+    const minutes: number[] = []
     for (let elapsed = 0; elapsed < ms; elapsed += 10_000) {
-      resolves += streak.shouldResolve(hostOffline()) ? 1 : 0
+      if (streak.shouldResolve(hostOffline())) {
+        minutes.push(Math.round((Date.now() - startedAt) / 60_000))
+      }
       vi.advanceTimersByTime(10_000)
     }
-    return resolves
+    return minutes
   }
 
-  it('resolves on the second 4404, then backs off for a desktop that stays offline', () => {
+  it('resolves on the second 4404, then at doubling gaps for a desktop that stays offline', () => {
     const streak = new RelayHostOfflineStreak(() => null)
-    expect(streak.shouldResolve(hostOffline())).toBe(false)
-    expect(streak.shouldResolve(hostOffline())).toBe(true)
-    // At most once per 5 minutes, and only at the 4th, 8th, 16th... 4404 of the episode.
-    expect(resolvesOver(5 * 60_000 - 10_000, streak)).toBe(0)
-    const hour = resolvesOver(60 * 60_000, streak)
-    expect(hour).toBeGreaterThan(0)
-    expect(hour).toBeLessThanOrEqual(7)
+    // Gaps of 5, 10, 20, 40 and then 60 minutes.
+    expect(resolveMinutesOver(3 * 60 * 60_000, streak)).toEqual([0, 5, 15, 35, 75, 135])
+  })
+
+  it('returns to the 5-minute gap after a successful relay dial', () => {
+    const streak = new RelayHostOfflineStreak(() => null)
+    expect(resolveMinutesOver(40 * 60_000, streak)).toEqual([0, 5, 15, 35])
+    expect(streak.shouldResolve(null)).toBe(false)
+    expect(resolveMinutesOver(6 * 60_000, streak)).toEqual([0, 5])
   })
 
   it('never counts attach timeouts and restarts after any other outcome or an abort', () => {

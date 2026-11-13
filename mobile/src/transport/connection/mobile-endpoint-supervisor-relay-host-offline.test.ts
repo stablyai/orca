@@ -87,16 +87,17 @@ describe('mobile endpoint supervisor on persistent host-offline', () => {
     supervisor.stop()
   })
 
-  it('asks the director only a few times while a laptop sleeps for 30 minutes', async () => {
+  it('asks the director only a few times while a laptop sleeps for two hours', async () => {
     // The director keeps naming the same cell; the edge keeps answering 4404.
     const resolveRelay = vi.fn(async ({ relay: current }: { relay: typeof relay }) => current)
     const { deps, supervisor } = await startOffLan({ resolveRelay })
-    await vi.advanceTimersByTimeAsync(30 * 60_000)
-    expect(resolveRelay.mock.calls.length).toBeGreaterThanOrEqual(1)
-    expect(resolveRelay.mock.calls.length).toBeLessThanOrEqual(7)
+    await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
+    // Gaps of 5, 10, 20, 40 min: resolves near 0, 5, 15, 35 and 75 min.
+    expect(resolveRelay.mock.calls.length).toBeGreaterThanOrEqual(5)
+    expect(resolveRelay.mock.calls.length).toBeLessThanOrEqual(6)
     // Unchanged answers neither re-route nor add an immediate redial: 4404 pacing alone (5-15s).
     expect(deps.setRelayRouting).not.toHaveBeenCalled()
-    expect(vi.mocked(deps.openRelay).mock.calls.length).toBeLessThanOrEqual(30 * 4 + 1)
+    expect(vi.mocked(deps.openRelay).mock.calls.length).toBeLessThanOrEqual(120 * 4 + 1)
     supervisor.stop()
   })
 
