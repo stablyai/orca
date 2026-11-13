@@ -1,5 +1,6 @@
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentReadEntry } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
+import { compareAgentJournalItems } from '../../../../../shared/agent-session/journal/agent-session-journal-position'
 import { agentChatEntryOf } from '../../../../../shared/agent-conversations/agent-chat-entries'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { findSequenceGap } from '../../../agent-session-journal/replay/journal-cursor'
@@ -14,7 +15,7 @@ import {
 import { renderJournalStatusItem } from '../../../agent-session-journal/projection/journal-public-read'
 
 /** Where an agent read continues: rows through `sequence` are read, and the first `within`
- *  items of the next row (one row can name several). */
+ *  items of the next row in presented order (one row can name several). */
 export type AgentReadJournalPosition = { cursor: AgentJournalCursor; within: number }
 
 export type AgentReadJournalPage =
@@ -81,24 +82,18 @@ export function readAgentJournalPage(
       hasSubmission: (id) => journal.submission(id) !== undefined
     })
     const start = row.seq === after.cursor.sequence + 1 ? after.within : 0
-    // One row's items appear once each, current content; `within` counts its raw positions.
-    const seen = new Set(ids.slice(0, start))
-    for (let index = start; index < ids.length; index++) {
-      const id = ids[index]
-      if (id === undefined || seen.has(id)) {
-        continue
-      }
-      const item = renderJournalStatusItem(display, id)
+    // `within` counts positions in the row's presented order.
+    const items = presentedItems(display, ids)
+    for (let index = start; index < items.length; index++) {
+      const item = items[index]
       const entry = item && entryOf(item, waiting)
       if (!entry) {
-        seen.add(id)
         continue
       }
       if (!page.admit(entry)) {
         // Stop before this item: the next read resumes at it.
         return { ok: true, entries, next: position(row.seq - 1, index), limited: true }
       }
-      seen.add(id)
       entries.push(entry)
     }
   }
@@ -109,6 +104,19 @@ export function readAgentJournalPage(
     next: position(more ? (rows.at(-1)?.seq ?? after.cursor.sequence) : since.through),
     limited: more
   }
+}
+
+/** A row's current items, once each, in the order the chat presents them. */
+function presentedItems(
+  display: Parameters<typeof renderJournalStatusItem>[0],
+  ids: readonly string[]
+): AgentJournalRenderItem[] {
+  return [...new Set(ids)]
+    .flatMap((id) => renderJournalStatusItem(display, id) ?? [])
+    .sort(
+      (a, b) =>
+        compareAgentJournalItems(a, b) || (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0)
+    )
 }
 
 /** The entry an item reads as, from its history wire form. One no page could carry reads as the

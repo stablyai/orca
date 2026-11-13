@@ -39,6 +39,7 @@ import {
   type AgentReadJournalPosition
 } from '../agent-read-journal-page'
 import { agentJournalItemForWire } from '../agent-session-item-wire-form'
+import { readAgentSessionHistory } from '../agent-session-history-page'
 import { agentSessionSendBodyFingerprint } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { buildJournalQueueRow } from '../../../../agent-session-journal/queued-messages/journal-queue-events'
 
@@ -670,8 +671,7 @@ it.each([1_000, 10_000])(
     expect(publicEntries(journal).slice(-2).map(textOf)).toEqual(['old', 'new'])
     expect(texts(tail(journal, 3))).toEqual([`reply ${count - 1}`, 'old', 'new'])
     expect(texts(tail(journal, 3))).toEqual([`reply ${count - 1}`, 'old', 'new'])
-    // An outcome row lists its ids by key, so forward order within it isn't presented order.
-    expect(texts(readForward(journal, 1, before.next)).toSorted()).toEqual(['new', 'old'])
+    expect(texts(readForward(journal, 1, before.next))).toEqual(['old', 'new'])
     expect(work.builds).toBe(0)
     expect(work.upkeep).toBe(2)
   }
@@ -716,5 +716,47 @@ it.each([1_000, 10_000])(
 
     await batch('restore', [note('shape', 'shaped')])
     expect(index.noteDependencies()).toEqual({ turns: 3, notes: 3 })
+  }
+)
+
+it.each([1, 2])(
+  'reads one write forward in presented order, not stored-id order, at limit %i',
+  async (limit) => {
+    const journal = await seed(1, () => message('before'))
+    const start = { cursor: journal.cursor(), within: 0 }
+    await journal.appendLifecycleBatch({
+      settlementId: 'exchange',
+      fence: 1,
+      mutations: [
+        {
+          kind: 'item',
+          itemId: 'z-question',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'question' }] },
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
+        {
+          kind: 'item',
+          itemId: 'a-answer',
+          body: message('answer'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
+    })
+    const history = readAgentSessionHistory(journal, {
+      sessionId: identity.sessionId,
+      direction: 'after',
+      cursor: start.cursor,
+      limit: 50
+    })
+
+    const forward = readForward(journal, limit, start)
+
+    expect(texts(forward)).toEqual(['question', 'answer'])
+    expect(publicEntries(journal).slice(-2).map(textOf)).toEqual(['question', 'answer'])
+    expect(
+      history.ok &&
+        history.page.items.flatMap((item) => agentChatEntryOf(item, waiting) ?? []).map(textOf)
+    ).toEqual(['question', 'answer'])
+    expect(forward.after).toEqual({ cursor: journal.cursor(), within: 0 })
   }
 )
