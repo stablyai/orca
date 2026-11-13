@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { AgentConversationCopyError } from '../../../native-chat/agent-conversation-copy-error'
+import { AgentConversationCopyError } from '../../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
 import {

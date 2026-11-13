@@ -6,8 +6,8 @@ import { zcodeModelCatalogDiscovery } from '../../runtime/agent-session/model-ca
 import type { StructuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { ZCODE_STRUCTURED_AGENT } from './launch/zcode-structured-agent-definition'
 import { ZCODE_TRANSCRIPT_IMPORT } from './zcode-transcript-import'
-import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
-import type { StructuredAgentSessionHistory } from '../../native-chat/structured-agent-cli-conversations'
+import { resolveStructuredAgentCommand } from '../../native-chat/agent-launch/structured-agent-command-resolution'
+import type { StructuredAgentSessionHistory } from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const ZCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['zcode'],

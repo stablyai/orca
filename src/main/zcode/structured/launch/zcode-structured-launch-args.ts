@@ -1,4 +1,4 @@
-import { StructuredAgentArgumentsError } from '../../../native-chat/structured-agent-arguments-error'
+import { StructuredAgentArgumentsError } from '../../../native-chat/agent-launch/structured-agent-arguments-error'
 
 // zcode chats run `app-server --stdio`: prompts, permission modes and output formats are
 // session RPC territory, so the chat accepts only root options that cannot redirect them.

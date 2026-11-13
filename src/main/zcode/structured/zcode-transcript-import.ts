@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import {
   absoluteConversationStore,
   type StructuredAgentTranscriptImport
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 // zcode keeps conversations in its own SQLite store, not transcript files — a container store,
 // like opencode's. Fork admission only requires the store to resolve; inherited rows replay from

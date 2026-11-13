@@ -1,7 +1,7 @@
 import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   readBundledZcodeAppVersion,
   zcodeBundledLaunch,

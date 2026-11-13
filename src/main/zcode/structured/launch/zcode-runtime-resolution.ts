@@ -1,7 +1,7 @@
 import { close as closeFd, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { dirname, join, resolve as resolvePath } from 'node:path'
-import type { StructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
+import type { StructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 
 // zcode's own app-server is the only official chat transport, but which binary to run matters:
 // desktop-bundle runtimes accept the host's account-config push (their models light up), while

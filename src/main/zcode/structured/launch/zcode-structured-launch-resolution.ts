@@ -4,12 +4,12 @@ import { pendingAgentSessionRewindFork } from '../../../../shared/agent-session/
 import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { zcodeStructuredLaunchArgs } from './zcode-structured-launch-args'
 import {
   readBundledZcodeAppVersion,

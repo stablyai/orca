@@ -3,7 +3,7 @@ import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentCommandSettings,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
 import { AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS } from '../../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
