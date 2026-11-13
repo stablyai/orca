@@ -40,11 +40,11 @@ export function useWorkspaceCleanupHostActivity(
   preview: WorkspaceCleanupPreview | null
   cleaningUp: boolean
   cleanUpNow: () => Promise<void>
-  /** `save` marks the rules about to be saved, so their preview is kept as the page's matches. */
-  previewRules: (
-    rules: WorkspaceCleanupRules,
-    options?: { save?: boolean }
-  ) => Promise<WorkspaceCleanupPreview>
+  previewRules: (rules: WorkspaceCleanupRules) => Promise<WorkspaceCleanupPreview>
+  /** The page's own preview when it already evaluated exactly these rules, so callers skip a host scan. */
+  cachedPreview: (rules: WorkspaceCleanupRules) => WorkspaceCleanupPreview | null
+  /** Makes a preview of rules that were just saved the page's matches, instead of scanning them again. */
+  adoptPreview: (rules: WorkspaceCleanupRules, preview: WorkspaceCleanupPreview) => void
 } {
   const t = useTranslate()
   const environmentId = runtimeTargetEnvironmentId(owner)
@@ -159,22 +159,14 @@ export function useWorkspaceCleanupHostActivity(
   }, [owner, t])
 
   const previewRules = useCallback(
-    async (
-      nextRules: WorkspaceCleanupRules,
-      options?: { save?: boolean }
-    ): Promise<WorkspaceCleanupPreview> => {
-      const preview = await callRuntimeRpc<WorkspaceCleanupPreview>(
+    (nextRules: WorkspaceCleanupRules): Promise<WorkspaceCleanupPreview> =>
+      callRuntimeRpc<WorkspaceCleanupPreview>(
         owner,
         'workspaceCleanup.preview',
         { rules: nextRules },
         { timeoutMs: EVALUATE_TIMEOUT_MS }
-      )
-      if (options?.save) {
-        setPreviewState({ ownerKey, rulesKey: JSON.stringify(nextRules), revision, preview })
-      }
-      return preview
-    },
-    [owner, ownerKey, revision]
+      ),
+    [owner]
   )
 
   return {
@@ -185,6 +177,12 @@ export function useWorkspaceCleanupHostActivity(
         : null,
     cleaningUp,
     cleanUpNow,
-    previewRules
+    previewRules,
+    cachedPreview: (candidate) =>
+      previewIsCurrent && previewState?.rulesKey === JSON.stringify(candidate)
+        ? previewState.preview
+        : null,
+    adoptPreview: (savedRules, preview) =>
+      setPreviewState({ ownerKey, rulesKey: JSON.stringify(savedRules), revision, preview })
   }
 }

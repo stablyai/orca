@@ -105,7 +105,7 @@ export function WorkspaceCleanupSettingsPane({
     updateSettings
   )
   const rules = hostRules.state === 'ready' ? hostRules.rules : null
-  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules } =
+  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, cachedPreview, adoptPreview } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
   const [pendingRule, setPendingRule] = useState<WorkspaceCleanupRuleKey | null>(null)
@@ -189,34 +189,50 @@ export function WorkspaceCleanupSettingsPane({
       return
     }
     const nextRules = change(latest)
-    const rows =
+    const checked =
       request && hasEnabledWorkspaceCleanupRule(nextRules)
         ? await previewNewRemovals(latest, nextRules)
-        : []
+        : { rows: [], nextPreview: null }
     if (!mountedRef.current) {
       return
     }
-    if (!rows) {
+    if (!checked) {
       finishChange(false)
       return
     }
-    if (request && rows.length > 0) {
+    if (request && checked.rows.length > 0) {
       setPendingRule(null)
-      setPendingChange({ ...request, rows, change })
+      setPendingChange({ ...request, rows: checked.rows, change })
       return
     }
-    finishChange(await update(nextRules))
+    finishChange(await saveRules(nextRules, checked.nextPreview))
+  }
+
+  // The would-be rules' preview becomes the page's matches only once those rules are saved.
+  const saveRules = async (
+    nextRules: WorkspaceCleanupRules,
+    nextPreview: WorkspaceCleanupPreview | null
+  ): Promise<boolean> => {
+    const saved = await update(nextRules)
+    if (saved && nextPreview) {
+      adoptPreview(nextRules, nextPreview)
+    }
+    return saved
   }
 
   /** Null when the preview failed; the toast says so. */
   const previewNewRemovals = async (
     latest: WorkspaceCleanupRules,
     nextRules: WorkspaceCleanupRules
-  ): Promise<WorkspaceCleanupPreviewRow[] | null> => {
-    // Project rules can delete with every global rule off, so the current rules are always read.
+  ): Promise<{
+    rows: WorkspaceCleanupPreviewRow[]
+    nextPreview: WorkspaceCleanupPreview
+  } | null> => {
+    // Project rules can delete with every global rule off, so the current rules are always read,
+    // from the page's own preview when it already covers them.
     const previews = await Promise.all([
-      previewRules(nextRules, { save: true }),
-      previewRules(latest)
+      previewRules(nextRules),
+      cachedPreview(latest) ?? previewRules(latest)
     ]).catch((error: unknown) => {
       toast.error(
         t(
@@ -227,7 +243,9 @@ export function WorkspaceCleanupSettingsPane({
       )
       return null
     })
-    return previews ? newRemovals(previews[0], previews[1]) : null
+    return previews
+      ? { rows: newRemovals(previews[0], previews[1]), nextPreview: previews[0] }
+      : null
   }
 
   const toggleRule = (key: WorkspaceCleanupRuleKey): void => {
@@ -254,13 +272,14 @@ export function WorkspaceCleanupSettingsPane({
     if (!latest || !mountedRef.current) {
       return
     }
-    const rows = await previewNewRemovals(latest, change.change(latest))
-    if (!rows || !mountedRef.current) {
+    const nextRules = change.change(latest)
+    const checked = await previewNewRemovals(latest, nextRules)
+    if (!checked || !mountedRef.current) {
       return
     }
     const listed = new Set(change.rows.map(workspaceCleanupRowKey))
-    if (rows.some((row) => !listed.has(workspaceCleanupRowKey(row)))) {
-      setPendingChange({ ...change, rows })
+    if (checked.rows.some((row) => !listed.has(workspaceCleanupRowKey(row)))) {
+      setPendingChange({ ...change, rows: checked.rows })
       return
     }
     // Pinned workspaces are always kept, so Keep is a pin rather than a second keep list.
@@ -288,7 +307,7 @@ export function WorkspaceCleanupSettingsPane({
     if (!mountedRef.current) {
       return
     }
-    if (await update(change.change(latest))) {
+    if (await saveRules(nextRules, checked.nextPreview)) {
       setPendingChange(null)
       finishChange(true)
     }
