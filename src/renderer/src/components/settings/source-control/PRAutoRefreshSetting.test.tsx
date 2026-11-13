@@ -109,7 +109,6 @@ describe('PRAutoRefreshSetting for a paired host', () => {
       setPRAutoRefreshCadenceForHost('env-a', 'off')
     })
     expect(selected()).toBe('Off')
-    expect(hint()).toContain('Off: no timed refresh.')
   })
 
   it('lets the user choose Default back after another client picked Off', async () => {

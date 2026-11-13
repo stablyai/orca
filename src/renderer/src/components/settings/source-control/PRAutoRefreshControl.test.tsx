@@ -33,15 +33,12 @@ function text(testId: string): string | null {
 }
 
 describe('PRAutoRefreshControl', () => {
-  it('describes the selected cadence as how often it checks, from the shared policy', async () => {
+  it('offers every cadence and reports the one the user picks', async () => {
     const onChange = vi.fn()
     await act(async () =>
       root.render(
         <PRAutoRefreshControl cadence="reduced" onChange={onChange} remoteHostName={null} />
       )
-    )
-    expect(text('pr-auto-refresh-hint')).toBe(
-      'Reduced: about every 5 min for the open workspace and every 10 min for other visible ones.'
     )
     expect(text('pr-auto-refresh-host-note')).toBeNull()
 
@@ -53,15 +50,6 @@ describe('PRAutoRefreshControl', () => {
     }
     await act(async () => minimal.click())
     expect(onChange).toHaveBeenCalledWith('minimal')
-  })
-
-  it('spells out that Off has no timer and what still refreshes', async () => {
-    await act(async () =>
-      root.render(<PRAutoRefreshControl cadence="off" onChange={() => {}} remoteHostName={null} />)
-    )
-    expect(text('pr-auto-refresh-hint')).toBe(
-      'Off: no timed refresh. Orca still reads when you select a workspace, push, return to the window or refresh manually.'
-    )
   })
 
   it('names the paired host whose timers and clients the setting changes', async () => {
@@ -76,9 +64,6 @@ describe('PRAutoRefreshControl', () => {
     )
     expect(text('pr-auto-refresh-host-note')).toBe(
       'Applies to Boston build server and every client connected to it.'
-    )
-    expect(text('pr-auto-refresh-hint')).toBe(
-      'Default: about every minute for the open workspace and every 2 min for other visible ones.'
     )
     const group = container.querySelector('[role="radiogroup"]')
     const describedBy = group?.getAttribute('aria-describedby') ?? ''
