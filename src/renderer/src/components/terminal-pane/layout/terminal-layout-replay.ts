@@ -6,7 +6,7 @@ import type {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getLeftmostLeafId } from './terminal-layout-leaf-traversal'
 import { normalizeTerminalLayoutSnapshot } from './terminal-layout-normalization'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../../shared/workspace-layout/terminal-pane-tree'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function replayTerminalLayout(
   manager: PaneManager,

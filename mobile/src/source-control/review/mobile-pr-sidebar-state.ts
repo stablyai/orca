@@ -1,11 +1,11 @@
 import {
   resolveGitHubWorkItemTarget,
   githubWorkItemTargetKey
-} from '../../../../src/shared/github/work-item-target'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/work-items/work-item-target'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitPushTarget } from '../../../../src/shared/worktree/types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/github-pr-suppression'
@@ -13,15 +13,15 @@ import {
   prBranchFallbackNeedsHint,
   resolvePRBranchFallback,
   shouldAcceptMergedFallbackPR
-} from '../../../../src/shared/github/pr-branch-fallback-rule'
+} from '../../../../src/shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../src/shared/github/linked-pr-staleness'
-import type { MobileWorktreeSummary } from '../mobile-worktree-metadata-operations'
-import type { WorktreeGitHubPRLink } from '../mobile-pr-link'
+} from '../../../../src/shared/github/pull-requests/refresh/linked-pr-staleness'
+import type { MobileWorktreeSummary } from '../branches/mobile-worktree-metadata-operations'
+import type { WorktreeGitHubPRLink } from './mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
 
 export type PrSidebarData = {

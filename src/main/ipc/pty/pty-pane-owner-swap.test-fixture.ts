@@ -1,7 +1,7 @@
 // Exercise the real binding store and IPC spawn pipeline over a fake session/provider; suites declare module mocks.
 import { vi, type Mock } from 'vitest'
-import { PtyBindingPersistenceOperations } from '../../persistence/loading-store/pty-binding-persistence'
-import { ptyBindingGenerationOf } from '../../persistence/loading-store/pty-binding-generations'
+import { PtyBindingPersistenceOperations } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
+import { ptyBindingGenerationOf } from '../../persistence/loading-store/terminal-bindings/pty-binding-generations'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PtyIpcSuiteFixtures } from './pty-ipc-test-harness'
 import { TerminalKilledError } from '../../daemon/providers/adapter/daemon-pty-lifecycle-errors'

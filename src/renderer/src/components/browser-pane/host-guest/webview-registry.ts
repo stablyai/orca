@@ -1,4 +1,5 @@
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
+import { retireBrowserGuestMetadata } from './browser-guest-metadata-cache'
 import {
   clearBrowserPageViewportPresetSize,
   removeBrowserPageViewport
@@ -259,6 +260,7 @@ function removePersistentWebview(
   const unregisterGuest = Promise.resolve(
     window.api.browser.unregisterGuest({ browserPageId: browserTabId })
   ).catch(() => {})
+  retireBrowserGuestMetadata(webview)
   moveFocusToRendererBeforeWebviewDetach(webview)
   webview.remove()
   unregisterPersistentWebview(browserTabId)

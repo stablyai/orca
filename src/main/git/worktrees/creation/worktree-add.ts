@@ -5,11 +5,11 @@ import type {
   LocalBaseRefUpdateSuggestion
 } from '../../../../shared/worktree/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import {
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   parseRemoteTrackingLocalBaseRef,
@@ -271,6 +271,7 @@ async function performAddWorktree(
   try {
     await gitExecFileAsync([...(await checkoutWorkersArgs), ...args], {
       ...gitExecOptions(repoPath, options),
+      ...(!noCheckout ? { admissionClass: 'checkout' as const } : {}),
       // Resolve per call so later environment overrides take effect.
       timeout: resolveWorktreeAddTimeoutMs(),
       ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})

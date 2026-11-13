@@ -79,6 +79,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
+    ...(options.pageRouteGrants === undefined ? {} : { pageRouteGrants: options.pageRouteGrants }),
     ...(options.ownsHostArea === undefined ? {} : { ownsHostArea: options.ownsHostArea }),
     sessionEstablished: options.sessionEstablished ?? false,
     onNavigate: (href) => navigations.push(href),

@@ -1,8 +1,9 @@
 import {
+  notifyAiVaultSessionNoContinuationContext,
   notifyAiVaultSessionPreparationFailure,
   resolveAiVaultSessionLaunchTargetOrNotify
 } from './ai-vault-session-launch-feedback'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
@@ -23,7 +24,11 @@ import {
 } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
 import { translate } from '@/i18n/i18n'
 import { describeAiVaultCliForkFailure } from './ai-vault-session-cli-fork'
-import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
+import {
+  loadDatabaseAiVaultSessionContinuation,
+  prepareAiVaultSessionContinuation
+} from './ai-vault-session-continuation'
+import { isAiVaultDatabaseAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
 
@@ -54,8 +59,12 @@ export function useAiVaultSessionLaunchActions({
   targetState: AiVaultSessionResumeTargetState
   agentCmdOverrides?: Partial<Record<AiVaultAgent, string | null>>
 }) {
-  const [continuationRequest, setContinuationRequest] =
-    useState<AgentSessionContinuationRequest | null>(null)
+  // An open dialog whose request is null is still saving the conversation on its host.
+  const [continuation, setContinuation] = useState<{
+    request: AgentSessionContinuationRequest | null
+  } | null>(null)
+  // Only the latest Hand Off may fill or close the dialog.
+  const continuationAttempt = useRef<object | null>(null)
 
   const buildResumeCommand = useCallback(
     (session: AiVaultSession, worktreeId?: string | null): string =>
@@ -245,20 +254,33 @@ export function useAiVaultSessionLaunchActions({
         )
         return
       }
-      setContinuationRequest(
-        prepareAiVaultSessionContinuation({
-          session,
-          targetWorktreeId: targetId.worktreeId,
-          targetWorkspacePath
-        })
-      )
+      const target = { session, targetWorktreeId: targetId.worktreeId, targetWorkspacePath }
+      const attempt = {}
+      continuationAttempt.current = attempt
+      if (!isAiVaultDatabaseAgent(session.agent)) {
+        setContinuation({ request: prepareAiVaultSessionContinuation(target) })
+        return
+      }
+      setContinuation({ request: null })
+      void loadDatabaseAiVaultSessionContinuation(target).then((request) => {
+        if (continuationAttempt.current !== attempt) {
+          return
+        }
+        if (request) {
+          setContinuation({ request })
+          return
+        }
+        setContinuation(null)
+        notifyAiVaultSessionNoContinuationContext()
+      })
     },
     [activeWorktree?.id, activeWorktreeId, targetState]
   )
 
   const handleContinuationDialogOpenChange = useCallback((open: boolean): void => {
     if (!open) {
-      setContinuationRequest(null)
+      continuationAttempt.current = null
+      setContinuation(null)
     }
   }, [])
 
@@ -269,7 +291,8 @@ export function useAiVaultSessionLaunchActions({
     handleResumeInNewCli,
     handleResumeInNewChat,
     handleContinueInNewSession,
-    continuationRequest,
+    continuationOpen: continuation !== null,
+    continuationRequest: continuation?.request ?? null,
     handleContinuationDialogOpenChange
   }
 }

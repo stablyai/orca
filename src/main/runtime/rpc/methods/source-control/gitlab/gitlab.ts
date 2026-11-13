@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { normalizeGitLabIssueListArgs } from '../../../../../gitlab/gitlab-preload-args'
+import { normalizeGitLabIssueListArgs } from '../../../../../gitlab/requests/gitlab-preload-args'
 import { toGitLabJobLogExcerptResult } from '../../../../../../shared/source-control/checks/gitlab/gitlab-job-log-excerpt'
 import {
   AddIssueComment,
@@ -22,7 +22,7 @@ import {
   WorkItemByPath,
   WorkItemDetails,
   WorkItemsList
-} from '../../../../../../shared/rpc-contract/gitlab-params'
+} from '../../../../../../shared/rpc-contract/source-control/gitlab-params'
 
 export const GITLAB_METHODS = [
   defineMethod({

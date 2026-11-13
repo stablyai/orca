@@ -17,7 +17,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
-import { desktopStructuredTranscript } from './conversation/projection/structured-agent-session-message-projection'
+import { useNativeChatQuestionReceipts } from './conversation/projection/use-native-chat-question-receipts'
 import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
@@ -38,6 +38,7 @@ import type { StructuredAgentSessionHostWork } from './session/structured/use-st
 import type { NativeChatDeliveryNotice } from './messages/rows/NativeChatMessageRow'
 import { splitNativeChatSlotsWaitingBehindLiveTurn } from './conversation/slots/native-chat-transcript-slot-selection'
 import { useNativeChatTranscriptSlots } from './conversation/slots/use-native-chat-transcript-slots'
+import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-rows'
 import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
 import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
 import { useNativeChatSubagentSections } from './subagents/use-native-chat-subagent-sections'
@@ -89,6 +90,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   deliveryNotices,
+  timedRows,
   awaitingInput = null,
   turnActivity,
   stopping = false,
@@ -117,6 +119,8 @@ export function NativeChatMessageList({
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  /** Rows that are not part of the conversation but happened during it, such as workers' approvals. */
+  timedRows?: readonly NativeChatTimedRow[]
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
   turnActivity?: NativeChatTurnActivity | null
@@ -125,11 +129,7 @@ export function NativeChatMessageList({
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const questionTranscript = useMemo(() => desktopStructuredTranscript.stream(), [])
-  const receipts = useMemo(
-    () => (journalItems ? questionTranscript(journalItems).receipts : new Map()),
-    [journalItems, questionTranscript]
-  )
+  const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
@@ -391,6 +391,7 @@ export function NativeChatMessageList({
                 >
                   <NativeChatTranscriptItems
                     slots={slots}
+                    timedRows={timedRows}
                     loadedMessageIds={loadedMessageIds}
                     context={rowContext}
                     window={transcriptWindow}

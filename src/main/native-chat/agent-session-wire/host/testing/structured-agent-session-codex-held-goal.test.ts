@@ -1,4 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { CodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection-types'
+import { optionSession } from '../../../../codex/structured/catalog/codex-structured-option-session.test-fixture'
+import {
+  readCodexAppliedInputOptions,
+  resolvedCodexMessageOptions
+} from '../../../../codex/structured/turns/codex-structured-message-options'
+import { dispatchCodexTurn } from '../../../../codex/structured/turns/codex-structured-turn-start'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER
@@ -17,7 +24,24 @@ import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/j
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
+  const request = vi.fn<CodexAppServerConnection['request']>(async () => ({}))
+  const native = optionSession(request)
+  native.threadId = THREAD
   rig = await createQueuedMessageTestRig({ restartable: true })
+  rig.host.deps.adapter.readAppliedInputOptions = (input) =>
+    input.sessionId === SESSION ? readCodexAppliedInputOptions(native, input) : null
+  rig.host.deps.adapter.holdsLiveProviderProcess = (sessionId, generation) =>
+    sessionId === SESSION &&
+    generation === native.acquisitionGeneration &&
+    !native.ended &&
+    !native.connection.closed
+  rig.dispatch.mockImplementation(async (input) =>
+    dispatchCodexTurn(
+      native,
+      { ...input, turnOptions: await resolvedCodexMessageOptions(native, input.executionOptions) },
+      undefined
+    )
+  )
 })
 
 afterEach(() => rig.dispose())

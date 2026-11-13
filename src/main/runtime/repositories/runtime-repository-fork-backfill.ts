@@ -2,9 +2,9 @@ import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/
 import type { Repo } from '../../../shared/repo-types'
 import { githubAvatarIcon, githubAvatarSlug } from '../../../shared/repo-icon'
 import { probeRepoUpstream } from '../../github/client/fetch/repo-slug-upstream'
-import { GhExecutableAbsenceBatch } from '../../git/command-runner/gh-executable-absence-batch'
+import { GhExecutableAbsenceBatch } from '../../git/command-runner/hosted-cli/gh-executable-absence-batch'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 type MetadataJob = {

@@ -30,7 +30,7 @@ import { canUseRepoBackedComposerSources } from '@/lib/workspace/creation/new-wo
 import { useEffect } from 'react'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items/work-item-pagination'
 import { getDefaultSetupDecision } from '../../../../shared/orca-hook-setup-config'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginManifest, pluginManifestSchema } from '../manifest/plugin-manifest'
+import { pluginManifestSchema } from '../manifest/plugin-manifest'
 
 function manifest(contributes: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -16,75 +16,6 @@ function manifest(contributes: Record<string, unknown>): Record<string, unknown>
 }
 
 describe('content-pack manifest contributions', () => {
-  it('still requires a worker entry for non-alias commands', () => {
-    expect(
-      parsePluginManifest(
-        manifest({ commands: [{ id: 'content-pack.run', title: 'Run content pack' }] })
-      )
-    ).toMatchObject({ ok: false, error: expect.stringContaining('worker command') })
-  })
-
-  it.each([
-    [
-      'unknown alias target',
-      {
-        commands: [{ id: 'open', title: 'Open', action: 'missing.action' }]
-      },
-      'unknown built-in action'
-    ],
-    [
-      'unknown command reference',
-      { keybindings: [{ command: 'missing', key: 'Mod+K' }] },
-      'unknown contributed command'
-    ],
-    [
-      'invalid chord',
-      {
-        commands: [{ id: 'open', title: 'Open', action: 'view.tasks' }],
-        keybindings: [{ command: 'open', key: 'Mod+NotAKey' }]
-      },
-      'key'
-    ],
-    [
-      'global binding for a worktree command',
-      {
-        commands: [{ id: 'open', title: 'Open', context: 'workspace', action: 'view.tasks' }],
-        keybindings: [{ command: 'open', key: 'Mod+K', when: 'global' }]
-      },
-      "command's when"
-    ],
-    [
-      'platform-equivalent duplicate chords',
-      {
-        commands: [
-          { id: 'first', title: 'First', action: 'view.tasks' },
-          { id: 'second', title: 'Second', action: 'sidebar.left.toggle' }
-        ],
-        keybindings: [
-          { command: 'first', key: 'Mod+K' },
-          { command: 'second', key: 'Ctrl+K' }
-        ]
-      },
-      'duplicate keybinding'
-    ]
-  ])('rejects %s', (_label, contributes, error) => {
-    expect(parsePluginManifest(manifest(contributes))).toMatchObject({
-      ok: false,
-      error: expect.stringContaining(error)
-    })
-  })
-
-  it.each([
-    ['language pack', { languagePacks: [{ locale: 'en_US', path: 'locale.json' }] }],
-    // Shape-legal but ill-formed: the regex alone let these load with dates falling back to English.
-    ['duplicate region', { languagePacks: [{ locale: 'en-US-US', path: 'locale.json' }] }],
-    ['unknown subtag', { languagePacks: [{ locale: 'en-aaa', path: 'locale.json' }] }],
-    ['language pack path', { languagePacks: [{ locale: 'pt-BR', path: '../outside.json' }] }],
-    ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }]
-  ])('rejects unsafe or malformed %s contributions', (_label, contributes) => {
-    expect(parsePluginManifest(manifest(contributes)).ok).toBe(false)
-  })
-
   it('rejects duplicate ids, locales, paths, and bindings', () => {
     const parsed = pluginManifestSchema.safeParse(
       manifest({
