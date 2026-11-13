@@ -5,6 +5,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import type { MessageRow } from '../../db/orchestration-records'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { parseRunNotifyTypes } from '../../db/runs/run-notify-types'
 
 export type OrchestrationMessageWaiter = { typeFilter: string[] | undefined }
 
@@ -58,13 +59,48 @@ export function selectOrchestrationPointerBatch(input: {
     }
   }
   const held = input.db.getOutstandingMailboxDelivery?.(input.mailboxHandle)
+  const exclusion = {
+    excludeTypes: [...excludedTypes],
+    excludeRunOwnedDirect: input.excludeRunOwnedDirect
+  }
+  // The Run's notify list gates the wake only: a waking batch still carries every other unread type.
+  const runWakeTypes = input.mailboxHandle.startsWith('run:')
+    ? parseRunNotifyTypes(input.db.getRun(input.mailboxHandle.slice('run:'.length))?.notify_types)
+    : null
+  if (!runWakeTypes) {
+    return {
+      messages: input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
+        ...exclusion,
+        excludeIds: held?.messageIds,
+        limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
+      }),
+      heldDeliveryId: held?.id
+    }
+  }
+  const wakeTypes = runWakeTypes.filter((type) => !excludedTypes.has(type))
+  if (wakeTypes.length === 0) {
+    return { messages: [], heldDeliveryId: undefined }
+  }
+  // Wake rows first: a long non-waking backlog must not fill the batch and hide the type that woke us.
+  const waking = input.db.getUndeliveredUnreadMessages(input.mailboxHandle, wakeTypes, {
+    ...exclusion,
+    excludeIds: held?.messageIds,
+    limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
+  })
+  if (waking.length === 0) {
+    return { messages: [], heldDeliveryId: undefined }
+  }
+  const remainderLimit = ORCHESTRATION_DELIVERY_BATCH_LIMIT - waking.length
+  const remainder =
+    remainderLimit > 0
+      ? input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
+          ...exclusion,
+          excludeIds: [...(held?.messageIds ?? []), ...waking.map((message) => message.id)],
+          limit: remainderLimit
+        })
+      : []
   return {
-    messages: input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
-      excludeTypes: [...excludedTypes],
-      excludeIds: held?.messageIds,
-      excludeRunOwnedDirect: input.excludeRunOwnedDirect,
-      limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
-    }),
+    messages: [...waking, ...remainder].sort((a, b) => a.sequence - b.sequence),
     heldDeliveryId: held?.id
   }
 }

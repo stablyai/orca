@@ -96,6 +96,7 @@ export function runRow(fields: Partial<RunRow>): RunRow {
     coordinator_orca_session_id_generation: null,
     consumer_generation: 0,
     legacy: 0,
+    notify_types: null,
     created_at: createdAt,
     updated_at: createdAt,
     ...fields

@@ -5,9 +5,11 @@ import { printOrchestrationResult } from '../agent-view'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
   getRequiredStringFlag
 } from '../../arguments/flags'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration/orchestration-run-pagination'
+import { RuntimeClientError } from '../../runtime/types'
 import type { RunRemovedWork } from '../../../shared/orchestration/orchestration-removed-work'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
@@ -20,6 +22,34 @@ import {
 
 const RUN_LIST_DEFAULT_LIMIT = 10
 
+/** `none` silences wake pointers, `all` restores every type; otherwise a CSV of message types. */
+function notifyTypesFlag(flags: Map<string, string | boolean>): {
+  notifyTypes?: string[] | null
+} {
+  const raw = getOptionalStringFlagAllowingEmpty(flags, 'notify-types')
+  if (raw === undefined) {
+    return {}
+  }
+  const value = raw.trim().toLowerCase()
+  if (value === 'none') {
+    return { notifyTypes: [] }
+  }
+  if (value === 'all') {
+    return { notifyTypes: null }
+  }
+  const notifyTypes = value
+    .split(',')
+    .map((type) => type.trim())
+    .filter(Boolean)
+  if (notifyTypes.length === 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--notify-types needs message types, or `none` / `all`.'
+    )
+  }
+  return { notifyTypes }
+}
+
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
@@ -29,7 +59,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       next?: string
     }>(client, flags, 'orchestration.runCreate', {
       objective: getRequiredStringFlag(flags, 'objective'),
-      from
+      from,
+      ...notifyTypesFlag(flags)
     })
     if (unboundRunId && unboundRunId !== result.result.run.id) {
       result.result.next = olderRuntimeUnboundRunNext(unboundRunId)
@@ -52,6 +83,7 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     }>(client, flags, 'orchestration.runUse', {
       id: getRequiredStringFlag(flags, 'id'),
       from,
+      ...notifyTypesFlag(flags),
       ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
     if (!flags.has('full')) {
@@ -154,6 +186,16 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
   }
 }
 
-function runFields(run: { id: string; objective: string; legacy?: number }) {
-  return { runId: run.id, objective: run.objective, legacy: run.legacy ? true : undefined }
+function runFields(run: {
+  id: string
+  objective: string
+  legacy?: number
+  notifyTypes?: string[] | null
+}) {
+  return {
+    runId: run.id,
+    objective: run.objective,
+    legacy: run.legacy ? true : undefined,
+    ...(run.notifyTypes ? { notifyTypes: run.notifyTypes } : {})
+  }
 }

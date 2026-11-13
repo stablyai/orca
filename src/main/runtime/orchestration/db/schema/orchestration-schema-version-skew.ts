@@ -54,7 +54,8 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 45, table: 'federated_dispatches', column: 'home_auto_release_state' },
   { version: 46, table: 'dispatch_contexts', column: 'follow_up_of_dispatch_id' },
   { version: 46, table: 'dispatch_contexts', column: 'follow_up_mail_at' },
-  { version: 46, table: 'worker_terminal_resources', column: 'resume_session' }
+  { version: 46, table: 'worker_terminal_resources', column: 'resume_session' },
+  { version: 47, table: 'runs', column: 'notify_types' }
 ] as const
 
 // v34 stamps can lack these repairs; v35 probes must verify their stored defaults.

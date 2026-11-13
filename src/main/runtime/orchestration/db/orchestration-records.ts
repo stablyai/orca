@@ -1,18 +1,12 @@
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
-export const MESSAGE_TYPES = [
-  'status',
-  'dispatch',
-  'worker_done',
-  'merge_ready',
-  'escalation',
-  'handoff',
-  'decision_gate',
-  'question',
-  'heartbeat'
-] as const
+import {
+  MESSAGE_TYPES,
+  type MessageType
+} from '../../../../shared/orchestration/orchestration-message-types'
 
-export type MessageType = (typeof MESSAGE_TYPES)[number]
+export { MESSAGE_TYPES }
+export type { MessageType }
 
 export type MessagePriority = 'normal' | 'high' | 'urgent'
 
@@ -53,6 +47,8 @@ export type RunRow = {
   coordinator_orca_session_id_generation: number | null
   consumer_generation: number
   legacy: number
+  /** JSON array of message types allowed to wake the coordinator; NULL wakes for every type. */
+  notify_types: string | null
   created_at: string
   updated_at: string
 }

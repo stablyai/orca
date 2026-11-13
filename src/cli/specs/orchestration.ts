@@ -8,11 +8,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'run-create'],
     summary: 'Create and bind a lightweight orchestration Run',
     usage:
-      'orca orchestration run-create --objective <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'retry-request'],
+      'orca orchestration run-create --objective <text> [--from <handle>] [--notify-types <csv>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'notify-types', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
     notes: [
       'A Run is a namespace and home inbox. It never schedules or places workers. worker-start --spec creates one when none is bound; use run-create for Task graphs or a new goal.',
+      "--notify-types limits which message types may wake this Run's coordinator (for example worker_done,escalation,question); other types stay in the inbox until the next check. Pass `none` to stop wake pointers; omit it to wake for every type.",
       '--retry-request is only for exact recovery after an unknown mutation result.'
     ]
   },
@@ -20,11 +21,19 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'run-use'],
     summary: 'Resume coordinating a Run',
     usage:
-      'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
+      'orca orchestration run-use --id <run_id> [--from <handle>] [--notify-types <csv>] [--takeover-legacy] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'id',
+      'from',
+      'notify-types',
+      'takeover-legacy',
+      'retry-request'
+    ],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'A worker cannot bind its own or ancestor Run or use --takeover-legacy. --takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.'
+      'A worker cannot bind its own or ancestor Run or use --takeover-legacy. --takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.',
+      "--notify-types replaces this Run's wake allow-list; `none` stops wake pointers, `all` restores every type, and a CSV narrows them. Omit it to keep the current setting."
     ]
   },
   {

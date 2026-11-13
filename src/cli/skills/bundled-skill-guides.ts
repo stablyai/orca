@@ -4161,6 +4161,17 @@ const ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN = [
   "commands without `--run` use the newest Run, so pass `--run <id>` for an earlier",
   "one. `run-use` keeps only the Run it names.",
   "",
+  "## Wake types",
+  "",
+  "A Run's mailbox wakes you for every message type by default. `--notify-types` on",
+  "`run-create` or `run-use` narrows those wake pointers to the types worth a turn;",
+  "every other type stays in the inbox until your next check. `none` stops wake",
+  "pointers entirely and `all` restores every type.",
+  "",
+  "```text",
+  "ORCA orchestration run-use --id <run_id> --notify-types \"worker_done,escalation,question\"",
+  "```",
+  "",
 ].join('\n')
 
 // oxfmt-ignore

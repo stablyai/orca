@@ -56,6 +56,8 @@ After starting workers, end your turn. Orca wakes the coordinator when a worker 
 orca orchestration check --run <runId>
 ```
 
+A Run's mailbox wakes its coordinator for every message type. Narrow those wake pointers with `--notify-types` on `run-create`, or later with `run-use --notify-types worker_done,escalation,question`; other types stay in the inbox until the next check, `--notify-types none` stops wake pointers entirely, and `--notify-types all` restores every type.
+
 Worker completion (from the worker pane; include injected IDs):
 
 ```bash
