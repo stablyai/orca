@@ -8,6 +8,7 @@ import {
   paneKeyMatchesAnyTabPrefix
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
+import { isSleepingAgentStatus } from './agent-status-process-retirement'
 
 export function createAgentStatusWorktreeDropActions(
   runtime: AgentStatusRuntime
@@ -29,7 +30,7 @@ export function createAgentStatusWorktreeDropActions(
         const liveEntries = Array.from(s.agentStatusByPaneKey.entries()).filter(
           ([paneKey, entry]) =>
             ownedByWorktree(paneKey, entry.worktreeId) &&
-            !(paneSurvives && entry.state === 'done' && entry.paneSleep)
+            !(paneSurvives && isSleepingAgentStatus(entry))
         )
         const liveKeys = liveEntries.map(([paneKey]) => paneKey)
         const liveKeySet = new Set(liveKeys)

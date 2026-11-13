@@ -3,6 +3,7 @@ import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectWorktreeIdsForConnection } from './agent-status-connection-worktree-scope'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import { removePaneKeys, removePaneKeysByTabPrefix } from './agent-status-pane-keyed-records'
+import { agentProcessRetirementPatch } from './agent-status-process-retirement'
 
 /** Actions for removing transient rows and migration-era cache entries. */
 export function createAgentStatusCleanupActions(
@@ -69,25 +70,14 @@ export function createAgentStatusCleanupActions(
         if (hasLive) {
           changedPaneKeys.add(paneKey)
         }
-        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
-        const nextLaunchConfigs = hasLaunchConfig
-          ? { ...s.agentLaunchConfigByPaneKey }
-          : s.agentLaunchConfigByPaneKey
-        if (hasLaunchConfig) {
-          delete nextLaunchConfigs[paneKey]
-        }
-        const migrationUnsupported = pruneMigrationUnsupportedEntries(
-          s.migrationUnsupportedByPtyId,
-          (entry) => entry.paneKey === paneKey
-        )
+        const processRetirement = agentProcessRetirementPatch(s, paneKey)
         const paneKeys = new Set([paneKey])
         const nextAck = removePaneKeys(s.acknowledgedAgentsByPaneKey, paneKeys)
         const nextClearedAt = removePaneKeys(s.activityClearedAtByPaneKey, paneKeys)
         const nextManualUnread = removePaneKeys(s.manuallyUnreadTurnsByPaneKey, paneKeys)
         return {
           agentStatusByPaneKey: next,
-          agentLaunchConfigByPaneKey: nextLaunchConfigs,
-          migrationUnsupportedByPtyId: migrationUnsupported.next,
+          ...processRetirement.patch,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),

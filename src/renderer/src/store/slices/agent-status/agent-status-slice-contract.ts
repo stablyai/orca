@@ -130,6 +130,9 @@ export type AgentStatusSlice = {
 
   removeAgentStatus: (paneKey: string) => void
 
+  /** End process occupancy while a source-approved sleeping pane still owns its Done. */
+  retireAgentStatusProcess: (paneKey: string, ptyId?: string) => void
+
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 
   /** Remove stale live rows while preserving pane launch and resume identity. */

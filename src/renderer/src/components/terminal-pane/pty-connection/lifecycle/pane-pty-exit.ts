@@ -85,9 +85,12 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
     const preserveRendererBinding =
       opts.preserveRendererBinding === true ||
       consumeCommittedPtyShutdownExit(ptyId, session.runtimeEnvironmentId)
-    session.resetRendererOrderedSeqForPtyExit(ptyId)
     const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
-    if (currentPaneTransport && currentPaneTransport !== session.transport) {
+    const currentPtyId = session.transport.getPtyId()
+    if (
+      (currentPaneTransport && currentPaneTransport !== session.transport) ||
+      (currentPtyId !== null && currentPtyId !== ptyId)
+    ) {
       // Late exits from replaced transports may clear only the exiting PTY’s ownership.
       session.handledExitPtyId = ptyId
       session.processExitStateByPtyId.delete(ptyId)
@@ -98,6 +101,7 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
       scheduleRuntimeGraphSync()
       return
     }
+    session.resetRendererOrderedSeqForPtyExit(ptyId)
     session.handledExitPtyId = ptyId
     noteHiddenAgentResumePtyEnded(session)
     const processExitState =
@@ -128,7 +132,7 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
     }
     // Abrupt exits may omit title reset; always clear the cache countdown.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
-    useAppStore.getState().removeAgentStatus(session.cacheKey)
+    useAppStore.getState().retireAgentStatusProcess(session.cacheKey, ptyId)
     useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)
     // Republish PTY loss to the runtime graph immediately; CLI bindings cannot wait for an unrelated layout change.
     scheduleRuntimeGraphSync()
