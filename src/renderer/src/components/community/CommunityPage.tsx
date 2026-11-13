@@ -34,8 +34,11 @@ export default function CommunityPage(): React.JSX.Element {
   const environments = useAppStore((state) => state.runtimeEnvironments)
   const [host, setHost] = useState('local')
   const target = useMemo<RuntimeClientTarget>(
-    () => (host === 'local' ? { kind: 'local' } : { kind: 'environment', environmentId: host }),
-    [host]
+    () =>
+      section === 'custom' || host === 'local'
+        ? { kind: 'local' }
+        : { kind: 'environment', environmentId: host },
+    [host, section]
   )
   const catalog = useCommunityCatalog(target, query)
   const [accounts, setAccounts] = useState<{ selected: string | null; users: string[] } | null>(
@@ -80,7 +83,8 @@ export default function CommunityPage(): React.JSX.Element {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select
-              value={host}
+              value={section === 'custom' ? 'local' : host}
+              disabled={section === 'custom'}
               onValueChange={(value) => {
                 accountRequest.current++
                 setAccountBusy(false)

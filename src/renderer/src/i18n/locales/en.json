@@ -25502,7 +25502,7 @@
     "buildRequirements": "Your fork must contain Orca’s exact candidate workflow. Builds can use GitHub Actions minutes. No signing key or user account secret is passed to PR code.",
     "cancel": "Cancel",
     "cancelRefresh": "Cancel refresh",
-    "candidateNote": "Pin the selected PRs and the official base. Build them in a disposable GitHub-hosted runner in your fork.",
+    "candidateNote": "Pin the selected PRs and the official base. Prepare a Mac build in a disposable GitHub-hosted runner in your fork.",
     "candidateTitle": "Prepare a combined candidate",
     "candidateTrust": "A completed build is not a safety verdict. Unsigned artifacts need trusted signing and compatibility checks before installation.",
     "captured": "Captured",

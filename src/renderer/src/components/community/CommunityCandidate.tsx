@@ -52,7 +52,7 @@ export function CommunityCandidate({ target }: { target: RuntimeClientTarget }):
           <p className="mt-2 text-xs text-muted-foreground">
             {t(
               'community.candidateNote',
-              'Pin the selected PRs and the official base. Build them in a disposable GitHub-hosted runner in your fork.'
+              'Pin the selected PRs and the official base. Prepare a Mac build in a disposable GitHub-hosted runner in your fork.'
             )}
           </p>
         </div>

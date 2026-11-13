@@ -93,6 +93,9 @@ jobs:
       - name: Install dependencies in this disposable runner
         working-directory: source
         run: pnpm install --frozen-lockfile
+      - name: Install mobile web dependencies
+        working-directory: source/mobile
+        run: pnpm install --frozen-lockfile
       - name: Check the combined change
         working-directory: source
         env:
