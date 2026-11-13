@@ -20627,7 +20627,8 @@
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
-        "forkedFrom": "Forked from"
+        "forkedFrom": "Forked from",
+        "modelSwitched": "Model switched: {{from}} → {{to}}"
       },
       "composer": {
         "send": "Send",

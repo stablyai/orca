@@ -90,6 +90,7 @@ export type StructuredAgentModelCatalogDeps = Pick<
   | 'resolveEnvironment'
   | 'resolveShellEnvironmentPolicy'
   | 'resolveAgentLaunchEnv'
+  | 'resolveZcodeChatPlanSite'
 >
 export type StructuredAgentModelCatalogContext = {
   deps: StructuredAgentModelCatalogDeps

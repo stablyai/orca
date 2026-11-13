@@ -43,8 +43,21 @@ export function rewindRefusalBehindClear(
     return null
   }
   if (journal.cursor().epoch !== target.expectedEpoch) {
+    console.warn('[agent-session] rewind behind-clear: stale epoch', {
+      itemId: target.itemId,
+      floor: floor.sequence
+    })
     return rewindRefusal('stale-epoch')
   }
   const item = journal.itemsRead().items.find((entry) => entry.itemId === target.itemId)
-  return !item || item.sequence <= floor.sequence ? rewindRefusal('invalid-target') : null
+  if (!item || item.sequence <= floor.sequence) {
+    console.warn('[agent-session] rewind behind-clear: below floor', {
+      itemId: target.itemId,
+      floor: floor.sequence,
+      found: item !== undefined,
+      sequence: item?.sequence ?? null
+    })
+    return rewindRefusal('invalid-target')
+  }
+  return null
 }

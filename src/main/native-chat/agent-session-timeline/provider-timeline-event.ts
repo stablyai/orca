@@ -47,6 +47,8 @@ export type ProviderTimelineEvent =
       type: 'input.accepted'
       clientMessageId: string
       requestedAt: number
+      /** The provider's own input message id for this turn — the rewind/fork anchor. */
+      providerMessageId?: string
       join?: ProviderTimelineJoin
     }
   /** Mint a turn ID only when the provider supplies none. */

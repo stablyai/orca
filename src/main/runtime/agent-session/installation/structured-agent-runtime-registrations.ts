@@ -21,6 +21,10 @@ import { createOpenCodeAcpConnection } from '../../../opencode/acp/opencode-acp-
 import { acpStructuredLaunchPart } from '../../../acp/launch/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../../../acp/session/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../../../pi/rpc-runtime-registration'
+import { ZcodeStructuredSessionAdapter } from '../../../zcode/structured/session-lifecycle/zcode-structured-session-adapter'
+import { zcodeStructuredLaunchPart } from '../../../zcode/structured/launch/zcode-structured-launch-resolution'
+import { ZCODE_STRUCTURED_AGENT } from '../../../zcode/structured/launch/zcode-structured-agent-definition'
+import { resolveZcodeChatCredentials } from '../../../zcode/structured/credentials/zcode-chat-credentials'
 import {
   claudeLaunchEnvOverlay,
   claudeListingDeps
@@ -202,6 +206,32 @@ function createAcpAdapter(
   }
 }
 
+function createZcodeAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
+  const { deps } = context
+  return new ZcodeStructuredSessionAdapter({
+    resolveCommandSettings: deps.resolveAgentCommandSettings,
+    // Disposable fork/rewind backends need the same per-agent overlay a live chat launch gets.
+    resolveEnvironment: () => context.environment.resolveAgentEnvironment('zcode'),
+    resolveLaunch: composeStructuredLaunch(
+      ZCODE_STRUCTURED_AGENT,
+      structuredAgentLaunchSources(context),
+      zcodeStructuredLaunchPart({
+        resolveLaunchArgs: () => deps.resolveLaunchArgs('zcode')
+      })
+    ),
+    resolveChatCredentials: () =>
+      resolveZcodeChatCredentials({ site: deps.resolveZcodeChatPlanSite?.() }),
+    logger: deps.logger,
+    onEvent: (event) => {
+      // The lifecycle arms carry the fence; the translator's plain `ended` is diagnostics only.
+      if ('fence' in event) {
+        context.deliverLifecycle(event)
+      }
+    },
+    onDispatchSettledLate: (settlement) => context.followUps.onDispatchSettledLate(settlement)
+  })
+}
+
 function registrationWithAdapter(
   entry: StructuredAgentRuntimeCatalogEntry
 ): StructuredAgentRuntimeRegistration {
@@ -209,6 +239,8 @@ function registrationWithAdapter(
   switch (entry.kind) {
     case 'pi':
       return PI_RPC_RUNTIME_REGISTRATION
+    case 'zcode':
+      return Object.assign(entry.metadata, { createAdapter: createZcodeAdapter })
     case 'codex':
       return Object.assign(entry.metadata, { createAdapter: createCodexAdapter })
     case 'claude':

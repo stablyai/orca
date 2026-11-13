@@ -4,6 +4,7 @@
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session/agent-session-compaction'
 import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../agent-session/journal/agent-session-hook-outcome'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../agent-session/lifecycle/agent-session-orca-stop'
+import { AGENT_SESSION_MODEL_SWITCH_PRESENTATION } from '../../agent-session/journal/agent-session-model-switch'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../agent-session/journal/agent-session-turn-notice'
 import { nativeChatRowRendersContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from '../native-chat-stopped-before-start'
@@ -87,6 +88,7 @@ function deriveTurnFoldRow(
             block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
             block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
             block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
+            block.presentation === AGENT_SESSION_MODEL_SWITCH_PRESENTATION ||
             block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION)
       ) ||
       (message.blocks.some(isGeneratedImageOperation) &&

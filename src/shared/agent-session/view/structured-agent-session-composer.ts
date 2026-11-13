@@ -122,7 +122,7 @@ export function structuredSessionSlashCommands(
   const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
     ? [
         { name: 'plan', description: 'Switch to Plan mode', orcaOwned: true },
-        ...(agent === 'codex'
+        ...(agent === 'codex' || agent === 'zcode'
           ? [{ name: 'default', description: 'Switch to Build mode', orcaOwned: true as const }]
           : [])
       ]

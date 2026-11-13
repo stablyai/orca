@@ -1,0 +1,45 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { supportsSupervisedProviderChildLocation } from '../../provider-process/supervised-provider-child-location'
+import { zcodeModelCatalogDiscovery } from '../../runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery'
+import type { StructuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-registration-types'
+import { ZCODE_STRUCTURED_AGENT } from './launch/zcode-structured-agent-definition'
+import { ZCODE_TRANSCRIPT_IMPORT } from './zcode-transcript-import'
+import { resolveStructuredAgentCommand } from '../../native-chat/agent-launch/structured-agent-command-resolution'
+import type { StructuredAgentSessionHistory } from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
+
+export const ZCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
+  rowAgents: ['zcode'],
+  rowSessionId: (link) => link.handle.nativeId,
+  // zcode chats resume through their provider handles; CLI argv adoption is not wired yet.
+  parseResumeArgs: () => null
+}
+
+export const ZCODE_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
+  definition: ZCODE_STRUCTURED_AGENT,
+  // Forks need the conversation store to resolve; adoption itself stays unwired for zcode.
+  transcriptImport: ZCODE_TRANSCRIPT_IMPORT,
+  sessionHistory: ZCODE_SESSION_HISTORY,
+  // A disposable backend session lists the pushed account's models; sessions report live changes.
+  modelCatalog: zcodeModelCatalogDiscovery,
+  supportsLocation: supportsSupervisedProviderChildLocation,
+  chatProgram: {
+    resolve: (env, commandSettings) => {
+      const homePath = env.HOME ?? env.USERPROFILE
+      const pathEnv = env.PATH ?? env.Path ?? null
+      const options = { pathEnv, ...(homePath ? { homePath } : {}) }
+      const resolved = resolveStructuredAgentCommand('zcode', commandSettings, options)
+      return {
+        command: resolved.command,
+        prefixArgs: resolved.prefixArgs,
+        env: { ...env }
+      }
+    }
+  },
+  resolveAccountHome: async ({ launchEnv }) =>
+    agentSessionAccountHome(
+      ZCODE_STRUCTURED_AGENT,
+      launchEnv.ZCODE_HOME?.trim() || join(homedir(), '.zcode')
+    )
+}

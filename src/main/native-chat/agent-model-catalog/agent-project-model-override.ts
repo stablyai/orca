@@ -185,9 +185,10 @@ function ancestry(cwd: string): string[] {
   }
 }
 
-// Grok uses user, managed and environment config, not project model settings.
+// Grok uses user, managed and environment config, not project model settings; zcode keeps its
+// account, model and mode state entirely under its own home.
 export function agentReadsProjectModelConfig(agent: string): boolean {
-  return agent !== 'grok'
+  return agent !== 'grok' && agent !== 'zcode'
 }
 
 export async function workspaceMayOverrideDefaultModel(input: {

@@ -5,7 +5,7 @@ import {
 import { NativeChatUsageLimitAutoContinue } from '../../usage/NativeChatUsageLimitAutoContinue'
 import { NativeChatUsageLimitActions } from '../../usage/NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { ArrowLeftRight, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContext, useSyncExternalStore } from 'react'
 import { NativeChatForkedFromContext } from '../actions/native-chat-fork-context'
@@ -147,6 +147,20 @@ export function NativeChatNoticeRow({
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
         {HOST_STATUS_WORDS[look.presentation]()}
+      </p>
+    )
+  }
+  if (look.kind === 'model-switch') {
+    return (
+      <p className="flex min-w-0 items-center justify-center gap-1.5 select-text text-xs text-chat-foreground-faint">
+        <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="whitespace-normal">
+          {t(
+            'components.native-chat.notices.modelSwitched',
+            'Model switched: {{from}} → {{to}}',
+            look
+          )}
+        </span>
       </p>
     )
   }

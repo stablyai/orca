@@ -1,5 +1,6 @@
 import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/agent-session-fork'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   savedRewindKeys,
@@ -32,7 +33,13 @@ export type StructuredRewindCut = {
 
 export function structuredRewindCut(
   journal: AgentSessionJournal,
-  target: { itemId: string; provider: string; nativeId: string }
+  target: {
+    itemId: string
+    provider: string
+    nativeId: string
+    /** Earlier chain roots: a rewind fork keeps retained rows under the session it forked from. */
+    ancestorNativeIds?: readonly string[]
+  }
 ): StructuredRewindCut | null {
   const snapshot = journal.currentRead()
   const floor = journal.context.floor()
@@ -42,7 +49,18 @@ export function structuredRewindCut(
   const { providerKey, omitted, nativeIdentity } = savedRewindKeys(snapshot.submissions)
   const selected = items.find((item) => item.itemId === target.itemId)
   const key = selected ? nativeIdentity(selected.itemId) : null
-  if (key?.provider === 'claude' && target.provider === 'claude') {
+  const cutUnusable =
+    !selected ||
+    !(
+      key !== null &&
+      (key.provider === 'claude' || key.provider === 'zcode') &&
+      key.provider === target.provider &&
+      (key.sessionId === target.nativeId ||
+        (key.provider === 'zcode' && target.ancestorNativeIds?.includes(key.sessionId) === true))
+    )
+  // Fork-cut providers rewind by resuming a fork the provider built; the cut token rides the uuid
+  // slot (claude's parent uuid, zcode's turn key) and the session must match the head.
+  if (!cutUnusable) {
     // Messages before an earlier fork still cut at their original position.
     const boundary = items.findIndex((item) => item.itemId === target.itemId)
     const keptTurns = new Set(items.slice(0, boundary).flatMap((item) => scopedTurn(item) ?? []))
@@ -55,7 +73,10 @@ export function structuredRewindCut(
       )
     })
     return {
-      beforeMessage: { sessionId: key.sessionId, uuid: key.uuid },
+      beforeMessage: {
+        sessionId: key.sessionId,
+        uuid: key.provider === 'zcode' ? key.turnId : key.uuid
+      },
       kept: keptRows.map((item) => keptRow(journal, item))
     }
   }
@@ -64,6 +85,26 @@ export function structuredRewindCut(
     target.provider !== 'codex' ||
     key.threadId !== target.nativeId
   ) {
+    if (cutUnusable) {
+      createStructuredAgentSessionLogger().warn('rewind cut resolved no branch', {
+        scope: 'structured-rewind-cut',
+        provider: target.provider,
+        headNativeId: target.nativeId,
+        itemId: target.itemId,
+        hasRow: selected !== undefined,
+        rowCount: items.length,
+        hasFloor: floor !== null,
+        resolvedKey: key
+          ? {
+              provider: key.provider,
+              matchesHead:
+                key.provider === 'codex'
+                  ? key.threadId === target.nativeId
+                  : key.sessionId === target.nativeId
+            }
+          : null
+      })
+    }
     return null
   }
   const turnOf = turnMembership(journal, items, key.threadId, providerKey)
@@ -222,7 +263,8 @@ export function rewindJournalCut(
       : structuredRewindCut(journal, {
           itemId: rewind.itemId,
           provider: record.provider,
-          nativeId: head.nativeId
+          nativeId: head.nativeId,
+          ancestorNativeIds: record.providerHandleChain.map((link) => link.handle.nativeId)
         })
   return { alreadyReplaced, cut }
 }

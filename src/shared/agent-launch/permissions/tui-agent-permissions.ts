@@ -6,7 +6,9 @@ export type AgentPermissionMode = 'yolo' | 'manual' | 'auto' | 'mixed'
 export const AUTO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--permission-mode auto',
   'claude-agent-teams': '--permission-mode auto',
-  codex: '--approve-for-me'
+  codex: '--approve-for-me',
+  // ZCode's own auto mode asks the model to confirm risky work itself.
+  zcode: '--mode auto'
 }
 
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {

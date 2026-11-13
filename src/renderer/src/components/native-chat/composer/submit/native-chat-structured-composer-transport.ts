@@ -1,4 +1,5 @@
 import type { CaptureStructuredAgentSessionPresentation } from '../../session/structured/writes/use-structured-agent-session-mutate'
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/agent-session-conversation-command'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { StructuredAgentSessionSendRequest } from '../../session/structured/delivery/structured-agent-session-send-slot'
@@ -16,6 +17,8 @@ import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-
 
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
+  /** The chat's agent; mode-command vs same-named-skill collision checks read it. */
+  agent?: AgentType
   conversationCommands?: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
   send: (

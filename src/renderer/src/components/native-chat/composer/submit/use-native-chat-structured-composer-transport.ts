@@ -122,6 +122,7 @@ export function useNativeChatStructuredComposerTransport(args: {
           : undefined,
       fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
+      agent: props.agent,
       ...(sideChat ? { sideChat } : {}),
       send: (text, attachments, ...request) => {
         if (sendBlockedReason !== null) {

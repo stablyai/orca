@@ -1,6 +1,6 @@
 /** Orca's validated saved Arguments refusal. The option has no value or user-authored operand. */
 export type AgentSessionArgumentProblem = {
-  agent: 'Codex' | 'Claude'
+  agent: 'Codex' | 'Claude' | 'ZCode'
   option: string
   problem: 'unsupportedOption' | 'missingValue' | 'multipleValues' | 'positionalPrompt'
 }
@@ -22,7 +22,7 @@ export function readAgentSessionArgumentProblem(
   const problem = value.problem
   const option = value.option
   if (
-    (agent !== 'Codex' && agent !== 'Claude') ||
+    (agent !== 'Codex' && agent !== 'Claude' && agent !== 'ZCode') ||
     (problem !== 'unsupportedOption' &&
       problem !== 'missingValue' &&
       problem !== 'multipleValues' &&

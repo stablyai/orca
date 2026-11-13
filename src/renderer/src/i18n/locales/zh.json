@@ -19329,6 +19329,7 @@
         "otherDevice": "其他设备"
       },
       "notices": {
+        "modelSwitched": "模型已切换 {{from}} → {{to}}",
         "contextCleared": "上下文已清除",
         "compaction": "上下文已压缩",
         "details": "详情",

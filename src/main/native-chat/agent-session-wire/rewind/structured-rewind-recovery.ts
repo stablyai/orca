@@ -19,6 +19,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { latestUsageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { ZCODE_STRUCTURED_HANDLE_NAMESPACE } from '../../../zcode/structured/launch/zcode-structured-agent-definition'
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
@@ -199,10 +200,13 @@ export async function applyStructuredRewindRecovery(
   const completed = rewind
   const record = store.getRecord(sessionId)!
   const providerHandle = completed.providerFork
-    ? claudeProviderHandle(
-        completed.providerFork.sessionId,
-        completed.providerFork.resumeCursor ?? null
-      )
+    ? record.provider === 'zcode'
+      ? // zcode forks resume the forked session through its own transport.
+        { ...ZCODE_STRUCTURED_HANDLE_NAMESPACE, nativeId: completed.providerFork.sessionId }
+      : claudeProviderHandle(
+          completed.providerFork.sessionId,
+          completed.providerFork.resumeCursor ?? null
+        )
     : (agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null)
   const journalHandle = agentSessionJournalProviderHandle({
     agent: record.provider,
@@ -214,8 +218,8 @@ export async function applyStructuredRewindRecovery(
       ? {
           version: 1,
           kind: 'native_copy',
-          agent: 'claude',
-          unit: 'claude-entry',
+          agent: record.provider,
+          unit: record.provider === 'zcode' ? 'zcode-turn' : 'claude-entry',
           providerHandle: journalHandle,
           ids: completed.providerFork.coverage
         }
