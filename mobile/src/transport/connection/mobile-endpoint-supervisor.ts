@@ -9,6 +9,7 @@ import {
   createRelayRecoveryLog,
   type RelayRecoveryLog
 } from '../../diagnostics/connection/mobile-relay-recovery-log'
+import { createRelayDeferralLog } from '../../diagnostics/connection/mobile-relay-deferral-log'
 import {
   mobileRelayCredentialNeedsRotation,
   rotateMobileRelayCredential
@@ -22,11 +23,7 @@ import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './connection-state'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { MobileRelayBackgroundGrace } from '../relay/mobile-relay-background-grace'
-import {
-  logRelayConnected,
-  logRelayCredentialUnavailable,
-  logRelayDialFailure
-} from '../../diagnostics/connection/mobile-relay-diagnostic-log'
+import * as relayDiagnosticLog from '../../diagnostics/connection/mobile-relay-diagnostic-log'
 
 export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
@@ -41,6 +38,8 @@ export class MobileEndpointSupervisor {
   private readonly relayReconnect: RelayReconnectController
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
+  // Lazy: logRelay is assigned in the constructor.
+  private readonly logDeferral = createRelayDeferralLog((m, d) => this.logRelay(m, d))
   private readonly directProbe: DirectReturnProbe
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
@@ -92,7 +91,7 @@ export class MobileEndpointSupervisor {
       recordMigration: () => {
         this.relayRotationPending = false
         this.hysteresis.recordMigration(dependencies.now())
-        logRelayConnected(this.logRelay)
+        relayDiagnosticLog.logRelayConnected(this.logRelay)
       },
       scheduleLease: (expiry) =>
         this.leaseRotation.scheduleFromLease(
@@ -101,7 +100,7 @@ export class MobileEndpointSupervisor {
       scheduleDirectProbe: () => this.directProbe.schedule(),
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
-      onDialFailure: (error) => logRelayDialFailure(this.logRelay, error)
+      onDialFailure: (error) => relayDiagnosticLog.logRelayDialFailure(this.logRelay, error)
     })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
@@ -163,7 +162,7 @@ export class MobileEndpointSupervisor {
         // dial and may never publish disconnected while its retry loop lives.
         recoveryPresentation.onActiveFailure(this.logical, this.relayReconnect, state, this.bundle)
         const relayFailure = this.relayReconnect.handleStateFailure(this.logical, state)
-        logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
+        relayDiagnosticLog.logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
         // Redials keep direct in connecting, which unforced recovery waits out; one timer per outage races them.
         if (this.logical.getActivePath() !== 'relay') {
           this.directGrace.arm()
@@ -223,12 +222,13 @@ export class MobileEndpointSupervisor {
       return
     }
     // Share cooldown across overlapping resume, revival and lease failures to prevent reconnect churn.
-    if (this.relayReconnect.shouldDefer()) {
+    const deferral = this.relayReconnect.deferral()
+    if (deferral) {
       if (ownsRecovery) {
         // Without a dial, no session was disproven; keep intent queued for forced recovery after cooldown.
         this.pendingReplace = true
       }
-      this.logRelay('recovery deferred by cooldown or gate')
+      this.logDeferral(deferral)
       return
     }
     this.operationInFlight = true
@@ -244,7 +244,7 @@ export class MobileEndpointSupervisor {
       if (selection.credentials.length === 0) {
         this.logical.setRecoveryPath(null)
         // Distinguish expired credentials from missing keychain data in diagnostics.
-        logRelayCredentialUnavailable(this.logRelay, selection.bundle !== null)
+        relayDiagnosticLog.logRelayCredentialUnavailable(this.logRelay, selection.bundle !== null)
         this.relayReconnect.armCredentialReprobe()
         if (ownsRecovery) {
           // Preserve session/intent until credentials return; reprobe will replace without breaking the live session.
