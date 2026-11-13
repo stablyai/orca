@@ -33,6 +33,12 @@ describe('GitHub PR review status', () => {
         latestReviews: [...latestReviews, { login: 'outsider', state: 'CHANGES_REQUESTED' }]
       })
     ).toEqual({ kind: 'approved', logins: ['alice', 'review-bot'] })
+    expect(
+      getGitHubPRReviewStatus({
+        reviewDecision: null,
+        latestReviews: [...latestReviews, { login: 'bob', state: 'CHANGES_REQUESTED' }]
+      })
+    ).toEqual({ kind: 'changesRequested', logins: ['bob'] })
     expect(getGitHubPRReviewStatus({ reviewDecision: null, latestReviews: [] })).toBeNull()
   })
 })
