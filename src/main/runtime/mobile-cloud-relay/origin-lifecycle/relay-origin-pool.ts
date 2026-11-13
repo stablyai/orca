@@ -18,6 +18,12 @@ import { RelayRecoveryEpisode } from './relay-recovery-episode'
 const DATA_PATH_RECOVERY_INTERVAL_MS = 60_000
 const DATA_PATH_DRAIN_GRACE_MS = 60_000
 
+// The director answered and only a cell it newly named failed: retry that once sooner. Director
+// failures, and any cell failing again in the same episode (even alternating A, B, A), keep the
+// full backoff: every retry re-asks the director, so a short cap on dead cells would multiply
+// director load for every host on them.
+const CELL_CONNECT_RETRY_MAX_MS = 60_000
+
 export class RelayOriginPool {
   private activeOrigin: RelayControlOrigin | null = null
   private readonly origins = new Set<RelayControlOrigin>()
@@ -31,6 +37,8 @@ export class RelayOriginPool {
   private readonly basisOrigins = this.retirement.basis
   private assignment: RelayAssignment | null = null
   private deferredAssignment: RelayAssignment | null = null
+  // Cells that failed since the last success: each gets the short cap once.
+  private readonly failedCells = new Set<string>()
   private relayJwt: string | null = null
   private readonly rotation: RelayControlRotation
   private rotationPromise: Promise<void> | null = null
@@ -196,6 +204,7 @@ export class RelayOriginPool {
     origin: RelayControlOrigin,
     message: RelayDrainMessage
   ): Promise<void> {
+    let answeredCellUrl: string | null = null
     try {
       if (!this.relayJwt) {
         throw new Error('relay_authorization_unavailable')
@@ -220,6 +229,7 @@ export class RelayOriginPool {
         assignment = this.deferredAssignment
       }
       this.deferredAssignment = null
+      answeredCellUrl = assignment.cellUrl
       if (assignment.cellUrl === origin.cellUrl) {
         let rebound = false
         try {
@@ -251,7 +261,13 @@ export class RelayOriginPool {
         )
         this.recovery.failed(error)
         const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
-        this.drainRetry.schedule(retryAfterMs, () => this.handleDrain(origin, message))
+        this.drainRetry.schedule(
+          retryAfterMs,
+          () => this.handleDrain(origin, message),
+          answeredCellUrl && this.isNewCellFailure(answeredCellUrl)
+            ? CELL_CONNECT_RETRY_MAX_MS
+            : undefined
+        )
       }
     }
   }
@@ -277,6 +293,16 @@ export class RelayOriginPool {
     this.retirement.schedule(origin, graceMs)
     this.retirement.maybeClose(origin)
   }
+  // attempts is 0 only right after a success, which starts a new episode.
+  private isNewCellFailure(cellUrl: string): boolean {
+    if (this.drainRetry.attempts === 0) {
+      this.failedCells.clear()
+    }
+    const repeated = this.failedCells.has(cellUrl)
+    this.failedCells.add(cellUrl)
+    return !repeated
+  }
+
   private assertCurrent(): void {
     if (!this.isCurrent()) {
       throw new Error('stale_relay_origin_pool')
