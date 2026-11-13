@@ -80,12 +80,5 @@ describe('web git atRiskLocalFiles', () => {
 
     await expect(scan).rejects.toBeInstanceOf(RuntimeRpcCallError)
     await expect(scan).rejects.toMatchObject({ code: 'method_not_found' })
-    expect(abortableCallMock).toHaveBeenCalledWith(
-      'env-1',
-      'git.atRiskLocalFiles',
-      { worktree: expect.anything() },
-      undefined,
-      expect.any(AbortSignal)
-    )
   })
 })

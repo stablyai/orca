@@ -30,7 +30,7 @@ async function callAbortableAtRiskLocalFiles(
       environment.id,
       'git.atRiskLocalFiles',
       { worktree: toRuntimeWorktreeSelector(worktree.id) },
-      undefined,
+      30_000,
       controller.signal
     )
     updateEnvironmentFromResponse(environment, response)

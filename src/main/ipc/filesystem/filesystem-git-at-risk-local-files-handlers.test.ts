@@ -90,20 +90,37 @@ describe('git:atRiskLocalFiles cancellation', () => {
 
   it('does not let another window cancel the scan', async () => {
     let scanSignal: AbortSignal | undefined
-    readAtRiskMock.mockImplementation((args: { gitOptions?: { signal?: AbortSignal } }) => {
-      scanSignal = args.gitOptions?.signal
-      return Promise.resolve({ count: 0, samplePaths: [], complete: true })
+    let startScan!: () => void
+    const scanStarted = new Promise<void>((resolve) => {
+      startScan = resolve
     })
+    readAtRiskMock.mockImplementation(
+      (args: { gitOptions?: { signal?: AbortSignal } }) =>
+        new Promise((_resolve, reject) => {
+          scanSignal = args.gitOptions?.signal
+          scanSignal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+          startScan()
+        })
+    )
+    const owner = requestEvent(1)
 
-    void invoke('git:atRiskLocalFiles', requestEvent(1), {
+    const scan = invoke('git:atRiskLocalFiles', owner, {
       worktreePath: '/repo-feature',
       requestToken: 'at-risk-1'
     })
-    await vi.waitFor(() => expect(readAtRiskMock).toHaveBeenCalled())
+    const cancelled = expect(scan).rejects.toThrow('aborted')
+    await scanStarted
     await invoke('git:cancelAtRiskLocalFiles', requestEvent(2), {
       requestToken: 'at-risk-1'
     })
 
-    expect(scanSignal?.aborted).toBe(false)
+    const abortedByOtherWindow = scanSignal?.aborted
+    await invoke('git:cancelAtRiskLocalFiles', owner, {
+      requestToken: 'at-risk-1'
+    })
+
+    expect(scanSignal?.aborted).toBe(true)
+    await cancelled
+    expect(abortedByOtherWindow).toBe(false)
   })
 })
