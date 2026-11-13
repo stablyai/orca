@@ -179,6 +179,25 @@ describe('floating workspace window', () => {
     }
   })
 
+  it('a no-focus show on a foreground launch reveals the window inactive; a focused show activates it', () => {
+    const window = showReady()
+    expect(window.showInactive).toHaveBeenCalledTimes(1)
+    expect(window.show).not.toHaveBeenCalled()
+    expect(window.focus).not.toHaveBeenCalled()
+
+    showFloatingWorkspaceWindow(null, { focus: true })
+    expect(window.focus).toHaveBeenCalledTimes(1)
+    expect(window.show).not.toHaveBeenCalled()
+  })
+
+  it('a no-focus show in a windowless launch keeps the window hidden', () => {
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+    const window = showReady()
+    expect(window.showInactive).not.toHaveBeenCalled()
+    expect(window.show).not.toHaveBeenCalled()
+    expect(window.visible).toBe(false)
+  })
+
   it('a user close while not quitting hides the window, keeps it and its renderer, and reports a user hide', () => {
     const window = showReady()
     showFloatingWorkspaceWindow(null, { focus: false })

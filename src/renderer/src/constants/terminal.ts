@@ -87,6 +87,8 @@ export type BackgroundMountTerminalWorktreeDetail = {
 
 export type WakeHibernatedAgentsWorktreeDetail = {
   worktreeId: string
+  /** Limits the wake to these tabs' panes; omitted wakes every mounted pane in the worktree. */
+  tabIds?: readonly string[]
   /** Collect provider-session claims from panes consuming/latching wake so generic resume cannot launch those sessions twice. */
   wokenClaimKeys?: Set<string>
 }
