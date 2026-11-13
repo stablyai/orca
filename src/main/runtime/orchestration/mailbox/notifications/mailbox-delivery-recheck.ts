@@ -25,9 +25,12 @@ export class MailboxDeliveryRecheck {
   ) {}
 
   request(ptyId: string, decision: MailboxDeliveryDecision = {}): void {
-    if (decision.settled && this.read.settle(ptyId)) {
-      this.retire(ptyId)
-      return
+    if (decision.settled) {
+      if (this.read.settle(ptyId)) {
+        this.retire(ptyId)
+        return
+      }
+      this.foregroundPending.delete(ptyId)
     }
     if (decision.foreground === true) {
       this.foregroundPending.add(ptyId)
@@ -51,11 +54,10 @@ export class MailboxDeliveryRecheck {
         return
       }
       const terminal = this.read.terminal(ptyId)
-      const foreground = this.foregroundPending.has(ptyId) || this.read.held(ptyId)
-      if (foreground) {
+      const backoffRequired = this.foregroundPending.has(ptyId) || this.read.held(ptyId)
+      if (backoffRequired) {
         this.foregroundPending.add(ptyId)
       }
-      const backoffRequired = foreground || this.read.recovering?.(ptyId) === true
       const readinessDelay =
         terminal && !backoffRequired ? this.read.readinessDelay(terminal) : null
       if (
@@ -79,6 +81,9 @@ export class MailboxDeliveryRecheck {
           this.retire(ptyId)
           return
         }
+        if (this.read.recovering?.(ptyId)) {
+          this.foregroundPending.add(ptyId)
+        }
         this.read.deliver(ptyId)
       }, delay)
       timer.unref?.()
@@ -87,7 +92,11 @@ export class MailboxDeliveryRecheck {
   }
 
   needsForegroundEvaluation(ptyId: string): boolean {
-    return this.foregroundPending.has(ptyId) || this.read.held(ptyId)
+    return (
+      this.foregroundPending.has(ptyId) ||
+      this.read.held(ptyId) ||
+      this.read.recovering?.(ptyId) === true
+    )
   }
 
   retire(ptyId: string): void {

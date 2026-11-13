@@ -1,6 +1,4 @@
 import { terminalComposerTextOwnsPointer } from '../../../terminal/wait/terminal-delivery-refusal'
-import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
-import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
 import type { MailboxDeliveryDecision } from '../notifications/mailbox-delivery-recheck'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -48,27 +46,6 @@ export type OrchestrationMailboxPointerSubmitTarget = {
   processIncarnation: string
 }
 
-export function resumeDeferredMailboxPointer<T extends OrchestrationMessageWaiter>(
-  deps: PointerDeliveryDependencies<T>,
-  state: OrchestrationMailboxPointerState,
-  terminal: OrchestrationMailboxTerminal,
-  coldParked: boolean
-): boolean {
-  const ptyId = terminal.ptyId
-  if (!state.hasFlight(ptyId)) {
-    return false
-  }
-  if (
-    !state.hasActiveFlight(ptyId) &&
-    (state.foreground.screenRecovery(ptyId) === state.flightForPty(ptyId)?.processIncarnation ||
-      ((!coldParked || terminal.lastAgentStatus === 'idle') &&
-        deps.isAgentSettledForDelivery(ptyId)))
-  ) {
-    state.takeDeferredEnter(ptyId)?.()
-  }
-  return true
-}
-
 export type PointerSubmitInput = {
   mailboxHandle: string
   messages: readonly { id: string; type: string }[]
@@ -92,8 +69,7 @@ export function submitOrchestrationMailboxPointer(
   let preserveAmbiguousDelivery = input.enterUncertain === true
   let preserveFlight = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
-  const isRecovering = () =>
-    deps.state.foreground.screenRecovery(input.ptyId) === input.expectedTarget.processIncarnation
+  const isRecovering = () => deps.state.hasRecoveryFlight(input.ptyId)
   const messageIds = input.messages.map((message) => message.id)
   const reservationTarget = {
     ptyId: input.ptyId,
@@ -110,7 +86,11 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
-      if (input.enterUncertain) {
+      const composerBeforeProbe = deps.readComposerText?.(input.ptyId)
+      if (
+        input.enterUncertain &&
+        !(composerBeforeProbe === '' && deps.state.hasNewerMail(input.ptyId, input.newestSequence))
+      ) {
         if (messageIds.every((id) => deps.getDb()?.getMessageById(id)?.read === 1)) {
           clearAndRedrive = true
         } else {
@@ -119,7 +99,6 @@ export function submitOrchestrationMailboxPointer(
         }
         return
       }
-      const composerBeforeProbe = deps.readComposerText?.(input.ptyId)
       if (
         isRecovering() &&
         !terminalComposerTextOwnsPointer(composerBeforeProbe, input.stagedText) &&
@@ -180,13 +159,20 @@ export function submitOrchestrationMailboxPointer(
         preserveFlight = true
       } else if (
         isRecovering() &&
-        (foreground.foreground !== 'agent' ||
+        (input.enterUncertain ||
+          foreground.foreground !== 'agent' ||
           !terminal.lastAgentStatusObservedLive ||
           !settled ||
           !ownPointer)
       ) {
-        // Missing text cannot distinguish deletion from a user-submitted pointer.
-        preserveFlight = true
+        // New mail can replace the callback, never the older uncertain reservation.
+        preserveFlight = !(
+          foreground.foreground === 'agent' &&
+          terminal.lastAgentStatusObservedLive &&
+          settled &&
+          composer === '' &&
+          deps.state.hasNewerMail(input.ptyId, input.newestSequence)
+        )
       } else if (deps.state.foreground.foregroundHold(input.ptyId)) {
         preserveFlight = true
       } else if (
@@ -200,7 +186,6 @@ export function submitOrchestrationMailboxPointer(
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {
-        preserveAmbiguousDelivery = true
         const db = deps.getDb()
         if (db?.markMailboxPointerEnterAttempted(messageIds, reservationTarget)) {
           expectedPhase = MAILBOX_POINTER_ENTER_ATTEMPTED
@@ -209,6 +194,7 @@ export function submitOrchestrationMailboxPointer(
           preserveFlight = isRecovering()
           return
         }
+        preserveAmbiguousDelivery = true
         const enterSettlement = await deps.writePty(input.ptyId, '\r')
         submitted = enterSettlement.outcome === 'accepted'
         if (isRecovering() && enterSettlement.outcome === 'unverifiable') {
@@ -251,7 +237,7 @@ export function submitOrchestrationMailboxPointer(
             ...input,
             enterUncertain: preserveAmbiguousDelivery
           })
-        deps.onDeliveryDecision?.(input.ptyId, isRecovering() ? undefined : { foreground: false })
+        deps.onDeliveryDecision?.(input.ptyId, { foreground: isRecovering() })
         return
       }
       let released = false

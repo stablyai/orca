@@ -1,5 +1,11 @@
-import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
-import type { OrchestrationMailboxDeliveryFlight } from './mailbox-pointer-state'
+import type {
+  PointerDeliveryDependencies,
+  PointerDeliveryOptions
+} from './mailbox-pointer-delivery-contract'
+import type {
+  OrchestrationMailboxDeliveryFlight,
+  OrchestrationMailboxPointerState
+} from './mailbox-pointer-state'
 import type { OrchestrationMailboxTerminal } from '../routing/mailbox-owner'
 import '../../db/orchestration-db'
 import '../../db/contract-constants'
@@ -121,4 +127,39 @@ export function hasPendingMailboxPointerFlight<T extends OrchestrationMessageWai
         row.to_handle
     )
   })
+}
+
+export function resumeDeferredMailboxPointer<T extends OrchestrationMessageWaiter>(
+  deps: PointerDeliveryDependencies<T>,
+  state: OrchestrationMailboxPointerState,
+  terminal: OrchestrationMailboxTerminal,
+  coldParked: boolean,
+  options?: PointerDeliveryOptions
+): boolean {
+  const ptyId = terminal.ptyId
+  if (!state.hasFlight(ptyId)) {
+    return false
+  }
+  const db = options && state.hasRecoveryFlight(ptyId) ? deps.getDb() : null
+  if (db && options) {
+    const newer = selectOrchestrationPointerBatch({
+      db,
+      mailboxHandle: options.mailboxHandle,
+      waiters: deps.getMessageWaiters(options.mailboxHandle),
+      reservedTypes: options.reservedTypes,
+      excludeRunOwnedDirect: options.mailboxHandle === terminal.handle
+    }).messages.at(-1)
+    if (newer) {
+      state.noteMailSequence(ptyId, newer.sequence)
+    }
+  }
+  if (
+    !state.hasActiveFlight(ptyId) &&
+    (state.hasRecoveryFlight(ptyId) ||
+      ((!coldParked || terminal.lastAgentStatus === 'idle') &&
+        deps.isAgentSettledForDelivery(ptyId)))
+  ) {
+    state.takeDeferredEnter(ptyId)?.()
+  }
+  return true
 }

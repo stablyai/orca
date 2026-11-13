@@ -1,4 +1,3 @@
-import { resumeDeferredMailboxPointer } from './mailbox-pointer-submit'
 import { MailboxForegroundDelivery } from './mailbox-foreground-delivery'
 import type {
   PointerDeliveryDependencies,
@@ -6,6 +5,7 @@ import type {
 } from './mailbox-pointer-delivery-contract'
 import {
   hasPendingMailboxPointerFlight,
+  resumeDeferredMailboxPointer,
   hasUnfilteredOrchestrationWaiter,
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
@@ -57,7 +57,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         return
       }
       terminal = target.terminal
-      if (this.resumeDeferredEnter(terminal)) {
+      if (this.resumeDeferredEnter(terminal, options)) {
         this.state.parkDelivery(ptyId, mailboxHandle, options.reservedTypes)
         return
       }
@@ -117,7 +117,13 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       }
       if (
         pending.length > 0 &&
-        resumePendingOrchestrationMailboxPointer({ deps: this.deps, terminal, messages: pending })
+        !(unread.length > 0 && this.requiresCurrentScreen(ptyId)) &&
+        resumePendingOrchestrationMailboxPointer({
+          deps: this.deps,
+          terminal,
+          messages: pending,
+          recovering: this.requiresCurrentScreen(ptyId)
+        })
       ) {
         return
       }
@@ -176,27 +182,20 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     this.state.completeRecovery(ptyId)
   }
 
-  hasPendingFlightMail(terminal: OrchestrationMailboxTerminal): boolean {
-    return (
-      this.hasRecoveryFlight(terminal.ptyId) ||
-      hasPendingMailboxPointerFlight(this.deps, terminal, this.state.flightForPty(terminal.ptyId))
-    )
-  }
+  readonly hasPendingFlightMail = (terminal: OrchestrationMailboxTerminal): boolean =>
+    this.state.hasRecoveryFlight(terminal.ptyId) ||
+    hasPendingMailboxPointerFlight(this.deps, terminal, this.state.flightForPty(terminal.ptyId))
 
-  resumeDeferredEnter(terminal: OrchestrationMailboxTerminal): boolean {
+  resumeDeferredEnter(
+    terminal: OrchestrationMailboxTerminal,
+    options?: PointerDeliveryOptions
+  ): boolean {
     return resumeDeferredMailboxPointer(
       this.deps,
       this.state,
       terminal,
-      this.coldParkedPtys.has(terminal.ptyId)
-    )
-  }
-
-  hasRecoveryFlight(ptyId: string): boolean {
-    const flight = this.state.flightForPty(ptyId)
-    return (
-      !!flight?.processIncarnation &&
-      this.state.foreground.screenRecovery(ptyId) === flight.processIncarnation
+      this.coldParkedPtys.has(terminal.ptyId),
+      options
     )
   }
 
@@ -298,7 +297,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   private settle(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): void {
     const parked = this.state.settleFlight(ptyId, flight)
-    this.deps.onDeliveryDecision(ptyId, { settled: true, foreground: false })
+    this.deps.onDeliveryDecision(ptyId, { settled: true, reset: true })
     const current = this.deps.getTerminal(ptyId)
     for (const [mailboxHandle, reservedTypes] of parked ?? []) {
       if (current) {

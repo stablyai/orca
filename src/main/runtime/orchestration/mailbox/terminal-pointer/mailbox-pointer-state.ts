@@ -39,6 +39,10 @@ export class OrchestrationMailboxPointerState {
     return true
   }
 
+  hasNewerMail(ptyId: string, sequence: number): boolean {
+    return (this.observedMail.get(ptyId) ?? -1) > sequence
+  }
+
   readonly foreground: MailboxForegroundEvidence
 
   constructor(onForegroundRecovery?: (ptyId: string) => void) {
@@ -56,6 +60,14 @@ export class OrchestrationMailboxPointerState {
 
   flightForPty(ptyId: string): OrchestrationMailboxDeliveryFlight | undefined {
     return this.flightsByPtyId.get(ptyId)
+  }
+
+  hasRecoveryFlight(ptyId: string): boolean {
+    const flight = this.flightForPty(ptyId)
+    return (
+      !!flight?.processIncarnation &&
+      this.foreground.screenRecovery(ptyId) === flight.processIncarnation
+    )
   }
 
   hasFlight(ptyId: string): boolean {

@@ -75,7 +75,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     {
       terminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
       inFlight: (ptyId) => this.orchestrationMailboxPointerDelivery.isDeliveryInFlight(ptyId),
-      recovering: (ptyId) => this.orchestrationMailboxPointerDelivery.hasRecoveryFlight(ptyId),
+      recovering: (ptyId) => this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(ptyId),
       held: (ptyId) => this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId),
       hasMail: (terminal) => this.orchestrationMailboxNotifications.hasDeliverableMail(terminal),
       settle: (ptyId) =>
@@ -85,6 +85,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       readinessDelay: (terminal) => {
         if (
           !isMailboxTerminalTakingInput(terminal) &&
+          !this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(terminal.ptyId) &&
           !(
             terminal.lastAgentStatusObservedLive &&
             terminal.lastAgentStatus === null &&

@@ -14,6 +14,7 @@ export function resumePendingOrchestrationMailboxPointer(args: {
   deps: Pick<PointerDeliveryDependencies<never>, 'getDb' | 'resolveSubmitTarget'>
   terminal: OrchestrationMailboxTerminal
   messages: readonly OrchestrationMailboxPointerMessage[]
+  recovering?: boolean
 }): boolean {
   const { ptyId } = args.terminal
   const newestSequence = args.messages.at(-1)?.sequence
@@ -72,6 +73,9 @@ export function resumePendingOrchestrationMailboxPointer(args: {
   }
   if (phases.size !== 1 || !phases.has(MAILBOX_POINTER_RESERVED)) {
     // Same-incarnation recovery cannot tell whether pointer text or Enter reached the PTY.
+    if (args.recovering) {
+      return true
+    }
     args.deps
       .getDb()
       ?.settleMailboxPointerEnter(messageIds, persistedTarget!, [
