@@ -8,7 +8,9 @@ import type {
 export const WORKSPACE_CLEANUP_RULE_REASON_LABELS: Record<WorkspaceCleanupRuleReason, string> = {
   merged: 'merged',
   unchanged: 'no changes',
-  inactive: 'inactive'
+  inactive: 'inactive',
+  'automation-run': 'finished automation run',
+  'orchestration-worker': 'released orchestration worker'
 }
 
 /** Plain-words names for why the runner left a workspace alone. */
