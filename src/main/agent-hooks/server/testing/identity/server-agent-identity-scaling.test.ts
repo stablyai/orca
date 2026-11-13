@@ -271,7 +271,7 @@ it('publishes a lost first answer as pending, and the click recovers the committ
   server.ingestRemote(hook(0, 'session-0'), WSL)
   await answered()
   // The host can name this conversation but has not: the field is present and null, which is
-  // what offers Copy Agent ID (canPaneOfferAgentId).
+  // what offers Copy Orca Session ID (canPaneOfferAgentId).
   expect(server.getStatusSnapshot()[0]).toHaveProperty('orcaSessionId', null)
   // Inside the 30 s backoff only the click asks again; its answer also re-stamps the row.
   const id = await server.resolvePaneAgentId(paneKey(0), () => undefined)
