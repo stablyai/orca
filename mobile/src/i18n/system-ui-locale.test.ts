@@ -15,6 +15,7 @@ describe('resolveUiLocaleFromTags', () => {
     [['zh-Latn-CN', 'ja-JP'], 'ja'],
     [['pt-PT'], 'pt'],
     [['it-IT', 'de-AT'], 'de'],
+    [['pl-PL'], 'pl'],
     [['it-IT'], 'en'],
     [[], 'en'],
     [['', 'x-pseudo', 'tr'], 'tr']
