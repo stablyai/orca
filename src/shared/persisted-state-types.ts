@@ -5,7 +5,8 @@ import type {
   SshRemotePtyLease,
   SshTarget
 } from './ssh-types'
-import type { Automation, AutomationRun } from './automations-types'
+import type { Automation } from './automations/automation-definition'
+import type { AutomationRun } from './automations/history/automation-run'
 import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
@@ -14,7 +15,7 @@ import type { DiffComment } from './diff-comment-types'
 import type { FolderWorkspace } from './folder-workspaces/folder-workspace-types'
 import type { WorkspaceKey } from './workspace-scope'
 import type { GlobalSettings } from './global-settings-types'
-import type { IssueInfo, PRInfo } from './github/pull-request-types'
+import type { IssueInfo, PRInfo } from './github/pull-requests/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'

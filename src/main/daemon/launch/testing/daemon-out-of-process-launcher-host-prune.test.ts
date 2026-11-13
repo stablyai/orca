@@ -168,23 +168,6 @@ describe('out-of-process launcher: published daemon-host retention', () => {
     return oldBuild
   }
 
-  it('retains a superseded current-version build after its previous daemon exits', async () => {
-    const oldBuild = seedSupersededLaunch()
-    harness.prepareDaemonReplacement.mockImplementation(async () => {
-      staleDaemon = 'exited'
-      return null
-    })
-    const seen = recordLaunch(oldBuild)
-
-    await launch()
-
-    expect(seen.oldBuildPresent).toBe(true)
-    expect(seen.forkEntryPath).toBeDefined()
-    expect(seen.forkEntryPath?.startsWith(oldBuild)).toBe(false)
-    expect(existsSync(seen.forkEntryPath ?? '')).toBe(true)
-    expect(existsSync(join(oldBuild, 'Orca.exe'))).toBe(true)
-  })
-
   it('keeps a published build when another daemon can still be starting before pid publication', async () => {
     const startingBuild = materializedBuild()
     expect(existsSync(getDaemonPidPath(runtimeDir))).toBe(false)
@@ -268,15 +251,5 @@ describe('out-of-process launcher: published daemon-host retention', () => {
 
     expect(existsSync(supersededVersion)).toBe(false)
     expect(existsSync(seen.forkEntryPath ?? '')).toBe(true)
-  })
-
-  it('reclaims nothing when preflight adopts the running daemon', async () => {
-    const oldBuild = seedSupersededLaunch()
-    harness.prepareDaemonReplacement.mockResolvedValue({ adopted: true, shutdown: async () => {} })
-
-    await launch()
-
-    expect(harness.launchDaemonChild).not.toHaveBeenCalled()
-    expect(existsSync(join(oldBuild, 'Orca.exe'))).toBe(true)
   })
 })

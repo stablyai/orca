@@ -1,6 +1,6 @@
 import React from 'react'
 import { GitPullRequest, Link2, ListTodo } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import {
   workspaceAttachmentLabel,
@@ -32,22 +32,23 @@ import type {
   WorktreeCardJiraIssueDisplay
 } from '../metadata/worktree-card-meta-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function getLinkedTaskState(
   detail: WorkspaceReferenceDetails | undefined,
-  liveTask: WorkspaceLinkedItemRow['liveTask']
+  liveTask: WorkspaceLinkedItemRow['liveTask'],
+  t?: Translate
 ): WorktreeTaskState | null {
   if (detail?.stateName) {
-    return getLinearTaskState(detail.stateName, detail.stateType)
+    return getLinearTaskState(detail.stateName, detail.stateType, t)
   }
   if (detail?.issueState) {
-    return getIssueTaskState(detail.issueState)
+    return getIssueTaskState(detail.issueState, t)
   }
   if (liveTask && 'identifier' in liveTask) {
-    return getLinearTaskState(liveTask.stateName, liveTask.stateType)
+    return getLinearTaskState(liveTask.stateName, liveTask.stateType, t)
   }
-  return getIssueTaskState(liveTask?.state)
+  return getIssueTaskState(liveTask?.state, t)
 }
 
 export function WorktreeCardLinkedItemsSection({
@@ -78,6 +79,7 @@ export function WorktreeCardLinkedItemsSection({
     review: WorktreeCardPrDisplay | null
   ) => React.ReactNode
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!workspace) {
     return null
   }
@@ -88,12 +90,12 @@ export function WorktreeCardLinkedItemsSection({
   )
   const groups = [
     {
-      label: translate('workspace.links.reviews', 'Reviews'),
+      label: t('workspace.links.reviews', 'Reviews'),
       icon: <GitPullRequest className="size-3" />,
       rows: rows.filter((row) => row.item.type !== 'issue')
     },
     {
-      label: translate('workspace.links.tasks', 'Issues & tasks'),
+      label: t('workspace.links.tasks', 'Issues & tasks'),
       icon: <ListTodo className="size-3" />,
       rows: rows.filter((row) => row.item.type === 'issue')
     }
@@ -144,7 +146,7 @@ export function WorktreeCardLinkedItemsSection({
                         source={source}
                         stale={detail?.stale}
                         taskState={
-                          item.type === 'issue' ? getLinkedTaskState(detail, liveTask) : null
+                          item.type === 'issue' ? getLinkedTaskState(detail, liveTask, t) : null
                         }
                         labels={liveTask?.labels}
                         url={url}
@@ -171,7 +173,7 @@ export function WorktreeCardLinkedItemsSection({
                       />
                       {live && 'baseRefName' in live && live.baseRefName ? (
                         <div className="pl-5 text-2xs text-muted-foreground">
-                          {translate('workspace.links.reviewTarget', 'Target: {{branch}}', {
+                          {t('workspace.links.reviewTarget', 'Target: {{branch}}', {
                             branch: live.baseRefName
                           })}
                         </div>
@@ -186,7 +188,7 @@ export function WorktreeCardLinkedItemsSection({
       {!rows.length && onManage ? (
         <DetailHeader
           icon={<Link2 className="size-3" />}
-          label={translate('workspace.links.title', 'Linked work')}
+          label={t('workspace.links.title', 'Linked work')}
           onAddReference={onManage}
         />
       ) : null}

@@ -1,5 +1,5 @@
 import { getRepositorySourceControlAiSectionId } from '@/components/settings/repository/repository-settings-targets'
-import type { AppState } from '@/store/index'
+import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 
 export function openSourceControlAiSettingsTarget({

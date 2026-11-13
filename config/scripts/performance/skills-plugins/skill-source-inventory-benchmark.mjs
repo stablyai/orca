@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks'
 import { transform } from 'esbuild'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 
-const path = 'src/renderer/src/components/skills/skill-source-inventory.ts'
+const path = 'src/renderer/src/components/skills/catalog/skill-source-inventory.ts'
 const arms = {}
 for (const [name, source] of [
   ['baseline', readFileSync(0, 'utf8')],

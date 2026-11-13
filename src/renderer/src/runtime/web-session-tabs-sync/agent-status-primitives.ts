@@ -4,16 +4,17 @@ import {
   makePaneKey,
   isTerminalLeafId
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
+import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
+import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 import {
   type RetiredTerminalTabSweepState,
   buildRetiredTerminalTabStateSweepPatch
-} from '../../store/slices/retired-terminal-tab-state-sweep'
+} from '../../store/terminals/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import { isAgentStatusFresh } from './state-equality-core'
 
@@ -29,7 +30,7 @@ export function isMirroredAgentStatusOwnedBy(
 }
 
 export function toMirroredPaneKey(
-  surface: TerminalSurface,
+  surface: RuntimeMobileSessionTerminalClientTab,
   leafId = surface.leafId
 ): string | null {
   if (!isTerminalLeafId(leafId)) {
@@ -38,9 +39,13 @@ export function toMirroredPaneKey(
   return makePaneKey(toWebTerminalSurfaceTabId(surface.parentTabId), leafId)
 }
 
+/** A host frame's agent status in this client's pane keys. `frameWorktreeId` is the worktree the
+ *  frame publishes: older hosts omit it on agents restored after a restart, and clients judge a
+ *  row's ownership (and retraction) by worktree, so every reader must see the same owner. */
 export function remapHostAgentStatus(
-  surface: TerminalSurface,
-  retainedSurface?: TerminalSurface
+  surface: RuntimeMobileSessionTerminalClientTab,
+  frameWorktreeId: string,
+  retainedSurface?: RuntimeMobileSessionTerminalClientTab
 ): AgentStatusEntry | null {
   if (!surface.agentStatus) {
     return null
@@ -53,12 +58,17 @@ export function remapHostAgentStatus(
     launchAgent: retainedSurface?.launchAgent ?? surface.launchAgent,
     hookAgent: surface.agentStatus.agentType
   })
+  const entry = normalizeCompatibleAgentStatusEntryForOwner(
+    surface.agentStatus,
+    ownerRecord?.agent,
+    { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
+  )
   return {
-    ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerRecord?.agent, {
-      ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
-    }),
+    ...entry,
+    worktreeId: entry.worktreeId || frameWorktreeId,
     paneKey,
-    tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
+    tabId: toWebTerminalSurfaceTabId(surface.parentTabId),
+    ...(surface.launchAttested !== undefined ? { launchAttested: surface.launchAttested } : {})
   }
 }
 

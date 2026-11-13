@@ -1,8 +1,8 @@
-import type { CacheEntry } from '@/store/github/cache-model'
+import type { CacheEntry } from '@/store/github/cache/cache-model'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 
 type JiraIssueCache = Record<string, CacheEntry<JiraIssue>>

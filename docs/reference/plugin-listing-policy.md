@@ -1,7 +1,7 @@
 # Plugin listing policy
 
 These rules apply to every plugin listed in Orca's official and community catalogs and on the
-[plugin directory](https://onorca.dev/plugins). For how to write and publish a plugin, see
+[plugin directory](https://orca.dev/plugins). For how to write and publish a plugin, see
 [Writing an Orca plugin](plugin-authoring.md).
 
 ## Free to install and use

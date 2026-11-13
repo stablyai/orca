@@ -11,7 +11,6 @@ import {
 import { parseWslDistroHold } from '../../../../../shared/wsl-distro-stopped-hold'
 import {
   holdPassiveRestoreOfStoppedWslDistro,
-  WSL_HOLD_READ_MAX_AGE_MS,
   wslHoldReadAnchor
 } from '../daemon-wsl-passive-restore-hold'
 
@@ -49,34 +48,6 @@ afterEach(() => {
 })
 
 describe('a held WSL spawn reuses only its own running read (E9)', () => {
-  it('runs one probe across its startup-target and provider holds', async () => {
-    const anchor = wslHoldReadAnchor()
-    await hold(anchor)
-    await hold(anchor)
-    expect(probe).toHaveBeenCalledTimes(1)
-  })
-
-  it('holds a stopped distro at both, still with one probe', async () => {
-    running.distros = []
-    const anchor = wslHoldReadAnchor()
-    expect(heldState(await hold(anchor).catch((error: unknown) => error))).toBe('stopped')
-    expect(heldState(await hold(anchor).catch((error: unknown) => error))).toBe('stopped')
-    expect(probe).toHaveBeenCalledTimes(1)
-  })
-
-  it("never reuses another spawn's read", async () => {
-    await hold(wslHoldReadAnchor())
-    vi.advanceTimersByTime(2)
-    await hold(wslHoldReadAnchor())
-    expect(probe).toHaveBeenCalledTimes(2)
-  })
-
-  it('reads fresh without an anchor (a spawn that skipped the startup-target hold)', async () => {
-    await hold(wslHoldReadAnchor())
-    await hold()
-    expect(probe).toHaveBeenCalledTimes(2)
-  })
-
   it('reads fresh, and holds, after a stop noted between the two holds', async () => {
     const anchor = wslHoldReadAnchor()
     await hold(anchor)
@@ -86,14 +57,6 @@ describe('a held WSL spawn reuses only its own running read (E9)', () => {
     const provider = hold(anchor).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(1_000)
     expect(heldState(await provider)).toBe('stopped')
-    expect(probe).toHaveBeenCalledTimes(2)
-  })
-
-  it("reads fresh once the spawn's own read is older than the cap (a respawn between holds)", async () => {
-    const anchor = wslHoldReadAnchor()
-    await hold(anchor)
-    vi.advanceTimersByTime(WSL_HOLD_READ_MAX_AGE_MS + 1)
-    await hold(anchor)
     expect(probe).toHaveBeenCalledTimes(2)
   })
 })

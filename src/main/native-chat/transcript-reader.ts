@@ -1,4 +1,4 @@
-import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-history/opencode/transcript-opencode'
 import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
@@ -6,23 +6,22 @@ import type {
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
-import { errorMessage } from '../ai-vault/session-scanner-values'
+import { errorMessage } from '../../shared/error-message'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { openTranscriptReadStream } from './wsl-transcript-fs-access'
-import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
-} from './transcript-line-decoders'
-import { decodeTranscriptStream } from './transcript-stream-lines'
+import { openTranscriptReadStream } from './transcript-filesystem/wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
+import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
+import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
+import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
+import { decodeTranscriptStream } from './transcript-streaming/transcript-stream-lines'
 
 export type ReadTranscriptResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
       sourceEmpty?: boolean
+      forkTipItemIds?: string[]
     }
   // notFound is retryable: the agent may not have flushed its transcript yet.
   | { error: string; notFound?: true }

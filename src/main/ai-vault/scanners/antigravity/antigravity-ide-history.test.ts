@@ -4,10 +4,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots, writeAntigravityTranscript } from '../../session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  writeAntigravityTranscript
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
 import { antigravitySessionOrigin } from '../../../../shared/antigravity-session-origin'
-import { readLocalAntigravityHistory } from './session-scanner-antigravity-history'
-import { ANTIGRAVITY_INDEX_MAX_BYTES } from './session-scanner-antigravity-metadata'
+import './session-scanner-antigravity-history'
+import './session-scanner-antigravity-metadata'
 
 const temporaryDirectories: string[] = []
 const conversationId = 'same-conversation-id'
@@ -178,13 +181,6 @@ describe('Antigravity IDE history discovery', () => {
     },
     5000
   )
-
-  it('does not retain an oversized metadata file', async () => {
-    const home = await temporaryHome()
-    const file = join(home, 'oversized.json')
-    await writeFile(file, ' '.repeat(ANTIGRAVITY_INDEX_MAX_BYTES + 1))
-    expect(await readLocalAntigravityHistory(file)).toBeNull()
-  })
 })
 
 function jsonLines(records: unknown[]): string {

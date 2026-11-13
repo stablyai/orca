@@ -1,4 +1,4 @@
-import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from '../../browser/screencast/browser-screencast-protocol'
 import type { BridgeBinaryEvent } from './bridge-screencast-binary'
 
 // Encode image bytes only; JSON already carries frame metadata, and the page reconstructs the native listener shape without a socket header.

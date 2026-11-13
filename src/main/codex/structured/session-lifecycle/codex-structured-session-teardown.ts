@@ -1,7 +1,7 @@
-import type { AgentSessionCloseObserver } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
-import '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AgentSessionCloseObserver } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {
   closeAllCodexSessions,
   closeCodexPublishedSession,

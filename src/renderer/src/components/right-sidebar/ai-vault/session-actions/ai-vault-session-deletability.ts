@@ -5,6 +5,7 @@ import {
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import '../session-list/ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { canUseLocalAiVaultSessionPathActions } from './ai-vault-session-path-actions'
@@ -23,8 +24,11 @@ export function aiVaultSessionRuntimeEnvironmentId(
   return host?.kind === 'runtime' ? host.environmentId : null
 }
 
-export function aiVaultSessionHostUpdateRequiredReason(hostLabel: string): string {
-  return translate(
+export function aiVaultSessionHostUpdateRequiredReason(
+  hostLabel: string,
+  t: Translate = translate
+): string {
+  return t(
     'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonHostUpdateRequired',
     'Update {{value0}} to delete its sessions from here.',
     { value0: hostLabel }
@@ -34,30 +38,31 @@ export function aiVaultSessionHostUpdateRequiredReason(hostLabel: string): strin
 /** Main and the owning host revalidate disk paths; this gate mirrors their predicates for the tooltip. */
 export function aiVaultSessionDeleteBlockedReason(
   session: Pick<AiVaultSession, 'agent' | 'executionHostId' | 'filePath'>,
-  host: AiVaultSessionDeleteHost
+  host: AiVaultSessionDeleteHost,
+  t: Translate = translate
 ): string | null {
   const runtimeHosted = aiVaultSessionRuntimeEnvironmentId(session) !== null
   if (!runtimeHosted && !canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonNonLocalHost',
       'Only sessions on this device can be deleted.'
     )
   }
   if (isSyntheticAiVaultSessionPath(session.filePath)) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
       "This session can't be deleted from Orca."
     )
   }
   if (!isAiVaultDeletableAgent(session.agent)) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonUnsupportedAgent',
       "{{value0}} sessions can't be deleted from Orca.",
       { value0: agentLabel(session.agent) }
     )
   }
   if (runtimeHosted && host.deleteSupported === false) {
-    return aiVaultSessionHostUpdateRequiredReason(host.label)
+    return aiVaultSessionHostUpdateRequiredReason(host.label, t)
   }
   return null
 }

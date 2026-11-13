@@ -1,6 +1,5 @@
 import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { createHash } from 'node:crypto'
 import * as Pools from './codex-at-rest-skills-probe-pools'
 import {
   isLegacyAgentSessionAccountHome,
@@ -10,11 +9,11 @@ import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-arg
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
-} from '../../../native-chat/agent-session-wire/at-rest-command-catalog'
+} from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import {
   runCodexAppServerSession,
   type CodexAppServerRpc
@@ -26,8 +25,9 @@ import {
   codexReportCommandRows,
   isCodexSkillsListUnsupported
 } from './codex-skill-list'
+import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
-import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
@@ -64,6 +64,7 @@ function definedEnv(env: NodeJS.ProcessEnv | undefined): Record<string, string> 
 export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRestCommandCatalog {
   const now = deps.now ?? Date.now
   const { pools, start, expire, dispose } = Pools.createCodexSkillsProbePools(deps, probe)
+  const stampSources = createCodexSkillSourcesStamp(deps.now ? { now: deps.now } : {})
 
   return new AtRestCommandCatalog({
     label: 'codex',
@@ -73,6 +74,8 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
       isLegacyAgentSessionAccountHome(record.accountHome),
     resolveWorkspacePath: deps.resolveWorkspacePath,
     dispose,
+    stamp: (record, cwd, signal) =>
+      stampSources(requireLegacyAgentSessionAccountHome(record.accountHome).path, cwd, signal),
     scan: async (record, cwd, isCurrent, generation, signal, admitted) => {
       const accountHomePath = requireLegacyAgentSessionAccountHome(record.accountHome).path
       const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
@@ -90,14 +93,10 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
         return NO_SCAN
       }
       const env = definedEnv(environment)
-      const key = JSON.stringify([
-        accountHomePath,
-        command,
-        args,
-        createHash('sha256')
-          .update(JSON.stringify(Object.entries(env).sort()))
-          .digest('hex')
-      ])
+      // Not the env itself: the shell capture refreshes every 10 s with volatile values (prompt
+      // session keys), which would start a second probe. Settings and account env changes retire
+      // the generation; a running probe keeps the env it started with for its ~70 s life.
+      const key = JSON.stringify([accountHomePath, command, args, generation])
       const pool = pools.get(key) ?? { failedStarts: 0, retryAt: 0, lastDemandAt: now() }
       pools.set(key, pool)
       pool.lastDemandAt = now()
@@ -117,7 +116,6 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
       }
       const request: Pools.FolderRequest = {
         cwd,
-        generation,
         isCurrent,
         admitted,
         answer: Promise.withResolvers<AtRestCommandScan>(),
@@ -161,7 +159,6 @@ export async function probe(
   onStarted: () => void
 ): Promise<void> {
   const now = deps.now ?? Date.now
-  let reloaded = Math.max(...[...pool.pending].map((request) => request.generation))
   await (deps.runSession ?? runCodexAppServerSession)(
     {
       command: pool.command,
@@ -210,13 +207,10 @@ export async function probe(
           pool.cursor = undefined
         }
         if (batch.length > 0) {
-          const forceReload = batch.some((request) => request.generation > reloaded)
           try {
             deps.prepareHome?.(pool.accountHomePath)
             batch.forEach((request) => request.admitted())
-            if (await answer(rpc, batch, forceReload, signal)) {
-              reloaded = Math.max(reloaded, ...batch.map((request) => request.generation))
-            }
+            await answer(rpc, batch, signal)
           } catch (error) {
             batch.forEach((request) =>
               Pools.settle(request, error instanceof Error ? error : new Error(String(error)))
@@ -249,27 +243,27 @@ export async function probe(
 async function answer(
   rpc: CodexAppServerRpc,
   batch: Pools.FolderRequest[],
-  forceReload: boolean,
   signal: AbortSignal
-): Promise<boolean> {
+): Promise<void> {
   let reply: unknown
   try {
     reply = await rpc.request(
       CODEX_SKILLS_LIST_METHOD,
-      { cwds: batch.map((request) => request.cwd), ...(forceReload ? { forceReload: true } : {}) },
+      // A probe answers several menus in its lifetime; without this Codex can repeat its cached list.
+      { cwds: batch.map((request) => request.cwd), forceReload: true },
       { timeoutMs: ANSWER_TIMEOUT_MS }
     )
   } catch (error) {
     if (isCodexSkillsListUnsupported(error)) {
       // An older Codex has no list to give; the client keeps its folder scan.
       batch.forEach((request) => Pools.settle(request, { commands: undefined, fromAgent: true }))
-      return false
+      return
     }
     // The process still settles: ending it early would interrupt plugin sync, including after a list failure.
     batch.forEach((request) =>
       Pools.settle(request, error instanceof Error ? error : new Error(String(error)))
     )
-    return false
+    return
   }
   signal.throwIfAborted()
   for (const request of batch) {
@@ -290,5 +284,4 @@ async function answer(
         : new Error(`codex listed no skills entry for ${request.cwd}`)
     )
   }
-  return true
 }

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -11,13 +11,21 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
-import type { CrossStoreWorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineageEdge,
+  WorktreeLineage
+} from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { openEnum } from '../zod-salvage'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
 import { SMART_TIERS } from './sort-stamps'
-import { CrossStoreParentRecordSchema, WorkspaceRowSchema } from './workspace-rows'
+import {
+  CrossStoreParentRecordSchema,
+  WorkspaceLineageEdgeSchema,
+  WorkspaceRowSchema
+} from './workspace-rows'
 import { HostReportedActivitySchema, type HostReportedActivity } from './workspace-activity-facts'
 
 /** One paired-server workspace as the sidebar lists it, keyed by its host-qualified id. */
@@ -37,6 +45,9 @@ const PairedServerWorkspaceRowSchema = z
     // Server-owned sorting/filter/lineage facts; older desktops omit them. Lineage is the checked edge, not the raw record.
     WorkspaceRowSchema.pick({
       isMainWorktree: true,
+      removing: true,
+      removalRecorded: true,
+      removalError: true,
       isUnread: true,
       instanceId: true,
       lineage: true,
@@ -57,7 +68,13 @@ const PairedServerWorkspaceRowSchema = z
   .extend({
     /** The server's own terminals and agents there; older desktops omit it. */
     activity: HostReportedActivitySchema.optional().catch(undefined),
-    crossStoreParent: CrossStoreParentRecordSchema
+    crossStoreParent: CrossStoreParentRecordSchema,
+    workspaceLineage: WorkspaceLineageEdgeSchema,
+    /** An older server's edge without instance ids; only the phone accepts it, as before. */
+    legacyLineage: z
+      .object({ parentWorktreeId: z.string(), source: z.literal('no-instance-host') })
+      .optional()
+      .catch(undefined)
   })
 
 /** See PairedServerHost; health and compatibility stay open strings, as a reader only compares them. */
@@ -95,7 +112,8 @@ export function pairedServerRowOfWorktree(
   kind: PairedServerWorkspaceRow['kind'],
   repo: Pick<Repo, 'kind'> | undefined,
   lineage: WorktreeLineage | null | undefined,
-  crossStoreParent?: CrossStoreWorkspaceLineage
+  crossStoreParent?: CrossStoreWorkspaceLineage,
+  workspaceLineage?: WorkspaceLineageEdge | null
 ): PairedServerWorkspaceRow {
   const key = getWorktreeHostIdentity(worktree)
   // The server's reply carries no automation name, so the row leaves it out too.
@@ -109,6 +127,9 @@ export function pairedServerRowOfWorktree(
     branch: worktree.branch,
     displayName: worktree.displayName,
     isArchived: worktree.isArchived,
+    ...(worktree.removing ? { removing: true } : {}),
+    ...(worktree.removalRecorded ? { removalRecorded: true } : {}),
+    ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
     isPinned: worktree.isPinned,
     isMainWorktree: worktree.isMainWorktree,
     isUnread: worktree.isUnread,
@@ -129,7 +150,8 @@ export function pairedServerRowOfWorktree(
     recentAt: worktree.lastActivityAt,
     smartTier: worktree.smartTier,
     smartAt: worktree.smartAt,
-    ...(crossStoreParent ? { crossStoreParent } : {})
+    ...(crossStoreParent ? { crossStoreParent } : {}),
+    ...(workspaceLineage ? { workspaceLineage } : {})
   }
 }
 
@@ -164,6 +186,9 @@ const ServerWorktreePsRowSchema = z.object({
   branch: z.string().catch(''),
   displayName: z.string().catch(''),
   isArchived: z.boolean().catch(false),
+  removing: z.literal(true).optional().catch(undefined),
+  removalRecorded: z.literal(true).optional().catch(undefined),
+  removalError: z.string().optional().catch(undefined),
   isPinned: z.boolean().catch(false),
   isMainWorktree: z.boolean().catch(false),
   unread: z.boolean().optional().catch(undefined),
@@ -187,7 +212,8 @@ const ServerWorktreePsRowSchema = z.object({
   unverifiableTerminalCount: z.number().optional().catch(undefined),
   status: z.string().optional().catch(undefined),
   workingMode: z.string().optional().catch(undefined),
-  crossStoreParent: CrossStoreParentRecordSchema
+  crossStoreParent: CrossStoreParentRecordSchema,
+  workspaceLineage: WorkspaceLineageEdgeSchema
 })
 
 function reportedActivity(row: z.infer<typeof ServerWorktreePsRowSchema>): HostReportedActivity {
@@ -240,6 +266,11 @@ export function normalizePairedServerRow(
             parentWorktreeInstanceId
           }
         : null,
+    ...(parentWorktreeId &&
+    lineageWorktreeInstanceId === undefined &&
+    parentWorktreeInstanceId === undefined
+      ? { legacyLineage: { parentWorktreeId, source: 'no-instance-host' as const } }
+      : {}),
     recentAt: lastActivityAt,
     activity: reportedActivity(parsed.data)
   }

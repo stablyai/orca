@@ -1,12 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import type { LocalFileAccess } from '../../shared/local-file-access'
-import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
-import { isDocumentPreview, type FilePreview } from '../../shared/file-preview-kind'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
+import type { LocalFileAccess } from '../../shared/file-access/local-file-access'
+import { MEDIA_PREVIEW_SCHEME } from '../../shared/file-preview/media-preview-scheme'
+import { isDocumentPreview, type FilePreview } from '../../shared/file-preview/file-preview-kind'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
-import { statRemotePreviewFile, type RemotePreviewFileSnapshot } from './remote-file-preview-reader'
+import {
+  RemotePreviewGrantLapsedError,
+  renewRemotePreviewGrant,
+  statRemotePreviewFile,
+  type GrantedRemoteFilePreviewAddress,
+  type RemotePreviewFileSnapshot
+} from './remote-file-preview-reader'
 
 export type LocalPreviewTarget = {
   filePath: string
@@ -23,7 +29,14 @@ export type PreviewGrant = {
   senderId: number
   key: string
   // Why: a seek or prefetch burst opens several ranges at once; one stat answers all of them.
-  stat?: { at: number; snapshot: Promise<RemotePreviewFileSnapshot> }
+  stat?: { at: number; version: Promise<RemotePreviewVersion> }
+  // Why: likewise one renewal answers a burst that found a granted file's grant lapsed.
+  renewal?: Promise<RemoteFilePreviewAddress>
+}
+/** A remote file's version together with the address that saw it. */
+export type RemotePreviewVersion = {
+  remote: RemoteFilePreviewAddress
+  snapshot: RemotePreviewFileSnapshot
 }
 export type PreviewUrl = {
   content: string
@@ -77,9 +90,9 @@ export function mintPreviewUrl(
     grants.set(token, { target, store, preview, mimeType, senderId: sender.id, key })
   }
   const grant = grants.get(token)
-  if (grant && snapshot) {
+  if (grant && snapshot && 'remote' in target) {
     // A reload re-mints the same token; its fresh stat must replace a cached older size.
-    grant.stat = { at: Date.now(), snapshot: Promise.resolve(snapshot) }
+    grant.stat = { at: Date.now(), version: Promise.resolve({ remote: target.remote, snapshot }) }
   }
   const byteSize = snapshot?.size ?? size
   return {
@@ -113,20 +126,24 @@ export function revokeRemoteFilePreviewGrants(environmentId: string): void {
   }
 }
 
-export function remoteSnapshot(grant: PreviewGrant, remote: RemoteFilePreviewAddress) {
+export function remotePreviewVersion(grant: PreviewGrant): Promise<RemotePreviewVersion> {
   const now = Date.now()
   if (!grant.stat || now - grant.stat.at > REMOTE_STAT_REUSE_MS) {
     // Not tied to one request's abort: other ranges in the burst may be waiting on it.
-    const snapshot = statRemotePreviewFile(remote, new AbortController().signal)
-    const stat = { at: now, snapshot }
+    const signal = new AbortController().signal
+    const version = callRemotePreview(grant, async (remote) => ({
+      remote,
+      snapshot: await statRemotePreviewFile(remote, signal)
+    }))
+    const stat = { at: now, version }
     grant.stat = stat
-    snapshot.catch(() => {
+    version.catch(() => {
       if (grant.stat === stat) {
         grant.stat = undefined
       }
     })
   }
-  return grant.stat.snapshot
+  return grant.stat.version
 }
 
 /** The grant behind an orca-media URL, only for the renderer that minted it. */
@@ -146,4 +163,108 @@ export function previewGrantForSender(
       : ''
   const grant = grants.get(token)
   return grant && grant.senderId === senderId ? { token, grant } : null
+}
+
+function currentRemote(grant: PreviewGrant): RemoteFilePreviewAddress {
+  if (!('remote' in grant.target)) {
+    throw new Error('Preview is not a remote file')
+  }
+  return grant.target.remote
+}
+
+/** The granted address a lapsed-grant refusal names, or null for any other failure. */
+function lapsedGrant(
+  error: unknown,
+  remote: RemoteFilePreviewAddress
+): GrantedRemoteFilePreviewAddress | null {
+  return error instanceof RemotePreviewGrantLapsedError && remote.grantId !== undefined
+    ? remote
+    : null
+}
+
+/**
+ * Runs one host call for a remote preview on its current address. A paused or reconnected viewer
+ * outlives its grant, so a lapsed one is renewed once, as the editor's reads do.
+ */
+async function callRemotePreview<T>(
+  grant: PreviewGrant,
+  call: (remote: RemoteFilePreviewAddress) => Promise<T>
+): Promise<T> {
+  const remote = currentRemote(grant)
+  try {
+    return await call(remote)
+  } catch (error) {
+    const lapsed = lapsedGrant(error, remote)
+    if (!lapsed) {
+      throw error
+    }
+    return call(await renewedRemoteTarget(grant, lapsed))
+  }
+}
+
+export type RemotePreviewReader = <T>(
+  call: (remote: RemoteFilePreviewAddress) => Promise<T>
+) => Promise<T>
+
+/**
+ * Host calls for one response that serves `served`: they stay on the grant that saw that version
+ * and move to a renewed one only while it still sees the same version, so a rewritten file never
+ * splices into a response.
+ */
+export function remotePreviewReader(
+  grant: PreviewGrant,
+  served: RemotePreviewVersion
+): RemotePreviewReader {
+  let remote = served.remote
+  return async (call) => {
+    const pinned = remote
+    try {
+      return await call(pinned)
+    } catch (error) {
+      const lapsed = lapsedGrant(error, pinned)
+      if (!lapsed) {
+        throw error
+      }
+      const renewed = await renewedRemoteTarget(grant, lapsed)
+      const renewedSnapshot = await statRemotePreviewFile(renewed, new AbortController().signal)
+      if (!sameFileVersion(renewedSnapshot, served.snapshot)) {
+        throw new Error('The file changed on its host while it was being read.')
+      }
+      remote = renewed
+      return call(renewed)
+    }
+  }
+}
+
+function sameFileVersion(a: RemotePreviewFileSnapshot, b: RemotePreviewFileSnapshot): boolean {
+  return a.size === b.size && a.mtime === b.mtime && a.ctime === b.ctime
+}
+
+/** The preview's address under a fresh grant, shared by every request that found the old one lapsed. */
+function renewedRemoteTarget(
+  grant: PreviewGrant,
+  lapsed: GrantedRemoteFilePreviewAddress
+): Promise<RemoteFilePreviewAddress> {
+  const current = 'remote' in grant.target ? grant.target.remote : null
+  if (current && current.grantId !== lapsed.grantId) {
+    return Promise.resolve(current)
+  }
+  if (!grant.renewal) {
+    const renewal: Promise<RemoteFilePreviewAddress> = renewRemotePreviewGrant(
+      lapsed,
+      new AbortController().signal
+    )
+      .then((remote) => {
+        grant.target = { remote }
+        grant.stat = undefined
+        return remote
+      })
+      .finally(() => {
+        if (grant.renewal === renewal) {
+          grant.renewal = undefined
+        }
+      })
+    grant.renewal = renewal
+  }
+  return grant.renewal
 }

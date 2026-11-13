@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Platform, ScrollView, Text, View } from 'react-native'
+import { Platform, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
 import type {
   AttachmentTextSource,
   AttachmentTextWindow
-} from '../../../src/shared/attachment-text-source'
-import { AttachmentTextViewport } from '../../../src/shared/attachment-text-viewport'
+} from '../../../src/shared/attachment-text/attachment-text-source'
+import { AttachmentTextViewport } from '../../../src/shared/attachment-text/attachment-text-viewport'
 import { chatAttachmentPreviewStyles as styles } from './mobile-file-preview-styles'
 
-function scrollElement(view: ScrollView | null): HTMLElement | null {
+function scrollElement(view: ScrollViewInstance | null): HTMLElement | null {
   if (Platform.OS !== 'web') {
     return null
   }
@@ -27,8 +27,8 @@ export function AttachmentTextScrollView({
   revision: number
   demand: (window: AttachmentTextWindow) => void
 }) {
-  const scroll = useRef<ScrollView>(null)
-  const viewport = useRef<ScrollView>(null)
+  const scroll = useRef<ScrollViewInstance>(null)
+  const viewport = useRef<ScrollViewInstance>(null)
   const nativeOffset = useRef(0)
   const [position, setPosition] = useState({ height: 0, rowHeight: 19 })
   const measured = useMemo(

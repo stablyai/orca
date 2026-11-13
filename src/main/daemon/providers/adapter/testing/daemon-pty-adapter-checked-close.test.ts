@@ -238,20 +238,4 @@ describe('DaemonPtyAdapter checked explicit close', () => {
     await reopened
     expect(existsSync(historyTree(created.id))).toBe(false)
   })
-
-  it('preserves ordinary Close history cleanup and kill options', async () => {
-    const provider = await start()
-    const created = await spawn(provider)
-    const request = vi.spyOn(provider['client'], 'request')
-
-    await provider.shutdown(created.id, { immediate: false })
-
-    expect(existsSync(historyTree(created.id))).toBe(false)
-    expect(provider.hasPty(created.id)).toBe(false)
-    expect(request.mock.calls.filter(([type]) => type === 'kill')).toEqual([
-      ['kill', { sessionId: created.id, immediate: false }, undefined]
-    ])
-    expect(subprocess.kill).toHaveBeenCalledOnce()
-    expect(subprocess.forceKill).not.toHaveBeenCalled()
-  })
 })

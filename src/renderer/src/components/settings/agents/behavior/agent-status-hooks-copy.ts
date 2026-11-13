@@ -1,16 +1,17 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { searchKeywords } from '../../search/settings-search-keywords'
 
 const AGENT_STATUS_HOOKS_TITLE_KEY = 'auto.components.settings.agent-status-hooks-copy.7707c15abb'
 const AGENT_STATUS_HOOKS_DESCRIPTION_KEY =
   'auto.components.settings.agent-status-hooks-copy.a68a642835'
 
-export function getAgentStatusHooksTitle(): string {
-  return translate(AGENT_STATUS_HOOKS_TITLE_KEY, 'Agent status hooks')
+export function getAgentStatusHooksTitle(t: Translate = translate): string {
+  return t(AGENT_STATUS_HOOKS_TITLE_KEY, 'Agent status hooks')
 }
 
-export function getAgentStatusHooksDescription(): string {
-  return translate(
+export function getAgentStatusHooksDescription(t: Translate = translate): string {
+  return t(
     AGENT_STATUS_HOOKS_DESCRIPTION_KEY,
     'Shows working, waiting, and done states in Orca. Turn off to remove Orca-managed hooks and stop reinstalling them.'
   )

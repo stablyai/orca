@@ -34,10 +34,10 @@ vi.mock('../../../src/main/ipc/pty/provider/registry', async (importOriginal) =>
   }
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ terminalLayoutsByTabId: {} }) } }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => io.rpc(...args)
 }))
-vi.mock('@/runtime/runtime-terminal-stream', () => ({
+vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
   getRemoteRuntimePtyEnvironmentId: (id: string) => (id.startsWith('remote:') ? 'owner' : null),
   getRemoteRuntimeTerminalHandle: (id: string) => (id.startsWith('remote:') ? 'terminal' : null),
   getRemoteRuntimePtyOwner: (id: string) =>

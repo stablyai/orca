@@ -50,6 +50,7 @@ export type TextGenerationOperation =
   | 'branch-name'
   | 'jira-issue-summary'
   | 'conversation-name'
+  | 'dictation-cleanup'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
@@ -128,4 +129,5 @@ export type LocalSourceControlPlanInput = {
   operation: TextGenerationOperation
   wslDistro?: string
   spawnAgent: SpawnSourceControlAgent
+  timeoutMs?: number
 }

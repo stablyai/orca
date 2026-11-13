@@ -3,6 +3,7 @@ import type {
   HostedReviewCreationEligibility
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { hostedReviewCreateFailureMessage } from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
+import type { Translate } from '../../../../i18n/use-translate'
 
 type ClickableBlockedCreateReviewReason = Extract<
   HostedReviewCreationBlockedReason,
@@ -24,17 +25,24 @@ export function canClickBlockedCreateReviewReason(
 }
 
 export function resolveBlockedCreateReviewNoticeMessage(
-  eligibility: HostedReviewCreationEligibility | null | undefined
+  eligibility: HostedReviewCreationEligibility | null | undefined,
+  t?: Translate
 ): string | null {
   if (!eligibility || eligibility.canCreate) {
     return null
   }
   const reason = eligibility.blockedReason
   if (eligibility.reviewLookupOutcome === 'unavailable' && reason === null) {
-    return hostedReviewCreateFailureMessage('review_lookup_unavailable', eligibility.provider)
+    return hostedReviewCreateFailureMessage(
+      'review_lookup_unavailable',
+      eligibility.provider,
+      undefined,
+      undefined,
+      t
+    )
   }
   if (!canClickBlockedCreateReviewReason(reason)) {
     return null
   }
-  return hostedReviewCreateFailureMessage(reason, eligibility.provider)
+  return hostedReviewCreateFailureMessage(reason, eligibility.provider, undefined, undefined, t)
 }

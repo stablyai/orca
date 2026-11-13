@@ -61,6 +61,12 @@ export type WorkspaceLineage = {
   createdAt: number
 }
 
+/** The parts of a workspace record (list 2) a reader needs to place the child under its parent. */
+export type WorkspaceLineageEdge = Pick<
+  WorkspaceLineage,
+  'parentWorkspaceKey' | 'parentInstanceId' | 'childInstanceId'
+>
+
 /** A parent saved in another Orca store; `instanceId` is identity, `workspaceKey` only a hint. */
 export type CrossStoreParentRef = {
   /** The parent store's installationId (host-installation.json). */

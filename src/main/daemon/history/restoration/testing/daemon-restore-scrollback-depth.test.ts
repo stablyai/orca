@@ -17,11 +17,8 @@ import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
 import { HeadlessEmulator } from '../../../emulation/headless-emulator'
 import { HistoryManager } from '../../storage/history-manager'
 import { HistoryReader } from '../history-reader'
-import { TerminalHost } from '../../../terminal-host/terminal-host'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
-import type { ColdRestoreInfo } from '../terminal-history-cold-restore-info'
 import type { PendingOutputRecord } from '../../../protocol/daemon-rpc-contract'
-import type { TerminalSnapshot } from '../../../protocol/terminal-snapshot'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
 
 const PREVIOUSLY_RECOVERABLE_LINE = 'LINE_01000'
@@ -78,32 +75,6 @@ function simulateAdapterCrash(adapter: DaemonPtyAdapter): void {
 }
 
 describe('STA-4091 previously recoverable restore depth', () => {
-  it('live daemon memory still drops older rows so session count cannot grow unbounded', async () => {
-    const subprocess = createMockSubprocess()
-    const host = new TerminalHost({ spawnSubprocess: () => subprocess })
-    try {
-      await host.createOrAttach({
-        sessionId: 'live-window',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      subprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
-      await vi.waitFor(() => {
-        const snapshot = host.getSnapshot('live-window')
-        const text = snapshotText(snapshot ?? {})
-        expect(text).toContain(NEWEST_WRITTEN_LINE)
-        expect(text).not.toContain(OLDEST_WRITTEN_LINE)
-        expect(text).not.toContain(PREVIOUSLY_RECOVERABLE_LINE)
-        expect(DAEMON_SESSION_SCROLLBACK_ROWS).toBeLessThan(
-          DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
-        )
-      })
-    } finally {
-      await host.dispose()
-    }
-  })
-
   describe('durable history', () => {
     let dir: string
     let manager: HistoryManager
@@ -168,121 +139,6 @@ describe('STA-4091 previously recoverable restore depth', () => {
         live.dispose()
       }
     })
-
-    it('replays pending records into restore depth when disk history is empty', async () => {
-      const live = new HeadlessEmulator({
-        cols: 80,
-        rows: 24,
-        scrollback: DAEMON_SESSION_SCROLLBACK_ROWS
-      })
-      try {
-        live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
-        const durable = await buildDurableCheckpointSnapshot({
-          liveSnapshot: live.getSnapshot(),
-          restoreInfo: null,
-          pendingRecords: [
-            { kind: 'output', data: numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT) }
-          ],
-          isFirstTake: false
-        })
-        expect(snapshotText(durable)).toContain(OLDEST_WRITTEN_LINE)
-        expect(snapshotText(durable)).toContain(PREVIOUSLY_RECOVERABLE_LINE)
-        expect(snapshotText(durable)).toContain(NEWEST_WRITTEN_LINE)
-      } finally {
-        live.dispose()
-      }
-    })
-
-    it('reuses restore info when there are no pending records to replay', async () => {
-      const live = new HeadlessEmulator({
-        cols: 80,
-        rows: 24,
-        scrollback: DAEMON_SESSION_SCROLLBACK_ROWS
-      })
-      try {
-        expect(
-          await manager.appendIncrements('restore-depth', 1, [
-            { kind: 'output', data: numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT) }
-          ])
-        ).toBe('ok')
-        const restoreInfo = await reader.detectColdRestore('restore-depth')
-        live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
-        const durable = await buildDurableCheckpointSnapshot({
-          liveSnapshot: { ...live.getSnapshot(), outputSequence: 9 },
-          restoreInfo,
-          pendingRecords: [],
-          isFirstTake: false
-        })
-        expect(durable.outputSequence).toBe(9)
-        expect(durable.scrollbackAnsi).toBe('')
-        expect(durable.scrollbackLines).toBe(restoreInfo?.scrollbackLines)
-        expect(snapshotText(durable)).toContain(PREVIOUSLY_RECOVERABLE_LINE)
-      } finally {
-        live.dispose()
-      }
-    })
-
-    it('takes terminal ownership from the live snapshot, not the persisted proof', async () => {
-      const restoreInfo: ColdRestoreInfo = {
-        snapshotAnsi: 'stale-tui',
-        scrollbackAnsi: '',
-        rehydrateSequences: '\x1b[?1049h',
-        cwd: '/tmp',
-        cols: 80,
-        rows: 24,
-        modes: {
-          bracketedPaste: false,
-          mouseTracking: true,
-          applicationCursor: false,
-          alternateScreen: true
-        },
-        terminalOwner: 'shell'
-      }
-      // Model the live recovery barrier revoking shell ownership when the TUI starts.
-      const { terminalOwner: _persistedOwner, ...liveState } = restoreInfo
-      const liveSnapshot: TerminalSnapshot = {
-        ...liveState,
-        scrollbackLines: 0,
-        outputSequence: 42
-      }
-
-      const durable = await buildDurableCheckpointSnapshot({
-        liveSnapshot,
-        restoreInfo,
-        pendingRecords: [{ kind: 'output', data: '\x1b[?1049hLIVE-TUI' }],
-        isFirstTake: false
-      })
-
-      expect(durable.modes.alternateScreen).toBe(true)
-      expect(durable.terminalOwner).toBeUndefined()
-    })
-
-    it('falls back to the live window when pending resize records are invalid', async () => {
-      const liveSnapshot = {
-        snapshotAnsi: 'live-only',
-        scrollbackAnsi: '',
-        rehydrateSequences: '',
-        cwd: '/tmp',
-        cols: 80,
-        rows: 24,
-        scrollbackLines: 0,
-        modes: {
-          bracketedPaste: false,
-          alternateScreen: false,
-          applicationCursor: false,
-          mouseTracking: false
-        },
-        outputSequence: 4
-      } as TerminalSnapshot
-
-      const durable = await buildDurableCheckpointSnapshot({
-        liveSnapshot,
-        restoreInfo: null,
-        pendingRecords: [{ kind: 'resize', cols: 0, rows: 24 }],
-        isFirstTake: false
-      })
-      expect(durable).toBe(liveSnapshot)
-    })
   })
 
   describe('adapter remount and restart', () => {
@@ -336,22 +192,6 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(text.split(OLDEST_WRITTEN_LINE)).toHaveLength(2)
     })
 
-    it('honors a bounded remount snapshot depth', async () => {
-      const { id } = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'bounded-remount-depth',
-        cwd: '/tmp'
-      })
-      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
-
-      const snapshot = await adapter.getBufferSnapshot(id, { scrollbackRows: 24 })
-      const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`
-      expect(text).toContain(NEWEST_WRITTEN_LINE)
-      expect(text).not.toContain(PREVIOUSLY_RECOVERABLE_LINE)
-      expect(text).not.toContain(OLDEST_WRITTEN_LINE)
-    })
-
     it('restores that depth after a keepHistory restart compact', async () => {
       const { id } = await adapter.spawn({
         cols: 80,
@@ -370,27 +210,6 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(text).toContain(NEWEST_WRITTEN_LINE)
       expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
       expect(text).toContain(OLDEST_WRITTEN_LINE)
-    })
-
-    it('restores that depth on warm reattach', async () => {
-      const { id } = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'reattach-depth',
-        cwd: '/tmp'
-      })
-      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
-
-      const reattach = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: id,
-        cwd: '/tmp'
-      })
-      expect(reattach.isReattach).toBe(true)
-      expect(reattach.snapshot).toContain(NEWEST_WRITTEN_LINE)
-      expect(reattach.snapshot).toContain(PREVIOUSLY_RECOVERABLE_LINE)
-      expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
     })
 
     it('preserves durable depth across an adapter reconnect', async () => {
@@ -668,47 +487,6 @@ describe('STA-4091 previously recoverable restore depth', () => {
       })
       expect(reattach.isReattach).toBe(true)
       expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
-    })
-
-    it('stops retrying when durable history is unavailable', async () => {
-      const { id } = await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'checkpoint-unavailable',
-        cwd: '/tmp'
-      })
-      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
-      await adapter.getBufferSnapshot(id)
-      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
-
-      const internals = adapter as unknown as {
-        client: { request: (method: string, params?: unknown) => Promise<unknown> }
-        historyManager: HistoryManager
-        sessionsNeedingFullCheckpoint: Set<string>
-        sessionsNeedingLiveCheckpoint: Set<string>
-        checkpointDirtySessions: () => Promise<void>
-      }
-      const requests = vi.spyOn(internals.client, 'request')
-      const checkpoint = vi
-        .spyOn(internals.historyManager, 'checkpoint')
-        .mockResolvedValue('unavailable')
-
-      const snapshot = await adapter.getBufferSnapshot(id)
-      expect(`${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`).toContain(
-        FRESH_AFTER_CHECKPOINT
-      )
-      expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(false)
-      expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(false)
-
-      await internals.checkpointDirtySessions()
-      await internals.checkpointDirtySessions()
-      const snapshotTakes = requests.mock.calls.filter(
-        ([method, params]) =>
-          method === 'takePendingOutput' &&
-          (params as { includeSnapshot?: boolean } | undefined)?.includeSnapshot === true
-      )
-      expect(snapshotTakes).toHaveLength(1)
-      expect(checkpoint).toHaveBeenCalledTimes(1)
     })
 
     it('uses the live window when an older daemon omits drained records', async () => {

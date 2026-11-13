@@ -1,8 +1,8 @@
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalLifecycleMutationInput } from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import type { StructuredAgentSessionEventTarget } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import type { JournalLifecycleMutationInput } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
+import type { StructuredAgentSessionEventTarget } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/journal-ingress/testing/structured-agent-session-journal-double-test-support'
 
 export function deferredTarget(
   log: AgentJournalItemBody[],

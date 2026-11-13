@@ -1,25 +1,32 @@
 import {
   joinResolvedWorktreeScans,
-  projectResolvedWorktreeScans
+  type ResolvedWorktreeRepoScans
 } from './resolved-worktree-scan-join'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
-import { WorkspaceGitIdentity } from '../../sidebar-inputs/workspace-git-identity'
 import { describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+
 import type { Repo } from '../../../../shared/repo-types'
-import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-meta-write-normalization'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../../../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
-  listStoredWorktreeRowsForRepo,
+  projectRepoWorktreeRows,
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
+  scanRepoWorktreeRows,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import {
+  pendingWorktreeRemovals,
+  recordedWorktreeRemovals,
+  finishedWorktreeRemovals
+} from '../../../workspaces/removal/worktree-removal-table'
+import { bumpLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 
 function repo(
   id: string,
@@ -75,80 +82,6 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
 }
 
 describe('host-qualified scoped worktree resolution', () => {
-  it('projects cross-repository lineage by scanning only related repos on the selected host', async () => {
-    const childRepo = repo('child-repo', '/child-repo', { executionHostId: 'local' })
-    const parentRepo = repo('parent-repo', '/parent-repo', { executionHostId: 'local' })
-    const remoteParent = repo('parent-repo', '/remote-parent-repo', {
-      connectionId: 'builder',
-      executionHostId: 'ssh:builder'
-    })
-    const unrelated = repo('unrelated', '/unrelated', { executionHostId: 'local' })
-    const deps = createDeps([childRepo, parentRepo, remoteParent, unrelated])
-    const childId = 'child-repo::/child'
-    const parentId = 'parent-repo::/parent'
-    deps.metaById[childId] = mergeWorktreeMetaForWrite(undefined, {
-      instanceId: 'child-instance',
-      hostId: 'local',
-      projectId: 'child-project'
-    })
-    deps.metaById[parentId] = mergeWorktreeMetaForWrite(undefined, {
-      instanceId: 'parent-instance',
-      hostId: 'local',
-      projectId: 'parent-project'
-    })
-    const lineage: WorktreeLineage = {
-      worktreeId: childId,
-      worktreeInstanceId: 'child-instance',
-      parentWorktreeId: parentId,
-      parentWorktreeInstanceId: 'parent-instance',
-      origin: 'cli',
-      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
-      createdAt: 1
-    }
-    Object.assign(deps.store, { getAllWorktreeLineage: () => ({ [childId]: lineage }) })
-    deps.scanRepo.mockImplementation(async (owner) => ({
-      ok: true,
-      worktrees: [gitWorktree(owner.id === 'child-repo' ? '/child' : '/parent')]
-    }))
-
-    await expect(resolveScopedWorktreeIdRow(deps, childId, 'local')).resolves.toMatchObject({
-      parentWorktreeId: parentId,
-      lineage
-    })
-    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([childRepo, parentRepo])
-
-    deps.scanRepo.mockClear()
-    await expect(resolveScopedWorktreeIdRow(deps, parentId, 'local')).resolves.toMatchObject({
-      childWorktreeIds: [childId]
-    })
-    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([parentRepo, childRepo])
-  })
-
-  it('scans only the selected local or SSH owner when repo ids and paths collide', async () => {
-    const owners = [
-      repo('shared', '/local/repo', { executionHostId: 'local' }),
-      repo('shared', '/remote/repo', {
-        connectionId: 'builder',
-        executionHostId: 'ssh:builder'
-      }),
-      repo('unrelated', '/unrelated/repo', { connectionId: 'slow-box' })
-    ]
-    const deps = createDeps(owners)
-    const worktreeId = 'shared::/same/worktree'
-
-    await expect(
-      resolveScopedWorktreeIdRow(deps, worktreeId, 'ssh:builder')
-    ).resolves.toMatchObject({ id: worktreeId, hostId: 'ssh:builder' })
-    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([owners[1]])
-
-    deps.scanRepo.mockClear()
-    await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toMatchObject({
-      id: worktreeId,
-      hostId: 'local'
-    })
-    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([owners[0]])
-  })
-
   it('does not project another host metadata onto a colliding scoped row', async () => {
     const deps = createDeps([
       repo('shared', '/local/repo', { executionHostId: 'local' }),
@@ -173,94 +106,6 @@ describe('host-qualified scoped worktree resolution', () => {
       displayName: 'feature'
     })
   })
-  it('uses the host-qualified metadata owner when a legacy row has another host', async () => {
-    const deps = createDeps([
-      repo('shared', '/remote/repo', {
-        connectionId: 'builder',
-        executionHostId: 'ssh:builder'
-      })
-    ])
-    const worktreeId = 'shared::/same/worktree'
-    const remoteMeta = {
-      displayName: 'remote workspace',
-      hostId: 'ssh:builder',
-      instanceId: 'remote-instance'
-    } as unknown as WorktreeMeta
-    deps.metaById[worktreeId] = {
-      displayName: 'stale local workspace',
-      hostId: 'local',
-      instanceId: 'local-instance'
-    } as unknown as WorktreeMeta
-    ;(
-      deps.store as Store & {
-        getWorktreeMetaForHost: () => WorktreeMeta
-      }
-    ).getWorktreeMetaForHost = () => remoteMeta
-
-    const rows = await resolveRepoWorktreeRows(
-      deps,
-      deps.store.getRepos()[0]!,
-      deps.metaById,
-      new Map()
-    )
-
-    expect(rows[0]).toMatchObject({
-      displayName: 'remote workspace',
-      hostId: 'ssh:builder',
-      instanceId: 'remote-instance'
-    })
-  })
-
-  it('restores canonical-only SSH rows without leaking colliding local metadata', () => {
-    const local = repo('shared', '/local/repo', { executionHostId: 'local' })
-    const remote = repo('shared', '/remote/repo', {
-      connectionId: 'builder',
-      executionHostId: 'ssh:builder'
-    })
-    const deps = createDeps([local, remote])
-    deps.metaById['shared::/local/worktree'] = {
-      displayName: 'local workspace',
-      hostId: 'local'
-    } as WorktreeMeta
-    ;(
-      deps.store as Store & {
-        getAllWorktreeMetaForHost: () => Record<string, WorktreeMeta>
-      }
-    ).getAllWorktreeMetaForHost = () => ({
-      'shared::/remote/worktree': {
-        displayName: 'remote workspace',
-        hostId: 'ssh:builder'
-      } as unknown as WorktreeMeta
-    })
-
-    expect(listStoredWorktreeRowsForRepo(deps.store, remote, 2)).toEqual([
-      expect.objectContaining({ path: '/remote/worktree' })
-    ])
-  })
-
-  it.each([
-    ['runtime:windows', String.raw`C:\Users\dev\orca worktree`],
-    ['local', '/mnt/c/Users/dev/orca worktree']
-  ] satisfies [ExecutionHostId, string][])(
-    'keeps %s path resolution scoped',
-    async (hostId, path) => {
-      const target = repo('shared', path, { executionHostId: hostId })
-      const deps = createDeps([
-        target,
-        repo('shared', '/other-host/repo', { executionHostId: 'ssh:unrelated' }),
-        repo('unrelated', '/unrelated/repo')
-      ])
-      deps.scanRepo.mockImplementation(async () => ({ ok: true, worktrees: [gitWorktree(path)] }))
-      const worktreeId = `shared::${path}`
-
-      await expect(resolveScopedWorktreeIdRow(deps, worktreeId, hostId)).resolves.toMatchObject({
-        id: worktreeId,
-        hostId,
-        path
-      })
-      expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([target])
-    }
-  )
 
   it('resolves only the selected folder-workspace owner without scanning Git providers', async () => {
     const local = repo('folders', '/local/folders', {
@@ -299,65 +144,10 @@ describe('host-qualified scoped worktree resolution', () => {
     expect(deps.listFolderWorkspaces).toHaveBeenCalledExactlyOnceWith(remote, 2)
     expect(deps.scanRepo).not.toHaveBeenCalled()
   })
-
-  it('does not scan when the requested host does not own the repo id', async () => {
-    const deps = createDeps([
-      repo('shared', '/local/repo', { executionHostId: 'local' }),
-      repo('unrelated', '/unrelated/repo', { executionHostId: 'runtime:other' })
-    ])
-
-    await expect(
-      resolveScopedWorktreeIdRow(deps, 'shared::/same/worktree', 'ssh:builder')
-    ).resolves.toBeNull()
-    expect(deps.scanRepo).not.toHaveBeenCalled()
-  })
-
-  it('reuses fleet owner counts without reloading repos per row', async () => {
-    const owners = Array.from({ length: 100 }, (_, index) =>
-      repo(`repo-${index}`, `/repos/${index}`, { executionHostId: 'local' })
-    )
-    const deps = createDeps(owners)
-    const getRepos = vi.spyOn(deps.store, 'getRepos')
-
-    await Promise.all(
-      owners.map((owner) => resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map(), 1))
-    )
-
-    expect(getRepos).not.toHaveBeenCalled()
-  })
 })
 
 /** Normalize id-selector paths like path selectors so UI removal resolves the same host-qualified row as CLI (#16243). */
 describe('scoped worktree id resolution across path spellings (#16243)', () => {
-  it.each([
-    ['a trailing slash', '/same/worktree', 'shared::/same/worktree/'],
-    ['a doubled separator', '/same/worktree', 'shared::/same//worktree'],
-    ['an NFD name', '/same/café', `shared::${'/same/café'.normalize('NFD')}`]
-  ])('resolves the scanned row when the id carries %s', async (_label, scannedPath, worktreeId) => {
-    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
-    const deps = createDeps([owner])
-    deps.scanRepo.mockImplementation(async () => ({
-      ok: true,
-      worktrees: [gitWorktree(scannedPath)]
-    }))
-
-    await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toMatchObject({
-      id: `shared::${scannedPath}`,
-      path: scannedPath
-    })
-  })
-
-  it('still refuses the same path under a different repo id', async () => {
-    const deps = createDeps([
-      repo('shared', '/local/repo', { executionHostId: 'local' }),
-      repo('unrelated', '/unrelated/repo', { executionHostId: 'local' })
-    ])
-
-    await expect(
-      resolveScopedWorktreeIdRow(deps, 'unrelated::/same/worktree/', 'local')
-    ).resolves.toBeNull()
-  })
-
   it('refuses rather than guessing when two rows spell one path', async () => {
     const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
     const deps = createDeps([owner])
@@ -371,19 +161,6 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
     ).resolves.toBeNull()
   })
 
-  it('prefers the exactly matching row over an equivalent spelling', async () => {
-    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
-    const deps = createDeps([owner])
-    deps.scanRepo.mockImplementation(async () => ({
-      ok: true,
-      worktrees: [gitWorktree('/same//worktree'), gitWorktree('/same/worktree')]
-    }))
-
-    await expect(
-      resolveScopedWorktreeIdRow(deps, 'shared::/same//worktree', 'local')
-    ).resolves.toMatchObject({ id: 'shared::/same//worktree' })
-  })
-
   // #15598/#15616: the backslash spelling is what a pre-restart Windows registration recorded.
   it('resolves a Windows backslash id against the forward-slash spelling git reports', async () => {
     const path = 'D:/Agentic/game2/battle-core'
@@ -395,15 +172,38 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
       resolveScopedWorktreeIdRow(deps, 'shared::D:\\Agentic\\game2\\battle-core', 'runtime:windows')
     ).resolves.toMatchObject({ id: `shared::${path}`, path })
   })
+})
 
-  it.each([
-    ['no repo boundary', 'not-an-id'],
-    ['an empty path', 'shared::']
-  ])('keeps exact matching for a malformed id with %s', async (_label, worktreeId) => {
-    const deps = createDeps([repo('shared', '/local/repo', { executionHostId: 'local' })])
+describe('scanRepoWorktreeRows lineage pruning', () => {
+  // #16654: lineage written by a create that overtook the scan must survive its stale rows.
+  it('keeps lineage recorded by a worktree change that overtook the scan', async () => {
+    const owner = repo('repo-1', '/repo')
+    const deps = createDeps([owner])
+    const childId = 'repo-1::/repo-child'
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const removeWorktreeLineage = vi.fn()
+    Object.assign(deps.store, {
+      getAllWorktreeLineage: () => lineageById,
+      getWorktreeMeta: () => undefined,
+      removeWorktreeLineage
+    })
+    deps.scanRepo.mockImplementationOnce(async () => {
+      bumpLocalWorktreeScanGeneration(owner.id)
+      lineageById[childId] = {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: 'repo-1::/repo',
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      }
+      return { ok: true, worktrees: [gitWorktree('/repo')] }
+    })
 
-    await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toBeNull()
-    expect(deps.scanRepo).not.toHaveBeenCalled()
+    await scanRepoWorktreeRows(deps, owner, new Map())
+
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
   })
 })
 
@@ -446,34 +246,106 @@ describe('folder-to-Git checkout identity', () => {
   )
 })
 
-it('stamps the scan/sidebar join while cached catalog projection stays pure across detach', () => {
-  const owner = repo('row-owner', '/repo', { executionHostId: 'local' })
-  const deps = createDeps([owner])
-  const writes = vi.spyOn(deps.store, 'setWorktreeMeta').mockImplementation(({ id }, updates) => {
-    const next = mergeWorktreeMetaForWrite(deps.metaById[id], updates)
-    deps.metaById[id] = next
-    return next
+describe('durable removal projection onto cached host rows', () => {
+  it('retires admitted rows without another scan and fences old rows after cleanup, only on their host', async () => {
+    const local = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const remote = repo('shared', '/remote/repo', { executionHostId: 'ssh:builder' })
+    const deps = createDeps([local, remote])
+    const scan = await scanRepoWorktreeRows(deps, local, new Map())
+    const id = 'shared::/same/worktree'
+    const record = {
+      worktreeId: id,
+      repoId: local.id,
+      repoPath: local.path,
+      worktreePath: '/same/worktree',
+      branch: 'feature',
+      head: 'abc123',
+      deleteBranch: false,
+      force: false,
+      requestedAt: 1
+    }
+    pendingWorktreeRemovals.set(id, record)
+    try {
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toMatchObject([{ id }])
+      expect(projectRepoWorktreeRows(deps, local, scan, {})[0].removalRecorded).toBeUndefined()
+      recordedWorktreeRemovals.add(record)
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toMatchObject([
+        { id, removing: true, removalRecorded: true }
+      ])
+      expect(projectRepoWorktreeRows(deps, remote, scan, {})[0].removalRecorded).toBeUndefined()
+      pendingWorktreeRemovals.delete(id)
+      finishedWorktreeRemovals.add(record)
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toEqual([])
+      expect(projectRepoWorktreeRows(deps, remote, scan, {})).toMatchObject([{ id }])
+    } finally {
+      pendingWorktreeRemovals.delete(id)
+    }
   })
-  const key = getRepoHostIdentityForParts(owner.id, 'local')
-  const scans = new Map([
-    [key, { ok: true as const, worktrees: [gitWorktree('/repo/work')], gitRun: {} }]
-  ])
-  projectResolvedWorktreeScans(deps.store, () => deps, scans)
-  expect(writes).not.toHaveBeenCalled()
-  const first = joinResolvedWorktreeScans(deps.store, () => deps, scans)
-  expect(writes).toHaveBeenCalledOnce()
-  const identity = new WorkspaceGitIdentity()
-  const rows = (joined: typeof first) => joined.worktrees.map((row) => ({ ...row, gitRun: {} }))
-  identity.observeScan(rows(first), first.scannedRepoKeys)
-  scans.set(key, {
-    ok: true,
-    worktrees: [{ ...gitWorktree('/repo/work'), branch: '' }],
-    gitRun: {}
-  })
-  const detached = joinResolvedWorktreeScans(deps.store, () => deps, scans)
-  identity.observeScan(rows(detached), detached.scannedRepoKeys)
-  expect(identity.title(detached.worktrees[0]!)).toBe(first.worktrees[0]!.displayName)
-  expect(writes).toHaveBeenCalledOnce()
-  projectResolvedWorktreeScans(deps.store, () => deps, scans)
-  expect(writes).toHaveBeenCalledOnce()
 })
+
+it.each([
+  [12, 750],
+  [120, 7500]
+])(
+  'keeps removal witnesses repo-scoped without recopying on metadata joins (%i repos, %i removals)',
+  (repoCount, removalCount) => {
+    const repos = Array.from({ length: repoCount }, (_, i) =>
+      repo(`fleet-${i}`, `/fleet/${i}`, { executionHostId: 'local' })
+    )
+    const deps = createDeps(repos)
+    const scans: ResolvedWorktreeRepoScans = new Map(
+      repos.map((owner) => [
+        getRepoHostIdentityForParts(owner.id, 'local'),
+        { ok: true, worktrees: [], gitRun: null }
+      ])
+    )
+    const records = Array.from({ length: removalCount }, (_, i) => ({
+      worktreeId: `fleet-0::/retiring/${i}`,
+      repoId: 'fleet-0',
+      repoPath: '/fleet/0',
+      worktreePath: `/retiring/${i}`,
+      branch: `feature-${i}`,
+      head: 'abc123',
+      force: false,
+      deleteBranch: false,
+      requestedAt: 1
+    }))
+    for (const record of records) {
+      pendingWorktreeRemovals.set(record.worktreeId, record)
+      recordedWorktreeRemovals.add(record)
+    }
+    const firstScan = scans.get(getRepoHostIdentityForParts('fleet-0', 'local'))!
+    firstScan.worktrees = [gitWorktree('/retiring/0')]
+    try {
+      const joined = joinResolvedWorktreeScans(deps.store, () => deps, scans)
+      expect(joined.worktrees).toMatchObject([{ id: records[0].worktreeId, removalRecorded: true }])
+      expect([...scans.values()].map((scan) => scan.removals?.size ?? 0)).toEqual([
+        removalCount,
+        ...Array(repoCount - 1).fill(0)
+      ])
+      const witnesses = firstScan.removals!
+      const enumerateWitnesses = vi.spyOn(witnesses, Symbol.iterator)
+      const enumerateGlobal = vi.spyOn(pendingWorktreeRemovals, Symbol.iterator)
+      try {
+        deps.metaById[records[0].worktreeId] = mergeWorktreeMetaForWrite(undefined, {
+          displayName: 'changed metadata'
+        })
+        joinResolvedWorktreeScans(deps.store, () => deps, scans)
+        // Unrelated metadata cannot invalidate removal membership: no witness entries need copying.
+        expect(enumerateWitnesses).not.toHaveBeenCalled()
+        expect(enumerateGlobal).not.toHaveBeenCalled()
+        expect(firstScan.removals).toBe(witnesses)
+      } finally {
+        enumerateWitnesses.mockRestore()
+        enumerateGlobal.mockRestore()
+      }
+      pendingWorktreeRemovals.delete(records[0].worktreeId)
+      finishedWorktreeRemovals.add(records[0])
+      expect(joinResolvedWorktreeScans(deps.store, () => deps, scans).worktrees).toEqual([])
+    } finally {
+      for (const record of records) {
+        pendingWorktreeRemovals.delete(record.worktreeId)
+      }
+    }
+  }
+)

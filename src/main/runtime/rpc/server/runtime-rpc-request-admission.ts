@@ -1,12 +1,12 @@
 import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
 import { writeRuntimeMetadata } from './runtime-metadata'
 import type { RpcMessageContext } from '../transport'
-import type { RpcRequest, RpcResponse } from '../core'
-import { errorResponse } from '../errors'
+import type { PairingOffersRpcContext, RpcRequest, RpcResponse } from '../core'
+import { errorResponse } from '../responses/rpc-response'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
-import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../rpc-caller-scope'
-import { LOCAL_CLI_RPC_CALLER } from '../rpc-caller-identity'
+import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../callers/rpc-caller-scope'
+import { LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
 
 // Short calls that stop on disconnect without long-poll keepalives or admission slots.
 const DISCONNECT_FORWARDED_METHODS = new Set([
@@ -53,11 +53,17 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
             : undefined,
         connectionSignal: context?.signal,
         caller: LOCAL_CLI_RPC_CALLER,
-        callerScope
+        callerScope,
+        pairingOffers: callerScope.kind === 'owner' ? this.ownerPairingOffers() : undefined
       })
     } finally {
       this.releaseLongPoll(longPoll)
     }
+  }
+
+  // Pairing lives above this class in the server chain; RuntimeRpcMobilePairing provides it.
+  protected ownerPairingOffers(): PairingOffersRpcContext | undefined {
+    return undefined
   }
 
   // Share total/ask fences across transports: preserve short-RPC slots and reserve wait/check capacity from slow asks.

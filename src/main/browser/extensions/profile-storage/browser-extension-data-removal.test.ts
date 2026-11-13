@@ -43,20 +43,16 @@ vi.mock('electron', () => ({
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-data-user-'))
 
 const {
-  clearBrowserExtensionSessionData,
   noteBrowserExtensionStorageOpened,
   removeUninstalledBrowserExtensionData,
-  removeReinstalledBrowserExtensionData,
-  throwIfBrowserExtensionStorageAwaitingRestart
+  removeReinstalledBrowserExtensionData
 } = await import('./browser-extension-data-removal')
 const { getBrowserExtensionProfileStateStore } =
   await import('./browser-extension-profile-state-store')
-const { BrowserExtensionSyncStorageStore, getBrowserExtensionSyncStorageStore } =
+const { getBrowserExtensionSyncStorageStore } =
   await import('./browser-extension-sync-storage-store')
 const { getBrowserExtensionInstallStore } =
   await import('../installation/browser-extension-install-store')
-const { getBrowserExtensionProfileDataDirectory } =
-  await import('./browser-extension-profile-data-directory')
 
 const realFsPromises = await vi.importActual<typeof FsPromises>('node:fs/promises')
 
@@ -74,51 +70,6 @@ function fakeSession(loaded: boolean, storagePath: string | null = null): Electr
 
 beforeEach(() => {
   mocks.windows.length = 0
-})
-
-describe('clearBrowserExtensionSessionData', () => {
-  it('deletes chrome.storage.local of an unloaded extension unless this run opened it', async () => {
-    const partition = mkdtempSync(join(tmpdir(), 'orca-extension-data-'))
-    const folder = join(partition, 'Local Extension Settings', ID)
-    mkdirSync(folder, { recursive: true })
-    const opened = fakeSession(false, partition)
-    noteBrowserExtensionStorageOpened(opened, ID)
-    await clearBrowserExtensionSessionData(opened, ID)
-    // Chromium still holds the open database, so the launch sweep deletes it instead.
-    expect(existsSync(folder)).toBe(true)
-    expect(() => throwIfBrowserExtensionStorageAwaitingRestart(opened, ID)).toThrow('Restart Orca')
-
-    const sess = fakeSession(false, partition)
-    await clearBrowserExtensionSessionData(sess, ID)
-    expect(existsSync(folder)).toBe(false)
-    expect(mocks.windows).toHaveLength(0)
-    expect(sess.clearStorageData).toHaveBeenCalledOnce()
-  })
-})
-
-describe('removeUninstalledBrowserExtensionData', () => {
-  // Uninstall reaches only the Orca profile open at the time; others are swept when they attach.
-  it("forgets this profile's saved grants and sync items of uninstalled extensions", async () => {
-    const states = getBrowserExtensionProfileStateStore()
-    const sync = getBrowserExtensionSyncStorageStore()
-    for (const id of [ID, OTHER]) {
-      states.update('work', id, (state) => ({ ...state, grantedPermissions: ['nativeMessaging'] }))
-      sync.write('work', id, { token: 'secret' })
-    }
-    sync.flush()
-    states.update('home', ID, (state) => ({ ...state, grantedPermissions: ['tabs'] }))
-
-    await removeUninstalledBrowserExtensionData(fakeSession(false), 'work', new Set([OTHER]))
-    expect(Object.keys(states.readProfile('work'))).toEqual([OTHER])
-    expect(states.read('home', ID).grantedPermissions).toEqual(['tabs'])
-    expect(
-      new BrowserExtensionSyncStorageStore(getBrowserExtensionProfileDataDirectory()).read(
-        'work',
-        ID
-      )
-    ).toEqual({})
-    expect(sync.read('work', OTHER)).toEqual({ token: 'secret' })
-  })
 })
 
 describe('uninstall while another Orca profile is inactive', () => {

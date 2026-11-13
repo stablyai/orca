@@ -1,5 +1,5 @@
 // Keep cosmetic widths per device in localStorage; frozen columns use pixels, later columns use fr weights.
-import type { GitHubProjectField } from '../../../../shared/github/project-types'
+import type { GitHubProjectField } from '../../../../shared/github/projects/project-types'
 
 const STORAGE_KEY = 'orca.githubProject.columnWidths'
 

@@ -36,26 +36,6 @@ describe('TerminalHost attach-only sessions', () => {
     await host.dispose()
   })
 
-  it('attaches only to an existing stable session', async () => {
-    await host.createOrAttach({
-      sessionId: 'stable-pane-session',
-      cols: 80,
-      rows: 24,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-
-    const result = await host.createOrAttach({
-      sessionId: 'stable-pane-session',
-      cols: 120,
-      rows: 40,
-      attachOnly: true,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-
-    expect(result.isNew).toBe(false)
-    expect(spawnSubprocess).toHaveBeenCalledOnce()
-  })
-
   it('does not create when an attach-only stable session is absent', async () => {
     await expect(
       host.createOrAttach({

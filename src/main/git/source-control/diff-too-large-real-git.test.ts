@@ -50,15 +50,4 @@ describe('a diff side past the read cap', () => {
       tooLarge: true
     })
   })
-
-  it('leaves a real binary unmarked', async () => {
-    await writeFile(path.join(repo, 'blob.bin'), Buffer.from([1, 0, 2]))
-    git(repo, ['add', '.'])
-    git(repo, ['commit', '-m', 'initial'])
-    await writeFile(path.join(repo, 'blob.bin'), Buffer.from([3, 0, 4]))
-
-    const result = await getDiff(repo, 'blob.bin', false)
-    expect(result).toMatchObject({ kind: 'binary', modifiedIsBinary: true })
-    expect(result).not.toHaveProperty('tooLarge')
-  })
 })

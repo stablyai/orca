@@ -1,7 +1,7 @@
 import { addWslEnvKeys } from '../../../../shared/wsl-env'
 import { detectExplicitPiAgentKindFromCommand } from '../../../../shared/pi-agent-kind'
-import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
-import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
+import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
+import { resolveLoginShellEnvironment } from '../../../startup/shell-environment/login-shell-environment'
 
 const OMP_DIRECTORY_ENV_KEYS = [
   'XDG_CONFIG_HOME',

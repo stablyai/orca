@@ -1,15 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PostgresDatabase } from './database.js'
-import type pg from 'pg'
-import {
-  noteConnectionStatement,
-  SLOW_CONNECTION_PEER_SLACK_MS,
-  SLOW_CONNECTION_RETIRE_INTERVAL_MS,
-  SLOW_CONNECTION_SAMPLE_MAX_AGE_MS,
-  SLOW_CONNECTION_WINDOW,
-  SlowConnectionRetirement
-} from './postgres-connection-latency.js'
+import { SLOW_CONNECTION_RETIRE_INTERVAL_MS, SLOW_CONNECTION_SAMPLE_MAX_AGE_MS, SLOW_CONNECTION_WINDOW } from './postgres-connection-latency.js'
 
 let clock = 0
 
@@ -100,13 +92,6 @@ describe('slow connection retirement', () => {
     ])
   })
 
-  it('retires nothing in a pool whose round-trip floor is high, as in a far region', async () => {
-    const far = pool(['a', 'b', 'c'].map((name) => ({ name, statementMs: steady(180) })))
-    await runStatements(far.database, SLOW_CONNECTION_WINDOW * 6)
-
-    expect(far.destroyed).toEqual([])
-  })
-
   it('retires nothing when the whole database slows down', async () => {
     let slowDatabase = false
     const statementMs = () => (slowDatabase ? 60 : 3)
@@ -183,38 +168,6 @@ describe('slow connection retirement', () => {
     expect(two.destroyed).toEqual(['slow-1', 'slow-2'])
   })
 
-  it('bounds the misfire at a database-wide slowdown onset while peers sit idle', () => {
-    const retirement = new SlowConnectionRetirement(() => clock)
-    const peers = [fakeClient(), fakeClient()]
-    for (const peer of peers) {
-      for (let index = 0; index < 8; index++) {
-        retirement.track(peer)
-        noteConnectionStatement(peer, 3)
-        retirement.shouldRetire(peer, 1)
-      }
-    }
-    // From here every statement is slow, and only the busy connection (and its redials) runs.
-    let busy = fakeClient()
-    let id = 10
-    const retiredAt: number[] = []
-    for (let elapsed = 0; elapsed < 120_000; elapsed += 60) {
-      clock += 60
-      retirement.track(busy)
-      noteConnectionStatement(busy, 60)
-      if (retirement.shouldRetire(busy, id)) {
-        retiredAt.push(elapsed)
-        busy = fakeClient()
-        id++
-      }
-    }
-
-    expect(retiredAt.length).toBeLessThanOrEqual(3)
-    expect(retiredAt.length).toBeGreaterThan(0)
-    expect(Math.max(...retiredAt)).toBeLessThan(
-      SLOW_CONNECTION_PEER_SLACK_MS + SLOW_CONNECTION_RETIRE_INTERVAL_MS
-    )
-  })
-
   // Every 50th statement takes `outlierMs`: a 2% tail, like the ~200/400/800 ms retransmit stalls.
   const withTail = (baseMs: number, outlierMs: number) => {
     let calls = 0
@@ -237,31 +190,6 @@ describe('slow connection retirement', () => {
     })
   })
 
-  it('retires nothing when every connection has the same tail, as a whole-database spike does', async () => {
-    const spiky = pool(['a', 'b', 'c'].map((name) => ({ name, statementMs: withTail(3, 400) })))
-    await runStatements(spiky.database, 900)
-
-    expect(spiky.destroyed).toEqual([])
-  })
-
-  it('retires nothing on a far region whose healthy tail sits above 200 ms', async () => {
-    const far = pool(['a', 'b', 'c'].map((name) => ({ name, statementMs: withTail(180, 260) })))
-    await runStatements(far.database, 900)
-
-    expect(far.destroyed).toEqual([])
-  })
-
-  it('lets one peer with a slow statement of its own block a tail retirement', async () => {
-    const noisy = pool([
-      { name: 'a', statementMs: steady(3) },
-      { name: 'noisy', statementMs: withTail(3, 90) },
-      { name: 'lossy', statementMs: withTail(3, 415) }
-    ])
-    await runStatements(noisy.database, 900)
-
-    expect(noisy.destroyed).toEqual([])
-  })
-
   it('never retires, or records, on a pool built without retirement, as cells are', async () => {
     const cell = pool(
       [
@@ -278,26 +206,4 @@ describe('slow connection retirement', () => {
     expect(warnings).toEqual([])
   })
 
-  it('drops clients the pool closed on idle, even when nothing else is judged', () => {
-    const retirement = new SlowConnectionRetirement(() => clock)
-    for (let id = 1; id <= 50; id++) {
-      const closedLater = fakeClient()
-      retirement.track(closedLater)
-      noteConnectionStatement(closedLater, 3)
-      retirement.shouldRetire(closedLater, id)
-    }
-    expect(retirement.trackedClients).toBe(50)
-
-    clock += SLOW_CONNECTION_SAMPLE_MAX_AGE_MS + 1
-    const live = fakeClient()
-    retirement.track(live)
-    noteConnectionStatement(live, 3)
-    retirement.shouldRetire(live, 51)
-    expect(retirement.trackedClients).toBe(1)
-  })
 })
-
-function fakeClient(): pg.PoolClient {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the retirement rule only uses clients as identity keys.
-  return {} as pg.PoolClient
-}

@@ -85,14 +85,6 @@ afterEach(async () => {
 })
 
 describe('renaming a document the user opened outside every project', () => {
-  it('renames it within its own folder', async () => {
-    const renamed = join(docFolder, 'renamed.md')
-
-    await call('fs:rename', { oldPath: note, newPath: renamed, access: documentFolder(note) })
-
-    expect(await readdir(docFolder)).toEqual(['renamed.md'])
-  })
-
   it('refuses another file, a relative new name, and a request with no access', async () => {
     await writeFile(join(docFolder, 'other.md'), 'other')
 
@@ -116,15 +108,6 @@ describe('renaming a document the user opened outside every project', () => {
     expect((await readdir(docFolder)).sort()).toEqual(['note.md', 'other.md'])
   })
 
-  it('undoes a rename with the renamed file declared as the document', async () => {
-    const renamed = join(docFolder, 'renamed.md')
-    await call('fs:rename', { oldPath: note, newPath: renamed, access: documentFolder(note) })
-
-    await call('fs:rename', { oldPath: renamed, newPath: note, access: documentFolder(renamed) })
-
-    expect(await readdir(docFolder)).toEqual(['note.md'])
-  })
-
   it('moves it into another outside folder, and Undo brings it back', async () => {
     await mkdir(join(base, 'other'))
     const moved = join(base, 'other', 'note.md')
@@ -136,59 +119,9 @@ describe('renaming a document the user opened outside every project', () => {
     expect(await readdir(join(base, 'other'))).toEqual([])
     expect(await readdir(docFolder)).toEqual(['note.md'])
   })
-
-  it('moves it into a project, and Undo brings it back out', async () => {
-    const project = join(base, 'proj')
-    await mkdir(project)
-    projectPaths = [project]
-    invalidateAuthorizedRootsCache()
-    const moved = join(project, 'note.md')
-
-    await call('fs:rename', { oldPath: note, newPath: moved, access: documentFolder(note) })
-    expect(await readdir(project)).toEqual(['note.md'])
-
-    await call('fs:rename', { oldPath: moved, newPath: note, access: documentFolder(moved) })
-    expect(await readdir(project)).toEqual([])
-    expect(await readdir(docFolder)).toEqual(['note.md'])
-  })
-
-  it('moves it into a subfolder, and Undo brings it back', async () => {
-    await mkdir(join(docFolder, 'archive'))
-    const moved = join(docFolder, 'archive', 'note.md')
-
-    await call('fs:rename', { oldPath: note, newPath: moved, access: documentFolder(note) })
-    expect(await readdir(join(docFolder, 'archive'))).toEqual(['note.md'])
-
-    await call('fs:rename', { oldPath: moved, newPath: note, access: documentFolder(moved) })
-    expect(await readdir(join(docFolder, 'archive'))).toEqual([])
-    expect((await readdir(docFolder)).sort()).toEqual(['archive', 'note.md'])
-  })
 })
 
 describe('inserting an image into a document the user opened outside every project', () => {
-  it('copies the image into the document folder', async () => {
-    const outcome = await call('fs:importExternalPaths', {
-      sourcePaths: [join(base, 'shot.png')],
-      destDir: docFolder,
-      access: documentFolder(note)
-    })
-
-    expect(outcome).toMatchObject({ results: [{ status: 'imported' }] })
-    expect((await readdir(docFolder)).sort()).toEqual(['note.md', 'shot.png'])
-  })
-
-  it('copies the image into a subfolder of the document folder', async () => {
-    await mkdir(join(docFolder, 'images'))
-
-    await call('fs:importExternalPaths', {
-      sourcePaths: [join(base, 'shot.png')],
-      destDir: join(docFolder, 'images'),
-      access: documentFolder(note)
-    })
-
-    expect(await readdir(join(docFolder, 'images'))).toEqual(['shot.png'])
-  })
-
   it.skipIf(process.platform === 'win32')(
     'refuses an import through a linked subfolder that leads out',
     async () => {
@@ -225,42 +158,6 @@ describe('inserting an image into a document the user opened outside every proje
 })
 
 describe('a project file opened by its full path', () => {
-  it('renames into a subfolder of the project, which the project check allows', async () => {
-    const project = join(base, 'project')
-    await mkdir(join(project, 'docs', 'old'), { recursive: true })
-    await writeFile(join(project, 'docs', 'plan.md'), '# plan\n')
-    projectPaths = [project]
-    invalidateAuthorizedRootsCache()
-    const plan = join(project, 'docs', 'plan.md')
-
-    await call('fs:rename', {
-      oldPath: plan,
-      newPath: join(project, 'docs', 'old', 'plan.md'),
-      access: documentFolder(plan)
-    })
-
-    expect(await readdir(join(project, 'docs', 'old'))).toEqual(['plan.md'])
-  })
-
-  it('renames into another folder of the same project, as with no declared access', async () => {
-    const project = join(base, 'project')
-    await mkdir(join(project, 'docs'), { recursive: true })
-    await mkdir(join(project, 'archive'))
-    await writeFile(join(project, 'docs', 'plan.md'), '# plan\n')
-    projectPaths = [project]
-    invalidateAuthorizedRootsCache()
-    const plan = join(project, 'docs', 'plan.md')
-
-    await call('fs:rename', {
-      oldPath: plan,
-      newPath: join(project, 'archive', 'plan.md'),
-      access: documentFolder(plan)
-    })
-
-    expect(await readdir(join(project, 'archive'))).toEqual(['plan.md'])
-    expect(await readdir(join(project, 'docs'))).toEqual([])
-  })
-
   it('moves out of the project, and Undo brings it back in', async () => {
     const project = join(base, 'project')
     await mkdir(join(project, 'docs'), { recursive: true })

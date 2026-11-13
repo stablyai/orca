@@ -1,16 +1,13 @@
-import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
-// @vitest-environment happy-dom
-
+import { linearIssueReadFixture } from '@/store/slices/linear/linear-slice-test-harness'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
-
-import type { LinearIssue } from '../../../../shared/linear/issue-types'
-
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { referenceLinearIssue } from '../sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
+import type { Repo } from '../../../../shared/repo-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
+// @vitest-environment happy-dom
 
 const mocks = vi.hoisted(() => ({
   readStatus: vi.fn(),
@@ -33,12 +30,12 @@ const mocks = vi.hoisted(() => ({
     >(async () => [])
   }
 }))
-vi.mock('@/runtime/runtime-linear-client', () => ({ linearStatus: mocks.readStatus }))
-vi.mock('@/lib/gitlab-work-item-source-lookup', () => ({
+vi.mock('@/runtime/linear/runtime-linear-client', () => ({ linearStatus: mocks.readStatus }))
+vi.mock('@/lib/work-items/gitlab/gitlab-work-item-source-lookup', () => ({
   listGitLabWorkItemsForSource: mocks.listGitlabWorkItems,
   lookupGitLabWorkItemByPathForSource: vi.fn()
 }))
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
       selector({
@@ -51,8 +48,11 @@ vi.mock('@/store', () => ({
     { getState: () => mocks.state, subscribe: () => () => {} }
   )
 }))
-vi.mock('@/lib/local-preflight-context', () => ({
-  getLocalPreflightContext: () => ({}),
+vi.mock('@/runtime/hosts/preflight/local-preflight-context', () => ({
+  getLocalPreflightContext: () => ({})
+}))
+
+vi.mock('@/runtime/hosts/preflight/local-preflight-context-key', () => ({
   localPreflightContextKey: () => 'test'
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

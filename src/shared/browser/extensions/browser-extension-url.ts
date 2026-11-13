@@ -1,4 +1,5 @@
-import { ORCA_BROWSER_BLANK_URL } from '../../constants'
+import '../../constants'
+import { ORCA_BROWSER_BLANK_URL } from '../browser-blank-page'
 import { normalizeBrowserNavigationUrl } from '../../browser-url'
 
 const CHROME_EXTENSION_ID_PATTERN = /^[a-p]{32}$/

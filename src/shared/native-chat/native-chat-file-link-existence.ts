@@ -1,6 +1,6 @@
 import type { ParsedTerminalFileLink } from '../terminal/links/terminal-links'
 import type { FileLinkExists } from './native-chat-file-link-tree'
-import { readRecentPathAnswer, writeRecentPathAnswer } from '../recent-path-answers'
+import { readRecentPathAnswer, writeRecentPathAnswer } from '../file-links/recent-path-answers'
 
 // Why: a host that could not answer is retried a few times, then waits for the next recheck.
 export const UNVERIFIABLE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000] as const

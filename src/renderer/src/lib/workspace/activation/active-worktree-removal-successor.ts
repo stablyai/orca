@@ -1,0 +1,280 @@
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
+import {
+  isAutomaticDeselection,
+  subscribeWorktreeDeselectionIntent,
+  type EnclosingWorktreeRemoval
+} from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import { findIndexedWorktreeOwnerForHost } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
+import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
+import { createSleepingSweepHiddenCheck } from '@/components/sidebar/worktree-list/listing/sleeping-sweep-visibility'
+import { getSidebarSleepingSweepRetainedIds } from '@/components/sidebar/worktree-list/listing/use-sleeping-sweep-retention'
+import {
+  isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+
+type RemovedActiveRow = {
+  id: string
+  hostId: ExecutionHostId | null
+  repoId: string
+  ownerHostIds: ExecutionHostId[]
+}
+
+function findListedRow(
+  state: Pick<AppState, 'worktreesByRepo' | 'repos'>,
+  worktreeId: string,
+  hostId: ExecutionHostId | null
+) {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const rows = selectWorktreesByRepo(state)[repoId] ?? []
+  if (!hostId) {
+    return rows.find((row) => row.id === worktreeId)
+  }
+  return findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, hostId)
+}
+
+// Per-workspace runtimes die with their workspace; choosing a sibling on that host would spawn a terminal on a dead runtime.
+function isHostedOnRuntimeOwnedSshTarget(
+  worktree: Pick<Worktree, 'hostId' | 'repoId'>,
+  repoById: Map<string, Repo>
+): boolean {
+  const hostIds = [
+    worktree.hostId,
+    repoById.get(worktree.repoId)?.executionHostId,
+    repoById.get(worktree.repoId)?.connectionId
+  ]
+  return hostIds.some((value) => {
+    if (!value) {
+      return false
+    }
+    // connectionId is a raw target id; executionHostId/hostId are `ssh:<targetId>`.
+    if (isRuntimeOwnedSshTargetId(value)) {
+      return true
+    }
+    const parsed = parseExecutionHostId(value)
+    return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
+  })
+}
+
+// Like closing a tab: the most recently visited other workspace of the project, else its main one.
+export function pickActiveWorktreeSuccessor(
+  state: AppState,
+  removed: RemovedActiveRow,
+  sleepingSweepRetainedIds: ReadonlySet<string>
+): Worktree | null {
+  const repoById = getIndexedRepoMap(state.repos)
+  // Activating seeds a terminal, so a row "Hide sleeping" keeps out of the sidebar would be woken.
+  const isHiddenAsleep =
+    state.persistedUIReady && state.workspaceSessionReady && !state.showSleepingWorkspaces
+      ? createSleepingSweepHiddenCheck(state, sleepingSweepRetainedIds)
+      : null
+  const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
+    (worktree) =>
+      !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
+      !isWorktreeRetiredByRemoval(worktree) &&
+      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
+      !isHiddenAsleep?.(worktree)
+  )
+  const others = siblings.filter((worktree) => !worktree.isMainWorktree)
+  if (others.length > 0) {
+    const lastVisited = state.lastVisitedAtByWorktreeId
+    return [...others].sort(
+      (a, b) =>
+        (getWorktreeVisitTimestamp(lastVisited, b) ?? 0) -
+        (getWorktreeVisitTimestamp(lastVisited, a) ?? 0)
+    )[0]
+  }
+  return siblings.find((worktree) => worktree.isMainWorktree) ?? null
+}
+
+function listedActiveRow(state: AppState): RemovedActiveRow | null {
+  const id = state.activeWorktreeId
+  const row = id ? findListedRow(state, id, state.activeWorkspaceExecutionHostId) : undefined
+  return row && id
+    ? {
+        id,
+        hostId: state.activeWorkspaceExecutionHostId,
+        repoId: row.repoId,
+        ownerHostIds: worktreeOwnerHostIds(row)
+      }
+    : null
+}
+
+function isSelectionEmptyTerminalView(state: AppState): boolean {
+  return (
+    state.activeView === 'terminal' &&
+    state.activePendingCreationId === null &&
+    state.activeWorktreeId === null
+  )
+}
+
+/** Focus a successor once the active row is gone and selection is empty. Remember the last listed active row because removal and selection clearing can arrive in either order. */
+export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () => void {
+  let witness: RemovedActiveRow | null = null
+  let generation = 0
+  const scopes = new Set<EnclosingWorktreeRemoval>()
+  const matchesScope = (row: RemovedActiveRow, scope: EnclosingWorktreeRemoval): boolean =>
+    row.ownerHostIds.includes(scope.hostId) && (!scope.repoId || scope.repoId === row.repoId)
+  const isScoped = (row: RemovedActiveRow): boolean =>
+    [...scopes].some((scope) => matchesScope(row, scope))
+  const observe = (): RemovedActiveRow | null => {
+    const state = store.getState()
+    const row =
+      state.activeView === 'terminal' && state.activePendingCreationId === null
+        ? listedActiveRow(state)
+        : null
+    return row && !isScoped(row) ? row : null
+  }
+  witness = observe()
+  const retireAcceptedSelection = (state: AppState): boolean => {
+    const removed = listedActiveRow(state)
+    const row = removed ? findListedRow(state, removed.id, removed.hostId) : undefined
+    if (!removed || !row || !isWorktreeRetiredByRemoval(row) || isScoped(removed)) {
+      return false
+    }
+    const scheduled = ++generation
+    queueMicrotask(() => {
+      const current = store.getState()
+      const active = findListedRow(current, removed.id, removed.hostId)
+      if (
+        generation !== scheduled ||
+        current.activeView !== 'terminal' ||
+        current.activePendingCreationId !== null ||
+        current.activeWorktreeId !== removed.id ||
+        current.activeWorkspaceExecutionHostId !== removed.hostId ||
+        !active ||
+        !isWorktreeRetiredByRemoval(active)
+      ) {
+        return
+      }
+      witness = null
+      const successor = pickActiveWorktreeSuccessor(
+        current,
+        removed,
+        getSidebarSleepingSweepRetainedIds()
+      )
+      if (successor) {
+        activateAndRevealWorktree(successor.id, {
+          revealInSidebar: false,
+          executionHostId: successor.hostId
+        })
+      } else {
+        current.setActiveWorktree(null)
+      }
+    })
+    return true
+  }
+  const unsubscribeIntent = subscribeWorktreeDeselectionIntent((scope, entering) => {
+    if (!scope || entering) {
+      if (scope) {
+        scopes.add(scope)
+      }
+      if (!scope || (witness && isScoped(witness))) {
+        witness = null
+        generation += 1
+      }
+    } else {
+      scopes.delete(scope)
+      const current = observe()
+      if (!witness && current && matchesScope(current, scope)) {
+        witness = current
+      }
+    }
+  })
+  const unsubscribe = store.subscribe((next, prev) => {
+    if (
+      next.activeWorktreeId === prev.activeWorktreeId &&
+      next.activeWorkspaceExecutionHostId === prev.activeWorkspaceExecutionHostId &&
+      selectWorktreesByRepo(next) === selectWorktreesByRepo(prev) &&
+      next.activeView === prev.activeView &&
+      next.activePendingCreationId === prev.activePendingCreationId
+    ) {
+      return
+    }
+    const selectionChanged =
+      next.activeWorktreeId !== null &&
+      (next.activeWorktreeId !== prev.activeWorktreeId ||
+        next.activeWorkspaceExecutionHostId !== prev.activeWorkspaceExecutionHostId)
+    const navigated =
+      selectionChanged ||
+      next.activeView !== prev.activeView ||
+      next.activePendingCreationId !== prev.activePendingCreationId
+    if (navigated) {
+      witness = null
+      generation += 1
+    }
+    if (next.activeView !== 'terminal' || next.activePendingCreationId !== null) {
+      return
+    }
+    if (next.activeWorktreeId !== null) {
+      if (retireAcceptedSelection(next)) {
+        return
+      }
+      const listed = observe()
+      // An unlisted pointer to the witness is a row dropped before its selection clears.
+      if (listed || witness?.id !== next.activeWorktreeId) {
+        witness = listed
+      }
+      return
+    }
+    if (!witness) {
+      return
+    }
+    const witnessListed = Boolean(findListedRow(next, witness.id, witness.hostId))
+    const rowDropped = Boolean(findListedRow(prev, witness.id, witness.hostId)) && !witnessListed
+    const userCleared = prev.activeWorktreeId !== null && !rowDropped && !isAutomaticDeselection()
+    if (userCleared || !isSelectionEmptyTerminalView(next)) {
+      witness = null
+      generation += 1
+      return
+    }
+    if (witnessListed) {
+      return
+    }
+    const removed = witness
+    const scheduled = ++generation
+    // Let removal’s synchronous follow-up writes finish before rechecking.
+    queueMicrotask(() => {
+      const state = store.getState()
+      if (
+        scheduled !== generation ||
+        !isSelectionEmptyTerminalView(state) ||
+        findListedRow(state, removed.id, removed.hostId)
+      ) {
+        return
+      }
+      witness = null
+      const successor = pickActiveWorktreeSuccessor(
+        state,
+        removed,
+        getSidebarSleepingSweepRetainedIds()
+      )
+      if (successor) {
+        // Keep successor focus from replacing the removed row's spatial context.
+        activateAndRevealWorktree(successor.id, {
+          revealInSidebar: false,
+          executionHostId: successor.hostId
+        })
+      }
+    })
+  })
+  if (store.getState().activeView === 'terminal') {
+    retireAcceptedSelection(store.getState())
+  }
+  return () => {
+    generation += 1
+    unsubscribeIntent()
+    unsubscribe()
+  }
+}

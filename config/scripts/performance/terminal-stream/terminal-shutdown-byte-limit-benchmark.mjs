@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import ts from 'typescript-api'
@@ -7,10 +7,34 @@ import { build } from 'esbuild'
 
 // Pipe the baseline capture module on stdin. No Electron or visible terminal is launched.
 const renderer = path.resolve('src/renderer/src')
-const entry = path.join(renderer, 'components/terminal-pane/terminal-shutdown-layout-capture.ts')
+const paneDirectory = path.join(renderer, 'components/terminal-pane')
+const entry = [
+  path.join(paneDirectory, 'snapshots/terminal-shutdown-layout-capture.ts'),
+  path.join(paneDirectory, 'terminal-shutdown-layout-capture.ts')
+].find(existsSync)
+assert(entry, 'The checked-out revision must define terminal shutdown layout capture')
+const activeLeafFile = [
+  path.join(paneDirectory, 'layout/ownership/terminal-layout-active-leaf.ts'),
+  path.join(paneDirectory, 'terminal-layout-leaf-ids.ts')
+].find(existsSync)
+assert(activeLeafFile, 'The checked-out revision must define active layout leaf resolution')
+const mergeCapturedLeafStateFile = [
+  path.join(paneDirectory, 'snapshots/merge-captured-leaf-state.ts'),
+  path.join(paneDirectory, 'merge-captured-leaf-state.ts')
+].find(existsSync)
+assert(
+  mergeCapturedLeafStateFile,
+  'The checked-out revision must define captured leaf state merging'
+)
 const sources = [readFileSync(0, 'utf8'), readFileSync(entry, 'utf8')]
 assert(sources.every((source) => source.includes('export function captureTerminalShutdownLayout')))
-const layoutFile = path.join(renderer, 'components/terminal-pane/layout-serialization.ts')
+const layoutFile = [
+  'components/terminal-pane/layout/terminal-layout-dom-serialization.ts',
+  'components/terminal-pane/layout-serialization.ts'
+]
+  .map((file) => path.join(renderer, file))
+  .find(existsSync)
+assert(layoutFile, 'The checked-out revision must define terminal layout serialization')
 const layoutSource = readFileSync(layoutFile, 'utf8')
 const layoutAst = ts.createSourceFile(layoutFile, layoutSource, ts.ScriptTarget.Latest, true)
 const layoutNames = ['getLayoutChildNodes', 'serializePaneTree', 'serializeTerminalLayout']
@@ -18,8 +42,9 @@ const layoutFunctions = layoutAst.statements.filter(
   (node) => ts.isFunctionDeclaration(node) && layoutNames.includes(node.name?.text)
 )
 assert.equal(layoutFunctions.length, layoutNames.length)
-const layoutSubset = `import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id';
-import { readSplitRatio, SPLIT_RATIO_TOLERANCE } from '@/lib/pane-manager/pane-split-ratio';
+const layoutSubset = `import { isTerminalLeafId } from ${JSON.stringify(path.resolve('src/shared/workspace-layout/stable-pane-id.ts'))};
+import { readSplitRatio } from '@/lib/pane-manager/pane-layout/pane-split-ratio';
+import { SPLIT_RATIO_TOLERANCE } from ${JSON.stringify(path.resolve('src/shared/workspace-layout/terminal-topology/terminal-pane-tree.ts'))};
 ${layoutFunctions.map((node) => node.getText(layoutAst)).join('\n')}`
 
 async function load(source) {
@@ -39,12 +64,35 @@ async function load(source) {
             loader: 'ts',
             resolveDir: path.dirname(entry)
           }))
-          // Select unchanged layout declarations to exclude unrelated renderer module side effects.
-          builder.onLoad({ filter: /[/\\]layout-serialization\.ts$/ }, () => ({
-            contents: layoutSubset,
-            loader: 'ts',
-            resolveDir: path.dirname(layoutFile)
+          // Historical inputs keep their bodies while imports select this checkout's defining owners.
+          builder.onResolve({ filter: /(?:^|[/\\])terminal-pane-layout-tree$/ }, () => ({
+            path: path.resolve(
+              'src/shared/workspace-layout/terminal-topology/terminal-pane-layout-tree.ts'
+            )
           }))
+          builder.onResolve({ filter: /^(?:\.\.\/)+shared\// }, (args) => {
+            const target = path.resolve('src/shared', args.path.split('/shared/')[1])
+            return { path: existsSync(target) ? target : `${target}.ts` }
+          })
+          builder.onResolve({ filter: /(?:^|[/\\])merge-captured-leaf-state$/ }, () => ({
+            path: mergeCapturedLeafStateFile
+          }))
+          builder.onResolve(
+            { filter: /(?:^|[/\\])(?:terminal-layout-leaf-ids|terminal-layout-active-leaf)$/ },
+            () => ({ path: activeLeafFile })
+          )
+          builder.onResolve(
+            { filter: /(?:^|[/\\])(?:layout-serialization|terminal-layout-dom-serialization)$/ },
+            () => ({ path: layoutFile })
+          )
+          builder.onLoad(
+            { filter: /[/\\](?:layout-serialization|terminal-layout-dom-serialization)\.ts$/ },
+            () => ({
+              contents: layoutSubset,
+              loader: 'ts',
+              resolveDir: path.dirname(layoutFile)
+            })
+          )
           builder.onResolve({ filter: /pane-terminal-output-scheduler$/ }, () => ({
             path: 'capture-scheduler',
             namespace: 'fixture'

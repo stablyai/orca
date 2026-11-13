@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/github/cache-identity'
-import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
+import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/github/cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   readChecksPanelGitStatusSnapshot,
@@ -18,20 +18,21 @@ import {
 import {
   getPullRequestGenerationRecordKey,
   getPullRequestGenerationSeedRestoreKey,
-  markPullRequestGenerationRequiresPushBeforeCreate,
-  type PullRequestGenerationContext
-} from '@/store/slices/pull-request-generation'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
+  markPullRequestGenerationRequiresPushBeforeCreate
+} from '@/store/slices/hosted-review/generation/pull-request-generation'
+import type { PullRequestGenerationContext } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   resolveSourceControlAiEnabled,
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
+import { getRuntimeGitRepoDiscoveryHostKey } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { ChecksPanelReviewStateInput } from './review-state-dependencies'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
+  const t = useTranslate()
   const {
     activeReview,
     activeWorktree,
@@ -188,7 +189,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
   const isGitHubReviewContext = hostedReviewCreation
     ? hostedReviewCreation.provider === 'github'
     : !hasNonGitHubLinkedReview
-  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
+  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider, t)
   // Demote cached absence to unknown across eligibility contexts; PR cache keys omit push targets.
   const prCachedHasPRForContext =
     hostedReviewCreationSnapshot && hostedReviewCreationSnapshot.contextKey !== panelContextKey
@@ -276,8 +277,10 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
     }
-    const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(
-      getRuntimeGitScope(ownerTarget ?? { kind: 'local' }, repo?.connectionId)
+    const hostKey = getRuntimeGitRepoDiscoveryHostKey(
+      ownerTarget ?? { kind: 'local' },
+      repo,
+      repo?.connectionId
     )
     const resolved = resolveSourceControlAiForOperation({
       settings,

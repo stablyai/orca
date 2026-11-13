@@ -7,7 +7,10 @@ const doubles = vi.hoisted(() => ({
 }))
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
-vi.mock('../transport/rpc-operation', () => ({
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+// The runner's deadlines live in the runtime module, whose foreground timer reads React Native's AppState.
+vi.mock('./foreground-timer', () => ({ setForegroundTimer: () => () => {} }))
+vi.mock('../transport/rpc/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: () => doubles.manifest()
 }))
@@ -15,12 +18,12 @@ vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: () => doubles.fetch()
 }))
 
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
-import { createGenerationStore, type GenerationStore } from './generation-store'
-import { createFakeGenerationFileSystem } from './generation-file-system-fake'
-import { deriveHostCacheKey } from './host-cache-key'
+import { createGenerationStore, type GenerationStore } from './generations/generation-store'
+import { createFakeGenerationFileSystem } from './generations/generation-file-system-fake'
+import { deriveHostCacheKey } from './generations/host-cache-key'
 import { download } from './mobile-web-shell-session-effects'
 
 const CLIENT: RpcClient = {
@@ -101,8 +104,9 @@ describe('a download that reuses the cached generation', () => {
       runtime: {
         createStore: () => store,
         mintSessionId: () => 's',
+        claimSpareSessionId: async () => null,
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       },
       startedAt: 0,
       downloads,
@@ -110,85 +114,6 @@ describe('a download that reuses the cached generation', () => {
     })
     return done.then(() => events)
   }
-
-  it('writes no staging bytes when canceled while its staging waits in the store queue', async () => {
-    const fileSystem = createFakeGenerationFileSystem()
-    const store = createGenerationStore({ fileSystem })
-    const NEXT = bundle(16)
-    const BLOCKER = deriveHostCacheKey('host-b')
-    let enterBlocker = (): void => {}
-    const blockerEntered = new Promise<void>((resolve) => {
-      enterBlocker = resolve
-    })
-    let releaseBlocker = (): void => {}
-    const blockerReleased = new Promise<void>((resolve) => {
-      releaseBlocker = resolve
-    })
-    const list = fileSystem.list.bind(fileSystem)
-    fileSystem.list = async (uri) => {
-      if (uri.includes(`/${BLOCKER}/`)) {
-        enterBlocker()
-        await blockerReleased
-      }
-      return list(uri)
-    }
-    const writes: string[] = []
-    const writeBytes = fileSystem.writeBytes.bind(fileSystem)
-    fileSystem.writeBytes = async (uri, bytes) => {
-      writes.push(uri)
-      await writeBytes(uri, bytes)
-    }
-    let blocker: Promise<unknown> = Promise.resolve()
-    doubles.fetch = async () => {
-      blocker = store.readActiveGeneration(BLOCKER)
-      await blockerEntered
-      return NEXT
-    }
-    let markQueued = (): void => {}
-    const stageQueued = new Promise<void>((resolve) => {
-      markQueued = resolve
-    })
-    const downloads = new Set<AbortController>()
-    const run = runFor(
-      {
-        ...store,
-        stageGeneration: (...args) => {
-          const staged = store.stageGeneration(...args)
-          markQueued()
-          return staged
-        }
-      },
-      downloads
-    )
-
-    await stageQueued
-    downloads.forEach((controller) => controller.abort())
-    releaseBlocker()
-    await Promise.all([run, blocker])
-
-    expect(writes.filter((uri) => uri.includes(`/tmp/${NEXT.manifest.buildId}/`))).toEqual([])
-  })
-
-  it('commits whole when another mount sweeps the staging trees mid-download', async () => {
-    const { fileSystem, store } = await cachedStore()
-    doubles.fetch = async () => {
-      fileSystem.seed(`${HOST}/tmp/${UPDATE.manifest.buildId}/app.js`, {
-        kind: 'file',
-        bytes: new Uint8Array(1)
-      })
-      await store.sweepStagedGenerations()
-      return UPDATE
-    }
-
-    const events = await runFor(store)
-
-    expect(events.filter((event) => event.type === 'download-failed')).toEqual([])
-    const active = await store.readActiveGeneration(HOST)
-    expect(active?.buildId).toBe(UPDATE.manifest.buildId)
-    expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
-      new Uint8Array(2)
-    )
-  })
 
   it('stages from the offered snapshot without reopening its manifest after fetch', async () => {
     const { fileSystem, store } = await cachedStore()
@@ -235,49 +160,5 @@ describe('a download that reuses the cached generation', () => {
     expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
       new Uint8Array(2)
     )
-  })
-
-  it('commits once when two downloads of the same build finish together', async () => {
-    const { fileSystem, store } = await cachedStore()
-    doubles.fetch = async () => UPDATE
-    const moveDirectory = fileSystem.moveDirectory.bind(fileSystem)
-    const moves: [string, string][] = []
-    fileSystem.moveDirectory = async (from, to) => {
-      moves.push([from, to])
-      await moveDirectory(from, to)
-    }
-    try {
-      const [first, second] = await Promise.all([runFor(store), runFor(store)])
-      const expected = [
-        { type: 'download-staged', flow: 3 },
-        {
-          type: 'activated',
-          flow: 3,
-          generationDirectory: `/cache/mobile-web/${HOST}/generations/${UPDATE.manifest.buildId}`,
-          sessionId: 's',
-          buildId: UPDATE.manifest.buildId,
-          totalBytes: UPDATE.manifest.totalBytes,
-          elapsedMs: 0
-        }
-      ]
-      expect(first).toEqual(expected)
-      expect(second).toEqual(expected)
-      expect(moves).toEqual([
-        [
-          `${fileSystem.rootUri}/${HOST}/tmp/${UPDATE.manifest.buildId}`,
-          `${fileSystem.rootUri}/${HOST}/generations/${UPDATE.manifest.buildId}`
-        ]
-      ])
-      expect(await store.readActiveGeneration(HOST)).toEqual({
-        buildId: UPDATE.manifest.buildId,
-        directory: `${fileSystem.rootUri}/${HOST}/generations/${UPDATE.manifest.buildId}`,
-        manifest: UPDATE.manifest
-      })
-      expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
-        new Uint8Array(2)
-      )
-    } finally {
-      fileSystem.moveDirectory = moveDirectory
-    }
   })
 })

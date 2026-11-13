@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 
 export type JiraListColumnId =
@@ -40,30 +41,30 @@ export const JIRA_LIST_COLUMNS: readonly JiraListColumn[] = [
 // Device-local, like Linear display preferences, rather than synced through ui.set.
 const STORAGE_KEY = 'orca.jira.list-columns.v1'
 
-export function getJiraListColumnLabel(id: JiraListColumnId): string {
+export function getJiraListColumnLabel(id: JiraListColumnId, t: Translate = translate): string {
   switch (id) {
     case 'key':
-      return translate('auto.components.TaskPage.37e7ee311e', 'Key')
+      return t('auto.components.TaskPage.37e7ee311e', 'Key')
     case 'title':
-      return translate('auto.components.TaskPage.b1eaa18ace', 'Issue')
+      return t('auto.components.TaskPage.b1eaa18ace', 'Issue')
     case 'status':
-      return translate('auto.components.TaskPage.154b0fa623', 'Status')
+      return t('auto.components.TaskPage.154b0fa623', 'Status')
     case 'priority':
-      return translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')
+      return t('auto.components.TaskPage.c8d5bec5f7', 'Priority')
     case 'assignee':
-      return translate('auto.components.TaskPage.d2a876ca53', 'Assignee')
+      return t('auto.components.TaskPage.d2a876ca53', 'Assignee')
     case 'parent':
-      return translate('auto.components.TaskPage.jiraColumnParent', 'Parent')
+      return t('auto.components.TaskPage.jiraColumnParent', 'Parent')
     case 'sprint':
-      return translate('auto.components.TaskPage.jiraColumnSprint', 'Sprint')
+      return t('auto.components.TaskPage.jiraColumnSprint', 'Sprint')
     case 'storyPoints':
-      return translate('auto.components.TaskPage.jiraColumnStoryPoints', 'Points')
+      return t('auto.components.TaskPage.jiraColumnStoryPoints', 'Points')
     case 'originalEstimate':
-      return translate('auto.components.TaskPage.jiraColumnOriginalEstimate', 'Estimate')
+      return t('auto.components.TaskPage.jiraColumnOriginalEstimate', 'Estimate')
     case 'remainingEstimate':
-      return translate('auto.components.TaskPage.jiraColumnRemainingEstimate', 'Remaining')
+      return t('auto.components.TaskPage.jiraColumnRemainingEstimate', 'Remaining')
     case 'updated':
-      return translate('auto.components.TaskPage.f362667d55', 'Updated')
+      return t('auto.components.TaskPage.f362667d55', 'Updated')
   }
 }
 
@@ -157,22 +158,22 @@ export function fallbackJiraSortColumn(ids: ReadonlySet<JiraListColumnId>): Jira
 }
 
 // Hours do not depend on the site's configurable working day/week length.
-export function formatJiraEstimate(seconds: number | undefined): string {
+export function formatJiraEstimate(seconds: number | undefined, intlLocale?: string): string {
   if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
     return '–'
   }
   if (seconds === 0) {
-    return formatUiNarrowDuration(0, 'minute')
+    return formatUiNarrowDuration(0, 'minute', intlLocale)
   }
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   return (
     [
-      hours ? formatUiNarrowDuration(hours, 'hour') : '',
-      minutes ? formatUiNarrowDuration(minutes, 'minute') : ''
+      hours ? formatUiNarrowDuration(hours, 'hour', intlLocale) : '',
+      minutes ? formatUiNarrowDuration(minutes, 'minute', intlLocale) : ''
     ]
       .filter(Boolean)
-      .join(' ') || `<${formatUiNarrowDuration(1, 'minute')}`
+      .join(' ') || `<${formatUiNarrowDuration(1, 'minute', intlLocale)}`
   )
 }
 

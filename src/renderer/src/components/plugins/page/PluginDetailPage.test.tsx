@@ -7,11 +7,15 @@ import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
 } from '../../../../../preload/api-types'
-import { usePluginSyntaxFailureStore } from '@/store/plugin-syntax-failures'
-import { usePluginSyntaxStore } from '@/store/plugin-syntax-packs'
-import { usePluginThemeStore } from '@/store/plugin-themes'
+import { usePluginSyntaxFailureStore } from '@/store/plugins/syntax/plugin-syntax-failures'
+import { usePluginSyntaxStore } from '@/store/plugins/syntax/plugin-syntax-packs'
+import { usePluginThemeStore } from '@/store/plugins/appearance/plugin-themes'
 import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import { pluginListEntryFromListing, type PluginListEntry } from '../list/plugin-list-entries'
+import {
+  pluginListEntryFromInstalled,
+  pluginListEntryFromListing,
+  type PluginListEntry
+} from '../list/plugin-list-entries'
 import { PluginDetailPage } from './PluginDetailPage'
 import type { PluginPagePreview } from '../state/use-plugin-catalog'
 
@@ -80,11 +84,18 @@ const install = {
 async function render(
   entry: PluginListEntry,
   fetchPreview: (target: PluginMarketplaceHostListing) => Promise<PluginPagePreview>,
-  { refreshing = false }: { refreshing?: boolean } = {}
+  {
+    refreshing = false,
+    container = document.createElement('div')
+  }: {
+    refreshing?: boolean
+    container?: HTMLDivElement
+  } = {}
 ): Promise<HTMLDivElement> {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  root = createRoot(container)
+  if (!root) {
+    document.body.appendChild(container)
+    root = createRoot(container)
+  }
   await act(async () => {
     root?.render(
       <PluginDetailPage
@@ -108,6 +119,8 @@ async function render(
         onConsent={vi.fn().mockResolvedValue(undefined)}
         onBack={vi.fn()}
         onOpenShortcuts={vi.fn()}
+        entries={{ installed: [], available: [] }}
+        onOpenPlugin={vi.fn()}
       />
     )
   })
@@ -137,11 +150,67 @@ afterEach(() => {
 })
 
 describe('PluginDetailPage', () => {
-  it('shows author links and hotlinked images as nothing, and links only the install source', async () => {
+  it('keeps the README reachable after installation at the installed source commit', async () => {
+    const entry = pluginListEntryFromListing({
+      ...listing,
+      source: {
+        kind: 'git',
+        url: 'https://github.com/acme/plugins',
+        ref: 'main',
+        path: 'plugins/icons'
+      }
+    })
+    const fetchPreview = () => new Promise<PluginPagePreview>(() => undefined)
+    const container = await render(entry, fetchPreview)
+    await render(
+      pluginListEntryFromInstalled(
+        {
+          pluginKey: entry.pluginKey,
+          name: 'Icons',
+          publisher: 'stablyai',
+          version: '1.0.0',
+          status: 'disabled',
+          execution: 'data',
+          consentFingerprint: null,
+          needsReconsent: false,
+          isDev: false,
+          official: false,
+          bundled: false,
+          capabilities: [],
+          panels: [],
+          commands: [],
+          hasWorker: false,
+          restarts: 0,
+          source: {
+            kind: 'marketplace',
+            reference: 'https://github.com/acme/plugins (plugins/icons)',
+            url: 'https://github.com/acme/plugins',
+            path: 'plugins/icons',
+            resolvedCommit: 'a'.repeat(40),
+            contentHash: 'e'.repeat(64)
+          }
+        },
+        entry.listing
+      ),
+      fetchPreview,
+      { container }
+    )
+    const readme = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Read the README on GitHub'
+    )
+    await act(async () => readme?.click())
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      'https://github.com/acme/plugins/tree/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/plugins/icons#readme'
+    )
+  })
+
+  it('does not turn a catalog repository claim into an account identity or load hotlinked images', async () => {
     const container = await render(
       pluginListEntryFromListing({
         ...listing,
-        source: { kind: 'git', url: 'https://github.com/Acme/icons.git', ref: 'main' },
+        pluginKey: 'victim.icons',
+        source: { kind: 'git', url: 'https://github.com/mirror/icons.git', ref: 'main' },
+        release: { ...listing.release!, repository: 'https://github.com/victim/icons' },
         description: 'Docs at https://evil.example and [click](javascript:alert(1))',
         homepage: 'https://evil.example/home',
         repository: 'https://evil.example/repo',
@@ -151,19 +220,44 @@ describe('PluginDetailPage', () => {
       () => Promise.resolve({ ok: true, preview })
     )
     expect(container.querySelectorAll('a, img')).toHaveLength(0)
-    expect(container.textContent).toContain('See <a href="https://evil.example">notes</a>')
-    expect(container.textContent).not.toContain('Homepage')
     const repository = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Repository'
     )
     await act(async () => repository?.click())
-    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/acme/icons')
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/victim/icons')
     const readme = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Read the README on GitHub'
     )
     await act(async () => readme?.click())
     expect(window.api.shell.openUrl).toHaveBeenCalledWith(
-      `https://github.com/acme/icons/tree/${'d'.repeat(40)}#readme`
+      'https://github.com/mirror/icons/tree/dddddddddddddddddddddddddddddddddddddddd#readme'
     )
+  })
+
+  it('keeps source links on the displayed release during a catalog refresh', async () => {
+    const original = pluginListEntryFromListing({
+      ...listing,
+      pluginKey: 'acme.icons',
+      source: { kind: 'git', url: 'https://github.com/acme/icons', ref: 'main' }
+    })
+    const fetchPreview = vi.fn(() => new Promise<PluginPagePreview>(() => undefined))
+    const container = await render(original, fetchPreview)
+    await render(
+      pluginListEntryFromListing({
+        ...original.listing!,
+        marketplaceCommit: 'new-commit',
+        source: { kind: 'git', url: 'https://gitlab.com/acme/icons', ref: 'main' }
+      }),
+      fetchPreview,
+      { container }
+    )
+    for (const button of container.querySelectorAll('button')) {
+      if (button.textContent === 'Repository') {
+        await act(async () => button.click())
+      }
+    }
+    const urls = vi.mocked(window.api.shell.openUrl).mock.calls.map(([url]) => url)
+    expect(urls).toContain('https://github.com/acme/icons')
+    expect(urls.some((url) => url.includes('gitlab.com'))).toBe(false)
   })
 })

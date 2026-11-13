@@ -3,11 +3,12 @@ import type {
   WorktreeVisibilityDefaults
 } from '../../../../../../shared/global-settings-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isRepoHidden } from '../../../../../../shared/hidden-projects'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
@@ -35,7 +36,8 @@ export function buildImportedWorktreesCardCandidates(args: {
     if (visibleRepoIds && !visibleRepoIds.has(repo.id)) {
       continue
     }
-    if (!isGitRepoKind(repo)) {
+    // A hidden project draws nothing in the sidebar, notices included.
+    if (!isGitRepoKind(repo) || isRepoHidden(repo)) {
       continue
     }
     if (typeof repo.externalWorktreeVisibilityPromptDismissedAt === 'number') {

@@ -20,20 +20,20 @@ import {
   materializedStablePaneReply
 } from '../identity/runtime-terminal-pane-identity'
 import { randomUUID } from 'node:crypto'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { mergeTerminalEnvDeletionKeys } from './runtime-agent-launch-resolution'
 import { terminalSpawnOptions } from './terminal-spawn-options'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { terminalCreateTeamAllocation } from './terminal-create-team-allocation'
-import { createIdempotentCallback } from '../../orca-runtime-report-pty-spawn-commit'
+import { createIdempotentCallback } from './pty-spawn-commit-callback'
 import {
   recordPtySurface,
   spawnSurfaceClaimSequence
 } from '../surface/pty-recorded-surface-topology'
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
 import { seedPtyLaunchTitle } from './pty-launch-title'
-import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
+import { migratedPaneRestoreHint } from '../recovery/migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
 import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
 
@@ -141,6 +141,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            ...(launchOpts.trustWorktreeId ? { trustWorktreeId: launchOpts.trustWorktreeId } : {}),
             launchConfig: effectiveLaunchConfig,
             ...(launchToken ? { launchToken } : {}),
             commandDelivery: 'provider',
@@ -242,8 +243,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          this.watchLaunchComposer(
-            result.id,
+          this.watchLaunchedAgent(
+            pty,
             recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
           )
           if (!launch.adoptedStablePane) {

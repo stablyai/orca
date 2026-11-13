@@ -31,7 +31,11 @@ export type WorkspaceSleepDeps = {
     worktreeId: string,
     markAsleep: boolean
   ) => Promise<AgentSessionWorkspaceSleepResult>
-  suspendVm: ((worktreeId: string) => Promise<void>) | null
+  /** Settles once a wake of the workspace's VM that is under way has finished (whatever its
+   *  outcome): a sleep stops what the woken server runs. */
+  vmWakeSettled: (worktreeId: string) => Promise<void>
+  /** Suspends the VM once its turn comes, unless `wanted` no longer holds by then. */
+  suspendVm: ((worktreeId: string, wanted: () => boolean) => Promise<void>) | null
   /** The wake records main keeps for this host's workspace, read after its terminals stopped. */
   ownRecords: (worktreeId: string) => SleepingAgentSessionRecord[]
   /** Starts watching for the workspace being reopened; the returned check says whether it was. */
@@ -180,11 +184,12 @@ async function sleepWorkspace(
   target: WorkspaceSleepTarget,
   markAsleep: boolean,
   batch: { chatsSettled: () => void; batchChatsSettled: Promise<unknown> },
+  reopened: () => boolean,
   projectMovePauseId?: string
 ): Promise<WorkspaceSleepAttempt> {
   const { worktreeId } = target
-  const reopened = deps.watchReopen(worktreeId)
   const move = projectMovePauseId ? { projectMovePauseId } : {}
+  await deps.vmWakeSettled(worktreeId)
   deps.notify({ worktreeId, phase: 'started', ...move })
   let failure: string | undefined
   let vmSuspendFailure: string | undefined
@@ -212,10 +217,9 @@ async function sleepWorkspace(
   if (!failure && deps.suspendVm) {
     await batch.batchChatsSettled
     try {
-      // Reopened mid-sleep: it is the user's again, so its VM keeps running.
-      if (!reopened()) {
-        await deps.suspendVm(worktreeId)
-      }
+      // Reopened mid-sleep, even while the suspend waits its turn: it is the user's again, so
+      // its VM keeps running.
+      await deps.suspendVm(worktreeId, () => !reopened())
     } catch (error) {
       console.error('[workspace-sleep] host suspension failed', { worktreeId, error })
       vmSuspendFailure = messageOf(error)
@@ -249,6 +253,8 @@ export async function sleepWorkspaces(
   return Promise.all(
     targets.map(async (target, index) => {
       const chatsSettled = releases[index]
+      // From the request, not the run: an open while this sleep waits its turn still keeps the VM up.
+      const reopened = deps.watchReopen(target.worktreeId)
       if (queue.paused(target)) {
         chatsSettled()
       }
@@ -264,6 +270,7 @@ export async function sleepWorkspaces(
                 chatsSettled,
                 batchChatsSettled
               },
+              reopened,
               request.projectMovePauseId
             ),
           outcome: (attempt) => (attempt.unverifiable ? 'unverifiable' : 'settled')

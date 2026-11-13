@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { readDirectSetupRequest } from '@/lib/direct-work-item-setup-test-fixture'
+import { readDirectSetupRequest } from '@/lib/workspace/creation/work-item/direct-work-item-setup-test-fixture'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
@@ -7,9 +7,9 @@ import { useAppStore } from '@/store'
 import {
   requestDirectWorkItemSetup,
   type DirectWorkItemSetupRequest
-} from '@/lib/direct-work-item-setup'
+} from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { DirectWorkItemSetupDialog } from './DirectWorkItemSetupDialog'
-import type { DirectSetupInspection } from '@/lib/launch-work-item-direct-preflight'
+import type { WorkspaceSetupInspection as DirectSetupInspection } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 
 const initial = useAppStore.getState()
 afterEach(async () => {

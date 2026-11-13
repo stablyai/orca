@@ -4,7 +4,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../shared/github/checks/check-types'
 import { ChecksList } from './presentation/checks-list'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -23,7 +26,7 @@ vi.mock('@/store/index', () => ({
     })
 }))
 
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
   useActiveWorktree: () => activeWorktreeState.current
 }))
 

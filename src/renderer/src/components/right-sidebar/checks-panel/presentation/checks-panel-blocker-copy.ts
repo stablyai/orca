@@ -1,5 +1,6 @@
 import type { HostedReviewCreationBlockedReason } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   autoRetrySchedule,
   capitalizeReviewLabel,
@@ -86,19 +87,20 @@ const SAFETY_COPY: Record<
 
 export function safetyBlockerState(
   input: ChecksPanelReviewStateInput,
-  reason: NonNullable<HostedReviewCreationBlockedReason>
+  reason: NonNullable<HostedReviewCreationBlockedReason>,
+  t: Translate = translate
 ): ChecksPanelReviewState {
   const { reviewLabel } = input
   if (reason === 'existing_review') {
     // Same family as positive evidence — offer trusted Open Review, never Create.
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.existing.title',
         '{{reviewLabelCap}} already exists',
         { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.existing.body',
         'Orca found an existing {{reviewLabel}} for this branch.',
         { reviewLabel }
@@ -113,8 +115,8 @@ export function safetyBlockerState(
   const vars = { reviewLabel, reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
   return {
     renderReview: false,
-    title: translate(copy.title.key, copy.title.fallback, vars),
-    description: translate(copy.body.key, copy.body.fallback, vars),
+    title: t(copy.title.key, copy.title.fallback, vars),
+    description: t(copy.body.key, copy.body.fallback, vars),
     composerMode: 'hidden',
     workflowAction: null,
     recovery: []
@@ -163,10 +165,11 @@ const BRANCH_BLOCKER_COPY: Record<
 
 export function branchBlockerState(
   input: ChecksPanelReviewStateInput,
-  reason: NonNullable<HostedReviewCreationBlockedReason>
+  reason: NonNullable<HostedReviewCreationBlockedReason>,
+  t: Translate = translate
 ): ChecksPanelReviewState {
   const { reviewLabel, providerName } = input
-  const detail = concurrentLookupDetail(input)
+  const detail = concurrentLookupDetail(input, t)
   const schedule = detail ? autoRetrySchedule(input) : {}
   // Keep trusted Open Review under blockers; lookup failures also offer Retry, while create stays suppressed.
   const canOpenReview = input.reviewLookup === 'positive_unresolved' && Boolean(input.openReviewUrl)
@@ -184,11 +187,11 @@ export function branchBlockerState(
       !input.confirmedReadiness
     return {
       renderReview: false,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.needs_push.title',
         'Branch has unpushed commits'
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.needs_push.body',
         'Push the latest commits before creating a {{reviewLabel}}.',
         { reviewLabel }
@@ -205,8 +208,8 @@ export function branchBlockerState(
   const copy = BRANCH_BLOCKER_COPY[reason as keyof typeof BRANCH_BLOCKER_COPY]
   return {
     renderReview: false,
-    title: translate(copy.title.key, copy.title.fallback, vars),
-    description: translate(copy.body.key, copy.body.fallback, vars),
+    title: t(copy.title.key, copy.title.fallback, vars),
+    description: t(copy.body.key, copy.body.fallback, vars),
     detail,
     composerMode: 'hidden',
     workflowAction: copy.workflow,

@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ActivePluginPanel } from '@/store/plugin-panels'
+import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en-US',
@@ -21,7 +21,7 @@ const { watchdogStartMock, watchdogStopMock, watchdogCallbacks } = vi.hoisted(()
   watchdogCallbacks: { onUnresponsive: null as (() => void) | null }
 }))
 
-vi.mock('@/store/plugin-panels', () => ({
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
   usePluginPanels: usePluginPanelsMock,
   usePluginPanelsStore: (
     selector: (state: { setPanelHealth: typeof setPanelHealthMock }) => unknown

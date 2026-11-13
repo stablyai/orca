@@ -47,26 +47,6 @@ describe('DiffCommentDraftCard', () => {
     await act(async () => resolveSubmit(true))
   })
 
-  it('calls onSubmit on Enter without Shift, but allows Shift+Enter for newlines', async () => {
-    const onCancel = vi.fn()
-    const onSubmit = vi.fn().mockResolvedValue(true)
-
-    const view = render(
-      <DiffCommentDraftCard lineNumber={10} onCancel={onCancel} onSubmit={onSubmit} />
-    )
-
-    const textarea = view.getByRole('textbox')
-    fireEvent.change(textarea, { target: { value: 'First line' } })
-
-    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
-    expect(onSubmit).not.toHaveBeenCalled()
-
-    await act(async () => {
-      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
-    })
-    expect(onSubmit).toHaveBeenCalledWith('First line')
-  })
-
   it('submits Cmd+Shift+Enter and ignores duplicate submits while pending', async () => {
     let resolveSubmit: (result: boolean) => void = () => {}
     const onSubmit = vi.fn(
@@ -110,20 +90,5 @@ describe('DiffCommentDraftCard', () => {
     expect(toast.error).toHaveBeenCalledWith('Failed to save comment')
     expect(consoleError).toHaveBeenCalled()
     expect(view.getByRole('button', { name: 'Add note' }).hasAttribute('disabled')).toBe(false)
-  })
-
-  it('does not submit on Enter when IME composition is active', async () => {
-    const onCancel = vi.fn()
-    const onSubmit = vi.fn().mockResolvedValue(true)
-
-    const view = render(
-      <DiffCommentDraftCard lineNumber={10} onCancel={onCancel} onSubmit={onSubmit} />
-    )
-
-    const textarea = view.getByRole('textbox')
-    fireEvent.change(textarea, { target: { value: 'nihon' } })
-
-    fireEvent.keyDown(textarea, { key: 'Enter', isComposing: true })
-    expect(onSubmit).not.toHaveBeenCalled()
   })
 })

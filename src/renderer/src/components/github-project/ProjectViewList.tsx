@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
 import { ProjectItemsEmptyState } from './ProjectViewStates'
-import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
+import { groupRows, sortRows } from '../../../../shared/github/projects/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
   ACTION_COLUMN_WIDTH,
@@ -22,9 +22,9 @@ import type {
   GitHubProjectRow,
   GitHubProjectSortDirection,
   GitHubProjectTable
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
 
@@ -275,6 +275,7 @@ function ProjectHeaderRow({
   gridTemplate: string
   onResizeColumn: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur"
@@ -310,7 +311,7 @@ function ProjectHeaderRow({
                 'group flex min-w-0 flex-1 items-center gap-1 truncate text-left uppercase tracking-wide hover:text-foreground',
                 isActive && 'text-foreground'
               )}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.github.project.ProjectViewList.eddfc7a794',
                 'Sort by {{value0}}',
                 { value0: f.name }
@@ -341,7 +342,7 @@ function ProjectHeaderRow({
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.github.project.ProjectViewList.f949f5b2b7',
                 'Configure columns'
               )}
@@ -352,7 +353,7 @@ function ProjectHeaderRow({
           </PopoverTrigger>
           <PopoverContent align="end" className="w-56 p-1">
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {translate('auto.components.github.project.ProjectViewList.989f81dc2a', 'Columns')}
+              {t('auto.components.github.project.ProjectViewList.989f81dc2a', 'Columns')}
             </div>
             {availableFields.map((f) => {
               // Keep TITLE visible because it supplies the row’s identity and open action.

@@ -8,10 +8,10 @@ import {
 } from '../../../shared/plugins/workers/plugin-hook-chain'
 import { setPluginHookRunner, type PluginHookRunner } from './plugin-hook-dispatch'
 import type { PluginService } from '../plugin-service'
-import { setAgentToolHookTerminalResolver } from '../../agent-hooks/agent-tool-call-reader'
-import type { PluginWorkerHandle } from '../workers/plugin-host-process'
+import { setAgentToolHookTerminalResolver } from '../../agent-hooks/tool-events/agent-tool-call-reader'
+import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
 import { PLUGIN_WORKER_READY_TIMEOUT_MS } from '../../../shared/plugins/workers/plugin-host-protocol'
-import { pluginApprovedRevision } from '../workers/plugin-resident-worker'
+import { pluginApprovedRevision } from '../workers/worker-admission/plugin-resident-worker'
 
 /** The event path's context (enabled, approved, not being removed; worker start; logs). */
 export type PluginHookHostContext = Pick<

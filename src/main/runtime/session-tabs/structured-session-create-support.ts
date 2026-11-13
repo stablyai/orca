@@ -1,11 +1,13 @@
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
 import {
   captureStructuredAgentCliSource,
   structuredAgentCliSourceFromEvidence
-} from '../../native-chat/structured-agent-cli-source'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   requireUnownedStructuredAgentSessionAdoption,
@@ -13,7 +15,7 @@ import {
   structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../agent-session/structured-agent-session-create-adoption'
-import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
+import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import {
   resolveHostStructuredAgentCreateSupport,
   resolveHostStructuredAgentLaunchEnvironment
@@ -108,6 +110,15 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
       : undefined
+    if (input.forkFrom) {
+      const resolved = await resolveStructuredAgentSessionForkIntent({
+        ...input,
+        forkFrom: input.forkFrom,
+        host: getStructuredAgentSessionHost(),
+        location: await this.resolveStructuredAgentSessionLocation(input.worktree)
+      })
+      return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
+    }
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
       input.agent,
       input.worktree,
@@ -144,15 +155,18 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
 
   protected async resolveStructuredAgentSessionIntent(
     input: StructuredAgentSessionCreateIntentInput,
-    resolveAccountHome: (context: {
-      launchEnv: NodeJS.ProcessEnv
-      location: {
-        executionHostId: string
-        wslDistro: string | null
-        workspaceId: string
-        workspaceKind: 'folder' | 'git-worktree'
-      }
-    }) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>
+    resolveAccountHome: (
+      context: {
+        launchEnv: NodeJS.ProcessEnv
+        location: {
+          executionHostId: string
+          wslDistro: string | null
+          workspaceId: string
+          workspaceKind: 'folder' | 'git-worktree'
+        }
+      },
+      permissionMode?: string
+    ) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     // Adopting a conversation reads the agent's own transcript, so only an agent registered with an
@@ -195,7 +209,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const workspaceCwd = resumeFrom
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
       : ''
-    const selectedAccountHome = await resolveAccountHome({ launchEnv, location })
+    const permissionMode = options?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+    const selectedAccountHome = await resolveAccountHome({ launchEnv, location }, permissionMode)
     // Adoption pins the transcript's actual account home; fresh-create defaults may open a blank conversation under the old name.
     const adoption =
       resumeFrom && transcriptImport

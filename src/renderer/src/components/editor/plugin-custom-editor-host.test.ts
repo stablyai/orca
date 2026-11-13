@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
 import { createPanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
-import { createPluginFrameMessageHandler } from '../plugins/frames/plugin-frame-host'
+import {
+  createPluginFrameEnvelopeHandler,
+  createPluginFrameMessageHandler,
+  type PluginFrameHostOptions
+} from '../plugins/frames/plugin-frame-host'
 import { createCustomEditorHost } from './plugin-custom-editor-host'
 import type { CustomEditorHostOptions } from './plugin-custom-editor-host-types'
 
@@ -31,11 +35,26 @@ const keydown = (payload: Record<string, unknown>) => ({
 })
 
 type Posted = { message: unknown; transfer: unknown }
+type FrameSend = (data: unknown, source?: unknown) => void
+
+function iframeSender(frameHost: PluginFrameHostOptions, frameWindow: unknown): FrameSend {
+  const handler = createPluginFrameMessageHandler(frameHost)
+  return (data, source = frameWindow) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only data and source.
+    handler({ data, source } as unknown as MessageEvent)
+}
+
+/** As `usePluginFrameHost` relays a guest's IPC. */
+function guestSender(frameHost: PluginFrameHostOptions): FrameSend {
+  const handle = createPluginFrameEnvelopeHandler(frameHost)
+  return (data) => handle(data, { userActivation: false, transport: 'guest', gesture: 0 })
+}
 
 function harness(
   options: Omit<CustomEditorHostOptions, 'getFrameWindow' | 'onEdit'> & {
     onEdit?: CustomEditorHostOptions['onEdit']
-  }
+  },
+  transport: 'iframe' | 'guest' = 'iframe'
 ) {
   const posted: Posted[] = []
   const frameWindow = {
@@ -45,16 +64,14 @@ function harness(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hosts only call postMessage and compare identity.
   const getFrameWindow = () => frameWindow as unknown as Window
   const host = createCustomEditorHost({ onEdit: vi.fn(), ...options, getFrameWindow })
-  const handler = createPluginFrameMessageHandler({
-    surface: 'editor',
+  const frameHost = {
+    surface: 'editor' as const,
     getFrameWindow,
     getSessionToken: () => null,
     callHostMethod: vi.fn(),
     editor: host.channel
-  })
-  const send = (data: unknown, source: unknown = frameWindow) =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only data and source.
-    handler({ data, source } as unknown as MessageEvent)
+  }
+  const send = transport === 'guest' ? guestSender(frameHost) : iframeSender(frameHost, frameWindow)
   const messages = () => posted.map(({ message }) => message)
   const documents = () =>
     messages().filter(
@@ -78,19 +95,23 @@ function setupWith(initial: {
   text: string
   onMergesOutside: () => void
   onKeyChord?: CustomEditorHostOptions['onKeyChord']
+  transport?: 'iframe' | 'guest'
 }) {
   const doc = { text: initial.text, readOnly: false }
   const onEdit = vi.fn((text: string) => {
     doc.text = text
   })
   return {
-    ...harness({
-      getDocument: () => doc,
-      onEdit,
-      onMergesOutside: initial.onMergesOutside,
-      flushTimeoutMs: 1_000,
-      ...(initial.onKeyChord ? { onKeyChord: initial.onKeyChord } : {})
-    }),
+    ...harness(
+      {
+        getDocument: () => doc,
+        onEdit,
+        onMergesOutside: initial.onMergesOutside,
+        flushTimeoutMs: 1_000,
+        ...(initial.onKeyChord ? { onKeyChord: initial.onKeyChord } : {})
+      },
+      initial.transport
+    ),
     onEdit
   }
 }
@@ -386,6 +407,17 @@ describe('custom editor document channel', () => {
       })
     )
     expect(onKeyChord).toHaveBeenCalledOnce()
+  })
+
+  it('merges an outside change for an isolated guest frame too', async () => {
+    const onMergesOutside = vi.fn()
+    const { host, send } = setupWith({ text: 'a+mine', onMergesOutside, transport: 'guest' })
+    send(READY)
+    send({ orca: 1, kind: 'evt', event: 'editor.merges', payload: {} })
+    expect(onMergesOutside).toHaveBeenCalledOnce()
+    const merged = host.mergeOutsideChange('a+agent', 'a')
+    send(edit('a+mine+agent', 2))
+    await expect(merged).resolves.toBe('a+mine+agent')
   })
 
   it('answers null when the session never acknowledges, or the frame remounts', async () => {

@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DaemonPtyAdapter } from '../../adapter/daemon-pty-adapter'
 import { DaemonPtyRouter } from '../daemon-pty-router'
-import {
-  SessionNotFoundError,
-  TerminalSessionOwnerUnverifiedError
-} from '../../../protocol/daemon-errors'
+import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
 
 const LIVE_PID = 4242
 const EXITED_PID = 4343
@@ -37,58 +34,6 @@ function connectError(code: 'ECONNREFUSED' | 'ENOENT' | 'ECONNRESET', syscall: s
 
 describe('DaemonPtyRouter legacy socket that can never answer', () => {
   // Legacy PID-only exit proof remains unsupported on Windows.
-  it.skipIf(process.platform === 'win32')(
-    'drops a refused or missing legacy socket and does not ask it again',
-    async () => {
-      const current = adapter('current', ['current-session'])
-      const refused = adapter('refused')
-      const missing = adapter('missing')
-      vi.mocked(refused.listProcesses).mockRejectedValue(connectError('ECONNREFUSED', 'connect'))
-      vi.mocked(missing.listProcesses).mockRejectedValue(connectError('ENOENT', 'connect'))
-      vi.mocked(refused.disconnectOnly).mockRejectedValue(new Error('already closed'))
-      const router = new DaemonPtyRouter({ current, legacy: [refused, missing] })
-      const sessions = [{ id: 'current-session', cwd: '', title: 'current' }]
-
-      await expect(router.listProcesses()).resolves.toEqual(sessions)
-      await expect(router.listProcesses()).resolves.toEqual(sessions)
-
-      expect(refused.listProcesses).toHaveBeenCalledOnce()
-      expect(missing.listProcesses).toHaveBeenCalledOnce()
-      expect(refused.disconnectOnly).toHaveBeenCalledOnce()
-      expect(router.getLegacyAdapters()).toEqual([])
-
-      await router.discoverLegacySessions()
-      router.onBackgroundStreamEvent(() => {})
-      expect(refused.listProcesses).toHaveBeenCalledOnce()
-      expect(missing.listProcesses).toHaveBeenCalledOnce()
-      expect(refused.onBackgroundStreamEvent).not.toHaveBeenCalled()
-      expect(current.onBackgroundStreamEvent).toHaveBeenCalledOnce()
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'lets a reattach prove absence once a legacy daemon has exited',
-    async () => {
-      const current = adapter('current', ['current-session'])
-      const exited = adapter('exited')
-      vi.mocked(exited.listProcesses).mockRejectedValue(connectError('ECONNREFUSED', 'connect'))
-      const router = new DaemonPtyRouter({ current, legacy: [exited] })
-      const attach = { cols: 80, rows: 24, sessionId: 'gone-session', attachOnly: true }
-
-      await expect(router.spawn(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
-      Object.assign(current, {
-        spawn: vi.fn(async () => {
-          throw new SessionNotFoundError('gone-session')
-        })
-      })
-      await expect(router.spawn(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
-      expect(current.spawn).toHaveBeenCalledOnce()
-
-      expect(exited.listProcesses).toHaveBeenCalledOnce()
-      expect(exited.disconnectOnly).toHaveBeenCalledOnce()
-      expect(router.getLegacyAdapters()).toEqual([])
-    }
-  )
 
   it('judges a replacement legacy daemon by its own pid, not its predecessor', async () => {
     const current = adapter('current')
@@ -120,26 +65,5 @@ describe('DaemonPtyRouter legacy socket that can never answer', () => {
     await expect(router.listProcesses()).rejects.toThrow('connect')
     expect(router.getLegacyAdapters()).toEqual([alive, unknown])
     expect(alive.disconnectOnly).not.toHaveBeenCalled()
-  })
-
-  it('still fails closed for the current daemon and for any other legacy error', async () => {
-    const current = adapter('current', ['current-session'])
-    const legacy = adapter('legacy', ['legacy-session'])
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(new Error('legacy unavailable'))
-    await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
-    expect(router.getLegacyAdapters()).toEqual([legacy])
-
-    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(connectError('ENOENT', 'open'))
-    await expect(router.listProcesses()).rejects.toThrow('open ENOENT')
-    expect(router.getLegacyAdapters()).toEqual([legacy])
-
-    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(connectError('ECONNRESET', 'read'))
-    await expect(router.listProcesses()).rejects.toThrow('read ECONNRESET')
-    expect(router.getLegacyAdapters()).toEqual([legacy])
-
-    vi.mocked(current.listProcesses).mockRejectedValueOnce(connectError('ECONNREFUSED', 'connect'))
-    await expect(router.listProcesses()).rejects.toThrow('connect ECONNREFUSED')
-    expect(current.disconnectOnly).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+export { AntigravityChatAuthConfigSchema } from '../antigravity-chat-auth-config'
 
 export const AntigravityAccountTargetParams = z
   .object({

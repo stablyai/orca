@@ -1,4 +1,4 @@
-import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
@@ -7,7 +7,7 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../../shared/runtime-navigation'
-import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
+import { withTerminalCloseAttribution } from '../../terminal/terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
@@ -74,6 +74,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
               terminalImageViewerSupported: terminalImageViewerSupported(context)
             }
           )
@@ -101,6 +102,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
               ? { terminalKittyKeyboardProtocol: true }
               : {}),
@@ -143,7 +145,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.split',
     permission: 'workspace',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
+    handler: async (params, { runtime, caller }) => ({
       split:
         params.pane && !params.terminal
           ? await runtime.splitTerminalPane(params.pane, {
@@ -164,6 +166,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               env: params.env,
               telemetrySource: params.telemetrySource,
               retrySplit: params.retrySplit,
+              ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
               wslUserAct: true
             })
     })

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import type { HostScopedRepoKey } from '../../../../shared/repo-host-identity'
 import { getActivityProjectLabelsByRepoHost } from './activity-thread-grouping'
 

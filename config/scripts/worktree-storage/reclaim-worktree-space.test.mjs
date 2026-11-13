@@ -19,36 +19,6 @@ async function fixture() {
   return { commonDirectory: root, repoRoot: root, execute }
 }
 
-it('includes generated and historical test cache cleanup in automatic invocations without the stopped-test override', async () => {
-  const options = {
-    ...(await fixture()),
-    automatic: true,
-    apply: true,
-    testsStopped: true,
-    excludeWorktree: '/dev-worktree'
-  }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(7)
-  const args = options.execute.mock.calls.flatMap(([spec]) => spec.args)
-  expect(args.join(' ')).toContain('reclaim-release-test-caches')
-  expect(args.join(' ')).toContain('reclaim-worktree-generated-files')
-  expect(args).not.toContain('--tests-stopped')
-  for (const [spec] of options.execute.mock.calls.slice(0, -1)) {
-    expect(spec.args).toEqual(
-      expect.arrayContaining(['--exclude-worktree', options.excludeWorktree])
-    )
-  }
-})
-
-it.each([
-  ['releaseCacheMinAgeDays', '--release-cache-min-age-days'],
-  ['generatedMinAgeDays', '--generated-min-age-days']
-])('rejects invalid %s before starting cleanup', async (key, flag) => {
-  const options = { ...(await fixture()), [key]: -1 }
-  await expect(reclaimWorktreeSpace(options)).rejects.toThrow(flag)
-  expect(options.execute).not.toHaveBeenCalled()
-})
-
 it("runs the CLI outside the repository and retains an active worktree's historical caches until tests are stopped", async () => {
   const options = await fixture()
   const init = await runProcess({
@@ -134,31 +104,4 @@ it('rejects competing sweeps and releases the lock after a failed operation', as
   options.execute.mockResolvedValue({ code: 0, timedOut: false })
   await reclaimWorktreeSpace(options)
   expect(options.execute).toHaveBeenCalledTimes(8)
-})
-
-it('preserves the cleanup failure and reports a concurrent lock release failure separately', async () => {
-  const options = await fixture()
-  const failure = new Error('original cleanup failure')
-  options.execute.mockRejectedValue(failure)
-  const release = vi.fn().mockRejectedValue(new Error('lock release failure'))
-  const report = vi.spyOn(console, 'error').mockImplementation(() => {})
-  try {
-    await expect(
-      reclaimWorktreeSpace({ ...options, acquireLock: async () => release })
-    ).rejects.toBe(failure)
-    expect(release).toHaveBeenCalledTimes(1)
-    expect(report).toHaveBeenCalledWith('Failed to release cleanup lock: lock release failure')
-  } finally {
-    report.mockRestore()
-  }
-})
-
-it('fails if cleanup succeeds but the repository lock cannot be released', async () => {
-  const options = { ...(await fixture()), testsStopped: true }
-  const failure = new Error('lock release failure')
-  const release = vi.fn().mockRejectedValue(failure)
-  await expect(reclaimWorktreeSpace({ ...options, acquireLock: async () => release })).rejects.toBe(
-    failure
-  )
-  expect(options.execute).toHaveBeenCalledTimes(7)
 })

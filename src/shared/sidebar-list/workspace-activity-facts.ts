@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import {
   parseWorktreeHostIdentity,

@@ -1,4 +1,4 @@
-import type { BrowserManager } from '../../browser-manager'
+import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { BrowserRoutePageGuestIdentity } from '../../routing/guest-authority/browser-route-page-authority'
 
 export type BrowserClientPageGuestBindingInput = {

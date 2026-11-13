@@ -1,9 +1,9 @@
 import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
-} from '../../../shared/file-preview-kind'
+} from '../../../shared/file-preview/file-preview-kind'
 import { localLogFileIdentity } from '../../ai-vault/transcripts/local-log-tail-reader'
-import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import {
   fileTooLargeError,
   openLocalRegularFile,

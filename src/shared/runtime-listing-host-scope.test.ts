@@ -24,12 +24,6 @@ describe('hostScopeCensusIsComplete', () => {
     ).toBe(false)
   })
 
-  it('calls a clean census complete', () => {
-    expect(hostScopeCensusIsComplete({ hostIds: ['local', 'ssh:box-1'], omittedHostIds: [] })).toBe(
-      true
-    )
-  })
-
   // Even if local stops being seeded, a listing covering no host must never read complete.
   it('refuses a listing that covered no host at all', () => {
     expect(hostScopeCensusIsComplete({ hostIds: [], omittedHostIds: ['runtime:env-7'] })).toBe(

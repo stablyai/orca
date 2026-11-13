@@ -1,6 +1,6 @@
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { AppState } from '@/store/types'
-
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'
@@ -8,7 +8,7 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
-} from '../../components/native-chat/native-chat-leaf-routing'
+} from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
 
 export function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
@@ -38,7 +38,7 @@ export function getRuntimeLeafIdsForTerminal(
   if (liveLeafIds.length > 0) {
     return liveLeafIds
   }
-  const persistedLeafIds = collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+  const persistedLeafIds = collectLayoutLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
   if (persistedLeafIds.length > 0) {
     return persistedLeafIds
   }

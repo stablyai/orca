@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_FILE_RANGE_READ_BYTES } from '../file-range-read'
+import { MAX_FILE_RANGE_READ_BYTES } from '../file-content/file-range-read'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
   AGENT_SESSION_ATTACHMENT_MAX_BYTES

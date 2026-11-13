@@ -8,6 +8,11 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { AiVaultDeleteSessionArgs } from '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import {
+  AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
+  readAiVaultSessionHandoffResult,
+  type AiVaultSessionHandoffArgs
+} from '../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
@@ -76,6 +81,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
           ? { afterFingerprint: args.afterFingerprint }
           : {}),
         scopePaths: args?.scopePaths,
+        ...(args?.scopeOnly === true ? { scopeOnly: true } : {}),
         executionHostId
       }).then((result) =>
         // Fence later host mutations on these rows to the pairing that listed them.
@@ -104,6 +110,18 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     cancelListSessions: () => Promise.resolve(),
     prepareSessionResume: (args: AiVaultPrepareSessionResumeRequest) =>
       callRuntimeResult<AiVaultPrepareSessionResumeResult>('aiVault.prepareSessionResume', args),
+    // A browser reaches only its own paired runtime; an older one leaves the preview hand-off.
+    prepareSessionHandoff: async (args: AiVaultSessionHandoffArgs) => {
+      if (!addressesOwnRuntime(args.executionHostId)) {
+        return {}
+      }
+      const result = await callRuntimeResult<unknown>(
+        'aiVault.prepareSessionHandoff',
+        { agent: args.agent, filePath: args.filePath, sessionId: args.sessionId },
+        AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS
+      ).catch(() => null)
+      return readAiVaultSessionHandoffResult(result)
+    },
     // Why: no server-side RPC for subagent transcript listing yet, so report an empty (not erroring) result.
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.

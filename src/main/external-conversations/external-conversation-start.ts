@@ -9,11 +9,11 @@ import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
-} from '../agent-hooks/agent-transition-detector'
+} from '../agent-hooks/observations/agent-transition-detector'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { resolveUnlaunchedIntent } from '../runtime/rpc/methods/agent-launch-intent-resolution'
-import { agentLaunchSurfaceFactory } from '../runtime/rpc/methods/agent-launch-surfaces'
-import { agentLaunchWorkspaceFactory } from '../runtime/rpc/methods/agent-launch-worktree-creation'
+import { resolveUnlaunchedIntent } from '../runtime/rpc/methods/agent-launch/agent-launch-intent-resolution'
+import { agentLaunchSurfaceFactory } from '../runtime/rpc/methods/agent-launch/agent-launch-surfaces'
+import { agentLaunchWorkspaceFactory } from '../runtime/rpc/methods/agent-launch/agent-launch-worktree-creation'
 import { refusalOf } from './external-conversation-chain'
 import { refused, type Delivery } from './external-conversation-types'
 

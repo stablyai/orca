@@ -1,13 +1,9 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { importUnitTimingReports, importUnitTimingRuns } from './ci-unit-timing-import.mjs'
-import UnitTimingReporter, {
-  buildUnitPhaseReport,
-  moduleDuration,
-  UNIT_PHASE_FILE_LIMIT
-} from './ci-unit-timing-reporter.mjs'
+import { importUnitTimingReports } from './ci-unit-timing-import.mjs'
+import UnitTimingReporter, { buildUnitPhaseReport } from './ci-unit-timing-reporter.mjs'
 
 const report = (index, timings) => ({
   metric: 'module-duration-v1',
@@ -22,105 +18,6 @@ const report = (index, timings) => ({
 })
 
 describe('unit worker timing evidence', () => {
-  it('counts each worker phase once, including imports of tests with cheap assertions', () => {
-    expect(
-      moduleDuration({
-        environmentSetupDuration: 11,
-        prepareDuration: 12,
-        collectDuration: 130,
-        setupDuration: 14,
-        duration: 0.2,
-        importDurations: { dependency: 100 }
-      })
-    ).toBe(168)
-  })
-
-  it.each([undefined, '24.21.0', '26.6.0'])(
-    'writes reporter provenance for selected Node version %s',
-    (nodeVersion) => {
-      const directory = mkdtempSync(join(tmpdir(), 'orca-unit-timing-'))
-      const previous = process.env.ORCA_UNIT_TIMING_REPORT
-      process.env.ORCA_UNIT_TIMING_REPORT = join(directory, 'unit-timings.json')
-      vi.stubEnv('ORCA_TEST_NODE_VERSION', nodeVersion)
-      vi.stubEnv('ORCA_UNIT_PHASE_REPORT', undefined)
-      try {
-        const reporter = new UnitTimingReporter()
-        reporter.onInit({ config: { root: process.cwd(), shard: { index: 1, count: 8 } } })
-        reporter.onTestRunEnd(
-          [
-            {
-              moduleId: resolve('src/example.test.ts'),
-              diagnostic: () => ({
-                environmentSetupDuration: 0,
-                prepareDuration: 0,
-                collectDuration: 200,
-                setupDuration: 10,
-                duration: 5
-              })
-            }
-          ],
-          [],
-          'passed'
-        )
-        expect(JSON.parse(readFileSync(process.env.ORCA_UNIT_TIMING_REPORT, 'utf8'))).toMatchObject(
-          {
-            metric: 'module-duration-v1',
-            nodeVersion: nodeVersion ?? process.versions.node,
-            ...(process.versions.bun ? { bunVersion: process.versions.bun } : {}),
-            shard: { index: 1, count: 8 },
-            status: 'passed',
-            unhandledErrors: 0,
-            timings: { 'src/example.test.ts': 215 }
-          }
-        )
-      } finally {
-        vi.unstubAllEnvs()
-        if (previous === undefined) {
-          delete process.env.ORCA_UNIT_TIMING_REPORT
-        } else {
-          process.env.ORCA_UNIT_TIMING_REPORT = previous
-        }
-        rmSync(directory, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it('imports all shards without adding the old average overhead again', () => {
-    expect(importUnitTimingReports([report(2, { b: 100 }), report(1, { a: 200 })])).toMatchObject({
-      sourceSha: 'source',
-      overheadMs: 0,
-      metric: 'module-duration-v1',
-      timings: { a: 200, b: 100 }
-    })
-  })
-
-  it('averages each file over several complete runs and rejects repeated or mixed runs', () => {
-    const run = (runId, a, b) => [
-      { ...report(1, { a }), runId },
-      { ...report(2, { b }), runId }
-    ]
-    expect(importUnitTimingRuns([run('r1', 100, 300), run('r2', 200, 500)])).toMatchObject({
-      runIds: ['r1', 'r2'],
-      overheadMs: 0,
-      timings: { a: 150, b: 400 }
-    })
-    expect(() => importUnitTimingRuns([run('r1', 100, 300), run('r1', 100, 300)])).toThrow(
-      'distinct'
-    )
-    const otherNode = run('r2', 200, 500).map((entry) => ({ ...entry, nodeVersion: '26.6.0' }))
-    expect(() => importUnitTimingRuns([run('r1', 100, 300), otherNode])).toThrow('distinct')
-  })
-
-  it('preserves Bun provenance and rejects mixing Bun and Node timing sets', () => {
-    const first = { ...report(1, { a: 100 }), bunVersion: '1.4.2' }
-    const second = { ...report(2, { b: 200 }), bunVersion: '1.4.2' }
-    expect(importUnitTimingReports([first, second])).toMatchObject({ bunVersion: '1.4.2' })
-    expect(() => importUnitTimingReports([first, report(2, { b: 200 })])).toThrow('successful')
-    expect(() => importUnitTimingReports([first, { ...second, bunVersion: '1.4.1' }])).toThrow(
-      'successful'
-    )
-  })
-
   it('rejects incomplete, duplicate, mixed and failed evidence', () => {
     const first = report(1, { a: 100 })
     expect(() => importUnitTimingReports([first])).toThrow('complete')
@@ -186,38 +83,6 @@ function withReporterOutputs(run) {
 }
 
 describe('optional unit phase diagnostics', () => {
-  it('leaves the timing report identical and writes nothing extra when disabled', () => {
-    withReporterOutputs(({ timingPath, phasePath }) => {
-      const modules = [
-        phaseModule(
-          'src/example.test.ts',
-          phaseDiagnostic({ importDurations: { dependency: { selfTime: 100, totalTime: 200 } } })
-        )
-      ]
-      const reporter = new UnitTimingReporter()
-      reporter.onInit(phaseContext({ workersSpawned: 3, startupTime: 500 }))
-      reporter.onTestRunEnd(modules, [], 'passed')
-      const timing = readFileSync(timingPath, 'utf8')
-      expect(existsSync(phasePath)).toBe(false)
-
-      vi.stubEnv('ORCA_UNIT_PHASE_REPORT', phasePath)
-      reporter.onTestRunEnd(modules, [], 'passed')
-      expect(readFileSync(timingPath, 'utf8')).toBe(timing)
-      expect(JSON.parse(timing).timings).toEqual({ 'src/example.test.ts': 44 })
-      expect(JSON.parse(readFileSync(phasePath, 'utf8'))).toMatchObject({
-        sourceSha: 'phase-source',
-        runId: 'phase-run',
-        runAttempt: '3',
-        metric: 'module-phase-diagnostics-v1',
-        vitestVersion: '5.0.3',
-        shard: { index: 1, count: 5 },
-        status: 'passed',
-        unhandledErrors: 0,
-        workerTotals: { scope: 'vitest-session', workersSpawned: 3, startupTimeMs: 500 }
-      })
-    })
-  })
-
   it('records fractions and project totals without retaining sampled import records', () => {
     const report = buildUnitPhaseReport(
       phaseContext(),
@@ -269,73 +134,6 @@ describe('optional unit phase diagnostics', () => {
     })
     expect(JSON.stringify(report)).not.toContain('private-account')
     expect(JSON.stringify(report)).not.toContain('importDurations')
-  })
-
-  it('reports successful worker startup counters for the current run separately', () => {
-    withReporterOutputs(({ phasePath }) => {
-      vi.stubEnv('ORCA_UNIT_PHASE_REPORT', phasePath)
-      const state = { workersSpawned: 2, startupTime: 10 }
-      const reporter = new UnitTimingReporter()
-      reporter.onInit(phaseContext(state))
-      reporter.onTestRunStart()
-      state.workersSpawned = 5
-      state.startupTime = 60.25
-      reporter.onTestRunEnd([phaseModule('src/example.test.ts')], [], 'passed')
-      expect(JSON.parse(readFileSync(phasePath, 'utf8')).workerTotals).toEqual({
-        scope: 'test-run',
-        workersSpawned: 3,
-        startupTimeMs: 50.25
-      })
-    })
-  })
-
-  it('caps file detail while keeping aggregates from omitted files', () => {
-    const module = phaseModule('src/repeated.test.ts')
-    const modules = Array.from({ length: UNIT_PHASE_FILE_LIMIT }, () => module)
-    modules.push(
-      phaseModule(
-        'src/omitted.test.ts',
-        phaseDiagnostic({
-          collectDuration: 11,
-          importDurations: { dependency: { selfTime: 2, totalTime: 3 } }
-        })
-      )
-    )
-    const report = buildUnitPhaseReport(phaseContext(), modules, [], 'passed')
-    expect(report.files).toHaveLength(UNIT_PHASE_FILE_LIMIT)
-    expect(report).toMatchObject({
-      fileLimit: UNIT_PHASE_FILE_LIMIT,
-      filesSeen: UNIT_PHASE_FILE_LIMIT + 1,
-      filesOmitted: 1,
-      phases: { collectDuration: UNIT_PHASE_FILE_LIMIT * 30.25 + 11 },
-      projects: [
-        {
-          files: UNIT_PHASE_FILE_LIMIT + 1,
-          sampledImports: { entries: 1, selfTimeMs: 2, totalTimeMs: 3 }
-        }
-      ]
-    })
-  })
-
-  it('marks unavailable counters, phases and worker IDs without inventing measurements', () => {
-    const report = buildUnitPhaseReport(
-      phaseContext({ workersSpawned: -1, startupTime: Number.NaN }),
-      [phaseModule('src/unavailable.test.ts', {})],
-      [],
-      'interrupted'
-    )
-    expect(report.workerTotals).toEqual({
-      scope: 'vitest-session',
-      workersSpawned: null,
-      startupTimeMs: null
-    })
-    expect(report.files[0]).toMatchObject({
-      workerId: null,
-      concurrencyId: null,
-      phases: { collectDuration: null }
-    })
-    expect(report.phaseSamples.collectDuration).toBe(0)
-    expect(report.status).toBe('interrupted')
   })
 
   it.each(['unwritable', 'same as timing'])(

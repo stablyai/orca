@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
@@ -21,6 +21,7 @@ import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
+import { resolveSidebarWorkspaceDeleteIntent } from '../navigation/sidebar-workspace-delete'
 import { useWorktreeListKeyboardNavigation, withKeyboardPreview } from '../navigation/use-keyboard'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
@@ -31,7 +32,7 @@ import { EMPTY_PROJECT_GROUPS, type VirtualizedWorktreeViewportProps } from './v
 import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
-import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
@@ -44,6 +45,7 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
 ) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const {
     rows,
@@ -223,15 +225,25 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     toggleGroup
   })
 
-  const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
-    rows,
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
-    pinnedDisplayPolicy,
-    scrollRef,
-    activeModal: props.activeModal,
-    markDirectScrollInput
-  })
+  const { handleContainerKeyDown, handleContainerKeyUp, handleContainerBlur, keyboardPreview } =
+    useWorktreeListKeyboardNavigation({
+      rows,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
+      pinnedDisplayPolicy,
+      scrollRef,
+      activeModal: props.activeModal,
+      markDirectScrollInput,
+      onKeyboardSelect: props.onKeyboardSelect,
+      focusedWorktree: props.focusedWorktree,
+      focusedWorkspaceExecutionHostId: props.focusedWorkspaceExecutionHostId,
+      resolveDeleteIntent: () =>
+        resolveSidebarWorkspaceDeleteIntent({
+          selectedWorktrees: props.selectedWorktrees,
+          focusedWorktree: props.focusedWorktree ?? null,
+          repoMap
+        })
+    })
 
   const dropCtx = useWorktreeDropCommitContext({
     scrollRef,
@@ -327,9 +339,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     },
     [markDirectScrollInput]
   )
-  const handleScroll = useCallback(() => {
-    markScrollMovement()
-  }, [markScrollMovement])
 
   const rowProps = useMemo(
     () => withKeyboardPreview(props, keyboardPreview),
@@ -371,20 +380,24 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         data-worktree-sidebar
         tabIndex={0}
         role="listbox"
-        aria-label={translate('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}
+        aria-label={t('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}
         aria-orientation="vertical"
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
-          activeWorktreeId: rowProps.activeWorktreeId,
-          activeWorkspaceExecutionHostId: rowProps.activeWorkspaceExecutionHostId,
+          activeWorktreeId: props.focusedWorktree?.id ?? rowProps.activeWorktreeId,
+          activeWorkspaceExecutionHostId: props.focusedWorktree
+            ? (props.focusedWorkspaceExecutionHostId ?? null)
+            : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
           renderRows,
           virtualItems
         })}
         onKeyDown={handleContainerKeyDown}
+        onKeyUp={handleContainerKeyUp}
+        onBlur={handleContainerBlur}
         // Why: trackpad momentum fires sparse scroll events after the input stream quiets; suppress correction until the viewport stops.
-        onScroll={handleScroll}
+        onScroll={markScrollMovement}
         onPointerDown={handleScrollPointerDown}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}
@@ -404,7 +417,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           })}
           {virtualItems.map((vItem) => {
             const row = renderRows[vItem.index]
-            return row ? renderWorktreeVirtualRow(rowContext, row, vItem) : null
+            return row ? renderWorktreeVirtualRow(rowContext, row, vItem, t) : null
           })}
         </div>
       </div>

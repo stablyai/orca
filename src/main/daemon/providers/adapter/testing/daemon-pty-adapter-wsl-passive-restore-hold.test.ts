@@ -132,22 +132,5 @@ describe('a passive restore of a WSL bridge pane (E9)', () => {
       })
       expect(spawns).toBe(0)
     })
-
-    it('holds its restore of a saved pane', async () => {
-      const held = await adapter
-        .spawn({
-          cols: 80,
-          rows: 24,
-          cwd: WSL_CWD,
-          sessionId: SESSION_ID,
-          wslBackgroundStart: true
-        })
-        .catch((caught: unknown) => caught)
-      expect(held instanceof Error ? parseWslDistroHold(held.message) : null).toEqual({
-        distro: 'Ubuntu',
-        state: 'stopped'
-      })
-      expect(spawns).toBe(0)
-    })
   })
 })

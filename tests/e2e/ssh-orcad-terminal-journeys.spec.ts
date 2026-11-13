@@ -153,6 +153,12 @@ test('managed tabs restore exactly once, and a tab closed while disconnected sta
     const closedTab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${closed}"]`).first()
     await closedTab.hover()
     await closedTab.getByRole('button', { name: /^Close tab /i }).click()
+    // Disconnected, Orca can't tell whether the bound shell is busy, so it asks before stopping it.
+    const confirmation = page.getByRole('dialog', { name: 'Stop running command?' })
+    await expect(confirmation).toBeVisible({ timeout: 15_000 })
+    await expect(closedTab).toHaveCount(1)
+    await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
+    await expect(confirmation).toBeHidden()
     await expect(closedTab).toHaveCount(0, { timeout: 15_000 })
     await reconnect(page, seeded.targetId)
     const remaining = expected.filter((id) => id !== closed)

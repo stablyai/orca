@@ -1,13 +1,24 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
 import { toWorktreeRelativePath } from '../../../../../shared/terminal/links/terminal-links'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
-type WorkspaceRow = { id: string; path: string; hostId?: string; isArchived?: boolean }
+type WorkspaceRow = {
+  id: string
+  path: string
+  hostId?: string
+  isArchived?: boolean
+  removing?: true
+  removalRecorded?: true
+}
 
 export type PluginEditorWorkspace = {
   worktreeId: string
@@ -44,7 +55,7 @@ export function findWorkspaceShowingFile(
   let best: (PluginEditorWorkspace & { depth: number; active: boolean }) | null = null
   for (const worktree of workspaces) {
     const local = worktree.hostId === undefined || worktree.hostId === LOCAL_EXECUTION_HOST_ID
-    if (!local || worktree.isArchived) {
+    if (!local || worktree.isArchived || isWorktreeRetiredByRemoval(worktree)) {
       continue
     }
     for (const filePath of paths) {
@@ -71,21 +82,34 @@ export function findWorkspaceShowingFile(
 
 /**
  * The workspace to open `paths[0]` in, made active: one that shows the file, else its folder added
- * as a folder workspace on this machine. Null when Orca could not add the folder.
+ * as a folder workspace on this machine. Null when it is being deleted or could not be added.
  */
 export async function showWorkspaceForFile(
   paths: readonly string[],
   fallbackFolder: string
 ): Promise<PluginEditorWorkspace | null> {
-  const find = (): PluginEditorWorkspace | null => {
+  const find = (): PluginEditorWorkspace | null | 'removing' => {
     const state = useAppStore.getState()
     const rows = [
       ...Object.values(selectWorktreesByRepo(state) ?? {}).flat(),
       ...folderWorkspaceRows(selectFolderWorkspaces(state))
     ]
+    if (
+      rows.some(
+        (row) =>
+          (row.hostId === undefined || row.hostId === LOCAL_EXECUTION_HOST_ID) &&
+          isWorktreeRetiredByRemoval(row) &&
+          paths.some((path) => toWorktreeRelativePath(path, row.path) !== null)
+      )
+    ) {
+      return 'removing'
+    }
     return findWorkspaceShowingFile(rows, paths, state.activeWorktreeId)
   }
   let found = find()
+  if (found === 'removing') {
+    return null
+  }
   let addedRepoId: string | undefined
   if (!found) {
     const state = useAppStore.getState()
@@ -98,7 +122,7 @@ export async function showWorkspaceForFile(
     addedRepoId = repo.id
     found = find()
   }
-  if (!found) {
+  if (!found || found === 'removing') {
     return null
   }
   const state = useAppStore.getState()

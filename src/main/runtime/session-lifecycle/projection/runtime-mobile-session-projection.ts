@@ -1,10 +1,10 @@
+import { frameAgentStatus } from './frame-agent-status'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
@@ -13,7 +13,7 @@ import type {
 } from '../../../../shared/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
-import { indexAgentStatusRowsByPaneKey } from '../../../agent-hooks/agent-status-pane-index'
+import { indexAgentStatusRowsByPaneKey } from '../../../agent-hooks/runtime/agent-status-pane-index'
 import {
   demoteRuntimeMobileAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle,
@@ -268,11 +268,11 @@ export function projectRuntimeMobileSessionTabs(
         retainedAgentStatus,
         getHookRowsForPane
       )
-    const projectedStatusEntry = projectedAgentStatus.agentStatus as
-      | (AgentStatusEntry & { turnCompletedAt?: number })
-      | undefined
-    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-      projectedStatusEntry ?? {}
+    const { projectedTurnCompletedAt, ...clientAgentStatus } = frameAgentStatus(
+      projectedAgentStatus.agentStatus,
+      snapshot.worktree,
+      terminalPty
+    )
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
       selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
@@ -281,9 +281,6 @@ export function projectRuntimeMobileSessionTabs(
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
         ? rawTurnCompletedAt
         : undefined
-    const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
-      ? { agentStatus: clientStatusFields as AgentStatusEntry }
-      : {}
     tabs.push({
       type: 'terminal',
       id: tab.id,

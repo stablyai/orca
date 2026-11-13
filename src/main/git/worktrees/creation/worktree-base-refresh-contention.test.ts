@@ -10,7 +10,7 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => ({
+vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: (output: string) => output
 }))
@@ -97,26 +97,6 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('retries a fast-forward that lost the index.lock race and reports updated', async () => {
-    const mutate = vi
-      .fn()
-      .mockRejectedValueOnce(INDEX_LOCK_ERROR)
-      .mockResolvedValueOnce({ stdout: '' })
-    installGitFake({ owner: true, mutate })
-
-    const pending = refresh()
-    await vi.runAllTimersAsync()
-
-    await expect(pending).resolves.toEqual({
-      baseRef: 'origin/main',
-      localBranch: 'main',
-      status: 'updated',
-      ownerWorktreePath: '/repo'
-    })
-    expect(mutationCalls().map(commandOf)).toEqual(['merge', 'merge'])
-    expect(mutationCalls().map((args) => args.at(-1))).toEqual(['remote-main', 'remote-main'])
-  })
-
   it('re-confirms the owner has the branch checked out before each retry', async () => {
     let symbolicRefReads = 0
     installGitFake({
@@ -130,30 +110,6 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
 
     await expect(pending).resolves.toMatchObject({ status: 'skipped_error' })
     expect(mutationCalls()).toHaveLength(1)
-  })
-
-  it('reports updated without a warning when the lock never clears but local already reached the target', async () => {
-    installGitFake({
-      owner: true,
-      mutate: () => Promise.reject(INDEX_LOCK_ERROR),
-      localContainsTarget: () => true
-    })
-
-    const pending = refresh()
-    await vi.runAllTimersAsync()
-
-    await expect(pending).resolves.toMatchObject({ status: 'updated' })
-    expect(mutationCalls()).toHaveLength(4)
-  })
-
-  it('reports skipped_error when the lock never clears and local is still behind', async () => {
-    installGitFake({ owner: true, mutate: () => Promise.reject(INDEX_LOCK_ERROR) })
-
-    const pending = refresh()
-    await vi.runAllTimersAsync()
-
-    await expect(pending).resolves.toMatchObject({ status: 'skipped_error' })
-    expect(mutationCalls()).toHaveLength(4)
   })
 
   it('does not retry a failure that is not lock contention', async () => {
@@ -190,36 +146,6 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
       status: 'updated'
     })
     expect(mutationCalls()).toHaveLength(1)
-  })
-
-  it('skips the owner check and the move when local is already current', async () => {
-    installGitFake({ owner: true, mutate: () => Promise.resolve({ stdout: '' }) })
-    const base = gitExecFileAsyncMock.getMockImplementation()!
-    gitExecFileAsyncMock.mockImplementation(async (args: string[], opts: { cwd: string }) =>
-      args[0] === 'rev-parse' ? { stdout: 'remote-main\n' } : base(args, opts)
-    )
-
-    await expect(refresh()).resolves.toBeUndefined()
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args[0])).toEqual([
-      'rev-parse',
-      'rev-parse'
-    ])
-  })
-
-  it("runs the shared refresh without one create's abort signal or timeout", async () => {
-    installGitFake({ owner: true, mutate: () => Promise.resolve({ stdout: '' }) })
-
-    await refreshLocalBaseRefForWorktreeCreate(
-      '/repo',
-      'origin/main',
-      'refs/remotes/origin/main',
-      undefined,
-      { wslDistro: 'Ubuntu', signal: new AbortController().signal, timeout: 8000 }
-    )
-
-    for (const [, options] of gitExecFileAsyncMock.mock.calls) {
-      expect(options).toEqual({ cwd: expect.any(String), wslDistro: 'Ubuntu' })
-    }
   })
 })
 

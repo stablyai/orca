@@ -1,3 +1,5 @@
+import type * as MobileRelayCredentialRotationModule from '../../../transport/relay/mobile-relay-credential-rotation'
+import type * as MobileRelayDirectUpgradeModule from '../../../transport/relay/mobile-relay-direct-upgrade'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import {
@@ -15,9 +17,9 @@ export function relayCredentialMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'relay.credential-rotation': ({ client, effect }: MountContext) => {
-      const rotate = modules.load<
-        typeof import('../../../transport/mobile-relay-credential-rotation')
-      >('mobile/src/transport/mobile-relay-credential-rotation.ts').rotateMobileRelayCredential
+      const rotate = modules.load<typeof MobileRelayCredentialRotationModule>(
+        'mobile/src/transport/relay/mobile-relay-credential-rotation.ts'
+      ).rotateMobileRelayCredential
       const hash = credentialHash(modules)
       let bundle = credentialBundle(hash)
       let outcome: unknown = 'unrotated'
@@ -67,8 +69,8 @@ export function relayCredentialMountAdapters(
       }
     },
     'relay.direct-upgrade': ({ client, effect }: MountContext) => {
-      const upgrade = modules.load<typeof import('../../../transport/mobile-relay-direct-upgrade')>(
-        'mobile/src/transport/mobile-relay-direct-upgrade.ts'
+      const upgrade = modules.load<typeof MobileRelayDirectUpgradeModule>(
+        'mobile/src/transport/relay/mobile-relay-direct-upgrade.ts'
       ).upgradeDirectMobileRelay
       const hash = credentialHash(modules)
       let journal: unknown = null

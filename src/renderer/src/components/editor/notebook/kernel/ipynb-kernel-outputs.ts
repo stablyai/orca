@@ -1,5 +1,11 @@
 import type { KernelOutputType } from '../../../../../../shared/notebook-kernel-types'
 import { isRecord } from '../document/ipynb-parse'
+import {
+  appendDiagnostic,
+  fitDisplayUpdateBudget,
+  fitOutputBudget,
+  hasTruncationNotice
+} from './ipynb-kernel-output-budget'
 
 /** An nbformat v4 output; while live it may also carry the kernel's `transient.display_id`. */
 export type NotebookOutput = Record<string, unknown>
@@ -83,6 +89,19 @@ function toOutput(type: KernelOutputType, content: Record<string, unknown>): Not
     : { output_type: 'display_data', ...bundle, transient: content.transient }
 }
 
+function appendOutput(
+  outputs: NotebookOutput[],
+  type: KernelOutputType,
+  content: Record<string, unknown>
+): NotebookOutput[] {
+  const last = outputs.at(-1)
+  if (type === 'stream' && last?.output_type === 'stream' && last.name === content.name) {
+    return [...outputs.slice(0, -1), streamOutput(content, last)]
+  }
+  return [...outputs, type === 'stream' ? streamOutput(content) : toOutput(type, content)]
+}
+
+/** Returns `live` itself when the output is dropped, so callers can skip waking store subscribers. */
 export function applyKernelOutput<T extends LiveOutputs>(
   live: T,
   type: KernelOutputType,
@@ -95,26 +114,37 @@ export function applyKernelOutput<T extends LiveOutputs>(
   }
   if (type === 'update_display_data') {
     const id = displayId(content)
-    return {
-      ...live,
-      outputs: live.outputs.map((output) =>
-        id !== undefined && displayId(output) === id
-          ? { ...output, data: content.data ?? {}, metadata: content.metadata ?? {} }
-          : output
-      )
+    if (id === undefined || !live.outputs.some((output) => displayId(output) === id)) {
+      return live
     }
+    const updated = live.outputs.map((output) =>
+      displayId(output) === id
+        ? { ...output, data: content.data ?? {}, metadata: content.metadata ?? {} }
+        : output
+    )
+    const outputs = fitDisplayUpdateBudget(live.outputs, updated)
+    return outputs === live.outputs ? live : { ...live, outputs }
   }
   const outputs = live.clearOnNextOutput ? [] : live.outputs
-  const last = outputs.at(-1)
-  if (type === 'stream' && last?.output_type === 'stream' && last.name === content.name) {
+  // Why: first diagnostics survive ordinary truncation, with a separate finite allowance.
+  if (
+    (type === 'error' || type === 'execute_result') &&
+    !outputs.some((output) => output.output_type === type)
+  ) {
     return {
       ...live,
-      outputs: [...outputs.slice(0, -1), streamOutput(content, last)],
+      outputs: appendDiagnostic(outputs, toOutput(type, content)),
       clearOnNextOutput: false
     }
   }
-  const output = type === 'stream' ? streamOutput(content) : toOutput(type, content)
-  return { ...live, outputs: [...outputs, output], clearOnNextOutput: false }
+  if (hasTruncationNotice(outputs)) {
+    return live
+  }
+  return {
+    ...live,
+    outputs: fitOutputBudget(outputs, appendOutput(outputs, type, content)),
+    clearOnNextOutput: false
+  }
 }
 
 /** Drops live-only fields so the outputs are valid nbformat. */

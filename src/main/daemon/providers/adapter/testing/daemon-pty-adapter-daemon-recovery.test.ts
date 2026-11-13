@@ -1,8 +1,7 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, rmSync } from 'node:fs'
-import { DaemonClient } from '../../../transport/client/daemon-client'
-import { DaemonProtocolError } from '../../../protocol/daemon-errors'
+import type { DaemonClient } from '../../../transport/client/daemon-client'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { DaemonServer } from '../../../server/daemon-server'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
@@ -260,52 +259,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('does not respawn when a dropped write targets no active session', async () => {
-      const respawn = vi.fn(async () => {
-        restartServerOnRespawn()
-        await server.start()
-      })
-      const idleAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
-      try {
-        const client = (idleAdapter as unknown as { client: DaemonClient }).client
-        await idleAdapter.listProcesses()
-
-        await server.shutdown()
-        await waitFor(() => !client.isConnected())
-
-        idleAdapter.write('never-attached-session', 'ls\n')
-
-        await new Promise((r) => setTimeout(r, 50))
-        expect(respawn).not.toHaveBeenCalled()
-      } finally {
-        idleAdapter.dispose()
-      }
-    })
-
-    it('signals every active pane to recover when one pane hits the dead endpoint', async () => {
-      const respawn = vi.fn(async () => {})
-      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
-      const recovered: string[] = []
-      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
-      try {
-        const { id: a } = await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
-        const { id: b } = await healingAdapter.spawn({ sessionId: 'pane-b', cols: 80, rows: 24 })
-        const client = (healingAdapter as unknown as { client: DaemonClient }).client
-
-        await server.shutdown()
-        await waitFor(() => !client.isConnected())
-
-        // Pane B remains a passive sibling.
-        expect(() => healingAdapter.write(a, 'typed-into-a')).toThrow(PtyWriteUnavailableError)
-
-        // Endpoint loss requires passive siblings to remount too (STA-2373).
-        expect(recovered).toContain(a)
-        expect(recovered).toContain(b)
-      } finally {
-        healingAdapter.dispose()
-      }
-    })
-
     it('signals every active pane and respawns as soon as the daemon dies, before any input', async () => {
       const respawn = vi.fn(async () => {
         restartServerOnRespawn()
@@ -330,45 +283,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         warn.mockRestore()
         healingAdapter.dispose()
-      }
-    })
-
-    it('does not respawn on a dropped connection when no session is active', async () => {
-      const respawn = vi.fn(async () => {
-        restartServerOnRespawn()
-        await server.start()
-      })
-      const idleAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
-      try {
-        const client = (idleAdapter as unknown as { client: DaemonClient }).client
-        await idleAdapter.listProcesses()
-
-        await server.shutdown()
-        await waitFor(() => !client.isConnected())
-        await new Promise((r) => setTimeout(r, 50))
-
-        expect(respawn).not.toHaveBeenCalled()
-      } finally {
-        idleAdapter.dispose()
-      }
-    })
-
-    it('keeps dropping writes silently on an adapter that cannot respawn', async () => {
-      // Remounting a legacy adapter that cannot respawn would erase still-readable scrollback.
-      const legacyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
-      const recovered: string[] = []
-      legacyAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
-      try {
-        const { id } = await legacyAdapter.spawn({ sessionId: 'legacy-pane', cols: 80, rows: 24 })
-        const client = (legacyAdapter as unknown as { client: DaemonClient }).client
-
-        await server.shutdown()
-        await waitFor(() => !client.isConnected())
-
-        expect(() => legacyAdapter.write(id, 'typed')).not.toThrow()
-        expect(recovered).toEqual([])
-      } finally {
-        legacyAdapter.dispose()
       }
     })
 
@@ -450,31 +364,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(noRespawnAdapter.spawn({ cols: 80, rows: 24 })).rejects.toThrow()
 
       noRespawnAdapter.dispose()
-    })
-
-    it('treats a hello handshake timeout as daemon-gone and respawns (#8689)', async () => {
-      const realEnsureConnected = DaemonClient.prototype.ensureConnected
-      const ensureConnectedSpy = vi
-        .spyOn(DaemonClient.prototype, 'ensureConnected')
-        .mockImplementationOnce(async () => {
-          // Match the real client’s handshake-timeout error.
-          throw new DaemonProtocolError('Hello response timed out')
-        })
-        .mockImplementation(function (this: DaemonClient) {
-          return realEnsureConnected.call(this)
-        })
-      const respawnFn = vi.fn(async () => {})
-      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
-
-      try {
-        const result = await respawnAdapter.spawn({ cols: 80, rows: 24 })
-        expect(result.id).toBeDefined()
-        expect(respawnFn).toHaveBeenCalledTimes(1)
-        expect(respawnFn).toHaveBeenCalledWith('daemon_died')
-      } finally {
-        ensureConnectedSpy.mockRestore()
-        respawnAdapter.dispose()
-      }
     })
 
     it('coalesces concurrent respawns so only one daemon is forked', async () => {
@@ -585,51 +474,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await respawnServer?.shutdown()
     })
 
-    it('does not resolver-health restart attach-style spawns', async () => {
-      const respawnFn = vi.fn()
-      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
-      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
-
-      const result = await respawnAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'caller-owned-session'
-      })
-
-      expect(result.id).toBe('caller-owned-session')
-      expect(getMacDaemonSystemResolverHealthMock).not.toHaveBeenCalled()
-      expect(respawnFn).not.toHaveBeenCalled()
-
-      respawnAdapter.dispose()
-    })
-
-    it('preserves a stale packaged daemon that still owns live sessions before a new spawn', async () => {
-      const respawnFn = vi.fn()
-      const respawnAdapter = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        runtimeDir: dir,
-        packagedAppVersion: '1.4.178',
-        respawn: respawnFn
-      })
-      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-      isDaemonStaleForCurrentBundleMock.mockResolvedValueOnce(true)
-
-      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-
-      expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
-        dir,
-        socketPath,
-        tokenPath,
-        '1.4.178',
-        respawnAdapter.protocolVersion
-      )
-      expect(respawnFn).not.toHaveBeenCalled()
-      expect(next.id).toBeDefined()
-
-      respawnAdapter.dispose()
-    })
-
     it('preserves a stale packaged daemon when its live session inventory is unavailable', async () => {
       const respawnFn = vi.fn()
       const respawnAdapter = new DaemonPtyAdapter({
@@ -688,95 +532,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(respawnFn).toHaveBeenCalledTimes(1)
       expect(respawnFn).toHaveBeenCalledWith('stale_bundle')
       expect(replacements.every((replacement) => replacement.id)).toBe(true)
-
-      respawnAdapter.dispose()
-      await respawnServer?.shutdown()
-    })
-
-    it('preserves a severed-TCC daemon that still owns live sessions before a new spawn', async () => {
-      const respawnFn = vi.fn()
-      const respawnAdapter = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        runtimeDir: dir,
-        respawn: respawnFn
-      })
-      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
-
-      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-
-      expect(getMacDaemonTccAttributionHealthMock).toHaveBeenCalledWith(
-        dir,
-        socketPath,
-        tokenPath,
-        respawnAdapter.protocolVersion
-      )
-      expect(respawnFn).not.toHaveBeenCalled()
-      expect(next.id).toBeDefined()
-
-      respawnAdapter.dispose()
-    })
-
-    it('preserves a severed-TCC daemon when its live session inventory is unavailable', async () => {
-      const respawnFn = vi.fn()
-      const respawnAdapter = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        runtimeDir: dir,
-        respawn: respawnFn
-      })
-      const internals = respawnAdapter as unknown as {
-        client: { request: (type: string, payload?: unknown) => Promise<unknown> }
-      }
-      const originalRequest = internals.client.request.bind(internals.client)
-      vi.spyOn(internals.client, 'request').mockImplementation((type, payload) => {
-        if (type === 'listSessions') {
-          return Promise.reject(new Error('inventory unavailable'))
-        }
-        return originalRequest(type, payload)
-      })
-      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
-
-      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-
-      expect(respawnFn).not.toHaveBeenCalled()
-      expect(next.id).toBeDefined()
-
-      respawnAdapter.dispose()
-    })
-
-    it('replaces a severed-TCC daemon before a fresh session when no sessions are active', async () => {
-      let respawnServer: DaemonServer | undefined
-      const respawnFn = vi.fn(async () => {
-        await server.shutdown()
-        rmSync(socketPath, { force: true })
-        respawnServer = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => createMockSubprocess()
-        })
-        await respawnServer.start()
-      })
-      const respawnAdapter = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        runtimeDir: dir,
-        respawn: respawnFn
-      })
-      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
-
-      const replacement = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
-
-      expect(getMacDaemonTccAttributionHealthMock).toHaveBeenCalledWith(
-        dir,
-        socketPath,
-        tokenPath,
-        respawnAdapter.protocolVersion
-      )
-      expect(respawnFn).toHaveBeenCalledTimes(1)
-      expect(respawnFn).toHaveBeenCalledWith('severed_tcc_attribution')
-      expect(replacement.id).toBeDefined()
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()

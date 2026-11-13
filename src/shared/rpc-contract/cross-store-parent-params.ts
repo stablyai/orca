@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isWorkspaceKey } from '../workspace-scope'
 import type { CrossStoreParentRef } from '../worktree/lineage-types'
 

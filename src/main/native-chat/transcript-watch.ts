@@ -1,5 +1,5 @@
-import { UNFLUSHED_SETTLE_MS } from './transcript-watch-contract'
-import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
+import { UNFLUSHED_SETTLE_MS } from './transcript-watching/transcript-watch-contract'
+import { subscribeOpenCodeNativeChatTranscript } from './transcript-history/opencode/transcript-opencode-subscribe'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
@@ -7,23 +7,19 @@ import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
   type WslTranscriptResolutionSnapshot
-} from './host-readable-transcript-path'
+} from './transcript-discovery/host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
-import { installTranscriptWatcher } from './transcript-watch-engine'
+import { installTranscriptWatcher } from './transcript-watching/transcript-watch-engine'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
-} from './transcript-watch-contract'
+} from './transcript-watching/transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
-import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
-import { observeRunningWslDistros } from './wsl-transcript-running-observer'
-
-export { readNativeChatTranscriptTail } from './transcript-tail-reader'
-export { getActiveNativeChatWatcherCount } from './transcript-watcher-count'
-export type {
-  NativeChatTranscriptSubscription,
-  SubscribeNativeChatTranscriptArgs
-} from './transcript-watch-contract'
+import {
+  WslTranscriptFsError,
+  wslTranscriptFsRefusal
+} from './transcript-filesystem/wsl-transcript-fs-error'
+import { observeRunningWslDistros } from './transcript-filesystem/wsl-transcript-running-observer'
 
 /** Unresolved files retry; native watch failure still permits reconciliation-only mode. */
 async function attemptInstall(
@@ -49,6 +45,9 @@ async function attemptInstall(
 const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
 const FALLBACK_RESOLVE_POLL_MS = 5_000
+// ID discovery probes every project bucket; a transcript still missing after a minute rarely appears soon.
+const SLOW_RESOLVE_AFTER_MS = 60_000
+const SLOW_RESOLVE_POLL_MS = 30_000
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
@@ -65,7 +64,8 @@ function subscribeViaResolvePoll(
   let installed: NativeChatTranscriptSubscription | null = null
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let delay = args.resolvePollIntervalMs ?? INITIAL_RESOLVE_POLL_MS
-  let lastFallbackResolveAt = Date.now()
+  const subscribedAt = Date.now()
+  let lastFallbackResolveAt = subscribedAt
   const exactPath = exactTranscriptPath(args)
   const exactPathNeedsWslResolution = exactPath !== null && needsWslHostResolution(exactPath)
   // Lazily translate WSL guest paths so exact-path retries avoid the slower ID scan.
@@ -109,20 +109,27 @@ function subscribeViaResolvePoll(
     args.onInitialSnapshot([], false, 0, error.message)
   }
 
+  function fallbackResolveIntervalMs(now: number): number {
+    return now - subscribedAt < SLOW_RESOLVE_AFTER_MS
+      ? FALLBACK_RESOLVE_POLL_MS
+      : SLOW_RESOLVE_POLL_MS
+  }
+
   function scheduleAttempt(): void {
     if (closed || exactPathNeedsWslResolution) {
       return
     }
-    const untilFallbackResolve = exactPath
-      ? Math.max(0, FALLBACK_RESOLVE_POLL_MS - (Date.now() - lastFallbackResolveAt))
-      : delay
-    pollTimer = setTimeout(
-      () => {
-        pollTimer = null
-        void runAttempt()
-      },
-      Math.min(delay, untilFallbackResolve)
-    )
+    const now = Date.now()
+    const interval = fallbackResolveIntervalMs(now)
+    // Without a hook or known file path every attempt is ID discovery, so it follows the discovery cadence once slow.
+    const discoversById = !exactPath && !args.filePath
+    const wait = exactPath
+      ? Math.min(delay, Math.max(0, interval - (now - lastFallbackResolveAt)))
+      : Math.max(delay, discoversById && interval === SLOW_RESOLVE_POLL_MS ? interval : 0)
+    pollTimer = setTimeout(() => {
+      pollTimer = null
+      void runAttempt()
+    }, wait)
     // Unresolved sessions must not keep headless host shutdown alive.
     pollTimer.unref?.()
     if (args.resolvePollIntervalMs === undefined) {
@@ -136,7 +143,7 @@ function subscribeViaResolvePoll(
     }
     let result: NativeChatTranscriptSubscription | null
     const now = Date.now()
-    const fallbackDue = !exactPath || now - lastFallbackResolveAt >= FALLBACK_RESOLVE_POLL_MS
+    const fallbackDue = !exactPath || now - lastFallbackResolveAt >= fallbackResolveIntervalMs(now)
     try {
       if (exactPath && !hostReadableExactPath) {
         if (!exactPathNeedsWslResolution) {

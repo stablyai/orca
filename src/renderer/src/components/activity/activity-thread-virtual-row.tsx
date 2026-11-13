@@ -1,5 +1,5 @@
 import type React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getRepoHostIdentity, type HostScopedRepoKey } from '../../../../shared/repo-host-identity'
 import { clearActivityThread, isClearableActivityThread } from './activity-clear-completed'
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
@@ -49,11 +49,12 @@ export function ActivityThreadVirtualRow({
   compactMode: boolean
   showJumpAction: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (item.type === 'header') {
     return (
       <div
         role="group"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.activity.ActivityPrototypePage.a2b4437bfb',
           '{{value0}} activity',
           { value0: item.group.label }

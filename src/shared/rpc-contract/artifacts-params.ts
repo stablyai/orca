@@ -4,7 +4,7 @@ import {
   ARTIFACT_MAX_REQUEST_BYTES,
   artifactContentByteLength,
   artifactWriteRequestByteLength
-} from '../artifacts'
+} from '../artifacts/artifacts'
 
 export const CloudOptions = {
   apiUrl: z.string().max(2_048).optional(),

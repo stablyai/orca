@@ -1,14 +1,14 @@
 import { shallow } from 'zustand/shallow'
-import { workItemsCacheKey } from '@/store/github/cache-identity'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { workItemsCacheKey } from '@/store/github/cache/cache-identity'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   CacheEntry,
   WorkItemsCacheError,
   WorkItemsCacheSources
-} from '@/store/github/cache-model'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+} from '@/store/github/cache/cache-model'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,

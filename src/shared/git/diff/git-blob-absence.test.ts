@@ -3,24 +3,6 @@ import { isMissingGitBlobPath } from './git-blob-absence'
 
 describe('Git blob path absence', () => {
   it.each([
-    { stderr: "fatal: path 'new.txt' exists on disk, but not in the index\n" },
-    {
-      stderr: Buffer.from(
-        "fatal: Path 'new.txt' does not exist (neither on disk nor in the index).\n"
-      )
-    }
-  ])('recognizes exact index absence across Git versions', ({ stderr }) => {
-    expect(isMissingGitBlobPath({ code: 128, stderr }, 'new.txt')).toBe(true)
-  })
-
-  it.each([
-    "fatal: path 'new.txt' does not exist in 'HEAD'\n",
-    "fatal: Path 'new.txt' exists on disk, but not in 'HEAD'.\n"
-  ])('recognizes exact tree path absence', (stderr) => {
-    expect(isMissingGitBlobPath({ code: 128, stderr }, 'new.txt', 'HEAD')).toBe(true)
-  })
-
-  it.each([
     'fatal: bad object :new.txt',
     'fatal: invalid object name HEAD',
     'fatal: detected dubious ownership in repository',

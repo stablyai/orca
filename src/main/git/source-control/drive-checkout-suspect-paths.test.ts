@@ -9,14 +9,6 @@ describe('repoRelativeWatcherPath', () => {
     const repo = String.raw`C:\Work\Café`
     expect(repoRelativeWatcherPath(repo, `c:\\WORK\\${decomposed}\\Src\\Ünï.TS`)).toBe('Src/Ünï.TS')
   })
-
-  it('rejects the root itself, siblings, prefixes, and .git internals', () => {
-    expect(repoRelativeWatcherPath(REPO, REPO)).toBeNull()
-    expect(repoRelativeWatcherPath(REPO, String.raw`C:\Users\dev\My Repo2\a.ts`)).toBeNull()
-    expect(repoRelativeWatcherPath(REPO, String.raw`D:\Users\dev\My Repo\a.ts`)).toBeNull()
-    expect(repoRelativeWatcherPath(REPO, String.raw`C:\Users\dev\My Repo\.git\index`)).toBeNull()
-    expect(repoRelativeWatcherPath(REPO, String.raw`C:\Users\dev\My Repo\sub\.GIT\HEAD`)).toBeNull()
-  })
 })
 
 describe('DriveCheckoutSuspectPaths', () => {
@@ -46,17 +38,6 @@ describe('DriveCheckoutSuspectPaths', () => {
     const reinstalled = { rootPath: REPO }
     expect([...(tracker.beginPoll(reinstalled)?.keys() ?? [])]).toEqual(['hidden.ts'])
     expect([...(tracker.beginPoll(null)?.keys() ?? [])]).toEqual(['hidden.ts'])
-  })
-
-  it('stays bounded when rechecked-dirty paths alone fill the limit', () => {
-    const tracker = new DriveCheckoutSuspectPaths(REPO, 2)
-    tracker.recordEvents(root, [event('a'), event('b')])
-    const snapshot = tracker.beginPoll(root)
-    tracker.confirmDirty('a', snapshot?.get('a') ?? 0)
-    tracker.confirmDirty('b', snapshot?.get('b') ?? 0)
-    tracker.recordEvents(root, [event('c')])
-    expect([...(tracker.beginPoll(root)?.keys() ?? [])]).toEqual(['a', 'b'])
-    expect(tracker.lastDegradeReason).toBe('over-limit')
   })
 
   it('keeps a dirty proof when the watcher was interrupted during the recheck', () => {

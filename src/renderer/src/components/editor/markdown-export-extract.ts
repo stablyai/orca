@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { buildMarkdownExportHtml } from './markdown-export-html'
 
 export type MarkdownExportPayload = {

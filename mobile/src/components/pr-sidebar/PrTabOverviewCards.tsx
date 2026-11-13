@@ -3,12 +3,11 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
-import type { PrSidebarData } from '../../session/mobile-pr-sidebar-state'
-import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
-import { canEditPRTitle } from '../../session/pr-title-edit'
+import type { PrSidebarData } from '../../source-control/review/mobile-pr-sidebar-state'
+import { isPrSidebarDetailsPlaceholder } from '../../source-control/review/mobile-pr-sidebar-state'
+import { canEditPRTitle } from '../../source-control/review/pr-title-edit'
 import { AutoHeight } from '../AutoHeight'
-import { MobileMarkdown } from '../MobileMarkdown'
-import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../mobile-markdown-styles'
+import { PrMarkdown } from './PrMarkdown'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prTabStyles as styles } from './pr-tab-styles'
 
@@ -121,7 +120,7 @@ export function PrDescription({ tab, data }: { tab: MobilePrTab; data: PrSidebar
                 setOverflows(event.nativeEvent.layout.height > COLLAPSED_DESCRIPTION_HEIGHT)
               }
             >
-              <MobileMarkdown content={body} textScale={MOBILE_MARKDOWN_DOCUMENT_SCALE} />
+              <PrMarkdown content={body} url={data.pr.url} document />
             </View>
           </AutoHeight>
           {overflows ? (

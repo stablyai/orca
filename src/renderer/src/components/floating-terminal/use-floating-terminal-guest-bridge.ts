@@ -4,7 +4,7 @@ import {
   FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT,
   type FloatingWorkspaceGuestCloseDetail,
   type FloatingWorkspaceGuestSelectIndexDetail
-} from '@/lib/floating-workspace-guest-bridge'
+} from '@/components/floating-terminal/floating-workspace-guest-bridge'
 import type { FloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
 
 type FloatingTerminalGuestBridgeInput = Pick<

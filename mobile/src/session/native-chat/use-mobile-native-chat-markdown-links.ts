@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { relativePathInsideRoot } from '../../../../src/shared/cross-platform-path'
 import {
   githubReferenceRepo,
   type GitHubRepoReference
-} from '../../../../src/shared/github/github-reference-links'
-import { githubRepoIdentityKey } from '../../../../src/shared/github/repository-identity-key'
+} from '../../../../src/shared/github/markdown/github-reference-links'
+import { githubRepoIdentityKey } from '../../../../src/shared/github/repositories/repository-identity-key'
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence
@@ -13,22 +13,22 @@ import {
 import {
   createPathExistenceBatch,
   requirePathExistenceResults
-} from '../../../../src/shared/path-existence-batch'
+} from '../../../../src/shared/file-access/path-existence-batch'
 import { resolveTerminalFileLink } from '../../../../src/shared/terminal/links/terminal-links'
 import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree/id'
 import {
   useRecheckNativeChatFileLinksWhenSettled,
   type MobileMarkdownLinks
 } from '../../components/mobile-markdown-links-context'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
-import { isMobileMethodUnavailableError } from '../../transport/mobile-method-unavailable'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
+import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
 import { isFilePathCodeSpan } from '../../components/markdown-file-path-detection'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
-import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
-import type { ConnectionState } from '../../transport/types'
-import { fetchGithubRepoSlug } from '../github-pr-rpc'
-import { nativeChatRepoListRead } from '../mobile-session-read-operations'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import { fetchGithubRepoSlug } from '../../source-control/review/github-pr-rpc'
+import { nativeChatRepoListRead } from '../agent-launch/mobile-runtime-repo-operations'
 
 const chatPathsExistRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -42,7 +42,7 @@ const chatPathsExistRead = bindDeferredRpcOperation(
 
 /** Paths in a chat's text, checked in batches against the chat's workspace on its host. */
 export function createMobileNativeChatFileLinkExistence(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   worktreePath: string
 ): NativeChatFileLinkExistence {

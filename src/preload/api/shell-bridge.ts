@@ -3,10 +3,11 @@ import { ipcRenderer } from 'electron'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
+  ShellOpenFileResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell/opening/shell-open-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { ShellPathExistence } from '../../shared/path-existence-batch'
+import type { ShellPathExistence } from '../../shared/file-access/path-existence-batch'
 import type { PreloadApi } from '../api-types'
 
 export const shellApi = {
@@ -29,7 +30,7 @@ export const shellApi = {
   openFilePath: (path: string, ownerHostId: ExecutionHostId): Promise<boolean> =>
     ipcRenderer.invoke('shell:openFilePath', path, ownerHostId),
 
-  openFileUri: (uri: string, ownerHostId: ExecutionHostId): Promise<void> =>
+  openFileUri: (uri: string, ownerHostId: ExecutionHostId): Promise<ShellOpenFileResult> =>
     ipcRenderer.invoke('shell:openFileUri', uri, ownerHostId),
 
   pathsExist: (paths: string[]): Promise<ShellPathExistence[]> =>
@@ -49,8 +50,5 @@ export const shellApi = {
   pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
 
   pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
-    ipcRenderer.invoke('shell:pickDirectory', args),
-
-  copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
-    ipcRenderer.invoke('shell:copyFile', args)
+    ipcRenderer.invoke('shell:pickDirectory', args)
 } satisfies PreloadApi['shell']

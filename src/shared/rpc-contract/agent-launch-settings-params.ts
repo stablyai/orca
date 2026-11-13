@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { AGENT_PERMISSION_CHOICES } from '../agent-launch/permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'

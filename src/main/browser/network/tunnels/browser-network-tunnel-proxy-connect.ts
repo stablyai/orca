@@ -1,4 +1,4 @@
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelProxy } from './browser-network-tunnel-proxy-selection'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 import { HttpConnectTunnelSocket } from './http-connect-tunnel-socket'

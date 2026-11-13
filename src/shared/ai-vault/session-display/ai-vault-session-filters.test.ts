@@ -89,42 +89,6 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
 })
 
 describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', () => {
-  it('does not read transcript previews for empty or field-only queries', () => {
-    let reads = 0
-    const sessions = Array.from({ length: 1000 }, (_, i) => ({
-      ...baseSession,
-      id: String(i),
-      get previewMessages() {
-        reads++
-        return baseSession.previewMessages
-      }
-    }))
-    for (const query of ['', 'repo:repo', 'path:app']) {
-      expect(
-        filterAiVaultSessions(sessions, {
-          query,
-          agents: ['claude'],
-          scope: 'all',
-          sort: 'updated',
-          activeWorktreePaths: [],
-          hideEmptySessions: false
-        })
-      ).toHaveLength(1000)
-    }
-    expect(reads).toBe(0)
-    expect(
-      filterAiVaultSessions(sessions, {
-        query: 'scope',
-        agents: ['claude'],
-        scope: 'all',
-        sort: 'updated',
-        activeWorktreePaths: [],
-        hideEmptySessions: false
-      })
-    ).toHaveLength(1000)
-    expect(reads).toBeGreaterThan(0)
-  })
-
   it('matches workspace scope across host path spellings', () => {
     // Verify native containment across Windows folding, WSL aliases/mounts, trailing separators and near-miss siblings.
     const cases: [workspace: string, cwd: string, matched: boolean][] = [

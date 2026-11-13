@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -11,12 +11,17 @@ import type { Repo } from '../repo-types'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
-import { worktreeWorkspaceKey } from '../workspace-scope'
+import { parseWorkspaceKey, worktreeWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
 } from '../worktree/host-qualified-identity'
-import type { CrossStoreWorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineageEdge,
+  WorktreeLineage
+} from '../worktree/lineage-types'
+import { folderLineageEdgeOf } from '../worktree/folder-lineage-parents'
 import { isCrossStoreWorkspaceLineage } from '../worktree/cross-store-lineage-records'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
@@ -25,6 +30,19 @@ import { SMART_TIERS } from './sort-stamps'
 /** A row's parent in another Orca store; a missing or unreadable record leaves the row standalone. */
 export const CrossStoreParentRecordSchema = z
   .custom<CrossStoreWorkspaceLineage>(isCrossStoreWorkspaceLineage)
+  .optional()
+  .catch(undefined)
+
+/** A row's folder workspace parent (folder-lineage-parents.ts); unreadable reads as none. */
+export const WorkspaceLineageEdgeSchema = z
+  .object({
+    parentWorkspaceKey: z.custom<WorkspaceKey>(
+      (value) => typeof value === 'string' && parseWorkspaceKey(value) !== null
+    ),
+    parentInstanceId: z.string().nullable().optional(),
+    childInstanceId: z.string().nullable().optional()
+  })
+  .nullable()
   .optional()
   .catch(undefined)
 
@@ -49,8 +67,13 @@ export const WorkspaceRowSchema = z.object({
     .nullable(),
   /** Saved parent in another Orca store; the reader resolves it (cross-store-lineage-resolution.ts). */
   crossStoreParent: CrossStoreParentRecordSchema,
+  /** Folder workspace parent in this store; null for none, absent from older hosts. */
+  workspaceLineage: WorkspaceLineageEdgeSchema,
   isPinned: z.boolean(),
   isArchived: z.boolean(),
+  removing: z.literal(true).optional(),
+  removalRecorded: z.literal(true).optional(),
+  removalError: z.string().optional(),
   isUnread: z.boolean(),
   workspaceStatus: z.string(),
   comment: z.string(),
@@ -99,7 +122,8 @@ function toWorkspaceRow(
   kind: WorkspaceRow['kind'],
   repo: Repo | undefined,
   lineage: WorktreeLineage | undefined,
-  crossStoreParent?: unknown
+  crossStoreParent?: unknown,
+  workspaceLineage?: WorkspaceLineageEdge | null
 ): WorkspaceRow {
   const kindFacts = getWorkspaceRowKindFacts(worktree, repo)
   return {
@@ -120,8 +144,12 @@ function toWorkspaceRow(
         }
       : null,
     ...(isCrossStoreWorkspaceLineage(crossStoreParent) ? { crossStoreParent } : {}),
+    ...(workspaceLineage !== undefined ? { workspaceLineage } : {}),
     isPinned: worktree.isPinned,
     isArchived: worktree.isArchived,
+    ...(worktree.removing ? { removing: true } : {}),
+    ...(worktree.removalRecorded ? { removalRecorded: true } : {}),
+    ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
     isUnread: worktree.isUnread,
     workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     comment: worktree.comment,
@@ -203,6 +231,8 @@ export function buildWorkspaceRows(catalog: {
   lineageById: Readonly<Record<string, WorktreeLineage>>
   /** This store's saved cross-store parents, by child workspace key. */
   crossStoreLineageByChildKey?: Readonly<Record<string, unknown>>
+  /** This store's workspace records (list 2), by child workspace key. */
+  workspaceLineageByChildKey?: Readonly<Record<string, WorkspaceLineageEdge>>
 }): Map<HostScopedWorktreeKey, WorkspaceRow> {
   const rows = new Map<HostScopedWorktreeKey, WorkspaceRow>()
   const add = (
@@ -217,9 +247,24 @@ export function buildWorkspaceRows(catalog: {
         kind === 'git'
           ? catalog.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(worktree.id)]
           : undefined
+      const workspaceLineage =
+        kind === 'git' && catalog.workspaceLineageByChildKey
+          ? folderLineageEdgeOf(
+              catalog.workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)],
+              worktree.instanceId
+            )
+          : undefined
       rows.set(
         listed.identity,
-        toWorkspaceRow(worktree, listed.hostId, kind, repo, lineage, crossStoreParent)
+        toWorkspaceRow(
+          worktree,
+          listed.hostId,
+          kind,
+          repo,
+          lineage,
+          crossStoreParent,
+          workspaceLineage
+        )
       )
     }
   }

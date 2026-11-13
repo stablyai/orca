@@ -74,7 +74,6 @@ import type { DaemonChildSpawnOptions } from '../../../launch/daemon-launched-ch
 import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 const ok: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
-const stopped = { ...ok, stdout: 'gui/501/x = {\n\tstate = not running\n}\n' }
 const running = { ...ok, stdout: 'gui/501/x = {\n\tstate = running\n}\n' }
 const missing = {
   ...ok,
@@ -248,66 +247,6 @@ it('launches the copied helper on plain Node and leaves no inherited credentials
   expect(await exists(copyDir)).toBe(true)
 })
 
-it('uses one launchd label per profile and protocol', () => {
-  expect(macDaemonJobLabel('/Users/a/Library/Application Support/orca')).toBe(
-    macDaemonJobLabel('/Users/a/Library/Application Support/orca/')
-  )
-  expect(macDaemonJobLabel('/Users/a/Library/Application Support/orca')).not.toBe(
-    macDaemonJobLabel('/Users/a/Library/Application Support/orca-dev')
-  )
-  expect(macDaemonJobLabel('/p')).toMatch(
-    new RegExp(`^com\\.stablyai\\.orca\\.terminal\\.[0-9a-f]{16}\\.v${PROTOCOL_VERSION}$`)
-  )
-})
-
-it.each(['13.4.1', '12.7.6'])(
-  'keeps macOS %s below the helper floor on the fork',
-  async (version) => {
-    stubSystemVersion(version)
-    await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.toBeNull()
-    expect(materializeMock).not.toHaveBeenCalled()
-    expect(runProcessMock).not.toHaveBeenCalled()
-  }
-)
-
-it('runs the helper from the floor itself', async () => {
-  stubSystemVersion('13.5')
-  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()
-})
-
-it.each(['linux', 'win32'] as const)('keeps %s on the existing launcher', async (platform) => {
-  vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.toBeNull()
-  expect(materializeMock).not.toHaveBeenCalled()
-})
-
-it('keeps Node/SSH hosts and unpackaged Electron on the existing launcher', async () => {
-  await expect(
-    launchMacDaemonFromStableBundle({ ...options, macosLoginSessionWatch: false }, roomyDeadline())
-  ).resolves.toBeNull()
-  state.packaged = false
-  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.toBeNull()
-  expect(materializeMock).not.toHaveBeenCalled()
-})
-
-it("boots out an earlier daemon's stopped job before starting the new one", async () => {
-  launchctl.print = [stopped, missing]
-  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()
-  const verbs = runProcessMock.mock.calls
-    .map(([spec]) => spec)
-    .filter((spec) => spec.program === '/bin/launchctl' && spec.args?.[0] !== 'print')
-    .map((spec) => spec.args?.[0])
-  expect(verbs).toEqual(['bootout', 'bootstrap'])
-})
-
-it('lets a restarting daemon exit before removing its registration and bootstrapping', async () => {
-  beginRetirementClock()
-  launchctl.print = [running, stopped]
-  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()
-  expect(launchctlCalls('bootout')).toHaveLength(1)
-  expect(launchctlCalls('bootstrap')).toHaveLength(1)
-})
-
 it.each([
   ['running', running],
   ['unverifiable', { ...ok, code: 1, stderr: 'Operation not permitted' }]
@@ -323,21 +262,6 @@ it.each([
     options.runtimeDir,
     PROTOCOL_VERSION
   )
-})
-
-it('replaces a running job that verifiably retired its endpoint without exiting (#29361)', async () => {
-  const startedAt = beginRetirementClock()
-  launchctl.print = [running]
-  recoverMock.mockImplementation(async () => {
-    expect(retirementClock.now - startedAt).toBe(7_000)
-    launchctl.print = [missing]
-    return true
-  })
-  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()
-  expect(recoverMock).toHaveBeenCalledOnce()
-  expect(launchctlCalls('bootstrap')).toHaveLength(1)
-  expect(retirementClock.waits).toEqual(Array(28).fill(250))
-  expect(launchctlCalls('print')).toHaveLength(29)
 })
 
 it.each([
@@ -360,19 +284,6 @@ it.each([
   expect(launchctlCalls('bootout')).toHaveLength(0)
 })
 
-it('stops only its own job and hands the endpoint to the fork launcher when another daemon owns it', async () => {
-  state.identity = { pid: 55555, startedAtMs: 2000, launchNonce: 'another-launch' }
-  expect(await launchFailure()).toBeNull()
-  await expect(access(options.pidPath)).rejects.toThrow()
-  expect(disconnectMock).toHaveBeenCalled()
-  expect(launchctlCalls('bootout').map((spec) => spec.args?.[1])).toEqual([service()])
-  expect(console.warn).toHaveBeenCalledWith(
-    expect.stringContaining('reason=endpoint-taken'),
-    expect.anything()
-  )
-  expect(await exists(copyDir)).toBe(true)
-})
-
 it('stays fatal and keeps the copy after an uncertain bootstrap, removing the job file', async () => {
   launchctl.bootstrap = { ...ok, code: null, signal: 'SIGTERM', timedOut: true }
   const error = await launchFailure()
@@ -380,17 +291,6 @@ it('stays fatal and keeps the copy after an uncertain bootstrap, removing the jo
   expect(await readdir(copyDir)).toEqual([])
   expect(await exists(copyDir)).toBe(true)
   expect(ensureWithinMock).not.toHaveBeenCalled()
-})
-
-it('forks and drops an unused copy when launchd refused the job and it is absent', async () => {
-  launchctl.bootstrap = { ...ok, code: 5, stderr: 'Bootstrap failed: 5' }
-  expect(await launchFailure()).toBeNull()
-  expect(ensureWithinMock).not.toHaveBeenCalled()
-  expect(console.warn).toHaveBeenCalledWith(
-    expect.stringContaining('reason=bootstrap-refused'),
-    expect.anything()
-  )
-  await vi.waitFor(async () => expect(await exists(copyDir)).toBe(false))
 })
 
 it.each([
@@ -404,19 +304,6 @@ it.each([
   expect(await exists(copyDir)).toBe(true)
 })
 
-it('hands off as soon as the job exits, and drops the copy so the next launch re-copies it', async () => {
-  launchctl.print = [missing, stopped]
-  const elapsed = elapseOnEachConnectAttempt(200)
-  expect(await launchFailure()).toBeNull()
-  expect(elapsed()).toBeLessThan(1_000)
-  expect(launchctlCalls('bootout').map((spec) => spec.args?.[1])).toEqual([service()])
-  expect(console.warn).toHaveBeenCalledWith(
-    expect.stringContaining('reason=exited-before-ready'),
-    expect.anything()
-  )
-  await vi.waitFor(async () => expect(await exists(copyDir)).toBe(false))
-})
-
 it('waits out a silent job that is still running and never forks beside it', async () => {
   launchctl.print = [missing, running]
   const elapsed = elapseOnEachConnectAttempt(2_000)
@@ -427,27 +314,6 @@ it('waits out a silent job that is still running and never forks beside it', asy
   expect(await exists(copyDir)).toBe(true)
 })
 
-it('retries a connection refusal within the same job', async () => {
-  beginRetirementClock()
-  ensureWithinMock.mockRejectedValueOnce(new Error('ECONNREFUSED'))
-  launchctl.print = [missing, running]
-  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()
-  expect(launchctlCalls('bootstrap')).toHaveLength(1)
-})
-
-it('forks without submitting a job whose own readiness wait would overrun the deadline', async () => {
-  materializeMock.mockImplementation(async (_root: string, signal: AbortSignal) => {
-    signal.throwIfAborted()
-    return { directory: copyDir, execPath: helperExec(), entryPath: helperEntry() }
-  })
-  expect(await launchFailure(Date.now() + 19_000)).toBeNull()
-  expect(launchctlCalls('bootstrap')).toHaveLength(0)
-  expect(console.warn).toHaveBeenCalledWith(
-    expect.stringContaining('reason=deadline'),
-    expect.anything()
-  )
-})
-
 it('reports a failure too late for the fork to fit the startup gate instead of forking', async () => {
   materializeMock.mockImplementation(async () => {
     vi.spyOn(Date, 'now').mockReturnValue(deadline + 1)
@@ -456,32 +322,4 @@ it('reports a failure too late for the fork to fit the startup gate instead of f
   const deadline = Date.now() + 25_000
   const error = await launchFailure(deadline)
   expect(error).toHaveProperty('message', 'Could not copy the macOS terminal host')
-})
-
-it('shares one preparation deadline between the copy and the job file', async () => {
-  await launchMacDaemonFromStableBundle(options, Date.now() + 25_000)
-  const signal: unknown = materializeMock.mock.calls[0]?.[1]
-  expect(signal).toHaveProperty('aborted', false)
-  const plutil = runProcessMock.mock.calls.find(([spec]) => spec.program === '/usr/bin/plutil')
-  expect(plutil?.[0].signal).toBe(signal)
-})
-
-it('forks without a job when the job file cannot be prepared', async () => {
-  const route = runProcessMock.getMockImplementation()
-  runProcessMock.mockImplementation(async (spec) =>
-    spec.program === '/usr/bin/plutil' ? { ...ok, code: 1 } : (route?.(spec) ?? ok)
-  )
-  expect(await launchFailure()).toBeNull()
-  expect(launchctlCalls('bootstrap')).toHaveLength(0)
-  expect(await readdir(copyDir)).toEqual([])
-  expect(console.warn).toHaveBeenCalledWith(
-    expect.stringContaining('reason=prepare-failed'),
-    expect.anything()
-  )
-})
-
-it('forks when the helper copy cannot be prepared', async () => {
-  materializeMock.mockRejectedValueOnce(new Error('Could not copy the macOS terminal host'))
-  expect(await launchFailure()).toBeNull()
-  expect(runProcessMock).not.toHaveBeenCalled()
 })

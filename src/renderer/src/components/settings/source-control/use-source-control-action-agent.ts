@@ -4,7 +4,7 @@ import { isCustomAgentId } from '../../../../../shared/source-control/ai/generat
 import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { useAppStore } from '@/store/index'
 
 type ActionAgent = { status: 'pending' } | { status: 'ready'; agent: TuiAgent | null }

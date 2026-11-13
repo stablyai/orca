@@ -6,8 +6,8 @@ import {
   useVirtualizer,
   type Range
 } from '@tanstack/react-virtual'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { ActivityThreadListToolbar } from './activity-thread-list-toolbar'
 import { useActivityProjectLabels } from './use-activity-project-labels'
 import {
@@ -119,6 +119,7 @@ export function ActivityThreadListPane({
   /** Optional view-local scroll memory; updated without triggering React renders. */
   scrollTopRef?: React.MutableRefObject<number>
 }): React.JSX.Element {
+  const t = useTranslate()
   const projectLabelsByRepoHost = useActivityProjectLabels()
   const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
     () => new Set()
@@ -389,7 +390,7 @@ export function ActivityThreadListPane({
           </div>
           {visibleThreadCount === 0 ? (
             <div className="px-3 py-8 text-center text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.activity.ActivityPrototypePage.7cd632006b',
                 'No agent activity matches these filters.'
               )}

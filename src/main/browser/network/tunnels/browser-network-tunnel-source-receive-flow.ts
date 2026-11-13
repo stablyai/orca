@@ -1,9 +1,9 @@
-import {
-  BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES,
-  BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS
-} from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelConnectionCredit } from './browser-network-tunnel-connection-credit'
+import { browserNetworkTunnelMaxPendingChunks } from './browser-network-tunnel-stream-state'
 
 export type BrowserNetworkTunnelSourceReceiveStream = {
+  windowBytes: number
+  receiveWindowBytes: number
   opened: boolean
   remoteEnded: boolean
   readableEnded: boolean
@@ -35,9 +35,8 @@ export function queueBrowserNetworkSourceData(
     stream.remoteEnded ||
     payload.byteLength === 0 ||
     payload.byteLength > stream.receiveCredit ||
-    stream.pendingToSocketBytes + payload.byteLength >
-      BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES ||
-    stream.pendingToSocket.length >= BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS
+    stream.pendingToSocketBytes + payload.byteLength > stream.windowBytes ||
+    stream.pendingToSocket.length >= browserNetworkTunnelMaxPendingChunks(stream.windowBytes)
   ) {
     return 'invalid'
   }
@@ -83,16 +82,19 @@ export function beginBrowserNetworkSourceRead(
   flushBrowserNetworkSourceData(stream)
 }
 
-export function grantBrowserNetworkSourceReceiveCredit(
-  stream: BrowserNetworkTunnelSourceReceiveStream,
-  bytes: number,
-  maxCredit: number
-): boolean {
-  if (stream.receiveCredit + bytes > maxCredit) {
-    return false
+/** Returns consumed bytes to the sender plus any window growth; null if credit would overflow. */
+export function replenishBrowserNetworkSourceReceiveCredit(
+  stream: BrowserNetworkTunnelSourceReceiveStream & { id: number },
+  consumedBytes: number,
+  connection: Pick<BrowserNetworkTunnelConnectionCredit, 'replenishReceiveWindow'>
+): number | null {
+  const drained = stream.pendingToSocket.length === 0 && stream.unsettledToSocket.length === 0
+  const credit = consumedBytes + connection.replenishReceiveWindow(stream, consumedBytes, drained)
+  if (stream.receiveCredit + credit > stream.receiveWindowBytes) {
+    return null
   }
-  stream.receiveCredit += bytes
-  return true
+  stream.receiveCredit += credit
+  return credit
 }
 
 export function finishBrowserNetworkSourceData(

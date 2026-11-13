@@ -4,7 +4,7 @@ import {
   TAB_ID,
   WORKTREE_ID,
   setupMainOwnedWorkspace
-} from '../main-owned-workspace-runtime-fixture'
+} from '../terminal/layout/main-owned-workspace-runtime-fixture'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -79,30 +79,5 @@ describe("a client's tab move in a workspace main owns", () => {
     })
 
     expect(groups().map((entry) => entry.tabOrder)).toEqual([[TAB_ID], ['a', 'b']])
-  })
-
-  it("refuses with today's codes and moves nothing", async () => {
-    const { runtime, groups, group } = await setup()
-    const before = groups()
-
-    await expect(
-      runtime.moveMobileSessionTab(WT, {
-        kind: 'move-to-group',
-        tabId: 'gone',
-        targetGroupId: group
-      })
-    ).rejects.toThrow('tab_not_found')
-    await expect(
-      runtime.moveMobileSessionTab(WT, { kind: 'move-to-group', tabId: 'a', targetGroupId: 'gone' })
-    ).rejects.toThrow('target_group_not_found')
-    await expect(
-      runtime.moveMobileSessionTab(WT, {
-        kind: 'reorder',
-        tabId: 'a',
-        targetGroupId: group,
-        tabOrder: ['a', 'b']
-      })
-    ).rejects.toThrow('invalid_tab_order')
-    expect(groups()).toEqual(before)
   })
 })

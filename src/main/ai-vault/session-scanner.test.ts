@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
-import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
+import { isolatedScanRoots, jsonLines } from './scanner-fixtures/session-scanner-test-fixtures'
 
 // Use synchronous SQLite implementations because worker bundles are absent in the test runtime.
 vi.mock(

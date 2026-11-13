@@ -13,9 +13,10 @@ import {
 } from '../../../../../../shared/sidebar-list/smart-sort'
 import './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   computeRenderedSidebarWorktreeOrder,
@@ -50,9 +51,11 @@ export function getPublishedVisibleWorktreeShortcutTargets():
 /** The unmounted list's visible rows in sidebar sort order, ranked per host copy like the mounted list. */
 function computeUnmountedVisibleWorktrees(): Worktree[] {
   const state = useAppStore.getState()
-  const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
+  const allWorktrees = getIndexedAllWorktrees(selectWorktreesByRepo(state)).filter(
+    (w) => !w.isArchived
+  )
 
-  const repoMap = getRepoMapFromState(state)
+  const repoMap = getIndexedRepoMap(state.repos)
 
   let sortedKeys: string[]
 
@@ -110,10 +113,10 @@ export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarg
   }
   const visibleIds = _publishedVisibleIds
   const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
-  const repoMap = getRepoMapFromState(state)
+  const repoMap = getIndexedRepoMap(state.repos)
   const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
-  const worktrees = getAllWorktreesFromState(state)
+  const worktrees = getIndexedAllWorktrees(selectWorktreesByRepo(state))
     .filter(
       (worktree) =>
         !worktree.isArchived &&

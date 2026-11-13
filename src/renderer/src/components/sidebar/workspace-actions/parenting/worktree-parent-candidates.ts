@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -10,7 +11,15 @@ import {
   getCyclicProjectedWorktreeLineageIds,
   type SidebarLineageParentIdentities
 } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import {
+  lineageStoreKeyOfRow,
+  OWN_LINEAGE_STORE_KEY
+} from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { supportsFolderParent } from '../../../../../../shared/worktree-runtime-capabilities'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 type ParentCandidateArgs = {
@@ -51,7 +60,7 @@ export function worktreeParentPlacementFor({
   const isCrossStoreParent = crossStoreParentEligibility(child, parentIdentities)
   const closesLoop = closesResolvedLoop(child, worktrees, parentIdentities)
   return (candidate) => {
-    if (closesLoop(candidate)) {
+    if (isWorktreeRetiredByRemoval(candidate) || closesLoop(candidate)) {
       return null
     }
     if (
@@ -118,6 +127,7 @@ function crossStoreParentEligibility(
       store !== undefined &&
       store !== childStore &&
       !candidate.isArchived &&
+      !isWorktreeRetiredByRemoval(candidate) &&
       Boolean(candidate.instanceId) &&
       getWorktreeHostIdentity(candidate) !== currentParent
     )
@@ -171,6 +181,7 @@ export function isEligibleWorktreeParent({
     childHostId !== null &&
     getWorktreeOwnerHostId(candidateParent, repoMap) === childHostId &&
     !candidateParent.isArchived &&
+    !isWorktreeRetiredByRemoval(candidateParent) &&
     canAssignWorktreeParent({
       child,
       candidateParent,
@@ -179,4 +190,38 @@ export function isEligibleWorktreeParent({
       cyclicLineageIds
     })
   )
+}
+
+/** Multi-repo folder workspaces a worktree may nest under; a folder is only ever a parent. Same-store
+ * folders need a host that accepts folder parents; another store's folder takes a cross-store ref. */
+export function getEligibleFolderParents(args: {
+  child: Worktree
+  folderRows: readonly Worktree[]
+  currentParentWorkspaceKey: string | undefined
+  storeAcceptsFolderParent: (storeKey: string) => boolean
+}): Worktree[] {
+  const childStore = lineageStoreKeyOfRow(args.child)
+  if (childStore === undefined || !args.child.instanceId) {
+    return []
+  }
+  return args.folderRows.filter((folder) => {
+    const store = lineageStoreKeyOfRow(folder)
+    return (
+      store !== undefined &&
+      !folder.isArchived &&
+      folder.id !== args.currentParentWorkspaceKey &&
+      (store !== childStore || args.storeAcceptsFolderParent(childStore))
+    )
+  })
+}
+
+/** This desktop's own store accepts folder parents; a paired server must advertise it. */
+export function storeAcceptsFolderParentIn(
+  statusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
+): (storeKey: string) => boolean {
+  return (storeKey) =>
+    storeKey === OWN_LINEAGE_STORE_KEY ||
+    supportsFolderParent(
+      lastVerifiedRuntimeStatus(statusByEnvironmentId.get(storeKey))?.capabilities
+    )
 }

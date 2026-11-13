@@ -12,7 +12,7 @@ import type {
   openCodexAppServerConnection
 } from '../../app-server/codex-app-server-connection'
 import { CodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from '../journal/codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from '../session-lifecycle/codex-structured-session-state'
@@ -99,6 +99,7 @@ export async function acquiredCodexAdapter(input: {
   sink?: StructuredAgentSessionEventSink
   requestTimeoutMs?: number
   permissionMode?: AgentChatPermissionChoice
+  onHeldSendsChanged?: CodexStructuredSessionAdapterDeps['onHeldSendsChanged']
 }): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -114,6 +115,7 @@ export async function acquiredCodexAdapter(input: {
     onDispatchSettledLate: (settlement) => {
       input.settlements.push(settlement)
     },
+    ...(input.onHeldSendsChanged ? { onHeldSendsChanged: input.onHeldSendsChanged } : {}),
     ...(input.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: input.requestTimeoutMs })
   })
   const identity: AgentSessionJournalIdentity = {

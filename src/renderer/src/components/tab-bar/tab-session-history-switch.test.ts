@@ -1,6 +1,6 @@
 import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
   makeRepo,
@@ -25,14 +25,14 @@ const mocks = vi.hoisted(() => {
 })
 
 // Staged host answers: its capabilities arrive over IPC at boot, and the platform from preload.
-vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [
     STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
     STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   ]
 }))
-vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/host-structured-agents', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readHostStructuredAgents: () =>
     ['claude', 'codex', 'grok', 'omp', 'opencode', 'pi'].map((agent) => ({
@@ -40,7 +40,9 @@ vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
       capabilities: {}
     }))
 }))
-vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => mocks.platform }))
+vi.mock('@/app-shell/platform/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => mocks.platform
+}))
 
 vi.mock(
   '../right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-workspace',

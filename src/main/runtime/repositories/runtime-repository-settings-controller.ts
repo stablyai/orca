@@ -1,12 +1,13 @@
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { isRepoHidden } from '../../../shared/hidden-projects'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { teardownStops } from '../workspaces/removal/owned-session-teardown-policy'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
@@ -41,6 +42,7 @@ type RepositoryUpdates = Partial<
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
+    | 'dictationTerms'
     | 'issueSourcePreference'
     | 'defaultJiraProject'
     | 'externalWorktreeVisibility'
@@ -51,11 +53,13 @@ type RepositoryUpdates = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
-    | 'projectGroupOrder'
   >
 > & {
+  projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
 }
@@ -99,6 +103,22 @@ export class RuntimeRepositorySettingsController {
     return updated
   }
 
+  /** View-only: hiding stops nothing, so terminals, agents and automations keep running. */
+  async setHidden(repoSelector: RuntimeRepoSelector, hidden: boolean): Promise<Repo> {
+    const store = this.requireStore()
+    const repo = await this.deps.resolveRepo(repoSelector)
+    if (isRepoHidden(repo) === hidden) {
+      return repo
+    }
+    assertWslMoveRepoWritable(store, repo)
+    const updated = store.updateRepo(repo, { hiddenAt: hidden ? Date.now() : null })
+    if (!updated) {
+      throw new Error('repo_not_found')
+    }
+    this.deps.notifyReposChanged()
+    return updated
+  }
+
   async update(repoSelector: string, updates: RepositoryUpdates): Promise<Repo> {
     const store = this.requireStore()
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -112,6 +132,9 @@ export class RuntimeRepositorySettingsController {
       updates.externalWorktreeDiscoverySuppressedAt === null
     ) {
       sanitizedUpdates.externalWorktreeDiscoverySuppressedAt = undefined
+    }
+    if ('hiddenAt' in updates && updates.hiddenAt === null) {
+      sanitizedUpdates.hiddenAt = undefined
     }
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null

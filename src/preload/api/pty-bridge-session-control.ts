@@ -1,18 +1,19 @@
+import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
 import { ipcRenderer } from 'electron'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/workspace-layout/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type {
   SavedResumeDecision,
   TerminalLaunchResult,
@@ -32,7 +33,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal/protocol/quer
 import type { PtyMainDeliveryDiagnostics } from '../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
-import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export const ptySessionControlApi = {
@@ -49,6 +50,7 @@ export const ptySessionControlApi = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    trustWorktreeId?: string
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
     worktreeId?: string
@@ -97,11 +99,12 @@ export const ptySessionControlApi = {
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {
     ipcRenderer.send('pty:write', { id, data, inputKind })
   },
+  noteUserInput: (): void => ipcRenderer.send('pty:noteUserInput'),
   writeAccepted: (
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
   ): Promise<boolean> =>
     ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind, ...options }),
   onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
@@ -116,6 +119,8 @@ export const ptySessionControlApi = {
   claimViewport: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:claimViewport', { id, cols, rows })
   },
+  getTerminalAttention: (ids: string[]): Promise<Record<string, RuntimeTerminalAttention>> =>
+    ipcRenderer.invoke('pty:getTerminalAttention', ids),
   reportGeometry: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
   },
@@ -188,6 +193,8 @@ export const ptySessionControlApi = {
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>
     ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
+  getGoneSessionIds: (ids: string[]): Promise<string[]> =>
+    ipcRenderer.invoke('pty:getGoneSessionIds', { ids }),
   hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
   moveLeafToNewTab: (request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> =>
     ipcRenderer.invoke('pty:moveLeafToNewTab', request),

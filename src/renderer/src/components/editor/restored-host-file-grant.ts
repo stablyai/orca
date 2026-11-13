@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   hostSavesGrantedFiles,
   renewTerminalArtifactGrant
-} from '@/runtime/runtime-terminal-artifact-grant'
+} from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 
 export const REMOTE_EXTERNAL_FILE_UNAVAILABLE_MESSAGE =
   'External local files are not available for remote workspaces.'

@@ -1,4 +1,4 @@
-import type { SecretboxOpen } from './mobile-e2ee-v2-framing'
+import type { SecretboxOpen, SecretboxSeal } from './mobile-e2ee-v2-framing'
 
 // Inject platform adapters for Node, browser and Hermes NaCl/base64 differences, size limits and Buffer availability.
 export type PairedE2EEKeyPair = { publicKey: Uint8Array; secretKey: Uint8Array }
@@ -25,6 +25,7 @@ export type PairedE2EEPrimitives = {
   openLegacyBinary: (frame: Uint8Array, sharedKey: Uint8Array) => Uint8Array | null
   // Phone-only native overrides avoid Hermes’ ~100x slower JS; absent overrides use tweetnacl, re-encoding and TextDecoder.
   openSecretbox?: SecretboxOpen
+  sealSecretbox?: SecretboxSeal
   // Null for anything but canonical padded base64.
   decodeCanonicalBase64?: (value: string) => Uint8Array | null
   decodeUtf8?: (bytes: Uint8Array) => string

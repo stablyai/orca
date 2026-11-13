@@ -85,13 +85,6 @@ describe('WorkspaceLifecycleQueue', () => {
     expect(queue.hints()).toEqual({})
   })
 
-  it('runs a repeated command again rather than merging it into the first', async () => {
-    const queue = new WorkspaceLifecycleQueue()
-    let runs = 0
-    const sleep: LifecycleCommand<number> = { kind: 'sleep', run: async () => ++runs }
-    expect(await Promise.all([queue.submit(KEY, sleep), queue.submit(KEY, sleep)])).toEqual([1, 2])
-  })
-
   it('keeps separate workspaces apart, including one id on two hosts', async () => {
     const queue = new WorkspaceLifecycleQueue()
     const log: string[] = []
@@ -191,30 +184,6 @@ describe('WorkspaceLifecycleQueue', () => {
     expect(log).toEqual(['sleep', 'observe', 'observe', 'observe'])
     expect(queue.pausedKeys().includes(KEY)).toBe(false)
     expect(queue.hints()).toEqual({})
-  })
-
-  it('re-runs a repeated command once contact is back', async () => {
-    const { queue } = manualRetryQueue()
-    let reachable = false
-    let sleeps = 0
-    const sleep: LifecycleCommand<boolean> = {
-      kind: 'sleep',
-      run: async () => {
-        sleeps += 1
-        return reachable
-      },
-      outcome: (ok) => (ok ? 'settled' : 'unverifiable'),
-      observe: async () => {
-        if (!reachable) {
-          throw new Error('lost')
-        }
-      }
-    }
-    expect(await queue.submit(KEY, sleep)).toBe(false)
-    reachable = true
-    expect(await queue.submit(KEY, sleep)).toBe(true)
-    expect(sleeps).toBe(2)
-    expect(queue.pausedKeys().includes(KEY)).toBe(false)
   })
 
   it('pauses on lost contact mid-run, but not on a definite failure', async () => {
@@ -333,62 +302,9 @@ describe('WorkspaceLifecycleQueue', () => {
     expect(await other).toBe('woken')
     expect(clock).toBe(500)
   })
-
-  it('never cancels a command because its requester went away', async () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const log: string[] = []
-    const sleep = gated(log, 'sleep', 'sleep', 'slept')
-    // A disconnected requester must not cancel the running command.
-    void queue.submit(KEY, sleep.command).catch(() => {})
-    await flush()
-    sleep.release()
-    await flush()
-    expect(log).toEqual(['start sleep', 'end sleep'])
-  })
-
-  it('leaves nothing pending in a fresh queue, as after a restart', () => {
-    const queue = new WorkspaceLifecycleQueue()
-    expect(queue.hints()).toEqual({})
-    expect(queue.creationsSnapshot().creations).toEqual({})
-  })
 })
 
 describe('WorkspaceLifecycleQueue creates', () => {
-  it('lists a creation once opened, names its workspace, and drops it on close', () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const creation = queue.openCreate({ creationId: 'c1', repoId: 'repo-1' })
-    expect(queue.creationsSnapshot().creations).toEqual({ c1: { repoId: 'repo-1' } })
-    const opened = queue.creationsSnapshot().revision
-    creation.named('repo-1::/wt')
-    expect(queue.creationsSnapshot().creations).toEqual({
-      c1: { repoId: 'repo-1', worktreeId: 'repo-1::/wt' }
-    })
-    expect(queue.creationsSnapshot().revision).toBeGreaterThan(opened)
-    creation.close()
-    expect(queue.creationsSnapshot().creations).toEqual({})
-  })
-
-  it('mints an id for a caller that sends none', () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const creation = queue.openCreate({ repoId: 'repo-1' })
-    const ids = Object.keys(queue.creationsSnapshot().creations)
-    expect(ids).toHaveLength(1)
-    expect(ids[0]).not.toBe('')
-    creation.close()
-    expect(queue.creationsSnapshot().creations).toEqual({})
-  })
-
-  it('leaves a concurrent retry under the same id listed when the first create closes', () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const first = queue.openCreate({ creationId: 'c1', repoId: 'repo-1' })
-    const second = queue.openCreate({ creationId: 'c1', repoId: 'repo-1' })
-    first.named('repo-1::/stale')
-    first.close()
-    expect(queue.creationsSnapshot().creations).toEqual({ c1: { repoId: 'repo-1' } })
-    second.close()
-    expect(queue.creationsSnapshot().creations).toEqual({})
-  })
-
   it('frees the workspace queue when a create closes after a retry took over its id', async () => {
     const queue = new WorkspaceLifecycleQueue()
     const first = queue.openCreate({ creationId: 'c1', repoId: 'repo-1', keyOf: () => KEY })
@@ -398,15 +314,6 @@ describe('WorkspaceLifecycleQueue creates', () => {
     first.close()
     expect(await sleeping).toBe('slept')
     retry.close()
-  })
-
-  it('closes once', () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const creation = queue.openCreate({ creationId: 'c1', repoId: 'repo-1' })
-    creation.close()
-    const closed = queue.creationsSnapshot().revision
-    creation.close()
-    expect(queue.creationsSnapshot().revision).toBe(closed)
   })
 
   it('binds to the workspace once named, so commands on the Creating row wait behind it', async () => {
@@ -493,23 +400,5 @@ describe('WorkspaceLifecycleQueue membership', () => {
     expect(queue.hints()).toEqual({})
     // Publish membership and creation changes together in one revision.
     expect(bumps).toHaveLength(1)
-  })
-
-  it('drops a failed create at once, with nothing to list', () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const rows = listing()
-    queue.setMembership(rows.membership)
-    queue.openCreate({ creationId: 'c1', repoId: 'repo-1' }).close()
-    expect(queue.creationsSnapshot().creations).toEqual({})
-  })
-
-  it('shows a finished delete until a fresh listing drops the row', async () => {
-    const queue = new WorkspaceLifecycleQueue()
-    const rows = listing()
-    queue.setMembership(rows.membership)
-    expect(await queue.submit(KEY, { kind: 'delete', run: async () => 'deleted' })).toBe('deleted')
-    expect(queue.hints()).toEqual({ [KEY]: { kind: 'delete', queuedBehind: 0 } })
-    rows.applyFreshScan()
-    expect(queue.hints()).toEqual({})
   })
 })

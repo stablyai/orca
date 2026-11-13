@@ -1,4 +1,7 @@
-import { isViewEntry, type WorktreeNavHistoryEntry } from '@/store/slices/worktree-nav-history'
+import {
+  isViewEntry,
+  type WorktreeNavHistoryEntry
+} from '@/store/slices/ui/workspace-navigation-history'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -84,6 +87,8 @@ export function resolveCycleAnchorWorktreeId(args: {
   return null
 }
 
+export type SidebarWorkspacePreview = { row: RenderedWorkspaceRow; fromWorktreeId: string | null }
+
 export type LastActiveCycleWorkspace = {
   worktreeId: string
   executionHostId: ExecutionHostId | null
@@ -163,4 +168,20 @@ export function resolveCycledWorkspaceRow(args: {
     return null
   }
   return worktreeRows.find((row) => getCyclableRowIdentity(row) === nextIdentity) ?? null
+}
+
+/** A held arrow previews its row as active before the workspace switch commits. */
+export function withKeyboardPreview<
+  P extends {
+    activeWorktreeId: string | null
+    activeWorkspaceExecutionHostId: ExecutionHostId | null
+  }
+>(props: P, preview: LastActiveCycleWorkspace | null): P {
+  return preview
+    ? {
+        ...props,
+        activeWorktreeId: preview.worktreeId,
+        activeWorkspaceExecutionHostId: preview.executionHostId
+      }
+    : props
 }

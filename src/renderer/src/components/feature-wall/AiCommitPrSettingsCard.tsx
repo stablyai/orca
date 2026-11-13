@@ -1,11 +1,12 @@
 import type { JSX } from 'react'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AiCommitPrSettingsFields } from './AiCommitPrSettingsFields'
 import { AiCommitPrSettingsSwitch } from './AiCommitPrSettingsSwitch'
 import { useAiCommitPrSettings } from './useAiCommitPrSettings'
 
 export function AiCommitPrSettingsCard(): JSX.Element | null {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const {
     config,
@@ -31,15 +32,12 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[15px] font-semibold leading-tight text-foreground">
-              {translate(
-                'auto.components.feature.wall.AiCommitPrSettingsCard.1c0cb4fabb',
-                'AI author'
-              )}
+              {t('auto.components.feature.wall.AiCommitPrSettingsCard.1c0cb4fabb', 'AI author')}
             </div>
           </div>
           <AiCommitPrSettingsSwitch
             checked={config.enabled}
-            label={translate(
+            label={t(
               'auto.components.feature.wall.AiCommitPrSettingsCard.f9382b48a1',
               'Enable AI author'
             )}

@@ -1,7 +1,7 @@
-import { agentSessionRecordPredecessorIds } from '../../agent-session-record-lineage'
-import { clearSuccessor } from '../../agent-session-sender-identity-revision'
+import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
+import { clearSuccessor } from './agent-session-sender-identity-revision'
 import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
+import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -68,9 +68,9 @@ import {
   type AgentSessionStoreState
 } from './agent-session-store-state'
 import { AgentSessionRecordTabs } from '../agent-session-tab-table'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import { readStoredWorkspaceAttention } from '../../../native-chat/agent-session-journal/journal-stored-cursor'
-import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
+import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import { readStoredWorkspaceAttention } from '../../../native-chat/agent-session-journal/replay/journal-stored-cursor'
+import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
@@ -144,6 +144,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       (id) => clearSuccessor(this.getConversation(id)) === sessionId
     )
   lineageRevision = (): object => this.transactions.lineageRevision()
+  providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>
@@ -175,8 +176,20 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
     setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
 
-  compareAndSetConversationName: CompareAndSetConversationName = (id, name, expected, context) =>
-    compareAndSetAgentSessionRecordName((apply) => this.mutate(id, apply), name, expected, context)
+  compareAndSetConversationName: CompareAndSetConversationName = (
+    id,
+    name,
+    expected,
+    context,
+    applicable
+  ) =>
+    compareAndSetAgentSessionRecordName(
+      (apply) => this.mutate(id, apply),
+      name,
+      expected,
+      context,
+      applicable
+    )
 
   /** Launch history is metadata and does not contend with the writer lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>

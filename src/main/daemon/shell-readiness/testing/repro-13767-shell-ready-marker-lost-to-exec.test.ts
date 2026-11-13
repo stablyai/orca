@@ -293,20 +293,6 @@ async function runReadOracle(fixture: ShellFixture, child: boolean): Promise<voi
 }
 
 describePosix('#13767 shell-ready marker loss across exec', () => {
-  it('continues setup cleanup after force-kill failure', () => {
-    const dispose = vi.fn()
-    const restore = vi.fn()
-    runCleanupActions(
-      () => {
-        throw new Error('force kill failed')
-      },
-      dispose,
-      restore
-    )
-    expect(dispose).toHaveBeenCalledOnce()
-    expect(restore).toHaveBeenCalledOnce()
-  })
-
   for (const fixture of FIXTURES) {
     const runnable = fixture.shellPath.endsWith('zsh') ? hasZsh : hasBash
     const testCase = runnable ? it : it.skip

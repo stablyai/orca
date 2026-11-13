@@ -1,25 +1,29 @@
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 export type GitHubWorkItemStatusItem = Pick<GitHubWorkItem, 'type' | 'state'>
 
-export function getTaskPageGitHubWorkItemStateLabel(item: GitHubWorkItemStatusItem): string {
+export function getTaskPageGitHubWorkItemStateLabel(
+  item: GitHubWorkItemStatusItem,
+  t: Translate = translate
+): string {
   if (item.type === 'pr') {
     if (item.state === 'merged') {
-      return translate('auto.components.github.pr.merge.state.83ecdbb4a6', 'Merged')
+      return t('auto.components.github.pr.merge.state.83ecdbb4a6', 'Merged')
     }
     if (item.state === 'draft') {
-      return translate('auto.components.TaskPage.054bf695cc', 'Draft')
+      return t('auto.components.TaskPage.054bf695cc', 'Draft')
     }
     if (item.state === 'closed') {
-      return translate('auto.components.TaskPage.d09bf34db7', 'Closed')
+      return t('auto.components.TaskPage.d09bf34db7', 'Closed')
     }
-    return translate('auto.components.TaskPage.606a85c774', 'Open')
+    return t('auto.components.TaskPage.606a85c774', 'Open')
   }
 
   return item.state === 'closed'
-    ? translate('auto.components.TaskPage.d09bf34db7', 'Closed')
-    : translate('auto.components.TaskPage.606a85c774', 'Open')
+    ? t('auto.components.TaskPage.d09bf34db7', 'Closed')
+    : t('auto.components.TaskPage.606a85c774', 'Open')
 }
 
 // Match merge/check pill tones across themes; draft remains neutral because it is not actionable.

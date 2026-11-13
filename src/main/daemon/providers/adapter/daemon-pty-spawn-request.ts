@@ -1,4 +1,4 @@
-import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { ColdRestorePayload } from '../../history/restoration/cold-restore-payload-cache'
 import type { DaemonAuditObservation } from '../../observability/daemon-audit-classifier'
 import {

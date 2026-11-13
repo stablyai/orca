@@ -8,9 +8,9 @@ import {
 import { beginEdit, isTrackedEdit } from './gh-edit-task-record'
 import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 
 export type GHEditProjectRowPatch = {

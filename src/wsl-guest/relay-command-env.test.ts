@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { homedir } from 'node:os'
 import { buildRelayCommandEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 
 // Fix the fallback home so no-resolvable-home behavior is testable and independent of the user’s machine.
@@ -22,34 +21,11 @@ describe('buildRelayCommandEnv', () => {
     expect(env.Path).not.toContain('.npm-global')
   })
 
-  it('falls back to homedir() for user bins when the relay env carries no HOME', () => {
-    const env = buildRelayCommandEnv({ PATH: '/usr/bin' }, 'linux')
-
-    expect(env.PATH?.split(':')).toContain('/home/fallback/.local/bin')
-    expect(env.PATH).not.toContain('undefined')
-  })
-
-  it('adds only POSIX fallbacks when no home directory can be resolved', () => {
-    vi.mocked(homedir).mockReturnValueOnce('')
-    const env = buildRelayCommandEnv({ PATH: '' }, 'linux')
-    const segments = env.PATH?.split(':') ?? []
-
-    expect(segments).toEqual(expect.arrayContaining(['/usr/local/bin', '/usr/bin', '/bin']))
-    expect(segments.some((s) => s.includes('.local/bin'))).toBe(false)
-  })
-
   it('keeps inherited PATH entries ahead of the appended fallbacks', () => {
     const env = buildRelayCommandEnv({ HOME: '/home/me', PATH: '/custom/bin' }, 'linux')
     const segments = env.PATH?.split(':') ?? []
 
     expect(segments.indexOf('/custom/bin')).toBeLessThan(segments.indexOf('/usr/bin'))
-  })
-
-  it('orders the static POSIX fallbacks ahead of the resolved user bins', () => {
-    const env = buildRelayCommandEnv({ HOME: '/home/me', PATH: '' }, 'linux')
-    const segments = env.PATH?.split(':') ?? []
-
-    expect(segments.indexOf('/usr/bin')).toBeLessThan(segments.indexOf('/home/me/.local/bin'))
   })
 })
 

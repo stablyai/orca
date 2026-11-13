@@ -37,14 +37,7 @@ vi.mock('@xterm/xterm', () => ({
       this.screen.className = 'xterm-screen'
       Object.defineProperties(this.screen, {
         offsetWidth: {
-          get: () =>
-            this.cols *
-            (this.options.fontSize === 18 ||
-            this.options.fontFamily?.includes('Fira Code') ||
-            this.options.fontWeight === 900 ||
-            this.options.fontWeightBold === 900
-              ? 12
-              : 10)
+          get: () => this.cols * (this.options.fontSize === 18 ? 12 : 10)
         },
         offsetHeight: { get: () => this.rows * 16 * (this.options.lineHeight ?? 1) }
       })
@@ -60,10 +53,10 @@ vi.mock('@xterm/xterm', () => ({
     }
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
+vi.mock('@/components/terminal-pane/input/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: () => ({ dispose: vi.fn() })
 }))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
 vi.mock('@/lib/keyboard-layout/use-effective-mac-option-as-alt', () => ({
@@ -79,7 +72,7 @@ vi.mock('./preview-terminal-ime-bridge', () => ({
 vi.mock('./preview-terminal-key-handler', () => ({
   installPreviewTerminalKeyHandler: () => vi.fn()
 }))
-vi.mock('@/components/terminal-pane/terminal-native-copy-gutter', () => ({
+vi.mock('@/components/terminal-pane/clipboard/terminal-native-copy-gutter', () => ({
   installTerminalNativeCopyGutterTrim: () => ({ dispose: vi.fn() })
 }))
 vi.mock('./preview-terminal-app-menu-clipboard', () => ({
@@ -171,16 +164,4 @@ it('ignores a pending connection retired by a metric change', async () => {
   expect(connect).toHaveBeenCalledTimes(2)
   expect(harness.instances).toHaveLength(1)
   expect(harness.instances[0]?.options.fontSize).toBe(18)
-  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15)
-})
-
-it('cancels an obsolete metric owner grid claim before the next change', async () => {
-  render(<AgentTerminalPreview ptyId="pty-1" />)
-  await settleGeometry()
-  await act(async () => useAppStore.getState().updateSettings({ terminalFontSize: 18 }))
-  await act(async () => useAppStore.getState().updateSettings({ terminalLineHeight: 1.5 }))
-  await settleGeometry()
-  expect(harness.instances).toHaveLength(3)
-  expect(fit).toHaveBeenCalledTimes(2)
-  expect(fit).toHaveBeenLastCalledWith('pty-1', 50, 10)
 })

@@ -3,16 +3,16 @@ import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { prepareCodexAdoption } from '../../native-chat/codex-adoption-preparation'
+import { prepareCodexAdoption } from '../../native-chat/conversation-adoption/codex-adoption-preparation'
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
-import { generatedSessionTitle } from '../../ai-vault/session-scanner-accumulator'
+import { generatedSessionTitle } from '../../ai-vault/parsing/session-scanner-accumulator'
 import { resolveLocalAiVaultSessionTitles } from '../../ai-vault/session-titles/session-title-resolver'
 import type { NativeCodexResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
 import type {
   StructuredAgentCliSourceEvidence,
   StructuredAgentCliSourceLocator
-} from '../../native-chat/structured-agent-cli-source'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   AgentSessionProviderHandle,
@@ -22,26 +22,27 @@ import {
   type AgentSessionExecutionLocation,
   agentSessionExecutionLocationsEqual
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { listStructuredProviderSessionOwnership } from '../../native-chat/agent-session-wire/structured-provider-session-ownership'
+import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { listStructuredProviderSessionOwnership } from '../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import {
   findCommittedStructuredAgentSessionAdoptionReplay,
   findConflictingStructuredAdoption,
   resolveStructuredAgentSessionAdoption,
   structuredAdoptionConflictError
-} from '../../native-chat/structured-agent-session-history-adoption'
+} from '../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { structuredAgentRuntimeMetadata } from './installation/structured-agent-runtime-metadata'
 import type {
   StructuredAgentTranscriptImport,
   StructuredAgentTranscriptImportSettings
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export type StructuredAgentSessionCreateIntentInput = {
   envelope: { sessionId: string; clientOperationId: string }
   worktree: string
   agent: StructuredAgentId
   callerKey?: string
+  forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
 }
@@ -51,16 +52,17 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
   envelope: { sessionId: string; clientOperationId: string }
   agent: StructuredAgentId
   callerKey?: string
+  forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: { providerSessionId: string }
   location: AgentSessionExecutionLocation
   options?: Readonly<Record<string, string>>
 }): AgentSessionAttachParams | null {
   const history = structuredAgentRuntimeMetadata(input.agent)?.sessionHistory
   const replay =
-    input.resumeFrom && input.callerKey && input.host && history
+    (input.resumeFrom || input.forkFrom) && input.callerKey && input.host && history
       ? findCommittedStructuredAgentSessionAdoptionReplay({
           agent: input.agent,
-          providerSessionId: input.resumeFrom.providerSessionId,
+          providerSessionId: input.resumeFrom?.providerSessionId,
           rowSessionId: history.rowSessionId,
           selfSessionId: input.envelope.sessionId,
           callerKey: input.callerKey,
@@ -83,8 +85,20 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
     provider: input.agent,
     agent: input.agent,
     accountHome: replay.record.accountHome,
-    ...(input.options ? { options: input.options } : {}),
-    adopt: { providerHandle: replay.providerHandle },
+    ...(input.forkFrom
+      ? {
+          options: {
+            ...replay.record.options,
+            ...(replay.record.permissionMode
+              ? { permissionMode: replay.record.permissionMode }
+              : {})
+          },
+          ...(replay.record.launchArgs ? { launchArgs: replay.record.launchArgs } : {})
+        }
+      : input.options
+        ? { options: input.options }
+        : {}),
+    ...(replay.providerHandle ? { adopt: { providerHandle: replay.providerHandle } } : {}),
     runtimeKind: 'native'
   }
 }
@@ -115,6 +129,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   selectedAccountHome: AgentSessionAccountHome
   launchEnv: NodeJS.ProcessEnv
   workspaceCwd: string
+  conversationName?: string
   resolveTranscriptSource?: () => StructuredAgentCliSourceLocator
   prepareCodexResume?: NativeCodexResumePreparation
 }) {
@@ -211,11 +226,12 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
             candidates
           )
         : adoption,
-      resolveAdoptedConversationName({
-        agent: input.agent,
-        providerSessionId: input.providerSessionId,
-        transcriptPath: adoption.transcriptPath
-      })
+      input.conversationName ??
+        resolveAdoptedConversationName({
+          agent: input.agent,
+          providerSessionId: input.providerSessionId,
+          transcriptPath: adoption.transcriptPath
+        })
     ])
     return { ...prepared, conversationName }
   } catch (error) {

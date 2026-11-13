@@ -1,6 +1,9 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { resolveStepOutcome } from '../../../../../../shared/source-control/checks/pr-check-step-status'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import {
   cancelCheckReadingIntents,
   checkDetailsReadingKey,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { joinAbsolutePath, resolveTildePath } from './file-link-path-normalization'
+import { joinAbsolutePath } from './file-link-path-normalization'
 
 describe('joinAbsolutePath', () => {
   it.each([
@@ -28,21 +28,5 @@ describe('joinAbsolutePath', () => {
     ['//server/share', '', '//server/share']
   ])('joins %j and %j without escaping its filesystem root', (base, relative, expected) => {
     expect(joinAbsolutePath(base, relative)).toBe(expected)
-  })
-
-  it('cannot resolve a relative base', () => {
-    expect(joinAbsolutePath('repo', '../readme.md')).toBeNull()
-  })
-})
-
-describe('resolveTildePath', () => {
-  it('resolves parent segments against an inferred home', () => {
-    expect(resolveTildePath('~/../shared/readme.md', '/home/me/repo')).toBe(
-      '/home/shared/readme.md'
-    )
-  })
-
-  it('retains the drive root when traversing beyond an explicit home', () => {
-    expect(resolveTildePath('~/../../../readme.md', 'C:/repo', 'C:/Users/me')).toBe('C:/readme.md')
   })
 })

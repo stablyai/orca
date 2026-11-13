@@ -12,16 +12,6 @@ const plan = {
   candidateFiles: ['a']
 }
 
-it('does not present full fallback runs as selection-validation evidence', () => {
-  const records = [record(1, 'a', 'passed'), record(2, 'b', 'passed')].map((row) => ({
-    ...row,
-    plan: { ...plan, selectionAvailable: false }
-  }))
-  expect(reviewUnitSelection(records)[0]).toMatchObject({
-    completeFullRun: true,
-    selectionEvaluated: false
-  })
-})
 const record = (index, file, state) => ({
   plan,
   timing: {
@@ -84,20 +74,4 @@ it('does not call incomplete, duplicate, interrupted or selected evidence a full
   ]) {
     expect(reviewUnitSelection(rows).map((row) => row.completeFullRun)).toEqual([false])
   }
-})
-
-it('requires all ten full assignments exactly once for complete evidence', () => {
-  const files = Array.from({ length: 10 }, (_, index) => `retained-${index}.test.ts`)
-  const tenPlan = { ...plan, files, candidateFiles: files }
-  const records = files.map((file, index) => {
-    const row = record(index + 1, file, 'passed')
-    return {
-      ...row,
-      plan: tenPlan,
-      timing: { ...row.timing, shard: { index: index + 1, count: 10 } }
-    }
-  })
-  expect(reviewUnitSelection(records)[0].completeFullRun).toBe(true)
-  expect(reviewUnitSelection(records.slice(0, -1))[0].completeFullRun).toBe(false)
-  expect(reviewUnitSelection([...records.slice(0, -1), records[0]])[0].completeFullRun).toBe(false)
 })

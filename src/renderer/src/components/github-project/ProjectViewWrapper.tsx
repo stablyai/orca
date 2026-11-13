@@ -1,9 +1,9 @@
 import React, { useCallback, useMemo } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { useAppStore } from '@/store'
-import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
-import { translate } from '@/i18n/i18n'
+import { projectViewCacheKeyTarget } from '@/store/github/cache/cache-identity'
+import { useTranslate } from '@/i18n/use-translate'
 import ProjectViewList from './ProjectViewList'
 import ProjectBoard from './ProjectBoard'
 import ProjectRoadmap from './ProjectRoadmap'
@@ -20,10 +20,10 @@ import { useProjectViewTable } from './useProjectViewTable'
 import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>
@@ -86,6 +86,7 @@ function ProjectViewBody({
   tableState: ReturnType<typeof useProjectViewTable>
   rowActions: ReturnType<typeof useProjectRowActions>
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { activeProject, error, loading, table, visibleTable } = tableState
   // Keep the board's document drop subscription stable across wrapper renders.
   const { editField } = rowActions
@@ -97,7 +98,7 @@ function ProjectViewBody({
   if (!activeProject) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.github.project.ProjectViewWrapper.512fc171d6',
           'Choose a project to get started.'
         )}
@@ -130,7 +131,7 @@ function ProjectViewBody({
         repoId={dialogItem.repoId}
         sourceContext={rowActions.dialogSourceContext}
         projectOrigin={dialogItem.origin}
-        backLabel={translate(
+        backLabel={t(
           'auto.components.github.project.ProjectViewWrapper.1aa7c952b9',
           'Project view'
         )}

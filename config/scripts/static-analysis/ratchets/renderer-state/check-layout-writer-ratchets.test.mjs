@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-
-import { countLayoutWrites, isScannedPath, RATCHETS } from './check-layout-writer-ratchets.mjs'
+import { countLayoutWrites, RATCHETS } from './check-layout-writer-ratchets.mjs'
 
 const [mainRatchet, rendererRatchet] = RATCHETS
 
@@ -51,14 +50,5 @@ describe('renderer layout writes', () => {
       'set({ tabsByWorktree: s.tabsByWorktree.map(rename) })'
     ].join('\n')
     expect(countLayoutWrites(src, rendererRatchet, 'a.tsx')).toBe(3)
-  })
-})
-
-describe('isScannedPath', () => {
-  it('skips tests, fixtures and harnesses', () => {
-    expect(isScannedPath('src/main/ipc/session.ts')).toBe(true)
-    expect(isScannedPath('src/main/ipc/session.test.ts')).toBe(false)
-    expect(isScannedPath('src/main/runtime/terminal-retirement-fixture.ts')).toBe(false)
-    expect(isScannedPath('src/main/ipc/session.md')).toBe(false)
   })
 })

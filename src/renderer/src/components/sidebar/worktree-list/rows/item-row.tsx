@@ -1,6 +1,6 @@
 import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -200,7 +200,7 @@ export function renderWorktreeItemRow(
 // Rebuild the visible lineage subtree so each card renders its own children inline.
 export function renderWorktreeLineageDescendants(
   ctx: WorktreeItemRowContext,
-  parent: WorktreeItemRow,
+  parent: { depth: number },
   descendants: readonly WorktreeItemRow[]
 ): React.ReactNode | undefined {
   const childNodes: React.ReactNode[] = []

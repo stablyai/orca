@@ -102,7 +102,7 @@ export function normalizeTerminalChunk(
     return { text: chunk, pendingAnsi: '' }
   }
   const combined = `${pendingAnsi}${chunk}`
-  const parts: string[] = []
+  const out = new NormalizedTerminalText(combined)
   let textStart = 0
   // Copy spans and skip parameter parsing for controls the preview discards.
   for (let index = 0; index < combined.length; index += 1) {
@@ -111,18 +111,15 @@ export function normalizeTerminalChunk(
       continue
     }
     if (code === 0x1b) {
-      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      out.appendSpan(textStart, index)
       if (index + 1 >= combined.length) {
-        return { text: parts.join(''), pendingAnsi: combined.slice(index) }
+        return out.finish(combined.slice(index))
       }
       const introducer = classifyTerminalEscapeIntroducer(combined.charCodeAt(index + 1))
       const endIndex = findTerminalEscapeSequenceEnd(combined, index, introducer)
       if (endIndex === -1) {
-        return {
-          text: parts.join(''),
-          // Own the tail so it stops pinning the consumed chunk it was sliced from.
-          pendingAnsi: ownRetainedString(trimPendingAnsiControl(combined.slice(index)))
-        }
+        // Own the tail so it stops pinning the consumed chunk it was sliced from.
+        return out.finish(ownRetainedString(trimPendingAnsiControl(combined.slice(index))))
       }
       if (
         introducer === 'csi' &&
@@ -131,44 +128,63 @@ export function normalizeTerminalChunk(
         const parsed = parseTerminalCsiAtEnd(combined, index, endIndex)
         if (isTerminalPreviewLineControl(parsed)) {
           // Preserve Codex ANSI-only redraws so the tail overwrites the previous frame.
-          parts.push(combined.slice(index, endIndex + 1))
+          out.appendSpan(index, endIndex + 1)
         }
       }
       index = endIndex
       textStart = index + 1
       continue
     }
-    if (code === 0x0d && index + 1 === combined.length) {
-      // A final CR may be half of CRLF; keep the painted row until the next byte decides.
-      appendTerminalNormalizedSpan(parts, combined, textStart, index)
-      return { text: parts.join(''), pendingAnsi: '\r' }
-    }
-    if (code === 0x0d && combined.charCodeAt(index + 1) === 0x0a) {
-      // CRLF keeps only its LF, which starts the next span.
-      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+    if (code === 0x0d) {
+      out.appendSpan(textStart, index)
+      out.deferCarriageReturn()
       textStart = index + 1
       continue
     }
-    if (code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0d) {
+    if (code === 0x08 || code === 0x09 || code === 0x0a) {
       continue
     }
     if (!isTerminalPreviewPrintableCodeUnit(code)) {
-      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      out.appendSpan(textStart, index)
       textStart = index + 1
     }
   }
-  appendTerminalNormalizedSpan(parts, combined, textStart, combined.length)
-  return { text: parts.join(''), pendingAnsi: '' }
+  out.appendSpan(textStart, combined.length)
+  return out.finish('')
 }
 
-function appendTerminalNormalizedSpan(
-  parts: string[],
-  value: string,
-  start: number,
-  end: number
-): void {
-  if (end > start) {
-    parts.push(value.slice(start, end))
+/**
+ * Holds a CR until the next kept output decides it: before LF it is part of the line ending,
+ * and runs of CRs, or CRs split by discarded escapes, act as one. Raw-mode programs end lines
+ * with CR CR LF, and an early CR must not erase the row it ends.
+ */
+class NormalizedTerminalText {
+  private readonly parts: string[] = []
+  private carriageReturnPending = false
+
+  constructor(private readonly value: string) {}
+
+  appendSpan(start: number, end: number): void {
+    if (end <= start) {
+      return
+    }
+    if (this.carriageReturnPending && this.value.charCodeAt(start) !== 0x0a) {
+      this.parts.push('\r')
+    }
+    this.carriageReturnPending = false
+    this.parts.push(this.value.slice(start, end))
+  }
+
+  deferCarriageReturn(): void {
+    this.carriageReturnPending = true
+  }
+
+  /** An undecided CR stays pending: it may be half of a CRLF split across chunks. */
+  finish(pendingTail: string): { text: string; pendingAnsi: string } {
+    return {
+      text: this.parts.join(''),
+      pendingAnsi: this.carriageReturnPending ? `\r${pendingTail}` : pendingTail
+    }
   }
 }
 

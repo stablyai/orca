@@ -1,4 +1,4 @@
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { TreeNode } from '../tree/file-explorer-types'
 
 export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {

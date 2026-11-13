@@ -63,15 +63,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
 
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const outputSequence = this.getPtyOutputSequence(ptyId)
-    const cached = this.providerVisibleStateByPtyId.get(ptyId)
-    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    if (
-      cached?.generation === generation &&
-      outputSequence <= cached.sequence &&
-      (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
-    ) {
+    const cached = this.readCurrentProviderVisibleState(ptyId)
+    if (cached) {
       return cached
     }
+    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
     if (trackedMode && !trackedMode.isAlternateScreen) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
       return headlessState
@@ -83,6 +79,25 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
             generation
           }
     }
+    return this.captureProviderVisibleState(ptyId)
+  }
+
+  /** The provider's last frame while no later output or mode switch has outdated it. */
+  protected readCurrentProviderVisibleState(ptyId: string): RuntimeVisibleTerminalState | null {
+    const cached = this.providerVisibleStateByPtyId.get(ptyId)
+    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
+    return cached?.generation === this.getPtyLifecycleGeneration(ptyId) &&
+      this.getPtyOutputSequence(ptyId) <= cached.sequence &&
+      (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
+      ? cached
+      : null
+  }
+
+  /** Asks the provider for its current frame and caches it; null while it cannot give one now. */
+  protected async captureProviderVisibleState(
+    ptyId: string
+  ): Promise<RuntimeVisibleTerminalState | null> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
       return null
     }
@@ -255,7 +270,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       if (!snapshot || snapshot.data.length === 0) {
         return { lines: [] }
       }
-      return this.parseVisibleSnapshot(snapshot)
+      return await this.parseVisibleSnapshot(snapshot)
     } catch {
       return { lines: [] }
     }

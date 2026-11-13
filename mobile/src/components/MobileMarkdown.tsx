@@ -5,6 +5,7 @@ import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-st
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-blocks'
 import { MarkdownText } from './mobile-markdown-text'
+import { MobileMarkdownRemoteImage } from './MobileMarkdownRemoteImage'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { MarkdownLinkHandlerContext } from './markdown-link-handler'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
@@ -27,7 +28,7 @@ type Props = {
   // File targets call this with relative/absolute path and optional :line(:col); omit on screens without viewer to leave paths plain.
   onOpenFile?: (pathText: string) => void
   // Enable ::orca-visual directives only in assistant native-chat prose; keep callback identity stable for memoization.
-  renderImage?: (href: string, alt: string) => ReactNode
+  renderImage?: (href: string, alt: string, width?: number) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   // Close incomplete streaming markup like desktop; diagrams remain code until text stops.
   growing?: boolean
@@ -38,6 +39,13 @@ type Props = {
   chatMath?: boolean
   /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: keyof typeof MARKDOWN_TONES
+}
+
+/** Without a surface's own image renderer, https images draw from the web (GitHub text). */
+function renderRemoteImage(href: string, alt: string, width?: number): ReactNode {
+  return /^https:\/\//i.test(href) ? (
+    <MobileMarkdownRemoteImage uri={href} alt={alt} width={width} />
+  ) : null
 }
 
 function MobileMarkdownContent({
@@ -96,7 +104,7 @@ function MobileMarkdownContent({
     rowLongPress: setup.androidTranscript ? setup.onLongPress : undefined,
     directives,
     renderVisual,
-    renderImage,
+    renderImage: renderImage ?? renderRemoteImage,
     mermaidOccurrences: new Map()
   }
   // Native-chat range selection is set on each block; nested inline spans inherit it.

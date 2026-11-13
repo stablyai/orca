@@ -36,7 +36,7 @@ let mockState: MockState
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
 }))
-vi.mock('../../../terminal-pane/remote-server-outage', () => ({
+vi.mock('@/lib/workspace/ownership/workspace-runtime-environment', () => ({
   selectWorkspaceRuntimeEnvironmentId: () => 'wsl:ubuntu'
 }))
 

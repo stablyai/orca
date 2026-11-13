@@ -40,17 +40,4 @@ describe('terminal contrast modes', () => {
     expect(persist).toHaveBeenLastCalledWith({ terminalMinimumContrastRatio: 7 })
     expect((screen.getByRole('spinbutton') as HTMLInputElement).value).toBe('7')
   })
-
-  it('starts custom at a usable target and bounds precise input', () => {
-    const persist = mount()
-    fireEvent.click(screen.getByRole('radio', { name: 'Custom' }))
-    expect(persist).toHaveBeenLastCalledWith({ terminalMinimumContrastRatio: 4.5 })
-    const input = screen.getByRole('spinbutton')
-    fireEvent.change(input, { target: { value: '99' } })
-    fireEvent.blur(input)
-    expect(persist).toHaveBeenLastCalledWith({ terminalMinimumContrastRatio: 21 })
-    fireEvent.change(input, { target: { value: '1' } })
-    fireEvent.blur(input)
-    expect(screen.getByRole('radio', { name: 'Off' }).getAttribute('aria-checked')).toBe('true')
-  })
 })

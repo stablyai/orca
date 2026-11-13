@@ -20,7 +20,6 @@ import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
-import { respondAfterAgentToolPluginHooks } from '../agent-tool-plugin-hooks'
 
 import type { HookServerStartOptions } from './server-types'
 
@@ -144,6 +143,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        if (source === 'muse' && !normalized.event) {
+          this.rearmIgnoredMuseHook(aliasedBody)
+        }
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
               source,
@@ -185,8 +187,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
           }
         }
-        // Plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped.
-        await respondAfterAgentToolPluginHooks(res, source, aliasedBody, req.headers, toolCallOwner)
+        await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {
           if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
@@ -248,6 +249,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
     this.claudeAgentViews.clear()
+    this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()
@@ -275,8 +277,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
-    this.lastStatusFilePath = null
+    this.setStatusFilePath(null)
     this.closeStatusSnapshotWriter()
+    this.agentIdentities.close()
     this.runtimeObservedStatusPaneKeys.clear()
     this.paneKeyByTerminalHandle.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])

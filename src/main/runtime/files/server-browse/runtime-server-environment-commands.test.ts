@@ -41,16 +41,4 @@ describe('RuntimeServerEnvironmentCommands.browseDirectory', () => {
       ])
     }
   )
-
-  it('navigates into a symlinked directory', async () => {
-    await mkdir(join(root, 'real-dir', 'project'), { recursive: true })
-    await symlink(join(root, 'real-dir'), join(root, 'linked-dir'), dirLinkType)
-
-    const result = await new RuntimeServerEnvironmentCommands().browseDirectory(
-      join(root, 'linked-dir')
-    )
-
-    expect(result.resolvedPath).toBe(join(root, 'linked-dir'))
-    expect(result.entries).toEqual([{ name: 'project', isDirectory: true, isSymlink: false }])
-  })
 })

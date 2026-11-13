@@ -13,10 +13,8 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
-} from '../../runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { adoptEndpointProjectCatalog } from '../../../../shared/endpoint-catalog-adoption'
 import {
@@ -24,7 +22,7 @@ import {
   sshHostWithoutServerMessage,
   type ProjectHostSetupTarget
 } from '../../../../shared/project-host-setup-target'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { AppState } from '../types'
 import { findSoleHostCopy } from '../../../../shared/worktree/host-qualified-identity'
 
@@ -35,6 +33,13 @@ export function getProjectSetupRuntimeTarget(
   return parsedHost?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsedHost.environmentId }
     : { kind: 'local' }
+}
+
+/** Null for SSH hosts: setup refuses them before a folder check could matter. */
+export function getProjectCloneCheckTarget(
+  hostId: ProjectHostSetupExistingFolderArgs['hostId']
+): RuntimeClientTarget | null {
+  return parseExecutionHostId(hostId)?.kind === 'ssh' ? null : getProjectSetupRuntimeTarget(hostId)
 }
 
 // Why before dispatch: no process sets up `ssh:` hosts (managed ones are `runtime:`), and a

@@ -1,5 +1,5 @@
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { Timer } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useShallow } from 'zustand/react/shallow'
@@ -9,7 +9,7 @@ import {
   getPromptCacheCountdownForPane,
   type PromptCacheCountdownSelection
 } from './prompt-cache-timer-selection'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Resolve the soonest-expiring Claude cache once for both row visibility and countdown rendering. */
 export function usePromptCacheCountdownStartedAt(worktreeId: string, active = true): number | null {
@@ -59,6 +59,7 @@ export default function CacheTimer({
   startedAt: number
   ttlMs: number
 }): React.JSX.Element {
+  const t = useTranslate()
   const now = usePromptCacheCountdownNow(true)
   const remainingMs = Math.max(0, ttlMs - (now - startedAt))
 
@@ -71,15 +72,13 @@ export default function CacheTimer({
   const warning = !expired && remainingMs <= 60_000
 
   const tooltipText = expired
-    ? translate(
+    ? t(
         'auto.components.sidebar.CacheTimer.expiredTooltip',
         'The next message will re-send the full context as uncached tokens'
       )
-    : translate(
-        'auto.components.sidebar.CacheTimer.expiresIn',
-        'Prompt cache expires in {{time}}',
-        { time: label }
-      )
+    : t('auto.components.sidebar.CacheTimer.expiresIn', 'Prompt cache expires in {{time}}', {
+        time: label
+      })
 
   return (
     <Tooltip>

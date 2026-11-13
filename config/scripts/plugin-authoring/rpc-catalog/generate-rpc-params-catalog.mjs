@@ -19,7 +19,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '../../..', '..')
 const SHARED_DIR = path.join(REPO_ROOT, 'src', 'shared')
 const CONTRACT_DIR = path.join(SHARED_DIR, 'rpc-contract')
 const RPC_DIR = path.join(REPO_ROOT, 'src', 'main', 'runtime', 'rpc')
-const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'index.ts')
+const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'rpc-method-registry.ts')
 const OUTPUT_PATH = path.join(CONTRACT_DIR, 'rpc-params-catalog.generated.ts')
 
 // Create ignored out/ before mkdtemp; keep scratch under repo for external node_modules resolution and formatter config discovery.

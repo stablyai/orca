@@ -17,6 +17,7 @@ const dotColors = (): Record<
   done: '#10b981',
   blocked: '#ef4444',
   waiting: '#ef4444',
+  permission: '#ef4444',
   interrupted: colors.textMuted,
   failed: '#ef4444',
   unconfirmed: colors.statusAmber,

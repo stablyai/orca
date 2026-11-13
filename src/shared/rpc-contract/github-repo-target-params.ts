@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { normalizeGhAccountBinding } from '../github/account-binding'
+import { normalizeGhAccountBinding } from '../github/accounts/account-binding'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
 import { OptionalExecutionHostId } from './worktree-params'
 

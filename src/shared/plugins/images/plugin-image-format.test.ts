@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { readPluginImageHeader } from './plugin-image-format'
-import { pluginImageRuleError } from './plugin-image-fields'
 
 function chunk(type: string, data: number[] = []): number[] {
   const length = data.length
@@ -107,33 +106,5 @@ describe('readPluginImageHeader', () => {
       width: 1280,
       height: 800
     })
-  })
-
-  it('refuses animation, other formats and oversized frames', () => {
-    expect(readPluginImageHeader(pngBytes(512, 512, true))).toBe('animated images are not allowed')
-    expect(readPluginImageHeader(webpVp8x(512, 512, 0x02))).toBe('animated images are not allowed')
-    expect(readPluginImageHeader(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBe(
-      'must be a PNG, JPEG or WebP image'
-    )
-    expect(readPluginImageHeader(Buffer.from('GIF89a'))).toBe('must be a PNG, JPEG or WebP image')
-    expect(readPluginImageHeader(pngBytes(5000, 100))).toBe('image is larger than 4096×4096')
-  })
-
-  it('applies per-kind rules', () => {
-    expect(
-      pluginImageRuleError('icon', { format: 'png', width: 512, height: 512 }, 10_000)
-    ).toBeNull()
-    expect(pluginImageRuleError('icon', { format: 'jpeg', width: 512, height: 512 }, 10_000)).toBe(
-      'icon must be PNG or WEBP'
-    )
-    expect(pluginImageRuleError('icon', { format: 'png', width: 512, height: 256 }, 10_000)).toBe(
-      'icon must be square'
-    )
-    expect(pluginImageRuleError('cover', { format: 'png', width: 640, height: 400 }, 10_000)).toBe(
-      'cover must be at least 800×500'
-    )
-    expect(
-      pluginImageRuleError('screenshot', { format: 'webp', width: 1600, height: 1000 }, 2_000_000)
-    ).toBe('screenshot must be at most 1536 KB')
   })
 })

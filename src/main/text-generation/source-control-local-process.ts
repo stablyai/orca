@@ -6,7 +6,7 @@ import { producePromptRecords } from './source-control-prompt-producer'
 import { argumentBudgetFailure } from './source-control-command-line-budget'
 export { fitsLocalCommandLine } from './source-control-command-line-budget'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { WindowsCmdLineBreakError } from '@orca/process-host'
+import { WindowsCmdLineBreakError } from '@orca/process-host/windows-command-line'
 import { WindowsCommandLineBudgetError } from '../../shared/windows-command-line-budget'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import {
@@ -36,7 +36,8 @@ export function runLocalSourceControlPlan(
 ): LocalProcessExecution<InternalTextGenerationResult> {
   let { plan } = input
   const { cwd, operation } = input
-  const distro = plan.promptFile ? wslDistroForCommand(cwd, input.wslDistro) : null
+  const distro =
+    plan.promptFile || plan.taskFiles?.length ? wslDistroForCommand(cwd, input.wslDistro) : null
   const guest = distro ? prepareWslPrompt(plan, distro) : undefined
   let closed = false
   let promptDirectory: string | undefined
@@ -101,7 +102,8 @@ export function runLocalSourceControlPlan(
     }
 
     const stop = new AbortController()
-    const deadline = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+    const timeoutMs = input.timeoutMs ?? SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+    const deadline = Date.now() + timeoutMs
     let stdout = ''
     let stderr = ''
     let stdoutBytes = 0
@@ -160,7 +162,7 @@ export function runLocalSourceControlPlan(
           seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
         })
       })
-    }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+    }, timeoutMs)
 
     const onStdoutData = (chunk: Buffer): void => {
       stdoutBytes += chunk.byteLength
@@ -236,8 +238,7 @@ export function runLocalSourceControlPlan(
           stderr,
           label: plan.label,
           outputFormat: plan.outputFormat,
-          operation,
-          includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
+          operation
         })
       )
     }

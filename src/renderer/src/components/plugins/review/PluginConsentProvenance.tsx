@@ -1,5 +1,6 @@
 import { BadgeCheck, Info } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
@@ -40,12 +41,15 @@ function ProvenanceDetail({
   )
 }
 
-function provenanceBadge(props: PluginConsentProvenanceProps): React.JSX.Element {
+function provenanceBadge(
+  props: PluginConsentProvenanceProps,
+  t: Translate = translate
+): React.JSX.Element {
   if (props.official) {
     return (
       <Badge variant="secondary" className="gap-1">
         <BadgeCheck className="size-3.5" />
-        {translate('auto.components.settings.PluginConsentProvenance.official', 'Official')}
+        {t('auto.components.settings.PluginConsentProvenance.official', 'Official')}
         {props.publisher ? ` · ${props.publisher}` : ''}
       </Badge>
     )
@@ -53,56 +57,51 @@ function provenanceBadge(props: PluginConsentProvenanceProps): React.JSX.Element
   if (props.source?.kind === 'bundled') {
     return (
       <Badge variant="outline">
-        {translate('auto.components.settings.PluginConsentProvenance.bundled', 'Bundled with Orca')}
+        {t('auto.components.settings.PluginConsentProvenance.bundled', 'Bundled with Orca')}
       </Badge>
     )
   }
   if (props.source?.kind === 'local-path') {
     return (
       <Badge variant="outline">
-        {translate('auto.components.settings.PluginConsentProvenance.local', 'Local folder')}
+        {t('auto.components.settings.PluginConsentProvenance.local', 'Local folder')}
       </Badge>
     )
   }
   return (
     <Badge variant="outline">
-      {translate('auto.components.settings.PluginConsentProvenance.community', 'Community')}
+      {t('auto.components.settings.PluginConsentProvenance.community', 'Community')}
       {props.publisher ? ` · ${props.publisher}` : ''}
     </Badge>
   )
 }
 
 export function PluginConsentProvenance(props: PluginConsentProvenanceProps): React.JSX.Element {
+  const t = useTranslate()
   const { source } = props
   const pinned = shortCommit(source?.resolvedCommit)
   return (
     <div className="flex items-center gap-1.5">
-      {provenanceBadge(props)}
+      {provenanceBadge(props, t)}
       {source ? (
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="xs" className="text-muted-foreground">
               <Info />
-              {translate('auto.components.settings.PluginConsentProvenance.source', 'Source')}
+              {t('auto.components.settings.PluginConsentProvenance.source', 'Source')}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-80 space-y-1.5 p-3">
             <ProvenanceDetail
-              label={translate(
-                'auto.components.settings.PluginConsentProvenance.sourceLabel',
-                'Source'
-              )}
+              label={t('auto.components.settings.PluginConsentProvenance.sourceLabel', 'Source')}
               value={source.reference}
               fullValue={source.reference}
             />
             <ProvenanceDetail
-              label={translate(
-                'auto.components.settings.PluginConsentProvenance.commit',
-                'Pinned commit'
-              )}
+              label={t('auto.components.settings.PluginConsentProvenance.commit', 'Pinned commit')}
               value={
                 pinned ??
-                translate(
+                t(
                   'auto.components.settings.PluginConsentProvenance.localCommit',
                   'Local folder — no commit'
                 )
@@ -111,7 +110,7 @@ export function PluginConsentProvenance(props: PluginConsentProvenanceProps): Re
             />
             {source.marketplace ? (
               <ProvenanceDetail
-                label={translate(
+                label={t(
                   'auto.components.settings.PluginConsentProvenance.indexCommit',
                   'Index commit'
                 )}

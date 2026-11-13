@@ -49,6 +49,10 @@
   --text-2xs--line-height: calc(1 / 0.6875);
   --text-3xs: 0.625rem;
   --text-3xs--line-height: calc(0.875 / 0.625);
+  --text-settings-detail: 0.78125rem;
+  --text-settings-detail--line-height: 1.35;
+  --text-settings-heading: 0.9375rem;
+  --text-settings-heading--line-height: 1.4;
   --text-chat-code: 0.75rem;
   --text-chat-code--line-height: calc(1 / 0.75);
 }
@@ -61,6 +65,7 @@
   --color-chat-foreground: var(--chat-foreground);
   --color-chat-foreground-strong: var(--chat-foreground-strong);
   --color-chat-foreground-faint: var(--chat-foreground-faint);
+  --color-chat-unread: var(--chat-unread);
   --color-chat-user-surface: var(--chat-user-surface);
   --color-chat-user-border: var(--chat-user-border);
   --color-chat-code-foreground: var(--chat-code-foreground);
@@ -96,6 +101,9 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-question-card-border: var(--question-card-border);
+  --color-question-option-border: var(--question-option-border);
+  --color-chat-focus-ring: var(--chat-focus-ring);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -229,6 +237,7 @@
   --chat-composer-mix: 0%;
   --chat-composer-base: var(--chat-canvas);
   --chat-composer-border-mix: 11%;
+  --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
   --card: #fff;
   --card-foreground: #0a0a0a;
@@ -256,6 +265,9 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
+  --question-card-border-mix: 14%;
+  --question-option-border-mix: 16%;
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -350,6 +362,7 @@
   --chat-composer-mix: 4%;
   --chat-composer-base: transparent;
   --chat-composer-border-mix: 9%;
+  --chat-selection-mix: 40%;
   --chat-content-max-width: 46rem;
   --card: #171717;
   --card-foreground: #f0f0f0;
@@ -372,6 +385,8 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --question-card-border-mix: 16%;
+  --question-option-border-mix: 12%;
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -586,6 +601,42 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   margin-left: 0;
 }
 
+/* Why: Sonner's 24px buttons with untokened fills don't match Orca; mirror Button size="sm" default/secondary. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition:
+    opacity 0.4s,
+    box-shadow 0.2s,
+    background-color 150ms;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:hover {
+  background: color-mix(in oklab, var(--primary) 90%, transparent);
+}
+
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel]:hover {
+  background: color-mix(in oklab, var(--secondary) 80%, transparent);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
   line-height: 1.35;
 }
@@ -654,10 +705,13 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-strong-mix),
     var(--chat-canvas)
   );
-  --chat-foreground-faint: color-mix(
-    in srgb,
-    var(--chat-source-muted-foreground) var(--chat-faint-mix),
-    var(--chat-canvas)
+  --chat-foreground-faint: var(
+    --chat-muted-foreground,
+    color-mix(
+      in srgb,
+      var(--chat-source-muted-foreground) var(--chat-faint-mix),
+      var(--chat-canvas)
+    )
   );
   --chat-user-surface: var(
     --chat-user-message,
@@ -669,16 +723,18 @@ body[data-modal-overlay-open]
     transparent
   );
   --chat-code-foreground: color-mix(in srgb, var(--chat-source-foreground) 85%, var(--chat-canvas));
-  --chat-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-code-mix),
-    var(--chat-code-base)
+  --chat-code-surface: var(
+    --chat-code-block,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-code-mix), var(--chat-code-base))
   );
   --chat-code-border: color-mix(in srgb, var(--chat-source-foreground) 7%, transparent);
-  --chat-inline-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-inline-code-mix),
-    var(--chat-inline-code-base)
+  --chat-inline-code-surface: var(
+    --chat-inline-code,
+    color-mix(
+      in srgb,
+      var(--chat-source-foreground) var(--chat-inline-code-mix),
+      var(--chat-inline-code-base)
+    )
   );
   --chat-inline-code-border: color-mix(
     in srgb,
@@ -695,15 +751,37 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-composer-border-mix),
     transparent
   );
+  /* From the chat's own foreground, so the edges stay visible when chat follows the terminal's colors. */
+  --question-card-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-card-border-mix),
+    transparent
+  );
+  --question-option-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-option-border-mix),
+    transparent
+  );
   /* Mixed toward the foreground so each clears text contrast on the canvas in either scheme. */
   --chat-focus-ring: color-mix(in srgb, var(--chat-source-foreground) 50%, var(--chat-canvas));
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
+  /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
+  --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
   --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
   --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
   --chat-link: color-mix(
     in srgb,
     var(--text-link, var(--callout-note)) 70%,
     var(--chat-source-foreground)
+  );
+  /* The link hue at about the system highlight's depth; a dim theme lowers the mix (chat-selection-mix.ts). */
+  --chat-selection-surface: var(
+    --chat-selection,
+    color-mix(
+      in srgb,
+      var(--text-link, var(--callout-note)) var(--chat-selection-mix),
+      var(--chat-canvas)
+    )
   );
 }
 
@@ -944,6 +1022,27 @@ body[data-modal-overlay-open]
   background-position: center, var(--orca-theme-background-position);
 }
 
+/* Its video (lib/theme-background-video.ts) plays over the image once a frame is ready. The opaque
+   base and the video's opacity reproduce the image's veil; position and opacity are the image's. */
+.theme-background-video {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  visibility: hidden;
+  background-color: var(--background);
+}
+.theme-background-video[data-ready] {
+  visibility: visible;
+}
+.theme-background-video > video {
+  width: 100%;
+  height: 100%;
+  object-fit: var(--orca-theme-background-video-fit);
+  object-position: var(--orca-theme-background-position);
+  opacity: var(--orca-theme-background-opacity);
+}
+
 /* The window material (window-material-options.ts) is the backdrop; an opaque body would cover it.
    A theme image keeps its opaque base so its letterbox and veil never expose the desktop. */
 :root[data-window-material]:not([data-theme-background]) body {
@@ -983,7 +1082,9 @@ body[data-modal-overlay-open]
     [data-slot='command-dialog-content'],
     [data-slot='sheet-content'],
     [data-onboarding-overlay]
-  ):has(~ [data-slot='dialog-overlay'], ~ [data-slot='sheet-overlay']) {
+  ):has(
+    ~ :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay']):not([data-state='closed'])
+  ) {
   filter: blur(2px);
 }
 
@@ -1450,6 +1551,20 @@ html.native-shell .app-layout {
   color: var(--accent-foreground);
 }
 
+/* Why: the split-pane landing card is a flat surface, so its highlight is a plain fill on
+   --popover with no ring; these out-rank the palette rules above in both themes. */
+.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
+.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 8%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
 [data-file-explorer-row][data-selected='true'] {
   /* Why: flat bg-accent ≈ panel background in light mode, so selection mixes
      foreground into accent and adds an inset ring to stay legible in both themes. */
@@ -1523,10 +1638,16 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
-/* #15971: the wash matches the pill's fill, so its border carries the shape; 80% keeps >=3:1 wherever the validated foreground is >=4.5:1. */
+/* #15971: the wash matches the pill's fill, so its border carries the shape. A neutral sidebar tint
+   keeps the outline visible but quieter than the pill's label (#38641); app themes and the tinted
+   sidebar raise the mix when their text is too dim to clear the selected wash (hostPillOutlineMixOver). */
 @scope ([data-worktree-card-surface][data-worktree-card-active='primary']) to ([data-worktree-lineage-children]) {
   [data-variant='hostContext'] {
-    border-color: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
+    border-color: color-mix(
+      in srgb,
+      var(--worktree-sidebar-foreground) var(--worktree-host-pill-outline-mix, 40%),
+      var(--worktree-sidebar)
+    );
   }
 }
 
@@ -2067,6 +2188,43 @@ html.native-shell .app-layout {
   animation: settings-shell-enter 180ms ease-out;
 }
 
+/* Shared row primitives also render outside Settings; their density stays local to this page. */
+.settings-view-shell > :not(aside) [data-slot='label'],
+.settings-view-shell > :not(aside) [data-source-title] {
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.settings-view-shell > :not(aside) p.text-xs,
+.settings-view-shell > :not(aside) p.text-2xs,
+.settings-view-shell > :not(aside) p[class~='text-[10px]'],
+.settings-view-shell > :not(aside) p[class~='text-[11px]'],
+.settings-view-shell > :not(aside) p[class~='text-[12px]'],
+.settings-view-shell > :not(aside) p[class~='text-[13px]'],
+.settings-view-shell > :not(aside) [data-source-path] {
+  font-size: var(--text-settings-detail);
+  line-height: 1.35;
+}
+
+.settings-view-shell > :not(aside) [data-slot='select-trigger'],
+.settings-view-shell > :not(aside) button[role='combobox'] {
+  min-height: 28px;
+  height: 28px;
+}
+
+.settings-view-shell > :not(aside) [data-settings-row]:not(:has([data-settings-row])) {
+  padding-block: 9px;
+  min-height: 44px;
+}
+
+.settings-view-shell > :not(aside) [data-settings-group-heading] {
+  font-size: var(--text-settings-heading);
+}
+
+.settings-view-shell > :not(aside) [data-settings-group-description] {
+  font-size: var(--text-settings-detail);
+}
+
 .repo-icon-emoji-picker .EmojiPickerReact {
   --epr-bg-color: var(--card);
   --epr-category-label-bg-color: var(--card);
@@ -2540,6 +2698,25 @@ html.native-shell .app-layout {
   ) {
   --ring: var(--code-editor-muted-foreground);
   --muted-foreground: var(--code-editor-muted-foreground);
+}
+
+/* Why: a new or deleted file keeps one line tint. The character tint would stack on it, and the empty
+   side's lone blank line is not a real removal or addition. */
+.orca-diff-whole-file-added
+  .monaco-diff-editor
+  :is(.monaco-editor, .diff-review)
+  :is(.char-insert, .char-delete, .line-delete, .gutter-delete, .inline-deleted-margin-view-zone),
+.orca-diff-whole-file-deleted
+  .monaco-diff-editor
+  :is(.monaco-editor, .diff-review)
+  :is(.char-delete, .char-insert, .line-insert, .gutter-insert, .inline-added-margin-view-zone) {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.orca-diff-whole-file-added .monaco-diff-editor .delete-sign,
+.orca-diff-whole-file-deleted .monaco-diff-editor .insert-sign {
+  visibility: hidden;
 }
 
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */

@@ -8,8 +8,8 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
-import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import {
   CODEX_DEFAULT_SERVICE_TIER,
   codexFastModeOfServiceTier,
@@ -101,6 +101,57 @@ export type CodexModelCatalogListing = {
   listedServiceTiers?: readonly string[]
 }
 
+export type CodexModelPages = {
+  models: AgentSessionModelOption[]
+  /** False when a page was malformed, a row unreadable, or the page cap cut the listing short. */
+  complete: boolean
+}
+
+/** Pages `model/list` (hidden rows excluded) through any transport's request. */
+export async function listCodexModelPages(
+  request: (params: Record<string, unknown>) => Promise<unknown>
+): Promise<CodexModelPages> {
+  const models: AgentSessionModelOption[] = []
+  const seen = new Set<string>()
+  let cursor: string | null = null
+  let complete = true
+  for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
+    const response = record(
+      await request({
+        limit: MODEL_PAGE_LIMIT,
+        includeHidden: false,
+        ...(cursor ? { cursor } : {})
+      })
+    )
+    if (!Array.isArray(response?.data)) {
+      complete = false
+    }
+    const rows = Array.isArray(response?.data) ? response.data : []
+    for (const row of rows) {
+      const parsed = modelOption(row)
+      if (!parsed && record(row)?.hidden !== true) {
+        complete = false
+      }
+      if (parsed && !seen.has(parsed.id)) {
+        seen.add(parsed.id)
+        models.push(parsed)
+      }
+    }
+    if (
+      response?.nextCursor !== null &&
+      response?.nextCursor !== undefined &&
+      !text(response.nextCursor)
+    ) {
+      complete = false
+    }
+    cursor = text(response?.nextCursor)
+    if (!cursor) {
+      break
+    }
+  }
+  return { models, complete: complete && cursor === null }
+}
+
 export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   timeoutMs?: number
@@ -123,43 +174,14 @@ export async function fetchCodexModelCatalogListing(input: {
     }
     return Math.min(remaining, input.timeoutMs ?? remaining)
   }
-  const parsedModels: AgentSessionModelOption[] = []
-  let cursor: string | null = null
-  let complete = true
-  for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
-    const response = record(
-      await input.connection.request(
-        'model/list',
-        { limit: MODEL_PAGE_LIMIT, includeHidden: false, ...(cursor ? { cursor } : {}) },
-        { timeoutMs: remainingTimeout() }
-      )
-    )
-    assertStructuredAgentResolutionCurrent(input.operation)
-    if (!Array.isArray(response?.data)) {
-      complete = false
-    }
-    const rows = Array.isArray(response?.data) ? response.data : []
-    for (const row of rows) {
-      const parsed = modelOption(row)
-      if (!parsed && record(row)?.hidden !== true) {
-        complete = false
-      }
-      if (parsed && !parsedModels.some((model) => model.id === parsed.id)) {
-        parsedModels.push(parsed)
-      }
-    }
-    if (
-      response?.nextCursor !== null &&
-      response?.nextCursor !== undefined &&
-      !text(response.nextCursor)
-    ) {
-      complete = false
-    }
-    cursor = text(response?.nextCursor)
-    if (!cursor) {
-      break
-    }
-  }
+  const { models: parsedModels, complete } = await listCodexModelPages((params) =>
+    input.connection
+      .request('model/list', params, { timeoutMs: remainingTimeout() })
+      .then((response) => {
+        assertStructuredAgentResolutionCurrent(input.operation)
+        return response
+      })
+  )
   const configured = await readCodexConfiguredLaunchDefaults(
     input.connection,
     remainingTimeout(),
@@ -168,7 +190,7 @@ export async function fetchCodexModelCatalogListing(input: {
   assertStructuredAgentResolutionCurrent(input.operation)
   return {
     models: applyCodexConfiguredLaunchDefaults(parsedModels, configured),
-    complete: complete && cursor === null && configured !== null,
+    complete: complete && configured !== null,
     ...(configured
       ? {
           configured: {

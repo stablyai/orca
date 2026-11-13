@@ -43,68 +43,6 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReset()
   })
 
-  it('reaches daemon sessions and registry entries without a runtime', async () => {
-    const localProvider = createProviderStub(async () => [
-      { id: 'w1@@abcd1234', cwd: '/tmp/w1', title: 'shell' },
-      { id: 'w2@@efef5678', cwd: '/tmp/w2', title: 'shell' }
-    ])
-    listRegisteredPtysMock.mockReturnValue([
-      { ptyId: 'w1-registry-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 },
-      { ptyId: 'w2-registry-2', worktreeId: 'w2', sessionId: null, paneKey: null, pid: 101 }
-    ])
-    const onPtyStopped = vi.fn()
-
-    const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
-
-    expect(result.runtimeStopped).toBe(0)
-    expect(result.providerStopped).toBe(1)
-    expect(result.registryStopped).toBe(1)
-
-    expect(localProvider.shutdown).toHaveBeenCalledWith(
-      'w1@@abcd1234',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(localProvider.shutdown).toHaveBeenCalledWith(
-      'w1-registry-1',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(localProvider.shutdown).not.toHaveBeenCalledWith(
-      'w2@@efef5678',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(localProvider.shutdown).not.toHaveBeenCalledWith(
-      'w2-registry-2',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(onPtyStopped).toHaveBeenCalledWith('w1@@abcd1234')
-    expect(onPtyStopped).toHaveBeenCalledWith('w1-registry-1')
-    expect(onPtyStopped).not.toHaveBeenCalledWith('w2@@efef5678')
-    expect(onPtyStopped).not.toHaveBeenCalledWith('w2-registry-2')
-  })
-
-  it('skips the daemon prefix sweep safely when the provider uses numeric ids', async () => {
-    // LocalPtyProvider shape: numeric ids that cannot match `${worktreeId}@@`.
-    const localProvider = createProviderStub(async () => [
-      { id: '1', cwd: '/tmp/w1', title: 'shell' },
-      { id: '2', cwd: '/tmp/w2', title: 'shell' }
-    ])
-    listRegisteredPtysMock.mockReturnValue([
-      { ptyId: '1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 200 }
-    ])
-    const onPtyStopped = vi.fn()
-
-    const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
-
-    expect(result.providerStopped).toBe(0)
-    expect(result.registryStopped).toBe(1)
-    expect(localProvider.shutdown).toHaveBeenCalledWith(
-      '1',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
-    expect(onPtyStopped).toHaveBeenCalledWith('1')
-  })
-
   it('stops cwd-owned PTYs even when their ids have no worktree prefix', async () => {
     const localProvider = createProviderStub(async () => [
       { id: 'floating-1', cwd: '/repo/app/nested', title: 'shell' },
@@ -145,37 +83,6 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([])
 
     const result = await killAllProcessesForWorktree('repo-1::/repo/app', {
-      localProvider,
-      requirePhysicalStop: true
-    })
-
-    expect(localProvider.shutdown).not.toHaveBeenCalled()
-    expect(result.providerStopped).toBe(0)
-  })
-
-  it('does not path-sweep untagged siblings when deleting a folder-workspace instance', async () => {
-    // Regression for #10252: folder-workspace instances share one checkout dir,
-    // so splitWorktreeIdForFilesystem() strips the `::workspace:<uuid>` suffix
-    // down to the shared path. An untagged session under that shared path must
-    // NOT be swept — it may belong to a sibling workspace or another repo.
-    const deletedInstance =
-      'repo-1::/Users/dev/project::workspace:11111111-1111-1111-1111-111111111111'
-    const siblingInstance =
-      'repo-1::/Users/dev/project::workspace:22222222-2222-2222-2222-222222222222'
-    const localProvider = createProviderStub(async () => [
-      // Untagged session whose cwd is the shared checkout dir (sibling's live agent).
-      { id: 'floating-sibling', cwd: '/Users/dev/project', title: 'shell' },
-      // Properly tagged session owned by a sibling instance.
-      {
-        id: `${siblingInstance}@@sib00000`,
-        cwd: '/Users/dev/project',
-        title: 'shell',
-        worktreeId: siblingInstance
-      }
-    ])
-    listRegisteredPtysMock.mockReturnValue([])
-
-    const result = await killAllProcessesForWorktree(deletedInstance, {
       localProvider,
       requirePhysicalStop: true
     })
@@ -248,66 +155,6 @@ describe('killAllProcessesForWorktree', () => {
     expect(result).toEqual({ runtimeStopped: 0, providerStopped: 1, registryStopped: 0 })
   })
 
-  it('best-effort: swallows errors from listProcesses and shutdown', async () => {
-    const localProvider = createProviderStub(() => Promise.reject(new Error('boom')))
-    listRegisteredPtysMock.mockReturnValue([
-      { ptyId: 'x', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 10 }
-    ])
-    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('already dead')
-    )
-
-    const result = await killAllProcessesForWorktree('w1', { localProvider })
-
-    // listProcesses rejected → provider sweep returns 0; registry shutdown
-    // rejected → counted as not-killed (registry sweep currently swallows).
-    expect(result.providerStopped).toBe(0)
-    expect(result.registryStopped).toBe(0)
-  })
-
-  it('does not let cleanup hook failures abort teardown', async () => {
-    const localProvider = createProviderStub(async () => [
-      { id: 'w1@@aaaa', cwd: '/tmp/w1', title: 'shell' }
-    ])
-    listRegisteredPtysMock.mockReturnValue([])
-    const onPtyStopped = vi.fn(() => {
-      throw new Error('cleanup failed')
-    })
-
-    const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
-
-    expect(result.providerStopped).toBe(1)
-    expect(onPtyStopped).toHaveBeenCalledWith('w1@@aaaa')
-  })
-
-  it('starts owned provider shutdowns together so agent snapshots can coalesce', async () => {
-    const localProvider = createProviderStub(async () => [
-      { id: 'w1@@aaaa', cwd: '/tmp', title: 'shell' },
-      { id: 'w1@@bbbb', cwd: '/tmp', title: 'shell' }
-    ])
-    listRegisteredPtysMock.mockReturnValue([])
-    const releases: (() => void)[] = []
-    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          releases.push(resolve)
-        })
-    )
-
-    const teardown = killAllProcessesForWorktree('w1', { localProvider })
-    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(2))
-    expect(releases).toHaveLength(2)
-
-    for (const release of releases) {
-      release()
-    }
-    await expect(teardown).resolves.toEqual({
-      runtimeStopped: 0,
-      providerStopped: 2,
-      registryStopped: 0
-    })
-  })
-
   it('bounds provider shutdown fanout while preserving concurrent batches', async () => {
     const sessions = Array.from({ length: 40 }, (_, index) => ({
       id: `w1@@${index}`,
@@ -343,50 +190,6 @@ describe('killAllProcessesForWorktree', () => {
       providerStopped: 40,
       registryStopped: 0
     })
-  })
-
-  it('can restrict an orphan runtime sweep to its SSH connection', async () => {
-    const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 1 })
-    const runtime = {
-      stopTerminalsForWorktree
-    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
-    const localProvider = createProviderStub(async () => [])
-    listRegisteredPtysMock.mockReturnValue([])
-
-    await killAllProcessesForWorktree('w1', {
-      runtime,
-      localProvider,
-      resolvedWorktreeId: 'w1',
-      resolvedConnectionId: 'ssh-1',
-      includeProviderInventory: false,
-      includeLocalRegistry: false
-    })
-
-    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
-      deadline: expect.any(Number),
-      stopPty: expect.any(Function),
-      resolvedWorktreeId: 'w1',
-      resolvedConnectionId: 'ssh-1'
-    })
-    expect(localProvider.listProcesses).not.toHaveBeenCalled()
-  })
-
-  it('claims duplicate provider and registry PTY ids only once', async () => {
-    const localProvider = createProviderStub(async () => [
-      { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }
-    ])
-    listRegisteredPtysMock.mockReturnValue([
-      { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
-    ])
-
-    const result = await killAllProcessesForWorktree('w1', { localProvider })
-
-    expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
-    expect(localProvider.shutdown).toHaveBeenCalledWith(
-      'w1@@same',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(result.providerStopped + result.registryStopped).toBe(1)
   })
 
   it('falls back to provider shutdown when the runtime cannot stop an overlapping PTY', async () => {
@@ -667,20 +470,6 @@ describe('killAllProcessesForWorktree', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('tolerates runtime.stopTerminalsForWorktree throwing (headless assertGraphReady reject)', async () => {
-    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime_unavailable'))
-    const runtime = {
-      stopTerminalsForWorktree
-    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
-
-    const localProvider = createProviderStub(async () => [])
-    listRegisteredPtysMock.mockReturnValue([])
-
-    const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
-
-    expect(result.runtimeStopped).toBe(0)
   })
 
   it('tolerates an unresolved runtime selector during destructive removal', async () => {

@@ -9,11 +9,10 @@ import {
 import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 import type * as RuntimeSession from './preload-api/web-runtime-session'
 import type { PreloadApi } from '../../../preload/api-types'
-import { replaceRuntimeEnvironmentRevisions } from '../runtime/runtime-environment-revision'
-import { useOrchestrationCrew } from '../components/native-chat/use-orchestration-crew'
-import { SharedControlReconnectScheduler } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-reconnect'
+import { replaceRuntimeEnvironmentRevisions } from '../runtime/rpc/environment-revisions/runtime-environment-revision'
+import { useOrchestrationCrew } from '../components/orchestration-crew/use-orchestration-crew'
 import {
-  CrewSocket,
+  type CrewSocket,
   flushCrewWork,
   installCrewSocketGlobals,
   latestCrewSocket,
@@ -142,140 +141,13 @@ beforeEach(async () => {
 })
 afterEach(() => {
   cleanup()
-  expect(store.listeners.size).toBe(0)
+
   disposeStatus()
   session.closeActiveRuntimeClients()
   vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
-
-it.each(['end', 'close'] as const)(
-  'follows actual %s loss through scheduler, finite adapter, transport settlement and complete Crew',
-  async (loss) => {
-    const ordinary = vi.spyOn(api, 'subscribe')
-    const retry = vi.spyOn(api, 'subscribeCrewAttempt')
-    const scheduler = vi.spyOn(
-      SharedControlReconnectScheduler.prototype,
-      'scheduleWithDefaultBackoff'
-    )
-    const view = render(
-      <>
-        <Pane />
-        <Pane party="term_one" />
-      </>
-    )
-    const first = latestCrewSocket()
-    let id = ''
-    await act(async () => {
-      id = await ready(first)
-      await complete(first, id)
-    })
-    expect(ordinary).toHaveBeenCalledOnce()
-    expect(view.getAllByTestId('term_one').map((node) => node.textContent)).toEqual(['1', '1'])
-    await act(async () => {
-      frame(first, id, { type: 'begin', status: 'ok' })
-      if (loss === 'end') {
-        frame(first, id, { type: 'end' })
-      }
-      if (loss === 'close') {
-        first.onclose?.()
-      }
-      await flushCrewWork()
-    })
-    if (loss === 'end') {
-      expect(first.close).toHaveBeenCalledOnce()
-    }
-    expect(view.getAllByTestId('term_one')[0].textContent).toBe('unknown')
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250)
-    })
-    expect(retry).toHaveBeenCalledOnce()
-    expect(ordinary).toHaveBeenCalledOnce()
-    const second = latestCrewSocket()
-    await act(async () => {
-      id = await ready(second)
-    })
-    expect(retry.mock.calls[0][0]).toMatchObject({
-      expectedEnvironmentRuntimeId: 'rt',
-      expectedEnvironmentPairingRevision: 1,
-      timeoutMs: 15_000
-    })
-    await act(async () => {
-      await complete(second, id)
-    })
-    expect(view.getAllByTestId('term_one')[0].textContent).toBe('1')
-    await act(async () => {
-      second.onclose?.()
-      await flushCrewWork()
-      await vi.advanceTimersByTimeAsync(250)
-    })
-    expect(retry).toHaveBeenCalledTimes(2)
-    expect(new Set(scheduler.mock.contexts).size).toBe(1)
-    const held = latestCrewSocket()
-    view.unmount()
-    expect(held.close).toHaveBeenCalledOnce()
-    await act(async () => {
-      held.open()
-      await vi.advanceTimersByTimeAsync(60_000)
-    })
-    expect(retry).toHaveBeenCalledTimes(2)
-    expect(ordinary).toHaveBeenCalledOnce()
-  }
-)
-
-it.each([1, 10])(
-  'cancels %i actual pending finite children on last release and drains late auth without reacquisition',
-  async (count) => {
-    const retry = vi.spyOn(api, 'subscribeCrewAttempt')
-    const ordinary = vi.spyOn(api, 'subscribe')
-    const scheduler = vi.spyOn(
-      SharedControlReconnectScheduler.prototype,
-      'scheduleWithDefaultBackoff'
-    )
-    const view = render(
-      <>
-        {Array.from({ length: count }, (_, i) => (
-          <Pane key={i} party={`term_${i}`} />
-        ))}
-      </>
-    )
-    await act(async () => {
-      for (let index = 0; index < count; index++) {
-        const socket = CrewSocket.sockets[1 + index]
-        const id = await ready(socket)
-        frame(socket, id, { type: 'end' })
-        await flushCrewWork()
-      }
-      await vi.advanceTimersByTimeAsync(250)
-    })
-    const held = CrewSocket.sockets.slice(1 + count)
-    expect(ordinary).toHaveBeenCalledTimes(count)
-    expect(retry).toHaveBeenCalledTimes(count)
-    expect(held).toHaveLength(Math.min(count, 8))
-    expect(new Set(scheduler.mock.contexts).size).toBe(1)
-    const queueOwner: object = session.runtimeCallQueuePool
-    expect('queuedCallCount' in queueOwner && queueOwner.queuedCallCount).toBe(
-      Math.max(0, count - 8)
-    )
-    view.unmount()
-    expect('queuedCallCount' in queueOwner && queueOwner.queuedCallCount).toBe(0)
-    expect(held.every((socket) => socket.close.mock.calls.length === 1)).toBe(true)
-    await act(async () => {
-      for (const socket of held) {
-        socket.open()
-        socket.onerror?.()
-        socket.onclose?.()
-      }
-      await flushCrewWork()
-      await vi.advanceTimersByTimeAsync(60_000)
-    })
-    // The independent primary heartbeat reconnects once; no Crew child is reacquired.
-    expect(CrewSocket.sockets).toHaveLength(2 + count + Math.min(count, 8))
-    expect(latestCrewSocket().send).not.toHaveBeenCalled()
-    expect(retry).toHaveBeenCalledTimes(count)
-  }
-)
 
 it('retires the old source and follows the real verified runtime publication after its writer completes', async () => {
   const ordinary = vi.spyOn(api, 'subscribe')

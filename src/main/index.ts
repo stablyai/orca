@@ -1,49 +1,56 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
-import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
-import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
-import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
+import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
+import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
+import {
+  isBackgroundLaunch,
+  isOrcadSidecarLaunch
+} from './window/activation/foreground-activation-policy'
+import {
+  createDesktopHandoff,
+  desktopHandoffArguments
+} from './window/activation/macos-desktop-handoff'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
-} from './startup/main-window-actions'
-import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
+} from './startup/main-window/main-window-actions'
+import { openMainWindow as openMainWindowController } from './startup/main-window/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
-import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
-import { runAgentHooksUninstallPreflight } from './startup/agent-hooks-uninstall-preflight'
-import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
-import { ensureWindowsRendererRuntimeFiles } from './startup/windows-renderer-runtime-files'
+import { runWslHolderUninstallPreflight } from './startup/uninstall/wsl-holder-uninstall-preflight'
+import { runAgentHooksUninstallPreflight } from './startup/uninstall/agent-hooks-uninstall-preflight'
+import { enableLinearRegexpFallback } from './startup/chromium-policy/linear-regexp-fallback'
+import { ensureWindowsRendererRuntimeFiles } from './startup/windows-startup/windows-renderer-runtime-files'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
-import { installMainProcessQuitHandlers } from './startup/main-process-quit'
-import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
-import { resolveOsOpenedDocuments } from './startup/os-opened-documents'
+import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
+import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
+import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
 import {
   formatProfileStateStartupFailure,
   isDivergedProfileStateFailure,
   profileStateStartupFailureClass
-} from './persistence/profile-state/profile-state-startup-failure'
-import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
+} from './persistence/profile-state/startup/profile-state-startup-failure'
+import { recordDurableCrashBreadcrumb } from './crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
   chooseProfileStateCopy,
   chooseProfileStateRepair,
   presentProfileStateStartupRecoveryDialog,
   readProfileStateCopySavedTimes
-} from './persistence/profile-state/profile-state-startup-recovery-dialog'
-import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+} from './persistence/profile-state/startup/profile-state-startup-recovery-dialog'
+import { profileStateDesktopRecoveryArgs } from './startup/profile-startup/profile-state-recovery-preflight'
 import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
-import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
+import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
-import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
 import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
+import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
 import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
-import { registerOrcaProtocolClient } from './startup/orca-protocol-registration'
-import { clearWindowsStdHandleInheritance } from './startup/windows-std-handle-inheritance'
-import { installWindowsIsolatedSpawner } from './startup/windows-isolated-spawner'
-import { dropE2eSpawnLogOutsideE2e } from './startup/e2e-spawn-log-env'
+import { registerOrcaProtocolClient } from './startup/open-routing/orca-protocol-registration'
+import { clearWindowsStdHandleInheritance } from './startup/windows-startup/windows-std-handle-inheritance'
+import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows-isolated-spawner'
+import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
@@ -135,6 +142,7 @@ if (preflightReady) {
   void leaseAppImageGenerationForCurrentProcess()
   // Before any gate check: saved WSL work keeps a closed gate serving it.
   configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
+  configureRemoteRuntimeE2EEV2HostLatch(app.getPath('userData'))
   // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
   if (process.platform === 'win32') {
     deleteLegacyWslHostWakeList(app.getPath('userData'))

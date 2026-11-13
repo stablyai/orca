@@ -47,6 +47,42 @@ describe('project trust writes recognise every spelling of the project table', (
 
     expect(updated).toBe([header, 'trust_level = "trusted"', ''].join('\n'))
   })
+
+  it.each([
+    {
+      label: 'a literal string ending in four quotes',
+      argsLine: `args = ["-c", '''printf 'ok'''']`
+    },
+    {
+      label: 'a basic string ending in four quotes',
+      argsLine: `args = ["-c", """printf "ok""""]`
+    }
+  ])('updates the project table after $label', ({ argsLine }) => {
+    const project = '/tmp/orca-toml-repro'
+    const original = [
+      '[mcp_servers.repro]',
+      'command = "sh"',
+      argsLine,
+      '',
+      `[projects."${project}"]`,
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+
+    const updated = upsertTrusted(original, project)
+
+    expect(updated).toBe(
+      [
+        '[mcp_servers.repro]',
+        'command = "sh"',
+        argsLine,
+        '',
+        `[projects."${project}"]`,
+        'trust_level = "trusted"',
+        ''
+      ].join('\n')
+    )
+  })
 })
 
 describe('the config mirror treats every spelling as one project table', () => {

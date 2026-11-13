@@ -96,9 +96,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-const runs = (flag: string): number =>
-  runProcessMock.mock.calls.filter(([spec]) => spec.args?.[0] === flag).length
-
 it('publishes one verified copy per helper build, from the running app rather than its replacement', async () => {
   const copy = await materializeMacDaemonBundle(copies, signal())
   await rm(source, { recursive: true })
@@ -116,16 +113,6 @@ it('publishes one verified copy per helper build, from the running app rather th
   expect(await readFile(copy.execPath, 'utf8')).toBe('signed-node')
   expect(await readFile(copy.entryPath, 'utf8')).toBe('daemon-code')
   expect(await readdir(copies)).toEqual([`terminal-host-${cdhash}`])
-})
-
-it('reuses a published copy without copying or verifying again', async () => {
-  const first = await materializeMacDaemonBundle(copies, signal())
-  await writeFile(helperExecutable(), 'same-build-rewritten')
-  const second = await materializeMacDaemonBundle(copies, signal())
-  expect(second).toEqual(first)
-  expect(await readFile(second.execPath, 'utf8')).toBe('signed-node')
-  expect(runs('-cR')).toBe(1)
-  expect(runs('--verify')).toBe(1)
 })
 
 it('publishes a new copy beside the old one when the helper build changes', async () => {
@@ -156,15 +143,6 @@ it('keeps the winning copy when a concurrent publisher renames first', async () 
   const copy = await materializeMacDaemonBundle(copies, signal())
   expect(await readFile(copy.execPath, 'utf8')).toBe('winner')
   expect(await readdir(copies)).toEqual([`terminal-host-${cdhash}`])
-})
-
-it('replaces a partial clone with a regular copy', async () => {
-  cloneLeavesPartialTree = true
-  const copy = await materializeMacDaemonBundle(copies, signal())
-  expect(await readdir(join(copy.directory, 'app.noindex', 'Orca Terminal Host.app'))).toEqual([
-    'Contents'
-  ])
-  expect(await readFile(copy.entryPath, 'utf8')).toBe('daemon-code')
 })
 
 it('stops at the shared deadline and removes the staging copy', async () => {

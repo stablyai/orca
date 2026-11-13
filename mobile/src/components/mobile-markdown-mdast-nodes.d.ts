@@ -1,4 +1,5 @@
 import type { BlockContent, DefinitionContent, Literal, Parent, PhrasingContent } from 'mdast'
+import type { GitHubCalloutKind } from '../../../src/shared/github/markdown/github-callouts'
 
 // The node types MobileMarkdown adds to mdast, registered by declaration merging. Merging needs
 // interfaces, which React Doctor's root rules flag; mobile's lint config ignores this file because
@@ -29,12 +30,21 @@ declare module 'mdast' {
     source: string
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface HtmlSpan extends Parent {
+    /** An inline HTML tag GitHub allows that mdast has no node for. */
+    type: 'htmlSpan'
+    tag: string
+    children: PhrasingContent[]
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface PhrasingContentMap {
     inlineMath: InlineMath
+    htmlSpan: HtmlSpan
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface RootContentMap {
     details: Details
+    htmlSpan: HtmlSpan
     inlineMath: InlineMath
     math: Math
   }
@@ -42,5 +52,15 @@ declare module 'mdast' {
   interface BlockContentMap {
     details: Details
     math: Math
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface BlockquoteData {
+    /** A GitHub alert (`> [!NOTE]`): drawn with its kind's colour, icon and title. */
+    callout?: GitHubCalloutKind
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface ImageData {
+    /** An HTML `<img width>`: the width GitHub draws it at. */
+    width?: number
   }
 }

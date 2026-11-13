@@ -1,6 +1,6 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type {
   RuntimeRequestPreparation,
   RuntimeOrchestrationEnvelope,
@@ -22,20 +22,44 @@ export function sendRemoteRuntimeRequestAbortable(
   prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal || clientCapabilities.length > 0 || prepareRequest) {
-    return sendRemoteRuntimeRequest(
+    return sendRemoteRuntimeRequestOnSocket(
       connection,
       method,
       params,
       timeoutMs,
       envelope,
+      undefined,
       signal,
       clientCapabilities,
-      ...(prepareRequest ? ([prepareRequest] as const) : [])
+      undefined,
+      prepareRequest ? prepareRequest : undefined
     )
   }
   return envelope
-    ? sendRemoteRuntimeRequest(connection, method, params, timeoutMs, envelope)
-    : sendRemoteRuntimeRequest(connection, method, params, timeoutMs)
+    ? sendRemoteRuntimeRequestOnSocket(
+        connection,
+        method,
+        params,
+        timeoutMs,
+        envelope,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      )
+    : sendRemoteRuntimeRequestOnSocket(
+        connection,
+        method,
+        params,
+        timeoutMs,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      )
 }
 
 export function sendRemoteRuntimeConnectionRequestAbortable(
@@ -65,9 +89,10 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal) {
+  if (signal || prepareRequest) {
     return sendRemoteRuntimeSharedControlRequest(
       environmentId,
       connection,
@@ -75,7 +100,8 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
       params,
       timeoutMs,
       envelope,
-      signal
+      signal,
+      ...(prepareRequest ? ([prepareRequest] as const) : [])
     )
   }
   return envelope

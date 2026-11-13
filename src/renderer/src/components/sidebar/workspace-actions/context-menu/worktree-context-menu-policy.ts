@@ -1,16 +1,18 @@
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import '@/lib/workspace/creation/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import { getProjectedWorktreeLineage } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/workspace-lineage-graph'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
@@ -104,16 +106,16 @@ export function shouldSuppressContextMenuFollowUpClick(
   )
 }
 
-export function getWorktreeParentPickerLabel(validParentWorktreeId: string | null): string {
+export function getWorktreeParentPickerLabel(
+  validParentWorktreeId: string | null,
+  t: Translate = translate
+): string {
   return validParentWorktreeId
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorktreeContextMenu.changeParentWorkspace',
         'Change Parent Worktree...'
       )
-    : translate(
-        'auto.components.sidebar.WorktreeContextMenu.setParentWorkspace',
-        'Set Parent Worktree...'
-      )
+    : t('auto.components.sidebar.WorktreeContextMenu.setParentWorkspace', 'Set Parent Worktree...')
 }
 
 export function isWorktreeParentPickerDisabled(args: {
@@ -131,7 +133,7 @@ export function canCreateChildWorktree(args: {
   return (
     args.repo != null &&
     isGitRepoKind(args.repo) &&
-    getComposerEligibleRepos([args.repo]).length > 0 &&
+    getNewWorkspaceDialogEligibleRepos([args.repo]).length > 0 &&
     !args.folderWorkspaceId &&
     !args.worktree.isArchived
   )

@@ -1,6 +1,7 @@
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 export type TerminalInputEnqueueOptions = {
   onAdmission?: (accepted: boolean) => void

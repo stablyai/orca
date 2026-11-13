@@ -13,6 +13,7 @@ export async function connectThroughOwningService(
       await getWslHostService()?.connect(environment.id)
       break
     case 'network':
+    case 'ssh':
       break
   }
 }
@@ -27,6 +28,7 @@ export function removeThroughOwningService(
       // Also releases the distro's holder and drops the WSL record.
       return getWslHostService()?.remove(environment.id) ?? null
     case 'network':
+    case 'ssh':
       return null
   }
 }

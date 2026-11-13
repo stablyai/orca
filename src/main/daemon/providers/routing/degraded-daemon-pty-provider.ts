@@ -3,6 +3,7 @@ import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termi
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
+import { DegradedDaemonListeners } from './degraded-daemon-listeners'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type {
@@ -35,8 +36,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private freshSpawns: DegradedDaemonFreshSpawnRouter
   private ownerRecovery: DegradedDaemonOwnerRecovery
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: PtyDataEvent) => void)[] = []
-  private exitListeners: Parameters<IPtyProvider['onExit']>[0][] = []
+  private readonly listeners = new DegradedDaemonListeners()
 
   constructor(opts: {
     current: DaemonPtyAdapter
@@ -62,10 +62,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
     for (const provider of this.allProviders()) {
       this.unsubscribers.push(
-        provider.onData((payload) => this.dataListeners.forEach((listener) => listener(payload))),
+        provider.onData((payload) => this.listeners.emitData(payload)),
         provider.onExit((payload) => {
           this.ownerRecovery.forgetRoute(payload.id)
-          this.exitListeners.forEach((listener) => listener(payload))
+          this.listeners.emitExit(payload)
         })
       )
     }
@@ -174,6 +174,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)
   resetInputModes = (id: string): Promise<void> => this.providerFor(id).resetInputModes(id)
 
+  async reportFocusLost(id: string): Promise<void> {
+    await this.providerFor(id).reportFocusLost?.(id)
+  }
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
@@ -229,15 +233,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.fallback.getProfiles()
   }
 
-  onData(callback: (payload: PtyDataEvent) => void): () => void {
-    this.dataListeners.push(callback)
-    return () => {
-      const idx = this.dataListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.dataListeners.splice(idx, 1)
-      }
-    }
-  }
+  onData = (callback: (payload: PtyDataEvent) => void): (() => void) =>
+    this.listeners.onData(callback)
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
     return combineUnsubscribes(
@@ -270,15 +267,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return trackedUnsubscribe
   }
 
-  onExit(callback: Parameters<IPtyProvider['onExit']>[0]): () => void {
-    this.exitListeners.push(callback)
-    return () => {
-      const idx = this.exitListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.exitListeners.splice(idx, 1)
-      }
-    }
-  }
+  onExit = (callback: Parameters<IPtyProvider['onExit']>[0]): (() => void) =>
+    this.listeners.onExit(callback)
 
   ackColdRestore(sessionId: string): void {
     findDaemonAdapter(this.sessionProviders, this.allDaemonAdapters(), sessionId)?.ackColdRestore(
@@ -323,10 +313,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
       this.ownerRecovery.forgetRoute(id)
       // Restart also kills listed sessions the adapter never tracked as active.
-      // Why: listeners may unsubscribe during iteration.
-      for (const listener of Array.from(this.exitListeners)) {
-        listener({ id, code, ...exit })
-      }
+      this.listeners.emitExit({ id, code, ...exit })
     }
   }
 

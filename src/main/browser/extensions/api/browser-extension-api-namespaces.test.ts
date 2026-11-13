@@ -39,7 +39,7 @@ vi.mock('electron', () => ({
     fromId: (processId: number, routingId: number) => mocks.frames.get(`${processId}:${routingId}`)
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getWebContentsIdByTabId: () => new Map(),
     getGuestWebContentsId: (id: string) => (id === 'gesture-page' ? 700 : null)
@@ -70,7 +70,7 @@ await import('./permissions')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
 const menuHost = await import('../context-menus/browser-extension-context-menu-host')
-const webRequest = await import('../browser-extension-web-request')
+const webRequest = await import('../requests/browser-extension-web-request-observer')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const contexts = await import('../api-runtime/browser-extension-contexts')
 const eventDispatch = await import('../api-runtime/browser-extension-event-dispatch')

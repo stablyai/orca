@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
 import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
@@ -118,11 +118,6 @@ export const uiStateAndMenuCommandsApi = {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:openNewWorkspace', listener)
     return () => ipcRenderer.removeListener('ui:openNewWorkspace', listener)
-  },
-  onDeleteCurrentWorkspace: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:deleteCurrentWorkspace', listener)
-    return () => ipcRenderer.removeListener('ui:deleteCurrentWorkspace', listener)
   },
   onOpenWorkspaceBoard: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()

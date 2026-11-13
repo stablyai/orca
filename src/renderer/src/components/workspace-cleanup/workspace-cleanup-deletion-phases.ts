@@ -1,5 +1,5 @@
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
-import type { WorktreeDeleteState } from '@/store/slices/worktree-helpers'
+import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupIdentityWorktreeId,

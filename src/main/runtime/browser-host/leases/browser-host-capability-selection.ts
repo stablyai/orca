@@ -1,7 +1,17 @@
 export const BROWSER_HOST_WEBVIEW_CAPABILITY = 'webview'
 
-type BrowserHostCapabilityLease = Readonly<{ hostCapabilities: readonly string[] }>
+type BrowserHostCapabilityLease = Readonly<{
+  browserHostClientId: string
+  hostCapabilities: readonly string[]
+}>
 type BrowserHostLeaseStateView<T extends BrowserHostCapabilityLease> = Readonly<{ lease: T }>
+
+/** Names every capable host so a caller that must pick one can choose among them. */
+export class BrowserHostAmbiguousError extends Error {
+  constructor(readonly browserHostClientIds: readonly string[]) {
+    super('browser_host_ambiguous')
+  }
+}
 
 export function selectBrowserHostLease<T extends BrowserHostCapabilityLease>(
   leasesByClientId: ReadonlyMap<string, BrowserHostLeaseStateView<T>>,
@@ -18,16 +28,13 @@ export function selectBrowserHostLease<T extends BrowserHostCapabilityLease>(
     }
     return exact.lease
   }
-  let selected: T | undefined
-  for (const state of leasesByClientId.values()) {
-    if (!hasCapabilities(state.lease, requiredCapabilities)) {
-      continue
-    }
-    if (selected) {
-      throw new Error('browser_host_ambiguous')
-    }
-    selected = state.lease
+  const capable = [...leasesByClientId.values()]
+    .map((state) => state.lease)
+    .filter((lease) => hasCapabilities(lease, requiredCapabilities))
+  if (capable.length > 1) {
+    throw new BrowserHostAmbiguousError(capable.map((lease) => lease.browserHostClientId))
   }
+  const selected = capable[0]
   if (!selected) {
     throw new Error('browser_host_unavailable')
   }

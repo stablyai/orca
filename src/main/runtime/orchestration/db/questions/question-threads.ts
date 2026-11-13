@@ -1,7 +1,8 @@
-import type { MessageRow, QuestionRow } from '../../types'
+import type { MessageRow, QuestionRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+import { generateId } from '../generated-id'
 import { handHelperMailToRun } from '../messages/helper-mailbox-hand-back'
 
 export function createQuestion(
@@ -27,7 +28,11 @@ export function createQuestion(
         `Dispatch ${params.dispatchId} is not in Run ${params.runId}.`
       )
     }
+    // A question is its own thread, set at insert so mail queued for a paired coordinator carries it.
+    const id = generateId('msg')
     const message = this.insertMessage({
+      id,
+      threadId: id,
       from: `dispatch:${params.dispatchId}`,
       to: params.to ?? `run:${params.runId}`,
       subject: 'Question',
@@ -39,9 +44,9 @@ export function createQuestion(
         question: params.question,
         options: params.options ?? []
       }),
+      senderDispatchId: dispatch.id,
       runId: params.runId
     })
-    this.db.prepare('UPDATE messages SET thread_id = ? WHERE id = ?').run(message.id, message.id)
     this.db
       .prepare(
         `INSERT INTO question_threads (

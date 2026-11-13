@@ -1,8 +1,8 @@
 import type { AppState } from '@/store/types'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
+import { createWorktreeRecordSelector } from '@/store/terminals/worktree-terminal-record-selector'
 
 // Cache projected maps per source snapshot while preserving per-tab value references.
 

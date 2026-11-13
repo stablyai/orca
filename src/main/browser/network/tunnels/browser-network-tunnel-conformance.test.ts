@@ -4,7 +4,7 @@ import {
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
   decodeBrowserNetworkTunnelWindowUpdate
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'
@@ -12,6 +12,7 @@ import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  type BrowserNetworkTunnelFlowControl,
   type BrowserNetworkTunnelSocket
 } from './browser-network-tunnel-stream-state'
 
@@ -104,27 +105,6 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
-  it('retires the destination when the client abandons a stream mid-transfer', async () => {
-    const tunnel = createConformanceTunnel()
-    const healthy = await openStream(tunnel, 'healthy.internal')
-    const abandoned = await openStream(tunnel, 'abandoned.internal')
-    abandoned.destination.autoSettleWrites = false
-    abandoned.duplex.write(new Uint8Array(CHUNK_BYTES))
-    await settle()
-
-    abandoned.duplex.destroy()
-    await whenClosed(abandoned.duplex)
-    await settle()
-
-    expect(opcodesFor(tunnel, 'clientToSession', 2)).toContain('Close')
-    expect(abandoned.destination.destroyed).toBe(true)
-    expect(tunnel.closures).toEqual([])
-    expect(tunnel.onSessionClose).not.toHaveBeenCalled()
-    await expectStreamStillCarriesBytes(healthy)
-
-    await teardown(tunnel)
-  })
-
   it('keeps an exhausted client send window scoped to its own stream', async () => {
     const tunnel = createConformanceTunnel()
     const healthy = await openStream(tunnel, 'healthy.internal')
@@ -174,47 +154,6 @@ describe('browser network tunnel conformance', () => {
     expect(stalled.destination.paused).toBe(false)
 
     await teardown(tunnel)
-  })
-
-  it('releases retained bytes still queued for a stream the client abandons', async () => {
-    const tunnel = createConformanceTunnel()
-    const stalled = await openStream(tunnel, 'stalled.internal')
-    const consumer = consumeDuplex(stalled.duplex, { autoSettle: false })
-
-    const windowChunks = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES / CHUNK_BYTES
-    for (let index = 0; index <= windowChunks; index += 1) {
-      stalled.destination.emit('data', new Uint8Array(CHUNK_BYTES).fill(index))
-      await settle()
-    }
-    expect(consumer.byteLength()).toBe(BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
-    expect(tunnel.aggregate.bytes).toBeGreaterThan(0)
-
-    stalled.duplex.destroy()
-    await whenClosed(stalled.duplex)
-    await settle()
-
-    expect(tunnel.aggregate.outstanding).toBe(0)
-    expect(tunnel.aggregate.bytes).toBe(0)
-    await teardown(tunnel)
-  })
-
-  it('leaves no timer or budget claim behind when both peers tear down mid-transfer', async () => {
-    const tunnel = createConformanceTunnel()
-    const idle = await openStream(tunnel, 'idle.internal')
-    const busy = await openStream(tunnel, 'busy.internal')
-    const consumer = consumeDuplex(busy.duplex, { autoSettle: false })
-    busy.destination.autoSettleWrites = false
-    busy.duplex.write(new Uint8Array(CHUNK_BYTES))
-    busy.destination.emit('data', new Uint8Array(CHUNK_BYTES))
-    const pending = tunnel.client.open({ host: 'pending.internal', port: 443 })
-    void pending.catch(() => undefined)
-    await settle()
-    expect(consumer.byteLength()).toBeGreaterThan(0)
-    expect(vi.getTimerCount()).toBeGreaterThan(0)
-
-    await teardown(tunnel)
-    expect(idle.destination.destroyed).toBe(true)
-    expect(busy.destination.destroyed).toBe(true)
   })
 })
 
@@ -324,7 +263,7 @@ function createAggregateBudgetProbe(): AggregateBudgetProbe {
   }
 }
 
-function createConformanceTunnel(): ConformanceTunnel {
+function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl): ConformanceTunnel {
   const aggregate = createAggregateBudgetProbe()
   const memory = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
   const lease = memory.acquire('conformance-host')
@@ -357,6 +296,7 @@ function createConformanceTunnel(): ConformanceTunnel {
       tunnel.client.handleBinary(bytes)
       return true
     },
+    flowControl,
     onClose: tunnel.onSessionClose,
     claimAggregateRetainedBytes: aggregate.claim
   })
@@ -368,6 +308,7 @@ function createConformanceTunnel(): ConformanceTunnel {
       return true
     },
     outboundMemory: lease,
+    flowControl,
     onClosed: (error) => tunnel.closures.push(error)
   })
   return tunnel

@@ -4,7 +4,7 @@ import { AlertTriangle, GitMerge } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../../shared/repo-types'
 import '../activity/worktree-card-empty-inputs'
 import { conflictOperationLabel } from './worktree-conflict-label'
@@ -38,13 +38,14 @@ export function WorktreeCardConflictBadge({
 }: {
   operation: Parameters<typeof conflictOperationLabel>[0]
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Badge
       variant="outline"
       className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
     >
       <GitMerge className="size-2.5" />
-      {conflictOperationLabel(operation)}
+      {conflictOperationLabel(operation, t)}
     </Badge>
   )
 }
@@ -56,11 +57,12 @@ export function WorktreeCardRemoteBranchConflict({
   remote: string
   branchName: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">
       <AlertTriangle className="mt-[1px] size-3 shrink-0" />
       <span className="min-w-0 flex-1">
-        {translate(
+        {t(
           'auto.components.sidebar.WorktreeCard.a88c92d0e3',
           '{{value0}}/{{value1}} already exists.',
           { value0: remote, value1: branchName }
@@ -71,6 +73,7 @@ export function WorktreeCardRemoteBranchConflict({
 }
 
 export function WorktreeCardDeleteFailed({ error }: { error: string }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -80,7 +83,7 @@ export function WorktreeCardDeleteFailed({ error }: { error: string }): React.JS
         >
           <AlertTriangle className="size-3 shrink-0" />
           <span className="min-w-0 truncate">
-            {translate('auto.components.sidebar.WorktreeCard.deleteFailed', 'Delete failed')}
+            {t('auto.components.sidebar.WorktreeCard.deleteFailed', 'Delete failed')}
           </span>
         </div>
       </TooltipTrigger>

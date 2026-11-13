@@ -1,6 +1,8 @@
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { structuredAgentRuntimeMetadata } from '../agent-session/installation/structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../agent-session/launch/structured-agent-launch-support'
+import { agentWorkspaceTrustDecisionForWorkspace } from '../../agent-launch/trust/agent-workspace-trust-spawn'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -17,12 +19,13 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     if (!registration) {
       return null
     }
-    return async ({ launchEnv, location }) =>
+    return async ({ launchEnv, location }, permissionMode?: string) =>
       registration.resolveAccountHome(
         {
           launchEnv,
           location: location ?? null,
           purpose,
+          ...(permissionMode ? { permissionMode } : {}),
           workspacePath:
             purpose === 'launch'
               ? async () =>
@@ -35,8 +38,18 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
           readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
           workspaceTrustSettings: () => this.requireStore().getSettings(),
+          workspaceTrustRepoDecision: (launchLocation) =>
+            launchLocation?.workspaceKind === 'folder'
+              ? undefined
+              : agentWorkspaceTrustDecisionForWorkspace(
+                  launchLocation?.workspaceId,
+                  this.requireStore()
+                ),
           // The chat host's own state root (ensureStructuredAgentSessionHost).
-          stateDirectory: getProfileUserDataPath()
+          stateDirectory: getProfileUserDataPath(),
+          hostLaunchEnvironment: (agent) =>
+            resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
+          hostSettings: () => this.requireStore().getSettings()
         }
       )
   }
@@ -55,5 +68,20 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     const read = this.structuredAgentAccountHomeResolver(provider, '', purpose)
     const launchEnv = this.structuredAgentLaunchEnv(provider, this.requireStore().getSettings())
     return (await read?.({ launchEnv, location })) ?? null
+  }
+
+  /** The same account, prepared for a start in `launchDirectory` as a create prepares it. */
+  async prepareStructuredAgentLaunchAccountHome(
+    record: AgentSessionRecord,
+    launchDirectory: string
+  ): Promise<AgentSessionAccountHome | null> {
+    const { provider, location } = record
+    if (!structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.()) {
+      return null
+    }
+    const prepare = this.structuredAgentAccountHomeResolver(provider, '', 'launch', launchDirectory)
+    await this.accounts.prepareHostAgentLaunch(provider)
+    const launchEnv = this.structuredAgentLaunchEnv(provider, this.requireStore().getSettings())
+    return (await prepare?.({ launchEnv, location })) ?? null
   }
 }

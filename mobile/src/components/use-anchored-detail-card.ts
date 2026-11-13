@@ -1,8 +1,9 @@
 import { useCallback, useLayoutEffect, useReducer, useRef, useState } from 'react'
-import { useWindowDimensions, type LayoutChangeEvent, type View } from 'react-native'
+import { useWindowDimensions, type LayoutChangeEvent } from 'react-native'
 import type { DetailCardAnchor, DetailCardPlacement } from './AnchoredDetailCard'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
+import type { MobileHostHandle } from '../platform/host-handle'
 
 type State = {
   serial: number
@@ -58,11 +59,8 @@ function reduce(state: State, action: Action): State {
   }
 }
 
-/** Places the card from window coordinates; null when its views are gone or hidden, which closes it. */
-export type DetailCardMeasure = (
-  root: { x: number; y: number },
-  place: (placement: DetailCardPlacement | null) => void
-) => void
+/** Reports window coordinates, or null when the anchor is gone or hidden. */
+export type DetailCardMeasure = (place: (placement: DetailCardPlacement | null) => void) => void
 
 /** Open, measure, animate and dismiss state for an AnchoredDetailCard; any change to `geometry`
  *  closes it, while a change to `follow` moves an open card to its anchor's new place. */
@@ -77,10 +75,10 @@ export function useAnchoredDetailCard({
   obscured: boolean
   measure: DetailCardMeasure
 }) {
-  const layerRef = useRef<View>(null)
-  const openerRef = useRef<View>(null)
-  const contentRef = useRef<View>(null)
-  const backRef = useRef<View>(null)
+  const layerRef = useRef<MobileHostHandle>(null)
+  const openerRef = useRef<MobileHostHandle>(null)
+  const contentRef = useRef<MobileHostHandle>(null)
+  const backRef = useRef<MobileHostHandle>(null)
   const boundaryRefs = useRef<unknown[]>([])
   const measureRef = useRef(measure)
   useLayoutEffect(() => {
@@ -120,12 +118,41 @@ export function useAnchoredDetailCard({
       }
       let disposed = false
       const current = generation.current
-      layer.measureInWindow((rootX, rootY) => {
-        measureRef.current({ x: rootX, y: rootY }, (placement) => {
-          if (!disposed && current === generation.current) {
-            done(placement && { ...placement, origin: { x: rootX, y: rootY } })
-          }
-        })
+      let origin: DetailCardAnchor['origin'] | undefined
+      let placement: DetailCardPlacement | null | undefined
+      const finish = () => {
+        if (disposed || current !== generation.current || placement === undefined) {
+          return
+        }
+        if (placement === null) {
+          disposed = true
+          done(null)
+        } else if (origin) {
+          disposed = true
+          done(
+            placement.side === 'below'
+              ? {
+                  side: 'below',
+                  left: placement.left - origin.x,
+                  top: placement.top - origin.y,
+                  origin
+                }
+              : {
+                  side: 'above',
+                  right: placement.right - origin.x,
+                  bottom: placement.bottom - origin.y,
+                  origin
+                }
+          )
+        }
+      }
+      layer.measureInWindow((x, y) => {
+        origin = { x, y }
+        finish()
+      })
+      measureRef.current((next) => {
+        placement = next
+        finish()
       })
       return () => {
         disposed = true

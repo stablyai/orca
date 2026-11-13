@@ -1,8 +1,8 @@
 import type React from 'react'
 import { CheckCircle2, ChevronLeft, CircleDot, Copy, Search } from 'lucide-react'
 
-import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -29,6 +29,7 @@ export function TaskPageGitHubDuplicatePicker({
   setDuplicatePickerOpen: React.Dispatch<React.SetStateAction<boolean>>
   setDuplicateSearch: React.Dispatch<React.SetStateAction<string>>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div>
       <div className="flex items-center gap-2 px-1 py-1.5">
@@ -42,7 +43,7 @@ export function TaskPageGitHubDuplicatePicker({
             setDuplicateSearch('')
             setDuplicateError(null)
           }}
-          aria-label={translate('auto.components.TaskPage.backToCloseReasons', 'Back')}
+          aria-label={t('auto.components.TaskPage.backToCloseReasons', 'Back')}
         >
           <ChevronLeft className="size-4" />
         </Button>
@@ -63,7 +64,7 @@ export function TaskPageGitHubDuplicatePicker({
               handleDuplicateSearchSubmit()
             }
           }}
-          placeholder={translate('auto.components.TaskPage.searchIssues', 'Search issues')}
+          placeholder={t('auto.components.TaskPage.searchIssues', 'Search issues')}
           className="h-9 pl-8 text-[12px]"
           aria-invalid={duplicateError ? true : undefined}
         />
@@ -80,7 +81,7 @@ export function TaskPageGitHubDuplicatePicker({
           >
             <Copy className="size-4 text-primary" />
             <span className="min-w-0 flex-1 text-[12px] font-medium">
-              {translate('auto.components.TaskPage.useIssueNumber', 'Use issue #{{value0}}', {
+              {t('auto.components.TaskPage.useIssueNumber', 'Use issue #{{value0}}', {
                 value0: directDuplicateTarget
               })}
             </span>
@@ -106,10 +107,7 @@ export function TaskPageGitHubDuplicatePicker({
         ))}
         {!directDuplicateTarget && filteredDuplicateCandidates.length === 0 ? (
           <p className="px-2 py-3 text-[12px] text-muted-foreground">
-            {translate(
-              'auto.components.TaskPage.noMatchingIssuesLoaded',
-              'No matching issues loaded.'
-            )}
+            {t('auto.components.TaskPage.noMatchingIssuesLoaded', 'No matching issues loaded.')}
           </p>
         ) : null}
       </div>

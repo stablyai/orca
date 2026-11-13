@@ -1,28 +1,35 @@
-import type { AppState } from '../../../types'
-
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import {
-  type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
-import { getIndexedAllWorktrees, getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+import {
+  getIndexedAllWorktrees,
+  getIndexedWorktreesById
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
+import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { CreatedWorktreeResult } from './worktree-create-payload'
-import { resolveReviewRepository } from '@/lib/review-owner'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 export type CreateAttemptOutcome = {
   result: CreatedWorktreeResult
@@ -37,6 +44,8 @@ export type WorktreeCreateParentPick = {
   pickedParentWorktreeId?: string
   /** A picked parent on another machine (by host identity); its own store names it before create. */
   crossStoreParentRow?: Worktree
+  /** The parent is the active folder workspace, not a pick: a host that can't nest across machines creates unnested. */
+  crossStoreParentIsActiveFolder?: true
   /** Label for the drop warning; null when the parent record is already gone, '' when it has no name. */
   pickedDisplayName: string | null
   /** The pick no longer qualifies, so the create runs unattached. */
@@ -81,7 +90,7 @@ export function resolveWorktreeCreateParent(
       (candidate) => getWorktreeHostIdentity(candidate) === requestedParentWorktreeId
     )
     // The pick outlives a destination change; a parent now on the creation host is an ordinary one.
-    if (row && !row.isArchived && !isOnCreationHost(row)) {
+    if (row && !row.isArchived && !isWorktreeRetiredByRemoval(row) && !isOnCreationHost(row)) {
       return {
         crossStoreParentRow: row,
         pickedParentWorktreeId: row.id,
@@ -89,7 +98,7 @@ export function resolveWorktreeCreateParent(
         staleBeforeCreate: false
       }
     }
-    if (!row || row.isArchived) {
+    if (!row || row.isArchived || isWorktreeRetiredByRemoval(row)) {
       return {
         pickedDisplayName: row ? resolveWorktreeDisplayName(row).trim() : null,
         staleBeforeCreate: true
@@ -101,8 +110,11 @@ export function resolveWorktreeCreateParent(
       isOnCreationHost
     )
   }
-  const usable = picked && !picked.isArchived ? picked.id : undefined
   const pickedDisplayName = picked ? resolveWorktreeDisplayName(picked).trim() : null
+  if (picked && isWorktreeRetiredByRemoval(picked)) {
+    return { pickedDisplayName, staleBeforeCreate: true }
+  }
+  const usable = picked && !picked.isArchived ? picked.id : undefined
   if (usable) {
     return {
       parentWorkspace: worktreeWorkspaceKey(usable),
@@ -112,6 +124,32 @@ export function resolveWorktreeCreateParent(
     }
   }
   const activeScope = parseWorkspaceKey(state.activeWorkspaceKey ?? '')
+  const activeFolder =
+    activeScope?.type === 'folder'
+      ? findFolderWorkspaceRecord(
+          selectFolderWorkspaces(state) ?? [],
+          activeScope.folderWorkspaceId,
+          state.activeWorkspaceExecutionHostId ?? undefined
+        )
+      : undefined
+  const activeFolderRow = activeFolder ? getFolderWorkspaceWorktree(activeFolder) : undefined
+  const childStore = lineageStoreKeyOfRow({ id: '', hostId: executionHostId })
+  const folderStore = activeFolderRow ? lineageStoreKeyOfRow(activeFolderRow) : undefined
+  if (
+    activeFolder &&
+    activeFolderRow &&
+    !requestedParentWorktreeId &&
+    childStore !== undefined &&
+    folderStore !== undefined &&
+    childStore !== folderStore
+  ) {
+    return {
+      crossStoreParentRow: activeFolderRow,
+      crossStoreParentIsActiveFolder: true,
+      pickedDisplayName: activeFolder.name.trim(),
+      staleBeforeCreate: false
+    }
+  }
   return {
     parentWorkspace:
       activeScope?.type === 'folder'

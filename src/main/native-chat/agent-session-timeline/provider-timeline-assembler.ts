@@ -5,9 +5,9 @@
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { StructuredAgentSessionCommandRun } from '../agent-session-wire/structured-agent-session-adapter'
-import type { AgentSessionDeltaCoalescerDeps } from '../agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionCommandRun } from '../agent-session-wire/providers/structured-agent-session-adapter'
+import type { AgentSessionDeltaCoalescerDeps } from '../agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ProviderTimelineContext } from './provider-timeline-context'
 import {
   decideProviderTimelineEvent,
