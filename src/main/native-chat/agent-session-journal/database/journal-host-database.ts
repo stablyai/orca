@@ -12,6 +12,8 @@ import { journalOpenRefusalError } from '../replay/journal-open-failure'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 
+import { markJournalWrite } from '../outcomes/journal-compaction-activity'
+
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
 
 export function journalDatabasePath(stateDirectory: string): string {
@@ -26,11 +28,13 @@ export class JournalHostDatabase {
   private closing: Promise<void> | undefined
   /** Identifies the open transaction; drafts staged in a rolled-back one must not be built on. */
   transactionNumber = 0
+  readonly compactionActivity = new BigInt64Array(new SharedArrayBuffer(8))
 
   private constructor(
     opened: OpenJournalDatabase,
     readonly stateDirectory: string
   ) {
+    markJournalWrite(this.compactionActivity)
     this.connection = opened.db
     this.readOnly = opened.readOnly
     if (!this.readOnly) {
@@ -67,6 +71,19 @@ export class JournalHostDatabase {
     streamed = false,
     committed?: (result: T) => void
   ): T {
+    markJournalWrite(this.compactionActivity)
+    try {
+      return this.writeTransaction(run, streamed, committed)
+    } finally {
+      markJournalWrite(this.compactionActivity)
+    }
+  }
+
+  private writeTransaction<T>(
+    run: (db: Database.Database) => T,
+    streamed: boolean,
+    committed?: (result: T) => void
+  ): T {
     const db = this.db
     this.transactionNumber += 1
     if (!streamed) {
@@ -96,10 +113,12 @@ export class JournalHostDatabase {
 
   /** Autocommit maintenance may commit earlier statements even when a later statement fails. */
   writeAutocommit<T>(run: (db: Database.Database) => T): T {
+    markJournalWrite(this.compactionActivity)
     const db = this.db
     try {
       return run(db)
     } finally {
+      markJournalWrite(this.compactionActivity)
       this.checkpoint?.afterCommit()
     }
   }

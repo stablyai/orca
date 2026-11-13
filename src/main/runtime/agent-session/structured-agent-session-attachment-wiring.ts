@@ -1,6 +1,7 @@
 // Keep chat attachment storage/sweeps beside the journal; its database owns upload claims the sweeps honor.
 
 import { JournalOutcomeSweeper } from '../../native-chat/agent-session-journal/outcomes/journal-outcome-cleanup'
+import { startJournalItemCompaction } from '../../native-chat/agent-session-journal/outcomes/journal-item-compaction-worker'
 import { mkdirSync } from 'node:fs'
 import { AgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import {
@@ -21,13 +22,20 @@ const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 let sweeper: AgentSessionAttachmentSweeper | null = null
 let journalSweeper: JournalOutcomeSweeper | null = null
+let journalCompaction: { stop: () => void } | null = null
 
 export function installAgentSessionAttachments(deps: {
   stateDirectory: string
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: Pick<
     JournalHostDatabase,
-    'readOnly' | 'isClosed' | 'db' | 'writeAutocommit' | 'transaction'
+    | 'readOnly'
+    | 'isClosed'
+    | 'db'
+    | 'writeAutocommit'
+    | 'transaction'
+    | 'stateDirectory'
+    | 'compactionActivity'
   >
   logger: StructuredAgentSessionLogger
 }): void {
@@ -40,6 +48,10 @@ export function installAgentSessionAttachments(deps: {
         error
       })
   }).start()
+  journalCompaction = startJournalItemCompaction({
+    database: deps.journalDatabase,
+    logger: deps.logger
+  })
   const root = agentSessionAttachmentStoreRoot(deps.stateDirectory)
   // Before any Claude starts: Claude drops an added directory that does not exist yet, for good.
   try {
@@ -84,6 +96,8 @@ export function installAgentSessionAttachments(deps: {
 export function stopAgentSessionAttachments(): void {
   journalSweeper?.stop()
   journalSweeper = null
+  journalCompaction?.stop()
+  journalCompaction = null
   sweeper?.stop()
   sweeper = null
   setAgentSessionAttachmentStore(null)
