@@ -20,6 +20,7 @@ import { pairToolBlocks } from '../../../../../../shared/native-chat/tools/nativ
 const NO_SEEN_REPOS: GitHubSeenReferenceRepos = new Map()
 const GH_COMMAND = new RegExp(`^${COMMAND_START}gh\\s`, 'u')
 const SILENT_COMMAND = /^cd(?:\s|$)/u
+const COMMENT_LINE = /^[ \t]*#.*$/gmu
 
 /** Repos bare `#123` in this chat's messages follow ahead of the chat's own repo. */
 export const NativeChatGitHubSeenReposContext =
@@ -28,7 +29,8 @@ export const NativeChatGitHubSeenReposContext =
 // Only gh output speaks for this chat's references; a read file or fetched page may cite any repo,
 // so output another command could have printed into is not attributed to gh.
 function printsOnlyGhOutput(script: string): boolean {
-  const commands = shellSegments(shellCode(script))
+  // A comment line runs nothing, but shellCode would leave it as a '' word.
+  const commands = shellSegments(shellCode(script.replace(COMMENT_LINE, '')))
     .map((command) => command.trim())
     .filter(Boolean)
   return (

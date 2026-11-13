@@ -78,9 +78,9 @@ describe('nativeChatGitHubSeenRepos', () => {
     expect(linkedUrls('#21', messages)).toEqual(['https://github.com/acme/ui/issues/21'])
   })
 
-  it('reads gh output after cd or a heredoc body, but not output mixed with other commands', () => {
+  it('reads gh output after a comment, cd or a heredoc body, but not output mixed with other commands', () => {
     const created = command(
-      'cd ../ui && gh pr create --title x --body "$(cat <<\'EOF\'\nSee notes; cat a\nEOF\n)"',
+      '# open the PR\ncd ../ui && gh pr create --title x --body "$(cat <<\'EOF\'\nSee notes; cat a\nEOF\n)"',
       'https://github.com/acme/ui/pull/4\n'
     )
     const mixed = command(
