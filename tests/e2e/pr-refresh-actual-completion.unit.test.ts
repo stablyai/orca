@@ -72,7 +72,7 @@ async function fixture() {
     recordCreated: () => {}
   })
   const store = createStore<AppState>()((set, get, api) => ({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- This fixture supplies only the state read by real PR event application.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies only the state read by real PR event application.
     ...({
       settings: {},
       repos: [repo],
