@@ -1,3 +1,8 @@
+import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import {
+  readTerminalComposerTypedText,
+  type TerminalCursorContext
+} from '../../../../shared/terminal/input/terminal-composer-draft'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import {
   evaluateTuiIdle,
@@ -8,12 +13,13 @@ import {
 import { ptyTuiIdleEvidence, type TuiIdleEvidenceSource } from './tui-idle-evidence-source'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
-export function mailboxDeliveryTuiVerdict(
+export function mailboxDeliveryRefusal(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
   readWaitText: () => string,
   recovering: boolean,
   readComposerText: () => string | null,
+  recognizedAgent: boolean,
   stagedText?: string
 ) {
   const admissionSource = source
@@ -30,7 +36,7 @@ export function mailboxDeliveryTuiVerdict(
   }
   const evidence = ptyTuiIdleEvidence(
     source,
-    recovering ? { ...pty, lastOscTitle: null } : pty,
+    recovering ? { ...pty, lastAgentStatus: null, lastOscTitle: null } : pty,
     recovering ? () => screen?.join('\n') ?? '' : readWaitText
   )
   let verdict: TuiIdleVerdict =
@@ -64,7 +70,11 @@ export function mailboxDeliveryTuiVerdict(
       readScreenInputVeto: evidence.readScreenInputVeto
     })
   }
-  return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
+  return terminalDeliveryRefusal({
+    verdict,
+    recognizedAgent,
+    readScreenInputVeto: evidence.readScreenInputVeto
+  })
 }
 
 /** Why pointer plus Enter would not be typed into a settled-looking worker terminal now (dialogs and
@@ -91,4 +101,14 @@ export function terminalDeliveryRefusal(input: {
   return verdict.kind === 'blocked'
     ? { kind: 'blocked', reason: verdict.reason }
     : { kind: 'unsettled' }
+}
+
+// OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+export function mailboxComposerHoldsDraft(
+  agent: string | null,
+  context: TerminalCursorContext
+): boolean {
+  return agent === 'opencode' || agent === 'opencode2'
+    ? openCodeComposerHoldsDraft(context)
+    : !!readTerminalComposerTypedText(context)
 }

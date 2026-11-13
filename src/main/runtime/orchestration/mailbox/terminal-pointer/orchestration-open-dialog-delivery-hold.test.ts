@@ -55,6 +55,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       write,
       writeWithSettlement: settledWriteStub(write),
       kill: vi.fn(),
+      getSize: () => ({ cols: 120, rows: 40 }),
       getForegroundProcess: async () => 'codex',
       confirmForegroundProcess: async () => {
         const sampled = foreground
@@ -86,11 +87,15 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     })
     const run = createBoundRun(db, 'Foreground delivery')
     await runtime.listTerminals()
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 1)
+    runtime.onPtyData(
+      PTY_ID,
+      `${readRuntimeFixture('codex-0157-plain-ready')}\x1b]0;Codex done\x07`,
+      Date.now()
+    )
     await vi.advanceTimersByTimeAsync(200)
 
     foreground = 'zsh'
-    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', 2)
+    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', Date.now())
     await vi.advanceTimersByTimeAsync(200)
     const message = insertDirectRunMessage(db, run.id, 'Worker finished')
     runtime.notifyMessageArrived(`run:${run.id}`, 'status')
@@ -100,15 +105,15 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     const receipt = await sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)
     expect(receipt?.code).toBe('recipient_delivery_held')
 
-    runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=codex\x07', 3)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=codex\x07', Date.now())
     await vi.advanceTimersByTimeAsync(1000)
-    runtime.onPtyData(PTY_ID, '\x1b]0;another workspace shell title\x07', 4)
+    runtime.onPtyData(PTY_ID, '\x1b]0;another workspace shell title\x07', Date.now())
     await vi.advanceTimersByTimeAsync(1000)
     expect(write).not.toHaveBeenCalled()
     expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
 
     // A shell can reuse the last agent's title without giving it the terminal's input.
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 5)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
     await vi.advanceTimersByTimeAsync(1000)
     expect(write).not.toHaveBeenCalled()
     expect(db.getMessageById(message.id)).toMatchObject({
@@ -121,14 +126,14 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     )
 
     const releaseShell = delayNextForegroundRead()
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 6)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
     await vi.advanceTimersByTimeAsync(300)
     const delayedReceipt = sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)
     await vi.advanceTimersByTimeAsync(0)
     foreground = 'codex'
     // The return edge must survive an older shell sample that arrives afterward.
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 7)
-    await vi.advanceTimersByTimeAsync(300)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
+    await vi.advanceTimersByTimeAsync(4000)
     releaseShell()
     await vi.advanceTimersByTimeAsync(2000)
     expect(await delayedReceipt).toBeNull()
@@ -161,7 +166,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       pointer_enter_pending: 0
     })
     foreground = 'codex'
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 8)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
     await vi.advanceTimersByTimeAsync(7000)
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
       expect.stringContaining('You have 1 orchestration message'),
@@ -182,8 +187,8 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     const releaseEnterShell = delayNextForegroundRead()
     await vi.advanceTimersByTimeAsync(500)
     foreground = 'codex'
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 9)
-    await vi.advanceTimersByTimeAsync(300)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', Date.now())
+    await vi.advanceTimersByTimeAsync(4000)
     releaseEnterShell()
     await vi.advanceTimersByTimeAsync(2000)
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
@@ -197,26 +202,26 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     })
 
     write.mockClear()
-    runtime.onPtyData(PTY_ID, '\x1b]7501;state=clear\x07', 10)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=clear\x07', Date.now())
     await vi.advanceTimersByTimeAsync(0)
     foreground = 'zsh'
     let releaseExitName = (): void => {}
     nextExitNameRead = new Promise((resolve) => {
       releaseExitName = resolve
     })
-    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell after exit\x07', 11)
+    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell after exit\x07', Date.now())
     await vi.advanceTimersByTimeAsync(300)
     const returnedMessage = insertDirectRunMessage(db, run.id, 'Mail during exit confirmation')
     runtime.notifyMessageArrived(`run:${run.id}`, 'status')
     foreground = 'codex'
     // An OSC-only return must invalidate the older exit sample without another title.
     const releaseReturnForeground = delayNextForegroundRead()
-    runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=codex\x07', 12)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=codex\x07', Date.now())
     await vi.advanceTimersByTimeAsync(0)
     releaseExitName()
     await vi.advanceTimersByTimeAsync(0)
     releaseReturnForeground()
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(5000)
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
       expect.stringContaining('You have 1 orchestration message'),
       '\r'
@@ -257,7 +262,6 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       })
       let shell = false
       let inspections = 0
-      let echoSequence = 3
       const write = vi.fn((_ptyId: string, data: string) => {
         if (longHold) {
           const composer =
@@ -267,7 +271,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
                   ''
                 )
               : `\x1b[2J\x1b[H\x1b[?25h${'─'.repeat(40)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(40)}\x1b[2;${data.trim().length + 3}H`
-          runtime.onPtyData(PTY_ID, composer, echoSequence++)
+          runtime.onPtyData(PTY_ID, composer, Date.now())
         }
         return true
       })

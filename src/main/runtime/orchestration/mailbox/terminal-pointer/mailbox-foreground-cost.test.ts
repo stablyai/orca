@@ -1,3 +1,4 @@
+import { readRuntimeFixture } from '../../../terminal/wait/agent-transcript-replay-test-harness'
 import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -71,6 +72,7 @@ describe('terminal-owned foreground work', () => {
       write,
       writeWithSettlement: settledWriteStub(write),
       kill: vi.fn(),
+      getSize: () => ({ cols: 120, rows: 40 }),
       getForegroundProcess: async () => 'codex',
       supportsForegroundObservation: () => true,
       inspectProcess: async (ptyId) => {
@@ -117,7 +119,11 @@ describe('terminal-owned foreground work', () => {
     }
     await runtime.listTerminals()
     for (const owner of owners.slice(0, held + 1)) {
-      runtime.onPtyData(owner.ptyId, '\x1b]0;Codex done\x07', 1)
+      runtime.onPtyData(
+        owner.ptyId,
+        `${readRuntimeFixture('codex-0157-plain-ready')}\x1b]0;Codex done\x07`,
+        Date.now()
+      )
     }
     await vi.advanceTimersByTimeAsync(1000)
     const messages: string[] = []

@@ -35,6 +35,8 @@ export class MailboxForegroundDelivery {
       .probeForeground(ptyId, target.processIncarnation)
       .then((foreground) => {
         this.mailboxesByPty.delete(ptyId)
+        const requireCurrentScreen =
+          delivery.isForegroundHeld(ptyId) || deps.getTerminal(ptyId)?.lastAgentStatus === null
         const current = deps.resolveSubmitTarget(ptyId, foreground.foreground)
         if (current?.processIncarnation !== target.processIncarnation) {
           return
@@ -62,6 +64,7 @@ export class MailboxForegroundDelivery {
               reservedTypes,
               foreground: applied ? foreground.foreground : undefined,
               foregroundFollowup: true,
+              requireCurrentScreen,
               skipAbsenceProbe: true,
               foregroundProbeIncarnation: applied ? target.processIncarnation : undefined
             })

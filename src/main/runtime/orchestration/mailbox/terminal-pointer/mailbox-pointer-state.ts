@@ -12,6 +12,7 @@ export type OrchestrationMailboxDeliveryFlight = {
   idleObservedWhileDeferred: boolean
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
   processIncarnation?: string
+  recoveryPointerText?: string
 }
 
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */
@@ -47,6 +48,10 @@ export class OrchestrationMailboxPointerState {
   hasActiveFlight(ptyId: string): boolean {
     const flight = this.flightsByPtyId.get(ptyId)
     return !!flight && !flight.deferredUntilIdle
+  }
+
+  recoveryPointerText(ptyId: string): string | undefined {
+    return this.flightsByPtyId.get(ptyId)?.recoveryPointerText
   }
 
   hasFlight(ptyId: string): boolean {

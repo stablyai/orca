@@ -13,7 +13,8 @@ export abstract class RuntimeMailboxDeliveryServices {
   protected abstract isAgentSettledForDelivery(
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string
+    stagedText?: string,
+    requireCurrentScreen?: boolean
   ): boolean
   protected abstract isMailboxForegroundCandidate(terminal: OrchestrationMailboxTerminal): boolean
   protected abstract mailboxTerminalAdmission(

@@ -77,10 +77,16 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       const foregroundHeld =
         options.foreground === undefined &&
         (this.needsForegroundEvaluation(ptyId) || this.deps.isForegroundCandidate?.(terminal))
+      const hasFlight = this.state.hasFlight(ptyId)
       if (
-        !foregroundHeld &&
-        (!isMailboxTerminalTakingInput(terminal) ||
-          !this.deps.isAgentSettledForDelivery(ptyId, options.foreground))
+        (!foregroundHeld || hasFlight) &&
+        ((!isMailboxTerminalTakingInput(terminal) && !hasFlight) ||
+          !this.deps.isAgentSettledForDelivery(
+            ptyId,
+            options.foreground,
+            undefined,
+            options.requireCurrentScreen
+          ))
       ) {
         this.parkRedelivery(mailboxHandle, options.reservedTypes)
         return
@@ -164,6 +170,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         messages: unread,
         heldDeliveryId,
         newestSequence,
+        requireCurrentScreen: options.requireCurrentScreen,
         enterDelayMs: pointerEnterDelayMs(),
         settle: (ptyId, flight) => this.settle(ptyId, flight),
         redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
@@ -186,6 +193,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   readonly applyForeground = this.state.foreground.applyForeground.bind(this.state.foreground)
+
+  recoveryPointerText(ptyId: string): string | undefined {
+    return this.state.recoveryPointerText(ptyId)
+  }
 
   isDeliveryInFlight(ptyId: string): boolean {
     return this.state.hasActiveFlight(ptyId) || this.state.foreground.hasForegroundProbe(ptyId)

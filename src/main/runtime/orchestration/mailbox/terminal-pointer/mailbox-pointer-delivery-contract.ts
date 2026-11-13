@@ -29,7 +29,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isAgentSettledForDelivery: (
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string
+    stagedText?: string,
+    requireCurrentScreen?: boolean
   ) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
@@ -56,4 +57,5 @@ export type PointerDeliveryOptions = {
   foreground?: MailboxForeground
   foregroundFollowup?: boolean
   foregroundProbeIncarnation?: string
+  requireCurrentScreen?: boolean
 }

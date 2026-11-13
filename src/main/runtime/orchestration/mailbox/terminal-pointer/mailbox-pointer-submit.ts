@@ -114,7 +114,7 @@ export function submitOrchestrationMailboxPointer(
           deps.state.deferFlightUntilIdle(input.ptyId)
           input.flight.submitEnter = () =>
             submitOrchestrationMailboxPointer(deps, { ...input, foregroundFollowup: false })
-          deps.onDeliveryDecision?.(input.ptyId, { foreground: true })
+          deps.onDeliveryDecision?.(input.ptyId)
         }
         preserveFlight = true
       } else if (deps.state.foreground.foregroundHold(input.ptyId)) {
@@ -128,8 +128,11 @@ export function submitOrchestrationMailboxPointer(
         // A neutral title can outlive the foreground check, and an open dialog would take the
         // Enter as its answer; no Enter has been attempted yet.
         deps.state.deferFlightUntilIdle(input.ptyId)
+        if (terminal.lastAgentStatus === null) {
+          input.flight.recoveryPointerText ??= input.stagedText
+        }
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
-        deps.onDeliveryDecision?.(input.ptyId, { foreground: true })
+        deps.onDeliveryDecision?.(input.ptyId, { foreground: false })
         preserveFlight = true
       } else if (!queueSafe) {
         releaseWithoutRedrive = true

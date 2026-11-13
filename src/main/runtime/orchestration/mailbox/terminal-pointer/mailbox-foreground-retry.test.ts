@@ -52,6 +52,7 @@ describe('owed mailbox foreground revalidation', () => {
         write,
         writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
+        getSize: () => ({ cols: 120, rows: 40 }),
         getForegroundProcess: async () => 'codex',
         confirmShellForeground: async () => {
           inspections++
@@ -83,6 +84,11 @@ describe('owed mailbox foreground revalidation', () => {
       try {
         const run = createBoundRun(db, 'Unknown is not a return')
         await driveToLiveIdle(runtime)
+        runtime.onPtyData(
+          PTY_ID,
+          `${readRuntimeFixture('codex-0157-plain-ready')}\x1b]0;Codex done\x07`,
+          Date.now()
+        )
         const message = insertDirectRunMessage(db, run.id, 'Waiting mail')
         runtime.notifyMessageArrived(`run:${run.id}`, 'status')
         await vi.advanceTimersByTimeAsync(1000)
@@ -310,6 +316,7 @@ describe('owed mailbox foreground revalidation', () => {
         write,
         writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
+        getSize: () => ({ cols: 120, rows: 40 }),
         getForegroundProcess: async () => null,
         supportsForegroundObservation: () => true,
         inspectProcess: async () => ({
@@ -330,6 +337,11 @@ describe('owed mailbox foreground revalidation', () => {
       })
       try {
         await driveToLiveIdle(runtime)
+        runtime.onPtyData(
+          PTY_ID,
+          `${readRuntimeFixture('codex-0157-plain-ready')}\x1b]0;Codex done\x07`,
+          Date.now()
+        )
         const run = createBoundRun(db, 'Other foreground program')
         const message = insertDirectRunMessage(db, run.id, 'Held for intended agent')
         runtime.notifyMessageArrived(`run:${run.id}`, 'status')
