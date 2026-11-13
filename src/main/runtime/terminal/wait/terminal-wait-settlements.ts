@@ -77,7 +77,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       readinessDelay: (terminal) => {
         if (
           !isMailboxTerminalTakingInput(terminal) &&
-          this.orchestrationMailboxPointerDelivery.recoveryPointerText(terminal.ptyId) === undefined
+          this.orchestrationMailboxPointerDelivery.stagedPointerText(terminal.ptyId) === undefined
         ) {
           return null
         }
@@ -95,6 +95,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     if (
       terminal &&
+      !this.orchestrationMailboxPointerDelivery.resumeDeferredEnter(terminal) &&
       ((isMailboxTerminalTakingInput(terminal) && this.isAgentSettledForDelivery(ptyId)) ||
         this.deliveryRechecks.needsForegroundEvaluation(ptyId) ||
         this.isMailboxForegroundCandidate(terminal))
@@ -152,10 +153,9 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   protected isAgentSettledForDelivery(
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string,
-    requireCurrentScreen?: boolean
+    stagedText?: string
   ): boolean {
-    return this.deliveryRefusal(ptyId, foreground, stagedText, requireCurrentScreen) === null
+    return this.deliveryRefusal(ptyId, foreground, stagedText) === null
   }
 
   /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
@@ -217,15 +217,14 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   private deliveryRefusal(
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string,
-    requireCurrentScreen?: boolean
+    stagedText?: string
   ): MailboxDeliveryHold | 'no-terminal' | null {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return 'no-terminal'
     }
-    const recoveryText = this.orchestrationMailboxPointerDelivery.recoveryPointerText(ptyId)
-    stagedText ??= recoveryText
+    const pointerText = this.orchestrationMailboxPointerDelivery.stagedPointerText(ptyId)
+    stagedText ??= pointerText
     const hold = this.ptyDeliveryHold(ptyId, stagedText)
     if (hold) {
       return { kind: hold }
@@ -235,11 +234,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       { ...this.tuiIdleEvidenceSource, getPaneAgent: () => (isTuiAgent(agent) ? agent : null) },
       pty,
       () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-      requireCurrentScreen ||
-        recoveryText !== undefined ||
-        (foreground === 'agent' &&
-          (pty.lastAgentStatus === null ||
-            this.orchestrationMailboxPointerDelivery.isForegroundHeld(pty.ptyId))),
+      this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(ptyId) ||
+        (pty.lastAgentStatus === null && (foreground === 'agent' || pointerText !== undefined)),
       () =>
         readTerminalComposerTypedText(
           this.readWholeScreenModel(pty.ptyId)?.emulator.getCursorLineContext()
@@ -264,7 +260,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
    *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
   private ptyDeliveryHold(
     ptyId: string,
-    stagedText = this.orchestrationMailboxPointerDelivery.recoveryPointerText(ptyId)
+    stagedText = this.orchestrationMailboxPointerDelivery.stagedPointerText(ptyId)
   ): 'prompt' | 'draft' | 'restoring' | null {
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return 'prompt'

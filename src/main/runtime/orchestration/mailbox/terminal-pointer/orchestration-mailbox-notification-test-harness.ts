@@ -77,6 +77,10 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
 }
 
 class MailboxRuntime extends OrcaRuntimeService {
+  override deliverPendingMessagesForPty(ptyId: string): void {
+    super.deliverPendingMessagesForPty(ptyId)
+  }
+
   requestMailDecision(ptyId: string): void {
     this.armDeliveryRecheck(ptyId)
   }

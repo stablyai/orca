@@ -123,7 +123,11 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
     recordsPromptLifecycle = true
   ): void {
     if (chunk.payloads.length > 0 && !provenance && recordsPromptLifecycle) {
-      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId, chunk.payloads.at(-1)?.state)
+      this.orchestrationMailboxPointerDelivery.observeTerminal(
+        ptyId,
+        chunk.payloads.at(-1)?.state,
+        true
+      )
     }
     const facet = chunk.programStatusFacet
     if (chunk.payloads.length === 0 && facet === undefined) {

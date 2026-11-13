@@ -130,6 +130,7 @@ describe('owed mailbox foreground revalidation', () => {
     const { runtime } = createRuntime(db)
     const write = vi.fn((_ptyId: string, _data: string) => true)
     let inspections = 0
+    const foregroundReads: (() => void)[] = []
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -138,7 +139,7 @@ describe('owed mailbox foreground revalidation', () => {
       supportsForegroundObservation: () => true,
       inspectProcess: async () => {
         inspections++
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        await new Promise<void>((resolve) => foregroundReads.push(resolve))
         return {
           foregroundProcess: 'codex',
           hasChildProcesses: true,
@@ -170,7 +171,11 @@ describe('owed mailbox foreground revalidation', () => {
       50
     )
     try {
-      await vi.advanceTimersByTimeAsync(1500)
+      await vi.advanceTimersByTimeAsync(200)
+      foregroundReads.splice(0).forEach((resolve) => resolve())
+      await vi.advanceTimersByTimeAsync(500)
+      foregroundReads.splice(0).forEach((resolve) => resolve())
+      await vi.advanceTimersByTimeAsync(800)
       expect(receiptDone).toBe(true)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
         expect.stringContaining('You have 1 orchestration message'),

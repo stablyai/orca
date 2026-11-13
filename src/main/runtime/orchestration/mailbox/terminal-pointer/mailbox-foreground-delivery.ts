@@ -13,6 +13,37 @@ type ForegroundMailboxBatch = Map<string, ReadonlySet<string> | undefined>
 export class MailboxForegroundDelivery {
   private readonly mailboxesByPty = new Map<string, ForegroundMailboxBatch>()
 
+  deliverForHandle<T extends OrchestrationMessageWaiter>(
+    deps: PointerDeliveryDependencies<T>,
+    delivery: OrchestrationMailboxPointerDelivery<T>,
+    handle: string,
+    reservedTypes?: ReadonlySet<string>
+  ): void {
+    try {
+      const terminal = deps.deliveryTarget.resolveTerminal(handle)
+      if (
+        !terminal ||
+        (!isMailboxTerminalTakingInput(terminal) &&
+          !(
+            delivery.isForegroundHeld(terminal.ptyId) ||
+            deps.needsForegroundEvaluation?.(terminal.ptyId)
+          ) &&
+          !deps.isForegroundCandidate?.(terminal))
+      ) {
+        if (terminal) {
+          deps.onDeliveryDecision(terminal.ptyId)
+        }
+        return
+      }
+      const mailboxHandle = deps.mailboxOwner.resolve(terminal, handle)
+      if (mailboxHandle) {
+        delivery.deliver(terminal, { mailboxHandle, reservedTypes })
+      }
+    } catch {
+      // Persisted mail remains available to explicit check or the terminal's next input edge.
+    }
+  }
+
   defer<T extends OrchestrationMessageWaiter>(
     deps: PointerDeliveryDependencies<T>,
     delivery: OrchestrationMailboxPointerDelivery<T>,
@@ -35,8 +66,6 @@ export class MailboxForegroundDelivery {
       .probeForeground(ptyId, target.processIncarnation)
       .then((foreground) => {
         this.mailboxesByPty.delete(ptyId)
-        const requireCurrentScreen =
-          delivery.isForegroundHeld(ptyId) || deps.getTerminal(ptyId)?.lastAgentStatus === null
         const current = deps.resolveSubmitTarget(ptyId, foreground.foreground)
         if (current?.processIncarnation !== target.processIncarnation) {
           return
@@ -64,7 +93,6 @@ export class MailboxForegroundDelivery {
               reservedTypes,
               foreground: applied ? foreground.foreground : undefined,
               foregroundFollowup: true,
-              requireCurrentScreen,
               skipAbsenceProbe: true,
               foregroundProbeIncarnation: applied ? target.processIncarnation : undefined
             })

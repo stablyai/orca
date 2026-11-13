@@ -5,12 +5,13 @@ type ForegroundObservation = {
   processIncarnation: string
   generation: number
   held: boolean
+  screenRequired: boolean
   contradiction: number
   status?: string
 }
 
 export type OrchestrationMailboxForegroundObservation = {
-  observation: Readonly<Omit<ForegroundObservation, 'held'>>
+  observation: Readonly<Omit<ForegroundObservation, 'held' | 'screenRequired'>>
   generation: number
   contradiction: number
 }
@@ -93,6 +94,7 @@ export class MailboxForegroundEvidence {
     const wasHeld = observation.held
     if (foreground === 'shell') {
       observation.held = true
+      observation.screenRequired = true
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
       observation.held = false
@@ -108,7 +110,19 @@ export class MailboxForegroundEvidence {
     return observation?.held ? observation.processIncarnation : undefined
   }
 
-  observeTerminal(ptyId: string, status?: string): boolean {
+  screenRecovery(ptyId: string): string | undefined {
+    const observation = this.foregroundObservations.get(ptyId)
+    return observation?.screenRequired ? observation.processIncarnation : undefined
+  }
+
+  completeDelivery(ptyId: string): void {
+    const observation = this.foregroundObservations.get(ptyId)
+    if (observation && !observation.held) {
+      observation.screenRequired = false
+    }
+  }
+
+  observeTerminal(ptyId: string, status?: string, hookReadiness = false): boolean {
     const observation = this.foregroundObservations.get(ptyId)
     if (!observation) {
       return false
@@ -117,17 +131,27 @@ export class MailboxForegroundEvidence {
     if (status === 'done') {
       status = 'idle'
     }
+    const ready = observation.screenRequired && hookReadiness && status === 'idle'
+    if (ready) {
+      observation.screenRequired = false
+    }
     const changed = status !== undefined && observation.status !== status
     if (status !== undefined) {
       observation.status = status
     }
-    return observation.held && changed
+    return ready || (observation.held && changed)
   }
 
   private foregroundObservation(ptyId: string, processIncarnation: string): ForegroundObservation {
     let observation = this.foregroundObservations.get(ptyId)
     if (!observation || observation.processIncarnation !== processIncarnation) {
-      observation = { processIncarnation, generation: 0, held: false, contradiction: 0 }
+      observation = {
+        processIncarnation,
+        generation: 0,
+        held: false,
+        screenRequired: false,
+        contradiction: 0
+      }
       this.foregroundObservations.set(ptyId, observation)
     }
     return observation

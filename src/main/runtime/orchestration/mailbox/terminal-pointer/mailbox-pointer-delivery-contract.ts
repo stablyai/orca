@@ -21,16 +21,18 @@ export type OrchestrationMailboxPointerMessage = {
 }
 
 export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  mailboxOwner: OrchestrationMailboxOwner
-  deliveryTarget: OrchestrationMailboxDeliveryTarget
+  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
+  deliveryTarget: Pick<
+    OrchestrationMailboxDeliveryTarget,
+    'resolveTerminal' | 'deferForAbsenceProbe'
+  >
   getDb: () => OrchestrationDb | null
   getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
   isAgentSettledForDelivery: (
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string,
-    requireCurrentScreen?: boolean
+    stagedText?: string
   ) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
@@ -57,5 +59,4 @@ export type PointerDeliveryOptions = {
   foreground?: MailboxForeground
   foregroundFollowup?: boolean
   foregroundProbeIncarnation?: string
-  requireCurrentScreen?: boolean
 }

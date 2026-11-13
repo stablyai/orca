@@ -172,7 +172,7 @@ describe('retiring a pty mid-delivery', () => {
     let firstAbsence = true
     const deps = {
       ...pointerDeps(db, writePty),
-      mailboxOwner: { resolve: (_terminal: unknown, handle: string) => handle },
+      mailboxOwner: { resolve: (_terminal: unknown, handle?: string) => handle ?? null },
       isLeafPtyProvenAbsent: () => {
         if (firstAbsence) {
           firstAbsence = false
@@ -184,7 +184,7 @@ describe('retiring a pty mid-delivery', () => {
       },
       resolveSubmitTarget: () => ({ terminal: TERMINAL, processIncarnation: incarnation })
     }
-    const delivery = new OrchestrationMailboxPointerDelivery(deps as never)
+    const delivery = new OrchestrationMailboxPointerDelivery(deps)
     try {
       const first = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'staged' })
       const second = db.insertMessage({ from: 'a', to: 'run:run-2', subject: 'parked' })

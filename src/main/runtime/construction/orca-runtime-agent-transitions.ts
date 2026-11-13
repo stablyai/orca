@@ -1,3 +1,4 @@
+import { isAgentStatusFresh } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/follow-up/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
@@ -182,7 +183,21 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     const detachMail = subscribe?.((row) => {
       const pty = this.getPtyRecordForPaneKey(row.paneKey)
       if (pty) {
-        this.orchestrationMailboxPointerDelivery.observeTerminal(pty.ptyId, row.payload.state)
+        this.orchestrationMailboxPointerDelivery.observeTerminal(
+          pty.ptyId,
+          row.payload.state,
+          row.observation?.origin === 'hook' &&
+            row.observation.kind !== 'snapshot' &&
+            !row.identityOnly &&
+            !row.programStatusOnly &&
+            (row.evidenceObservedAt ?? row.receivedAt) >
+              (this.agentPromptExplicitStatusFloorByPtyId.get(pty.ptyId) ?? -Infinity) &&
+            isAgentStatusFresh({
+              updatedAt: row.receivedAt,
+              evidenceObservedAt: row.evidenceObservedAt,
+              restoredUnconfirmed: row.restoredUnconfirmed
+            })
+        )
       }
     })
     const detachTitles = subscribe

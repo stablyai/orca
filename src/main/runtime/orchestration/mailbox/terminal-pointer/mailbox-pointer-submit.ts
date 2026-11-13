@@ -1,3 +1,5 @@
+import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
 import type { MailboxDeliveryDecision } from '../notifications/mailbox-delivery-recheck'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -17,7 +19,7 @@ import type {
 import type { WriteSettlement } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 type PointerSubmitDependencies = {
-  mailboxOwner: OrchestrationMailboxOwner
+  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
   resolveSubmitTarget: (
@@ -42,6 +44,26 @@ type PointerSubmitDependencies = {
 export type OrchestrationMailboxPointerSubmitTarget = {
   terminal: OrchestrationMailboxTerminal
   processIncarnation: string
+}
+
+export function resumeDeferredMailboxPointer<T extends OrchestrationMessageWaiter>(
+  deps: PointerDeliveryDependencies<T>,
+  state: OrchestrationMailboxPointerState,
+  terminal: OrchestrationMailboxTerminal,
+  coldParked: boolean
+): boolean {
+  const ptyId = terminal.ptyId
+  if (!state.hasFlight(ptyId)) {
+    return false
+  }
+  if (
+    !state.hasActiveFlight(ptyId) &&
+    (!coldParked || terminal.lastAgentStatus === 'idle') &&
+    deps.isAgentSettledForDelivery(ptyId)
+  ) {
+    state.takeDeferredEnter(ptyId)?.()
+  }
+  return true
 }
 
 export function submitOrchestrationMailboxPointer(
@@ -128,9 +150,6 @@ export function submitOrchestrationMailboxPointer(
         // A neutral title can outlive the foreground check, and an open dialog would take the
         // Enter as its answer; no Enter has been attempted yet.
         deps.state.deferFlightUntilIdle(input.ptyId)
-        if (terminal.lastAgentStatus === null) {
-          input.flight.recoveryPointerText ??= input.stagedText
-        }
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deps.onDeliveryDecision?.(input.ptyId, { foreground: false })
         preserveFlight = true

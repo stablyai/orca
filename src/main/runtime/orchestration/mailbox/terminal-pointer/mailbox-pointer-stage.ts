@@ -38,7 +38,6 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   mailboxHandle: string
   messages: readonly OrchestrationMailboxPointerMessage[]
   heldDeliveryId?: string
-  requireCurrentScreen?: boolean
   newestSequence: number
   enterDelayMs: number
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
@@ -77,7 +76,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   )
   const flight = args.state.beginFlight(ptyId)
   flight.processIncarnation = expectedTarget.processIncarnation
-  flight.recoveryPointerText = args.requireCurrentScreen ? pointerText.trim() : undefined
+  flight.stagedPointerText = pointerText.trim()
   flight.stagedMessageIds = args.messages.map((message) => message.id)
   try {
     if (

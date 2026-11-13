@@ -49,10 +49,21 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   /** Whether delivery has work for this terminal: a pointer reservation to recover, or unread, undelivered mail no waiter or held batch claims. */
   hasDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
+    const owed = this.readDeliverableMail(terminal)
+    if (!owed) {
+      this.deps.pointerDelivery.completeRecovery(terminal.ptyId)
+    }
+    return owed
+  }
+
+  private readDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
     try {
       const db = this.deps.getDb()
       if (!db) {
         return false
+      }
+      if (this.deps.pointerDelivery.hasPendingFlightMail(terminal)) {
+        return true
       }
       const owned = this.deps.mailboxOwner.resolveAll(terminal, { routeDirectMail: false })
       return [...new Set([...owned, terminal.handle])].some((mailboxHandle) => {

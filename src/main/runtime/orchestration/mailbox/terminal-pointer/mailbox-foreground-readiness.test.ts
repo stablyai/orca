@@ -11,6 +11,7 @@ import {
   PANE_KEY,
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
+import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
@@ -77,11 +78,11 @@ describe('mail-local foreground recovery readiness', () => {
     }) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-mail-expired-readiness-')
-      const row = {
+      const row: AgentStatusIpcPayload = {
         paneKey: PANE_KEY,
         connectionId: null,
         agentType: 'claude' as const,
-        state: 'done' as 'done' | 'waiting',
+        state: 'done',
         prompt: '',
         receivedAt: Date.now(),
         stateStartedAt: 1
@@ -189,16 +190,20 @@ describe('mail-local foreground recovery readiness', () => {
       }
     }
   )
-  it.each([false, true])(
-    'keeps a late dialog off the foreground retry schedule (recovering=%s)',
-    async (recovering) => {
+  it.each([
+    { kind: 'ordinary', recovering: false, receiptFirst: false },
+    { kind: 'recovered', recovering: true, receiptFirst: false },
+    { kind: 'receipt-first', recovering: true, receiptFirst: true }
+  ])(
+    'keeps a late dialog off the foreground retry schedule ($kind)',
+    async ({ recovering, receiptFirst }) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-mail-late-dialog-')
-      const row = {
+      const row: AgentStatusIpcPayload = {
         paneKey: PANE_KEY,
         connectionId: null,
         agentType: 'claude' as const,
-        state: 'done' as 'done' | 'waiting',
+        state: 'done',
         prompt: '',
         receivedAt: Date.now(),
         stateStartedAt: 1
@@ -262,7 +267,14 @@ describe('mail-local foreground recovery readiness', () => {
         if (recovering) {
           expect(write).not.toHaveBeenCalled()
           shell = false
+          const receipt = receiptFirst ? runtime.readTerminalMailHold(`run:${run.id}`) : null
+          if (receiptFirst) {
+            runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+          }
           await vi.advanceTimersByTimeAsync(65000)
+          if (receipt) {
+            expect(await receipt).toBeNull()
+          }
         }
         expect(write.mock.calls.map(([, data]) => data)).toEqual([
           expect.stringContaining('You have 1 orchestration message')

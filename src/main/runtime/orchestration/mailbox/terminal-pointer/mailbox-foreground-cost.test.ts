@@ -79,7 +79,7 @@ describe('terminal-owned foreground work', () => {
         inspections++
         concurrent++
         peak = Math.max(peak, concurrent)
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await Promise.resolve()
         concurrent--
         return {
           foregroundProcess: shell ? 'zsh' : 'codex',

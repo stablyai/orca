@@ -1,9 +1,11 @@
+import { resumeDeferredMailboxPointer } from './mailbox-pointer-submit'
 import { MailboxForegroundDelivery } from './mailbox-foreground-delivery'
 import type {
   PointerDeliveryDependencies,
   PointerDeliveryOptions
 } from './mailbox-pointer-delivery-contract'
 import {
+  hasPendingMailboxPointerFlight,
   hasUnfilteredOrchestrationWaiter,
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
@@ -33,26 +35,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
-    try {
-      const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
-      if (
-        !terminal ||
-        (!isMailboxTerminalTakingInput(terminal) &&
-          !this.needsForegroundEvaluation(terminal.ptyId) &&
-          !this.deps.isForegroundCandidate?.(terminal))
-      ) {
-        if (terminal) {
-          this.deps.onDeliveryDecision(terminal.ptyId)
-        }
-        return
-      }
-      const mailboxHandle = this.deps.mailboxOwner.resolve(terminal, handle)
-      if (mailboxHandle) {
-        this.deliver(terminal, { mailboxHandle, reservedTypes })
-      }
-    } catch {
-      // Persisted mail remains available to explicit check or the terminal's next input edge.
-    }
+    this.foregroundDelivery.deliverForHandle(this.deps, this, handle, reservedTypes)
   }
 
   deliver(terminal: OrchestrationMailboxTerminal, options: PointerDeliveryOptions): void {
@@ -81,12 +64,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       if (
         (!foregroundHeld || hasFlight) &&
         ((!isMailboxTerminalTakingInput(terminal) && !hasFlight) ||
-          !this.deps.isAgentSettledForDelivery(
-            ptyId,
-            options.foreground,
-            undefined,
-            options.requireCurrentScreen
-          ))
+          !this.deps.isAgentSettledForDelivery(ptyId, options.foreground, undefined))
       ) {
         this.parkRedelivery(mailboxHandle, options.reservedTypes)
         return
@@ -170,7 +148,6 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         messages: unread,
         heldDeliveryId,
         newestSequence,
-        requireCurrentScreen: options.requireCurrentScreen,
         enterDelayMs: pointerEnterDelayMs(),
         settle: (ptyId, flight) => this.settle(ptyId, flight),
         redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
@@ -194,8 +171,37 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   readonly applyForeground = this.state.foreground.applyForeground.bind(this.state.foreground)
 
-  recoveryPointerText(ptyId: string): string | undefined {
-    return this.state.recoveryPointerText(ptyId)
+  stagedPointerText(ptyId: string): string | undefined {
+    return this.state.stagedPointerText(ptyId)
+  }
+
+  requiresCurrentScreen(ptyId: string): boolean {
+    const incarnation = this.state.foreground.screenRecovery(ptyId)
+    return (
+      incarnation !== undefined &&
+      incarnation === this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+    )
+  }
+
+  completeRecovery(ptyId: string): void {
+    this.state.foreground.completeDelivery(ptyId)
+  }
+
+  hasPendingFlightMail(terminal: OrchestrationMailboxTerminal): boolean {
+    return hasPendingMailboxPointerFlight(
+      this.deps,
+      terminal,
+      this.state.flightForPty(terminal.ptyId)
+    )
+  }
+
+  resumeDeferredEnter(terminal: OrchestrationMailboxTerminal): boolean {
+    return resumeDeferredMailboxPointer(
+      this.deps,
+      this.state,
+      terminal,
+      this.coldParkedPtys.has(terminal.ptyId)
+    )
   }
 
   isDeliveryInFlight(ptyId: string): boolean {
@@ -218,8 +224,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     return !!hold
   }
 
-  observeTerminal(ptyId: string, status?: string): void {
-    if (this.state.foreground.observeTerminal(ptyId, status)) {
+  observeTerminal(ptyId: string, status?: string, hookReadiness = false): void {
+    if (this.state.foreground.observeTerminal(ptyId, status, hookReadiness)) {
       this.deps.onDeliveryDecision(ptyId, { reset: true })
       queueMicrotask(() => this.deps.redriveTerminal(ptyId))
     }

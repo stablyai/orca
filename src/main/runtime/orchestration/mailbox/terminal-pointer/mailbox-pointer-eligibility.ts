@@ -1,3 +1,6 @@
+import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
+import type { OrchestrationMailboxDeliveryFlight } from './mailbox-pointer-state'
+import type { OrchestrationMailboxTerminal } from '../routing/mailbox-owner'
 import '../../db/orchestration-db'
 import '../../db/contract-constants'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from '../../db/messages/mailbox-routing-page'
@@ -89,4 +92,33 @@ export function shouldReleaseOrchestrationPointer(
       messages.map((message) => message.id)
     ) ?? true
   )
+}
+
+export function hasPendingMailboxPointerFlight<T extends OrchestrationMessageWaiter>(
+  deps: PointerDeliveryDependencies<T>,
+  terminal: OrchestrationMailboxTerminal,
+  flight: OrchestrationMailboxDeliveryFlight | undefined
+): boolean {
+  const db = deps.getDb()
+  if (
+    !db ||
+    !flight ||
+    flight.processIncarnation !== deps.resolveSubmitTarget(terminal.ptyId)?.processIncarnation
+  ) {
+    return false
+  }
+  return flight.stagedMessageIds.some((id) => {
+    const row = db.getMessageById(id)
+    return (
+      !!row &&
+      row.read === 0 &&
+      (row.pointer_enter_pending ?? 0) > 0 &&
+      row.delivery_contract === 'current_delivery' &&
+      row.pointer_pty_id === terminal.ptyId &&
+      row.pointer_process_incarnation === flight.processIncarnation &&
+      !hasUnfilteredOrchestrationWaiter(deps.getMessageWaiters(row.to_handle)) &&
+      deps.mailboxOwner.resolve(terminal, row.to_handle, { routeDirectMail: false }) ===
+        row.to_handle
+    )
+  })
 }
