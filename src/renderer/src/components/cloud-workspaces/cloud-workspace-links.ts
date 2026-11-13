@@ -36,7 +36,9 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   rememberCloudWorkspaces([workspace])
   const outcome = await openCloudWorkspace(workspace)
   if (!outcome.ok) {
-    toast.error(outcome.message)
+    if (!outcome.notified) {
+      toast.error(outcome.message)
+    }
   } else if (resolved.value.chatId) {
     await focusCloudChat(outcome.worktreeId, resolved.value.chatId)
   }

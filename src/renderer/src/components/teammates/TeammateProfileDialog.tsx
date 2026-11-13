@@ -100,7 +100,7 @@ function ProfileBody({ userId }: { userId: string }): React.JSX.Element {
       onOpenWorkspace={(workspace) => {
         closeTeammateProfile()
         void openCloudWorkspace(workspace).then((outcome) => {
-          if (!outcome.ok) {
+          if (!outcome.ok && !outcome.notified) {
             toast.error(outcome.message)
           }
         })

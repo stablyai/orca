@@ -29807,5 +29807,14 @@
     "title": "You can’t open this cloud workspace anymore",
     "description": "Its owner or a team admin changed who can open it. Ask them for access, or remove it from this computer. This doesn’t delete the workspace.",
     "remove": "Remove from this computer"
+  },
+  "cloudWorkspaceOpen": {
+    "opening": "Opening {{name}}…",
+    "openingDescription": "Workspaces that were asleep or just created can take a minute or two.",
+    "slowTitle": "{{name}} is taking longer than usual",
+    "slowDescription": "It’s still starting. Try again in a moment.",
+    "tryAgain": "Try again",
+    "goneTitle": "Couldn’t find {{name}}",
+    "goneDescription": "It may have been deleted."
   }
 }

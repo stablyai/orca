@@ -208,6 +208,8 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
   const workspace = await window.api.cloudWorkspaces.get(sandboxId).catch(() => null)
   const opened = workspace?.ok
     ? await openCloudWorkspace(workspace.value, {
+        // Its pending row shows the open's progress and failure (no open toasts).
+        feedback: false,
         // GH-CREATE-NO-ROW: that server's rows wait behind the pending row until the hand-off.
         onHost: (hostId) =>
           useAppStore

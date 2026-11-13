@@ -84,7 +84,7 @@ export function TeamWorkspacesSettings({ orgId }: { orgId: string | null }): Rea
   )
   const open = (w: CloudWorkspace): void => {
     void openCloudWorkspace(w).then((outcome) => {
-      if (!outcome.ok) {
+      if (!outcome.ok && !outcome.notified) {
         toast.error(outcome.message)
       }
     })

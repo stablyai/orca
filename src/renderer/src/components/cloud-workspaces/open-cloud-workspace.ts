@@ -18,12 +18,34 @@ import {
 } from '../../../../shared/execution-host'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError, isUnknownServerFailure } from './cloud-workspace-errors'
+import {
+  type OpenFeedbackFailure,
+  withCloudWorkspaceOpenFeedback
+} from './cloud-workspace-open-feedback'
+import { openCloudWorkspacePicker } from './cloud-workspace-picker-store'
 
 /** On success, the worktree that was revealed (null when its projects are still syncing). */
 export type OpenOutcome =
   | { ok: true; worktreeId: string | null; hostId?: string }
-  /** `unknownServerError`: the wake failed on the server for no known reason (shared copy). */
-  | { ok: false; message: string; unknownServerError?: boolean }
+  /**
+   * `unknownServerError`: the wake failed on the server for no known reason (shared copy).
+   * `notified`: a toast already said what happened (EP-6-FLAKE); the caller shows nothing more.
+   */
+  | {
+      ok: false
+      message: string
+      unknownServerError?: boolean
+      failure?: OpenFeedbackFailure
+      notified?: true
+    }
+
+/** EP-6-FLAKE: a refusal that has its own toast: still starting (timeout) or gone (not found). */
+export function openFailureKind(error: string | undefined): OpenFeedbackFailure | undefined {
+  if (error === 'timeout') {
+    return 'timeout'
+  }
+  return error === 'not_found' ? 'gone' : undefined
+}
 
 // Rejections that mean this device's pairing is no longer accepted (revoked grant, rebuilt VM).
 const PAIRING_REJECTED_CODES = new Set(['unauthorized', 'device_revoked', 'forbidden'])
@@ -76,6 +98,8 @@ export type OpenCloudWorkspaceOptions = {
    * hides that server's rows until it hands off to them, so its pending row never doubles up.
    */
   onHost?: (hostId: string) => void
+  /** False: the caller shows the open's progress itself (a GitHub-only create's pending row). */
+  feedback?: false
 }
 
 async function connectAndReveal(
@@ -159,10 +183,12 @@ async function wakeIfAsleep(workspace: CloudWorkspace): Promise<OpenOutcome | nu
     self: workspace.access === 'owner',
     name: workspace.memberNames?.[workspace.ownerUserId] ?? null
   }
+  const failure = openFailureKind(woke.error)
   return {
     ok: false,
     message: describeError(woke.error, woke.reason, translate, owner),
-    unknownServerError: isUnknownServerFailure(woke.error, woke.status)
+    unknownServerError: isUnknownServerFailure(woke.error, woke.status),
+    ...(failure ? { failure } : {})
   }
 }
 
@@ -206,10 +232,12 @@ async function pairAndReveal(
       self: workspace.access === 'owner',
       name: workspace.memberNames?.[workspace.ownerUserId] ?? null
     }
+    const failure = openFailureKind(grant.error)
     return {
       ok: false,
       message: describeError(grant.error, grant.reason, translate, owner),
-      unknownServerError: isUnknownServerFailure(grant.error, grant.status)
+      unknownServerError: isUnknownServerFailure(grant.error, grant.status),
+      ...(failure ? { failure } : {})
     }
   }
   const added = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
@@ -301,7 +329,15 @@ export function openCloudWorkspace(
   if (existing) {
     return existing
   }
-  const attempt = openOnce(workspace, options).finally(() => opening.delete(workspace.id))
+  const run = (): Promise<OpenOutcome> => openOnce(workspace, options)
+  const attempt = (
+    options.feedback === false
+      ? run()
+      : withCloudWorkspaceOpenFeedback(workspace.id, cloudWorkspaceTitle(workspace), run, {
+          retry: () => void openCloudWorkspace(workspace, options),
+          showWorkspaces: () => openCloudWorkspacePicker()
+        })
+  ).finally(() => opening.delete(workspace.id))
   opening.set(workspace.id, attempt)
   return attempt
 }

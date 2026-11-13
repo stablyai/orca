@@ -1,7 +1,7 @@
 // What a cloud workspace row can do from "Open cloud workspace…": open (or read an Asleep one's
 // saved copy), copy its link, share or hand it over, sleep, archive and delete. Opening goes through
 // openCloudWorkspace, the same path as a workspace link and a teammate's profile.
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
@@ -17,6 +17,7 @@ import { focusCloudChat } from './cloud-chat-focus'
 import * as archive from './cloud-workspace-home-archive'
 import { focusedKind, frontCloudChat } from './cloud-workspace-links'
 import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
+import { showCloudWorkspaceOpenInPicker } from './cloud-workspace-open-feedback'
 import type { RowActions } from './CloudWorkspaceRowMenu'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
@@ -77,6 +78,9 @@ export function useCloudWorkspaceRowActions({
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   const { readingId, readingRef, setReadingId, readWake, setReadWake } = useCloudReadPanel()
+  // EP-6-FLAKE: the row's spinner shows this open; the open's toast waits while the picker is up and
+  // shows at once if it closes mid-open.
+  useEffect(() => (openingId ? showCloudWorkspaceOpenInPicker(openingId) : undefined), [openingId])
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
   const open = useCallback(
@@ -92,7 +96,7 @@ export function useCloudWorkspaceRowActions({
           if (fromPanel && readingRef.current === w.id) {
             // The panel shows the failure in place (with the reason) instead of a toast.
             setReadWake({ ...outcome, phase: 'failed' })
-          } else {
+          } else if (!outcome.notified) {
             toast.error(outcome.message)
           }
           return
