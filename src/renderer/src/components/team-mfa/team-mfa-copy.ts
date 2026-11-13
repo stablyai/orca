@@ -27,6 +27,63 @@ export function teamMfaSurface(policy: OrcaTeamMfaPolicy | null): 'none' | 'bann
   return policy.self === 'pending' ? 'banner' : 'none'
 }
 
+/** From this many days before the deadline the notice stops being quiet (design-squad). */
+export const MFA_URGENT_DAYS = 3
+
+/**
+ * How loud the notice is: quiet with more than three days left, a warning in the last three,
+ * and blocked only on the server's word (never from the clock).
+ */
+export type TeamMfaUrgency = 'quiet' | 'soon' | 'blocked'
+
+export function mfaUrgency(enforceAt: number, now: number, blocked: boolean): TeamMfaUrgency {
+  if (blocked) {
+    return 'blocked'
+  }
+  return mfaDaysLeft(enforceAt, now) <= MFA_URGENT_DAYS ? 'soon' : 'quiet'
+}
+
+/** "Acme requires MFA in 2 days": the title once the deadline is close. */
+export function mfaSoonTitle(teamName: string, enforceAt: number, now: number, t: Translate): string {
+  const days = mfaDaysLeft(enforceAt, now)
+  if (days <= 0) {
+    return t('auto.components.teamMfa.soonTitleNow', '{{value0}} requires MFA now', {
+      value0: teamName
+    })
+  }
+  return t('auto.components.teamMfa.soonTitle', '{{value0}} requires MFA in {{count}} days', {
+    value0: teamName,
+    count: days,
+    defaultValue_one: '{{value0}} requires MFA in {{count}} day'
+  })
+}
+
+/**
+ * The one-time toast is shown once per team and deadline, so a changed date announces itself
+ * again and a restart does not repeat it.
+ */
+export function mfaToastSeenKey(orgId: string, enforceAt: number): string {
+  return `orca.teamMfa.toastSeen:${orgId}:${enforceAt}`
+}
+
+/** True the first time for a deadline; records it. A storage failure shows it rather than hide it. */
+export function claimMfaToast(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null,
+  orgId: string,
+  enforceAt: number
+): boolean {
+  const key = mfaToastSeenKey(orgId, enforceAt)
+  try {
+    if (storage?.getItem(key) === '1') {
+      return false
+    }
+    storage?.setItem(key, '1')
+  } catch {
+    // Private mode or a full quota: showing it again next launch is the lesser problem.
+  }
+  return true
+}
+
 /** "6 days left", "1 day left", "Due now". i18next plurals, never ternaries on the count. */
 export function mfaCountdownLabel(enforceAt: number, now: number, t: Translate): string {
   const days = mfaDaysLeft(enforceAt, now)

@@ -25,7 +25,6 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaOrgMember, OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import { PersonAvatar } from './TeamAvatar'
@@ -307,14 +306,11 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                 // Rendered for every row, invites included, so the role column stays aligned.
                 <span
                   data-team-mfa={row.kind === 'member' ? (row.member.mfa ?? '') : ''}
-                  className={cn(
-                    'w-24 shrink-0 truncate text-xs',
-                    row.kind === 'member' && row.member.mfa === 'on'
-                      ? 'text-muted-foreground'
-                      : 'text-foreground'
-                  )}
+                  className="flex w-28 shrink-0"
                 >
-                  {row.kind === 'member' ? memberMfaLabel(row.member, locale, t) : null}
+                  {row.kind === 'member' && memberMfaLabel(row.member, locale, t) ? (
+                    <Badge variant="tag">{memberMfaLabel(row.member, locale, t)}</Badge>
+                  ) : null}
                 </span>
               ) : null}
               {row.kind === 'member' ? (

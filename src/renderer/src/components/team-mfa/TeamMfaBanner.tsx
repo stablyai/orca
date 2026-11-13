@@ -3,7 +3,8 @@ import { InlineError } from '@/components/ui/inline-error'
 import { cn } from '@/lib/class-names'
 import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { mfaCountdownLabel, mfaDeadlineDate } from './team-mfa-copy'
+import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
+import { mfaCountdownLabel, mfaDeadlineDate, mfaSoonTitle, mfaUrgency } from './team-mfa-copy'
 
 export type TeamMfaBannerProps = {
   teamName: string
@@ -35,7 +36,10 @@ export function TeamMfaBanner({
 }: TeamMfaBannerProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
-  const title = blocked
+  const urgency = mfaUrgency(enforceAt, now, blocked)
+  const title = urgency === 'soon'
+    ? mfaSoonTitle(teamName, enforceAt, now, t)
+    : blocked
     ? t(
         'auto.components.teamMfa.bannerBlockedTitle',
         '{{value0}} requires two-factor authentication',
@@ -67,10 +71,16 @@ export function TeamMfaBanner({
     return (
       <section
         role={blocked ? 'alert' : 'status'}
-        data-team-mfa-banner={blocked ? 'blocked' : 'pending'}
+        data-team-mfa-banner={urgency}
         className={cn(
-          'mx-2 mb-2 shrink-0 rounded-md border bg-worktree-sidebar-accent/40 p-2.5 text-worktree-sidebar-foreground',
-          blocked ? 'border-destructive/50' : 'border-border',
+          'mx-2 mb-2 shrink-0 rounded-md border p-2.5 text-worktree-sidebar-foreground',
+          // Quiet with time to spare; the shared warning look in the last three days; the
+          // destructive border of a real block after the deadline.
+          urgency === 'soon'
+            ? cn(BANNER_TONE.warning.surface, BANNER_TONE.warning.border)
+            : 'bg-worktree-sidebar-accent/40',
+          urgency === 'blocked' && 'border-destructive/50',
+          urgency === 'quiet' && 'border-border',
           className
         )}
       >
@@ -78,13 +88,24 @@ export function TeamMfaBanner({
           <ShieldAlert
             className={cn(
               'mt-px size-3.5 shrink-0',
-              blocked ? 'text-destructive' : 'text-muted-foreground'
+              urgency === 'blocked'
+                ? 'text-destructive'
+                : urgency === 'soon'
+                  ? BANNER_TONE.warning.icon
+                  : 'text-muted-foreground'
             )}
             aria-hidden="true"
           />
           <div className="min-w-0 flex-1 space-y-1.5">
             <p className="text-xs font-semibold leading-snug">{title}</p>
-            <p className="text-xs leading-snug text-muted-foreground">{detail}</p>
+            <p
+              className={cn(
+                'text-xs leading-snug',
+                urgency === 'soon' ? BANNER_BODY_TEXT : 'text-muted-foreground'
+              )}
+            >
+              {detail}
+            </p>
             {action}
           </div>
         </div>

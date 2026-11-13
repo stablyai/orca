@@ -21,6 +21,8 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   blocked: React.JSX.Element | null
   /** The sidebar notice: the countdown, or "no access" once blocked. */
   sidebarBanner: React.JSX.Element | null
+  /** Set while the member still has time: what the one-time toast needs. */
+  pendingToast: { orgId: string; teamName: string; enforceAt: number; setupUrl: string } | null
 } {
   const cloud = useAppStore((state) => state.orcaProfileAuthStatus?.cloud)
   const selectOrg = useAppStore((state) => state.selectOrcaProfileOrg)
@@ -31,7 +33,7 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   const [stillMissing, setStillMissing] = useState(false)
 
   if (!orgId || !policy?.policy) {
-    return { banner: null, blocked: null, sidebarBanner: null }
+    return { banner: null, blocked: null, sidebarBanner: null, pendingToast: null }
   }
   const surface = teamMfaSurface(policy)
   const openSetup = (): void => {
@@ -56,6 +58,7 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
     return {
       banner: null,
       sidebarBanner: line(true, 'sidebar'),
+      pendingToast: null,
       blocked: (
         <TeamMfaBlockedScreen
           teamName={teamName}
@@ -79,6 +82,9 @@ export function useTeamMfaGate(options: { forceBlocked?: boolean } = {}): {
   return {
     banner: pending ? line(false) : null,
     sidebarBanner: pending ? line(false, 'sidebar') : null,
+    pendingToast: pending
+      ? { orgId, teamName, enforceAt: policy.policy.enforceAt, setupUrl: policy.setupUrl }
+      : null,
     blocked: null
   }
 }

@@ -81,6 +81,8 @@ it.each(['owner', 'admin'] as const)('shows the MFA column to an %s', (viewerRol
     container.querySelector(`[data-team-row="${key}"] [data-team-mfa]`)!
   expect(cell('member:u-neil').textContent).toBe('MFA on')
   expect(cell('member:u-grace').textContent).toBe('MFA due Nov 24')
+  // A small muted badge, not bare text.
+  expect(cell('member:u-neil').querySelector('[data-slot="badge"]')).not.toBeNull()
   // Invites keep an empty cell so the role column stays aligned.
   expect(cell('invite:alex@acme.dev').textContent).toBe('')
 })

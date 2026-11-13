@@ -6,7 +6,14 @@ import type { OrcaTeamMfaPolicy } from '../../../../shared/orca-team-mfa-policy'
 import { RequireMfaRow, type RequireMfaRowProps } from './RequireMfaRow'
 import { TeamMfaBanner } from './TeamMfaBanner'
 import { TeamMfaBlockedScreen } from './TeamMfaBlockedScreen'
-import { mfaCountdownLabel, mfaDaysLeft, teamMfaSurface } from './team-mfa-copy'
+import {
+  claimMfaToast,
+  mfaCountdownLabel,
+  mfaDaysLeft,
+  mfaSoonTitle,
+  mfaUrgency,
+  teamMfaSurface
+} from './team-mfa-copy'
 import { describeError, describeInlineError } from '../cloud-workspaces/cloud-workspace-errors'
 
 afterEach(cleanup)
@@ -237,5 +244,71 @@ describe('banner after the deadline', () => {
     expect(container.textContent).toContain('Your personal account is not affected')
     expect(container.textContent).not.toContain('days left')
     expect(getByRole('button', { name: 'Set up MFA' })).toBeTruthy()
+  })
+})
+
+describe('escalation', () => {
+  it('is quiet with more than three days left, a warning in the last three, blocked on the server', () => {
+    expect(mfaUrgency(NOW + 14 * DAY, NOW, false)).toBe('quiet')
+    expect(mfaUrgency(NOW + 3 * DAY + 1, NOW, false)).toBe('quiet')
+    expect(mfaUrgency(NOW + 3 * DAY, NOW, false)).toBe('soon')
+    expect(mfaUrgency(NOW + DAY, NOW, false)).toBe('soon')
+    // Past the deadline by the clock but not blocked by the server: still only a warning.
+    expect(mfaUrgency(NOW - DAY, NOW, false)).toBe('soon')
+    expect(mfaUrgency(NOW + 14 * DAY, NOW, true)).toBe('blocked')
+  })
+
+  it('names the days in the title once it is close', () => {
+    expect(mfaSoonTitle('Acme', NOW + 2 * DAY, NOW, translate)).toBe('Acme requires MFA in 2 days')
+    expect(mfaSoonTitle('Acme', NOW + DAY, NOW, translate)).toBe('Acme requires MFA in 1 day')
+    expect(mfaSoonTitle('Acme', NOW - 1, NOW, translate)).toBe('Acme requires MFA now')
+  })
+
+  it('marks the sidebar card with its urgency', () => {
+    const card = (daysLeft: number, blocked = false): string | null | undefined =>
+      render(
+        <TeamMfaBanner
+          variant="sidebar"
+          teamName="Acme"
+          enforceAt={NOW + daysLeft * DAY}
+          now={NOW}
+          setupUrl={setupUrl}
+          onSetUp={() => {}}
+          blocked={blocked}
+        />
+      )
+        .container.querySelector('[data-team-mfa-banner]')
+        ?.getAttribute('data-team-mfa-banner')
+    expect(card(14)).toBe('quiet')
+    cleanup()
+    expect(card(2)).toBe('soon')
+    cleanup()
+    expect(card(-2, true)).toBe('blocked')
+  })
+})
+
+describe('one-time toast', () => {
+  const memory = (): Pick<Storage, 'getItem' | 'setItem'> => {
+    const map = new Map<string, string>()
+    return { getItem: (key) => map.get(key) ?? null, setItem: (key, value) => void map.set(key, value) }
+  }
+
+  it('shows once per team and deadline, and again when the date changes', () => {
+    const storage = memory()
+    expect(claimMfaToast(storage, 'org_1', 100)).toBe(true)
+    expect(claimMfaToast(storage, 'org_1', 100)).toBe(false)
+    expect(claimMfaToast(storage, 'org_1', 200)).toBe(true)
+    expect(claimMfaToast(storage, 'org_2', 100)).toBe(true)
+  })
+
+  it('shows rather than hides when storage is unavailable', () => {
+    expect(claimMfaToast(null, 'org_1', 100)).toBe(true)
+    const broken = {
+      getItem: () => {
+        throw new Error('denied')
+      },
+      setItem: () => {}
+    }
+    expect(claimMfaToast(broken, 'org_1', 100)).toBe(true)
   })
 })

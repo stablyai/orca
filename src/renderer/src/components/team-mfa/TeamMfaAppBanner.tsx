@@ -1,3 +1,7 @@
+import { useEffect } from 'react'
+import { hideCloudToast, showCloudToast } from '@/components/orca-cloud/cloud-toast-stack'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { claimMfaToast, mfaDeadlineDate } from './team-mfa-copy'
 import { useTeamMfaGate } from './TeamMfaGate'
 
 /**
@@ -10,7 +14,56 @@ import { useTeamMfaGate } from './TeamMfaGate'
  * team resource shows TeamMfaRefused in its own place whether or not the sidebar is visible.
  */
 export function TeamMfaSidebarBanner(): React.JSX.Element | null {
-  return useTeamMfaGate().sidebarBanner
+  const gate = useTeamMfaGate()
+  const t = useTranslate()
+  const locale = useIntlLocale()
+  const toast = gate.pendingToast
+  const orgId = toast?.orgId
+  const enforceAt = toast?.enforceAt
+  // One toast per team and deadline, for people who keep the sidebar collapsed. Not tied to any
+  // workspace, so it shows wherever they are; the sidebar card stays as the lasting reminder.
+  useEffect(() => {
+    if (!toast || orgId === undefined || enforceAt === undefined) {
+      return
+    }
+    if (!claimMfaToast(readLocalStorage(), orgId, enforceAt)) {
+      return
+    }
+    const id = `team-mfa:${orgId}`
+    showCloudToast(id, {
+      priority: 'action',
+      lines: [
+        {
+          key: 'mfa',
+          text: t('auto.components.teamMfa.toast', '{{value0}} requires MFA from {{value1}}.', {
+            value0: toast.teamName,
+            value1: mfaDeadlineDate(enforceAt, locale)
+          }),
+          action: {
+            label: t('auto.components.teamMfa.setUp', 'Set up MFA'),
+            primary: true,
+            // Opens the account page in the browser, so the chevron offers Copy link.
+            link: toast.setupUrl,
+            onClick: () => {
+              void window.api.shell.openUrl(toast.setupUrl)
+              hideCloudToast(id)
+            }
+          }
+        }
+      ]
+    })
+    // Deliberately keyed on the team and deadline only: copy or locale changes must not re-show.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, enforceAt])
+  return gate.sidebarBanner
+}
+
+function readLocalStorage(): Storage | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
 }
 
 /**

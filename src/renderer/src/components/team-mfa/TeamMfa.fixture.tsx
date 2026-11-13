@@ -3,6 +3,7 @@ import type {
   OrcaTeamMfaPendingMember,
   OrcaTeamMfaPolicy
 } from '../../../../shared/orca-team-mfa-policy'
+import { CloudToastCard } from '@/components/orca-cloud/cloud-toast-stack'
 import { RequireMfaRow, type RequireMfaRowProps } from './RequireMfaRow'
 import { TeamMfaBanner } from './TeamMfaBanner'
 import { TeamMfaBlockedScreen } from './TeamMfaBlockedScreen'
@@ -58,11 +59,32 @@ const sidebar = (daysLeft: number, sidebarWidth: number) =>
   })
 
 export const sidebarTwoWeeks = sidebar(14, 280)
+/** Three days or fewer: the warning look. */
+export const sidebarThreeDays = sidebar(3, 280)
 export const sidebarOneDay = sidebar(1, 280)
 /** After the deadline: no access until set up. */
 export const sidebarBlocked = sidebar(-2, 280)
 /** The narrowest sidebar. */
 export const sidebarBlockedNarrow = sidebar(-2, 220)
+
+// ---- The one-time toast, for people who keep the sidebar collapsed ----
+
+export const toast = frame(
+  <CloudToastCard
+    view={{
+      priority: 'action',
+      lines: [
+        {
+          key: 'mfa',
+          text: 'Acme Engineering requires MFA from December 2, 2026.',
+          action: { label: 'Set up MFA', primary: true, link: setupUrl, onClick: noop }
+        }
+      ]
+    }}
+    onDismiss={noop}
+  />,
+  420
+)
 
 // ---- Blocked screen: after the deadline ----
 
