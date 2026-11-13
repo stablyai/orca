@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './provider-buffer-capture'
+import { OrcaRuntimeWithProviderVisibleRead } from './provider-visible-read'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../wait/terminal-interactive-probe-budget'
 import type { RuntimeTerminalProjection } from './terminal-projection'
 import { buildPreview } from './tail/terminal-tail-state'
@@ -6,10 +6,7 @@ import type {
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
-import {
-  VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
-  VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-} from './provider-snapshot-budget'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
 import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
@@ -20,7 +17,7 @@ import {
   type ProviderVisibleRead
 } from '../lifecycle/terminal-view-resources'
 
-export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
+export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithProviderVisibleRead {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     if (this.hasHostHistoryAuthority(ptyId)) {
@@ -38,155 +35,18 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
       return preview
     }
-    const visibleState = await this.readVisibleTerminalState(ptyId)
-    if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
-      return preview
-    }
-    let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
-    if (projection.lines.length === 0) {
-      projection = await this.readRendererVisibleSnapshotLines(ptyId)
-    }
-    return projection.lines.length > 0 ? buildPreview(projection.lines, '') : preview
-  }
-
-  protected readVisibleTerminalState(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
-    return this.ownProviderVisibleRead(ptyId, false, (entry) =>
-      this.loadVisibleTerminalState(ptyId, entry)
-    )
-  }
-
-  protected async loadVisibleTerminalState(
-    ptyId: string,
-    entry: ProviderVisibleRead
-  ): Promise<RuntimeVisibleTerminalState | null> {
-    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
-      return this.readHeadlessVisibleTerminalState(ptyId)
-    }
-
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    const outputSequence = this.getPtyOutputSequence(ptyId)
-    const cached = this.readCurrentProviderVisibleState(ptyId)
-    if (cached) {
-      return cached
-    }
-    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    if (trackedMode && !trackedMode.isAlternateScreen) {
-      const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
-      return headlessState
-        ? { ...headlessState, isAlternateScreen: false }
-        : {
-            lines: [],
-            isAlternateScreen: false,
-            sequence: outputSequence,
-            generation
-          }
-    }
-    return this.captureProviderVisibleState(ptyId, entry)
-  }
-
-  /**
-   * Public reads of a host-owned binding: the daemon's live scrollback-0 frame at the current
-   * sequence. Private screen, input and status services keep reading main's projection.
-   */
-  protected readHostCurrentFrame(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
-    return this.ownProviderVisibleRead(
-      ptyId,
-      true,
-      async (entry) =>
-        this.readCurrentProviderVisibleState(ptyId, true) ??
-        this.captureProviderVisibleState(ptyId, entry)
-    )
-  }
-
-  /** The provider's last frame of this kind while no later output, mode switch or resize has outdated it. */
-  protected readCurrentProviderVisibleState(
-    ptyId: string,
-    currentFrame = false
-  ): RuntimeVisibleTerminalState | null {
-    const cached = this.providerVisibleStateByPtyId.get(ptyId)
-    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    return cached?.state.generation === this.getPtyLifecycleGeneration(ptyId) &&
-      cached.currentFrame === currentFrame &&
-      this.getPtyOutputSequence(ptyId) <= cached.state.sequence &&
-      (!trackedMode || trackedMode.isAlternateScreen === cached.state.isAlternateScreen) &&
-      providerFrameFitsGrid(this.getTerminalSize(ptyId), undefined, cached.grid)
-      ? cached.state
-      : null
-  }
-
-  /**
-   * Asks the provider for its current frame and caches it; null while it cannot give one now.
-   * Without an owning read entry (a restored-dialog probe) it takes one of its own.
-   */
-  protected async captureProviderVisibleState(
-    ptyId: string,
-    owner?: ProviderVisibleRead
-  ): Promise<RuntimeVisibleTerminalState | null> {
-    if (!owner) {
-      return this.ownProviderVisibleRead(ptyId, false, (entry) =>
-        this.captureProviderVisibleState(ptyId, entry)
-      )
-    }
-    // Ownership is the exact entry of the current lifecycle; a retired one writes nothing.
-    const generation = owner.generation
-    const owns = (): boolean =>
-      this.providerVisibleStateReadsByPtyId.get(ptyId) === owner &&
-      this.getPtyLifecycleGeneration(ptyId) === generation
-    if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
-      return null
-    }
-
-    const snapshot = await this.serializeProviderTerminalBuffer(
-      ptyId,
-      { scrollbackRows: 0 },
-      {
-        timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-        ...(owner.currentFrame ? { currentFrame: true } : { visible: true })
+    // The renderer continuation is held on the same read from before its primary to its return.
+    return this.withProviderVisibleRead(ptyId, false, async (entry) => {
+      const visibleState = await this.readVisibleTerminalState(ptyId, { entry })
+      if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
+        return preview
       }
-    )
-    if (!owns()) {
-      return null
-    }
-    if (!snapshot) {
-      this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
-      return null
-    }
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
-    if (
-      this.providerSnapshotsWithLiveModeTransition.has(snapshot) &&
-      !this.hasHostHistoryAuthority(ptyId)
-    ) {
-      // Why: the provider frame can predate a mode switch observed while its
-      // RPC was pending; the ordered live emulator owns the post-switch grid.
-      const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
-      if (!owns()) {
-        return null
+      let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
+      if (projection.lines.length === 0) {
+        projection = await this.readRendererVisibleSnapshotLines(ptyId, entry)
       }
-      if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
-        return liveState
-      }
-    }
-    const projection = await this.parseVisibleSnapshot(snapshot)
-    const frameGrid = { cols: snapshot.cols, rows: snapshot.rows }
-    if (
-      !owns() ||
-      this.getPtyOutputSequence(ptyId) > snapshot.seq ||
-      !providerFrameFitsGrid(this.getTerminalSize(ptyId), owner.grid, frameGrid)
-    ) {
-      return null
-    }
-    const visibleState: RuntimeVisibleTerminalState = {
-      ...projection,
-      isAlternateScreen: snapshot.alternateScreen ?? false,
-      sequence: snapshot.seq,
-      generation
-    }
-    this.providerVisibleStateByPtyId.set(ptyId, {
-      state: visibleState,
-      grid: frameGrid,
-      currentFrame: owner.currentFrame
+      return projection.lines.length > 0 ? buildPreview(projection.lines, '') : preview
     })
-    return visibleState
   }
 
   protected async readHeadlessVisibleTerminalState(
@@ -302,8 +162,10 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     }
   }
 
+  /** A renderer fallback for one visible read; its rows return only while that read is still current. */
   protected async readRendererVisibleSnapshotLines(
-    ptyId: string
+    ptyId: string,
+    entry: ProviderVisibleRead
   ): Promise<RuntimeTerminalProjection> {
     const controller = this.ptyController
     if (!controller?.serializeBuffer) {
@@ -319,12 +181,29 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
         VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         null
       )
-      if (!snapshot || snapshot.data.length === 0) {
+      if (
+        !snapshot ||
+        snapshot.data.length === 0 ||
+        !this.rendererFrameApplies(ptyId, entry, snapshot)
+      ) {
         return { lines: [] }
       }
-      return await this.parseVisibleSnapshot(snapshot)
+      const projection = await this.parseVisibleSnapshot(snapshot)
+      return this.rendererFrameApplies(ptyId, entry, snapshot) ? projection : { lines: [] }
     } catch {
       return { lines: [] }
     }
+  }
+
+  private rendererFrameApplies(
+    ptyId: string,
+    entry: ProviderVisibleRead,
+    snapshot: { cols: number; rows: number; seq?: number }
+  ): boolean {
+    return (
+      this.ownsProviderVisibleRead(ptyId, entry) &&
+      providerFrameFitsGrid(this.getTerminalSize(ptyId), entry.grid, snapshot) &&
+      (snapshot.seq === undefined || this.getPtyOutputSequence(ptyId) <= snapshot.seq)
+    )
   }
 }

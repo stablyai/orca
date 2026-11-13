@@ -21,16 +21,40 @@ import {
 } from '../view/orca-runtime-terminal-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
+import type { ProviderVisibleRead } from '../lifecycle/terminal-view-resources'
+
+/** The read with a nonblank visible projection in place of its tail; otherwise the read itself. */
+function withVisibleProjection(
+  read: RuntimeTerminalRead,
+  projection: RuntimeTerminalProjection | null,
+  limit: number | undefined
+): RuntimeTerminalRead {
+  return projection && projection.lines.length > 0
+    ? buildVisibleSnapshotReadFallback(
+        read,
+        projection.lines,
+        limit,
+        projection.draft,
+        projection.tailRows
+      )
+    : read
+}
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
   protected abstract readVisibleTerminalState(
-    ptyId: string
+    ptyId: string,
+    opts?: { entry?: ProviderVisibleRead; timeoutMs?: number }
   ): Promise<RuntimeVisibleTerminalState | null>
+  protected abstract readSharedVisibleProviderFrame(
+    ptyId: string,
+    timeoutMs?: number
+  ): Promise<RuntimeTerminalProjection | null>
   protected abstract readHostCurrentFrame(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null>
   protected abstract readRendererVisibleSnapshotLines(
-    ptyId: string
+    ptyId: string,
+    entry: ProviderVisibleRead
   ): Promise<RuntimeTerminalProjection>
   protected abstract readWholeScreenModel(
     ptyId: string | null | undefined
@@ -136,13 +160,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         providerSnapshot
       )
       if (providerProjection && providerProjection.lines.length > 0) {
-        return buildVisibleSnapshotReadFallback(
-          read,
-          providerProjection.lines,
-          opts.limit,
-          providerProjection.draft,
-          providerProjection.tailRows
-        )
+        return withVisibleProjection(read, providerProjection, opts.limit)
       }
     }
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
@@ -159,31 +177,28 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     ) {
       return read
     }
-    const visibleState = await this.readVisibleTerminalState(ptyId)
-    if (
-      !blankFallback &&
-      !recoveredWorkerFallback &&
-      !knownAlternateScreen &&
-      !visibleState?.isAlternateScreen
-    ) {
-      return conpty
-        ? await this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
-        : read
-    }
-    let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
-    if (projection.lines.length === 0) {
-      projection = await this.readRendererVisibleSnapshotLines(ptyId)
-    }
-    if (projection.lines.length === 0) {
-      return read
-    }
-    return buildVisibleSnapshotReadFallback(
-      read,
-      projection.lines,
-      opts.limit,
-      projection.draft,
-      projection.tailRows
-    )
+    // The renderer continuation is held on the same read from before its primary to its return.
+    return this.withProviderVisibleRead(ptyId, false, async (entry) => {
+      const visibleState = await this.readVisibleTerminalState(ptyId, {
+        entry,
+        timeoutMs: providerSnapshot.timeoutMs
+      })
+      if (
+        !blankFallback &&
+        !recoveredWorkerFallback &&
+        !knownAlternateScreen &&
+        !visibleState?.isAlternateScreen
+      ) {
+        return conpty
+          ? await this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
+          : read
+      }
+      let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
+      if (projection.lines.length === 0) {
+        projection = await this.readRendererVisibleSnapshotLines(ptyId, entry)
+      }
+      return withVisibleProjection(read, projection, opts.limit)
+    })
   }
 
   /**
@@ -214,15 +229,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         projection = await this.readRenderedTerminalTailLines(ptyId, opts.limit, providerSnapshot)
       }
     }
-    return projection && projection.lines.length > 0
-      ? buildVisibleSnapshotReadFallback(
-          read,
-          projection.lines,
-          opts.limit,
-          projection.draft,
-          projection.tailRows
-        )
-      : read
+    return withVisibleProjection(read, projection, opts.limit)
   }
 
   // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
@@ -233,15 +240,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
-    return projection && projection.lines.length > 0
-      ? buildVisibleSnapshotReadFallback(
-          read,
-          projection.lines,
-          limit,
-          projection.draft,
-          projection.tailRows
-        )
-      : read
+    return withVisibleProjection(read, projection, limit)
   }
 
   private async readRenderedTerminalTailLines(
@@ -278,25 +277,20 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     limit: number | undefined,
     snapshotOptions: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalProjection | null> {
+    // A visible-only read is the current screen: it shares the visible read's capture and parse.
+    if (snapshotOptions.visibleScreenOnly) {
+      return this.readSharedVisibleProviderFrame(ptyId, snapshotOptions.timeoutMs)
+    }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : lineLimit },
+      { scrollbackRows: lineLimit },
       snapshotOptions
     )
     // Null stays unavailable until the caller picks structural failure or its original stream.
     if (!snapshot) {
       return null
-    }
-    // Cached acquisitions can include unrequested scrollback; visible-only reads must parse the grid.
-    if (snapshotOptions.visibleScreenOnly) {
-      const projection = await this.parseVisibleSnapshot(snapshot)
-      // Live bytes ordered after the provider frame make that frame stale.
-      return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
-        this.getPtyOutputSequence(ptyId) <= snapshot.seq
-        ? projection
-        : null
     }
     const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
     if (data.length === 0) {

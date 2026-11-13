@@ -266,7 +266,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
       const visibleRead = opts.screen
-        ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
+        ? await this.readRenderedScreen(pty.pty.ptyId, read, opts, providerSnapshot)
         : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerSnapshot)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       return labelTerminalReadSource(visibleRead)
@@ -288,7 +288,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       return { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' }
     }
     const visibleRead = opts.screen
-      ? await this.readRenderedScreen(leaf.ptyId, read, opts)
+      ? await this.readRenderedScreen(leaf.ptyId, read, opts, providerSnapshot)
       : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerSnapshot)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
     return labelTerminalReadSource(visibleRead)
@@ -297,13 +297,13 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
   protected async readRenderedScreen(
     ptyId: string,
     read: RuntimeTerminalRead,
-    opts: { limit?: number } = {}
+    opts: { limit?: number } = {},
+    providerSnapshot: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
     // A host-owned binding's current frame comes from its daemon; no local frame stands in.
     const projection = this.hasHostHistoryAuthority(ptyId)
       ? await this.readHostCurrentFrame(ptyId)
-      : ((await this.readVisibleTerminalState(ptyId)) ??
-        (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true })))
+      : await this.readVisibleScreenFrame(ptyId, providerSnapshot.timeoutMs)
     if (!projection || projection.lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }
     }

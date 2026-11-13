@@ -20,6 +20,7 @@ import type { createAgentStatusOscProcessor } from '../../../../shared/agent-sta
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import type { RuntimeTerminalProjection } from '../output/terminal-projection'
 
 /** The PTY grid a provider frame was taken for; null while the PTY's size is unknown. */
 export type ProviderFrameGrid = { cols: number; rows: number } | null
@@ -43,12 +44,36 @@ export function providerFrameFitsGrid(
   )
 }
 
-/** One owned provider-frame read: its result may publish only while it is still this entry. */
+/** A provider acquisition; `visibleRetired` marks a grid change since it began, which visible reads must not inherit. */
+export type ProviderVisibleAcquisition = ProviderBufferAcquisition & {
+  grid?: ProviderFrameGrid
+  visibleRetired?: true
+}
+
+/** One provider capture a visible read owns, with the one parse every waiter shares. */
+export type ProviderVisibleCapture = {
+  raw: Promise<PtyProviderBufferSnapshot | null>
+  parsed?: Promise<RuntimeTerminalProjection>
+  settled: boolean
+}
+
+/**
+ * One visible read operation: it owns its source selection, captures, parse and publication.
+ * Shared stages carry no caller deadline; each caller bounds its own wait over them.
+ */
 export type ProviderVisibleRead = {
   generation: number
   grid: ProviderFrameGrid
   currentFrame: boolean
-  promise: Promise<RuntimeVisibleTerminalState | null>
+  // Set on this exact object when it stops being current; equal numbers later never clear it.
+  retired?: true
+  capture?: ProviderVisibleCapture
+  // Captures issued or adopted: a primary and at most one fallback.
+  attempts: number
+  providerFrame?: Promise<RuntimeVisibleTerminalState | null>
+  fallback?: Promise<RuntimeTerminalProjection | null>
+  // Unsettled stages, captures, parses and caller holds; the entry leaves the map at zero.
+  pending: number
 }
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
@@ -142,17 +167,11 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     Set<TerminalKittyKeyboardModeTracker>
   >()
 
-  // `visibleRetired`: a grid change since it began; deep history may still join it, a visible read may not.
-  protected providerBufferAcquisitionsByPtyId = new Map<
-    string,
-    ProviderBufferAcquisition & { grid?: ProviderFrameGrid; visibleRetired?: true }
-  >()
+  // Deep history may still join a visible-retired acquisition; a visible read may not.
+  protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderVisibleAcquisition>()
 
   // Current-frame reads never join or inherit a deep or timed-out history acquisition.
-  protected providerFrameAcquisitionsByPtyId = new Map<
-    string,
-    ProviderBufferAcquisition & { grid?: ProviderFrameGrid }
-  >()
+  protected providerFrameAcquisitionsByPtyId = new Map<string, ProviderVisibleAcquisition>()
 
   // Each frame keeps the grid it was drawn for and the kind of read that took it.
   protected providerVisibleStateByPtyId = new Map<
@@ -174,7 +193,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerFrameAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
-    this.providerVisibleStateReadsByPtyId.delete(ptyId)
+    this.retireProviderVisibleRead(ptyId)
     this.restoredAgentDialogRuledOutPtys.delete(ptyId)
   }
 
@@ -182,10 +201,19 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected forgetProviderFramesForGrid(ptyId: string): void {
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerFrameAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateReadsByPtyId.delete(ptyId)
+    this.retireProviderVisibleRead(ptyId)
     const ordinary = this.providerBufferAcquisitionsByPtyId.get(ptyId)
     if (ordinary) {
       ordinary.visibleRetired = true
+    }
+  }
+
+  /** Every continuation of the current visible read, wherever it is waiting, stops being current. */
+  protected retireProviderVisibleRead(ptyId: string): void {
+    const entry = this.providerVisibleStateReadsByPtyId.get(ptyId)
+    if (entry) {
+      entry.retired = true
+      this.providerVisibleStateReadsByPtyId.delete(ptyId)
     }
   }
 

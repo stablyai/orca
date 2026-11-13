@@ -1,10 +1,7 @@
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type {
-  ProviderTerminalBufferWait,
-  RuntimeVisibleTerminalState
-} from '../records/runtime-terminal-state-records'
+import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-state-records'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import {
@@ -140,49 +137,61 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   }
 
   /**
-   * One owned visible read per PTY, joined only by a read of the same generation, grid and kind.
-   * A read displaced by a resize or another kind may not publish or return its frame.
+   * The current visible read for this PTY's generation, grid and kind, or a new one. Synchronous
+   * and runs nothing: callers install the stages they need before their first await.
    */
-  protected ownProviderVisibleRead(
-    ptyId: string,
-    currentFrame: boolean,
-    load: (entry: ProviderVisibleRead) => Promise<RuntimeVisibleTerminalState | null>
-  ): Promise<RuntimeVisibleTerminalState | null> {
+  protected joinProviderVisibleRead(ptyId: string, currentFrame: boolean): ProviderVisibleRead {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const grid = this.getTerminalSize(ptyId)
-    const pending = this.providerVisibleStateReadsByPtyId.get(ptyId)
+    const current = this.providerVisibleStateReadsByPtyId.get(ptyId)
     if (
-      pending?.generation === generation &&
-      pending.currentFrame === currentFrame &&
-      sameProviderFrameGrid(pending.grid, grid)
+      current &&
+      !current.retired &&
+      current.generation === generation &&
+      current.currentFrame === currentFrame &&
+      sameProviderFrameGrid(current.grid, grid)
     ) {
-      return pending.promise
+      return current
     }
-    const entry: ProviderVisibleRead = {
-      generation,
-      grid,
-      currentFrame,
-      promise: Promise.resolve(null)
-    }
+    // A differently qualified read is displaced: its continuations may no longer publish.
+    this.retireProviderVisibleRead(ptyId)
+    const entry: ProviderVisibleRead = { generation, grid, currentFrame, attempts: 0, pending: 0 }
     this.providerVisibleStateReadsByPtyId.set(ptyId, entry)
-    entry.promise = load(entry).finally(() => {
-      if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
+    return entry
+  }
+
+  /** Keeps the read's entry current while `promise` runs; the last settlement removes that exact entry. */
+  protected trackProviderVisibleWork<T>(
+    ptyId: string,
+    entry: ProviderVisibleRead,
+    promise: Promise<T>
+  ): Promise<T> {
+    entry.pending += 1
+    const release = (): void => {
+      entry.pending -= 1
+      if (entry.pending === 0 && this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
         this.providerVisibleStateReadsByPtyId.delete(ptyId)
       }
-    })
-    return entry.promise
+    }
+    void promise.then(release, release)
+    return promise
+  }
+
+  /** Runs one caller inside the visible read it joins (or was handed), holding it until the caller returns. */
+  protected withProviderVisibleRead<T>(
+    ptyId: string,
+    currentFrame: boolean,
+    run: (entry: ProviderVisibleRead) => Promise<T>,
+    joined?: ProviderVisibleRead
+  ): Promise<T> {
+    const entry = joined ?? this.joinProviderVisibleRead(ptyId, currentFrame)
+    return this.trackProviderVisibleWork(ptyId, entry, run(entry))
   }
 
   protected async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: {
-      timeoutMs?: number
-      retireOnTimeout?: boolean
-      currentFrame?: boolean
-      visible?: boolean
-      visibleScreenOnly?: boolean
-    } = {}
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean; currentFrame?: boolean } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
   }
@@ -191,13 +200,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   protected async awaitProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: {
-      timeoutMs?: number
-      retireOnTimeout?: boolean
-      currentFrame?: boolean
-      visible?: boolean
-      visibleScreenOnly?: boolean
-    } = {}
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean; currentFrame?: boolean } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
@@ -207,13 +210,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     // A current frame joins only one taken for the PTY's present grid.
     const grid = wait.currentFrame ? this.getTerminalSize(ptyId) : undefined
     let acquisition = acquisitions.get(ptyId)
-    // A visible read never inherits an ordinary acquisition a grid change retired; it takes its own,
-    // owned by its visible-read entry, and leaves the shared one to deep history.
-    const retiredForVisible =
-      (wait.visible === true || wait.visibleScreenOnly === true) &&
-      acquisition?.visibleRetired === true
     const current =
-      !retiredForVisible &&
       acquisition?.generation === generation &&
       (!wait.currentFrame || sameProviderFrameGrid(acquisition.grid ?? null, grid ?? null))
     if (current && acquisition?.timedOut) {
@@ -228,14 +225,12 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
         timedOut: false,
         ...(grid !== undefined ? { grid } : {})
       }
-      if (!retiredForVisible) {
-        acquisitions.set(ptyId, acquisition)
-        void promise.finally(() => {
-          if (acquisitions.get(ptyId) === acquisition) {
-            acquisitions.delete(ptyId)
-          }
-        })
-      }
+      acquisitions.set(ptyId, acquisition)
+      void promise.finally(() => {
+        if (acquisitions.get(ptyId) === acquisition) {
+          acquisitions.delete(ptyId)
+        }
+      })
     }
     if (acquisition.timedOut) {
       return { snapshot: null, late: acquisition.promise }
