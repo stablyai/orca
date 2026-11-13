@@ -157,5 +157,5 @@ async function reconfirmSkippedSetup(
         'automation'
       )
     : await approveAutomationSetup(repoId, hostId, baseBranch)
-  return approval
+  return approval.decision === 'run' ? approval : null
 }
