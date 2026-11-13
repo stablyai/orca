@@ -23,6 +23,15 @@ describe('scripts/typecheck.mjs', () => {
     expect(foreign).toBe(1)
   })
 
+  it('the split is by path prefix: own package paths (src, test, image, scripts, types stub, tsconfig) fail; `..` and absolute paths are imported', () => {
+    const line = (path: string) => `${path}(1,1): error TS2322: x`
+    const own = ['src/a.ts', 'test/b.test.ts', 'image/c.ts', 'scripts/d.mjs', 'types/xterm-theme.d.ts', 'tsconfig.json', 'new-dir/added-later.ts']
+    const imported = ['../../../src/shared/e.ts', '../../node_modules/f/index.d.ts', '/abs/node_modules/g.d.ts']
+    const { own: kept, foreign } = splitDiagnostics([...own, ...imported].map(line).join('\n'))
+    expect(kept).toEqual(own.map(line))
+    expect(foreign).toBe(imported.length)
+  })
+
   it('a diagnostic without a file (config error) is its own', () => {
     expect(splitDiagnostics("error TS2688: Cannot find type definition file for 'x'.").own).toHaveLength(1)
   })
