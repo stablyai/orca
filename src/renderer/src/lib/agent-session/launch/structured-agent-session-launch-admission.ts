@@ -239,6 +239,11 @@ export function beginHostAdmittedStructuredLaunch(args: {
             plan.requestedSurface === 'chat' || noCli
           )
         }
+        // CLOUD-HELD-SURFACE: e.g. an Orca Cloud VM whose image predates chats; its terminal holds instead.
+        console.warn(
+          `[agent-launch-route] ${plan.agent} chat declined by host ${args.executionHostId}` +
+            `${admission.reason ? ` (${admission.reason})` : ''}: opening its terminal`
+        )
         const terminal = await args.onHostDeclined(args.target)
         const opened = await terminalLaunchOpened(terminal)
         if (paired && opened) {
