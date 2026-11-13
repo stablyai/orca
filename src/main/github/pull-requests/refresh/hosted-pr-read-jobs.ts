@@ -28,7 +28,6 @@ export type HostedPRReadJob = {
 export class HostedPRReadJobs {
   private readonly jobs = new Map<string, HostedPRReadJob>()
   private waiters = 0
-  readonly freshOutcome = freshTimedPROutcome
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -175,10 +174,8 @@ export class HostedPRReadJobs {
     const fallback = () => this.complete(prepared, candidate, null, acceptRevalidationOnly)
     const gate = this.gateUntil(prepared)
     // Off plans no automatic error retry; a foreground or manual read retries instead.
-    if (
-      prepared.cached()?.outcome.kind === 'upstream-error' &&
-      (gate > Date.now() || getPRAutoRefreshCadence() === 'off')
-    ) {
+    const failed = prepared.cached()?.outcome.kind === 'upstream-error'
+    if (failed && (gate > Date.now() || getPRAutoRefreshCadence() === 'off')) {
       return fallback()
     }
     let job = this.jobs.get(key)
@@ -290,26 +287,33 @@ export class HostedPRReadJobs {
       }
       if (off) {
         job.expiresAt = 0
-        this.queue.delete(key)
-        job.finish(null)
+        if (!(entry?.hosted === job && this.completeFromCache(entry))) {
+          job.finish(null)
+        }
       } else if (entry?.hosted === job) {
         entry.dueAt = Math.min(job.expiresAt, Math.max(Date.now(), this.gateUntil(job.prepared)))
       }
     }
   }
 
+  /** Ends a job that need not start: its answer is fresh, its scope changed, its lease ended, or it
+   *  is no longer the job this owner keeps for its key (retired while the drainer awaited quota,
+   *  maybe replaced). Only its own queue entry is removed. */
   completeFromCache(entry: PRRefreshQueueEntry): boolean {
     const job = entry.hosted
     if (!job) {
       return false
     }
-    const current = job.prepared.isCurrent()
-    const fresh = current ? this.fresh(job.prepared) : null
-    if (job.expiresAt > Date.now() && current && !fresh && job.prepared.canRetain()) {
+    const fresh = job.prepared.isCurrent() ? this.fresh(job.prepared) : null
+    const live =
+      this.jobs.get(entry.key) === job && job.prepared.isCurrent() && job.expiresAt > Date.now()
+    if (live && !fresh && job.prepared.canRetain()) {
       return false
     }
-    this.queue.delete(entry.key)
-    job.finish(current && job.expiresAt > Date.now() ? fresh : null)
+    if (this.queue.get(entry.key) === entry) {
+      this.queue.delete(entry.key)
+    }
+    job.finish(live ? fresh : null)
     return true
   }
 }

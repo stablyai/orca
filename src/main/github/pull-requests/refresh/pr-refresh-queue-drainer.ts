@@ -137,7 +137,7 @@ export class PRRefreshQueueDrainer {
           (next.reason === 'visible' || next.reason === 'swr')
         ) {
           const candidate = next.candidate
-          const fresh = freshQueuedPROutcome(candidate, next.reason)
+          const fresh = freshQueuedPROutcome(candidate, next.reason, next.foreground)
           if (fresh) {
             this.events.broadcast({ aliases, reason: next.reason, outcome: fresh })
             this.scheduleVisibleFollowUp(
@@ -171,6 +171,13 @@ export class PRRefreshQueueDrainer {
             next.hosted?.finish(null)
             continue
           }
+          // A job retired or replaced while quota was checked never starts; the pause still holds.
+          if (this.hostedJobs.completeFromCache(next)) {
+            if (pausedUntil !== null) {
+              this.queue.protectBackgroundUntil(next.key, pausedUntil)
+            }
+            continue
+          }
           if (pausedUntil !== null) {
             this.queue.protectBackgroundUntil(next.key, pausedUntil)
             const dueAt = Math.min(pausedUntil, next.hosted?.expiresAt ?? Infinity)
@@ -186,9 +193,6 @@ export class PRRefreshQueueDrainer {
               })
             }
             this.schedule(Math.max(1_000, dueAt - Date.now()))
-            continue
-          }
-          if (this.hostedJobs.completeFromCache(next)) {
             continue
           }
           if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {

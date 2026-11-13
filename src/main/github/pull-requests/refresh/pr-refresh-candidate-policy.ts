@@ -137,15 +137,22 @@ export function shouldSkipFresh(
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
 }
 
-export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
+export function freshRetryAt(
+  candidate: GitHubPRRefreshCandidate,
+  cadence?: PRAutoRefreshCadence
+): number | null {
   return candidate.cachedFetchedAt == null || hasStaleHead(candidate)
     ? null
-    : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
+    : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate, cadence)
 }
 
+/** The exact completed answer a queued read may take instead of reading: the same validated
+ *  interval that schedules its follow-up has not passed since that answer was read. A queued row's
+ *  foreground exposure was made due by the Default interval, so it is judged by that interval. */
 export function freshQueuedPROutcome(
   candidate: GitHubPRRefreshCandidate,
-  reason: GitHubPRRefreshReason
+  reason: GitHubPRRefreshReason,
+  foreground = false
 ): PRRefreshOutcome | null {
   const cached = cachedPRBranchOutcome(
     candidate.repoPath,
@@ -159,7 +166,10 @@ export function freshQueuedPROutcome(
   if (!outcome || outcome.kind === 'upstream-error') {
     return null
   }
-  const dueAt = freshRetryAt(visibleCandidateAfterOutcome(candidate, outcome))
+  const dueAt = freshRetryAt(
+    visibleCandidateAfterOutcome(candidate, outcome),
+    foreground ? 'default' : undefined
+  )
   return dueAt !== null && dueAt > Date.now() ? outcome : null
 }
 
@@ -242,30 +252,24 @@ export function refreshIntervalForCandidate(
   )
 }
 
-/** An exact completed answer a timed read may still take: its quiet or normal host interval,
- *  scaled by the cadence, has not passed since it was read. A queued row's foreground exposure was
- *  made due by the Default interval, so the answer is judged by that same unscaled interval. */
+/** An exact completed answer a client's timed snapshot read may still take: its quiet or normal
+ *  host interval, scaled by the cadence, has not passed since it was read. */
 export function freshTimedPROutcome(
-  cached: ReturnType<typeof readTimedPROutcome>,
-  entry?: { candidate: GitHubPRRefreshCandidate; foreground?: boolean }
+  cached: ReturnType<typeof readTimedPROutcome>
 ): PRRefreshOutcome | null {
   if (!cached || cached.outcome.kind === 'upstream-error') {
     return null
   }
   const outcome = cached.outcome
-  const cadence = entry?.foreground ? 'default' : undefined
   const interval =
     cached.quietIntervalMs !== null
-      ? scaleReviewRefreshInterval(cached.quietIntervalMs, cadence)
-      : reviewRefreshIntervalMs(
-          {
-            state: outcome.kind === 'found' ? outcome.pr.state : null,
-            checksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
-            hasReview: outcome.kind === 'found',
-            selected: entry ? entry.candidate.isSelected === true : true
-          },
-          cadence
-        )
+      ? scaleReviewRefreshInterval(cached.quietIntervalMs)
+      : reviewRefreshIntervalMs({
+          state: outcome.kind === 'found' ? outcome.pr.state : null,
+          checksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
+          hasReview: outcome.kind === 'found',
+          selected: true
+        })
   return interval === null || Date.now() - outcome.fetchedAt < interval ? outcome : null
 }
 

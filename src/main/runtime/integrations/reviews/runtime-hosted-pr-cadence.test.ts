@@ -88,31 +88,41 @@ describe('hosted PR snapshots under the host’s auto-refresh cadence', () => {
     expect(await due).toMatchObject({ pr: { title: 'read again' } })
   })
 
-  it.each([
-    ['admitted', null],
-    ['paused by quota', 120_000]
-  ] as const)(
-    'retires a revalidation that was awaiting quota when the host turns auto-refresh off (%s)',
-    async (_label, pauseMs) => {
-      await read('held', 'active')
-      await vi.advanceTimersByTimeAsync(60_000)
-      const quota = Promise.withResolvers<number | null>()
-      mocks.gate.mockReturnValue(quota.promise)
-      const waiting = read('held')
-      await vi.advanceTimersByTimeAsync(0)
+  // A revalidation is held at its quota check when auto-refresh turns off; Default returns and a new
+  // timer read of the same PR replaces it before that check answers.
+  async function retireWhileAwaitingQuota(pauseMs: number | null) {
+    await read('held', 'active')
+    await vi.advanceTimersByTimeAsync(60_000)
+    const quota = Promise.withResolvers<number | null>()
+    mocks.gate.mockReturnValue(quota.promise)
+    const waiting = read('held')
+    await vi.advanceTimersByTimeAsync(0)
+    await setHostCadence('off')
+    const retired = await waiting
+    await setHostCadence('default')
+    mocks.gate.mockResolvedValue(null)
+    fixture.title = 'read again'
+    const replacement = read('held')
+    await vi.advanceTimersByTimeAsync(0)
+    quota.resolve(pauseMs === null ? null : Date.now() + pauseMs)
+    return { retired, replacement }
+  }
 
-      await setHostCadence('off')
-      expect(await waiting).toMatchObject({ kind: 'found', fetchedAt: 1_000 })
-      quota.resolve(pauseMs === null ? null : Date.now() + pauseMs)
-      await vi.advanceTimersByTimeAsync(60 * 60_000)
-      expect(mocks.resolve).toHaveBeenCalledTimes(1)
+  it('lets the retired revalidation neither start nor take the replacement’s place once quota admits it', async () => {
+    const { retired, replacement } = await retireWhileAwaitingQuota(null)
+    expect(retired).toMatchObject({ kind: 'found', fetchedAt: 1_000 })
+    expect(await replacement).toMatchObject({ pr: { title: 'read again' } })
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
+  })
 
-      await setHostCadence('default')
-      mocks.gate.mockResolvedValue(null)
-      fixture.title = 'read again'
-      const due = read('held')
-      await vi.advanceTimersByTimeAsync(0)
-      expect(await due).toMatchObject({ pr: { title: 'read again' } })
-    }
-  )
+  it('keeps the quota pause the retired revalidation learned for the replacement, which then reads once', async () => {
+    const { retired, replacement } = await retireWhileAwaitingQuota(120_000)
+    expect(retired).toMatchObject({ kind: 'found', fetchedAt: 1_000 })
+    await vi.advanceTimersByTimeAsync(25_000)
+    expect(await replacement).toMatchObject({ fetchedAt: 1_000, revalidation: expect.any(Object) })
+    expect(mocks.resolve).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
+    expect(await read('held')).toMatchObject({ pr: { title: 'read again' } })
+  })
 })
