@@ -9,6 +9,10 @@
 # Prints "premerge OK" only when everything passes. Nothing here reads /tmp state. On macOS (no flock) wrap heavy runs
 # as /tmp/vdrv/heavy.sh 'config/scripts/cloud-integration/premerge-check.sh'.
 set -euo pipefail
+# macOS: /tmp and /var are symlinks into /private. Tests that build expected paths from os.tmpdir() then compare them with a
+# realpath'd value (packaged-cli-assets' macOS launcher argv, #574) fail only because of that. Resolve TMPDIR once so the gate's
+# environment matches what child processes see.
+TMPDIR=$(cd "${TMPDIR:-/tmp}" && pwd -P); export TMPDIR
 base=private/cloud/integration
 if [[ -z "${PREMERGE_IN_WORKTREE:-}" ]]; then
   branch=$(git rev-parse --abbrev-ref HEAD)
