@@ -152,6 +152,7 @@ export function renderCodexAccountRow(
           <AccountRenameButton
             t={t}
             disabled={isRemoving}
+            pending={model.renamingAccountKeys.has(`codex:${account.id}`)}
             onRename={() =>
               setRenameTarget(renameTargetFor('codex', account, getProviderAccountRuntime(account)))
             }

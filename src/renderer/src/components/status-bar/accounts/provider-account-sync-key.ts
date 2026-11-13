@@ -64,7 +64,8 @@ export function getClaudeAccountSettings(
     claudeManagedAccounts: settings.claudeManagedAccounts,
     activeClaudeManagedAccountId: settings.activeClaudeManagedAccountId,
     activeClaudeManagedAccountIdsByRuntime: settings.activeClaudeManagedAccountIdsByRuntime,
-    managedAccountDisplayNames: settings.managedAccountDisplayNames
+    // Only Claude's names, so a Codex rename leaves Claude consumers untouched.
+    managedAccountDisplayNames: { claude: settings.managedAccountDisplayNames?.claude }
   }
   const stable =
     previousClaudeProjection !== null && sameProviderAccountData(previousClaudeProjection, next)

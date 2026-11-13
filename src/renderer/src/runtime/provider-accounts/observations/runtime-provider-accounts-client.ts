@@ -284,7 +284,6 @@ export async function removeCodexProviderAccount(
 
 type ProviderAccountRename = { accountId: string; displayName: string | null }
 
-// Hosts older than account names lack these methods; every other account action still works there.
 async function renameOnHost<T>(
   target: Extract<RuntimeClientTarget, { kind: 'environment' }>,
   method: 'accounts.renameClaude' | 'accounts.renameCodex',
@@ -296,17 +295,21 @@ async function renameOnHost<T>(
       timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS
     })
   } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      throw new Error(
+    throw renameUnsupportedOnOldHost(error, hostLabel)
+  }
+}
+
+/** Hosts older than account names lack the rename methods; say what to do instead of the raw RPC error. */
+export function renameUnsupportedOnOldHost(error: unknown, hostLabel: string): unknown {
+  return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+    ? new Error(
         translate(
           'accounts.rename.unsupportedHost',
           'Update Orca on {{host}} to change this setting there.',
           { host: hostLabel }
         )
       )
-    }
-    throw error
-  }
+    : error
 }
 
 export function renameClaudeProviderAccount(
