@@ -130,7 +130,7 @@ it('applies the Muse read-only policy inside the Muse segment behind a wrapper o
     {
       agentId: 'muse',
       model: 'default',
-      agentCommandOverride: 'mise exec muse@latest -- muse',
+      agentCommandOverride: 'mise exec muse@latest -- muse --approval-mode never',
       agentArgs: '--yolo'
     },
     'Name this chat'

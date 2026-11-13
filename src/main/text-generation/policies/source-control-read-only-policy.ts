@@ -161,8 +161,8 @@ async function antigravityPolicy(
 }
 
 function musePolicy(plan: CommitMessagePlan): CommitMessagePlan {
-  // A command override wrapper owns the leading args (and possibly its own `--`); force flags only inside the Muse segment.
-  const prefix = plan.args.slice(0, plan.commandPrefixArgCount ?? 0)
+  // A command override wrapper owns the leading args (and possibly its own `--`); filter Muse-owned policy options there and force flags only inside the Muse segment.
+  const prefix = museReadOnlyRecipeArgs(plan.args.slice(0, plan.commandPrefixArgCount ?? 0))
   const segment = plan.args.slice(prefix.length)
   const terminator = segment.indexOf('--')
   const head = terminator === -1 ? segment.slice(0, -1) : segment.slice(0, terminator)

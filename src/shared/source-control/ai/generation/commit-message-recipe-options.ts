@@ -16,16 +16,26 @@ const MUSE_POLICY_BARE_FLAGS = [
   '--enable-shell-tool'
 ]
 
-/** Drop recipe options that would override the forced read-only Muse invocation. */
+/** Drop recipe options that would override the forced read-only Muse invocation, including Muse-owned options behind a wrapper `--`. */
 export function museReadOnlyRecipeArgs(args: string[]): string[] {
-  return compactRecipeOptions(
-    [...args],
-    MUSE_POLICY_VALUE_OPTIONS,
-    MUSE_POLICY_VALUE_OPTIONS
-  ).filter(
-    (token) =>
-      !MUSE_POLICY_BARE_FLAGS.some((flag) => token === flag || token.startsWith(`${flag}=`))
-  )
+  const result: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const token = args[index]
+    const valueOption = MUSE_POLICY_VALUE_OPTIONS.find(
+      (option) => token === option || token.startsWith(`${option}=`)
+    )
+    if (valueOption) {
+      if (token === valueOption) {
+        index++
+      }
+      continue
+    }
+    if (MUSE_POLICY_BARE_FLAGS.some((flag) => token === flag || token.startsWith(`${flag}=`))) {
+      continue
+    }
+    result.push(token)
+  }
+  return result
 }
 
 export function taskPolicyRecipeArgs(agent: string, args: string[]): string[] {
