@@ -32,6 +32,7 @@ openai_base_url=''
 openai_model=''
 anthropic_model=''
 anthropic_key_tail=''
+anthropic_key_scrub=''
 gateway_key=''
 gemini_key=''
 codex_placeholder=''
@@ -54,7 +55,14 @@ while IFS= read -r line; do
     GEMINI_API_KEY | GOOGLE_API_KEY) gemini_key="${gemini_key:-gemini-api-key}" ;;
     GOOGLE_GENAI_USE_VERTEXAI) case "$(printf '%s' "$b64" | base64 -d)" in true | 1) gemini_key=vertex-ai ;; esac ;;
     # Claude Code asks once per key whether to use ANTHROPIC_API_KEY; it remembers the last 20 chars.
-    ANTHROPIC_API_KEY) anthropic_key_tail="$(printf '%s' "$b64" | base64 -d | tail -c 20)" ;;
+    # G9: pre-approve only an Orca placeholder. A real key (placeholders off) is never written, not even its
+    # tail: Claude Code asks once instead, and a tail an older image wrote is scrubbed.
+    ANTHROPIC_API_KEY)
+      case "$(printf '%s' "$b64" | base64 -d)" in
+        orca-ph-*) anthropic_key_tail="$(printf '%s' "$b64" | base64 -d | tail -c 20)" ;;
+        *) anthropic_key_scrub="$(printf '%s' "$b64" | base64 -d | tail -c 20)" ;;
+      esac
+      ;;
   esac
 done < <(printf '%s\n' "${ORCA_SECRET_ENV:-}")
 mv -f "$tmp" "$dir/session.env"
@@ -156,7 +164,7 @@ fi
 # through them, and the agent would sit there doing nothing. Merges; never touches credentials.
 node_bin="$(command -v node || find /opt/orca/runtime/runtimes -type f -name node 2>/dev/null | head -n 1)"
 if [ -n "$node_bin" ]; then
-  ORCA_PROJECT="$PROJECT" ORCA_KEY_TAIL="$anthropic_key_tail" ORCA_GEMINI_KEY="$gemini_key" \
+  ORCA_PROJECT="$PROJECT" ORCA_KEY_TAIL="$anthropic_key_tail" ORCA_KEY_SCRUB="$anthropic_key_scrub" ORCA_GEMINI_KEY="$gemini_key" \
     ORCA_GATEWAY_MODEL="${gateway_key:+${anthropic_model:-$openai_model}}" "$node_bin" -e '
 const fs = require("fs"), path = require("path"), os = require("os")
 const home = os.homedir()
@@ -177,6 +185,11 @@ c.projects = c.projects && typeof c.projects === "object" ? c.projects : {}
 const p = process.env.ORCA_PROJECT
 c.projects[p] = { ...(c.projects[p] || {}), hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true }
 const tail = process.env.ORCA_KEY_TAIL
+const scrub = process.env.ORCA_KEY_SCRUB
+if (scrub && c.customApiKeyResponses && typeof c.customApiKeyResponses === "object") {
+  const r = c.customApiKeyResponses
+  for (const list of ["approved", "rejected"]) if (Array.isArray(r[list])) r[list] = r[list].filter((t) => t !== scrub)
+}
 if (tail) {
   const r = c.customApiKeyResponses && typeof c.customApiKeyResponses === "object" ? c.customApiKeyResponses : {}
   const approved = Array.isArray(r.approved) ? r.approved : []
