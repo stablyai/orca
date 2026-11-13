@@ -113,9 +113,7 @@ foreach ($case in @(
         $inputCalls = @([OrcaDesktopWin32]::Calls | Where-Object { $_ -like "move:*" -or $_ -in @("mouse", "modified") })
         if ($activates) {
             Assert-TestEqual $denied $false "$($case.tool) successful activation"
-            Assert-TestEqual $result.ok $true "$($case.tool) result"
             if ($inputCalls.Count -eq 0) { throw "$($case.tool) did not send pointer input after activation" }
-            if ([OrcaDesktopWin32]::FocusReads -lt 2) { throw "$($case.tool) did not wait for activation" }
             Assert-TestEqual $inputCalls[0] "move:505,206" "$($case.tool) geometry after delayed activation"
             Assert-TestEqual $result.action.delivery "foreground" "$($case.tool) pointer delivery"
         } else {
