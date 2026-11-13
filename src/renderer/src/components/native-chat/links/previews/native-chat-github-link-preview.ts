@@ -129,7 +129,10 @@ async function loadPreviewFromCatalog(
     githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity)
   )
   const retired = new Set<string>()
-  const stop = useAppStore.subscribe((state) => {
+  const stop = useAppStore.subscribe((state, previous) => {
+    if (state.repos === previous.repos) {
+      return
+    }
     const live = new Set(
       githubPreviewRouteCandidates(state.repos, routeAuthority).map(githubPreviewRepoIdentity)
     )

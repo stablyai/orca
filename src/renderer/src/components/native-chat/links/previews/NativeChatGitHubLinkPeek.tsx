@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
@@ -105,10 +105,14 @@ export function NativeChatGitHubPeekBody({
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
 }): ReactNode {
-  const key = useAppStore((state) =>
-    source.kind === 'repo'
-      ? githubLinkPreviewKey(source.repo, link)
-      : routedGitHubLinkPreviewKey(source.authorityKey, link, state.repos)
+  // Select the catalog itself so unrelated store updates don't rescan it for a route.
+  const routeRepos = useAppStore((state) => (source.kind === 'routed' ? state.repos : null))
+  const key = useMemo(
+    () =>
+      source.kind === 'repo'
+        ? githubLinkPreviewKey(source.repo, link)
+        : routedGitHubLinkPreviewKey(source.authorityKey, link, routeRepos ?? []),
+    [source, link, routeRepos]
   )
   return (
     <GitHubPeekContent
