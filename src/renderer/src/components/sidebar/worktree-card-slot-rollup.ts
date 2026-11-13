@@ -29,6 +29,7 @@ import {
 } from './workspace-card/activity/worktree-agent-rows-projection'
 import { selectAgentRowsUnread } from './workspace-card/activity/worktree-card-agent-ack-inputs'
 import { buildSlotAgentSignals } from './worktree-card-slot-agent-signals'
+import { recordDisplayedPanes } from './worktree-card-slot-pane-index'
 import { slotExceptionsFor, type SlotException } from './worktree-card-slot-signal'
 import {
   slotTargetsFromAgentLines,
@@ -80,6 +81,15 @@ function ownSlot(
     ownSlots.set(identity, cached)
     return cached.slot
   }
+  // Invalidation finds this slot through the panes it was built from.
+  recordDisplayedPanes(
+    identity,
+    agents.flatMap((agent) =>
+      agent.activationPaneKey && agent.activationPaneKey !== agent.paneKey
+        ? [agent.paneKey, agent.activationPaneKey]
+        : [agent.paneKey]
+    )
+  )
   const signals = buildSlotAgentSignals(agents, unread)
   const targets = slotTargetsFromAgentLines(
     getWorktreeIdFromHostIdentity(identity),

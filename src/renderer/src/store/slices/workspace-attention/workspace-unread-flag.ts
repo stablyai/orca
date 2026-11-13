@@ -8,12 +8,12 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import type { AppState } from '../../types'
 import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktree-owner-settings'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { workspaceHasLiveMarker } from './workspace-live-markers'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { ownerHostOwnsSidebarInputs } from '../worktrees/listing/owner-host-sidebar-inputs'
+import { folderRowOnHost, folderRowToMark, isWorkspaceFlagSet } from './workspace-unread-flag-reads'
 
 // The persisted workspace flag `isUnread`. Only the workspace-attention module writes it.
 
@@ -22,6 +22,7 @@ export function markWorkspaceUnreadFlag(
   get: WorkspaceAttentionGet,
   worktreeId: string
 ): void {
+  noteMarkerRaise(set, get, worktreeId)
   if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
     raiseWorkspaceUnreadFlag(set, get, worktreeId)
     return
@@ -66,26 +67,52 @@ export function noteWorkspaceRead(worktreeId: string): void {
   }
 }
 
-/** Same-id folder rows: the on-screen host's, else the first. */
-function folderRowToMark(
-  state: AppState,
-  worktreeId: string,
-  folderWorkspaceId: string
-): FolderWorkspace | undefined {
-  return folderRowOnHost(state, folderWorkspaceId, onScreenHostId(state, worktreeId))
+/**
+ * Record that a marker raises this workspace's flag, unless the flag is already up for another
+ * reason (Mark as unread, a peer, a previous session): settling must not lower what it did not raise.
+ * Checked before the raise, while the row still says whether the flag was down.
+ */
+function noteMarkerRaise(
+  set: WorkspaceAttentionSet,
+  get: WorkspaceAttentionGet,
+  worktreeId: string
+): void {
+  const state = get()
+  if (state.workspaceUnreadRaisedByMarkers[worktreeId]) {
+    return
+  }
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  const row =
+    workspaceScope?.type === 'folder'
+      ? folderRowToMark(state, worktreeId, workspaceScope.folderWorkspaceId)
+      : findKnownWorktreeById(state, worktreeId)
+  if (!row || row.isUnread) {
+    return
+  }
+  set((s) => ({
+    workspaceUnreadRaisedByMarkers: { ...s.workspaceUnreadRaisedByMarkers, [worktreeId]: true }
+  }))
 }
 
-/** The folder row on `host`, or the first same-id row when no host is named. */
-function folderRowOnHost(
-  state: AppState,
-  folderWorkspaceId: string,
-  host: ExecutionHostId | null
-): FolderWorkspace | undefined {
-  return state.folderWorkspaces.find(
-    (workspace) =>
-      workspace.id === folderWorkspaceId &&
-      (!host || getFolderWorkspaceHostId(workspace, state.projectGroups) === host)
-  )
+/** Drop the marker-raised record once no row of the workspace is flagged, or when the user takes the flag over. */
+export function forgetMarkerRaise(
+  set: WorkspaceAttentionSet,
+  get: WorkspaceAttentionGet,
+  worktreeId: string,
+  options?: { evenIfFlagged?: boolean }
+): void {
+  const state = get()
+  if (!state.workspaceUnreadRaisedByMarkers[worktreeId]) {
+    return
+  }
+  if (!options?.evenIfFlagged && isWorkspaceFlagSet(state, worktreeId)) {
+    return
+  }
+  set((s) => {
+    const next = { ...s.workspaceUnreadRaisedByMarkers }
+    delete next[worktreeId]
+    return { workspaceUnreadRaisedByMarkers: next }
+  })
 }
 
 function raiseWorkspaceUnreadFlag(
@@ -170,6 +197,16 @@ export function clearWorkspaceUnreadFlag(
   /** Folder rows share an id across hosts: the on-screen host's row, or null for every row. */
   executionHostId?: ExecutionHostId | null
 ): void {
+  lowerWorkspaceUnreadFlag(set, get, worktreeId, executionHostId)
+  forgetMarkerRaise(set, get, worktreeId)
+}
+
+function lowerWorkspaceUnreadFlag(
+  set: WorkspaceAttentionSet,
+  get: WorkspaceAttentionGet,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId | null
+): void {
   noteWorkspaceRead(worktreeId)
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
@@ -239,43 +276,29 @@ export function clearWorkspaceUnreadFlag(
   )
 }
 
+/**
+ * Why the flag is being settled. `arrival`: the workspace came on screen, which reads any flag with
+ * no live marker left (Mark as unread, a peer's, a restart's). `markers`: markers went away
+ * elsewhere (acknowledged, closed, read on screen), which lowers only a flag those markers raised.
+ */
+export type WorkspaceUnreadSettleCause = 'arrival' | 'markers'
+
 /** Lower flags only after the last live marker disappears. Unscoped same-ID folders share workspace-keyed markers, so lower every row only when none remain. */
 export function settleWorkspaceUnreadFlag(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,
   worktreeId: string,
+  cause: WorkspaceUnreadSettleCause,
   executionHostId?: ExecutionHostId | null
 ): void {
   // Why only downward: raising here would override another client's Mark as read with this
   // renderer's local markers; marking already raises the flag together with its marker.
-  if (!workspaceHasLiveMarker(get(), worktreeId)) {
-    clearWorkspaceUnreadFlag(set, get, worktreeId, executionHostId)
+  const state = get()
+  if (workspaceHasLiveMarker(state, worktreeId)) {
+    return
   }
-}
-
-/** The host whose row is on screen: the active workspace's, else null (every same-id row). */
-export function onScreenHostId(
-  state: Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>,
-  worktreeId: string
-): ExecutionHostId | null {
-  return worktreeId === state.activeWorktreeId ? state.activeWorkspaceExecutionHostId : null
-}
-
-/** The flag {@link clearWorkspaceUnreadFlag} would clear. */
-export function isWorkspaceFlagSet(
-  state: Parameters<typeof findKnownWorktreeById>[0] & Pick<AppState, 'projectGroups'>,
-  worktreeId: string,
-  executionHostId?: ExecutionHostId | null
-): boolean {
-  const workspaceScope = parseWorkspaceKey(worktreeId)
-  if (workspaceScope?.type === 'folder') {
-    return state.folderWorkspaces.some(
-      (workspace) =>
-        workspace.id === workspaceScope.folderWorkspaceId &&
-        Boolean(workspace.isUnread) &&
-        (!executionHostId ||
-          getFolderWorkspaceHostId(workspace, state.projectGroups) === executionHostId)
-    )
+  if (cause === 'markers' && !state.workspaceUnreadRaisedByMarkers[worktreeId]) {
+    return
   }
-  return Boolean(findKnownWorktreeById(state, worktreeId)?.isUnread)
+  clearWorkspaceUnreadFlag(set, get, worktreeId, executionHostId)
 }

@@ -8,9 +8,11 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeLineageRange } from '../../../../shared/sidebar-list/worktree-lineage-range'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { TerminalTab } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { selectCollapsedLineageSlots, selectLineageLatestAt } from './worktree-card-slot-rollup'
+import { slotSnapshot } from './worktree-card-slot-invalidation'
 
 // Counts per-workspace re-checks: each stale slot reads its workspace's row selector once.
 const counts = vi.hoisted(() => ({ reads: [] as string[] }))
@@ -199,5 +201,70 @@ describe('orchestration invalidation', () => {
     })
     readParent(range)
     expect(new Set(counts.reads)).toEqual(new Set([rows[2]!.id, rows[6]!.id]))
+  })
+})
+
+describe.each([10, 100, 1000])('freshness invalidation under a parent of %i', (size) => {
+  function working(paneKey: string, worktreeId: string, evidenceAt: number): AgentStatusEntry {
+    return {
+      ...entry(paneKey, worktreeId),
+      state: 'working',
+      updatedAt: evidenceAt,
+      evidenceObservedAt: evidenceAt
+    }
+  }
+
+  it('re-checks nothing on an epoch tick that leaves every agent fresh', () => {
+    const { range, rows } = seedLineage(size)
+    useAppStore.setState({
+      agentStatusByPaneKey: Object.fromEntries(
+        rows.map((row, i) => {
+          const paneKey = makePaneKey(`t${i}`, LEAF)
+          return [paneKey, working(paneKey, row.id, 2_000_000)]
+        })
+      )
+    })
+    readParent(range)
+    counts.reads = []
+    vi.setSystemTime(2_000_000 + 60_000)
+    useAppStore.setState({ agentStatusEpoch: 2 })
+    readParent(range)
+    expect(counts.reads).toEqual([])
+  })
+
+  it('re-checks only the workspace whose agent went stale on an epoch tick', () => {
+    const { range, rows } = seedLineage(size)
+    const AGES = AGENT_STATUS_STALE_AFTER_MS
+    useAppStore.setState({
+      agentStatusByPaneKey: Object.fromEntries(
+        rows.map((row, i) => {
+          const paneKey = makePaneKey(`t${i}`, LEAF)
+          // Only workspace 4's evidence is old enough to expire within the next minute.
+          const evidenceAt = i === 4 ? 2_000_000 - AGES + 30_000 : 2_000_000
+          return [paneKey, working(paneKey, row.id, evidenceAt)]
+        })
+      )
+    })
+    readParent(range)
+    counts.reads = []
+    vi.setSystemTime(2_000_000 + 60_000)
+    useAppStore.setState({ agentStatusEpoch: 2 })
+    readParent(range)
+    expect(counts.reads).toEqual([rows[4]!.id])
+  })
+})
+
+describe('journal', () => {
+  it('combines several steps for a tree that skipped reads', () => {
+    const { range, rows } = seedLineage(100)
+    readParent(range)
+    counts.reads = []
+    for (const index of [3, 7, 9]) {
+      useAppStore.setState({ ptyIdsByTabId: { [`t${index}`]: [`pty-${index}`] } })
+      // Another reader advances the shared journal without this tree.
+      slotSnapshot(useAppStore.getState())
+    }
+    readParent(range)
+    expect(new Set(counts.reads)).toEqual(new Set([rows[3]!.id, rows[7]!.id, rows[9]!.id]))
   })
 })

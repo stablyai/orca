@@ -58,7 +58,7 @@ export function createLineageSlotReader(
       return cached
     }
     if (cached) {
-      const changed = changedSlotWorkspaces(state, cached.snapshot, snapshot)
+      const changed = changedSlotWorkspaces(cached.snapshot, snapshot)
       if (changed) {
         for (const id of changed) {
           for (const index of cached.indicesById.get(id) ?? []) {

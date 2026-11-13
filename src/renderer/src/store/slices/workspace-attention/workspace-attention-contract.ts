@@ -39,6 +39,13 @@ export type WorkspaceAttentionSlice = {
     screen: OnScreenAttention,
     options: { screenArrived: boolean; markersRead?: boolean }
   ) => void
+  /**
+   * Workspaces whose persisted flag this renderer's markers raised (the flag was down when the
+   * marker arrived). Only these lower when their last marker goes; a flag the user, a peer or a
+   * previous session raised waits for a visit or Mark as read. Renderer-local, so a restart
+   * starts empty and never lowers a flag it cannot explain.
+   */
+  workspaceUnreadRaisedByMarkers: Partial<Record<string, true>>
   /** Host-qualified workspaces the user marked unread this session. Renderer-local. */
   workspacesMarkedUnreadByUser: Partial<Record<HostScopedWorktreeKey, true>>
   /** Sidebar "Mark as read" (also removes every marker and reads every agent in the workspace) / "Mark as unread". */

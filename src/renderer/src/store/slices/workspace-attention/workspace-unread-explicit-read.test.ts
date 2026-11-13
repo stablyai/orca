@@ -11,7 +11,7 @@ import {
   type PaneTarget
 } from './workspace-unread-characterization-fixture'
 import { completeAgentTurn, toggleUnreadByUser } from './workspace-unread-characterization-driver'
-import { isWorkspaceFlagSet } from './workspace-unread-flag'
+import { isWorkspaceFlagSet } from './workspace-unread-flag-reads'
 import { selectAgentRowsUnread } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-ack-inputs'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '../tabs/tab-group.test-fixture'
@@ -182,6 +182,42 @@ describe('explicit workspace and agent reads', () => {
 
     expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
     expect(selectAgentRowsUnread(store.getState(), [pane])).toEqual([false])
+  })
+
+  // Closing a tab removes its markers through the settle path (acknowledgement alone never settles).
+  it('closing the last marked tab keeps a workspace the user marked unread this session', () => {
+    const { store } = createAttentionStore()
+    store.getState().setWorkspaceUnreadByUser(WS_A, true, 'local')
+    const pane = finishedAgentOffScreen(store)
+
+    store.getState().closeTab(pane.tabId)
+
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
+    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
+  })
+
+  it('closing the last marked tab keeps a flag raised before restart', () => {
+    const { store: previousStore } = createAttentionStore()
+    previousStore.getState().setWorkspaceUnreadByUser(WS_A, true, 'local')
+    const { store } = createAttentionStore()
+    store.setState({ worktreesByRepo: previousStore.getState().worktreesByRepo })
+    const pane = finishedAgentOffScreen(store)
+
+    store.getState().closeTab(pane.tabId)
+
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
+    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
+  })
+
+  it('closing the last marked tab lowers a flag only its marker raised', () => {
+    const { store } = createAttentionStore()
+    const pane = finishedAgentOffScreen(store)
+    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
+
+    store.getState().closeTab(pane.tabId)
+
+    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(false)
+    expect(store.getState().workspaceUnreadRaisedByMarkers).toEqual({})
   })
 
   it('reads only the selected host, including retained agents and agents awaiting tab hydration', () => {

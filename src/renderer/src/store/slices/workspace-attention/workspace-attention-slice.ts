@@ -11,10 +11,11 @@ import {
 import { removeTabsAttention } from './subject-attention-transitions'
 import {
   markWorkspaceUnreadFlag,
-  onScreenHostId,
   settleWorkspaceUnreadFlag,
-  noteWorkspaceRead
+  noteWorkspaceRead,
+  forgetMarkerRaise
 } from './workspace-unread-flag'
+import { onScreenHostId } from './workspace-unread-flag-reads'
 import { workspaceMarkerTabs, paneKeyTabId } from './workspace-live-markers'
 import { workspaceMarkerTabIdsForHost } from './workspace-marker-host'
 import {
@@ -154,16 +155,25 @@ export const createWorkspaceAttentionSlice: StateCreator<
         screenArrived
       ) {
         for (const workspaceId of workspaceIds) {
-          settleWorkspaceUnreadFlag(set, get, workspaceId, onScreenHostId(get(), workspaceId))
+          settleWorkspaceUnreadFlag(
+            set,
+            get,
+            workspaceId,
+            screenArrived ? 'arrival' : 'markers',
+            onScreenHostId(get(), workspaceId)
+          )
         }
       }
     },
+    workspaceUnreadRaisedByMarkers: {},
     workspacesMarkedUnreadByUser: {},
     setWorkspaceUnreadByUser: (worktreeId, isUnread, executionHostId) => {
       setWorkspacesMarkedUnreadByUser(
         [composeWorktreeHostIdentity(executionHostId, worktreeId)],
         isUnread
       )
+      // The user owns the flag now: a later marker's removal must not lower their mark.
+      forgetMarkerRaise(set, get, worktreeId, { evenIfFlagged: true })
       if (isUnread) {
         void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
         return

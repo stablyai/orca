@@ -142,7 +142,7 @@ export function useWorktreeAgentListModel(
     toggleLineageParent: toggleLineageParentState,
     toggleIdleChildGroup: toggleIdleChildGroupState,
     toggleCompactRootList
-  } = useWorktreeAgentExpansionState(worktreeId)
+  } = useWorktreeAgentExpansionState(worktreeId, executionHostId)
   const toggleLineageParent = useCallback(
     (paneKey: string) => {
       dispatchSuppressScrollAdjustment()

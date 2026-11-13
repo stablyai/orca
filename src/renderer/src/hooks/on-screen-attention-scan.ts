@@ -29,7 +29,7 @@ import {
 import {
   isWorkspaceFlagSet,
   onScreenHostId
-} from '@/store/slices/workspace-attention/workspace-unread-flag'
+} from '@/store/slices/workspace-attention/workspace-unread-flag-reads'
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'

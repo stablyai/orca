@@ -205,7 +205,7 @@ export function openSlotTarget(target: SlotTarget): void {
     activateAndRevealWorkspace(target.worktreeId, { executionHostId: target.executionHostId })
     return
   }
-  expandWorktreeAgentList(target.worktreeId)
+  expandWorktreeAgentList(target.worktreeId, target.executionHostId)
   if (target.retained) {
     activateRetainedAgentRow(target.worktreeId, tabId, target.paneKey, target.executionHostId)
   } else {

@@ -1,11 +1,12 @@
 import type { AppState } from '@/store/types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  isAgentStatusFresh
-} from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { getTabIdToWorktreeId } from './workspace-card/activity/worktree-agent-row-selectors'
+import {
+  getLiveTabIdToWorktreeId,
+  getTabIdToWorktreeId
+} from './workspace-card/activity/worktree-agent-row-selectors'
+import { liveEntryWorktreeId } from './workspace-card/activity/worktree-agent-live-index-patch'
+import { createFreshnessDeadlines, forEachPaneDisplayer } from './worktree-card-slot-pane-index'
 import { selectWorktreeAgentOrchestrationIndex } from './workspace-card/activity/worktree-agent-orchestration-index'
 import { worktreeAgentProjectionInputs } from './workspace-card/activity/worktree-agent-rows-projection'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -31,13 +32,28 @@ export type SlotSnapshot = {
   acknowledgements: AppState['acknowledgedAgentsByPaneKey']
   titles: AppState['runtimePaneTitlesByTabId']
   epoch: number
+  /** The clock freshness is judged at; re-sampled only when the epoch moves. */
   at: number
+  /** The snapshot this one replaced, while the journal still reaches back to it. */
+  previous: SlotSnapshot | undefined
+  /** Workspaces whose slots may differ from `previous`'s; null when any slot may. */
+  changedFromPrevious: Set<string> | null
 }
+
+/**
+ * Snapshots form a short journal: each one's changes are computed once, when it replaces the
+ * previous one, and every lineage tree combines the steps since the snapshot it last saw. A tree
+ * that falls further behind than the journal re-checks all of its slots.
+ */
+const JOURNAL_LENGTH = 16
 let current: SlotSnapshot | undefined
+const freshnessDeadlines = createFreshnessDeadlines()
+
 export function slotSnapshot(state: AppState): SlotSnapshot {
   const inputs = worktreeAgentProjectionInputs(state)
-  if (!current || !inputs.every((value, index) => value === current!.inputs[index])) {
-    current = {
+  if (!current || !sameInputs(inputs, current.inputs)) {
+    const previous = current
+    const next: SlotSnapshot = {
       inputs,
       layout: {
         tabsByWorktree: state.tabsByWorktree,
@@ -56,11 +72,52 @@ export function slotSnapshot(state: AppState): SlotSnapshot {
       acknowledgements: state.acknowledgedAgentsByPaneKey,
       titles: state.runtimePaneTitlesByTabId,
       epoch: state.agentStatusEpoch,
-      at: current?.epoch === state.agentStatusEpoch ? current.at : Date.now()
+      at: previous?.epoch === state.agentStatusEpoch ? previous.at : Date.now(),
+      previous,
+      changedFromPrevious: null
     }
+    if (previous) {
+      next.changedFromPrevious = changedBetween(state, previous, next)
+    } else {
+      freshnessDeadlines.clear()
+      for (const paneKey in next.live) {
+        freshnessDeadlines.set(paneKey, next.live[paneKey], next.at)
+      }
+    }
+    trimJournal(next)
+    current = next
   }
   return current
 }
+
+function trimJournal(latest: SlotSnapshot): void {
+  let cursor: SlotSnapshot | undefined = latest
+  for (let depth = 0; cursor && depth < JOURNAL_LENGTH; depth += 1) {
+    cursor = cursor.previous
+  }
+  if (cursor) {
+    cursor.previous = undefined
+  }
+}
+
+/** Workspaces whose slots may differ between two snapshots; null when any slot may. */
+export function changedSlotWorkspaces(
+  before: SlotSnapshot,
+  after: SlotSnapshot
+): Set<string> | null {
+  const result = new Set<string>()
+  for (let cursor = after; cursor !== before;) {
+    if (!cursor.previous || !cursor.changedFromPrevious) {
+      return null
+    }
+    for (const id of cursor.changedFromPrevious) {
+      result.add(id)
+    }
+    cursor = cursor.previous
+  }
+  return result
+}
+
 function sameInputs(left: readonly unknown[], right: readonly unknown[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index])
 }
@@ -123,92 +180,78 @@ function addChangedOrchestrationWorkspaces(
 }
 
 /**
- * Adds the workspaces a layout change can touch. Returns false when the change moved panes between
- * workspaces (a tab or chat added, removed or moved, or a pane in a tab no workspace owns): only
- * then must every slot be re-checked.
+ * One journal step. Pane-keyed records (status, acknowledgement, retention, foreground agent,
+ * freshness) reach the workspaces the projection recorded as displaying the pane, plus the
+ * owner the live bucket assigns it, so ownership is never re-derived with separate rules.
  */
-const changes = new WeakMap<SlotSnapshot, WeakMap<SlotSnapshot, Set<string> | null>>()
-
-export function changedSlotWorkspaces(
+function changedBetween(
   state: AppState,
   before: SlotSnapshot,
   after: SlotSnapshot
 ): Set<string> | null {
-  const cached = changes.get(before)?.get(after)
-  if (cached !== undefined) {
-    return cached
+  const result = new Set<string>()
+  const add = (worktreeId: string): void => {
+    result.add(worktreeId)
   }
-  let result: Set<string> | null = new Set<string>()
   const tabOwners = getTabIdToWorktreeId(state.tabsByWorktree)
+  const liveTabOwners = getLiveTabIdToWorktreeId(state.tabsByWorktree, state.unifiedTabsByWorktree)
   const represented = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
   const includePane = (paneKey: string): void => {
+    forEachPaneDisplayer(paneKey, add)
+    // A pane no slot has displayed yet lands where the live bucket or its tab puts it.
     const parsed = parsePaneKey(paneKey)
-    const tabOwner = parsed && tabOwners.get(parsed.tabId)
+    const tabOwner = parsed && liveTabOwners.get(parsed.tabId)
     if (tabOwner) {
-      result!.add(tabOwner)
+      result.add(tabOwner)
     }
-    // Structured sessions may have no backing terminal tab.
     const chat = represented.get(paneKey)
     if (chat) {
-      result!.add(chat.worktreeId)
+      result.add(chat.worktreeId)
     }
-    for (const entry of [
-      before.live[paneKey],
-      after.live[paneKey],
-      before.layout.retainedAgentsByPaneKey[paneKey]?.entry,
-      after.layout.retainedAgentsByPaneKey[paneKey]?.entry
-    ]) {
-      if (entry?.worktreeId) {
-        result!.add(entry.worktreeId)
+    for (const entry of [before.live[paneKey], after.live[paneKey]]) {
+      const owner = entry && liveEntryWorktreeId(paneKey, entry, liveTabOwners, represented)
+      if (owner) {
+        result.add(owner)
       }
     }
     for (const retained of [
       before.layout.retainedAgentsByPaneKey[paneKey],
       after.layout.retainedAgentsByPaneKey[paneKey]
     ]) {
-      if (retained?.worktreeId) {
-        result!.add(retained.worktreeId)
+      if (retained) {
+        result.add(retained.worktreeId)
       }
     }
   }
-  if (addChangedLayoutWorkspaces(result, before.layout, after.layout, tabOwners, includePane)) {
-    addChangedOrchestrationWorkspaces(result, before.orchestration, after.orchestration)
-    if (before.worktreesByRepo !== after.worktreesByRepo) {
-      addChangedCatalogWorkspaces(result, before.worktreesByRepo, after.worktreesByRepo)
-    }
-    if (!sameInputs(after.owner, before.owner)) {
-      addUnstampedChatWorkspaces(result, state)
-    }
-    forEachChangedKey(before.titles, after.titles, (tabId) => {
-      const owner = tabOwners.get(tabId)
-      if (owner) {
-        result!.add(owner)
-      }
-    })
-    forEachChangedKey(before.live, after.live, includePane)
-    if (before.epoch !== after.epoch) {
-      // A new epoch moves the clock: entries that kept their identity may still go stale.
-      for (const paneKey in after.live) {
-        const entry = after.live[paneKey]
-        if (
-          entry &&
-          before.live[paneKey] === entry &&
-          isAgentStatusFresh(entry, before.at, AGENT_STATUS_STALE_AFTER_MS) !==
-            isAgentStatusFresh(entry, after.at, AGENT_STATUS_STALE_AFTER_MS)
-        ) {
-          includePane(paneKey)
-        }
-      }
-    }
-    forEachChangedKey(before.acknowledgements, after.acknowledgements, includePane)
-  } else {
-    result = null
+
+  // Freshness bookkeeping follows every step, even one that re-checks every slot.
+  forEachChangedKey(before.live, after.live, (paneKey) => {
+    freshnessDeadlines.set(paneKey, after.live[paneKey], after.at)
+  })
+  const expired: string[] = []
+  if (before.at !== after.at) {
+    // Only entries whose stale deadline fell between the two clock samples flip.
+    freshnessDeadlines.expire(after.at, (paneKey) => expired.push(paneKey))
   }
-  let next = changes.get(before)
-  if (!next) {
-    next = new WeakMap()
-    changes.set(before, next)
+
+  if (!addChangedLayoutWorkspaces(result, before.layout, after.layout, tabOwners, includePane)) {
+    return null
   }
-  next.set(after, result)
+  addChangedOrchestrationWorkspaces(result, before.orchestration, after.orchestration)
+  if (before.worktreesByRepo !== after.worktreesByRepo) {
+    addChangedCatalogWorkspaces(result, before.worktreesByRepo, after.worktreesByRepo)
+  }
+  if (!sameInputs(after.owner, before.owner)) {
+    addUnstampedChatWorkspaces(result, state)
+  }
+  forEachChangedKey(before.titles, after.titles, (tabId) => {
+    const owner = tabOwners.get(tabId)
+    if (owner) {
+      result.add(owner)
+    }
+  })
+  forEachChangedKey(before.live, after.live, includePane)
+  expired.forEach(includePane)
+  forEachChangedKey(before.acknowledgements, after.acknowledgements, includePane)
   return result
 }
