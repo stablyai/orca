@@ -72,5 +72,11 @@ describe('createDictationDictionary', () => {
     ]) {
       expect(clean(text)).toBe(text)
     }
+    // A bilingual model's Chinese sentence is not English, even though English is one of its languages.
+    const bilingual = createDictationDictionary([{ term: 'Vercel' }], ['zh', 'en'])!
+    expect(bilingual('请在 Versal 上部署预览。')).toBe('请在 Versal 上部署预览。')
+    expect(bilingual('Deploy the preview to Versal before the review.')).toBe(
+      'Deploy the preview to Vercel before the review.'
+    )
   })
 })

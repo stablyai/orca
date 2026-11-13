@@ -1,16 +1,17 @@
 import { levenshtein } from './edit-distance'
+import { createWordFilterLookup } from './dictation-word-filter'
 
 // Shorter terms sit too close to ordinary words ("Vite" and "vote", "Hono" and "honey").
 const MIN_TERM_KEY_LENGTH = 5
 const LATIN_LETTERS_RE = /^[a-z]+$/
 
-// The list is ~850 KB, so only a dictionary with a term to near-miss loads it; until then nothing near-misses.
-let commonWords: ReadonlySet<string> | undefined
+// Only a dictionary with a term to near-miss loads the word filter; until then nothing near-misses.
+let isCommonWord: ((word: string) => boolean) | undefined
 let commonWordsLoad: Promise<void> | undefined
 function loadCommonWords(): void {
   commonWordsLoad ??= import('./dictation-english-words.js').then(
     ({ COMMON_ENGLISH_WORDS }) => {
-      commonWords = new Set(COMMON_ENGLISH_WORDS.split(' '))
+      isCommonWord = createWordFilterLookup(COMMON_ENGLISH_WORDS)
     },
     () => {
       commonWordsLoad = undefined
@@ -40,8 +41,8 @@ type NearMissTerm<T> = { key: string; consonants: number; term: T }
 export type NearMissMatcher<T> = (keys: readonly string[]) => (T | undefined)[] | null
 
 /**
- * Matches near misses of `terms` (by word key) in text in `languages`, or in text that reads as English when
- * they are unknown; null when no term is long enough or the language is known not to be English.
+ * Matches near misses of `terms` (by word key) in English text: text whose only language is English, or that
+ * reads as English; null when no term is long enough or English isn't among the known `languages`.
  */
 export function createNearMissMatcher<T>(
   terms: readonly (readonly [key: string, term: T])[],
@@ -59,15 +60,15 @@ export function createNearMissMatcher<T>(
     return null
   }
   loadCommonWords()
-  const match = (key: string, words: ReadonlySet<string>): T | undefined => {
+  const match = (key: string, isCommon: (word: string) => boolean): T | undefined => {
     // An ordinary word or name is never a misheard term.
-    if (!LATIN_LETTERS_RE.test(key) || words.has(key)) {
+    if (!LATIN_LETTERS_RE.test(key) || isCommon(key)) {
       return undefined
     }
     let best: { term: T; distance: number } | undefined
     for (const candidate of bySound.get(soundKey(key)) ?? []) {
       // A term that is itself a word ("Drizzle") is heard right, so what sounds like it is another word.
-      if (words.has(candidate.key)) {
+      if (isCommon(candidate.key)) {
         continue
       }
       // Sounding the same and spelled close ("Versal" for "Vercel"), with fewer edits than the consonants
@@ -84,18 +85,19 @@ export function createNearMissMatcher<T>(
     return best?.term
   }
   return (keys) => {
-    const words = commonWords
-    const found = words ? keys.map((key) => match(key, words)) : []
-    if (!words || !found.some(Boolean)) {
+    const isCommon = isCommonWord
+    const found = isCommon ? keys.map((key) => match(key, isCommon)) : []
+    if (!isCommon || !found.some(Boolean)) {
       return null
     }
-    if (languages) {
+    // A bilingual model ("zh-en") may have heard either language, so only an English-only one skips the check.
+    if (languages?.every((language) => language === 'en')) {
       return found
     }
     // Short words ("I", "a") and the misheard words say little about the language; two thirds of the rest must
     // be English, since other languages share a few words with it ("den", "part").
     const rest = keys.filter((key, index) => key.length > 2 && !found[index])
-    const english = rest.filter((key) => words.has(key)).length
+    const english = rest.filter(isCommon).length
     return rest.length > 0 && english * 3 >= rest.length * 2 ? found : null
   }
 }
