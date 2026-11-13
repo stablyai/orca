@@ -23929,7 +23929,8 @@
         "rowPublic": "{{repo}}, cloud only",
         "privateLabel": "Private",
         "menuGroup": "Orca Cloud",
-        "addRepositoryMenu": "Add a GitHub repository…"
+        "addRepositoryMenu": "Add a GitHub repository…",
+        "copyAddRepositoryLink": "Copy GitHub link"
       },
       "agentLabel": "Agent"
     },
@@ -29326,5 +29327,11 @@
   "cloudAgentConfig": {
     "title": "Skills, agents & memory",
     "autoSyncHint": "Copies your Claude and Codex skills, commands, subagents, output styles and memory you’ve turned on into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten."
+  },
+  "openExternal": {
+    "copyLink": "Copy link",
+    "moreOptions": "More link options",
+    "copyLinkFailed": "Couldn’t copy the link.",
+    "linkCopied": "Link copied"
   }
 }

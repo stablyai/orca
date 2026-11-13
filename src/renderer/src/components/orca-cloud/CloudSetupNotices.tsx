@@ -17,6 +17,8 @@ import {
   repoSlug,
   runCloudSetupScript
 } from '@/lib/orca-cloud/cloud-setup-notice-actions'
+import { gitHubInstallLinkSource } from '@/lib/orca-cloud/github-link-sources'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { hideCloudToast, showCloudToast, type CloudToastView } from './cloud-toast-stack'
 
 // After Install: GitHub's webhook usually lands within seconds, then the owner may take a while.
@@ -27,7 +29,14 @@ const GIVE_UP_MS = 30 * 60_000
 
 export type CloudSetupNoticeLine = {
   text: string
-  action: { label: string; icon: React.ReactNode; run: () => void; pending?: boolean } | null
+  action: {
+    label: string
+    icon: React.ReactNode
+    run: () => void
+    pending?: boolean
+    /** Opens this page in the browser: "Copy link" beside it. */
+    link?: ExternalLinkSource
+  } | null
 }
 
 export function cloudSetupNoticeLine(
@@ -56,7 +65,8 @@ export function cloudSetupNoticeLine(
               <GitPullRequestArrow />
             ),
             run: handlers.install,
-            pending: handlers.installing
+            pending: handlers.installing,
+            link: gitHubInstallLinkSource({ repoUrl: record.repoUrl })
           }
         }
       }
@@ -181,7 +191,8 @@ export function cloudSetupNoticesView(
                 label: line.action.label,
                 icon: line.action.icon,
                 onClick: line.action.run,
-                ...(line.action.pending ? { pending: true } : {})
+                ...(line.action.pending ? { pending: true } : {}),
+                ...(line.action.link ? { link: line.action.link } : {})
               }
             }
           : {}),

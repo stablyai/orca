@@ -88,6 +88,13 @@ export function PlansDialogHost(): React.JSX.Element {
             setOrderedAt(Date.now())
             checkout.start({ planId, interval, seats: count })
           }}
+          checkoutLink={async ({ planId, interval, seats: count }) => {
+            const url = await checkout.copyLink({ planId, interval, seats: count })
+            if (url) {
+              setOrderedAt(Date.now())
+            }
+            return url
+          }}
           onManage={() => void openPortal()}
           onContactSales={(url) => void window.api.shell.openUrl(url)}
           onRetry={() => {
@@ -119,6 +126,7 @@ export function PlansDialogHost(): React.JSX.Element {
                   }
                   checkout.reopen()
                 }}
+                reopenLink={checkout.copyReopenLink}
                 contactUrl={plans.state === 'ready' ? planContactUrl(plans.model) : null}
                 onContact={(url) => void window.api.shell.openUrl(url)}
                 onKeepWaiting={checkout.keepWaiting}

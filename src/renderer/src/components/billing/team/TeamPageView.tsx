@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import { ExternalLink, LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
@@ -328,15 +329,15 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                   )}
                 </p>
               </div>
-              <Button
-                type="button"
+              <OpenExternalSplitButton
                 variant="outline"
                 size="sm"
+                link={enterprise.contactUrl}
                 onClick={() => props.onContactSales(enterprise.contactUrl)}
               >
                 {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
                 <ExternalLink />
-              </Button>
+              </OpenExternalSplitButton>
             </section>
           ) : null}
           {selfRow ? (

@@ -190,6 +190,12 @@ export type OrcaBillingOpenResult =
   | { status: 'plan-unavailable' }
   | { status: 'failed'; error: string }
 
+/** Why a Checkout/Portal open (or link) didn't happen. */
+export type OrcaBillingOpenRefusal = Exclude<OrcaBillingOpenResult, { status: 'opened' }>
+
+/** A minted Checkout/Portal URL for "Copy link" (not opened), or why there is none. */
+export type OrcaBillingLinkResult = { status: 'ok'; url: string } | OrcaBillingOpenRefusal
+
 export type OrcaBillingOverageResult =
   | { status: 'ok'; entitlement: OrcaBillingEntitlement }
   | { status: 'unconfigured' }

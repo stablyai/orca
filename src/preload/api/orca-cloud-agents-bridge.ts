@@ -16,6 +16,8 @@ export type OrcaCloudAgentsApi = {
   start: (request: { agent: OrcaCloudAccountAgent }) => Promise<OrcaCloudAgentsResult<true>>
   cancel: (request: { agent: OrcaCloudAccountAgent }) => Promise<void>
   reopen: (request: { agent: OrcaCloudAccountAgent }) => Promise<boolean>
+  /** The provider page `reopen` would open, without opening it ("Copy link"); null when none. */
+  signInLink: (request: { agent: OrcaCloudAccountAgent }) => Promise<string | null>
   usePaste: () => Promise<void>
   /** The code from Claude's sign-in page, typed into the waiting setup; the reply is a code only. */
   submitClaudeCode: (request: { code: string }) => Promise<OrcaCloudAgentsResult<true>>
@@ -48,6 +50,7 @@ export const orcaCloudAgentsApi: OrcaCloudAgentsApi = {
   start: (request) => ipcRenderer.invoke('orcaCloudAgents:start', request),
   cancel: (request) => ipcRenderer.invoke('orcaCloudAgents:cancel', request),
   reopen: (request) => ipcRenderer.invoke('orcaCloudAgents:reopen', request),
+  signInLink: (request) => ipcRenderer.invoke('orcaCloudAgents:signInLink', request),
   usePaste: () => ipcRenderer.invoke('orcaCloudAgents:usePaste'),
   submitClaudeCode: (request) => ipcRenderer.invoke('orcaCloudAgents:submitClaudeCode', request),
   pasteClaudeToken: (request) => ipcRenderer.invoke('orcaCloudAgents:pasteClaudeToken', request),

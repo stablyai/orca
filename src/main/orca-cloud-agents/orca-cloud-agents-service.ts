@@ -204,6 +204,18 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
     })
   }
 
+  /** The provider's sign-in page for a running setup, never anything else; null when none. */
+  const providerPage = (agent: OrcaCloudAccountAgent): string | null => {
+    const current = setups[agent]
+    const url =
+      agent === 'claude'
+        ? (claudeRun?.url() ?? null)
+        : current.phase === 'device'
+          ? current.verificationUrl
+          : null
+    return url && isProviderSignInUrl(agent, url) ? url : null
+  }
+
   return {
     setups: (): OrcaCloudAgentSetups => {
       followIdentity()
@@ -246,6 +258,9 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       await session?.cancel()
     },
 
+    /** "Copy link": the page `reopen` opens, not opened (for incognito or another profile). */
+    signInLink: providerPage,
+
     /** "Open again" (Claude) / "Open page" (Codex): the provider's page, never anything else. */
     reopen: async (agent: OrcaCloudAccountAgent): Promise<boolean> => {
       const current = setups[agent]
@@ -255,13 +270,8 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
         startClaude()
         return true
       }
-      const url =
-        agent === 'claude'
-          ? (claudeRun?.url() ?? null)
-          : current.phase === 'device'
-            ? current.verificationUrl
-            : null
-      if (!url || !isProviderSignInUrl(agent, url)) {
+      const url = providerPage(agent)
+      if (!url) {
         return false
       }
       if (agent === 'claude') {
