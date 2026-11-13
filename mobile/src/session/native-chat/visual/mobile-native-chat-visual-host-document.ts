@@ -16,7 +16,7 @@ export const MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT = 160
 export const MOBILE_NATIVE_CHAT_VISUAL_APPLY_HEIGHT = '__orcaVisualApplyHeight'
 
 const SIZE_FORWARD_INTERVAL_MS = 100
-const LINK_WINDOW_MS = 5_000
+export const MOBILE_NATIVE_CHAT_VISUAL_LINK_WINDOW_MS = 5_000
 
 // The unsandboxed WebView loads only this trusted wrapper; author HTML stays in an opaque sandboxed child, whose srcdoc inherits this CSP.
 // Relay only the child/channel’s messages and keep the app token private; load pings detect escapes, while CSP, sandbox and allowsLoad enforce navigation policy.
@@ -40,7 +40,7 @@ export function buildMobileNativeChatVisualHostDocument(input: {
     link: NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
     applyHeight: MOBILE_NATIVE_CHAT_VISUAL_APPLY_HEIGHT,
     sizeIntervalMs: SIZE_FORWARD_INTERVAL_MS,
-    linkWindowMs: LINK_WINDOW_MS,
+    linkWindowMs: MOBILE_NATIVE_CHAT_VISUAL_LINK_WINDOW_MS,
     ping: NATIVE_CHAT_VISUAL_PING_TYPE,
     pong: NATIVE_CHAT_VISUAL_PONG_TYPE,
     pongTimeoutMs: input.pongTimeoutMs ?? NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS

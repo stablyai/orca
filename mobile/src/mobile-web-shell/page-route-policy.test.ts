@@ -9,6 +9,7 @@ import {
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { MobileWebBundleManifestReadSchema } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { MANIFEST_WIRE } from './mobile-web-shell-session-test-fixtures'
+import { setVisualDocumentSupport } from '../test-support/visual-document-capability-node'
 
 function pageRoutesOf(routes: Parameters<typeof routeViewOf>[0]): string[] {
   return routeViewOf(routes, '/h/host-1').pageRoutes
@@ -125,6 +126,19 @@ describe('the pairs a session publishes to the page', () => {
 describe('a route that declares an optional grant', () => {
   const pathname = '/h/[hostId]/session/[worktreeId]'
   const opened = '/h/host-1/session/wt-1'
+
+  it('grants interactive reports only when the installed native binary implements them', () => {
+    const routes = [{ pathname, grants: ['navigate'], optionalGrants: ['native.visual.document'] }]
+    try {
+      setVisualDocumentSupport(false)
+      expect(grantsForRoute(routes, opened)).toEqual(['navigate'])
+      expect(pageRoutesOf(routes)).toEqual([pathname])
+      setVisualDocumentSupport(true)
+      expect(grantsForRoute(routes, opened)).toEqual(['navigate', 'native.visual.document'])
+    } finally {
+      setVisualDocumentSupport(false)
+    }
+  })
 
   it('drops an optional name this shell does not implement, and serves the route anyway', () => {
     const fromTheFuture = [

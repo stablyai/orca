@@ -53,6 +53,7 @@ internal class MobileWebShellDocument(private val context: Context) {
   // Failure state crosses main-thread callbacks and Chromium’s background interceptor.
   @Volatile private var documentFailed = false
   @Volatile private var served: MobileWebShellServed? = null
+  private val visualDocuments = MobileWebShellVisualDocuments()
   private var blocker: ScriptHandler? = null
   // Read by the interceptor thread when it reports a failed main-frame load.
   @Volatile var webView: WebView? = createWebView()
@@ -66,6 +67,7 @@ internal class MobileWebShellDocument(private val context: Context) {
     val next = MobileWebShellAppliedProps(generationDirectory, sessionId, bridgeEnabled)
     if (applied?.matches(next) == true) return
     applied = next
+    visualDocuments.clear()
     documentFailed = false
     loadState.reset()
     val view = webView
@@ -195,10 +197,28 @@ internal class MobileWebShellDocument(private val context: Context) {
     blocker?.remove()
     blocker = null
     served = null
+    visualDocuments.clear()
     documentFailed = false
     view.stopLoading()
     (view.parent as? ViewGroup)?.removeView(view)
     view.destroy()
+  }
+
+  fun createVisualDocument(html: String): String {
+    check(isUsable && served != null && loadState.hasCommittedDocument)
+    val origin = mobileWebShellOrigin(applied?.sessionId ?: "") ?: error("No visual document origin")
+    return origin + visualDocuments.create(html)
+  }
+
+  fun releaseVisualDocument(url: String) {
+    visualDocumentPath(Uri.parse(url))?.let(visualDocuments::remove)
+  }
+
+  private fun visualDocumentPath(url: Uri): String? {
+    val host = served?.originHost ?: return null
+    val parts = requestParts(url).copy(fragment = null)
+    val path = resolveMobileWebShellRequestPath(parts, host) ?: return null
+    return if (visualDocuments.read(path) != null) path else null
   }
 
   // Keep explicit settings even where newer WebViews ignore deprecated options; the floor is Chromium 101.
@@ -295,6 +315,12 @@ internal class MobileWebShellDocument(private val context: Context) {
       hasRangeHeader = request.requestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
     )
     val path = resolveMobileWebShellRequestPath(parts, current.originHost) ?: return null
+    if (path.startsWith(MOBILE_WEB_SHELL_VISUAL_PREFIX)) {
+      if (request.isForMainFrame) return null
+      val bytes = visualDocuments.read(path) ?: return null
+      return WebResourceResponse("text/html", "utf-8", 200, "OK",
+        mobileWebShellResponseHeaders(path, bytes.size), ByteArrayInputStream(bytes))
+    }
     val asset = current.generation.entries[path] ?: return null
     val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
     val headers = mobileWebShellResponseHeaders(path, bytes.size)
@@ -324,6 +350,7 @@ internal class MobileWebShellDocument(private val context: Context) {
     }
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+      if (!request.isForMainFrame && visualDocumentPath(request.url) != null) return false
       // hasGesture gates only opener offers: human requests may omit it and subframes can target top without it.
       val verdict = mobileWebShellNavigationVerdict(
         url = request.url?.toString(),

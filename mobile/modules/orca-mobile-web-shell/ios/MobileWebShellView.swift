@@ -97,6 +97,15 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
     try document.postBridgeMessage(json, promise: promise)
   }
 
+  func createVisualDocument(_ html: String) throws -> String {
+    guard let document else { throw MobileWebShellBridgeUnavailableException() }
+    return try document.createVisualDocument(html)
+  }
+
+  func releaseVisualDocument(_ url: String) {
+    document?.releaseVisualDocument(url)
+  }
+
   func documentLoadState(_ payload: [String: Any]) {
     onLoadState(payload)
   }

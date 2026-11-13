@@ -38,6 +38,8 @@ export type OrcaMobileWebShellViewHandle = {
   // Post raw JSON; reject over-cap messages or unavailable receivers (no page handshake, navigation, load failure, renderer gone) so host requests cannot silently hang.
   // Resolve does not prove delivery: iOS reports callAsyncJavaScript failures, Android’s void postMessage only proves enqueue. Require a page acknowledgment for delivery.
   postBridgeMessage: (json: string) => Promise<void>
+  createVisualDocument: (html: string) => Promise<string>
+  releaseVisualDocument: (url: string) => Promise<void>
 }
 
 // Render activated generation at private origin; retry by remounting under a new key to reinstall fences. postBridgeMessage cannot report load success.
@@ -98,6 +100,8 @@ export function currentWebViewProvider(): WebViewProvider | null {
     return null
   }
 }
+
+export { supportsVisualDocuments } from './visual-document-capability'
 
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,

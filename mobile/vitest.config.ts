@@ -11,6 +11,12 @@ export default defineConfig({
     // A faithful Node stand-in for the native module, rather than a mock in every test that reaches it.
     alias: [
       {
+        find: /^.*\/orca-mobile-web-shell\/src\/visual-document-capability$/,
+        replacement: fileURLToPath(
+          new URL('./src/test-support/visual-document-capability-node.ts', import.meta.url)
+        )
+      },
+      {
         find: /^\.\/mobile-agent-icon-assets$/,
         replacement: fileURLToPath(
           new URL('./src/test-support/mobile-agent-icon-assets-node.ts', import.meta.url)

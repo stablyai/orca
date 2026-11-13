@@ -219,13 +219,14 @@ export function buildNativeChatVisualDocument(args: {
   html: string
   channel: string
   theme: NativeChatVisualTheme
+  base?: 'srcdoc' | 'document'
 }): string {
   const scheme = args.theme.colorScheme === 'dark' ? 'dark' : 'light'
   return `<!doctype html>
 <html class="${scheme}">
 <head>
 <meta charset="utf-8">
-${INERT_BASE}
+${args.base === 'document' ? '' : INERT_BASE}
 <meta http-equiv="Content-Security-Policy" content="${NATIVE_CHAT_VISUAL_CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style id="orca-visual-theme">${nativeChatVisualThemeCss(args.theme)}</style>

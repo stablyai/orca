@@ -13,5 +13,9 @@ internal fun mobileWebShellResponseHeaders(path: String, byteCount: Int): Map<St
     // WebKit srcdoc images leaked the embedder origin despite iframe referrerPolicy; set the document header.
     headers["Referrer-Policy"] = "no-referrer"
   }
+  if (path.startsWith(MOBILE_WEB_SHELL_VISUAL_PREFIX)) {
+    headers["Content-Security-Policy"] = MOBILE_WEB_SHELL_VISUAL_CSP
+    headers["Referrer-Policy"] = "no-referrer"
+  }
   return headers
 }

@@ -4,6 +4,8 @@ import { BRIDGE_EXTERNAL_NAVIGATION_GRANT } from './cancelled-navigation-target'
 import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
+import { BRIDGE_VISUAL_DOCUMENT_VERB } from './bridge/bridge-visual-verbs'
+import { supportsVisualDocuments } from '../../modules/orca-mobile-web-shell/src/visual-document-capability'
 
 export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes']>[number]
 
@@ -27,6 +29,9 @@ export const MOBILE_WEB_SHELL_GRANTS = [
 export type MobileWebShellGrant = (typeof MOBILE_WEB_SHELL_GRANTS)[number]
 
 function implementsGrant(name: string): boolean {
+  if (name === BRIDGE_VISUAL_DOCUMENT_VERB) {
+    return supportsVisualDocuments()
+  }
   return MOBILE_WEB_SHELL_GRANTS.some((grant) => grant === name)
 }
 

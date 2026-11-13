@@ -8,6 +8,7 @@ public class OrcaMobileWebShellModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
+    Function("supportsVisualDocuments") { true }
 
     OnCreate {
       memoryWarningObserver = NotificationCenter.default.addObserver(
@@ -104,6 +105,14 @@ public class OrcaMobileWebShellModule: Module {
       AsyncFunction("postBridgeMessage") {
         (view: OrcaMobileWebShellView, json: String, promise: Promise) in
         try view.postBridgeMessage(json, promise: promise)
+      }
+
+      AsyncFunction("createVisualDocument") { (view: OrcaMobileWebShellView, html: String) in
+        try view.createVisualDocument(html)
+      }
+
+      AsyncFunction("releaseVisualDocument") { (view: OrcaMobileWebShellView, url: String) in
+        view.releaseVisualDocument(url)
       }
 
       OnViewDidUpdateProps { (view: OrcaMobileWebShellView) in
