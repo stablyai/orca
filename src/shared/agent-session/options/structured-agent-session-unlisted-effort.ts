@@ -17,6 +17,16 @@ export function withUnlistedEffort(
   if (!modelId || typeof effort?.value !== 'string') {
     return snapshot
   }
+  const model = catalog.models.find((entry) => entry.id === modelId)
+  // A listed model with an empty menu has no level; a leftover value is not its setting.
+  if (
+    model &&
+    listed?.includes(modelId) &&
+    model.effortsKnown !== false &&
+    !model.options.some((option) => option.id === 'effort')
+  ) {
+    return snapshot.filter((entry) => entry.id !== 'effort')
+  }
   if (
     agent !== 'pi' &&
     snapshot.some(
@@ -28,9 +38,7 @@ export function withUnlistedEffort(
   ) {
     return snapshot
   }
-  const offered = catalog.models
-    .find((model) => model.id === modelId)
-    ?.options.find((option) => option.id === 'effort')
+  const offered = model?.options.find((option) => option.id === 'effort')
   if (
     (listed?.includes(modelId) || (agent === 'pi' && !listed)) &&
     offered?.kind.type === 'select' &&

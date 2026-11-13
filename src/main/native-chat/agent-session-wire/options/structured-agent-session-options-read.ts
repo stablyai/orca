@@ -134,12 +134,19 @@ export async function readStructuredAgentSessionOptions(
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   if (live && usesModelSpecificAcpEfforts(agent)) {
+    const inventory = restingOptions.inventory
     options = {
       ...options,
       models: fillUnknownModelEfforts(
         options.models,
-        restingOptions.inventory.origin === 'unknown' ? [] : restingOptions.inventory.models
-      )
+        inventory.origin === 'unknown' ? [] : inventory.models
+      ),
+      // The current model may have no fast parameter; other models still do.
+      ...(options.fastModeSupport === undefined &&
+      inventory.origin !== 'unknown' &&
+      inventory.fastModeSupport
+        ? { fastModeSupport: inventory.fastModeSupport }
+        : {})
     }
   }
   const resting = live ? restingOptions : null

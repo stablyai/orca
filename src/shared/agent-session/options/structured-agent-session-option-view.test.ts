@@ -4,6 +4,7 @@ import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
+import { CURSOR_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-gemini-cursor'
 
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
@@ -475,4 +476,62 @@ describe('Pi supported selection apart from saved intent', () => {
     })
     expect(effort(unknown)).toMatchObject({ settable: false, kind: { currentValue: 'off' } })
   })
+})
+
+it('shows Cursor fast mode only on a model that supports it', () => {
+  const efforts = levels('low', 'medium', 'high')
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('cursor', CURSOR_SESSION_OPTION_CATALOG),
+    CURSOR_SESSION_OPTION_CATALOG,
+    {
+      models: [
+        {
+          id: 'default',
+          label: 'Auto',
+          isDefault: false,
+          efforts: [],
+          declaredDefaultEffort: null
+        },
+        {
+          id: 'grok-4.7',
+          label: 'Grok 4.7',
+          isDefault: false,
+          efforts,
+          supportsFastMode: true
+        }
+      ],
+      fastModeSupport: { supported: true },
+      listedModelIds: ['default', 'grok-4.7'],
+      current: { model: 'default' }
+    }
+  )
+  const fast = (current: StructuredAgentSessionOptionState) =>
+    structuredAgentSessionShownSnapshot(current).find((entry) => entry.id === 'fastMode')
+  expect(fast(state)).toBeUndefined()
+  expect(fast(commitStructuredAgentSessionOption(state, 'model', 'grok-4.7'))).toMatchObject({
+    kind: { type: 'boolean' }
+  })
+})
+
+it('shows no effort on a listed Cursor model that has none', () => {
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('cursor', CURSOR_SESSION_OPTION_CATALOG),
+    CURSOR_SESSION_OPTION_CATALOG,
+    {
+      models: [
+        {
+          id: 'composer-2.5',
+          label: 'Composer 2.5',
+          isDefault: false,
+          efforts: [],
+          declaredDefaultEffort: null
+        }
+      ],
+      listedModelIds: ['composer-2.5'],
+      current: { model: 'composer-2.5', effort: 'medium' }
+    }
+  )
+  expect(
+    structuredAgentSessionShownSnapshot(state).find((entry) => entry.id === 'effort')
+  ).toBeUndefined()
 })

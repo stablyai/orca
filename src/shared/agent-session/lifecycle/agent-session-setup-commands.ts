@@ -32,6 +32,7 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
   { agent: 'opencode2', loginCommand: ['opencode2', 'auth', 'login'] },
   { agent: 'pi', loginCommand: ['pi'], slashCommand: '/login' },
   { agent: 'omp', loginCommand: ['omp'], slashCommand: '/login' },
+  { agent: 'cursor', loginCommand: ['cursor-agent', 'login'] },
   {
     agent: 'copilot',
     loginCommand: ['copilot', 'login'],

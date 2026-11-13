@@ -12,8 +12,12 @@ export function fillUnknownModelEfforts(
   const byId = new Map(known.map((row) => [row.id, row]))
   return models.map((row) => {
     const discovered = byId.get(row.id)
+    const withFast = (model: AgentSessionModelOption): AgentSessionModelOption =>
+      model.supportsFastMode === undefined && discovered?.supportsFastMode !== undefined
+        ? { ...model, supportsFastMode: discovered.supportsFastMode }
+        : model
     if (row.effortsKnown !== false || !discovered || discovered.effortsKnown === false) {
-      return row
+      return withFast(row)
     }
     const {
       effortsKnown: _unknown,
@@ -21,7 +25,7 @@ export function fillUnknownModelEfforts(
       declaredDefaultEffort: _declared,
       ...rest
     } = row
-    return {
+    return withFast({
       ...rest,
       efforts: discovered.efforts,
       ...(discovered.defaultEffort !== undefined
@@ -30,7 +34,7 @@ export function fillUnknownModelEfforts(
       ...(discovered.declaredDefaultEffort !== undefined
         ? { declaredDefaultEffort: discovered.declaredDefaultEffort }
         : {})
-    }
+    })
   })
 }
 
@@ -45,14 +49,18 @@ export function fillUnknownCatalogEfforts(
       return row
     }
     const { effortsKnown: _unknown, declaredDefaultEffort: _declared, ...rest } = row
+    const fast = discovered.options.filter((option) => option.id === 'fastMode')
     return {
       ...rest,
       ...(discovered.declaredDefaultEffort !== undefined
         ? { declaredDefaultEffort: discovered.declaredDefaultEffort }
         : {}),
       options: [
-        ...row.options.filter((option) => option.id !== 'effort'),
-        ...discovered.options.filter((option) => option.id === 'effort')
+        ...row.options.filter(
+          (option) => option.id !== 'effort' && (fast.length === 0 || option.id !== 'fastMode')
+        ),
+        ...discovered.options.filter((option) => option.id === 'effort'),
+        ...fast
       ]
     }
   })
@@ -75,7 +83,9 @@ export function enrichStructuredAgentEfforts(
       ...state.catalog,
       models: fillUnknownCatalogEfforts(
         state.catalog.models,
-        catalog.models.map((row) => discoveredModel(row, false, state.record.agent))
+        catalog.models.map((row) =>
+          discoveredModel(row, catalog.fastModeSupport?.supported === true, state.record.agent)
+        )
       )
     }
   }

@@ -51,10 +51,14 @@ export function mergedAgentModelCatalogModels(
       defaultEffort: _own,
       declaredDefaultEffort: _declaration,
       effortsKnown: _known,
+      supportsFastMode: _fast,
       ...rest
     } = model
+    const supportsFastMode =
+      model.supportsFastMode ?? listed?.supportsFastMode ?? olderModel?.supportsFastMode
     return {
       ...rest,
+      ...(supportsFastMode !== undefined ? { supportsFastMode } : {}),
       // Efforts stay unknown only when neither listing knows this model's menu.
       ...(effortsKnown === false ? { effortsKnown } : {}),
       // Without discovery/configuration, live flags are the only available default evidence.

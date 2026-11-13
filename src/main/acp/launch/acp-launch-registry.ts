@@ -27,6 +27,7 @@ import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/opencode-launc
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
+import { CURSOR_LAUNCH_SPEC } from '../../cursor/cursor-acp-launch-spec'
 import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
 import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
@@ -157,6 +158,7 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC,
+  CURSOR_LAUNCH_SPEC,
   COPILOT_LAUNCH_SPEC,
   KIMI_LAUNCH_SPEC
 ]
