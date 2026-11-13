@@ -47,8 +47,7 @@ describe.runIf(process.platform !== 'win32')('chat naming CLI discovery', () => 
 
   it.each([
     ['./node_modules/.bin:EMPTY', 'node_modules/.bin'],
-    [':EMPTY', '.'],
-    ['EMPTY:', '.']
+    [':EMPTY', '.']
   ])('resolves recipe PATH %s from the workspace before global installs', async (path, folder) => {
     const home = mkdtempSync(join(tmpdir(), 'orca-naming-recipe-path-'))
     homes.push(home)

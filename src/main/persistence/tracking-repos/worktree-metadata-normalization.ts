@@ -57,7 +57,8 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     } else if (projectIds.has(ownerId)) {
       continue
     }
-    if (meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) {
+    // An archived workspace's checkout is missing on purpose; its row is the workspace.
+    if ((meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) || meta?.archivedCheckout) {
       continue
     }
     if (!isAbsolute(worktreePath) || isWslUncPath(worktreePath)) {

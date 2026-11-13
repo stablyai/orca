@@ -4,7 +4,8 @@ import type { BrowserPageCreationPlacement } from '../../../../shared/browser/cl
 import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
 import {
   publishCreatedBrowserSessionTab,
-  resolveBrowserTabCreateFocus
+  resolveBrowserTabCreateFocus,
+  type BrowserTabCreateFocusResolution
 } from './browser-tab-create-publication'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { BrowserError } from '../../../browser/browser-error'
@@ -13,8 +14,31 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import {
   createBrowserClientPage,
+  createBrowserPageOnPairedHost,
   openBrowserUrlOnClient
 } from '../client-pages/browser-client-page-opening'
+import { opensOnPairedDesktop } from '../client-pages/server-agent-tab-placement'
+
+type BrowserTabCreateRequest = {
+  url?: string
+  worktree?: string
+  page?: string
+  profileId?: string
+  waitForRegistration?: boolean
+  activate?: boolean
+  navigation?: RuntimeNavigationTarget
+  targetGroupId?: string
+  placement?: BrowserPageCreationPlacement
+  split?: BrowserTabSplitDirection
+  splitFromTabId?: string
+}
+
+type BrowserTabCreateCaller = {
+  pairedDeviceId?: string
+  clientKind?: 'mobile' | 'runtime'
+  opensPageLink?: boolean
+  signal?: AbortSignal
+}
 
 export class RuntimeBrowserTabCreation {
   constructor(
@@ -41,25 +65,8 @@ export class RuntimeBrowserTabCreation {
   ) {}
 
   async browserTabCreate(
-    params: {
-      url?: string
-      worktree?: string
-      page?: string
-      profileId?: string
-      waitForRegistration?: boolean
-      activate?: boolean
-      navigation?: RuntimeNavigationTarget
-      targetGroupId?: string
-      placement?: BrowserPageCreationPlacement
-      split?: BrowserTabSplitDirection
-      splitFromTabId?: string
-    },
-    caller?: {
-      pairedDeviceId?: string
-      clientKind?: 'mobile' | 'runtime'
-      opensPageLink?: boolean
-      signal?: AbortSignal
-    }
+    params: BrowserTabCreateRequest,
+    caller?: BrowserTabCreateCaller
   ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
@@ -103,35 +110,23 @@ export class RuntimeBrowserTabCreation {
     // Headless hosts use offscreen WebContents because no renderer webview exists.
     if (!this.host.getAvailableAuthoritativeWindow()) {
       const offscreen = this.host.getOffscreenBrowserBackend()
-      if (!offscreen) {
-        throw new BrowserError('browser_error', 'This host does not support browser panes.')
+      const createOffscreen = async (): Promise<{ browserPageId: string }> => {
+        if (!offscreen) {
+          throw new BrowserError('browser_error', 'This host does not support browser panes.')
+        }
+        return this.createOffscreenTab(offscreen, params, caller, url, worktreeId, focus)
       }
-      const created = await offscreen.createTab({
-        url,
-        worktreeId,
-        profileId: params.profileId,
-        ...(params.page ? { browserPageId: params.page } : {})
-      })
-      if (worktreeId) {
-        this.host.serveBrowserTabs?.opened({
-          worktreeId,
-          pageId: created.browserPageId,
-          url,
-          title: '',
-          ...(params.profileId ? { profileId: params.profileId } : {}),
-          ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
-        })
+      // A desktop on "Server (streamed)" declines when asked, so agent tabs keep streaming from here.
+      if (opensOnPairedDesktop(this.host, params, caller, offscreen !== null)) {
+        return createBrowserPageOnPairedHost(
+          this.host,
+          params,
+          params.profileId ?? browserSessionRegistry.getDefaultProfile().id,
+          offscreen ? createOffscreen : undefined,
+          caller?.signal
+        )
       }
-      publishCreatedBrowserSessionTab(this.host, {
-        placementKind: 'offscreen',
-        browserPageId: created.browserPageId,
-        worktreeId,
-        focus,
-        ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
-        ...(caller?.opensPageLink ? { opensPageLink: true } : {}),
-        targetGroupId: params.targetGroupId
-      })
-      return { browserPageId: created.browserPageId }
+      return createOffscreen()
     }
     const { browserPageId } = await createBrowserTabInRenderer(
       this.host,
@@ -186,6 +181,42 @@ export class RuntimeBrowserTabCreation {
     }
 
     return { browserPageId }
+  }
+
+  private async createOffscreenTab(
+    offscreen: NonNullable<ReturnType<RuntimeBrowserCommandHost['getOffscreenBrowserBackend']>>,
+    params: BrowserTabCreateRequest,
+    caller: BrowserTabCreateCaller | undefined,
+    url: string,
+    worktreeId: string | undefined,
+    focus: BrowserTabCreateFocusResolution
+  ): Promise<{ browserPageId: string }> {
+    const created = await offscreen.createTab({
+      url,
+      worktreeId,
+      profileId: params.profileId,
+      ...(params.page ? { browserPageId: params.page } : {})
+    })
+    if (worktreeId) {
+      this.host.serveBrowserTabs?.opened({
+        worktreeId,
+        pageId: created.browserPageId,
+        url,
+        title: '',
+        ...(params.profileId ? { profileId: params.profileId } : {}),
+        ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
+      })
+    }
+    publishCreatedBrowserSessionTab(this.host, {
+      placementKind: 'offscreen',
+      browserPageId: created.browserPageId,
+      worktreeId,
+      focus,
+      ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
+      ...(caller?.opensPageLink ? { opensPageLink: true } : {}),
+      targetGroupId: params.targetGroupId
+    })
+    return { browserPageId: created.browserPageId }
   }
 
   async browserOpenUrlOnClient(

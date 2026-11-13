@@ -16,6 +16,13 @@ import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sort-stamps'
 import type { ExternalConversationLink } from '../external-conversation-link'
 
+export type ArchivedCheckout = {
+  branch: string
+  archivedAt: number
+  /** isArchived before the archive, so a refused archive puts it back. */
+  wasArchived?: boolean
+}
+
 export type WorktreeMeta = {
   /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
   instanceId?: string
@@ -54,6 +61,8 @@ export type WorktreeMeta = {
   linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
+  /** Set while archived with the checkout removed from disk; restore recreates it from this branch. */
+  archivedCheckout?: ArchivedCheckout
   isUnread: boolean
   isPinned: boolean
   sortOrder: number

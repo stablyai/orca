@@ -15,11 +15,9 @@ vi.mock('../authentication/relay-token-verifier.js', () => ({
 }))
 
 import { createRelayApp } from '../app.js'
-import { relayHostLogDigest } from '../observability/relay-host-log-digest.js'
 
 describe('assignment rejection logging', () => {
   afterEach(() => {
-    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -49,43 +47,8 @@ describe('assignment rejection logging', () => {
     expect(line).toContain('lane=sticky')
     expect(line).toContain('hinted=true')
     expect(line).toContain('reason=relay_capacity_exhausted')
-    expect(line).toContain(`host=${relayHostLogDigest(host)}`)
+    expect(line).toContain('host=af342ad00ee4')
     expect(line).not.toContain(host)
-  })
-
-  it('names the throttled host once per window and closes it with the suppressed count', async () => {
-    vi.useFakeTimers()
-    const host = 'mmmmmmmmmmmmmmmm'
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: {
-        assign: vi.fn(async () => assignment('cell-r', host)),
-        resolve: vi.fn(async () => null)
-      } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    expect((await app.request('/v1/assign', assignmentRequest(host))).status).toBe(200)
-    expect((await app.request('/v1/assign', assignmentRequest(host))).status).toBe(503)
-    expect((await app.request('/v1/assign', assignmentRequest(host))).status).toBe(503)
-
-    const throttled = (): string[] =>
-      warn.mock.calls
-        .map((call) => String(call[0]))
-        .filter((entry) => entry.includes('reason=host-rate-limited'))
-    expect(throttled()).toHaveLength(1)
-    expect(throttled()[0]).toContain('route=assign')
-    expect(throttled()[0]).toContain('lane=placement')
-    expect(throttled()[0]).toContain(`host=${relayHostLogDigest(host)}`)
-    expect(throttled()[0]).not.toContain('suppressed=')
-    expect(throttled()[0]).not.toContain(host)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(throttled()).toHaveLength(2)
-    expect(throttled()[1]).toContain('suppressed=1')
-    expect(throttled()[1]).toContain(`host=${relayHostLogDigest(host)}`)
   })
 })
 

@@ -205,6 +205,14 @@ export class RuntimeBrowserPageRegistry {
     this.globalActivePageId = null
   }
 
+  /** An engine tab took the selection; unscoped creates and switches move only the global pick. */
+  yieldSelection(workspaceId: string | undefined): void {
+    this.deactivateGlobal()
+    if (workspaceId !== undefined) {
+      this.deactivateWorkspace(workspaceId)
+    }
+  }
+
   deactivateWorkspace(workspaceId: string): void {
     for (const [browserPageId, page] of this.pages) {
       if (page.workspaceId === workspaceId && page.active) {

@@ -20,8 +20,8 @@ import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
 } from '../../../../src/shared/github/pull-requests/refresh/linked-pr-staleness'
-import type { MobileWorktreeSummary } from '../mobile-worktree-metadata-operations'
-import type { WorktreeGitHubPRLink } from '../mobile-pr-link'
+import type { MobileWorktreeSummary } from '../branches/mobile-worktree-metadata-operations'
+import type { WorktreeGitHubPRLink } from './mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
 
 export type PrSidebarData = {

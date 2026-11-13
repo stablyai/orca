@@ -15,13 +15,13 @@ import {
   retireRuntimeBrowserClientPage
 } from '../../runtime/browser/client-pages/browser-client-page-close'
 import {
-  canPlacePairedPage,
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
   hasPairedPageHost,
   openBrowserUrlOnClient
 } from '../../runtime/browser/client-pages/browser-client-page-opening'
+import { opensOnPairedDesktop } from '../../runtime/browser/client-pages/server-agent-tab-placement'
 import {
   BrowserClientPageQueries,
   yieldClientPageSelection,
@@ -129,32 +129,36 @@ function createTab(
       )
     })()
   }
-  // Only this host’s CLI defaults to client pages; omitted paired-client placement means server.
-  if (
-    !params?.placement &&
-    !caller?.pairedDeviceId &&
-    !engineAvailable() &&
-    canPlacePairedPage(host)
-  ) {
+  const hasEngine = engineAvailable()
+  const createOnEngine = async (): Promise<unknown> => {
+    const created = await forward([params, caller])
+    if (
+      hasEngine &&
+      browserTabCreateClientPageStartsActive(params?.activate) &&
+      host.getRuntimeBrowserPageRegistry().listPages().length > 0
+    ) {
+      await yieldClientPageSelection(host, params?.worktree)
+    }
+    return created
+  }
+  // Engine tabs reach no client, so this host's own agents open on a paired desktop when one can host.
+  // The engine keeps profiles orcad cannot describe to a desktop.
+  const engineOnlyProfile =
+    hasEngine && params?.profileId !== undefined && params.profileId !== DEFAULT_BROWSER_PROFILE_ID
+  if (!engineOnlyProfile && opensOnPairedDesktop(host, params, caller, hasEngine)) {
     return createBrowserPageOnPairedHost(
       host,
       params ?? {},
       orcadBrowserProfileId(params?.profileId),
+      hasEngine ? async () => requireCreatedPage(await createOnEngine()) : undefined,
       caller?.signal
     )
   }
-  if (
-    !engineAvailable() ||
-    !browserTabCreateClientPageStartsActive(params?.activate) ||
-    host.getRuntimeBrowserPageRegistry().listPages().length === 0
-  ) {
-    return forward([params, caller])
-  }
-  return (async () => {
-    const created = await forward([params, caller])
-    await yieldClientPageSelection(host, params?.worktree)
-    return created
-  })()
+  return createOnEngine()
+}
+
+function requireCreatedPage(value: unknown): { browserPageId: string } {
+  return requireTabResult(value, isTabSwitchResult)
 }
 
 function engineTabs(forward: Forward): BrowserEngineTabs {

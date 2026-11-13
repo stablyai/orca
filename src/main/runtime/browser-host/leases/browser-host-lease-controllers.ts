@@ -22,7 +22,6 @@ export function createBrowserHostLeaseControllers(
     initializationChanged?: (workspaceId: string) => void
     reconnectGraceMs?: number
     fence(state: BrowserHostLeaseState, reason: BrowserHostFenceReason): void
-    fenceReconciliation(state: BrowserHostLeaseState): void
   }
 ) {
   const initializations = new BrowserHostPageInitializations(
@@ -42,10 +41,14 @@ export function createBrowserHostLeaseControllers(
     dependencies.initializationChanged
   )
   const reconciliations = new BrowserHostPageReconciliationOrchestrator(registry, placements)
+  const fenceReconciliation = (state: BrowserHostLeaseState): void => {
+    initializations.fence(state)
+    reconciliations.fence(state)
+  }
   const reconnects = new BrowserHostLeaseReconnectController({
     graceMs: dependencies.reconnectGraceMs ?? 15_000,
     leasesByClientId: dependencies.leases,
-    fenceReconciliation: dependencies.fenceReconciliation,
+    fenceReconciliation,
     fenceLease: dependencies.fence,
     fenceRoute: (state, reason) => dependencies.tunnels.fence(state, reason)
   })
@@ -53,6 +56,7 @@ export function createBrowserHostLeaseControllers(
     initializations,
     reconciliations,
     reconnects,
+    fenceReconciliation,
     sealInitializations: (
       identity: BrowserHostLeaseIdentity & { connectionId?: string },
       blocked: boolean

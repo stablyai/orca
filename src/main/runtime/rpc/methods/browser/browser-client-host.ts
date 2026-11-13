@@ -1,3 +1,4 @@
+import { requireCommandResultIdentity } from './browser-client-host-command-result-identity'
 import { BROWSER_PAGE_INITIALIZATION_ACTION_METHODS } from './browser-page-initialization-action'
 import '../../../../../shared/protocol-version'
 import {
@@ -13,8 +14,10 @@ import {
   BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
   BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY,
   BrowserClientHostAttachParams,
+  BrowserClientHostCommandResultChunkParams,
   BrowserClientHostCommandResultParams
 } from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD } from '../../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserError } from '../../../../browser/browser-error'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
@@ -193,33 +196,23 @@ export const BROWSER_CLIENT_HOST_METHODS = [
     name: 'browser.clientHost.commandResult',
     permission: 'workspace',
     params: BrowserClientHostCommandResultParams,
-    handler: (
-      params,
-      { runtime, pairedDeviceId, connectionId, clientKind, clientCapabilities }
-    ) => {
-      if (clientKind !== 'runtime' || !pairedDeviceId || !connectionId) {
-        throw new Error('authenticated_browser_client_host_required')
-      }
-      if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
-        throw new Error('browser_client_host_capability_required')
-      }
-      if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
-        throw new BrowserError(
-          BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
-          BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
-        )
-      }
-      const accepted = getBrowserHostLeaseRegistry(runtime).settleClientPageCommand(
-        {
-          authorityEpoch: params.authorityEpoch,
-          browserHostClientId: params.browserHostClientId,
-          browserHostGeneration: params.browserHostGeneration,
-          pairedDeviceId,
-          connectionId
-        },
+    handler: (params, context) => {
+      const accepted = getBrowserHostLeaseRegistry(context.runtime).settleClientPageCommand(
+        requireCommandResultIdentity(params, context),
         params
       )
       return { accepted }
+    }
+  }),
+  defineMethod({
+    name: BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD,
+    permission: 'workspace',
+    params: BrowserClientHostCommandResultChunkParams,
+    handler: (params, context) => {
+      getBrowserHostLeaseRegistry(context.runtime)
+        .requireCommandResultLedger(requireCommandResultIdentity(params, context))
+        .stageResultChunk(params)
+      return { accepted: true }
     }
   }),
   defineMethod({

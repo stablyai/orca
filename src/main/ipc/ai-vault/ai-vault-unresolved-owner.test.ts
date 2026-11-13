@@ -1,5 +1,7 @@
 /** Unresolved-owner sentinels have no environment: return unavailable instead of dialing a paired runtime (#18097). */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { resetLocalAiVaultScanProgressForTests } from '../../ai-vault/scan-lifecycle/ai-vault-local-scan-progress'
 
 const mocks = vi.hoisted(() => ({
   scanLocalSessions: vi.fn(),
@@ -37,6 +39,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   _internals.resetAiVaultCacheForTests()
 })
+
+afterEach(resetLocalAiVaultScanProgressForTests)
 
 describe('AI Vault never routes the unresolved-owner sentinel (#18097)', () => {
   it('answers a list with a host issue and no runtime or local scan', async () => {

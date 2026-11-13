@@ -22931,6 +22931,11 @@
         "reasonSharedSession": "Também aberta em outro painel",
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
         "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
+      },
+      "oauthUsage": {
+        "title": "Consulta de uso do Claude",
+        "description": "Usa seu login do Claude Code para consultar o uso, os créditos e as contas inativas. Desative para usar apenas as leituras em tempo real das sessões do terminal.",
+        "about": "Sobre a consulta de uso do Claude"
       }
     },
     "managedData": {

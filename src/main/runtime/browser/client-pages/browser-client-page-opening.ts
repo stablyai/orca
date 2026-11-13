@@ -156,6 +156,7 @@ export function openBrowserUrlOnClient(
     host,
     { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
     DEFAULT_BROWSER_PROFILE_ID,
+    undefined,
     signal
   )
 }
@@ -171,11 +172,22 @@ export async function createBrowserPageOnPairedHost(
   host: BrowserClientPageOpeningHost,
   params: Omit<BrowserClientPageCreateParams, 'placement'> & { worktree?: string },
   browserProfileId: string,
+  /** The server's own browser, used when no paired desktop takes the page. */
+  fallback?: () => Promise<{ browserPageId: string }>,
   signal?: AbortSignal
 ): Promise<{ browserPageId: string }> {
   const { worktree: selector, ...rest } = params
   const worktree = selector ? await host.resolveBrowserWorkspace(selector) : undefined
-  const lease = await acquirePairedPageHost(host, worktree?.id)
+  let lease: BrowserHostLease
+  try {
+    // With a fallback, ask a desktop even while it hosts: its own setting decides, and a sleeping one times out.
+    lease = await acquirePairedPageHost(host, worktree?.id, fallback !== undefined)
+  } catch (error) {
+    if (fallback && error instanceof BrowserError && error.code === 'browser_host_unavailable') {
+      return fallback()
+    }
+    throw error
+  }
   return createBrowserClientPage(
     host,
     { ...rest, placement: { kind: 'client', browserHostClientId: lease.browserHostClientId } },
@@ -220,18 +232,22 @@ type PairedPageHostSource = Pick<
 /** No caller names a host for these pages, so the server picks one desktop and never leaves it ambiguous. */
 async function acquirePairedPageHost(
   host: PairedPageHostSource,
-  workspaceId: string | undefined
+  workspaceId: string | undefined,
+  askDesktop: boolean
 ): Promise<BrowserHostLease> {
   const leases = host.getBrowserHostLeaseRegistry()
-  try {
-    return selectPairedPageHost(leases)
-  } catch (error) {
-    // Several desktops already host: choose one of them rather than asking for another lease.
-    if (error instanceof BrowserHostAmbiguousError) {
-      return chooseAmongHosts(host, error.browserHostClientIds, workspaceId)
-    }
-    if (!isHostError(error, 'browser_host_unavailable')) {
-      throw error
+  // Only desktops that answer asks are asked; older ones keep the server's own browser.
+  if (!askDesktop) {
+    try {
+      return selectPairedPageHost(leases)
+    } catch (error) {
+      // Several desktops already host: choose one of them rather than asking for another lease.
+      if (error instanceof BrowserHostAmbiguousError) {
+        return chooseAmongHosts(host, error.browserHostClientIds, workspaceId)
+      }
+      if (!isHostError(error, 'browser_host_unavailable')) {
+        throw error
+      }
     }
   }
   try {

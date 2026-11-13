@@ -12,7 +12,6 @@
   ],
   "exclude": [
     "../src/renderer/src/components/browser-pane/ClientHostedBrowserPagePane.test.tsx",
-    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {

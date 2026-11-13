@@ -6,6 +6,7 @@ import { switchBrowserHostClientProfile } from '../profiles/browser-host-client-
 import { randomUUID } from 'node:crypto'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserHostCommandResultParams } from '../commands/browser-host-command-state'
+import { requireBrowserHostCommandResultLedger } from './browser-host-lease-records'
 import type {
   BrowserHostCommandResultIdentity,
   BrowserHostLease,
@@ -85,8 +86,7 @@ export class BrowserHostLeaseRegistry {
         tunnels: this.tunnels,
         reconnectGraceMs: options.reconnectGraceMs,
         initializationChanged: options.onClientPageInitializationChanged,
-        fence: (state, reason) => this.fenceLease(state, reason),
-        fenceReconciliation: (state) => this.fenceReconciliation(state)
+        fence: (state, reason) => this.fenceLease(state, reason)
       }
     )
   }
@@ -277,6 +277,10 @@ export class BrowserHostLeaseRegistry {
     )
   }
 
+  requireCommandResultLedger(identity: BrowserHostCommandResultIdentity) {
+    return requireBrowserHostCommandResultLedger(this.requireLeaseState(identity), identity)
+  }
+
   getPlacement(browserPageId: string): RuntimeBrowserPlacement | undefined {
     return this.pagePlacements.getPlacement(browserPageId)
   }
@@ -315,15 +319,10 @@ export class BrowserHostLeaseRegistry {
       pagePlacements: this.pagePlacements,
       retireInitializations: (fenced) => this.controllers.initializations.retireAuthority(fenced),
       clearReconnect: (fenced) => this.controllers.reconnects.clear(fenced),
-      fenceReconciliation: (state) => this.fenceReconciliation(state),
+      fenceReconciliation: this.controllers.fenceReconciliation,
       fenceRoute: (route, routeReason) => this.tunnels.fence(route, routeReason),
       releaseFencedPage: (retirement) => this.releaseFencedClientPage(retirement)
     })
-  }
-
-  private fenceReconciliation(state: BrowserHostLeaseState): void {
-    this.controllers.initializations.fence(state)
-    this.controllers.reconciliations.fence(state)
   }
 
   private releaseFencedClientPage(retirement: BrowserPageRetirement): void {
