@@ -39,18 +39,33 @@ export function PluginRemoveDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {t('auto.components.settings.PluginRemoveDialog.title', 'Remove {{value0}}?', {
-              value0: plugin?.name ?? ''
-            })}
+            {plugin?.isDev
+              ? t(
+                  'auto.components.settings.PluginRemoveDialog.devTitle',
+                  'Remove development folder for {{value0}}?',
+                  { value0: plugin.name }
+                )
+              : t('auto.components.settings.PluginRemoveDialog.title', 'Remove {{value0}}?', {
+                  value0: plugin?.name ?? ''
+                })}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              'auto.components.settings.PluginRemoveDialog.description',
-              'Its data is removed too.'
-            )}{' '}
-            {t(
-              'auto.components.settings.PluginRemoveDialog.pausesAutomations',
-              'Automations it created are paused, and stay paused if you install it again.'
+            {plugin?.isDev ? (
+              t(
+                'auto.components.settings.PluginRemoveDialog.devDescription',
+                'Orca stops loading this folder. Its source files, saved data and approval are kept.'
+              )
+            ) : (
+              <>
+                {t(
+                  'auto.components.settings.PluginRemoveDialog.description',
+                  'Its data is removed too.'
+                )}{' '}
+                {t(
+                  'auto.components.settings.PluginRemoveDialog.pausesAutomations',
+                  'Automations it created are paused, and stay paused if you install it again.'
+                )}
+              </>
             )}
           </DialogDescription>
         </DialogHeader>
@@ -59,7 +74,7 @@ export function PluginRemoveDialog({
             {t('auto.components.settings.PluginRemoveDialog.cancel', 'Cancel')}
           </Button>
           <Button
-            variant="destructive"
+            variant={plugin?.isDev ? 'default' : 'destructive'}
             disabled={busy || !plugin}
             onClick={() => plugin && onConfirm(plugin.pluginKey)}
           >

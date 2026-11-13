@@ -77,6 +77,8 @@ export type PluginViewRequestBody =
   | { kind: 'run-action'; action: PluginCommandAliasActionId }
   /** A plugin worker's `workspace.open` of a folder workspace, which the runtime cannot activate. */
   | { kind: 'open-folder-workspace'; folderWorkspaceId: string }
+  /** Opens the calling plugin's declared settings page inside Orca settings. */
+  | { kind: 'open-plugin-settings'; pluginKey: string }
 
 export type PluginViewReplay = {
   tree: PluginDeclarativeNode | null

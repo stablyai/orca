@@ -174,7 +174,8 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
   },
   'plugin check': async (ctx) => {
     const dir = resolveLocalPluginPath(ctx, optionalString(ctx.flags, 'dir') ?? '.', 'check')
-    const report = await readTarget(validatePluginTarget, dir)
+    const options = { allowUnreleased: ctx.flags.get('allow-unreleased') === true }
+    const report = await readTarget((path) => validatePluginTarget(path, options), dir)
     if (report.kind !== 'plugin') {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -185,8 +186,8 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
       throw invalidError(report)
     }
     const [panels, editors] = await Promise.all([
-      checkPluginPanels(report.path),
-      checkPluginEditors(report.path)
+      checkPluginPanels(report.path, options),
+      checkPluginEditors(report.path, undefined, options)
     ])
     const failed = [...panels, ...editors].some((check) => check.issues.length > 0)
     const text = [
@@ -204,7 +205,13 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
   },
   'plugin validate': async (ctx) => {
     const path = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'path'), 'validate')
-    const report = await readTarget(validatePluginTarget, path)
+    const report = await readTarget(
+      (target) =>
+        validatePluginTarget(target, {
+          allowUnreleased: ctx.flags.get('allow-unreleased') === true
+        }),
+      path
+    )
     if (!report.valid) {
       throw invalidError(report)
     }

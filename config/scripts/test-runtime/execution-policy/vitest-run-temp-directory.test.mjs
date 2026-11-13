@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { runProcessSync } from '@orca/process-host'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -46,4 +55,32 @@ it('removes the run directory and leaves an unmarked one with the same name alon
 
   runDirectory(base, 105, false)
   expect(createRunTempDirectory({ base, pid: 105 })).toBeNull()
+})
+
+it('keeps child cwd and inherited temporary paths consistent through a directory alias', () => {
+  const base = process.platform === 'win32' ? tmpdir() : realpathSync('/tmp')
+  const root = mkdtempSync(join(base, 'rt-'))
+  bases.push(root)
+  const target = join(root, 'r')
+  const alias = join(root, 'a')
+  mkdirSync(target)
+  symlinkSync(target, alias, process.platform === 'win32' ? 'junction' : 'dir')
+  const run = createRunTempDirectory({ base: alias, pid: 106 })
+  try {
+    const result = runProcessSync({
+      program: process.execPath,
+      args: [
+        '-e',
+        'const {dirname}=require("node:path"); console.log(JSON.stringify({cwdParent:dirname(process.cwd()), tmpParent:dirname(require("node:os").tmpdir())}))'
+      ],
+      cwd: run.path,
+      env: { ...process.env, ...run.env }
+    })
+    expect(result.code).toBe(0)
+    const observed = JSON.parse(result.stdout)
+    const expected = realpathSync(target)
+    expect(observed).toEqual({ cwdParent: expected, tmpParent: expected })
+  } finally {
+    run.remove()
+  }
 })

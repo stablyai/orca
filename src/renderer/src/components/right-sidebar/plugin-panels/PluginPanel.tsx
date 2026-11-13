@@ -20,9 +20,12 @@ import {
 } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import type { PluginSettingsChangeOrigin } from '../../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 type PluginPanelProps = {
   tabKey: string
+  location?: 'sidebar' | 'settings'
+  onSettingsChanged?: (key: string, origin?: PluginSettingsChangeOrigin) => void
 }
 
 function PluginPanelMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -33,9 +36,13 @@ function PluginPanelMessage({ children }: { children: React.ReactNode }): React.
   )
 }
 
-function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
+function PluginPanel({
+  tabKey,
+  location = 'sidebar',
+  onSettingsChanged
+}: PluginPanelProps): React.JSX.Element {
   const t = useTranslate()
-  const panels = usePluginPanels()
+  const panels = usePluginPanels(location)
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
@@ -62,7 +69,8 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     frameKey: declarative ? null : panelFrameKey,
     sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
     onUnresponsive: markUnresponsive,
-    onGuestGone: remountGone
+    onGuestGone: remountGone,
+    onSettingsChanged
   })
 
   useEffect(() => {
@@ -127,12 +135,14 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
         key={guest.dev ? `${tabKey}:dev` : panelFrameKey}
         tabKey={tabKey}
         hotReload={guest.dev === true}
+        active={location === 'settings' ? true : undefined}
         panelId={panel.id}
         title={panel.title}
         guest={guest}
         frameKey={panelFrameKey}
         sessionToken={entry.sessionToken}
         onUnresponsive={markUnresponsive}
+        onSettingsChanged={onSettingsChanged}
       />
     ) : (
       <PluginPanelMessage>

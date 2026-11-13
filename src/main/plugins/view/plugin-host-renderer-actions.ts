@@ -11,6 +11,7 @@ export type PluginHostRendererActions = {
   openFile(worktreeId: string, relativePath: string): Promise<void>
   runAction(action: PluginCommandAliasActionId): Promise<void>
   openFolderWorkspace(folderWorkspaceId: string): Promise<void>
+  openPluginSettings?(pluginKey: string): Promise<void>
 }
 
 /** Sends one request to the main window's renderer; null when there is no window to ask. */
@@ -50,7 +51,8 @@ export function getPluginHostRendererActions(): PluginHostRendererActions | null
           ask({ kind: 'open-file', worktreeId, relativePath }),
         runAction: (action) => ask({ kind: 'run-action', action }),
         openFolderWorkspace: (folderWorkspaceId) =>
-          ask({ kind: 'open-folder-workspace', folderWorkspaceId })
+          ask({ kind: 'open-folder-workspace', folderWorkspaceId }),
+        openPluginSettings: (pluginKey) => ask({ kind: 'open-plugin-settings', pluginKey })
       }
     : null
 }

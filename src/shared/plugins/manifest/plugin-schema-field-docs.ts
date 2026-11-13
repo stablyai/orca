@@ -21,6 +21,10 @@ export const PLUGIN_EDITOR_FRAME_SINCE = '1.4.248'
 export const PLUGIN_HOOKS_SINCE = '1.4.248'
 /** Workers act on workspaces, terminals and agents: `workspace:write`, `terminal:read`, `agent:launch`. */
 export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
+/** Source-only features receive a numeric floor when maintainers assign their first release. */
+export const PLUGIN_UNRELEASED_SINCE = 'unreleased'
+/** Components panels embedded in Settings > Integrations; no published release supports them. */
+export const PLUGIN_SETTINGS_PANEL_SINCE = PLUGIN_UNRELEASED_SINCE
 /** First release that plays an app theme's `background.videoPath`. */
 export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
 

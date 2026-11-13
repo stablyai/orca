@@ -4,6 +4,7 @@ import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
 import { createAutomationDispatchToken } from '../../../../automations/ownership/dispatch-tokens'
+import { rpcContext, runtimeStub } from '../agent-launch/agent-launch.test-fixture'
 
 const repo = {
   id: 'repo-1',
@@ -24,6 +25,42 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
   run()
 
 describe('worktree RPC methods', () => {
+  it('refuses creation when startup-agent resolution outlives the caller approval', async () => {
+    let approved = true
+    const runtime = Object.assign(runtimeStub(), {
+      getRuntimeId: () => 'test-runtime',
+      resolveStartupDraftAgent: async () => {
+        approved = false
+        return 'claude'
+      }
+    })
+    runtime.showRepo.mockResolvedValue(repo)
+    const dispatcher = new RpcDispatcher({
+      runtime: rpcContext(runtime, {}).runtime,
+      methods: WORKTREE_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'review',
+        startupDraft: 'review this branch'
+      }),
+      {
+        beforeInvoke: () => {
+          if (!approved) {
+            throw new Error('plugin_approval_revoked')
+          }
+        }
+      }
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: 'plugin_approval_revoked' }
+    })
+  })
+
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-1', 'run-1')
     const runtime = {

@@ -2,11 +2,12 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { resolveConfig } from 'electron-vite'
+import { MainConfigFactory } from 'electron-vite'
 import { build } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { stagePackagedProcessHost } from '../../desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
+import { electronViteConfig } from '../../../../electron.vite.config'
 
 const projectDir = resolve(import.meta.dirname, '../../../..')
 const require = createRequire(import.meta.url)
@@ -14,15 +15,14 @@ let outputDir: string
 
 beforeAll(async () => {
   outputDir = mkdtempSync(join(tmpdir(), 'orca-account-runtime-'))
-  const resolved = await resolveConfig(
-    { configFile: join(projectDir, 'electron.vite.config.ts') },
-    'build',
-    'production'
-  )
-  const main = resolved.config?.main
-  if (!main?.build) {
+  if (!electronViteConfig.main) {
     throw new Error('Expected main-process build config')
   }
+  const main = await new MainConfigFactory(
+    electronViteConfig.main,
+    { configFile: false, mode: 'production' },
+    { root: projectDir }
+  ).build()
   await build({
     ...main,
     logLevel: 'silent',

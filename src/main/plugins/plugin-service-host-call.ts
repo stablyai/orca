@@ -90,6 +90,9 @@ export function resolvePluginServiceHostCallPolicy(input: {
           panels: input.panels,
           renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
+          hasSettingsPage: plugin?.manifest.contributes.panels.some(
+            (panel) => panel.location === 'settings'
+          ),
           statusBar: input.sinks.statusBar,
           appearance: input.sinks.appearance,
           editorTypography: input.sinks.editorTypography,
@@ -116,7 +119,7 @@ export function pluginPanelBridgeServices(bridge: PluginPanelBridge): PluginPane
   return {
     request: (pluginKey, request, caller) => bridge.request({ pluginKey, caller, ...request }),
     subscribe: (pluginKey, panelId, event) => bridge.subscribe(pluginKey, panelId, event),
-    dataChanged: (pluginKey, area, key) => bridge.dataChanged(pluginKey, area, key)
+    dataChanged: (pluginKey, area, key, origin) => bridge.dataChanged(pluginKey, area, key, origin)
   }
 }
 

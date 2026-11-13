@@ -69,6 +69,7 @@ export type PluginDesktopFrameServices = {
 }
 
 export type PluginHostServices = {
+  hasSettingsPage?: boolean
   appearance?: PluginAppearanceService | null
   /** This Orca's own editor settings; absent where no profile is loaded (relay conformance). */
   editorTypography?: PluginEditorTypographySource | null
@@ -132,6 +133,17 @@ const api = PLUGIN_HOST_API
 const OK = { ok: true } as const
 
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
+  'settings.open': bind(api['settings.open'], async (_params, { pluginId, services, scope }) => {
+    if (!services.hasSettingsPage || !services.renderer?.openPluginSettings) {
+      throw new PluginHostCallError(
+        'unavailable',
+        'this plugin has no settings page available in an Orca window'
+      )
+    }
+    scope.assertActive()
+    await services.renderer.openPluginSettings(pluginId)
+    return { opened: true as const }
+  }),
   'appearance.read': bind(api['appearance.read'], async (_params, { services }) => {
     if (!services.appearance) {
       throw new PluginHostCallError('unavailable', 'desktop appearance service is unavailable')
@@ -281,7 +293,11 @@ function changed<T>(
   key: string,
   result: T
 ): T {
-  services.panels?.dataChanged(pluginId, area, key)
+  if (area === 'settings') {
+    services.panels?.dataChanged(pluginId, area, key, 'plugin')
+  } else {
+    services.panels?.dataChanged(pluginId, area, key)
+  }
   return result
 }
 

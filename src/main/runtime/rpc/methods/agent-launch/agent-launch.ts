@@ -33,7 +33,7 @@ import {
   AgentLaunchReplay,
   type AgentLaunchParams
 } from '../../../../../shared/rpc-contract/agent-launch-params'
-import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
+import { agentLaunchSurfaceFactory, type HostLaunchContext } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
   agentLaunchFailureCode,
@@ -56,10 +56,6 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 
-type HostLaunchContext = RpcContext & {
-  agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
-}
-
 async function runAgentLaunch(
   { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
   context: HostLaunchContext,
@@ -69,6 +65,7 @@ async function runAgentLaunch(
   const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
   const result = await executeAgentLaunch({
     runtime: context.runtime,
+    signal: context.signal,
     intent,
     decidedMode,
     surfaces: agentLaunchSurfaceFactory(
@@ -256,6 +253,15 @@ function runReplaySafeAgentLaunch(
   return promise
 }
 
+export const agentLaunchMethod = (policy?: HostLaunchContext['agentLaunchPolicy']) =>
+  defineMethod({
+    name: 'agent.launch',
+    requires: agentLaunchFeatureRequirement,
+    permission: 'workspace',
+    params: AgentLaunch,
+    handler: (params, context) => launchAgentOnHost(params, context, policy)
+  })
+
 export const AGENT_LAUNCH_METHODS = [
   defineMethod({
     name: 'agent.launchReplay',
@@ -289,13 +295,7 @@ export const AGENT_LAUNCH_METHODS = [
       }
     }
   }),
-  defineMethod({
-    name: 'agent.launch',
-    requires: agentLaunchFeatureRequirement,
-    permission: 'workspace',
-    params: AgentLaunch,
-    handler: (params, context) => launchAgentOnHost(params, context)
-  })
+  agentLaunchMethod()
 ]
 
 /** In-process schedules and RPC callers share admission, factories and prompt settlement. */

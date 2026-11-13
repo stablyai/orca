@@ -5,7 +5,8 @@ import {
 import type { PluginEventName } from '../../../../shared/plugins/manifest/plugin-manifest'
 import type {
   PluginDataArea,
-  PluginPanelCaller
+  PluginPanelCaller,
+  PluginSettingsChangeOrigin
 } from '../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
@@ -18,7 +19,12 @@ export type PluginPanelBridgeServices = {
     caller: PluginPanelCaller
   ): Promise<PluginJsonValue>
   subscribe(pluginId: string, panelId: string, event: PluginEventName): void
-  dataChanged(pluginId: string, area: PluginDataArea, key: string): void
+  dataChanged(
+    pluginId: string,
+    area: PluginDataArea,
+    key: string,
+    origin?: PluginSettingsChangeOrigin
+  ): void
 }
 
 function requirePanel(caller: PluginPanelCaller | undefined): PluginPanelCaller {

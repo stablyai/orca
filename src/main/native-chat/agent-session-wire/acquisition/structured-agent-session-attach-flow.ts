@@ -60,6 +60,7 @@ import {
 export type AttachedOwner = 'acquired' | 'kept' | 'none'
 
 export type AttachFlowInput = {
+  beforeEffect?: () => void
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   agents: Pick<StructuredAgentRegistry, 'definition'>
@@ -156,8 +157,9 @@ export async function performAttach(
   }
   try {
     const reserved = await withAgentSessionCreatePhase('reserve_owner', input.recordPhase, () =>
-      lock.commit(() =>
-        store.reserveOwner(
+      lock.commit(() => {
+        input.beforeEffect?.()
+        return store.reserveOwner(
           reserveRequestFor({
             sessionId,
             params,
@@ -168,7 +170,7 @@ export async function performAttach(
             models: input.models
           })
         )
-      )
+      })
     )
     record = reserved.record
     replayed = reserved.disposition === 'replayed'

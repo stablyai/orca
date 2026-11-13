@@ -190,6 +190,7 @@ export async function buildPluginList(
           id: panel.id,
           title: panel.title,
           ...(panel.icon ? { icon: panel.icon } : {}),
+          ...(panel.location ? { location: panel.location } : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({
@@ -233,6 +234,7 @@ export async function buildPluginList(
         statusBarItems: plugin.manifest.contributes.statusBarItems,
         hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
+        hasSettings: plugin.manifest.contributes.settings.length > 0,
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
           name: recipe.name,

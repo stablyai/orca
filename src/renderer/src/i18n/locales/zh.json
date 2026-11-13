@@ -11638,7 +11638,9 @@
           "title": "移除 {{value0}}？",
           "description": "其数据也会被移除",
           "cancel": "取消",
-          "remove": "移除"
+          "remove": "移除",
+          "devTitle": "移除 {{value0}} 的开发目录？",
+          "devDescription": "Orca 将停止加载此目录。源码、已保存的数据和插件授权将保留。"
         },
         "PluginRollbackDialog": {
           "title": "回滚 {{value0}}？",
@@ -12824,7 +12826,8 @@
           "reviewUpdate": "审核更新",
           "dataLoadFailed": "无法加载其文件",
           "updateNeedsReview": "更新 {{value0}} 需要审查",
-          "updatedTo": "已更新到 {{value0}}"
+          "updatedTo": "已更新到 {{value0}}",
+          "unloadDevFolder": "移除开发目录…"
         },
         "PluginSettingsOverview": {
           "offTitle": "插件已关闭"
@@ -23845,5 +23848,17 @@
       "notGitRepository": "不是有效的 Git 仓库",
       "importFailed": "无法导入仓库"
     }
+  },
+  "pluginIntegrations": {
+    "title": "插件集成",
+    "description": "管理已安装插件提供的连接。",
+    "enableFirst": "在“插件”中启用此插件后配置连接。",
+    "configureNamed": "配置 {{name}}",
+    "configure": "配置",
+    "manage": "管理插件",
+    "back": "全部集成",
+    "advanced": "高级设置",
+    "unavailableTitle": "插件集成不可用",
+    "unavailable": "插件已移除、禁用或加载失败。可在“插件”中管理后返回此处。"
   }
 }

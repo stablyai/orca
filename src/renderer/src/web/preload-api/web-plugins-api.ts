@@ -4,12 +4,14 @@ import type { PluginsApi } from '../../../../preload/api/plugin-host-api'
  *  crashes callers expecting lists and records. */
 export function createWebPluginsApi(): Pick<
   PluginsApi,
-  'getAutoUpdateState' | 'takeUpdateReviewNotices' | 'getInstallCounts'
+  'getAutoUpdateState' | 'takeUpdateReviewNotices' | 'getInstallCounts' | 'unloadDevFolder'
 > {
   return {
     getAutoUpdateState: () => Promise.resolve({ updated: {}, needsReview: {} }),
     // Why empty: taking marks the host's notices told, which would hide them from its desktop app.
     takeUpdateReviewNotices: () => Promise.resolve([]),
-    getInstallCounts: () => Promise.resolve({})
+    getInstallCounts: () => Promise.resolve({}),
+    unloadDevFolder: () =>
+      Promise.reject(new Error('Development plugins are managed in Orca desktop.'))
   }
 }

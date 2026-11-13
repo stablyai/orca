@@ -5,7 +5,7 @@
 The orca-plugin.json file at the root of an Orca plugin (manifest format 2).
 
 Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schemas/plugins/orca-plugin.v2.schema.json"` to `orca-plugin.json` for completion and inline errors in your editor.
-`Since` is the first Orca release that reads the field; raise `engines.orca` when you use a newer one.
+`Since` is the first Orca release that reads the field; raise `engines.orca` when you use a newer one. `unreleased` means source development only until maintainers assign its first release.
 
 ## Fields
 
@@ -70,6 +70,7 @@ A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
 | `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` | no | 1.4.160 | Icon shown in the right-sidebar activity bar. Defaults to `plug`. Example: `"database"` |
 | `entry` | string | yes | 1.4.160 | What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/panel.html"` |
 | `ui` | `"html"` \| `"components"` | no | 1.4.246 | How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls. Example: `"components"` |
+| `location` | `"sidebar"` \| `"settings"` | no | unreleased | Where Orca shows this panel. Defaults to `sidebar`. A `settings` panel appears under Settings > Integrations, must use `ui: "components"`, and is limited to one per plugin. It uses the plugin's existing worker, settings and storage. Example: `"settings"` |
 
 ## CommandContribution
 
@@ -257,6 +258,7 @@ One screenshot of the plugin in use.
 - **`pluginApi` is optional.** It names the major version of the host API ([reference](plugin-host-api.md)), which only grows within major 1; Orca refuses a major it does not implement. Only `sandboxed-ui` and `trusted-worker` plugins call that API, so `data` and `declarative` plugins must leave it out.
 - **`terminal:send` needs `trusted-worker`.** Panels get no host method that types into a terminal, so Orca refuses the capability on any other profile instead of asking the user to grant something the plugin can never use.
 - **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.
+- **Unreleased fields are source-only.** A `Since` of `unreleased` makes normal authoring, catalog and release validation fail until maintainers assign the first supporting release. Development folders and `orca plugin validate/check/shot --allow-unreleased` may use these fields with the matching source SDK; numeric engine floors still apply. `pnpm validate:plugin --allow-unreleased <dir>` does the same source check without emitting a catalog release entry. An engine floor alone does not make an unreleased feature available in a published Orca.
 - **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.
 - **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills` and `mcpServers` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
 

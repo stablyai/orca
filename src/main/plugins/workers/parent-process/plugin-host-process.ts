@@ -65,6 +65,7 @@ export async function startPluginWorker(
   const pendingCommands = new Map<number, PendingCall>()
   const pendingEvents = new Map<number, ReturnType<typeof setTimeout>>()
   const exitCallbacks: ((code: number | null) => void)[] = []
+  const inFlightHostCalls = new PluginWorkerHostCalls()
   // One id space for host → worker requests: commands and event deliveries share `res`.
   let nextId = 0
   let exited = false
@@ -133,7 +134,6 @@ export async function startPluginWorker(
       rejectAllPending(failure.message)
     })
     child.on('exit', (code) => fail(new Error(`${tag} worker exited before ready (code ${code})`)))
-    const inFlightHostCalls = new PluginWorkerHostCalls()
     child.once('exit', () => inFlightHostCalls.cancelAll())
     child.on('message', (raw) => {
       const message = readPluginEnvelope(raw)
@@ -277,6 +277,7 @@ export async function startPluginWorker(
         return
       }
       disposed = true
+      inFlightHostCalls.cancelAll()
       if (exited) {
         return
       }
@@ -296,6 +297,7 @@ export async function startPluginWorker(
       })
     },
     kill() {
+      inFlightHostCalls.cancelAll()
       child.kill('SIGKILL')
     },
     onExit(callback) {

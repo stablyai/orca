@@ -12805,7 +12805,9 @@
           "description": "Its data is removed too.",
           "cancel": "Cancel",
           "remove": "Remove",
-          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again."
+          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again.",
+          "devTitle": "Remove development folder for {{value0}}?",
+          "devDescription": "Orca stops loading this folder. Its source files, saved data and approval are kept."
         },
         "PluginRollbackDialog": {
           "title": "Roll back {{value0}}?",
@@ -13948,7 +13950,8 @@
           "reviewUpdate": "Review update",
           "updateNeedsReview": "update {{value0}} needs review",
           "updatedTo": "updated to {{value0}}",
-          "dataLoadFailed": "Couldn’t load its files"
+          "dataLoadFailed": "Couldn’t load its files",
+          "unloadDevFolder": "Remove development folder…"
         },
         "PluginSettingsOverview": {
           "offTitle": "Plugins are off",
@@ -25444,5 +25447,17 @@
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
     }
+  },
+  "pluginIntegrations": {
+    "title": "Plugin integrations",
+    "description": "Manage connections provided by your installed plugins.",
+    "enableFirst": "Enable this plugin in Plugins to configure its connection.",
+    "configureNamed": "Configure {{name}}",
+    "configure": "Configure",
+    "manage": "Manage plugin",
+    "back": "All integrations",
+    "advanced": "Advanced settings",
+    "unavailableTitle": "Plugin integration unavailable",
+    "unavailable": "This plugin was removed, disabled, or could not be loaded. Manage it in Plugins, then return to Integrations."
   }
 }

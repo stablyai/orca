@@ -137,6 +137,77 @@ function holdStarts() {
   )
 }
 
+it('refuses founding an opening message when approval is revoked during host launch preparation', async () => {
+  let approved = true
+  rig.host.deps.resolveLaunchEnv = async () => {
+    approved = false
+    return undefined
+  }
+  const context = rpcContext(launchRuntime(), CLI)
+  await expect(
+    agentLaunchSurfaceFactory({
+      ...context,
+      agentLaunchPolicy: {
+        beforeEffect: () => {
+          if (!approved) {
+            throw new Error('plugin_approval_revoked')
+          }
+        }
+      }
+    }).createStructuredSession({
+      worktreeId: 'wt-7',
+      agent: 'codex',
+      sessionId: SESSION,
+      withoutPrompt: true,
+      firstMessage: {
+        clientMessageId: `${HOST_TEST_NOW}-000000000000000000000000000000ab`,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'review this' }] }
+      }
+    })
+  ).rejects.toThrow('plugin_approval_revoked')
+  expect(rig.store.getRecord(SESSION)).toBeNull()
+})
+
+it('refuses acquired session creation when approval is revoked during host launch preparation', async () => {
+  let approved = true
+  rig.host.deps.resolveLaunchEnv = async () => {
+    approved = false
+    return undefined
+  }
+  const context = rpcContext(launchRuntime(), CLI)
+  await expect(
+    agentLaunchSurfaceFactory({
+      ...context,
+      agentLaunchPolicy: {
+        beforeEffect: () => {
+          if (!approved) {
+            throw new Error('plugin_approval_revoked')
+          }
+        }
+      }
+    }).createStructuredSession({ worktreeId: 'wt-7', agent: 'codex', sessionId: SESSION })
+  ).rejects.toThrow('plugin_approval_revoked')
+  expect(rig.store.getRecord(SESSION)).toBeNull()
+})
+
+it('refuses an unprompted session cancelled during host launch preparation', async () => {
+  const controller = new AbortController()
+  rig.host.deps.resolveLaunchEnv = async () => {
+    controller.abort()
+    return undefined
+  }
+  const context = rpcContext(launchRuntime(), { signal: controller.signal })
+
+  await expect(
+    agentLaunchSurfaceFactory(context).createStructuredSession({
+      worktreeId: 'wt-7',
+      agent: 'codex',
+      sessionId: SESSION
+    })
+  ).rejects.toThrow('request_aborted')
+  expect(rig.store.getRecord(SESSION)).toBeNull()
+})
+
 it('the opening prompt owns retry with explicit model and permission for a legacy-capability CLI caller', async () => {
   holdStarts()
   const params = AGENT_LAUNCH.params.parse({

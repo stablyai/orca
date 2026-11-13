@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginDeclaredSettingsSnapshot } from '../../../../../shared/plugins/contributions/plugin-settings-values'
 import type { PluginJsonValue } from '../../../../../shared/plugins/workers/plugin-host-api'
 
@@ -12,10 +12,13 @@ export type PluginDeclaredSettingsState = {
 /** A plugin's `contributes.settings` and their values, re-read when `revision` changes. */
 export function usePluginDeclaredSettings(
   pluginKey: string,
-  revision: string
+  revision: string,
+  settingsRevision = 0
 ): PluginDeclaredSettingsState {
   const [snapshot, setSnapshot] = useState<PluginDeclaredSettingsSnapshot | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const activePlugin = useRef<symbol | null>(null)
+  const latestRead = useRef(0)
 
   const load = useCallback(async (): Promise<PluginDeclaredSettingsSnapshot | null> => {
     const read = window.api?.plugins?.getSettings
@@ -23,31 +26,57 @@ export function usePluginDeclaredSettings(
   }, [pluginKey])
 
   useEffect(() => {
-    let current = true
-    void load().then((next) => current && setSnapshot(next))
+    const current = Symbol(pluginKey)
+    activePlugin.current = current
+    setSnapshot(null)
+    setErrors({})
     return () => {
-      current = false
+      if (activePlugin.current === current) {
+        activePlugin.current = null
+        latestRead.current += 1
+      }
     }
-  }, [load, revision])
+  }, [pluginKey])
+
+  const refresh = useCallback(async (): Promise<void> => {
+    const current = activePlugin.current
+    const read = ++latestRead.current
+    const next = await load()
+    if (current && current === activePlugin.current && read === latestRead.current) {
+      setSnapshot(next)
+    }
+  }, [load])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh, revision, settingsRevision])
 
   const write = useCallback(
     (key: string, value: PluginJsonValue): void => {
       const setSetting = window.api?.plugins?.setSetting
-      if (!setSetting) {
+      const current = activePlugin.current
+      if (!setSetting || !current) {
         return
       }
       void setSetting({ pluginKey, key, value })
         .then(async (result) => {
+          if (current !== activePlugin.current) {
+            return
+          }
           setErrors(({ [key]: _previous, ...rest }) =>
             result.ok ? rest : { ...rest, [key]: result.error }
           )
           if (result.ok) {
-            setSnapshot(await load())
+            await refresh()
           }
         })
-        .catch((error: unknown) => setErrors((previous) => ({ ...previous, [key]: String(error) })))
+        .catch((error: unknown) => {
+          if (current === activePlugin.current) {
+            setErrors((previous) => ({ ...previous, [key]: String(error) }))
+          }
+        })
     },
-    [load, pluginKey]
+    [pluginKey, refresh]
   )
 
   return { snapshot, errors, write }

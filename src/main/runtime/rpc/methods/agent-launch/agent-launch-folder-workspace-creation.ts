@@ -3,7 +3,8 @@
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent-launch-surface-factories'
-import type { RpcContext } from '../../core'
+import type { HostLaunchContext } from './agent-launch-surfaces'
+import { assertAgentPromptRequestActive } from '../../../terminal/input/agent-prompt-signals'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
 
@@ -13,12 +14,15 @@ type FolderWorkspaceCreateParams = Extract<
 >['create']
 
 export function agentLaunchFolderWorkspaceCreator(
-  context: RpcContext,
+  context: HostLaunchContext,
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory['createFolderWorkspace'] {
   return async ({ create }) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`, and the intent copies the parsed payload unchanged.
     const params = create as FolderWorkspaceCreateParams
+    const beforeEffect = context.agentLaunchPolicy?.beforeEffect ?? context.beforeEffect
+    beforeEffect?.()
+    assertAgentPromptRequestActive(context.signal)
     const workspace = await context.runtime.createFolderWorkspace({
       ...params,
       creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context),

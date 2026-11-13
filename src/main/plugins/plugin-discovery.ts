@@ -109,7 +109,9 @@ async function readManifestDir(
     }
   }
   // Why strict for dev trees: they are the author's working copy, so authoring errors belong there.
-  const parsed = isDev ? parsePluginManifest(raw) : parseHostPluginManifest(raw)
+  const parsed = isDev
+    ? parsePluginManifest(raw, { allowUnreleased: true })
+    : parseHostPluginManifest(raw)
   if (!parsed.ok) {
     const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
     return { rootDir, error: incompatible ?? `invalid manifest: ${parsed.error}`, isDev }

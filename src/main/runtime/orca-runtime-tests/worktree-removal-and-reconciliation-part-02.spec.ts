@@ -1,7 +1,8 @@
 import type * as WorktreeRemovalModule from '../../git/worktrees/removal/worktree-removal'
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
-import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { readFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 const { removeWorktree: removeNativeWorktree } = await vi.importActual<
   typeof WorktreeRemovalModule
 >('../../git/worktrees/removal/worktree-removal')
@@ -257,8 +258,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('releases only the missing native checkout registration and preserves its branch and host metadata policy', async () => {
+    const removalRoot = await mkdtemp(join(tmpdir(), 'orca-missing-checkout-'))
     setPlatform('win32')
-    const missingWorktreePath = 'C:\\workspace\\already-removed'
+    const missingWorktreePath = join(removalRoot, 'already-removed')
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
@@ -326,6 +328,7 @@ describe('OrcaRuntimeService', () => {
       )
     } finally {
       gitSpy.mockRestore()
+      await rm(removalRoot, { recursive: true, force: true })
     }
   })
 

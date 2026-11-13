@@ -14,7 +14,7 @@ type PathContribution = { path: string }
 type ContributionValidationManifest = {
   main?: string
   contributes: {
-    panels: IdentifiedContribution[]
+    panels: (IdentifiedContribution & { location?: 'sidebar' | 'settings' })[]
     commands: (IdentifiedContribution & {
       action?: string
       replaces?: string
@@ -63,6 +63,26 @@ export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
 ): void {
+  const settingsPanels = manifest.contributes.panels.filter(
+    (panel) => panel.location === 'settings'
+  )
+  if (settingsPanels.length > 1) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contributes', 'panels'],
+      message: 'at most one settings panel may be declared'
+    })
+  }
+  if (
+    settingsPanels.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'settings:own')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contributes', 'panels'],
+      message: 'a settings panel needs the "settings:own" capability'
+    })
+  }
   for (const path of [
     'panels',
     'commands',

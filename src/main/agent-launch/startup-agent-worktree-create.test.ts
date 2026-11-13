@@ -41,9 +41,12 @@ function harness(
   return {
     runtime,
     created,
-    create: (args: RuntimeManagedWorktreeCreateArgs) =>
+    create: (
+      args: RuntimeManagedWorktreeCreateArgs,
+      controls?: Parameters<typeof createWorktreeWithStartupAgent>[2]
+    ) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method the entry and the executor reach.
-      createWorktreeWithStartupAgent(runtime as never, args)
+      createWorktreeWithStartupAgent(runtime as never, args, controls)
   }
 }
 
@@ -56,6 +59,44 @@ const BASE: RuntimeManagedWorktreeCreateArgs = {
 }
 
 describe('createWorktreeWithStartupAgent', () => {
+  it.each(['claude', null])(
+    'refuses a worktree when approval is revoked while resolving startup draft agent %s',
+    async (agent) => {
+      const { runtime, create } = harness()
+      let approved = true
+      runtime.resolveStartupDraftAgent.mockImplementation(async () => {
+        approved = false
+        return agent
+      })
+
+      await expect(
+        create(
+          { ...BASE, startupDraft: 'review this branch' },
+          {
+            beforeEffect: () => {
+              if (!approved) {
+                throw new Error('plugin_approval_revoked')
+              }
+            }
+          }
+        )
+      ).rejects.toThrow('plugin_approval_revoked')
+    }
+  )
+
+  it('refuses worktree creation cancelled while resolving its startup draft', async () => {
+    const { runtime, create } = harness()
+    const controller = new AbortController()
+    runtime.resolveStartupDraftAgent.mockImplementation(async () => {
+      controller.abort(new Error('request_aborted'))
+      return null
+    })
+
+    await expect(
+      create({ ...BASE, startupDraft: 'review this branch' }, { signal: controller.signal })
+    ).rejects.toThrow('request_aborted')
+  })
+
   it('builds no second agent when the create spawned none here', async () => {
     const { runtime, created, create } = harness({
       created: {

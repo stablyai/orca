@@ -25,7 +25,8 @@ import {
   PLUGIN_MANIFEST_FILENAME,
   parsePluginManifest,
   qualifiedPluginKey,
-  type PluginManifest
+  type PluginManifest,
+  type PluginManifestParseOptions
 } from '../../../shared/plugins/manifest/plugin-manifest'
 
 export type PluginFolderSummary = {
@@ -95,7 +96,10 @@ async function contentErrors(root: string, manifest: PluginManifest): Promise<st
 }
 
 /** The checks `pnpm validate:plugin` runs, plus every file Orca reads at load. Offline; never runs plugin code. */
-export async function validatePluginTarget(target: string): Promise<PluginValidationReport> {
+export async function validatePluginTarget(
+  target: string,
+  options: PluginManifestParseOptions = {}
+): Promise<PluginValidationReport> {
   const file = resolveTargetFile(target)
   const root = dirname(file)
   const name = basename(file)
@@ -107,8 +111,8 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
     const detail = error instanceof Error ? error.message : String(error)
     return { path: root, file, kind, valid: false, errors: [`invalid JSON: ${detail}`] }
   }
-  const errors = validatePluginFile(name, raw, catalogFileReader(root))
-  const parsed = kind === 'plugin' && errors.length === 0 ? parsePluginManifest(raw) : null
+  const errors = validatePluginFile(name, raw, catalogFileReader(root), options)
+  const parsed = kind === 'plugin' && errors.length === 0 ? parsePluginManifest(raw, options) : null
   if (!parsed?.ok) {
     return { path: root, file, kind, valid: errors.length === 0, errors }
   }

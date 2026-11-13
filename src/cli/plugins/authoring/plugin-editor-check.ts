@@ -5,7 +5,10 @@ import type {
   PluginEditorCheckIssue,
   PluginEditorStaticCheck
 } from '../../../main/plugins/testing/plugin-editor-static-check'
-import { parsePluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
+import {
+  parsePluginManifest,
+  type PluginManifestParseOptions
+} from '../../../shared/plugins/manifest/plugin-manifest'
 import { pluginTestingFiles } from './plugin-test-runner'
 
 export type PluginEditorCheck = {
@@ -25,10 +28,12 @@ type EditorCheckModule = {
 /** Every custom editor's files, transpiled and resolved as the frame loads them; runs no code. */
 export async function checkPluginEditors(
   dir: string,
-  appRoot?: string
+  appRoot?: string,
+  options: PluginManifestParseOptions = {}
 ): Promise<PluginEditorCheck[]> {
   const parsed = parsePluginManifest(
-    JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
+    JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8')),
+    options
   )
   const editors = parsed.ok ? parsed.manifest.contributes.customEditors : []
   if (editors.length === 0) {

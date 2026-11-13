@@ -50,6 +50,7 @@ export function rpcContextFromTransport(
   return {
     runtime,
     signal: options?.signal,
+    beforeEffect: options?.beforeInvoke,
     requestId: request.id,
     connectionId: options?.connectionId,
     // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
