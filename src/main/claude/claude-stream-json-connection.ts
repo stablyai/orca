@@ -62,6 +62,7 @@ function withoutKeys(env: Record<string, string>, keys: readonly string[]): Reco
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
+  onConnection?: (connection: ClaudeStreamJsonConnection) => void
   onMessage?: (message: Record<string, unknown>) => void
   /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
   onStdout?: (chunk: Buffer | string) => void
@@ -297,12 +298,8 @@ export async function openClaudeStreamJsonConnection(
     return closePromise
   }
 
-  await child.ready?.catch(async (error: unknown) => {
-    await close()
-    throw error
-  })
   const controls = createClaudeControlSurface(session)
-  return {
+  const connection: ClaudeStreamJsonConnection = {
     ...controls,
     startupFailure: startup.failure,
     exited: exited.promise,
@@ -330,4 +327,10 @@ export async function openClaudeStreamJsonConnection(
     send,
     close
   }
+  handlers.onConnection?.(connection)
+  await child.ready?.catch(async (error: unknown) => {
+    await close()
+    throw error
+  })
+  return connection
 }

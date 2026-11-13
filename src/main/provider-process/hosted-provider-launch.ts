@@ -1,3 +1,4 @@
+import type { HostedProviderSpawn } from '../daemon/protocol/daemon-provider-process-protocol'
 import type { createProviderSpawnSpec } from './provider-process-supervisor'
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-protocol'
@@ -16,11 +17,11 @@ export async function inspectHostedIdentity(
     : null
 }
 
-export function createHostedEnv(
+export function createHostedLaunch(
   spec: ReturnType<typeof createProviderSpawnSpec>,
   ownerPid: number,
   channel: { path: string; nonce: string }
-): Record<string, string> {
+): HostedProviderSpawn {
   const env = Object.fromEntries(
     Object.entries(spec.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
@@ -31,5 +32,28 @@ export function createHostedEnv(
     JSON.stringify({ ...supervisor, ownerPid })
   ).toString('base64')
   env.ORCA_PROVIDER_OWNER_CHANNEL = JSON.stringify(channel)
-  return env
+  return {
+    nonce: channel.nonce,
+    source: spec.args[1],
+    args: spec.args.slice(3),
+    cwd: spec.cwd,
+    env
+  }
+}
+
+export async function withProviderStartDeadline<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Provider launch timed out')), timeoutMs)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
 }

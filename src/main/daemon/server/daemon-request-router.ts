@@ -1,3 +1,4 @@
+import type { Socket } from 'node:net'
 import { canRetireDaemon, routeProviderRequest } from './daemon-provider-requests'
 import type { DaemonProviderProcesses } from './daemon-provider-processes'
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
@@ -42,13 +43,13 @@ export class DaemonRequestRouter {
     this.health = new DaemonHealthRequests(options.ptySpawnHealthCheck, options.log)
   }
 
-  async route(clientId: string, request: DaemonRequest): Promise<unknown> {
+  async route(clientId: string, request: DaemonRequest, socket?: Socket): Promise<unknown> {
     const client = this.options.connections.get(clientId)
     switch (request.type) {
       case 'spawnProvider':
       case 'signalProvider':
       case 'queryProvider':
-        return routeProviderRequest(request, client, this.options)
+        return routeProviderRequest(request, client, this.options, socket ?? client!.controlSocket)
       case 'startHistorySeedTransfer': {
         if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
           throw new Error('Daemon client connection is incomplete; reconnect')

@@ -209,6 +209,7 @@ export async function acquireClaudeSession({
         {
           onMessage,
           ...permissions.handlers,
+          onConnection: (connection) => void (attempt.connection = connection),
           onFault: childFailed,
           onExit: permissions.closeThen((error, exit) => {
             if (exit?.expected) {

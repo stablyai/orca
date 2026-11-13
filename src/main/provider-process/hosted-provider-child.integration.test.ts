@@ -1,6 +1,8 @@
+import { runLocalSourceControlPlan } from '../text-generation/execution/source-control-local-process'
+import { runCodexProcessWithHomeLock } from '../text-generation/execution/source-control-local-generation'
 import { stopSupervisedChildProcess } from './supervised-child-process-stop'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, rename, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
@@ -52,6 +54,7 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     await server.shutdown()
     client.disconnect()
     children.clear()
+    vi.restoreAllMocks()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -86,6 +89,71 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     guardSupervisedProviderGroup(child, { site: 'hosted-provider-fixture', supervised: true })
     return child
   }
+
+  it.each(['shutdown', 'endpoint'] as const)(
+    'settles a %s no-start before its refusal and releases the Codex home',
+    async (cause) => {
+      const releaseDisposal = Promise.withResolvers<void>()
+      const dispose = server.host.dispose.bind(server.host)
+      vi.spyOn(server.host, 'dispose').mockImplementation(async () => {
+        await releaseDisposal.promise
+        await dispose()
+      })
+      const request = client.request.bind(client)
+      let shutdown: Promise<void> | undefined
+      vi.spyOn(client, 'request').mockImplementation(async function <T>(
+        ...args: Parameters<typeof request>
+      ): Promise<T> {
+        if (args[0] === 'spawnProvider') {
+          if (cause === 'shutdown') {
+            shutdown = server.shutdown()
+          } else {
+            await rename(join(directory, 'daemon.sock'), join(directory, 'retired.sock'))
+            await writeFile(join(directory, 'daemon.sock'), 'replacement endpoint')
+          }
+        }
+        return request<T>(...args)
+      })
+      let child!: HostedProviderChild
+      const first = runCodexProcessWithHomeLock(directory, () =>
+        runLocalSourceControlPlan({
+          plan: { binary: 'codex', args: [], label: 'Codex', stdinPayload: null },
+          cwd: directory,
+          env: undefined,
+          operation: 'commit-message',
+          spawnAgent: () => {
+            child = launch('throw new Error("must never launch")')
+            return Object.assign(child, { supervised: true })
+          }
+        })
+      )
+      try {
+        expect(await first).toMatchObject({ success: false })
+        expect(child.spawnAbsenceKnown).toBe(true)
+        expect(child.pid).toBeUndefined()
+        expect(child.rootAbsent).toBe(true)
+        const next = runCodexProcessWithHomeLock(directory, () =>
+          runLocalSourceControlPlan({
+            plan: {
+              binary: process.execPath,
+              args: ['-e', 'process.stdout.write("next generation")'],
+              label: 'Codex',
+              stdinPayload: null
+            },
+            cwd: directory,
+            env: undefined,
+            operation: 'commit-message',
+            spawnAgent: (spec) =>
+              spawn(spec.binary, [...spec.args], { cwd: spec.cwd, env: spec.env, stdio: 'pipe' })
+          })
+        )
+        expect(await next).toMatchObject({ success: true, rawOutput: 'next generation' })
+      } finally {
+        releaseDisposal.resolve()
+        await shutdown
+      }
+    }
+  )
 
   it('waits for real final writes after source EOF without expiring a live owner', async () => {
     const gate = await createSupervisorOutputGate(directory)

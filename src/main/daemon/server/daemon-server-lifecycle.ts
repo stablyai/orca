@@ -46,6 +46,10 @@ export class DaemonServerLifecycle {
     return this.state === 'running'
   }
 
+  isAcceptingProviderWork(): boolean {
+    return this.isAcceptingWork() && !this.options.endpoint.hasLostOwnership()
+  }
+
   async start(handleConnection: (socket: Socket) => void): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = createServer(handleConnection)

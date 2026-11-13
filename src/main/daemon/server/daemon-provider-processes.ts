@@ -10,6 +10,8 @@ import type {
 
 const OUTCOME_RETENTION_MS = 60_000
 const STOP_TIMEOUT_MS = 7_500
+const validLaunchString = (value: unknown): value is string =>
+  typeof value === 'string' && !value.includes('\0')
 const SIGNALS = new Set(['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGUSR2', 'SIGSTOP', 'SIGCONT', 'SIGKILL'])
 
 type ProviderEntry = {
@@ -36,24 +38,44 @@ export class DaemonProviderProcesses {
     return this.live.size > 0
   }
 
-  async spawn(spec: HostedProviderSpawn, owner: Socket): Promise<{ pid: number }> {
-    if (!this.enabled || this.stopping) {
-      throw new Error('Provider host unavailable')
-    }
-    if (
-      !/^[a-f0-9]{64}$/.test(spec.nonce) ||
-      typeof spec.source !== 'string' ||
-      !Array.isArray(spec.args) ||
-      !spec.args.every((arg) => typeof arg === 'string') ||
-      typeof spec.cwd !== 'string' ||
-      !spec.env ||
-      typeof spec.env !== 'object' ||
-      !Object.values(spec.env).every((value) => typeof value === 'string')
-    ) {
+  async spawn(
+    spec: HostedProviderSpawn,
+    owner: Socket,
+    accepting = true
+  ): Promise<{ pid: number }> {
+    if (!spec || typeof spec.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(spec.nonce)) {
       throw new Error('Invalid provider launch')
     }
     if (this.live.has(spec.nonce) || this.outcomes.has(spec.nonce)) {
+      const retained = this.outcomes.get(spec.nonce)
+      if (retained) {
+        this.publishOutcome(spec.nonce, owner, retained.outcome)
+      }
       throw new Error('Provider launch already dispatched')
+    }
+    const refuse = (message: string): never => {
+      this.retainOutcome(spec.nonce, owner, {
+        pid: null,
+        code: null,
+        signal: null,
+        processless: true
+      })
+      throw new Error(message)
+    }
+    if (!this.enabled || this.stopping || !accepting) {
+      refuse('Provider host unavailable')
+    }
+    if (
+      !validLaunchString(spec.source) ||
+      !Array.isArray(spec.args) ||
+      !spec.args.every(validLaunchString) ||
+      !validLaunchString(spec.cwd) ||
+      !spec.env ||
+      typeof spec.env !== 'object' ||
+      !Object.keys(spec.env).every(validLaunchString) ||
+      !Object.values(spec.env).every(validLaunchString)
+    ) {
+      refuse('Invalid provider launch')
     }
     // The current GUI supplies its matching supervisor; the host supplies only its pinned runtime.
     const child = spawnProcess({
@@ -79,12 +101,7 @@ export class DaemonProviderProcesses {
         return
       }
       this.live.delete(spec.nonce)
-      if (!entry.owner.destroyed) {
-        entry.owner.write(encodeNdjson({ type: 'providerExit', nonce: spec.nonce, outcome }))
-      }
-      const expiry = setTimeout(() => this.removeOutcome(spec.nonce), OUTCOME_RETENTION_MS)
-      expiry.unref()
-      this.outcomes.set(spec.nonce, { outcome, expiry })
+      this.retainOutcome(spec.nonce, entry.owner, outcome)
       this.onLiveChanged()
     }
     child.once('exit', (code, signal) =>
@@ -168,6 +185,19 @@ export class DaemonProviderProcesses {
     this.live.clear()
     for (const nonce of this.outcomes.keys()) {
       this.removeOutcome(nonce)
+    }
+  }
+
+  private retainOutcome(nonce: string, owner: Socket, outcome: HostedProviderOutcome): void {
+    const expiry = setTimeout(() => this.removeOutcome(nonce), OUTCOME_RETENTION_MS)
+    expiry.unref()
+    this.outcomes.set(nonce, { outcome, expiry })
+    this.publishOutcome(nonce, owner, outcome)
+  }
+
+  private publishOutcome(nonce: string, owner: Socket, outcome: HostedProviderOutcome): void {
+    if (!owner.destroyed) {
+      owner.write(encodeNdjson({ type: 'providerExit', nonce, outcome }))
     }
   }
 

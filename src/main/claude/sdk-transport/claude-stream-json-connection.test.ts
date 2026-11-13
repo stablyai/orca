@@ -107,6 +107,30 @@ async function open(
 }
 
 describe('Claude stream-json connection', () => {
+  it('hands acquisition the actual connection before a pending startup can reject', async () => {
+    const scenario = scriptScenario([HOLD_OPEN])
+    const ready = Promise.withResolvers<void>()
+    const retained = Promise.withResolvers<ClaudeStreamJsonConnection>()
+    const opening = openClaudeStreamJsonConnection(
+      launchFor(scenario),
+      {
+        onConnection: (connection) => retained.resolve(connection)
+      },
+      (spec) => {
+        const child = spawnProcess(spec)
+        spawnedChildren.push(child)
+        childClosures.push(new Promise<void>((resolve) => child.once('close', () => resolve())))
+        return Object.assign(child, { ready: ready.promise })
+      }
+    )
+    const rejected = expect(opening).rejects.toThrow('pending startup failed')
+    const connection = await retained.promise
+    openConnections.push(connection)
+    ready.reject(new Error('pending startup failed'))
+    await rejected
+    await expect(connection.close()).resolves.toBe(true)
+  })
+
   it.skipIf(process.platform === 'win32')(
     'retires hosted active and idle sessions after proven root absence and permits a fresh send',
     async () => {

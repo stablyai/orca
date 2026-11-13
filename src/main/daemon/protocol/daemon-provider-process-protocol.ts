@@ -34,4 +34,4 @@ export type HostedProviderRequest =
     }
   | { id: string; type: 'queryProvider'; payload: { nonce: string; acknowledge?: boolean } }
 
-export const PROVIDER_SPAWN_PROTOCOL_VERSION = 57
+export const PROVIDER_SPAWN_PROTOCOL_VERSION = 58

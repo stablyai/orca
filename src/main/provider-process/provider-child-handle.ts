@@ -41,6 +41,7 @@ export abstract class ProviderChildHandle extends EventEmitter implements Provid
     this.direct = child
     this.pid = child.pid
     this.connected = child.connected
+    child.stdin.on('error', (error) => this.stdin.destroy(error))
     this.stdin.pipe(child.stdin)
     child.stdout.pipe(this.stdout)
     child.stderr.pipe(this.stderr)

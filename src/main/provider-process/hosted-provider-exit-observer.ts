@@ -1,3 +1,5 @@
+import type { DaemonClient } from '../daemon/transport/client/daemon-client'
+import { probeAgentSessionProcessIdentity } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type { HostedProviderState } from '../daemon/protocol/daemon-provider-process-protocol'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
@@ -46,4 +48,28 @@ export async function observeHostedProviderExit(options: {
     delayMs = Math.min(delayMs * 2, 1_000)
   }
   return { state: 'unproven' }
+}
+
+export function probeHostedProviderRoot(
+  pid: number | undefined,
+  nonce: string
+): Promise<AgentSessionOwnerProbe> {
+  return pid
+    ? probeAgentSessionProcessIdentity({
+        identity: { hostId: 'local', pid, processStartTimeMs: null, spawnToken: nonce }
+      })
+    : Promise.resolve({ outcome: 'indeterminate', reason: 'Supervisor PID not known' })
+}
+
+export async function queryHostedProviderState(
+  client: DaemonClient,
+  nonce: string,
+  timeoutMs: number,
+  observation: { connecting: boolean }
+): Promise<HostedProviderState> {
+  observation.connecting = true
+  await client.ensureConnectedWithin(timeoutMs).finally(() => {
+    observation.connecting = false
+  })
+  return client.request<HostedProviderState>('queryProvider', { nonce }, timeoutMs)
 }

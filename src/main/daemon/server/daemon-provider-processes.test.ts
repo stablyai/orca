@@ -42,3 +42,38 @@ it.each([10, 100])('drains %i live roots without rescanning retained outcomes', 
   await providers.dispose()
   owner.destroy()
 })
+
+it('retains known no-starts before publishing and never replaces a live nonce on refusal', async () => {
+  const owner = new Socket()
+  const providers = new DaemonProviderProcesses(true, () => {})
+  const published: unknown[] = []
+  vi.spyOn(owner, 'write').mockImplementation((record) => {
+    const event = JSON.parse(String(record))
+    expect(providers.query(event.nonce, owner)).toEqual({ state: 'exited', outcome: event.outcome })
+    published.push(event.outcome)
+    return true
+  })
+  const spec = { nonce: 'a'.repeat(64), source: '', args: [], cwd: '/tmp', env: {} }
+  try {
+    await expect(providers.spawn({ ...spec, cwd: undefined! }, owner)).rejects.toThrow(
+      'Invalid provider launch'
+    )
+    expect(published).toEqual([{ pid: null, code: null, signal: null, processless: true }])
+    const child = Object.assign(new EventEmitter(), { pid: 43, kill: vi.fn(() => true) })
+    vi.mocked(spawnProcess).mockImplementation(() => {
+      queueMicrotask(() => child.emit('spawn'))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Registry fixture supplies its held-child PID/events/kill.
+      return child as never
+    })
+    const liveSpec = { ...spec, nonce: 'b'.repeat(64) }
+    await providers.spawn(liveSpec, owner)
+    await expect(providers.spawn(liveSpec, owner, false)).rejects.toThrow('already dispatched')
+    expect(providers.query(liveSpec.nonce, owner)).toEqual({ state: 'live', pid: 43 })
+    expect(published).toHaveLength(1)
+    child.emit('exit', 0, null)
+    child.emit('close')
+  } finally {
+    await providers.dispose()
+    owner.destroy()
+  }
+})

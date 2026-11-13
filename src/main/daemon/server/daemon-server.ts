@@ -304,7 +304,7 @@ export class DaemonServer {
           () => this.lifecycle.isAcceptingWork() && !this.endpoint.hasLostOwnership()
         ) ??
         answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
-        this.requestRouter.route(clientId, request),
+        this.requestRouter.route(clientId, request, socket),
       () => this.lifecycle.startPendingShutdownReply(clientId, request.id)
     )
   }

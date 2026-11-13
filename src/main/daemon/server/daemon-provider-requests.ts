@@ -1,3 +1,4 @@
+import type { Socket } from 'node:net'
 import type { DaemonClientConnections, ConnectedDaemonClient } from './daemon-client-connections'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import type { TerminalHost } from '../terminal-host/terminal-host'
@@ -8,23 +9,24 @@ import type { DaemonServerLifecycle } from './daemon-server-lifecycle'
 export function routeProviderRequest(
   request: Extract<DaemonRequest, { type: 'spawnProvider' | 'signalProvider' | 'queryProvider' }>,
   client: ConnectedDaemonClient | undefined,
-  options: { providerProcesses?: DaemonProviderProcesses; lifecycle: DaemonServerLifecycle }
+  options: { providerProcesses?: DaemonProviderProcesses; lifecycle: DaemonServerLifecycle },
+  socket: Socket
 ): unknown {
   const providers = options.providerProcesses
   if (
     !client?.authenticatedPairEstablished ||
-    !providers?.enabled ||
-    !options.lifecycle.isAcceptingWork()
+    client.controlSocket !== socket ||
+    !providers?.enabled
   ) {
     throw new Error('Provider host unavailable')
   }
   if (request.type === 'spawnProvider') {
-    return providers.spawn(request.payload, client.controlSocket)
+    return providers.spawn(request.payload, socket, options.lifecycle.isAcceptingProviderWork())
   }
   if (request.type === 'signalProvider') {
-    return providers.signal(request.payload.nonce, client.controlSocket, request.payload.signal)
+    return providers.signal(request.payload.nonce, socket, request.payload.signal)
   }
-  return providers.query(request.payload.nonce, client.controlSocket, request.payload.acknowledge)
+  return providers.query(request.payload.nonce, socket, request.payload.acknowledge)
 }
 
 export function canRetireDaemon(

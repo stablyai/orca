@@ -1,3 +1,4 @@
+import { PROVIDER_SPAWN_PROTOCOL_VERSION } from '../../protocol/daemon-provider-process-protocol'
 import type { DaemonClient } from '../../transport/client/daemon-client'
 import { createPtyExitPayload, emitPtyListeners } from './daemon-pty-listener-emission'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
@@ -27,7 +28,7 @@ export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery
   }
 
   getProviderProcessClient(): DaemonClient | null {
-    return this.protocolVersion >= 57 ? this.client : null
+    return this.protocolVersion >= PROVIDER_SPAWN_PROTOCOL_VERSION ? this.client : null
   }
 
   protected recoverAfterEndpointLoss(): void {

@@ -1,3 +1,6 @@
+import { waitForPiSpawn } from './rpc-startup-open'
+import { JsonlRpcAgentConnection } from '../../jsonl-rpc/agent-connection'
+import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { JsonlRpcPeer } from '../../jsonl-rpc/peer'
@@ -125,4 +128,33 @@ it('acquires a hosted Pi only after its real PID arrives', async () => {
   spawned.resolve()
   await expect(restarting).resolves.toMatchObject({ acquired: { process: { pid: 5678 } } })
   expect(h.onSpawned).toHaveBeenCalledWith(expect.objectContaining({ pid: 5678 }))
+})
+
+it('owns rejection of the real startup getter without discarding another promise', async () => {
+  const ready = Promise.withResolvers<void>()
+  const child = Object.assign(new EventEmitter(), {
+    pid: undefined,
+    ready: ready.promise,
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    connected: false,
+    killed: false,
+    exitCode: null,
+    signalCode: null,
+    kill: vi.fn(() => false)
+  })
+  const connection = new JsonlRpcAgentConnection({ command: '/fake/pi', args: [] }, {}, () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Pending child fixture supplies streams, readiness and held lifecycle consumed by the production connection.
+    return child as never
+  })
+  const waiting = waitForPiSpawn(connection, new AbortController().signal)
+  const rejected = expect(waiting).rejects.toThrow('host refused startup')
+  ready.reject(new Error('host refused startup'))
+  await rejected
+  child.emit('error', Object.assign(new Error('not started'), { code: 'ENOENT' }))
+  child.stdout.end()
+  child.stderr.end()
+  child.emit('close', null, null)
+  await connection.close()
 })

@@ -1,22 +1,28 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { retainProviderOutput } from './provider-output-handoff'
-import { observeHostedProviderExit } from './hosted-provider-exit-observer'
+import {
+  observeHostedProviderExit,
+  probeHostedProviderRoot,
+  queryHostedProviderState
+} from './hosted-provider-exit-observer'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type {
-  HostedProviderOutcome,
-  HostedProviderState
-} from '../daemon/protocol/daemon-provider-process-protocol'
+import type { HostedProviderOutcome } from '../daemon/protocol/daemon-provider-process-protocol'
 import { ProviderOwnerListener, watchProviderControl } from './provider-owner-channels'
 import { ProviderChildHandle } from './provider-child-handle'
 import type { createProviderSpawnSpec } from './provider-process-supervisor'
-import { probeAgentSessionProcessIdentity } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import { sameDaemonIdentity } from '../daemon/transport/client/daemon-client-hello-handshake'
-import { createHostedEnv, inspectHostedIdentity } from './hosted-provider-launch'
+import {
+  createHostedLaunch,
+  inspectHostedIdentity,
+  withProviderStartDeadline
+} from './hosted-provider-launch'
 
 type ProviderSpawnSpec = ReturnType<typeof createProviderSpawnSpec>
 const START_TIMEOUT_MS = 10_000
 const EXIT_PROOF_TIMEOUT_MS = 8_000
 const RPC_TIMEOUT_MS = 1_000
+const observationNotifications = new AsyncLocalStorage<HostedProviderChild>()
 
 /** Streams exist before a remote spawn; only the owning host may supply its PID and exit. */
 export class HostedProviderChild extends ProviderChildHandle {
@@ -24,7 +30,8 @@ export class HostedProviderChild extends ProviderChildHandle {
   private client: DaemonClient | null = null
   private dispatched = false
   private canceled = false
-  private observing = false
+  private observation: { connecting: boolean } | null = null
+  private observationPending = false
   private removeEvents: () => void = () => {}
   private removeDisconnect: () => void = () => {}
 
@@ -58,6 +65,7 @@ export class HostedProviderChild extends ProviderChildHandle {
   }
 
   private async signalHeldRoot(signal: NodeJS.Signals): Promise<boolean> {
+    const fromObservationFailure = observationNotifications.getStore() === this
     if (this.direct) {
       return this.direct.kill(signal)
     }
@@ -80,7 +88,9 @@ export class HostedProviderChild extends ProviderChildHandle {
       )
       return result.delivered === true
     } catch {
-      void this.observeLostHost()
+      if (!fromObservationFailure) {
+        void this.observeLostHost()
+      }
       return false
     }
   }
@@ -110,26 +120,24 @@ export class HostedProviderChild extends ProviderChildHandle {
       ) {
         return this.launchDirect()
       }
-      const env = createHostedEnv(this.spec, identity.pid, {
+      const payload = createHostedLaunch(this.spec, identity.pid, {
         path,
         nonce: this.listener.nonce
       })
       this.removeEvents = this.client.onProviderExit(
         this.listener.nonce,
         (outcome) => this.observeOutcome(outcome),
-        () => void this.observeLostHost()
+        () => {
+          if (!this.observation?.connecting) {
+            void this.observeLostHost()
+          }
+        }
       )
       this.removeDisconnect = this.client.onDisconnected(() => void this.observeLostHost())
       this.dispatched = true
       const { pid } = await this.client.request<{ pid: number }>(
         'spawnProvider',
-        {
-          nonce: this.listener.nonce,
-          source: this.spec.args[1],
-          args: this.spec.args.slice(3),
-          cwd: this.spec.cwd,
-          env
-        },
+        payload,
         START_TIMEOUT_MS
       )
       if (!Number.isSafeInteger(pid) || pid <= 1) {
@@ -137,7 +145,7 @@ export class HostedProviderChild extends ProviderChildHandle {
       }
       this.pid = pid
       this.listener.bindPid(pid)
-      const channels = await this.withStartDeadline(this.listener.ready)
+      const channels = await withProviderStartDeadline(this.listener.ready, START_TIMEOUT_MS)
       if (this.canceled || this.settled) {
         await this.listener.close()
         await this.signalHeldRoot('SIGTERM')
@@ -163,6 +171,9 @@ export class HostedProviderChild extends ProviderChildHandle {
       channels.control.write('{"go":true}\n')
       channels.control.resume()
     } catch (error) {
+      if (this.settled) {
+        return
+      }
       const failure = error instanceof Error ? error : new Error('Provider could not start')
       if (!this.dispatched) {
         this.failBeforeDispatch(failure)
@@ -188,8 +199,9 @@ export class HostedProviderChild extends ProviderChildHandle {
     this.rootAbsent = true
     this.settled = true
     this.rejectReady(error)
-    this.emit('error', error)
+    this.observationPending = false
     void this.listener.close()
+    this.notifyTerminal('error', error)
     this.finishClose(null, null)
   }
 
@@ -198,6 +210,7 @@ export class HostedProviderChild extends ProviderChildHandle {
       return
     }
     this.settled = true
+    this.observationPending = false
     this.pid ??= outcome.pid ?? undefined
     this.rootAbsent = true
     this.spawnAbsenceKnown = outcome.processless
@@ -239,33 +252,23 @@ export class HostedProviderChild extends ProviderChildHandle {
   }
 
   private async observeLostHost(): Promise<void> {
-    if (this.observing || this.settled || !this.client) {
+    if (this.settled || !this.client) {
       return
     }
-    this.observing = true
+    if (this.observation !== null) {
+      this.observationPending = true
+      return
+    }
+    this.observationPending = false
+    const observation = { connecting: false }
+    this.observation = observation
     try {
       const state = await observeHostedProviderExit({
         timeoutMs: EXIT_PROOF_TIMEOUT_MS,
         isSettled: () => this.settled,
-        query: async () => {
-          await this.client!.ensureConnectedWithin(RPC_TIMEOUT_MS)
-          return this.client!.request<HostedProviderState>(
-            'queryProvider',
-            { nonce: this.listener.nonce },
-            RPC_TIMEOUT_MS
-          )
-        },
-        probe: async () =>
-          this.pid
-            ? probeAgentSessionProcessIdentity({
-                identity: {
-                  hostId: 'local',
-                  pid: this.pid,
-                  processStartTimeMs: null,
-                  spawnToken: this.listener.nonce
-                }
-              })
-            : { outcome: 'indeterminate', reason: 'Supervisor PID not known' }
+        query: () =>
+          queryHostedProviderState(this.client!, this.listener.nonce, RPC_TIMEOUT_MS, observation),
+        probe: () => probeHostedProviderRoot(this.pid, this.listener.nonce)
       })
       if (this.settled) {
         return
@@ -278,9 +281,10 @@ export class HostedProviderChild extends ProviderChildHandle {
       }
       if (state.state === 'absent') {
         this.settled = true
+        this.observationPending = false
         this.rootAbsent = true
         this.rejectReady(new Error('Provider supervisor ended before startup completed'))
-        this.emit('providerAbsent')
+        this.notifyTerminal('providerAbsent')
         await this.listener.close()
         this.finishClose(null, null)
         return
@@ -289,29 +293,22 @@ export class HostedProviderChild extends ProviderChildHandle {
         // No exit proof: adapters retain writer ownership through their existing unproven-close path.
         const error = new Error('Agent connection ended before its exit could be verified')
         this.rejectReady(error)
-        this.emit('error', error)
+        observationNotifications.run(this, () => this.notifyTerminal('error', error))
         // Transport failure is not ChildProcess close: helpers still own any live writer.
       }
+    } catch (error) {
+      if (!this.settled) {
+        observationNotifications.run(this, () => this.notifyTerminal('error', error))
+      }
     } finally {
-      this.observing = false
+      this.observation = null
       if (this.closed) {
         this.removeEvents()
         this.removeDisconnect()
       }
-    }
-  }
-
-  private async withStartDeadline<T>(promise: Promise<T>): Promise<T> {
-    let timer: NodeJS.Timeout | undefined
-    try {
-      return await Promise.race([
-        promise,
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('Provider launch timed out')), START_TIMEOUT_MS)
-        })
-      ])
-    } finally {
-      clearTimeout(timer)
+      if (this.observationPending && !this.settled) {
+        void this.observeLostHost()
+      }
     }
   }
 }

@@ -70,7 +70,8 @@ export async function waitForPiSpawn(
   connection: PiRpcConnection,
   signal: AbortSignal
 ): Promise<void> {
-  if (connection.spawned) {
-    await waitForPromiseWithSignal(connection.spawned, signal)
+  const spawned = connection.spawned
+  if (spawned) {
+    await waitForPromiseWithSignal(spawned, signal)
   }
 }

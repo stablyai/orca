@@ -2,6 +2,8 @@ import type * as ProcessTable from '../../shared/libproc-process-table'
 import type * as ProcessHost from '@orca/process-host'
 import type * as OwnerChannels from './provider-owner-channels'
 import type { PassThrough } from 'node:stream'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-protocol'
 import {
@@ -88,9 +90,11 @@ afterEach(() => {
 function pendingChild(
   fallback: () => ChildProcessWithoutNullStreams = () => {
     throw new Error('Duplicate spawn')
-  }
+  },
+  pid = 42
 ) {
   let disconnected = () => {}
+  let reconnected = () => {}
   let exit = (_outcome: HostedProviderOutcome) => {}
   const spec = createProviderSpawnSpec(
     { command: '/fake/codex', args: [], cwd: '/tmp' },
@@ -105,10 +109,10 @@ function pendingChild(
       launchNonce: 'original-host'
     }),
     ensureConnectedWithin: async () => {},
-    request: async (type: string) =>
-      type === 'spawnProvider' ? { pid: 42 } : { state: 'unknown' },
-    onProviderExit: (_nonce: string, listener: typeof exit) => {
+    request: async (type: string) => (type === 'spawnProvider' ? { pid } : { state: 'unknown' }),
+    onProviderExit: (_nonce: string, listener: typeof exit, reconnect?: () => void) => {
       exit = listener
+      reconnected = reconnect ?? (() => {})
       return () => {}
     },
     onDisconnected: (listener: () => void) => {
@@ -130,6 +134,7 @@ function pendingChild(
     spec,
     channels,
     disconnect: () => disconnected(),
+    reconnect: () => reconnected(),
     exit: (code = 1) => {
       channels.duplex.end()
       channels.stderr.end()
@@ -401,6 +406,120 @@ it.each(['generation', 'policy', 'models'] as const)(
     expect(secondStarted).toHaveBeenCalledTimes(1)
   }
 )
+
+it.skipIf(process.platform === 'win32')(
+  'consumes a control-close wake during the final sleep and releases the actual home lock',
+  async () => {
+    const root = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    const rootClosed = new Promise<void>((resolve) => root.once('close', () => resolve()))
+    await once(root, 'spawn')
+    try {
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      const handle = pendingChild(undefined, root.pid!)
+      const close = vi.fn()
+      handle.child.on('close', close)
+      const first = runCodexProcessWithHomeLock('wake-real-root', () =>
+        runLocalSourceControlPlan({
+          plan,
+          cwd: '/tmp',
+          env: undefined,
+          operation: 'commit-message',
+          spawnAgent: () => Object.assign(handle.child, { supervised: true })
+        })
+      )
+      const failed = first.catch(() => ({ success: false }))
+      await handle.child.ready
+      handle.disconnect()
+      await vi.advanceTimersByTimeAsync(7_999)
+      expect(handle.child.rootAbsent).toBe(false)
+      const secondEntered = vi.fn()
+      const second = runCodexProcessWithHomeLock('wake-real-root', () => {
+        secondEntered()
+        return { result: Promise.resolve('next generation'), processClosed: Promise.resolve() }
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(secondEntered).not.toHaveBeenCalled()
+      handle.channels.control.destroy()
+      expect(root.kill('SIGTERM')).toBe(true)
+      await rootClosed
+      await vi.advanceTimersByTimeAsync(1)
+      await failed
+      expect(await second).toBe('next generation')
+      expect(handle.child.rootAbsent).toBe(true)
+      expect(close).toHaveBeenCalledExactlyOnceWith(null, null)
+    } finally {
+      vi.useRealTimers()
+      if (root.exitCode === null && root.signalCode === null) {
+        root.kill('SIGTERM')
+      }
+      await rootClosed
+    }
+  }
+)
+
+it('forwards direct stdin failure while preserving actual child exit and close', async () => {
+  const { EventEmitter } = await import('node:events')
+  const { PassThrough } = await import('node:stream')
+  const direct = Object.assign(new EventEmitter(), {
+    pid: 400,
+    connected: false,
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn(() => true)
+  })
+  vi.mocked(inspectMacProcessCodeIdentity).mockResolvedValue({
+    identity: 'probe-failed',
+    executablePath: null
+  })
+  const handle = pendingChild(() => {
+    queueMicrotask(() => direct.emit('spawn'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Direct fixture supplies the streams and held-child lifecycle under test.
+    return direct as never
+  })
+  const inputFailed = new Promise<Error>((resolve) => handle.child.stdin.once('error', resolve))
+  const closed = new Promise<unknown[]>((resolve) =>
+    handle.child.once('close', (...args) => resolve(args))
+  )
+  await handle.child.ready
+  const failure = Object.assign(new Error('closed input'), { code: 'EPIPE' })
+  direct.stdin.destroy(failure)
+  expect(await inputFailed).toBe(failure)
+  expect(handle.child.exitCode).toBeNull()
+  direct.stdout.end()
+  direct.stderr.end()
+  direct.emit('exit', 7, null)
+  direct.emit('close', 7, null)
+  expect(await closed).toEqual([7, null])
+})
+
+it('does not renew loss observation from its own reconnect or error cleanup', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(process, 'kill').mockReturnValue(true)
+  const handle = pendingChild()
+  const query = vi.spyOn(handle.client, 'request')
+  vi.spyOn(handle.client, 'ensureConnectedWithin').mockImplementation(async () =>
+    handle.reconnect()
+  )
+  await handle.child.ready
+  handle.child.on('error', () => {
+    void Promise.resolve().then(() => handle.child.signalRoot!('SIGTERM'))
+  })
+  query.mockImplementation(async (type) => {
+    if (type === 'signalProvider') {
+      throw new Error('Host unavailable')
+    }
+    return { state: 'unknown' }
+  })
+  handle.disconnect()
+  await vi.advanceTimersByTimeAsync(8_001)
+  const stopped = query.mock.calls.length
+  await vi.advanceTimersByTimeAsync(16_000)
+  expect(query.mock.calls.length).toBe(stopped)
+  expect(handle.child.rootAbsent).toBe(false)
+  handle.exit()
+  await vi.advanceTimersByTimeAsync(0)
+})
 
 it('keeps a bounded startup longer than one second hosted instead of spawning twice', async () => {
   vi.useFakeTimers()

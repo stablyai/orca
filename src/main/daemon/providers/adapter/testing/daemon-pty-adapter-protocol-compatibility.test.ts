@@ -69,6 +69,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  it.each([57, 58])(
+    'preserves v%i terminals and only gives corrected hosts new provider work',
+    async (protocolVersion) => {
+      const harness = await startDaemonAdapterHarness(() => createMockSubprocess(), {
+        protocolVersion
+      })
+      try {
+        const terminal = await harness.adapter.spawn({ cols: 80, rows: 24 })
+        expect(await harness.adapter.probePtyLiveness(terminal.id)).toBe(true)
+        expect(harness.adapter.getProviderProcessClient() !== null).toBe(protocolVersion === 58)
+      } finally {
+        harness.adapter.dispose()
+        await harness.server.shutdown()
+        rmSync(harness.dir, { recursive: true, force: true })
+      }
+    }
+  )
+
   describe('background stream thinning compatibility', () => {
     // Provider fallback can route unknown IDs here; false authority would let the renderer discard their panes.
     it('refuses an authoritative snapshot claim for a session it does not own', async () => {
