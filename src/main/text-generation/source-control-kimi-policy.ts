@@ -1,3 +1,7 @@
+import {
+  generationOptionTokens,
+  type GenerationArgument
+} from '../../shared/source-control/ai/generation/generation-argument'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { z } from 'zod'
 import { findOptionOccurrence } from '../../shared/command-option-occurrence'
@@ -9,14 +13,23 @@ import type { CommitMessagePlan } from '../../shared/source-control/ai/generatio
 const object = z.record(z.string(), z.unknown())
 
 export async function prepareKimiTextTaskPolicy(
-  plan: CommitMessagePlan,
+  plan: CommitMessagePlan<GenerationArgument>,
   readRecipe: (file: string) => Promise<string>
 ) {
-  if (findOptionOccurrence(plan.args, ['--agent'], true, KIMI_VALUE_OPTIONS, 0, 'required')) {
+  if (
+    findOptionOccurrence(
+      generationOptionTokens(plan.args),
+      ['--agent'],
+      true,
+      KIMI_VALUE_OPTIONS,
+      0,
+      'required'
+    )
+  ) {
     throw new Error('Kimi named profiles cannot apply the text task tool policy')
   }
   const file = findOptionOccurrence(
-    plan.args,
+    generationOptionTokens(plan.args),
     ['--agent-file'],
     true,
     KIMI_VALUE_OPTIONS,

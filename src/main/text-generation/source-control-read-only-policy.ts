@@ -1,3 +1,7 @@
+import {
+  generationOptionTokens,
+  type GenerationArgument
+} from '../../shared/source-control/ai/generation/generation-argument'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -10,11 +14,12 @@ import {
   KIMI_VALUE_OPTIONS
 } from '../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
-import { parseWslUncPath, wslDistroForCommand } from '../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { CODEX_DISABLE_PLUGINS_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { TEXT_TASK_DIRECTORY } from './source-control-prompt-files'
 import { runSourceControlPolicyProbe } from './source-control-policy-probe'
+import { sourceControlWslPath, sourceControlWslPaths } from './source-control-wsl-paths'
 import type {
   LocalGenerationTarget,
   LocalProcessExecution,
@@ -45,7 +50,8 @@ async function recipeFile(
   const distro =
     process.platform === 'win32' ? wslDistroForCommand(target.cwd, target.wslDistro) : null
   if (distro) {
-    const cwd = parseWslUncPath(target.cwd)?.linuxPath ?? target.cwd
+    const cwd = await sourceControlWslPath(target.cwd, distro, signal)
+    const guestFile = await sourceControlWslPath(file, distro, signal)
     const home =
       commandEnv?.HOME ?? (target.env?.HOME !== process.env.HOME ? target.env?.HOME : undefined)
     const result = await runWslProcess({
@@ -55,7 +61,8 @@ async function recipeFile(
       ...(home !== undefined ? { env: { ORCA_TEXT_TASK_HOME: home } } : {}),
       script:
         'if [ "${ORCA_TEXT_TASK_HOME+x}" ]; then HOME=$ORCA_TEXT_TASK_HOME; fi; case "$1" in "~/"*) file=$HOME/${1#??} ;; *) file=$1 ;; esac; cat -- "$file"',
-      args: [file],
+      args: [guestFile],
+      signal,
       timeoutMs: 10_000,
       maxOutputBytes: 1024 * 1024
     })
@@ -87,7 +94,7 @@ function jsonObject(text: string): Record<string, unknown> {
 }
 
 async function antigravityPolicy(
-  plan: CommitMessagePlan,
+  plan: CommitMessagePlan<GenerationArgument>,
   target: LocalGenerationTarget,
   signal: AbortSignal
 ) {
@@ -95,7 +102,7 @@ async function antigravityPolicy(
   let cursor = 0
   for (;;) {
     const option = findOptionOccurrence(
-      plan.args,
+      generationOptionTokens(plan.args),
       ['--settings'],
       true,
       settingsOptions,
@@ -154,12 +161,14 @@ async function antigravityPolicy(
     args: [
       ...compactRecipeOptions(plan.args, ['--settings'], settingsOptions),
       '--settings',
-      JSON.stringify(composed)
+      { value: JSON.stringify(composed), literal: true as const }
     ]
   }
 }
 
-function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
+function dshPolicy(
+  plan: CommitMessagePlan<GenerationArgument>
+): CommitMessagePlan<GenerationArgument> {
   const plugin = `export const inject = ['tools']\nexport function apply(ctx) {\n  ctx.tools.guard(exec => exec.name === 'read' ? undefined : 'This text task permits only file reads')\n  ctx.provide('orcaTextReadPolicy', Object.freeze({}))\n}\n`
   const patch = JSON.stringify([
     { id: 'tools', config: { mode: 'native' } },
@@ -189,15 +198,19 @@ function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
 
 export function prepareSourceControlReadOnlyPlan(input: {
   agentId: string
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   target: LocalGenerationTarget
   signal: AbortSignal
   spawnAgent: SpawnSourceControlAgent
   operation?: TextGenerationOperation
-}): LocalProcessExecution<CommitMessagePlan> {
+}): LocalProcessExecution<CommitMessagePlan<GenerationArgument>> {
   let probeClosed = Promise.resolve()
   const probe = async (args: string[]) => {
-    const execution = runSourceControlPolicyProbe({ ...input, args })
+    const resolvedArgs =
+      process.platform === 'win32' && input.target.wslDistro
+        ? await sourceControlWslPaths(args, input.target.wslDistro, input.signal)
+        : args
+    const execution = runSourceControlPolicyProbe({ ...input, args: resolvedArgs })
     probeClosed = execution.processClosed
     const output = await execution.result
     await execution.processClosed
@@ -213,7 +226,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
     )
   }
 
-  async function prepare(): Promise<CommitMessagePlan> {
+  async function prepare(): Promise<CommitMessagePlan<GenerationArgument>> {
     const { plan, target, signal } = input
     const naming = input.operation === 'conversation-name'
     if (input.agentId === 'amp' || input.agentId === 'muse') {
@@ -234,7 +247,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
     }
     if (input.agentId === 'kimi') {
       const selected = findOptionOccurrence(
-        plan.args,
+        generationOptionTokens(plan.args),
         ['--agent', '--session', '-S', '--resume', '-r', '--continue', '-c', '-C'],
         true,
         [...KIMI_VALUE_OPTIONS, '--session', '-S', '--resume', '-r'],

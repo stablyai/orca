@@ -1,3 +1,8 @@
+import {
+  generationOptionTokens,
+  generationArgumentText,
+  type GenerationArgument
+} from './source-control/ai/generation/generation-argument'
 import { findOptionOccurrence } from './command-option-occurrence'
 import type { CommitMessagePlan } from './source-control/ai/generation/commit-message-plan'
 
@@ -53,12 +58,12 @@ export function openCodeGenerationLauncherBoundary(
   return null
 }
 
-export function mergeOpenCodeGenerationArgs(
+export function mergeOpenCodeGenerationArgs<T extends GenerationArgument>(
   agentId: string,
   binary: string,
   prefixArgs: string[],
-  args: string[]
-): string[] {
+  args: T[]
+): (string | T)[] {
   if (
     (agentId === 'opencode' || agentId === 'opencode2') &&
     isDirectOpenCodeGenerationCommand(binary, prefixArgs) &&
@@ -69,25 +74,25 @@ export function mergeOpenCodeGenerationArgs(
   return [...prefixArgs, ...args]
 }
 
-export function openCodeVariantRetryPlan(
-  plan: CommitMessagePlan,
+export function openCodeVariantRetryPlan<T extends GenerationArgument>(
+  plan: CommitMessagePlan<T>,
   stderr: string
-): CommitMessagePlan | null {
+): CommitMessagePlan<T | string> | null {
   // Retry only an argv rejection, which happens before a model turn starts.
   if (!stderr.includes('Unrecognized flag: --variant in command opencode run')) {
     return null
   }
-  const variant = findOptionOccurrence(plan.args, ['--variant'], true)
-  const model = findOptionOccurrence(plan.args, ['--model', '-m'], true)
+  const variant = findOptionOccurrence(generationOptionTokens(plan.args), ['--variant'], true)
+  const model = findOptionOccurrence(generationOptionTokens(plan.args), ['--model', '-m'], true)
   if (!variant?.value || !model?.value) {
     return null
   }
-  const args = [...plan.args]
+  const args: (T | string)[] = [...plan.args]
   const replacement = `${model.value.split('#')[0]}#${variant.value}`
   if (model.consumed === 2) {
     args[model.index + 1] = replacement
   } else {
-    const token = args[model.index]
+    const token = generationArgumentText(args[model.index])
     args[model.index] = `${token.slice(0, token.length - model.value.length)}${replacement}`
   }
   args.splice(variant.index, variant.consumed)

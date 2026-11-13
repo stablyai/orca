@@ -12,7 +12,7 @@ import { producePromptRecords } from './source-control-prompt-producer'
 import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { withPlatform } from './commit-message-text-generation-test-harness'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
-import './source-control-local-generation'
+import { runGenerationRequest } from './agent-generation-request'
 import { resolveCommand } from '../git/command-runner/host-routing/wsl-command-resolution'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
@@ -243,3 +243,222 @@ fs.writeFileSync(process.env.REPORT, JSON.stringify({startup:process.env.STARTUP
     }
   }
 )
+
+it.each([
+  { agentId: 'kimi' as const, prompt: String.raw`C:\reference\instructions.md` },
+  { agentId: 'kimi' as const, prompt: String.raw`\\wsl$\Foreign\private\instructions.md` },
+  { agentId: 'custom' as const, prompt: String.raw`C:\reference\instructions.md` },
+  { agentId: 'copilot' as const, prompt: String.raw`C:\reference\instructions.md` },
+  { agentId: 'antigravity' as const, prompt: String.raw`C:\reference\instructions.md` }
+])(
+  'keeps $agentId task text separate from real wrapper paths through the WSL resolver ($prompt)',
+  async ({ agentId, prompt }) => {
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orca-wsl-task-argv-')))
+    const profile = join(directory, 'rc')
+    const shell = join(directory, 'bash')
+    const report = join(directory, 'report.json')
+    const reader = join(directory, 'reader.cjs')
+    writeFileSync(
+      shell,
+      `#!/bin/sh\nexec /bin/bash --noprofile --rcfile ${quotePosixShell(profile)} -ic "$2"\n`,
+      { mode: 0o700 }
+    )
+    writeFileSync(
+      join(directory, 'getent'),
+      `#!/bin/sh\nprintf '%s\\n' ${quotePosixShell(`user:x:1:1:User:${directory}:${shell}`)}\n`,
+      { mode: 0o700 }
+    )
+    writeFileSync(
+      profile,
+      `cd() { [ "$1" = /c/repo ]; }\nnode() { ${quotePosixShell(process.execPath)} ${quotePosixShell(reader)} "$@"; }\n`
+    )
+    writeFileSync(
+      reader,
+      `const fs=require('node:fs'); const args=process.argv.slice(2); if(args.includes('--help')) { console.log('  --settings Session settings'); } else { const index=args.indexOf('--agent-file'); fs.writeFileSync(${JSON.stringify(report)},JSON.stringify({args,profile:index === -1 ? null : fs.readFileSync(args[index+1],'utf8')})); console.log(${JSON.stringify(agentId === 'kimi' ? JSON.stringify({ role: 'assistant', content: 'Preserve the requested task' }) : agentId === 'antigravity' ? JSON.stringify({ event: 'result', result: { status: 'SUCCESS', response: 'Preserve the requested task' } }) : 'Preserve the requested task')}); }`
+    )
+    let artifact: string | undefined
+    let rejectedModel = false
+    spawnMock.mockImplementation((_program, args, options) => {
+      if (
+        args.includes('wslpath') ||
+        args.some((arg) => String(arg).includes('for value do wslpath'))
+      ) {
+        const values = args.includes('wslpath')
+          ? [String(args.at(-1))]
+          : args.slice(args.lastIndexOf('--') + 1)
+        const output = values
+          .map((value: string) => `${value.replace(/^C:[\\/]/, '/c/').replaceAll('\\', '/')}\n`)
+          .join('')
+        return nativeSpawn(
+          process.execPath,
+          ['-e', 'process.stdout.write(process.argv[1])', output],
+          { ...options, cwd: directory }
+        )
+      }
+      if (args.some((arg) => String(arg).includes('_orca_env=$(command -v env'))) {
+        return nativeSpawn(process.execPath, ['-e', 'process.exit(127)'], {
+          ...options,
+          cwd: directory
+        })
+      }
+      if (args.some((arg) => String(arg).includes('cat -- "$file"'))) {
+        expect(args).toContain('/c/repo')
+        expect(args).toContain('/c/profiles/agent.md')
+        return nativeSpawn(
+          process.execPath,
+          [
+            '-e',
+            'console.log(process.argv[1])',
+            '--',
+            agentId === 'antigravity'
+              ? '{"customSetting":true}'
+              : '---\nname: reviewer\ntools: [read, write]\n---\nKeep recipe instructions.'
+          ],
+          { ...options, cwd: directory }
+        )
+      }
+      const guest = args.slice(args.indexOf('--exec') + 1)
+      if (agentId === 'copilot' && !rejectedModel) {
+        rejectedModel = true
+        return nativeSpawn(
+          process.execPath,
+          [
+            '-e',
+            `console.error('Error: Model "auto" from --model flag is not available.'); process.exit(1)`
+          ],
+          { ...options, cwd: directory }
+        )
+      }
+      if (guest[0] === '/bin/sh') {
+        artifact = `/tmp/orca-generation-${guest[4]}`
+      }
+      return nativeSpawn(guest[0], guest.slice(1), { ...options, cwd: directory })
+    })
+    const platform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const result = await runGenerationRequest({
+        params: {
+          agentId,
+          model: agentId === 'copilot' ? 'auto' : 'default',
+          ...(agentId === 'custom'
+            ? {
+                customAgentCommand: String.raw`node C:/wrappers/kimi.cjs 'C:\reference\instructions.md' '{prompt}' 'prefix={prompt}:{prompt}'`
+              }
+            : { agentCommandOverride: 'node C:/wrappers/kimi.cjs' }),
+          agentArgs:
+            agentId === 'kimi'
+              ? String.raw`--agent-file C:/profiles/agent.md --add-dir 'C:\reference\instructions.md'`
+              : agentId === 'antigravity'
+                ? '--settings C:/profiles/agent.md'
+                : undefined
+        },
+        prompt,
+        target: {
+          kind: 'local',
+          cwd: 'C:/repo',
+          wslDistro: 'TaskArgv',
+          env: { HOME: directory, SHELL: shell, PATH: `${directory}:${process.env.PATH}` }
+        },
+        operation: 'commit-message',
+        spawnAgent: spawnSourceControlAgent
+      })
+      expect(result, JSON.stringify(result)).toMatchObject({
+        success: true,
+        rawOutput: 'Preserve the requested task'
+      })
+      const receipt = JSON.parse(readFileSync(report, 'utf8'))
+      expect(receipt.args[0]).toBe('/c/wrappers/kimi.cjs')
+      if (agentId === 'custom') {
+        expect(receipt.args.slice(1)).toEqual([
+          '/c/reference/instructions.md',
+          prompt,
+          `prefix=${prompt}:${prompt}`
+        ])
+      } else if (agentId === 'antigravity') {
+        expect(JSON.parse(receipt.args[receipt.args.indexOf('--settings') + 1])).toMatchObject({
+          customSetting: true
+        })
+      } else {
+        expect(receipt.args[receipt.args.indexOf('--prompt') + 1]).toBe(prompt)
+      }
+      if (agentId === 'kimi') {
+        expect(receipt.args[receipt.args.indexOf('--add-dir') + 1]).toBe(
+          '/c/reference/instructions.md'
+        )
+        expect(receipt.args[receipt.args.indexOf('--agent-file') + 1]).toMatch(
+          /^\/tmp\/orca-generation-[^/]+\/text-task-profile.md$/
+        )
+        expect(receipt.profile).toContain('tools: []')
+        expect(receipt.profile).toContain('Keep recipe instructions.')
+      }
+      if (agentId === 'copilot') {
+        expect(rejectedModel).toBe(true)
+        expect(receipt.args).not.toContain('--model')
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+      if (artifact) {
+        await rm(artifact, { recursive: true, force: true })
+      }
+      await rm(directory, { recursive: true, force: true })
+    }
+  }
+)
+
+it('checks the final quoted WSL command budget even without task files', async () => {
+  const platform = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  try {
+    const result = await runGenerationRequest({
+      params: { agentId: 'custom', model: 'default', customAgentCommand: 'node {prompt}' },
+      prompt: "'".repeat(10_000),
+      target: { kind: 'local', cwd: '/home/repo', wslDistro: 'TaskArgv' },
+      operation: 'commit-message',
+      spawnAgent: spawnSourceControlAgent
+    })
+    expect(result).toMatchObject({ success: false, errorCode: 'promptTooLargeForWindows' })
+    expect(spawnMock).not.toHaveBeenCalled()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  }
+})
+
+it('resolves an assigned program path before lowering the env invocation', async () => {
+  let invocation = ''
+  spawnMock.mockImplementation((_program, args, options) => {
+    if (args.includes('wslpath')) {
+      expect(args.at(-1)).toBe('C:/tools/agent.exe')
+      return nativeSpawn(process.execPath, ['-e', 'console.log("/c/tools/agent.exe")'], options)
+    }
+    invocation = String(args.at(-1))
+    return nativeSpawn(
+      process.execPath,
+      ['-e', 'console.log("Keep the assigned program")'],
+      options
+    )
+  })
+  const platform = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  try {
+    await expect(
+      runGenerationRequest({
+        params: {
+          agentId: 'custom',
+          model: 'default',
+          customAgentCommand: 'KEEP=literal C:/tools/agent.exe {prompt}'
+        },
+        prompt: 'requested task',
+        target: { kind: 'local', cwd: '/home/repo', wslDistro: 'TaskArgv' },
+        operation: 'commit-message',
+        spawnAgent: spawnSourceControlAgent
+      })
+    ).resolves.toMatchObject({ success: true, rawOutput: 'Keep the assigned program' })
+    expect(invocation).toContain('/usr/bin/env')
+    expect(invocation).toContain('KEEP=literal')
+    expect(invocation).toContain('/c/tools/agent.exe')
+    expect(invocation).not.toContain('/mnt/c/')
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  }
+})

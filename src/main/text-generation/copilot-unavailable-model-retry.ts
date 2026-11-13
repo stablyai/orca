@@ -1,3 +1,7 @@
+import {
+  generationOptionTokens,
+  type GenerationArgument
+} from '../../shared/source-control/ai/generation/generation-argument'
 import { findOptionOccurrence } from '../../shared/command-option-occurrence'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { escapeRegex } from '../../shared/string-utils'
@@ -5,10 +9,15 @@ import type { AgentGenerationFailureOutput } from './agent-failure-output'
 
 const PROMPT_VALUE_OPTIONS = ['--prompt', '-p']
 
-function withoutOption(args: string[], aliases: readonly string[]): string[] {
+function withoutOption<T extends GenerationArgument>(args: T[], aliases: readonly string[]): T[] {
   let remaining = args
   for (;;) {
-    const option = findOptionOccurrence(remaining, aliases, true, PROMPT_VALUE_OPTIONS)
+    const option = findOptionOccurrence(
+      generationOptionTokens(remaining),
+      aliases,
+      true,
+      PROMPT_VALUE_OPTIONS
+    )
     if (!option) {
       return remaining
     }
@@ -20,10 +29,10 @@ function withoutOption(args: string[], aliases: readonly string[]): string[] {
 }
 
 /** Copilot rejects models the account's plan or org policy hides; rerun once on Copilot's own default model. */
-export function copilotUnavailableModelRetryPlan(
-  plan: CommitMessagePlan,
+export function copilotUnavailableModelRetryPlan<T extends GenerationArgument>(
+  plan: CommitMessagePlan<T>,
   failure: AgentGenerationFailureOutput | undefined
-): CommitMessagePlan | null {
+): CommitMessagePlan<T> | null {
   // The rejection exits nonzero before a model turn starts, so the retry cannot repeat work.
   if (
     !failure ||
@@ -33,7 +42,12 @@ export function copilotUnavailableModelRetryPlan(
   ) {
     return null
   }
-  const model = findOptionOccurrence(plan.args, ['--model'], true, PROMPT_VALUE_OPTIONS)?.value
+  const model = findOptionOccurrence(
+    generationOptionTokens(plan.args),
+    ['--model'],
+    true,
+    PROMPT_VALUE_OPTIONS
+  )?.value
   if (!model) {
     return null
   }

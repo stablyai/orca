@@ -1,4 +1,8 @@
 import {
+  generationArgumentText,
+  type GenerationArgument
+} from '../../shared/source-control/ai/generation/generation-argument'
+import {
   textGenerationFailure,
   type TextGenerationFailureFields
 } from '../../shared/text-generation-failure-copy'
@@ -8,19 +12,29 @@ import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-
 // Linux caps each argv entry in bytes (128KiB on 4KiB pages), before total argv capacity; reserve headroom for single-prompt arguments.
 const LINUX_SINGLE_ARGUMENT_BYTE_BUDGET = 120 * 1024
 /** Whether the plan's argv plus reserve fits this host's limit: UTF-16 units on Windows, bytes per argument on Linux. */
-export function fitsLocalCommandLine(plan: CommitMessagePlan, reserve = 0): boolean {
+export function fitsLocalCommandLine(
+  plan: CommitMessagePlan<GenerationArgument>,
+  reserve = 0
+): boolean {
   if (process.platform === 'win32') {
-    return commandLineLength([plan.binary, ...plan.args]) + reserve <= MAX_COMMAND_LINE_CHARS
+    return (
+      commandLineLength([plan.binary, ...plan.args.map(generationArgumentText)]) + reserve <=
+      MAX_COMMAND_LINE_CHARS
+    )
   }
   if (process.platform === 'linux') {
     return plan.args.every(
-      (arg) => Buffer.byteLength(arg, 'utf8') + reserve <= LINUX_SINGLE_ARGUMENT_BYTE_BUDGET
+      (arg) =>
+        Buffer.byteLength(generationArgumentText(arg), 'utf8') + reserve <=
+        LINUX_SINGLE_ARGUMENT_BYTE_BUDGET
     )
   }
   return true
 }
 
-export function argumentBudgetFailure(plan: CommitMessagePlan): TextGenerationFailureFields | null {
+export function argumentBudgetFailure(
+  plan: CommitMessagePlan<GenerationArgument>
+): TextGenerationFailureFields | null {
   if (fitsLocalCommandLine(plan)) {
     return null
   }

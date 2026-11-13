@@ -1,3 +1,4 @@
+import type { GenerationArgument } from '../../shared/source-control/ai/generation/generation-argument'
 import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
 import type { spawnProcess } from '@orca/process-host'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
@@ -114,6 +115,8 @@ export type SourceControlAgentSpawnInput = {
   // WSL applies these in the guest; native callers already merge them into env.
   commandEnv?: Record<string, string>
   preparation?: { script: string; args: string[] }
+  /** Local generation already resolved path operands; preserve final argv literally. */
+  literalWslArgs?: boolean
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
 }
@@ -123,8 +126,10 @@ export type SpawnSourceControlAgent = (
 ) => SpawnedSourceControlAgentProcess
 
 export type LocalSourceControlPlanInput = {
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   cwd: string
+  /** Guest spelling for execution; cwd retains the user's cancellation identity. */
+  executionCwd?: string
   env: NodeJS.ProcessEnv | undefined
   operation: TextGenerationOperation
   wslDistro?: string

@@ -1,3 +1,5 @@
+import { sourceControlCommandAssignments } from './source-control-agent-launch'
+import type { GenerationArgument } from '../../shared/source-control/ai/generation/generation-argument'
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
@@ -12,6 +14,7 @@ import {
 } from './source-control-generation-lanes'
 import { runLocalSourceControlPlan } from './source-control-local-process'
 import { prepareSourceControlReadOnlyPlan } from './source-control-read-only-policy'
+import { sourceControlWslPath, sourceControlWslPaths } from './source-control-wsl-paths'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import { textGenerationFailure } from '../../shared/text-generation-failure-copy'
 import type {
@@ -24,7 +27,8 @@ import type {
 
 export function runLocalPlanForAgent(input: {
   agentId: string
-  plan: CommitMessagePlan
+  literalBinary?: boolean
+  plan: CommitMessagePlan<GenerationArgument>
   target: LocalGenerationTarget
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
@@ -32,7 +36,7 @@ export function runLocalPlanForAgent(input: {
 }): Promise<InternalTextGenerationResult> {
   const needsPolicy = ['codex', 'kimi', 'dsh', 'antigravity', 'amp', 'muse'].includes(input.agentId)
   const wslDistro =
-    input.plan.promptFile || input.plan.taskFiles?.length || needsPolicy
+    input.plan.promptFile || input.plan.taskFiles?.length || needsPolicy || input.target.wslDistro
       ? (wslDistroForCommand(input.target.cwd, input.target.wslDistro) ?? undefined)
       : input.target.wslDistro
   const target = {
@@ -44,14 +48,20 @@ export function runLocalPlanForAgent(input: {
       wslDistro ? 'linux' : process.platform
     )
   }
-  const launch = (plan: CommitMessagePlan, timeoutMs?: number) =>
+  const launch = (
+    plan: CommitMessagePlan<GenerationArgument>,
+    timeoutMs?: number,
+    executionCwd?: string
+  ) =>
     runLocalSourceControlPlan({
       plan,
       cwd: input.target.cwd,
+      executionCwd,
       env: wslDistro ? input.target.env : target.env,
       operation: input.operation,
       wslDistro,
-      spawnAgent: input.spawnAgent,
+      spawnAgent: (spawn) =>
+        input.spawnAgent({ ...spawn, literalWslArgs: process.platform === 'win32' && !!wslDistro }),
       timeoutMs
     })
   const prepare = (): LocalProcessExecution<InternalTextGenerationResult> => {
@@ -76,7 +86,7 @@ export function runLocalPlanForAgent(input: {
     const cancel = () => canceled.abort()
     setLocalGenerationCancelToken(lane, cancel)
     signal.addEventListener('abort', abort, { once: true })
-    let preparation: LocalProcessExecution<CommitMessagePlan> | undefined
+    let preparation: LocalProcessExecution<CommitMessagePlan<GenerationArgument>> | undefined
     let execution: LocalProcessExecution<InternalTextGenerationResult> | undefined
     const processClosed = (async () => {
       try {
@@ -84,16 +94,45 @@ export function runLocalPlanForAgent(input: {
           canceled.abort()
         }
         signal.throwIfAborted()
-        preparation = prepareSourceControlReadOnlyPlan({ ...input, target, signal })
-        const plan = await preparation.result
+        const preparedTarget =
+          process.platform === 'win32' && wslDistro
+            ? { ...target, cwd: await sourceControlWslPath(target.cwd, wslDistro, signal) }
+            : target
+        signal.throwIfAborted()
+        const preparedPlan =
+          process.platform === 'win32' &&
+          wslDistro &&
+          !input.literalBinary &&
+          sourceControlCommandAssignments(input.plan.env).length
+            ? {
+                ...input.plan,
+                binary: await sourceControlWslPath(input.plan.binary, wslDistro, signal)
+              }
+            : input.plan
+        preparation = prepareSourceControlReadOnlyPlan({
+          ...input,
+          plan: preparedPlan,
+          target: preparedTarget,
+          signal
+        })
+        let plan = await preparation.result
         await preparation.processClosed
+        if (process.platform === 'win32' && wslDistro) {
+          const operands = plan.args.filter((arg): arg is string => typeof arg === 'string')
+          const resolved = await sourceControlWslPaths(operands, wslDistro, signal)
+          let index = 0
+          plan = {
+            ...plan,
+            args: plan.args.map((arg) => (typeof arg === 'string' ? resolved[index++] : arg))
+          }
+        }
         signal.throwIfAborted()
         if (input.shouldExecute?.() === false) {
           canceled.abort()
           signal.throwIfAborted()
         }
         signal.removeEventListener('abort', abort)
-        execution = launch(plan, Math.max(1, deadlineAt - Date.now()))
+        execution = launch(plan, Math.max(1, deadlineAt - Date.now()), preparedTarget.cwd)
         result.resolve(await execution.result)
       } catch {
         result.resolve(failure())
@@ -109,7 +148,7 @@ export function runLocalPlanForAgent(input: {
   const start = ():
     | LocalProcessExecution<InternalTextGenerationResult>
     | Promise<LocalProcessExecution<InternalTextGenerationResult>> => {
-    if (needsPolicy) {
+    if (needsPolicy || (process.platform === 'win32' && wslDistro)) {
       return prepare()
     }
     return input.shouldExecute?.() === false

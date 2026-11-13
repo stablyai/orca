@@ -1,3 +1,4 @@
+import { generationArgumentText } from '../../shared/source-control/ai/generation/generation-argument'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -114,7 +115,7 @@ it('copies an explicit Kimi profile with its prompt and identity preserved and a
   }).result
   const plan = stageLocalPromptFiles(policy, (directory) => owned.push(directory))
   const flag = plan.args.indexOf('--agent-file')
-  const content = await readFile(plan.args[flag + 1], 'utf8')
+  const content = await readFile(generationArgumentText(plan.args[flag + 1]), 'utf8')
   const sections = content.split('---\n')
   expect(content.startsWith('---\n')).toBe(true)
   expect(parseYaml(sections[1])).toEqual({
@@ -151,7 +152,7 @@ it('composes agy session settings without losing existing read denies or selecte
     signal: new AbortController().signal,
     spawnAgent
   }).result
-  const value = policy.args[policy.args.indexOf('--settings') + 1]
+  const value = generationArgumentText(policy.args[policy.args.indexOf('--settings') + 1])
   expect(JSON.parse(value)).toEqual({
     customSetting: 'retained',
     anotherSetting: true,

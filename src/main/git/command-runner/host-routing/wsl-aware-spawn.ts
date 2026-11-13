@@ -17,6 +17,7 @@ export function wslAwareSpawn(
     wslShellCommand?: string
     cwdFailureExitCode?: number
     preparation?: { script: string; args: string[] }
+    checkCommandLineBudget?: boolean
   }
 ): ChildProcess {
   const {
@@ -25,6 +26,7 @@ export function wslAwareSpawn(
     wslShellCommand,
     cwdFailureExitCode,
     preparation,
+    checkCommandLineBudget,
     ...spawnOptions
   } = options
   let resolved = resolveCommand(command, args, options.cwd, wslDistro, {
@@ -34,6 +36,8 @@ export function wslAwareSpawn(
   })
   if (preparation && resolved.wsl) {
     resolved = withWslPreparation(resolved, preparation)
+  }
+  if (resolved.wsl && (preparation || checkCommandLineBudget)) {
     if (commandLineLength([resolved.binary, ...resolved.args]) > MAX_COMMAND_LINE_CHARS) {
       throw new WindowsCommandLineBudgetError()
     }
