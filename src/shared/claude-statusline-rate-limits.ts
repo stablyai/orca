@@ -18,6 +18,8 @@ export type ClaudeStatusLineRateLimits = {
   configDir: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
+  /** Fable's weekly window; only chat streams report it. */
+  fableWeekly?: ClaudeStatusLineWindow | null
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -89,7 +91,7 @@ function rateLimitEventWindow(value: unknown): ClaudeStatusLineWindow | null {
   return utilization === undefined
     ? null
     : parseWindow({
-        utilization: utilization * 100,
+        utilization: Math.round(utilization * 10_000) / 100,
         resets_at: 'resetsAt' in value ? value.resetsAt : undefined
       })
 }
@@ -113,5 +115,11 @@ export function claudeRateLimitEventUsage(
   const windows = info.unifiedWindows
   const fiveHour = rateLimitEventWindow('five_hour' in windows ? windows.five_hour : undefined)
   const sevenDay = rateLimitEventWindow('seven_day' in windows ? windows.seven_day : undefined)
-  return fiveHour || sevenDay ? { configDir, fiveHour, sevenDay } : null
+  // The model-scoped weekly window Claude reports while Fable runs.
+  const fableWeekly = rateLimitEventWindow(
+    'seven_day_overage_included' in windows ? windows.seven_day_overage_included : undefined
+  )
+  return fiveHour || sevenDay || fableWeekly
+    ? { configDir, fiveHour, sevenDay, ...(fableWeekly ? { fableWeekly } : {}) }
+    : null
 }
