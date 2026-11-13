@@ -20319,7 +20319,7 @@
         "turnDiffsSearchChangedFiles": "已更改文件",
         "turnDiffsSearchEdits": "编辑",
         "markNewMessagesTitle": "返回聊天时标记新消息",
-        "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
+        "markNewMessagesCopy": "返回聊天时，如果错过的内容很长或有其他人发了消息，会用“新消息”分隔线标出你错过的内容并滚动到那里。看过之后它会淡出。",
         "markNewMessagesSearchUnread": "未读"
       },
       "voice": {

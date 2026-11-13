@@ -11,16 +11,12 @@ import {
   nativeChatSlotKey
 } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
-
-/** Use journal positions for conversation rows, including folded-turn bars; terminal-backed rows have none and remain unmarked. */
-function rowPosition(slot: NativeChatTranscriptSlot): AgentJournalPosition | undefined {
-  return slot.kind === 'message' && slot.depth === 0 && (slot.drawsMessage || slot.statusAbove)
-    ? slot.message.journalPosition
-    : undefined
-}
-
-/** Before every row the journal places: what the reader has read to when no row precedes. */
-const BEFORE_EVERY_ROW: AgentJournalPosition = { sequence: -1, index: 0 }
+import {
+  isMissedRow,
+  isReaderPrompt,
+  newestRowPosition,
+  rowPosition
+} from './native-chat-missed-row-positions'
 
 /** Where a reader who looks away now has read to, and the reply the agent is still writing. */
 type NativeChatLeftAt = {
@@ -28,30 +24,16 @@ type NativeChatLeftAt = {
   position: AgentJournalPosition
   /** A growing reply counts as missed from the position immediately before it. */
   writing: { key: string; size: number; before: AgentJournalPosition } | null
+  /** The reader's prompts there were, by row key: a key stays the same from send to journal. */
+  prompts: ReadonlySet<string>
+  /** Those the host held in its queue, to hand to the agent later. */
+  queuedPrompts: ReadonlySet<string>
 }
 
 function rowSize(slot: NativeChatTranscriptSlot): number {
   return slot.kind === 'message'
     ? JSON.stringify((slot.workRun ?? [slot.message]).map((message) => message.blocks)).length
     : 0
-}
-
-function newestRowPosition(
-  slots: readonly NativeChatTranscriptSlot[],
-  limit?: AgentJournalPosition
-): AgentJournalPosition {
-  let newest = BEFORE_EVERY_ROW
-  for (const slot of slots) {
-    const at = rowPosition(slot)
-    if (
-      at &&
-      (!limit || compareAgentJournalPositions(at, limit) < 0) &&
-      compareAgentJournalPositions(at, newest) > 0
-    ) {
-      newest = at
-    }
-  }
-  return newest
 }
 
 function nativeChatLeftAt(
@@ -71,7 +53,18 @@ function nativeChatLeftAt(
   const writing = at
     ? { key: nativeChatSlotKey(writer), size: rowSize(writer), before: newestRowPosition(all, at) }
     : null
-  return { position: newestRowPosition(all), writing }
+  const prompts = new Set<string>()
+  const queuedPrompts = new Set<string>()
+  for (const slot of all) {
+    if (isReaderPrompt(slot)) {
+      prompts.add(slot.message.id)
+      // Held by the host, not merely drawn after a turn that is still opening.
+      if (slot.message.queued) {
+        queuedPrompts.add(slot.message.id)
+      }
+    }
+  }
+  return { position: newestRowPosition(all), writing, prompts, queuedPrompts }
 }
 
 /** The first row that came while the reader was away, and the journal stretch it came in. */
@@ -83,29 +76,73 @@ export type NativeChatMissedRows = {
   through: AgentJournalPosition
 }
 
-function isMissedRow(
-  slot: NativeChatTranscriptSlot,
-  after: AgentJournalPosition,
-  through: AgentJournalPosition
-): boolean {
-  const at = rowPosition(slot)
-  return (
-    at !== undefined &&
-    compareAgentJournalPositions(at, after) > 0 &&
-    compareAgentJournalPositions(at, through) <= 0 &&
-    (slot.kind !== 'message' || slot.message.role !== 'user' || slot.message.from !== undefined)
-  )
-}
-
 function nativeChatMissedRows(
   slots: readonly NativeChatTranscriptSlot[],
-  { position, writing }: NativeChatLeftAt
+  { position, writing }: Pick<NativeChatLeftAt, 'position' | 'writing'>
 ): NativeChatMissedRows | null {
   const row = writing && slots.find((slot) => nativeChatSlotKey(slot) === writing.key)
   const after = writing && !(row && rowSize(row) === writing.size) ? writing.before : position
   const through = newestRowPosition(slots)
   const first = slots.find((slot) => isMissedRow(slot, after, through))
   return first ? { key: nativeChatSlotKey(first), after, through } : null
+}
+
+/** How the marker shows: a line only where it helps, measured by height when nothing else calls for it. */
+export type NativeChatNewRowsMarkerLook =
+  /** Laid out but not seen, so the marker can measure what was missed below it. */
+  | 'measure'
+  | 'line'
+  /** Rows were missed, but too few to need a line: only the announcement tells of them. */
+  | 'none'
+  /** The line was seen and has faded; it keeps its space so nothing below it moves. */
+  | 'faded'
+
+/** Another agent posted, or a prompt the reader did not just send ran while they were away. */
+function nativeChatMissedNeedsLine(
+  slots: readonly NativeChatTranscriptSlot[],
+  left: NativeChatLeftAt,
+  { after, through }: NativeChatMissedRows
+): boolean {
+  const first = slots.find((slot) => isMissedRow(slot, after, through))
+  const firstAt = first && rowPosition(first)
+  return slots.some(
+    (slot) =>
+      // The only user rows a missed stretch admits are ones another agent sent through Orca.
+      (slot.kind === 'message' &&
+        slot.message.role === 'user' &&
+        isMissedRow(slot, after, through)) ||
+      (isReaderPrompt(slot) && nativeChatPromptRanWhileAway(slot, left, firstAt))
+  )
+}
+
+/** A queued send handed over, or a prompt this pane never sent (an auto-continue, a connector delivery). */
+function nativeChatPromptRanWhileAway(
+  slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>,
+  left: NativeChatLeftAt,
+  /** Where the first missed row is. */
+  firstMissedAt: AgentJournalPosition | undefined
+): boolean {
+  const at = rowPosition(slot)
+  const key = slot.message.id
+  if (
+    at === undefined ||
+    slot.message.queued === true ||
+    // Orca's own turn for something the reader did here (a card answer, a bot they made), not news.
+    slot.message.orcaNotice !== undefined ||
+    compareAgentJournalPositions(at, left.position) <= 0
+  ) {
+    return false
+  }
+  if (!left.prompts.has(key)) {
+    return true
+  }
+  // A queued send ran behind a turn that was running, or behind work the reader missed. The host also
+  // holds a chat's first send while the chat opens; that one runs first, its reply the answer awaited.
+  return (
+    left.queuedPrompts.has(key) &&
+    (left.writing !== null ||
+      (firstMissedAt !== undefined && compareAgentJournalPositions(at, firstMissedAt) > 0))
+  )
 }
 
 export type NativeChatNewRowsMarkerPlacement = {
@@ -115,10 +152,17 @@ export type NativeChatNewRowsMarkerPlacement = {
 }
 
 export type NativeChatNewRowsMarkerState = NativeChatNewRowsMarkerPlacement & {
+  look: Exclude<NativeChatNewRowsMarkerLook, 'none'>
   /** The reader has just come back: bring the marker into view, once. */
   arriving: boolean
+  /** The window is in front and this pane is showing: a seen line's clock may run. */
+  watching: boolean
   onArrived: () => void
   onDismiss: () => void
+  /** With `look: 'measure'`: whether what came below the marker is tall enough to need a line. */
+  onMeasured: (tall: boolean) => void
+  /** With `look: 'line'`: the reader has seen it for long enough, so it fades out. */
+  onFaded: () => void
 }
 
 /** Place above the first missed row, or its turn bar when the two lines would otherwise touch. */
@@ -155,7 +199,10 @@ export function useNativeChatNewRowsMarker(
   /** The pane is the one showing, and shows what the host holds now. */
   isShowingLatest: boolean
 ): {
+  /** The marker to draw, when rows were missed and a line helps. */
   marker: NativeChatNewRowsMarkerState | undefined
+  /** Rows came while the reader was away, line or not; it counts returns, so each is announced. */
+  announcement: number | undefined
   /** The slot drawing the marker, or -1. */
   index: number
   /** The reader answered the conversation, so nothing in it is news to them. */
@@ -172,40 +219,108 @@ export function useNativeChatNewRowsMarker(
     /** Stands until the reader answers. */
     missed: NativeChatMissedRows | null
     arriving: boolean
-  }>({ watching, left: null, missed: null, arriving: false })
+    look: NativeChatNewRowsMarkerLook
+    /** While measuring: the faded line from before, kept in place if this return needs no line. */
+    faded: NativeChatMissedRows | null
+    /** Returns that found rows missed. */
+    returns: number
+  }>({
+    watching,
+    left: null,
+    missed: null,
+    arriving: false,
+    look: 'measure',
+    faded: null,
+    returns: 0
+  })
   if (!enabled) {
     if (!seen.watching || seen.left !== null || seen.missed !== null) {
-      setSeen({ watching, left: null, missed: null, arriving: false })
+      setSeen({ ...seen, watching, left: null, missed: null, arriving: false, faded: null })
     }
   } else if (seen.watching !== watching) {
     const all = [...slots, ...waitingSlots]
     if (watching) {
-      const missed = seen.left ? nativeChatMissedRows(all, seen.left) : seen.missed
-      setSeen({ watching, left: null, missed, arriving: seen.left !== null && missed !== null })
+      const missed = seen.left && nativeChatMissedRows(all, seen.left)
+      // Weighed over the transcript only: a row still held behind the turn is marked once it joins it.
+      const needsLine =
+        seen.left !== null && missed !== null && nativeChatMissedNeedsLine(slots, seen.left, missed)
+      // Removing a faded line for no new one would move the rows below it with nothing to show why.
+      const faded =
+        seen.look === 'faded' && nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
+          ? seen.missed
+          : null
+      setSeen(
+        seen.left && missed
+          ? {
+              watching,
+              left: null,
+              missed,
+              arriving: true,
+              look: needsLine ? 'line' : 'measure',
+              faded: needsLine ? null : faded,
+              returns: seen.returns + 1
+            }
+          : // Nothing new: a marker from before, faded or not drawn, stays as it was.
+            { ...seen, watching, left: null, arriving: false }
+      )
     } else {
-      // An unanswered marker whose row still stands is kept: the reader may be midway through it.
-      const marked = nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
+      // An unanswered line whose row still stands is kept: the reader may be midway through it.
+      // Once faded or never drawn, the next return is weighed afresh.
+      const marked =
+        (seen.look === 'line' || seen.look === 'measure') &&
+        nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
       setSeen({ ...seen, watching, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) })
     }
   }
-  const { missed } = seen
+  const { missed, look } = seen
   const placement = useMemo(() => nativeChatNewRowsMarkerPlacement(slots, missed), [slots, missed])
   const dismiss = useCallback(() => {
     // Where they left as well: an answer sent before the chat has caught up settles that too.
     setSeen((held) =>
-      held.missed === null && held.left === null ? held : { ...held, missed: null, left: null }
+      held.missed === null && held.left === null
+        ? held
+        : { ...held, missed: null, left: null, faded: null }
     )
   }, [])
   const onArrived = useCallback(() => {
     setSeen((held) => (held.arriving ? { ...held, arriving: false } : held))
   }, [])
+  const onMeasured = useCallback((tall: boolean) => {
+    setSeen((held) =>
+      held.look !== 'measure'
+        ? held
+        : tall
+          ? { ...held, look: 'line', faded: null }
+          : held.faded
+            ? { ...held, missed: held.faded, look: 'faded', arriving: false, faded: null }
+            : { ...held, look: 'none', arriving: false }
+    )
+  }, [])
+  const onFaded = useCallback(() => {
+    setSeen((held) => (held.look === 'line' ? { ...held, look: 'faded' } : held))
+  }, [])
   const { key, place } = placement ?? {}
   const marker = useMemo(
     () =>
-      key && place
-        ? { key, place, arriving: seen.arriving, onArrived, onDismiss: dismiss }
+      key && place && look !== 'none'
+        ? {
+            key,
+            place,
+            look,
+            arriving: seen.arriving,
+            watching: focused,
+            onArrived,
+            onDismiss: dismiss,
+            onMeasured,
+            onFaded
+          }
         : undefined,
-    [key, place, seen.arriving, onArrived, dismiss]
+    [key, place, look, seen.arriving, focused, onArrived, dismiss, onMeasured, onFaded]
   )
-  return { marker, index: nativeChatSlotIndexOf(slots, key), dismiss }
+  return {
+    marker,
+    announcement: key ? seen.returns : undefined,
+    index: marker ? nativeChatSlotIndexOf(slots, key) : -1,
+    dismiss
+  }
 }

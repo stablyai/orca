@@ -21953,7 +21953,7 @@
         "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
         "scrollToLatestOnSendSearchPosition": "position",
         "markNewMessagesTitle": "Mark new messages when returning to a chat",
-        "markNewMessagesCopy": "Coming back to a chat draws a New line above what arrived while you were away, and scrolls to it if you were reading the latest.",
+        "markNewMessagesCopy": "When you come back to a chat, a New line marks what you missed if it's long or someone else wrote, and scrolls there. It fades once you've seen it.",
         "markNewMessagesSearchUnread": "unread",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",

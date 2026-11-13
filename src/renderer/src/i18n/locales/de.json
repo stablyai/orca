@@ -20685,7 +20685,7 @@
         "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
         "scrollToLatestOnSendSearchPosition": "Position",
         "markNewMessagesTitle": "Neue Nachrichten bei der Rückkehr in einen Chat markieren",
-        "markNewMessagesCopy": "Bei der Rückkehr in einen Chat erscheint eine Neu-Linie über dem, was in deiner Abwesenheit eingegangen ist. Warst du bei der neuesten Nachricht, scrollt der Chat dorthin.",
+        "markNewMessagesCopy": "Wenn du zu einem Chat zurückkehrst, markiert eine Neu-Linie, was du verpasst hast, wenn es lang ist oder jemand anderes geschrieben hat, und scrollt dorthin. Sie verblasst, sobald du sie gesehen hast.",
         "markNewMessagesSearchUnread": "ungelesen",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",

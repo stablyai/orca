@@ -416,7 +416,7 @@ export function NativeChatMessageList({
               pendingId={navigation.pendingRailId}
             />
             <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
-            <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
+            <NativeChatNewRowsAnnouncement arrival={newRows.announcement} />
           </div>
           <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
         </div>

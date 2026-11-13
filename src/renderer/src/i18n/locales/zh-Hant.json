@@ -20368,7 +20368,7 @@
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
         "markNewMessagesTitle": "返回聊天時標記新訊息",
-        "markNewMessagesCopy": "返回聊天時，在你離開期間收到的內容上方顯示「新訊息」分隔線；如果你之前在看最新訊息，會捲動到該處。",
+        "markNewMessagesCopy": "返回聊天時，如果錯過的內容很長或有其他人發了訊息，會用「新訊息」分隔線標出你錯過的內容並捲動到那裡。看過之後它會淡出。",
         "markNewMessagesSearchUnread": "未讀",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
