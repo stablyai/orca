@@ -13,10 +13,7 @@ import {
   resolveZoomShortcut,
   zoomDashboardPopout
 } from './dashboard-popout-window'
-import {
-  isBackgroundLaunch,
-  showWindowWithoutStealingFocus
-} from './activation/foreground-activation-policy'
+import { isBackgroundLaunch, isWindowlessLaunch } from './activation/foreground-activation-policy'
 import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { rendererPublicationThrottle } from './visibility/renderer-publication-throttle'
 import { isQuittingForUpdate } from '../updater/updater-service'
@@ -108,8 +105,9 @@ function presentWindow(window: BrowserWindow, focus: boolean): void {
     }
     return
   }
-  if (!window.isVisible()) {
-    showWindowWithoutStealingFocus(window)
+  // Why showInactive: a foreground show() would activate the window on a no-focus restore.
+  if (!window.isVisible() && !isWindowlessLaunch()) {
+    window.showInactive()
   }
 }
 
