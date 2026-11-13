@@ -45,7 +45,10 @@ it('loads owner-host settings and inserts/copies the real-repo example without o
   })
   const updateProjectGroup = vi.fn(async () => true)
   const writeClipboardText = vi.fn(async () => {})
-  window.api.ui.writeClipboardText = writeClipboardText
+  Object.defineProperty(window.api, 'ui', {
+    configurable: true,
+    value: { writeClipboardText }
+  })
   useAppStore.setState({
     settingsSearchQuery: '',
     projectGroups: [group],
@@ -108,7 +111,10 @@ it('shows setup-only shared configuration through the group Advanced disclosure'
     tabOrder: 0
   })
   const writeClipboardText = vi.fn(async () => {})
-  window.api.ui.writeClipboardText = writeClipboardText
+  Object.defineProperty(window.api, 'ui', {
+    configurable: true,
+    value: { writeClipboardText }
+  })
   useAppStore.setState({ settingsSearchQuery: '', projectGroups: [group], repos: [] })
   for (const state of ['missing', 'invalid', 'loaded'] as const) {
     vi.mocked(checkRuntimeGroupHooks).mockClear()

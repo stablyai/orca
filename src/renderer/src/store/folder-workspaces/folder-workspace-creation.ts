@@ -12,6 +12,7 @@ import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { holdCreatedSidebarWorkspace } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { mergeCreatedFolderWorkspace } from './folder-workspace-catalog'
+import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
 
 export function createFolderWorkspaceCreateAction(
   set: Parameters<StateCreator<AppState>>[0],
@@ -56,7 +57,7 @@ export function createFolderWorkspaceCreateAction(
       set((s) => ({
         folderWorkspaces: mergeCreatedFolderWorkspace(
           ownedWorkspace,
-          s.folderWorkspaces,
+          selectFolderWorkspaces(s),
           s.projectGroups
         ),
         folderWorkspacePathStatuses: {}

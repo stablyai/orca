@@ -1425,6 +1425,7 @@
       "useExample": "Use this example",
       "agentSetupFailed": "Could not start {{agent}} because Setup did not complete successfully. Check the Setup tab and try again.",
       "description": "Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+      "invalidSetup": "The file is present, but Orca could not find a valid setup script.",
       "supportedKeys": "Define only the supported keys: `scripts` and `setup`."
     }
   },

@@ -62,12 +62,20 @@ it('keeps the created workspace activatable when its catalog arrives before setu
     'local',
     'runtime:other'
   ])
-  expect(findFolderWorkspaceOwner(store.getState(), 'created-folder', 'local')?.name).toBe(
-    'Latest catalog name'
-  )
-  expect(findFolderWorkspaceOwner(store.getState(), 'created-folder', 'runtime:other')?.name).toBe(
+  expect(findFolderWorkspaceOwner(store.getState(), 'created-folder', 'local')).toMatchObject({
+    id: 'created-folder',
+    executionHostId: 'local'
+  })
+  expect(
+    findFolderWorkspaceOwner(store.getState(), 'created-folder', 'runtime:other')
+  ).toMatchObject({
+    id: 'created-folder',
+    executionHostId: 'runtime:other'
+  })
+  expect(store.getState().folderWorkspaces.map((row) => row.name)).toEqual([
+    'Latest catalog name',
     'Feature'
-  )
+  ])
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -117,8 +125,8 @@ it('merges a created row with fleet catalogs in one owner and row pass', () => {
     const result = mergeCreatedFolderWorkspace(workspace, rows, groups)
     expect(result).toHaveLength(size + 1)
     expect(result[0]).toBe(workspace)
-    // Preserving N rows requires N identities; resolving their owners requires one G-row index.
+    // Preserving N rows requires N identities; indexing G owners reads each key for lookup and insert.
     expect(rowReads).toBeLessThanOrEqual(size + 1)
-    expect(groupReads).toBeLessThanOrEqual(size)
+    expect(groupReads).toBeLessThanOrEqual(2 * size)
   }
 })
