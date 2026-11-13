@@ -1,8 +1,12 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveGuestNativeAgentCommand, WINDOWS_ONLY_AGENT_CLI_DIR } from './command'
+
+vi.mock('../../shared/system-cli-install-dirs', () => ({
+  getSystemCliInstallDirectories: () => []
+}))
 
 let root: string
 let native: string
@@ -28,7 +32,11 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('agent CLI resolution on a WSL host', () => {
-  const options = () => ({ pathEnv: `${native}:${drive}/npm`, homePath: join(root, 'home') })
+  const options = () => ({
+    pathEnv: `${native}:${drive}/npm`,
+    homePath: join(root, 'home'),
+    platform: 'linux' as const
+  })
 
   it.each(['claude', 'codex'])('takes the WSL install of %s over a Windows copy', (name) => {
     const own = install(native, name)

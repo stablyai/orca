@@ -5,6 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { runProcess } from '@orca/process-host'
+import {
+  getStructuredAgentSessionHost,
+  setStructuredAgentSessionHost
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { sealedChildEnv } from './structured-session-child-env.test-support'
 
 const SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
@@ -36,7 +40,14 @@ export function createLoginShellHarness(): LoginShellHarness {
   writeFileSync(join(home, '.zprofile'), prependGlobal)
   writeFileSync(join(home, '.bash_profile'), prependGlobal)
   installFakeAppEnvironment({ isPackaged: () => false, getPath: () => userData })
-  const env = sealedChildEnv(SESSION_ID, { HOME: home, PATH: '/usr/bin:/bin' })
+  const previousHost = getStructuredAgentSessionHost()
+  let env: Record<string, string>
+  setStructuredAgentSessionHost(null)
+  try {
+    env = sealedChildEnv(SESSION_ID, { HOME: home, PATH: '/usr/bin:/bin' })
+  } finally {
+    setStructuredAgentSessionHost(previousHost)
+  }
   return {
     run: async (spec) => (await runProcess({ ...spec, env })).stdout,
     dispose: () => rmSync(root, { recursive: true, force: true })

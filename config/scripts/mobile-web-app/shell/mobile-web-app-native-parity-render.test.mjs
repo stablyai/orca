@@ -1,5 +1,6 @@
 // Measure browser defaults absent from native UI at phone density, with shipped plugins/document styles.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -66,8 +67,7 @@ beforeAll(async () => {
   if (!bundles) {
     return
   }
-  await mkdir(join(mobileDir, '.tmp'), { recursive: true })
-  scratch = await mkdtemp(join(mobileDir, '.tmp', 'native-parity-render-'))
+  scratch = await mkdtemp(join(tmpdir(), 'orca-native-parity-render-'))
   const outDir = join(scratch, 'bundle')
   await mkdir(outDir, { recursive: true })
   // Reuse page options except entry/chunking so dropping a builder shim fails here.
