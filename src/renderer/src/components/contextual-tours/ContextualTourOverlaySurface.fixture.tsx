@@ -53,7 +53,7 @@ function BrowserExtensionsTourPreview({ look }: { look: BrowserExtensionsBanner 
           <MoreHorizontal className="size-4" />
         </Button>
       </div>
-      {renderState ? (
+      {look !== 'none' && renderState ? (
         <ContextualTourOverlaySurface
           activeTourId="browser-extensions"
           renderState={renderState}
@@ -93,4 +93,9 @@ export const browserExtensionsEverydayColored = defineFixture({
 export const browserExtensionsNarrow = defineFixture({
   width: 520,
   render: () => <BrowserExtensionsTourPreview look="colored_everyday" />
+})
+
+export const browserExtensionsNone = defineFixture({
+  width: 700,
+  render: () => <BrowserExtensionsTourPreview look="none" />
 })

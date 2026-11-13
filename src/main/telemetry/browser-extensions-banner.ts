@@ -22,8 +22,13 @@ let storeRef: Store | null = null
 let inFlight: Promise<BrowserExtensionsBannerAssignmentReply> | null = null
 let heldUntilNextLaunch = false
 let usedThisSession = false
+let pendingUse: NodeJS.Immediate | null = null
 
 export function initBrowserExtensionsBanner(store: Store): void {
+  if (pendingUse) {
+    clearImmediate(pendingUse)
+    pendingUse = null
+  }
   storeRef = store
   inFlight = null
   heldUntilNextLaunch = false
@@ -144,12 +149,15 @@ export function recordBrowserExtensionInstalled(source: 'web_store' | 'unpacked'
 
 /** Reported once per launch; a refused report is retried on the next use. */
 export function recordBrowserExtensionUsed(): void {
-  if (usedThisSession) {
+  if (usedThisSession || pendingUse) {
     return
   }
-  try {
-    usedThisSession = track('browser_extension_used', {})
-  } catch {
-    // Telemetry never costs a click.
-  }
+  pendingUse = setImmediate(() => {
+    pendingUse = null
+    try {
+      usedThisSession = track('browser_extension_used', {})
+    } catch {
+      // Telemetry never costs a click.
+    }
+  })
 }

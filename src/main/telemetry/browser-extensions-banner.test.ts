@@ -197,15 +197,30 @@ describe('assignBrowserExtensionsBanner', () => {
 })
 
 describe('recordBrowserExtensionUsed', () => {
-  it('reports once per launch', () => {
+  it('reports once per launch', async () => {
     initBrowserExtensionsBanner(fakeStore().store)
     recordBrowserExtensionUsed()
     recordBrowserExtensionUsed()
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(mocks.track).toHaveBeenCalledTimes(1)
     expect(mocks.track).toHaveBeenCalledWith('browser_extension_used', {})
 
     initBrowserExtensionsBanner(fakeStore().store)
     recordBrowserExtensionUsed()
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(mocks.track).toHaveBeenCalledTimes(2)
+  })
+
+  it('can report a later use after reporting was refused', async () => {
+    initBrowserExtensionsBanner(fakeStore().store)
+    mocks.track.mockReturnValueOnce(false)
+    recordBrowserExtensionUsed()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    recordBrowserExtensionUsed()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(mocks.track.mock.results.map((result) => result.value)).toEqual([false, true])
+    expect(mocks.track).toHaveBeenLastCalledWith('browser_extension_used', {})
   })
 })
