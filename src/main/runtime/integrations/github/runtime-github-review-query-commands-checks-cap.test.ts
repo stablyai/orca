@@ -184,6 +184,36 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
   })
 
+  it.each(['answers', 'fails'] as const)(
+    'a read replaced by a user refresh that ended long ago and was evicted %s without ever answering for it',
+    async (outcome) => {
+      const replaced = timed()
+      const joined = read()
+      await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
+      // A user refresh of the same read replaces the running one instead of joining it.
+      const refreshed = read({ userRefresh: true })
+      await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
+      provider.calls.pop()!.answer('refreshed')
+      expect(await names(refreshed)).toEqual(['refreshed'])
+      for (let head = 0; head < 256; head += 1) {
+        const other = read({}, `evicting-head-${head}`)
+        await vi.waitFor(() => expect(provider.calls).toHaveLength(2), { interval: 1 })
+        provider.calls.pop()!.answer(`other ${head}`)
+        await other
+      }
+      if (outcome === 'answers') {
+        provider.calls.shift()!.answer('replaced')
+      } else {
+        provider.offline = true
+        provider.calls.shift()!.fail()
+      }
+      expect(await names(replaced)).toEqual(['refreshed'])
+      expect(await names(joined)).toEqual(['refreshed'])
+      expect(provider.calls).toHaveLength(0)
+      expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
+    }
+  )
+
   it('keeps at most 256 completed answers while every one of them is being read again, and a new manual read still works', async () => {
     const heads = Array.from({ length: 256 }, (_, head) => `cached-head-${head}`)
     for (const head of heads) {

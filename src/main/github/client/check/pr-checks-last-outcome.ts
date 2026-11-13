@@ -64,57 +64,67 @@ function recordPRChecksRead(key: string, read: PRChecksRead): void {
 export const prChecksProbeKey = (resource: string, noCache: boolean): string =>
   JSON.stringify([resource, noCache])
 
-/** A provider read of one resource while it runs: when it started, and a newer answer the other
- *  intent's read finished meanwhile. Kept only while the read runs, under its probe key. */
-type PRChecksTask = { start: PRChecksReadStart; newer?: PRChecksRead }
+/** What every read of one resource that overlaps another shares: the newest answer accepted for
+ *  it. Reachable only from running reads, so it ends with the last of them; one answer, no history. */
+type PRChecksAuthority = { latest?: PRChecksRead }
+type PRChecksTask = { start: PRChecksReadStart; authority: PRChecksAuthority }
+// Mirrors the running coalesced probes key for key (the coalescer keeps no per-read data): set
+// when a read starts, deleted when that same read ends. It only lets a starting read join the
+// authority of a read it overlaps, a stale one it replaces or the other intent's.
 const runningTasks = new Map<string, PRChecksTask>()
 
 /**
  * The producer of one coalesced checks read; joiners only await it. A timed read and a manual
- * (`noCache`) read of the same resource run side by side, so whichever finishes last must not win
- * just by finishing: an answer from a read that started later is handed to the older one while it
- * still runs, and the older one then answers with it and never publishes its own. A read replaced
- * as stale publishes nothing and answers with its replacement.
+ * (`noCache`) read of the same resource can run side by side, and a stale or user-refreshed read
+ * can replace one still running, so finishing last proves nothing. Overlapping reads share one
+ * authority: the answer of the read that started last wins, an older read answers its callers with
+ * that newer answer when it ends (even when its own provider read failed), and only a read that
+ * still owns its key publishes. A replaced read publishes nothing; it answers with its successor's
+ * accepted answer, or awaits the successor still running.
  */
 export async function producePRChecks(
   resource: string,
   noCache: boolean,
   ownsKey: () => boolean,
   readChecks: () => Promise<PRCheckDetail[]>,
-  replacement: () => Promise<PRChecksRead> | undefined
+  successor: () => Promise<PRChecksRead> | undefined
 ): Promise<PRChecksRead> {
   const key = prChecksProbeKey(resource, noCache)
   readSequence += 1
-  const task: PRChecksTask = { start: { startedAt: Date.now(), sequence: readSequence } }
+  const authority =
+    runningTasks.get(key)?.authority ??
+    runningTasks.get(prChecksProbeKey(resource, !noCache))?.authority ??
+    {}
+  const task: PRChecksTask = {
+    start: { startedAt: Date.now(), sequence: readSequence },
+    authority
+  }
   runningTasks.set(key, task)
   try {
-    let read: PRChecksRead | undefined
+    let own: PRChecksRead | undefined
     let failure: unknown
     try {
-      read = { start: task.start, checks: await readChecks() }
+      own = { start: task.start, checks: await readChecks() }
     } catch (error) {
       failure = error
     }
-    const replaced = ownsKey() ? undefined : replacement()
-    if (replaced) {
-      return await replaced
+    const newer =
+      authority.latest && authority.latest.start.sequence > task.start.sequence
+        ? authority.latest
+        : undefined
+    if (!ownsKey()) {
+      const running = newer ? undefined : successor()
+      if (newer || !running) {
+        return newer ?? own ?? Promise.reject(failure)
+      }
+      // A successor that fails leaves this read's own answer as the newest there is.
+      return await running.catch((error: unknown) => own ?? Promise.reject(error))
     }
-    read ??= task.newer
-    if (!read) {
+    const answer = newer ?? own
+    if (!answer) {
       throw failure
     }
-    if (!ownsKey()) {
-      return read
-    }
-    const answer = task.newer ?? read
-    const other = runningTasks.get(prChecksProbeKey(resource, !noCache))
-    if (
-      other &&
-      other.start.sequence < answer.start.sequence &&
-      (other.newer?.start.sequence ?? 0) < answer.start.sequence
-    ) {
-      other.newer = answer
-    }
+    authority.latest = answer
     recordPRChecksRead(resource, answer)
     return answer
   } finally {
