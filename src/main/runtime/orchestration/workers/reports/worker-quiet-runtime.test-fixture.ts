@@ -57,7 +57,7 @@ export function runtimeFixture() {
     get db() {
       return db
     },
-    start: () => {
+    start: (overrides: Partial<Parameters<typeof startWorkerQuietSweep>[0]> = {}) => {
       stop?.()
       stop = startWorkerQuietSweep({
         store: new AgentHookServer(),
@@ -65,7 +65,8 @@ export function runtimeFixture() {
         getDb: () => db,
         resolveTerminal: () => null,
         readPty: () => null,
-        notify: () => {}
+        notify: () => {},
+        ...overrides
       })
       vi.advanceTimersByTime(0)
     },

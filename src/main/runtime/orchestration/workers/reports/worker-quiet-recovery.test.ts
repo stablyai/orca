@@ -1,8 +1,31 @@
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import { expect, it, vi } from 'vitest'
 import { meterQuietQueries, runtimeFixture } from './worker-quiet-runtime.test-fixture'
+import { CrewChanges } from '../../crew/crew-changes'
+import { OrcaRuntimeWithCrewOperations } from '../../../workspaces/persisted-surfaces/crew-operations'
+
+vi.mock('../../../workspaces/persisted-surfaces/orchestration-database-binding', () => ({
+  OrcaRuntimeWithOrchestrationDatabaseBinding: class {}
+}))
 
 const fixture = runtimeFixture()
+
+it('wakes an idle no-database watch when a database with a saved working dispatch binds', () => {
+  const { db } = fixture
+  const { run } = fixture.workers(1)
+  const changes = new CrewChanges()
+  let bound = false
+  fixture.start({ changes, getDb: () => (bound ? db : null) })
+  vi.advanceTimersByTime(60_000)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bindCrewChanges only needs its prototype getters and the supplied change stream, without constructing runtime services.
+  const runtime = Object.assign(Object.create(OrcaRuntimeWithCrewOperations.prototype), {
+    crewChanges: changes
+  }) as OrcaRuntimeWithCrewOperations
+  bound = true
+  runtime['bindCrewChanges'](db)
+  vi.advanceTimersByTime(900_000)
+  expect(db.getUnreadRunMailbox(run.id, 100, ['status'])).toHaveLength(1)
+})
 
 it.each([
   [2, 100],
