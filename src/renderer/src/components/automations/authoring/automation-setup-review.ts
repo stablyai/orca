@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
+import { usesVersionedHookTrust } from '@/runtime/repo-hooks/hook-script-confirmation'
 import {
   confirmCreatedWorktreeSetupContent,
   ensureHooksApproved,
@@ -21,14 +22,15 @@ export function approveAutomationSetup(
 ): Promise<HookTrustApproval> {
   const createSource = { kind: 'base' as const, baseBranch: baseBranch?.trim() || undefined }
   return ensureHooksApproved(
-    useAppStore.getState(),
+    useAppStore.getState,
     repoId,
     'setup',
     hostId,
     undefined,
     undefined,
     undefined,
-    createSource
+    createSource,
+    'automation'
   )
 }
 
@@ -61,13 +63,13 @@ export function pendingAutomationSetupReviewFromSummary(
 }
 
 /**
- * Show the skipped setup commands; approving stores their hash so later runs run them. Nothing
+ * Show the skipped setup commands; trusting the repo lets later runs use its setup. Nothing
  * runs now, and a declined review leaves the automation unchanged.
  */
 export async function reviewAutomationSkippedSetup(
-  automation: Automation,
+  automation: Pick<Automation, 'projectId' | 'runContext'>,
   content: SetupTrustMismatch,
-  saveSetupTrustHash: (setupTrustHash: string) => Promise<boolean>
+  saveSetupTrustHash: (setupTrustHash: string | undefined) => Promise<boolean>
 ): Promise<void> {
   const approval = await confirmCreatedWorktreeSetupContent(
     useAppStore.getState,
@@ -79,7 +81,9 @@ export async function reviewAutomationSkippedSetup(
   if (approval.decision !== 'run' || approval.approvedContentHash === undefined) {
     return
   }
-  if (await saveSetupTrustHash(approval.approvedContentHash)) {
+  const state = useAppStore.getState()
+  const pinned = usesVersionedHookTrust(state, getAutomationRunRepoId(automation), 'automation')
+  if (await saveSetupTrustHash(pinned ? approval.approvedContentHash : undefined)) {
     toast.success(
       translate(
         'automations.setupTrust.approved',
@@ -91,7 +95,7 @@ export async function reviewAutomationSkippedSetup(
 
 /**
  * A save's setup approval: prompt when the target or setup choice changed, else re-review a skipped run.
- * The hash is stored with `run` so later runs execute only this content.
+ * Only projects whose id exists on two hosts retain content-pinned approval.
  */
 export async function confirmAutomationSaveSetup(
   context: Pick<AutomationSaveContext, 'local' | 'list'>,
@@ -108,40 +112,40 @@ export async function confirmAutomationSaveSetup(
   const trust = args.prompt
     ? await approveAutomationSetup(args.repoId, args.hostId, args.baseBranch)
     : null
-  const setupTrustHash =
-    trust?.approvedContentHash ??
-    (await reconfirmSkippedSetup(
-      context,
-      trust,
-      args.setupDecision,
-      args.automation,
-      args.hostId,
-      args.baseBranch
-    ))
-  return { trust, setupTrustHash }
+  const reviewTrust = trust
+    ? null
+    : await reconfirmSkippedSetup(
+        context,
+        args.setupDecision,
+        args.automation,
+        args.hostId,
+        args.baseBranch
+      )
+  const approval = trust ?? reviewTrust
+  const pinned = usesVersionedHookTrust(useAppStore.getState(), args.repoId, 'automation')
+  return { trust: approval, setupTrustHash: pinned ? approval?.approvedContentHash : undefined }
 }
 
 /**
  * Saving an automation whose last run skipped changed setup re-confirms that setup: the skipped
- * content when the host recorded it, else the content at the automation's base. Returns the hash to store.
+ * content when the host recorded it, else the content at the automation's base.
  */
 async function reconfirmSkippedSetup(
   context: Pick<AutomationSaveContext, 'local' | 'list'>,
-  trust: HookTrustApproval | null,
   setupDecision: SetupDecision | undefined,
   automation: Automation | null,
   hostId: ExecutionHostId | undefined,
   baseBranch: string | null | undefined
-): Promise<string | undefined> {
+): Promise<HookTrustApproval | null> {
   // A changed target or setup choice was just confirmed by the regular save prompt.
-  if (trust || context.local.targetEdited || setupDecision !== 'run' || !automation) {
-    return undefined
+  if (context.local.targetEdited || setupDecision !== 'run' || !automation) {
+    return null
   }
   const { editingRowKey } = context.local
   const summary = context.list.visibleRows.find((row) => row.key === editingRowKey)?.usageSummary
   const review = pendingAutomationSetupReviewFromSummary(automation, summary ?? null)
   if (!review) {
-    return undefined
+    return null
   }
   const repoId = getAutomationRunRepoId(automation)
   const approval = review.content
@@ -153,7 +157,5 @@ async function reconfirmSkippedSetup(
         'automation'
       )
     : await approveAutomationSetup(repoId, hostId, baseBranch)
-  return approval.decision === 'run' && approval.approvedContentHash !== automation.setupTrustHash
-    ? approval.approvedContentHash
-    : undefined
+  return approval
 }
