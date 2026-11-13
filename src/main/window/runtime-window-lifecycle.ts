@@ -52,6 +52,7 @@ export function registerRuntimeWindowLifecycle(
     reposChanged: () => send('repos:changed'),
     browserProfilesChanged: () => send('browser:session:profilesChanged'),
     automationsChanged: (payload) => send('automations:changed', payload),
+    workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,
       worktreeId,
