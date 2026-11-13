@@ -8,6 +8,7 @@ import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheet
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
 import { sourceFileDiffOpenRun } from '../../files/session-documents/mobile-source-file-open-operations'
+import { selectOpenedSessionDiff } from './select-opened-session-diff'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
@@ -185,6 +186,12 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
         )
         return
       }
+      // Best effort: the session still opens, on this phone's previous tab, if selecting the diff fails.
+      await selectOpenedSessionDiff(client, {
+        worktreeId,
+        relativePath: currentItem.filePath,
+        staged: currentItem.scope === 'staged'
+      }).catch(() => {})
       onOpenSession()
     },
     openSendSheet,
