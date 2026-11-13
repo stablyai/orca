@@ -175,7 +175,7 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/files/mobile-file-preview-route.ts",
+    "filePath": "mobile/src/files/preview/mobile-file-preview-route.ts",
     "kind": "object-property:message",
     "text": "Unable to load preview",
     "dynamic": false,
