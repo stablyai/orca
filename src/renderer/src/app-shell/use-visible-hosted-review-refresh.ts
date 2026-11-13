@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store/index'
 import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { subscribePRAutoRefreshCadence } from '../../../shared/review-refresh-policy'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
+import { followOwningHostCadence } from '@/store/slices/hosted-review/refresh/owning-host-cadence-replan'
 import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
 import {
   getVisibleHostedReviewRefreshTargets,
@@ -16,14 +16,17 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       return
     }
     const scheduler = createVisibleHostedReviewRefreshScheduler()
-    const update = (): void => {
+    // A changed cadence (this app's or a paired host's) re-plans the targets that host runs.
+    const { update, dispose: stopFollowingCadence } = followOwningHostCadence(() => {
       const state = useAppStore.getState()
       const selectedOnly = isWebClientLocation()
-      scheduler.update([
+      const targets = [
         ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
         ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
-      ])
-    }
+      ]
+      scheduler.update(targets)
+      return targets
+    })
     const visibilityChanged = (): void => {
       scheduler.setVisible(false)
       update()
@@ -34,14 +37,12 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
         update()
       }
     })
-    // A changed cadence (this app's or a paired host's) re-plans every target's interval.
-    const unsubscribeCadence = subscribePRAutoRefreshCadence(update)
     update()
     visibilityChanged()
     document.addEventListener('visibilitychange', visibilityChanged)
     return () => {
       unsubscribe()
-      unsubscribeCadence()
+      stopFollowingCadence()
       document.removeEventListener('visibilitychange', visibilityChanged)
       scheduler.dispose()
     }

@@ -20,6 +20,7 @@ import {
 } from './remote-host-pr-auto-refresh-cadence-sync'
 import {
   _resetHostPRAutoRefreshCadenceGenerationsForTests,
+  _trackedHostPRAutoRefreshStateCountForTests,
   forgetHostPRAutoRefreshCadence,
   hostLacksPRAutoRefresh,
   rememberHostPRAutoRefreshCadence
@@ -189,6 +190,42 @@ describe('remote host PR auto-refresh cadence sync', () => {
     finish({ prAutoRefresh: 'minimal' })
     await read
     expect(getPRAutoRefreshCadenceForHost('env-7')).toBe('default')
+  })
+
+  it('keeps nothing for hosts that come and go, a held changed read included, and reads a re-paired host afresh', async () => {
+    const held: ((value: { prAutoRefresh: string }) => void)[] = []
+    const reader = vi.fn((id: string) =>
+      id === 'env-held'
+        ? new Promise<{ prAutoRefresh: string }>((resolve) => held.push(resolve))
+        : Promise.resolve({ prAutoRefresh: 'reduced' })
+    )
+    const ids = [...Array.from({ length: 20 }, (_, index) => `env-${index}`), 'env-held']
+    const host = store({
+      runtimeEnvironments: [...ids, 'env-stays'].map(environment),
+      runtimeStatusByEnvironmentId: new Map([...ids, 'env-stays'].map((id) => [id, live]))
+    })
+    const stop = installRemoteHostPRAutoRefreshCadenceSync(host, reader)
+    await flush()
+    // The held host reports a change while its read is out, then it and the others are unpaired.
+    regained.listeners.get('env-held')?.()
+    host.set({ runtimeEnvironments: [environment('env-stays')] })
+    expect(_trackedHostPRAutoRefreshStateCountForTests()).toBe(0)
+
+    // Paired again before the old read answers: the old answer is dropped, a new read decides.
+    host.set({ runtimeEnvironments: [environment('env-stays'), environment('env-held')] })
+    held[0]({ prAutoRefresh: 'off' })
+    await flush()
+    expect(getPRAutoRefreshCadenceForHost('env-held')).toBe('default')
+    held[1]({ prAutoRefresh: 'minimal' })
+    await flush()
+    expect(getPRAutoRefreshCadenceForHost('env-held')).toBe('minimal')
+    expect(reader.mock.calls.filter(([id]) => id === 'env-held')).toHaveLength(2)
+    expect(getPRAutoRefreshCadenceForHost('env-stays')).toBe('reduced')
+
+    host.set({ runtimeEnvironments: [] })
+    expect(_trackedHostPRAutoRefreshStateCountForTests()).toBe(0)
+    expect(getPRAutoRefreshCadenceForHost('env-held')).toBe('default')
+    stop()
   })
 
   it('marks a host that answers without the setting (an older Orca) as lacking it, scheduled as Default', async () => {

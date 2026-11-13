@@ -25,7 +25,7 @@ export function getPRAutoRefreshTitle(t: Translate = translate): string {
 export function getPRAutoRefreshDescription(t: Translate = translate): string {
   return t(
     'auto.components.settings.GitPane.prAutoRefreshDescription',
-    'How often pull request and checks status is re-read on a timer. Selecting a workspace, pushing and refreshing manually always read at once, and returning to the window reads anything older than its Default interval. On a server, this also sets the timers of connected clients; clients on older Orca versions keep their Default timer.'
+    'How often pull request and checks status is re-read on a timer. Pushing and refreshing manually always read at once, and returning to the window reads anything older than its Default interval. On a server, this also sets the timers of connected clients; clients on older Orca versions keep their Default timer.'
   )
 }
 
@@ -68,7 +68,7 @@ export function getPRAutoRefreshCadenceHint(
     const watch = reviewRefreshIntervalMs({ checksStatus: 'pending', selected: false }, 'minimal')
     return t(
       'auto.components.settings.GitPane.prAutoRefreshHintOff',
-      '{{mode}}: no routine timed refresh. Checks a chat is following are still read {{watch}}. Orca also reads when you select a workspace, push, return to the window or refresh manually.',
+      '{{mode}}: no routine timed refresh. Checks a chat is following are still read {{watch}}. Orca also reads when you push or refresh manually, and when you return to the window to data older than its Default interval.',
       { mode, watch: formatEveryMinutes(watch ?? 0, t) }
     )
   }

@@ -1,6 +1,6 @@
 import { shouldAcceptMergedFallbackPR } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import {
-  REVIEW_REFRESH_COOLDOWN_MS,
+  settledForegroundAgeMs,
   reviewRefreshIntervalMs,
   scaleReviewRefreshInterval,
   type PRAutoRefreshCadence
@@ -222,30 +222,35 @@ export function refreshIntervalForCandidate(
 }
 
 /** An exact completed answer a timed read may still take: its quiet or normal host interval,
- *  scaled by the cadence, has not passed since it was read. */
+ *  scaled by the cadence, has not passed since it was read. A queued row's foreground exposure was
+ *  made due by the Default interval, so the answer is judged by that same unscaled interval. */
 export function freshTimedPROutcome(
   cached: ReturnType<typeof readTimedPROutcome>,
-  selected = true
+  entry?: { candidate: GitHubPRRefreshCandidate; foreground?: boolean }
 ): PRRefreshOutcome | null {
   if (!cached || cached.outcome.kind === 'upstream-error') {
     return null
   }
   const outcome = cached.outcome
+  const cadence = entry?.foreground ? 'default' : undefined
   const interval =
     cached.quietIntervalMs !== null
-      ? scaleReviewRefreshInterval(cached.quietIntervalMs)
-      : reviewRefreshIntervalMs({
-          state: outcome.kind === 'found' ? outcome.pr.state : null,
-          checksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
-          hasReview: outcome.kind === 'found',
-          selected
-        })
+      ? scaleReviewRefreshInterval(cached.quietIntervalMs, cadence)
+      : reviewRefreshIntervalMs(
+          {
+            state: outcome.kind === 'found' ? outcome.pr.state : null,
+            checksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
+            hasReview: outcome.kind === 'found',
+            selected: entry ? entry.candidate.isSelected === true : true
+          },
+          cadence
+        )
   return interval === null || Date.now() - outcome.fetchedAt < interval ? outcome : null
 }
 
 /** How old a candidate's data must be for a foreground exposure to read it now instead of waiting
  *  for its timer, or null when the exposure earns no early read. A row shown again that settled
- *  under Default reads after the cooldown. When the cadence stretches or stops the timer, a row shown
+ *  under Default reads after the settled age (Default's cooldown, a minute otherwise). When the cadence stretches or stops the timer, a row shown
  *  again, or the selected PR on window return, reads once the Default interval has passed: the
  *  cadence slows the timers, never the user's return, and never makes it faster than Default. */
 export function foregroundExposureAgeMs(
@@ -256,7 +261,7 @@ export function foregroundExposureAgeMs(
 ): number | null {
   const defaultInterval = refreshIntervalForCandidate(candidate, 'default')
   if (!Number.isFinite(defaultInterval)) {
-    return reexposed ? REVIEW_REFRESH_COOLDOWN_MS : null
+    return reexposed ? settledForegroundAgeMs() : null
   }
   const foreground =
     reexposed || (reason === 'visible' && candidate.isSelected === true && priority >= 80)

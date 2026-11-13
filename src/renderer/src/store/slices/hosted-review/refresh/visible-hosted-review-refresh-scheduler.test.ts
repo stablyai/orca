@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  _resetPRAutoRefreshCadencesForTests,
+  setPRAutoRefreshCadenceForHost
+} from '../../../../../../shared/review-refresh-policy'
+import {
   createVisibleHostedReviewRefreshScheduler,
   type VisibleHostedReviewRefreshTarget
 } from './visible-hosted-review-refresh-scheduler'
+import { followOwningHostCadence } from './owning-host-cadence-replan'
 
 const schedulers: ReturnType<typeof createVisibleHostedReviewRefreshScheduler>[] = []
 
@@ -229,4 +234,30 @@ it('limits refocus discovery to opted-in open GitHub rows and the existing stopp
   expect(other.refresh).toHaveBeenCalledWith(false, expect.any(AbortSignal), 'timer')
   scheduler.dispose()
   vi.useRealTimers()
+})
+
+describe('replanning on a host’s cadence change', () => {
+  afterEach(() => _resetPRAutoRefreshCadencesForTests())
+
+  it.each([750, 7500])(
+    'builds no targets for another host’s change, and rebuilds once for a real change of the host that runs %i rows',
+    (rows) => {
+      const targets = Array.from({ length: rows }, (_, row) =>
+        target({ key: `a-${row}`, cadenceHost: 'env-a' })
+      )
+      const build = vi.fn(() => targets)
+      const following = followOwningHostCadence(build)
+      following.update()
+      setPRAutoRefreshCadenceForHost('env-b', 'off')
+      setPRAutoRefreshCadenceForHost('env-b', 'minimal')
+      expect(build).toHaveBeenCalledTimes(1)
+      setPRAutoRefreshCadenceForHost('env-a', 'reduced')
+      expect(build).toHaveBeenCalledTimes(2)
+      setPRAutoRefreshCadenceForHost('env-a', 'reduced')
+      expect(build).toHaveBeenCalledTimes(2)
+      following.dispose()
+      setPRAutoRefreshCadenceForHost('env-a', 'off')
+      expect(build).toHaveBeenCalledTimes(2)
+    }
+  )
 })

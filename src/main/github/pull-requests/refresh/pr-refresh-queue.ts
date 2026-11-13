@@ -30,6 +30,8 @@ export type PRRefreshQueueEntry = {
   followUp?: boolean
   /** A timed retry of a failed visible read; re-planned when the auto-refresh cadence changes. */
   errorRetry?: boolean
+  /** Due because a foreground exposure found its data older than the Default interval. */
+  foreground?: boolean
   windowId?: number
   /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
   watch?: { prKey: string; headSha?: string }
@@ -170,6 +172,7 @@ export class PRRefreshQueue {
         dueAt,
         queuedAt: this.nextOrder(),
         followUp: reason === 'visible' && freshDueAt !== null && exposureDueAt === null,
+        foreground: exposureDueAt !== null,
         windowId
       })
       return { alias, key, dueAt, coalesced: false }
@@ -183,6 +186,7 @@ export class PRRefreshQueue {
     ) {
       existing.dueAt = Math.min(existing.dueAt, dueAt)
       existing.followUp = false
+      existing.foreground ||= exposureDueAt !== null
     }
     const shouldPromote =
       priority > existing.priority ||

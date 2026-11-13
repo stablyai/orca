@@ -4,8 +4,8 @@ import type { CheckStatus } from './github/pull-requests/pull-request-types'
 export const REVIEW_REFRESH_COOLDOWN_MS = 10_000
 export const CLOSED_REVIEW_REFRESH_INTERVAL_MS = 15 * 60_000
 
-/** How often PR/review state refreshes on a timer. Selecting a worktree, pushing, returning to the
- *  window and manual refresh still read at once in every mode. */
+/** How often PR/review state refreshes on a timer. Pushing and manual refresh still read at once in
+ *  every mode, and returning to the window reads data older than its Default interval. */
 export const PR_AUTO_REFRESH_CADENCES = ['default', 'reduced', 'minimal', 'off'] as const
 export type PRAutoRefreshCadence = (typeof PR_AUTO_REFRESH_CADENCES)[number]
 
@@ -37,14 +37,14 @@ export function normalizePRAutoRefreshCadence(value: unknown): PRAutoRefreshCade
 // which is also what the host itself enforces for that client's timed reads.
 let processCadence: PRAutoRefreshCadence = 'default'
 const hostCadences = new Map<string, PRAutoRefreshCadence>()
-const cadenceListeners = new Set<() => void>()
-let cadenceRevision = 0
+/** Called with the host whose cadence changed: null for this process's own setting. */
+export type PRAutoRefreshCadenceListener = (hostKey: string | null) => void
+const cadenceListeners = new Set<PRAutoRefreshCadenceListener>()
 
-function notifyCadenceChanged(): void {
-  cadenceRevision += 1
+function notifyCadenceChanged(hostKey: string | null): void {
   // A snapshot: a listener may unsubscribe itself or another while we iterate.
   for (const listener of Array.from(cadenceListeners)) {
-    listener()
+    listener(hostKey)
   }
 }
 
@@ -54,7 +54,7 @@ export function setPRAutoRefreshCadence(value: unknown): void {
     return
   }
   processCadence = next
-  notifyCadenceChanged()
+  notifyCadenceChanged(null)
 }
 
 export function getPRAutoRefreshCadence(): PRAutoRefreshCadence {
@@ -76,7 +76,7 @@ export function setPRAutoRefreshCadenceForHost(hostKey: string, value: unknown):
     }
     hostCadences.set(hostKey, next)
   }
-  notifyCadenceChanged()
+  notifyCadenceChanged(hostKey)
 }
 
 /** The cadence that governs work on `hostKey`: this process's own setting for local work (null),
@@ -97,25 +97,19 @@ export function getKnownPRAutoRefreshCadenceForHost(hostKey: string): PRAutoRefr
   return hostCadences.get(hostKey) ?? null
 }
 
-/** Fires after any cadence (this process's or a remembered host's) changes, so a mounted timer
- *  can replan instead of waiting for its next tick. */
-export function subscribePRAutoRefreshCadence(listener: () => void): () => void {
+/** Fires after any cadence (this process's or a remembered host's) changes, naming the host, so a
+ *  mounted timer can replan the work that host runs instead of waiting for its next tick. */
+export function subscribePRAutoRefreshCadence(listener: PRAutoRefreshCadenceListener): () => void {
   cadenceListeners.add(listener)
   return () => {
     cadenceListeners.delete(listener)
   }
 }
 
-/** Changes whenever any cadence changes; cheap to put in a memo or report identity. */
-export function prAutoRefreshCadenceRevision(): number {
-  return cadenceRevision
-}
-
 export function _resetPRAutoRefreshCadencesForTests(): void {
   processCadence = 'default'
   hostCadences.clear()
   cadenceListeners.clear()
-  cadenceRevision = 0
 }
 
 /** Stretch a timed interval by the cadence; null means no timed refresh. */
@@ -160,12 +154,18 @@ export function reviewRefreshIntervalMs(
   return scaleReviewRefreshInterval(defaultReviewRefreshIntervalMs(input), cadence)
 }
 
+/** How old settled data (no timer even on Default) must be before a foreground exposure reads it:
+ *  Default keeps its short cooldown, a stretched or stopped cadence waits at least a minute. */
+export function settledForegroundAgeMs(cadence: PRAutoRefreshCadence = processCadence): number {
+  return cadence === 'default' ? REVIEW_REFRESH_COOLDOWN_MS : 60_000
+}
+
 /** How old data must be before a foreground exposure (the window coming back, a row shown again)
  *  reads it again: the Default interval in every mode, since a cadence slows the timers, never the
- *  user's return, and never makes it faster than Default; the cooldown where Default itself runs
- *  no timer (settled data). */
+ *  user's return, and never makes it faster than Default. */
 export function reviewForegroundFreshnessMs(
-  input: Parameters<typeof reviewRefreshIntervalMs>[0]
+  input: Parameters<typeof reviewRefreshIntervalMs>[0],
+  cadence: PRAutoRefreshCadence = processCadence
 ): number {
-  return defaultReviewRefreshIntervalMs(input) ?? REVIEW_REFRESH_COOLDOWN_MS
+  return defaultReviewRefreshIntervalMs(input) ?? settledForegroundAgeMs(cadence)
 }

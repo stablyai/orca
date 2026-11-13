@@ -40,6 +40,16 @@ export class PRRefreshVisibility {
     return true
   }
 
+  /** Every reported candidate, with the window that reported it. */
+  *reported(): Generator<[number, GitHubPRRefreshCandidate]> {
+    this.pruneDestroyedWindows()
+    for (const [windowId, window] of this.visibleByWindow) {
+      for (const candidate of window.candidates.values()) {
+        yield [windowId, candidate]
+      }
+    }
+  }
+
   has(key: string): boolean {
     this.pruneDestroyedWindows()
     return Array.from(this.visibleByWindow.values()).some((window) => window.candidates.has(key))

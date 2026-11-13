@@ -278,19 +278,23 @@ export class HostedPRReadJobs {
       }
     })
   }
-  /** A cadence change: Off retires every queued job, others wait for their retimed gate. */
+  /** A cadence change: Off retires every job not yet started, including one the drainer holds
+   *  while it awaits quota (ending its lease makes the drainer drop it); others wait for their
+   *  retimed gate. */
   retime(): void {
+    const off = getPRAutoRefreshCadence() === 'off'
     for (const [key, job] of this.jobs) {
       const entry = this.queue.get(key)
-      if (job.running || entry?.hosted !== job) {
+      if (job.running) {
         continue
       }
-      if (getPRAutoRefreshCadence() === 'off') {
+      if (off) {
+        job.expiresAt = 0
         this.queue.delete(key)
         job.finish(null)
-        continue
+      } else if (entry?.hosted === job) {
+        entry.dueAt = Math.min(job.expiresAt, Math.max(Date.now(), this.gateUntil(job.prepared)))
       }
-      entry.dueAt = Math.min(job.expiresAt, Math.max(Date.now(), this.gateUntil(job.prepared)))
     }
   }
 

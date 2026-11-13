@@ -126,12 +126,19 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
 }
 
 /** A cadence change moves queued visible follow-ups, error retries and their shared schedules to
- *  the new interval, and the gates of queued host jobs with them; "off" drops them. */
+ *  the new interval, and the gates of queued host jobs with them; "off" drops them. Visible rows
+ *  then get the next read the new interval gives them, so a shorter cadence (Off back to Default)
+ *  resumes without waiting for the windows to report again. */
 export function retimePRRefreshesForCadence(): void {
   retry.retimeErrors(queue)
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))
   drainer.hostedJobs.retime()
+  for (const [windowId, candidate] of visibility.reported()) {
+    if (!validateCandidate(candidate)) {
+      queue.enqueue(visibility.candidate(refreshKey(candidate), candidate), 'visible', 40, windowId)
+    }
+  }
   drainer.schedule()
 }
 

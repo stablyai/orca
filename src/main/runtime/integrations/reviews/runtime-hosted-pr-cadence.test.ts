@@ -87,4 +87,32 @@ describe('hosted PR snapshots under the host’s auto-refresh cadence', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(await due).toMatchObject({ pr: { title: 'read again' } })
   })
+
+  it.each([
+    ['admitted', null],
+    ['paused by quota', 120_000]
+  ] as const)(
+    'retires a revalidation that was awaiting quota when the host turns auto-refresh off (%s)',
+    async (_label, pauseMs) => {
+      await read('held', 'active')
+      await vi.advanceTimersByTimeAsync(60_000)
+      const quota = Promise.withResolvers<number | null>()
+      mocks.gate.mockReturnValue(quota.promise)
+      const waiting = read('held')
+      await vi.advanceTimersByTimeAsync(0)
+
+      await setHostCadence('off')
+      expect(await waiting).toMatchObject({ kind: 'found', fetchedAt: 1_000 })
+      quota.resolve(pauseMs === null ? null : Date.now() + pauseMs)
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      expect(mocks.resolve).toHaveBeenCalledTimes(1)
+
+      await setHostCadence('default')
+      mocks.gate.mockResolvedValue(null)
+      fixture.title = 'read again'
+      const due = read('held')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(await due).toMatchObject({ pr: { title: 'read again' } })
+    }
+  )
 })

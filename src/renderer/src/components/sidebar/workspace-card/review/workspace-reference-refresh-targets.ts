@@ -44,7 +44,8 @@ export function getWorkspaceReferenceRefreshTargets(
       (state.prCache[candidate.cacheKey]?.data ? 'github' : undefined)
     const primaryExactKey = getDetachedWorkspaceReviewRequest(worktree, repo)?.key
     const runtimeVersion = getWorkspaceReferenceRuntimeVersion(worktree, repo)
-    const cadence = hostPRAutoRefreshCadence(getPRRefreshOwnerRuntimeEnvironmentId(candidate))
+    const cadenceHost = getPRRefreshOwnerRuntimeEnvironmentId(candidate)
+    const cadence = hostPRAutoRefreshCadence(cadenceHost)
     for (const item of getWorkspaceAttachments(worktree)) {
       if (item.type === 'issue') {
         continue
@@ -78,6 +79,7 @@ export function getWorkspaceReferenceRefreshTargets(
         selected,
         fetchedAt: entry?.fetchedAt ?? null,
         cadence,
+        cadenceHost,
         intervalMs: reviewRefreshIntervalMs(intervalInput, cadence),
         foregroundIntervalMs: reviewRefreshIntervalMs(intervalInput, 'default'),
         refresh: (_force, signal) =>

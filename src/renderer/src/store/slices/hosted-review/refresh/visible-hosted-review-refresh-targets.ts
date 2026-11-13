@@ -175,7 +175,8 @@ export function getVisibleHostedReviewRefreshTargets(
     const review = usePR ? prEntry.data : hostedEntry?.data
     const fetchedAt = usePR ? prEntry.fetchedAt : (hostedEntry?.fetchedAt ?? null)
     // The host that runs the read owns the cadence: a paired host's setting, else this app's.
-    const cadence = hostPRAutoRefreshCadence(getPRRefreshOwnerRuntimeEnvironmentId(candidate))
+    const cadenceHost = getPRRefreshOwnerRuntimeEnvironmentId(candidate)
+    const cadence = hostPRAutoRefreshCadence(cadenceHost)
     const intervalInput = {
       state: review?.state,
       checksStatus: usePR ? prEntry.data?.checksStatus : hostedEntry?.data?.status,
@@ -194,6 +195,7 @@ export function getVisibleHostedReviewRefreshTargets(
           : fetchedAt,
       selected,
       cadence,
+      cadenceHost,
       refreshOnForeground:
         !!runtime && knownGitHub && (review?.state === 'open' || review?.state === 'draft'),
       intervalMs: reviewRefreshIntervalMs(intervalInput, cadence),

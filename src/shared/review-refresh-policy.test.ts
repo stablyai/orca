@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   _resetPRAutoRefreshCadencesForTests,
   getPRAutoRefreshCadenceForHost,
-  prAutoRefreshCadenceRevision,
   setPRAutoRefreshCadenceForHost,
   subscribePRAutoRefreshCadence,
   getPRAutoRefreshCadence,
@@ -78,19 +77,16 @@ describe('per-host PR auto-refresh cadence', () => {
     expect(getPRAutoRefreshCadenceForHost('env-1')).toBe('default')
   })
 
-  it('notifies subscribers of every change and bumps the revision once per change', () => {
-    const seen: number[] = []
-    const unsubscribe = subscribePRAutoRefreshCadence(() =>
-      seen.push(prAutoRefreshCadenceRevision())
-    )
+  it('notifies subscribers once per actual change, naming the host that changed', () => {
+    const seen: (string | null)[] = []
+    const unsubscribe = subscribePRAutoRefreshCadence((hostKey) => seen.push(hostKey))
     setPRAutoRefreshCadence('reduced')
     setPRAutoRefreshCadence('reduced')
     setPRAutoRefreshCadenceForHost('env-1', 'off')
     setPRAutoRefreshCadenceForHost('env-1', 'off')
     unsubscribe()
     setPRAutoRefreshCadence('off')
-    expect(seen).toEqual([1, 2])
-    expect(prAutoRefreshCadenceRevision()).toBe(3)
+    expect(seen).toEqual([null, 'env-1'])
   })
 })
 
@@ -108,8 +104,10 @@ describe('foreground exposure freshness', () => {
       expect(reviewForegroundFreshnessMs({ selected: true })).toBe(60_000)
       expect(reviewForegroundFreshnessMs({ selected: false })).toBe(120_000)
       expect(reviewForegroundFreshnessMs({ hasReview: false, selected: false })).toBe(15 * 60_000)
-      // Default itself runs no timer for settled data, so only the cooldown applies.
-      expect(reviewForegroundFreshnessMs({ state: 'merged', checksStatus: 'success' })).toBe(10_000)
+      // Default runs no timer for settled data: Default keeps its cooldown, others wait a minute.
+      expect(reviewForegroundFreshnessMs({ state: 'merged', checksStatus: 'success' })).toBe(
+        cadence === 'default' ? 10_000 : 60_000
+      )
     }
   )
 })

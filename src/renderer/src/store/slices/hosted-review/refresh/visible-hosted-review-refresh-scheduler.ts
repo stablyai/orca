@@ -1,7 +1,5 @@
-import {
-  REVIEW_REFRESH_COOLDOWN_MS,
-  type PRAutoRefreshCadence
-} from '../../../../../../shared/review-refresh-policy'
+import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/review-refresh-policy'
+import type { OwningHostCadence } from './owning-host-cadence-replan'
 
 export type VisibleHostedReviewRefreshTarget = {
   key: string
@@ -13,15 +11,13 @@ export type VisibleHostedReviewRefreshTarget = {
    *  return still reads data this old: the cadence slows timers, not the user's return. */
   foregroundIntervalMs?: number | null
   selected: boolean
-  /** The owning host's auto-refresh cadence; "off" also stops timed and receipt retries. */
-  cadence?: PRAutoRefreshCadence
   refreshOnForeground?: boolean
   refresh: (
     force?: boolean,
     signal?: AbortSignal,
     intent?: 'discovery' | 'timer'
   ) => Promise<VisibleHostedReviewRefreshResult>
-}
+} & OwningHostCadence
 
 export type VisibleHostedReviewRefreshResult =
   | boolean

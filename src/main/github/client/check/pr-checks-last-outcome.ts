@@ -55,15 +55,27 @@ export function startPRChecksRead(): PRChecksReadStart {
   return { startedAt: Date.now(), sequence: readSequence }
 }
 
-export function recordPRChecksRead(key: string, read: PRChecksRead): void {
+/** `reading(key)`: a producer for that resource is still running. Its newest completed answer is
+ *  then the only proof the running one is older, so pressure evicts other answers first; the bound
+ *  is exceeded only by resources being read right now. */
+export function recordPRChecksRead(
+  key: string,
+  read: PRChecksRead,
+  reading: (key: string) => boolean
+): void {
   const existing = lastReads.get(key)
   if (existing && existing.start.sequence > read.start.sequence) {
     return
   }
   lastReads.delete(key)
   lastReads.set(key, read)
-  while (lastReads.size > MAX_ENTRIES) {
-    lastReads.delete(lastReads.keys().next().value!)
+  for (const oldest of lastReads.keys()) {
+    if (lastReads.size <= MAX_ENTRIES) {
+      break
+    }
+    if (oldest !== key && !reading(oldest)) {
+      lastReads.delete(oldest)
+    }
   }
 }
 

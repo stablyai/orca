@@ -4,10 +4,12 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import type { AppState } from '../../types'
 import {
+  beginHostPRAutoRefreshCadenceRead,
+  endHostPRAutoRefreshCadenceRead,
   forgetHostPRAutoRefreshCadence,
-  hostPRAutoRefreshCadenceGeneration,
   noteHostLacksPRAutoRefresh,
-  rememberHostPRAutoRefreshCadence
+  rememberHostPRAutoRefreshCadence,
+  type HostPRAutoRefreshCadenceRead
 } from './remote-host-pr-auto-refresh-cadence'
 
 const READ_TIMEOUT_MS = 15_000
@@ -34,6 +36,7 @@ type HostRead = {
   settled: Promise<void>
   /** A change was reported while the host had not answered: its answer may predate the change. */
   dirty: boolean
+  authority: HostPRAutoRefreshCadenceRead
 }
 
 const inFlight = new Map<string, HostRead>()
@@ -44,14 +47,16 @@ const inFlight = new Map<string, HostRead>()
  * one trailing read follows so the change is never lost. A failed read keeps the last known value;
  * an answer without the setting marks the host as an older Orca that lacks it.
  * An answer is also dropped when a newer authoritative value landed meanwhile (a write from the
- * Settings control, the host being forgotten), so a slow read never reverts it.
+ * Settings control, the host being forgotten), so a slow read never reverts it. Nothing outlives
+ * the read: a forgotten host keeps no state here.
  */
 export function readHostPRAutoRefreshCadence(
   environmentId: string,
   reader: Reader = defaultReader
 ): Promise<void> {
   const pending = inFlight.get(environmentId)
-  if (pending) {
+  // A read begun before the host was forgotten cannot answer for it once it is paired again.
+  if (pending && !pending.authority.retired) {
     pending.dirty = true
     return pending.settled
   }
@@ -59,11 +64,11 @@ export function readHostPRAutoRefreshCadence(
 }
 
 function startHostRead(environmentId: string, reader: Reader): HostRead {
-  const generation = hostPRAutoRefreshCadenceGeneration(environmentId)
-  const read: HostRead = { dirty: false, settled: Promise.resolve() }
+  const authority = beginHostPRAutoRefreshCadenceRead(environmentId)
+  const read: HostRead = { dirty: false, settled: Promise.resolve(), authority }
   read.settled = reader(environmentId)
     .then((settings) => {
-      if (!read.dirty && hostPRAutoRefreshCadenceGeneration(environmentId) === generation) {
+      if (!read.dirty && !authority.revoked) {
         // A host that knows the setting always sends it; an answer without it is an older Orca.
         if (settings.prAutoRefresh === undefined) {
           noteHostLacksPRAutoRefresh(environmentId)
@@ -76,10 +81,12 @@ function startHostRead(environmentId: string, reader: Reader): HostRead {
       console.warn('Failed to read a host’s PR auto-refresh setting:', error)
     })
     .then(() => {
+      endHostPRAutoRefreshCadenceRead(environmentId, authority)
       if (inFlight.get(environmentId) === read) {
         inFlight.delete(environmentId)
       }
-      if (read.dirty) {
+      // A forgotten host gets no trailing read; if it is paired again it is read afresh.
+      if (read.dirty && !authority.retired) {
         return startHostRead(environmentId, reader).settled
       }
       return undefined

@@ -141,7 +141,7 @@ export class PRRefreshQueueDrainer {
               candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
               hostedReviewOptionArgs(candidate, next.reason)[0] ?? {}
             ),
-            candidate.isSelected === true
+            next
           )
           if (fresh) {
             this.events.broadcast({ aliases, reason: next.reason, outcome: fresh })

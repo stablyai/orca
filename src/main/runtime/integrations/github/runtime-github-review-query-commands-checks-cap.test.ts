@@ -156,6 +156,29 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     expect(provider.calls).toHaveLength(0)
   })
 
+  it('keeps that newer manual answer authoritative while the older read lives through cache pressure', async () => {
+    setPRAutoRefreshCadence('off')
+    const olderTimed = timed()
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
+    const refreshed = manual()
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
+    provider.calls.pop()!.answer('manual')
+    expect(await names(refreshed)).toEqual(['manual'])
+    const joined = read()
+    // 256 other PR heads complete while the older read is still out, filling the completed bound.
+    for (let head = 0; head < 256; head += 1) {
+      const other = read({}, `other-head-${head}`)
+      await vi.waitFor(() => expect(provider.calls).toHaveLength(2), { interval: 1 })
+      provider.calls.pop()!.answer(`other ${head}`)
+      expect(await names(other)).toEqual([`other ${head}`])
+    }
+    provider.calls.shift()!.answer('older timed')
+    expect(await names(joined)).toEqual(['manual'])
+    expect(await names(olderTimed)).toEqual(['manual'])
+    expect(await names(timed())).toEqual(['manual'])
+    expect(provider.calls).toHaveLength(0)
+  })
+
   it('a read after a PR mutation starts its own provider read instead of joining one from before it', async () => {
     setPRAutoRefreshCadence('off')
     const beforeMutation = timed()

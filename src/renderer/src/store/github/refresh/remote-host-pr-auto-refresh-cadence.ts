@@ -10,13 +10,41 @@ import {
 // Why no store or RPC imports here: store slice code reads these; the reads and host-contact
 // subscriptions that feed them live in remote-host-pr-auto-refresh-cadence-sync.ts.
 
-// Each remember or forget of a host advances its generation, so a settings.get that was in flight
-// when a newer authoritative value landed (a write from the Settings control, an unpairing) can tell
-// its answer is obsolete and drop it.
-const generations = new Map<string, number>()
+/** A host's settings.get while it is in flight. A newer authoritative value (a write from the
+ *  Settings control, another answer) revokes it so its answer is dropped; forgetting the host also
+ *  retires it, so nothing it started reaches a host that is gone. */
+export type HostPRAutoRefreshCadenceRead = { revoked: boolean; retired: boolean }
 
-function advanceGeneration(environmentId: string): void {
-  generations.set(environmentId, hostPRAutoRefreshCadenceGeneration(environmentId) + 1)
+// Only reads still in flight are kept, so a host leaves nothing behind once it is forgotten.
+const pendingReads = new Map<string, HostPRAutoRefreshCadenceRead>()
+
+export function beginHostPRAutoRefreshCadenceRead(
+  environmentId: string
+): HostPRAutoRefreshCadenceRead {
+  const read = { revoked: false, retired: false }
+  pendingReads.set(environmentId, read)
+  return read
+}
+
+export function endHostPRAutoRefreshCadenceRead(
+  environmentId: string,
+  read: HostPRAutoRefreshCadenceRead
+): void {
+  if (pendingReads.get(environmentId) === read) {
+    pendingReads.delete(environmentId)
+  }
+}
+
+function revokePendingRead(environmentId: string, retire = false): void {
+  const read = pendingReads.get(environmentId)
+  if (!read) {
+    return
+  }
+  read.revoked = true
+  if (retire) {
+    read.retired = true
+    pendingReads.delete(environmentId)
+  }
 }
 
 // Hosts that answered `settings.get` without the setting: an Orca that predates it. Such a host
@@ -46,13 +74,13 @@ export function hostPRAutoRefreshCadence(environmentId: string | null): PRAutoRe
 
 /** A value just read from or written to the host (Settings control, settings.get) is authoritative. */
 export function rememberHostPRAutoRefreshCadence(environmentId: string, value: unknown): void {
-  advanceGeneration(environmentId)
+  revokePendingRead(environmentId)
   setHostLacksSetting(environmentId, false)
   setPRAutoRefreshCadenceForHost(environmentId, value)
 }
 
 export function forgetHostPRAutoRefreshCadence(environmentId: string): void {
-  advanceGeneration(environmentId)
+  revokePendingRead(environmentId, true)
   setHostLacksSetting(environmentId, false)
   setPRAutoRefreshCadenceForHost(environmentId, null)
 }
@@ -60,7 +88,7 @@ export function forgetHostPRAutoRefreshCadence(environmentId: string): void {
 /** The host answered without the setting (an older Orca). It keeps no value here, so every
  *  scheduler reads it as Default, which is what that host does. */
 export function noteHostLacksPRAutoRefresh(environmentId: string): void {
-  advanceGeneration(environmentId)
+  revokePendingRead(environmentId)
   setPRAutoRefreshCadenceForHost(environmentId, null)
   setHostLacksSetting(environmentId, true)
 }
@@ -99,12 +127,13 @@ export function useHostPRAutoRefreshCadence(
   )
 }
 
-export function hostPRAutoRefreshCadenceGeneration(environmentId: string): number {
-  return generations.get(environmentId) ?? 0
+/** How many hosts this client keeps any per-host read or support state for. */
+export function _trackedHostPRAutoRefreshStateCountForTests(): number {
+  return new Set([...pendingReads.keys(), ...hostsLackingSetting]).size
 }
 
 export function _resetHostPRAutoRefreshCadenceGenerationsForTests(): void {
-  generations.clear()
+  pendingReads.clear()
   hostsLackingSetting.clear()
   lackListeners.clear()
 }

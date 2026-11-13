@@ -245,6 +245,10 @@ async function readPRChecks(
 }
 
 const checksReads: CoalescedProbes<PRChecksRead> = new Map()
+const checksProbeKey = (resource: string, noCache: boolean) => JSON.stringify([resource, noCache])
+const reading = (resource: string) =>
+  checksReads.has(checksProbeKey(resource, false)) ||
+  checksReads.has(checksProbeKey(resource, true))
 
 /** `timed`: a client's timer tick, which this host may answer from its last read at its PR
  *  auto-refresh cadence. A manual read (`userRefresh`, `noCache`) always reaches the provider. */
@@ -276,8 +280,8 @@ export function getPRChecks(
     // one that started before it; the producer records its own result at its own start order.
     const read = await runCoalescedProbe(
       checksReads,
-      JSON.stringify([resource, Boolean(options?.noCache)]),
-      async () => {
+      checksProbeKey(resource, Boolean(options?.noCache)),
+      async (ownsKey) => {
         const start = startPRChecksRead()
         const checks = await readPRChecks(
           repoPath,
@@ -289,7 +293,10 @@ export function getPRChecks(
           localGitOptions
         )
         const read = { start, checks }
-        recordPRChecksRead(resource, read)
+        // A probe replaced as stale no longer publishes; its callers still get the newest answer.
+        if (ownsKey()) {
+          recordPRChecksRead(resource, read, reading)
+        }
         return read
       },
       undefined,

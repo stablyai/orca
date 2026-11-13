@@ -126,7 +126,7 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
-  it('drops a queued follow-up when the cadence changes to off', async () => {
+  it('drops a queued follow-up when the cadence changes to off, and resumes on Default without a new report', async () => {
     const { policy, coordinator } = await loadCoordinatorWithCadence('default')
     coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
@@ -136,6 +136,11 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     coordinator.retimePRRefreshesForCadence()
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    policy.setPRAutoRefreshCadence('default')
+    coordinator.retimePRRefreshesForCadence()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
   it('drops an error retry that was already queued when the cadence changes to off', async () => {
