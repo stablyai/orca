@@ -112,7 +112,9 @@ describe('transcript slots', () => {
     ['![](/tmp/p.png)', false],
     ['$$\n![](/tmp/p.png)\n$$', true],
     ['```md\n![](/tmp/p.png)\n```', true],
-    ['[picture](/tmp/p.png)', true],
+    ['[picture](/tmp/p.png)', false],
+    ['[picture][p]\n\n[p]: /tmp/p.png', false],
+    ['See [picture](/tmp/p.png).', true],
     ['<img src="/tmp/p.png" alt="Picture">', false],
     ['<!-- <img src="/tmp/p.png"> -->', true],
     ['`<img src="/tmp/p.png">`', true]
