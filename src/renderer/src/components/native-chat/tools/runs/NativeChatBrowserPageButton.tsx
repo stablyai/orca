@@ -1,10 +1,12 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { toast } from 'sonner'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { findBrowserWorkspaceForRemotePage } from '@/runtime/web-session-tabs-sync/mirrored-browser-tabs'
 import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
+import { browserPageActivationFailureMessage } from '@/components/tab-bar/open-tab-selection-routing'
 import { useLastBrowserAgentPageId } from '../../../browser-pane/agent-cursor/browser-agent-activity-state'
 import {
   useNativeChatVisualOwner,
@@ -160,13 +162,18 @@ function BrowserPageButton({
       aria-label={t('components.native-chat.tool.showBrowserPageLabel', 'Show {{value0}}', {
         value0: title
       })}
-      onClick={() =>
-        activateBrowserPagePaletteResult({
+      onClick={() => {
+        const activation = activateBrowserPagePaletteResult({
           pageId: page.id,
           workspaceId: page.workspaceId,
           worktreeId: page.worktreeId
         })
-      }
+        // A blocked activation already told the user why.
+        if (activation.status !== 'failed') {
+          return
+        }
+        toast.error(browserPageActivationFailureMessage(activation.reason))
+      }}
     >
       <BrowserFavicon faviconUrl={page.faviconUrl} className="size-3.5" />
       {t('components.native-chat.tool.showBrowserPage', 'Show')}
