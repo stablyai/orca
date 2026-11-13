@@ -10,7 +10,7 @@ import {
   parseAgentBrowserJsonOutput
 } from '../../../browser/agent-browser/protocol/agent-browser-batch-command'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-session-contracts'
-import { Screenshot } from '../../../../shared/rpc-contract/browser-observation-params'
+import { Screenshot } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import {
   agentBrowserScreenshotArgs,
   readAgentBrowserScreenshot

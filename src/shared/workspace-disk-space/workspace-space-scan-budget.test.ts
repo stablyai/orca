@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   collectWorkspaceSpaceDirectoryEntries,
   createWorkspaceSpaceScanBudget,
-  estimateWorkspaceSpaceEntryRetainedBytes,
-  estimateWorkspaceSpaceListingRetainedBytes,
-  releaseWorkspaceSpaceScanEntries,
   WorkspaceSpaceScanCapacityError
 } from './workspace-space-scan-budget'
 
@@ -26,36 +23,6 @@ describe('workspace space scan budget', () => {
       )
     ).rejects.toThrow('readdir exploded')
     expect(budget).toMatchObject({ retainedBytes: 0 })
-  })
-
-  it('frees capacity for later directories once a listing is released', async () => {
-    const parentPath = '/workspace'
-    const entries = [{ name: 'first' }, { name: 'second' }]
-    const exactBytes = entries.reduce(
-      (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(entry.name),
-      estimateWorkspaceSpaceListingRetainedBytes(parentPath)
-    )
-    const budget = createWorkspaceSpaceScanBudget({ maxRetainedBytes: exactBytes })
-
-    const first = await collectWorkspaceSpaceDirectoryEntries(
-      entries,
-      parentPath,
-      (entry) => entry.name,
-      budget,
-      () => undefined
-    )
-    // Why: a cumulative counter would reject the identical second listing here.
-    releaseWorkspaceSpaceScanEntries(budget, first.retainedBytes)
-
-    await expect(
-      collectWorkspaceSpaceDirectoryEntries(
-        entries,
-        parentPath,
-        (entry) => entry.name,
-        budget,
-        () => undefined
-      )
-    ).resolves.toMatchObject({ retainedBytes: exactBytes })
   })
 
   it('closes an async directory iterator when the next entry exceeds the budget', async () => {

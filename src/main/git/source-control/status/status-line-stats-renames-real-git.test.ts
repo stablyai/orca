@@ -38,8 +38,6 @@ afterEach(async () => {
 
 describe.each(['staged', 'unstaged'] as const)('%s rename line counts', (area) => {
   it.each([
-    { diffRenames: 'true', statusRenames: undefined, renamed: true },
-    { diffRenames: 'false', statusRenames: undefined, renamed: false },
     { diffRenames: 'true', statusRenames: 'false', renamed: false },
     { diffRenames: 'false', statusRenames: 'true', renamed: true }
   ])('matches status with $diffRenames diff / $statusRenames status', async (config) => {

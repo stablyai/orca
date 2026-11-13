@@ -3,7 +3,7 @@ import {
   resolveAttention,
   type SmartClass,
   type TabPaneInputSources
-} from '../../../../../../shared/sidebar-list/smart-attention'
+} from '../../../../../../shared/sidebar-list/sorting/smart-attention'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { agentVerdictDisplayMark } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import {

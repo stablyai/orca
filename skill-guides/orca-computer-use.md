@@ -139,7 +139,7 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 On macOS, every action runs in the background by default: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. The user can keep working while you act. `capabilities` reports this as `supports.input.background`, and each action result reports `action.delivery` as `background` or `foreground`.
 
-On Linux and Windows, keyboard and pointer input still need the target window in front; a `window_not_focused` refusal there means retry with `--restore-window`.
+On Linux, keyboard and pointer input still need the target window in front, and so does keyboard input on Windows; a `window_not_focused` refusal there means retry with `--restore-window`.
 
 Do not pass `--restore-window` by default. Use it only when foreground input is needed, and tell the user first because it takes over their screen, keyboard focus and pointer:
 
@@ -148,9 +148,9 @@ Do not pass `--restore-window` by default. Use it only when foreground input is 
 - Drags in Chromium or Electron apps, and apps that read the hardware pointer (games, OpenGL/Metal views, Java/Tk), which ignore background pointer events.
 - The window is minimized or hidden. Accessibility actions still work there; pointer and keyboard events do not.
 
-Popup menus and web `<select>` controls: set the option with `set-value` on the popup element. Background clicks on them are refused because they open the menu off screen or wedge the app's input.
+On macOS, background actions that would open a menu or dialog over the user are refused before anything is sent: right-clicks and Control-clicks, clicks or drags that start on popup menus, menu buttons, native combo boxes and web `<select>` controls, and buttons whose title ends in an ellipsis (`Save…`), which usually open a dialog. For a popup, native combo box or `<select>`, set the option with `set-value` on that element.
 
-On Linux, clicks, scrolling, drags and keyboard input still bring the target window forward. On Windows, these go through UI Automation when the control supports them, without moving the pointer or sending keys: element clicks, `set-value` (including sliders), element scrolls by whole `--pages`, and secondary actions such as `Invoke`, `Toggle`, `Select`, `Expand`, `Collapse` and `ScrollToVisible` (the last brings a list or tree item into view). Some apps bring their own window forward when driven this way (WPF apps do for most of these), so read `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward. Everything else brings the window forward and reports `foreground`.
+On Linux, clicks, scrolling, drags and keyboard input still bring the target window forward. On Windows, these go through UI Automation when the control supports them, without moving the pointer or sending keys: element clicks, `set-value` (including sliders), scrolls of an element or of the scrollable area under `--x`/`--y` (fractional `--pages` too), and secondary actions such as `Invoke`, `Toggle`, `Select`, `Expand`, `Collapse` and `ScrollToVisible` (the last brings a list or tree item into view). Some apps bring their own window forward when driven this way (WPF apps do for most of these), so read `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward. Clicks by coordinates, right, middle, modified and multi-clicks, clicks on elements with no `Invoke`, `Select` or `Toggle` action, scrolls over nothing scrollable, and drags need the real mouse, so they are refused with `background_unavailable` and nothing is sent. With `--restore-window` (after asking the user), only the target window comes forward, never one on another virtual desktop, and the pointer goes back where it was.
 
 ## Screenshots
 

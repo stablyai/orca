@@ -85,7 +85,7 @@ import { isWslDistroRegistered } from '../../wsl/discovery/wsl-distro-registry-i
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import { ptyPaneKey } from '../pty/pane/key-state'
 import { tryGetProviderForPty } from '../pty/provider/registry'
-import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
+import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
 /** The move's IPC handlers; its driver reads every move dependency from this module. */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
   setWslMoveReloadableWindow(() => {

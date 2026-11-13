@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import './agent-transcript-replay-test-harness'
-import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
+import {
+  finalReplayFrame,
+  finalProviderSnapshot,
+  readRuntimeFixture
+} from './agent-transcript-replay-test-harness'
+import { evaluateAgentStateRules } from '../../agent-state-rules/agent-state-rules-engine'
+
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
-import { describeScreenRuledAgentTranscripts } from './screen-ruled-agent-transcript-suite'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -65,11 +69,36 @@ describe('Prime Agent readiness from captured bytes', () => {
       vi.useRealTimers()
     }
   })
-  describeScreenRuledAgentTranscripts({
-    agent: 'prime-agent',
-    foregroundProcess: 'prime-agent',
-    ready: READY,
-    notReady: NOT_READY,
-    readyWithoutScreen: READY.map(({ name }) => name)
+  it('settles a restored pane from its current provider frame', async () => {
+    const snapshot = await finalProviderSnapshot('prime-agent-0-9-8-turn-ended', 120, 40)
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Terminal',
+      foregroundProcess: 'prime-agent',
+      launchAgent: 'prime-agent',
+      data: '',
+      size: { cols: 120, rows: 40 },
+      serializeProviderBuffer: async () => snapshot
+    })
+    vi.useFakeTimers()
+    try {
+      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+      await vi.advanceTimersByTimeAsync(4_000)
+      await expect(wait).resolves.toMatchObject({ satisfied: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it.each(READY)('$name ($what) reads ready', async ({ name, cols, rows }) => {
+    const { ruledScreenLines } = await finalReplayFrame(name, cols, rows)
+    expect(
+      evaluateAgentStateRules('prime-agent', { readScreenLines: () => ruledScreenLines })?.state
+    ).toBe('idle')
+  })
+
+  it.each(NOT_READY)('$name ($what) does not read ready', async ({ name, cols, rows }) => {
+    const { ruledScreenLines } = await finalReplayFrame(name, cols, rows)
+    expect(
+      evaluateAgentStateRules('prime-agent', { readScreenLines: () => ruledScreenLines })?.state
+    ).not.toBe('idle')
   })
 })

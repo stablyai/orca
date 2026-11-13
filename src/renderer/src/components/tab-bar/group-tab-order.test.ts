@@ -4,7 +4,7 @@ import type { AppState } from '../../store/types'
 import { getActiveTabNavOrder } from './group-tab-order'
 
 import { makeOpenFile } from '../../store/slices/editor/types/open-file.test-fixture'
-import { makeTerminalTab } from '../../store/terminals/terminal-row.test-fixture'
+import { makeTerminalTab } from '../../store/terminals/testing/terminal-row.test-fixture'
 
 function terminalTab(id: string, groupId: string, entityId: string, sortOrder: number): Tab {
   return {

@@ -238,7 +238,12 @@ export async function waitForWorkerAgentReady(
       ? waitWatchingForAgentExit(runtime, handle, agent, args.creation, undefined, (signal) =>
           waitForWorkerStartComposer(runtime, handle, agent, args.timeoutMs, signal)
         )
-      : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs }))
+      : // A reused pane's agent queues or steers a task sent mid-turn, as it does mail.
+        runtime.waitForTerminal(handle, {
+          condition: 'tui-idle',
+          timeoutMs: args.timeoutMs,
+          acceptsMidTurnInput: true
+        }))
     return args.reusesTerminal
       ? result
       : requireFreshReadiness(runtime, handle, args.creation, result)

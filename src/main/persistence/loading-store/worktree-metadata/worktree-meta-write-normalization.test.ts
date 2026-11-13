@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
-import { CLEARED_HOSTED_REVIEW_LINK_UPDATES } from '../../../../shared/worktree/hosted-review-links'
+import { CLEARED_HOSTED_REVIEW_LINK_UPDATES } from '../../../../shared/worktree/hosted-review/hosted-review-links'
 
 const existingMeta: WorktreeMeta = {
   displayName: 'Feature',

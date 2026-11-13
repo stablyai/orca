@@ -58,6 +58,8 @@ export type TuiIdleEvidenceSource = {
   /** The PTY's quiet clock: its last output, else when main began receiving its silent stream. */
   getOutputClockAt?(ptyId: string | null | undefined): number | null
   startupObservation?: Pick<PtyStartupObservation, 'read' | 'watch' | 'refresh'>
+  /** Whether mail delivery would type into this pane now (drafts, prompts and overlays hold it). */
+  isSettledForDelivery?(ptyId: string): boolean
 }
 
 /** One clock per terminal, read by ptyId. */

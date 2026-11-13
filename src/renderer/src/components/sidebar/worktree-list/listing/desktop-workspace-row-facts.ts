@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -11,7 +11,7 @@ import {
   isCliCreatedWorkspace,
   isDefaultBranchWorkspace,
   isDetachedHeadWorkspace
-} from '../../../../../../shared/worktree/workspace-kinds'
+} from '../../../../../../shared/worktree/visibility/workspace-kinds'
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../../../shared/workspace-creator-visibility'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'

@@ -19998,7 +19998,7 @@
         },
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Open with (when focus is not in an editable field)"
+            "openWith": "Open with (except while typing in an Orca text field)"
           }
         },
         "pluginInstallCount": {
@@ -20926,7 +20926,7 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "showAgent": "Show {{value0}} in the conversation"
+        "openAgent": "Open {{value0}}"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -21077,7 +21077,25 @@
         "started_one": "Kicked off {{count}} subagent",
         "started_other": "Kicked off {{count}} subagents",
         "ran_one": "Ran {{count}} subagent",
-        "ran_other": "Ran {{count}} subagents"
+        "ran_other": "Ran {{count}} subagents",
+        "backToMain": "Back to main agent",
+        "mainAgent": "Main agent",
+        "promptFromMain": "Prompt from main agent",
+        "clickToOpen": "Click to open",
+        "backTo": "Back to {{value0}}",
+        "path": "Subagent path",
+        "stateHeading": {
+          "completed": "Completed",
+          "working": "Working",
+          "idle": "Idle",
+          "failed": "Failed",
+          "stopped": "Stopped",
+          "unverifiable": "Status unavailable"
+        },
+        "noSteps": "No steps yet",
+        "beforeClear": "This subagent ran before the chat was cleared",
+        "stoppedBeforeReply": "Stopped before replying",
+        "noReply": "Ended without a reply"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",
@@ -22184,6 +22202,164 @@
         "folderArchiveDescription": "Local and shared scripts that run before a workspace is removed.",
         "folderSetupFieldDescription": "Runs after a new workspace is created; create child worktrees, install deps, copy env files.",
         "folderArchiveFieldDescription": "Runs before a workspace is removed."
+      },
+      "workspaceCleanup": {
+        "title": "Workspace Cleanup",
+        "description": "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work.",
+        "unsupportedHost": "This host runs an Orca version without automatic cleanup. Update Orca on it to use these settings.",
+        "previewFailed": "Couldn't check which workspaces this change matches.",
+        "pinFailed": "Couldn't keep {{name}}.",
+        "rules": {
+          "title": "Rules",
+          "branchNote": "Merged branches are deleted with their workspace. Unmerged branches are kept.",
+          "recommended": "Recommended",
+          "inactiveDescription": "No activity for {{count}} days.",
+          "advancedDescription": "Automation and orchestration worker workspaces",
+          "inactiveFor": "Inactive for",
+          "days": "days",
+          "then": "Then",
+          "archiveDescription": "Archive frees disk space and keeps the workspace in the sidebar.",
+          "deleteDescription": "Delete removes the workspace and its folder.",
+          "archive": "Archive",
+          "delete": "Delete",
+          "matchesCount": "Matches {{count}} workspaces now",
+          "hideMatches": "Hide",
+          "showMatches": "Show",
+          "merged": "Delete merged workspaces",
+          "mergedDescription": "The pull request is merged and everything in the workspace is in it.",
+          "unchanged": "Delete unchanged workspaces",
+          "unchangedDescription": "No commits beyond the default branch and no edits.",
+          "inactiveCleanUp": "Clean up inactive workspaces",
+          "inactive": "Delete inactive workspaces",
+          "automationRuns": "Delete finished automation workspaces",
+          "automationRunsDescription": "Workspaces an automation run created, once the run has finished.",
+          "orchestrationWorkers": "Delete released orchestration worker workspaces",
+          "orchestrationWorkersDescription": "Workspaces an orchestration worker used, once the coordinator has released it.",
+          "inactiveDescription_one": "No activity for 1 day.",
+          "inactiveDescription_other": "No activity for {{count}} days.",
+          "matchesCount_one": "Matches 1 workspace now",
+          "matchesCount_other": "Matches {{count}} workspaces now",
+          "checking": "Checking which workspaces match…"
+        },
+        "protection": {
+          "title": "Protection",
+          "alwaysKept": "Always kept: pinned workspaces, running agents or terminals, unsaved editor changes, uncommitted changes, unpushed commits.",
+          "keepIgnoredFiles": "Keep workspaces with ignored files",
+          "keepIgnoredFilesDescription": "Files like .env and local config can't be recovered. node_modules and build output don't count."
+        },
+        "activity": {
+          "loadFailed": "Couldn't load activity: {{error}}",
+          "empty": "Cleanup hasn't run yet.",
+          "unfinished": "Couldn't finish",
+          "nothingRemoved": "Nothing to clean",
+          "removedCount": "{{count}} removed",
+          "keptCount": "{{count}} kept",
+          "failedCount": "{{count}} failed",
+          "removed": "Removed · {{count}}",
+          "failed": "Failed · {{count}}",
+          "archived": "Archived",
+          "deleted": "Deleted",
+          "kept": "Kept · {{count}}",
+          "showMore": "Show {{count}} more",
+          "waiting": "Inactive {{elapsed}} of {{after}} days",
+          "title": "Activity",
+          "notListed_one": "1 more kept workspace is not listed.",
+          "notListed_other": "{{count}} more kept workspaces are not listed."
+        },
+        "runFailed": "Couldn't run cleanup.",
+        "updateFailed": "Couldn't save the cleanup rules.",
+        "enable": {
+          "title": "Turn on {{rule}}?",
+          "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
+          "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
+          "keepNamed": "Keep {{name}}",
+          "keep": "Keep",
+          "summary": "{{count}} will be deleted",
+          "cancel": "Cancel",
+          "turnOn": "Turn on"
+        },
+        "reason": {
+          "merged": "Merged",
+          "unchanged": "Unchanged",
+          "inactive": "Inactive",
+          "automationRun": "Automation run",
+          "orchestrationWorker": "Orchestration worker",
+          "mergedNumber": "{{label}} · #{{number}}"
+        },
+        "keep": {
+          "pinned": "Pinned",
+          "noRuleMatched": "No rule matched",
+          "recentlyActive": "Used in the last hour",
+          "activeWorkspace": "Open right now",
+          "agentRunning": "Agent running",
+          "terminalRunning": "Terminal running a process",
+          "terminalUnknown": "Terminal state unknown",
+          "unsavedEditorChanges": "Unsaved editor changes",
+          "uncommittedChanges": "Uncommitted changes",
+          "unpushedCommits": "Unpushed commits",
+          "ignoredFiles": "Ignored files",
+          "gitUnknown": "Couldn't read Git status",
+          "archiveUnavailable": "Archive not available",
+          "archiveScript": "Has an archive script",
+          "removing": "Already being removed",
+          "waiting": "Waiting",
+          "notRemovable": "Main workspace or folder project",
+          "projectOff": "Cleanup off for this project",
+          "rulesOff": "No rule on",
+          "withDetail": "{{cause}} · {{detail}}"
+        },
+        "trigger": {
+          "startup": "On startup",
+          "hourly": "Hourly",
+          "settings": "After a rule change",
+          "runNow": "Clean up now",
+          "cli": "From the CLI"
+        },
+        "search": {
+          "cleanup": "cleanup",
+          "cleanUp": "clean up",
+          "delete": "delete",
+          "statusDescription": "Run the cleanup rules now, or review workspaces yourself.",
+          "reviewWorkspaces": "review workspaces",
+          "automatic": "automatic",
+          "pullRequest": "PR",
+          "inactiveDescription": "No activity for a number of days.",
+          "stale": "stale",
+          "days": "days",
+          "automations": "automations",
+          "orchestration": "orchestration",
+          "protection": "protection",
+          "activityDescription": "What each cleanup run removed and kept.",
+          "history": "history",
+          "runs": "runs",
+          "envFile": ".env"
+        },
+        "cleanUpNow": "Clean up now",
+        "status": {
+          "lastRunFailed": "Last run {{when}} couldn't finish: {{error}}",
+          "lastRunNothing": "Last run {{when}} removed nothing.",
+          "lastRunFreed_one": "Last run {{when}} removed 1 workspace and freed {{size}}.",
+          "lastRunFreed_other": "Last run {{when}} removed {{count}} workspaces and freed {{size}}.",
+          "lastRunRemoved_one": "Last run {{when}} removed 1 workspace.",
+          "lastRunRemoved_other": "Last run {{when}} removed {{count}} workspaces.",
+          "offDetail": "Nothing is removed until you turn on a rule.",
+          "running": "Cleaning up now…",
+          "nextRun": "Next run {{when}}.",
+          "on": "Automatic cleanup is on.",
+          "off": "Automatic cleanup is off.",
+          "review": "Review workspaces",
+          "turnOnHint": "Turn on a rule to use this.",
+          "justNow": "just now",
+          "inUnderAMinute": "in under a minute"
+        },
+        "change": {
+          "title": "Change {{rule}}?",
+          "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
+          "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it.",
+          "apply": "Apply"
+        },
+        "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
+        "retry": "Try again"
       }
     },
     "agentChildRow": {
@@ -25443,6 +25619,21 @@
       "refresh": "The previous Refresh could not be completed. Try Refresh again.",
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
+    }
+  },
+  "crashReport": {
+    "freeze": {
+      "attach": "Attach saved freeze report and diagnostic logs",
+      "attachDescription": "Sends the saved freeze report with a capped, redacted log bundle.",
+      "attachmentsOmitted": "The saved freeze report and diagnostic logs were not attached: {{value0}}",
+      "description": "Send the saved freeze report to help us understand what happened.",
+      "notSent": "Freeze report wasn't sent",
+      "notes": "Optional: what were you doing before Orca froze?",
+      "sent": "Freeze report sent.",
+      "sentWithoutAttachments": "Details sent without the saved freeze report or diagnostic logs",
+      "summary": "Orca stopped responding",
+      "title": "Report a freeze",
+      "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
   }
 }

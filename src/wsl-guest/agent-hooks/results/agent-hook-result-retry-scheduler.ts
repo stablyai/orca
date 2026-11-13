@@ -1,5 +1,5 @@
-import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
-import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
+import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
   hasPendingAgentResultText,
@@ -19,7 +19,7 @@ import {
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
+import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50

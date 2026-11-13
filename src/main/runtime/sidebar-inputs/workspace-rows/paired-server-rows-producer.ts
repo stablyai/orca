@@ -5,7 +5,7 @@ import type { MobileRelayServerWorktreeRow } from '../../../../shared/remote-run
 import {
   normalizePairedServerRow,
   type PairedServerRowsSnapshot
-} from '../../../../shared/sidebar-list/paired-server-rows'
+} from '../../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import type {
   MobileDesktopRelayHostListing,
   MobileDesktopRelayHosts,
@@ -21,8 +21,8 @@ import {
   WorktreePsReplySchema,
   stampServerWorktreeRows
 } from '../../mobile-desktop-relay/server-worktree-fetch'
-import type { PairedServerCatalog } from '../../../../shared/sidebar-list/sidebar-project-catalog'
-import { fetchPairedServerCatalog } from '../../../../shared/sidebar-list/paired-server-catalog'
+import type { PairedServerCatalog } from '../../../../shared/sidebar-list/catalog/sidebar-project-catalog'
+import { fetchPairedServerCatalog } from '../../../../shared/sidebar-list/catalog/paired-server-catalog'
 
 // Owner-approved fallback for changes a server announces no event for (status-only, older servers).
 export const FALLBACK_REFRESH_MS = 30_000

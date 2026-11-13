@@ -49,14 +49,14 @@ vi.mock('expo-router', () => {
   const router = { canGoBack: () => false, push: () => {}, dismissTo: () => {} }
   return { useFocusEffect: () => {}, useRouter: () => router, useNavigation: () => undefined }
 })
-vi.mock('../platform/haptics', () => ({
+vi.mock('../platform/haptics/haptics', () => ({
   triggerError: () => {
     seen.errorHaptics += 1
   },
   triggerEdgeBump: () => {},
   triggerSelection: () => {}
 }))
-vi.mock('../platform/clipboard', () => {
+vi.mock('../platform/clipboard/clipboard', () => {
   const writer = {
     writeText: async (text: string) => {
       seen.clipboard.push(text)

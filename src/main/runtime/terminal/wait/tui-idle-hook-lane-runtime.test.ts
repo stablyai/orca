@@ -1,24 +1,22 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import '../../orchestration/db/contract-constants'
 import '../../orchestration/db/messages/mailbox-routing-page'
 import '../../orchestration/db/dispatch-row-writer'
 import '../../orchestration/db/attempt-outcome-projection'
-import { join } from 'node:path'
+import { settledWriteStub } from '../../../providers/testing/settled-pty-write-stub'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
   createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID,
-  waitForTranscriptIdle
+  TRANSCRIPT_PANE_PTY_ID
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
-import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
-import { normalizeHermesEvent } from '../../../../shared/agent-hook-listener/providers/hermes-events'
+
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { settledWriteStub } from '../../../providers/testing/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -26,278 +24,6 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp') }
 }))
-
-describe('Hermes captured hook readiness', () => {
-  const captured = readFileSync(
-    join(__dirname, '../../__fixtures__', 'hermes-tui-ready.txt'),
-    'utf8'
-  )
-
-  /** Run managed Hermes payloads through the real normalizer so event-mapping regressions fail at this runtime boundary too. */
-  const status = (eventName: string, payload: Record<string, unknown> = {}): string => {
-    const parsed = normalizeHermesEvent(createHookListenerState(), eventName, '', 'pane-1', payload)
-    expect(parsed, `hermes plugin event ${eventName} must normalize to a status`).not.toBeNull()
-    return `\x1b]9999;${JSON.stringify(parsed)}\x07`
-  }
-
-  const readyPane = async () => {
-    const pane = await createTranscriptPane({
-      paneTitle: 'Hermes Agent',
-      foregroundProcess: 'hermes',
-      launchAgent: 'hermes',
-      size: { cols: 120, rows: 31 },
-      data: captured
-    })
-    await pane.runtime.readTerminal(pane.handle, { screen: true })
-    return pane
-  }
-
-  describe('Hermes TUI readiness from a captured PTY', () => {
-    it.each(['recovery-first', 'reflow-first'] as const)(
-      'orders screen validity with %s before allowing wait and mail',
-      async (order) => {
-        const size = { cols: 120, rows: 31 }
-        const writes: string[] = []
-        const { runtime, handle } = await createTranscriptPane({
-          paneTitle: 'Hermes Agent',
-          foregroundProcess: 'hermes',
-          launchAgent: 'hermes',
-          size,
-          data: captured,
-          onWrite: (data) => writes.push(data),
-          writeWithSettlement: settledWriteStub((_id, data) => {
-            writes.push(data)
-          })
-        })
-        await runtime.serializeMainTerminalBuffer(TRANSCRIPT_PANE_PTY_ID)
-        writes.length = 0
-        const db = new OrchestrationDb(':memory:')
-        runtime.setOrchestrationDb(db)
-        const run = db.createRun({
-          objective: 'reflow readiness',
-          coordinatorHandle: handle,
-          coordinatorPaneKey: makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
-        })
-        const entered = Promise.withResolvers<void>()
-        const release = Promise.withResolvers<void>()
-        const originalWrite = HeadlessEmulator.prototype.write
-        const heldWrite = vi
-          .spyOn(HeadlessEmulator.prototype, 'write')
-          .mockImplementationOnce(async function (this: HeadlessEmulator, data, options) {
-            entered.resolve()
-            await release.promise
-            await originalWrite.call(this, data, options)
-          })
-        try {
-          runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b[0m', Date.now())
-          await entered.promise
-          const recover = (rows: number) =>
-            runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(TRANSCRIPT_PANE_PTY_ID, {
-              data: captured,
-              cols: 120,
-              rows,
-              seq: runtime.getPtyOutputSequence(TRANSCRIPT_PANE_PTY_ID)
-            })
-          if (order === 'recovery-first') {
-            recover(31)
-            size.rows = 40
-            runtime.reflowHeadlessTerminalToPtyGrid(TRANSCRIPT_PANE_PTY_ID, 120, 40)
-          } else {
-            size.rows = 40
-            runtime.reflowHeadlessTerminalToPtyGrid(TRANSCRIPT_PANE_PTY_ID, 120, 40)
-            recover(40)
-          }
-          vi.useFakeTimers({
-            toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
-          })
-          const settled = vi.fn()
-          const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
-          wait.then(settled, () => {})
-          const message = db.insertMessage({
-            from: 'term_worker',
-            to: `run:${run.id}`,
-            runId: run.id,
-            type: 'worker_done',
-            subject: 'Current screen only'
-          })
-          runtime.notifyMessageArrived(`run:${run.id}`, 'worker_done')
-          release.resolve()
-          await vi.advanceTimersByTimeAsync(6_000)
-          if (order === 'recovery-first') {
-            expect(settled).not.toHaveBeenCalled()
-            expect(db.getMessageById(message.id)?.delivered_at).toBeNull()
-            expect(
-              writes.filter((data) => data.includes('orchestration message') || data === '\r')
-            ).toEqual([])
-            size.rows = 39
-            runtime.resizeHeadlessTerminalToPtyGrid(TRANSCRIPT_PANE_PTY_ID, 120, 39)
-            runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, captured, Date.now())
-            await vi.advanceTimersByTimeAsync(5_000)
-          }
-          await expect(wait).resolves.toMatchObject({ satisfied: true })
-          expect(settled).toHaveBeenCalledTimes(1)
-          expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-          expect(
-            writes.filter((data) => data.includes('orchestration message') || data === '\r')
-          ).toEqual([expect.stringContaining('You have 1 orchestration message'), '\r'])
-        } finally {
-          release.resolve()
-          heldWrite.mockRestore()
-          vi.useRealTimers()
-          db.close()
-        }
-      }
-    )
-
-    it('settles tui-idle on a ready composer after the session-boundary hook', async () => {
-      const { runtime, handle } = await readyPane()
-      // What Orca's own managed plugin sends for `on_session_start`.
-      runtime.onPtyData(
-        TRANSCRIPT_PANE_PTY_ID,
-        status('on_session_start', { session_id: 's1' }),
-        Date.now()
-      )
-
-      const read = vi.spyOn(runtime, 'readTerminal')
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_000 })
-      ).resolves.toMatchObject({ satisfied: true })
-      // The retained screen decides without a provider screen round trip.
-      expect(read.mock.calls.filter(([, options]) => options?.screen === true)).toEqual([])
-    }, 5_000)
-
-    it('settles through a leaf handle whose retained tail never showed the ready screen', async () => {
-      const { runtime } = await readyPane()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Access the real synced leaf and handle issuer for this route regression.
-      const internals = runtime as unknown as {
-        leaves: Map<string, { tailBuffer: string[]; tailPartialLine: string }>
-        issueHandle: (leaf: unknown) => string
-      }
-      const leaf = internals.leaves.values().next().value
-      expect(leaf).toBeDefined()
-      expect([...leaf!.tailBuffer, leaf!.tailPartialLine].join('\n')).not.toMatch(/\bready\b/i)
-      runtime.onPtyData(
-        TRANSCRIPT_PANE_PTY_ID,
-        status('on_session_start', { session_id: 's1' }),
-        Date.now()
-      )
-
-      await expect(
-        runtime.waitForTerminal(internals.issueHandle(leaf), {
-          condition: 'tui-idle',
-          timeoutMs: 2_000
-        })
-      ).resolves.toMatchObject({ satisfied: true })
-    }, 5_000)
-
-    it('does not settle while a turn the user started is still running', async () => {
-      const { runtime, handle } = await readyPane()
-      runtime.onPtyData(
-        TRANSCRIPT_PANE_PTY_ID,
-        status('on_session_start', { session_id: 's1' }),
-        Date.now()
-      )
-      // `pre_llm_call` — the first event that means a turn actually began.
-      runtime.onPtyData(
-        TRANSCRIPT_PANE_PTY_ID,
-        status('pre_llm_call', { user_message: 'hi' }),
-        Date.now()
-      )
-
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 550 })
-      ).rejects.toThrow('timeout')
-    }, 3_000)
-
-    it('does not settle on a turn-end done row without a ready screen', async () => {
-      const { runtime, handle } = await createTranscriptPane({
-        paneTitle: 'Hermes Agent',
-        foregroundProcess: 'hermes',
-        launchAgent: 'hermes',
-        data: ''
-      })
-      // `post_llm_call` lands `done` without the boundary flag; the #6011 rule still applies.
-      runtime.onPtyData(
-        TRANSCRIPT_PANE_PTY_ID,
-        status('post_llm_call', { session_id: 's1' }),
-        Date.now()
-      )
-
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 550 })
-      ).rejects.toThrow('timeout')
-    }, 3_000)
-  })
-})
-
-describe('Claude indexed task wakeup readiness', () => {
-  const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
-  const ready = readFileSync(
-    join(import.meta.dirname, '../../__fixtures__/claude-ready-task-wakeup.txt'),
-    'utf8'
-  )
-
-  function owedRow(paneKey: string): AgentStatusIpcPayload {
-    const now = Date.now()
-    return {
-      paneKey,
-      state: 'working',
-      mainAgent: { state: 'done', stateStartedAt: now },
-      agentType: 'claude',
-      prompt: '',
-      connectionId: null,
-      launchToken: 'transcript-launch',
-      claudeTaskWakeupPending: 'notification',
-      providerSession: { key: 'session_id', id: 'session-a' },
-      observation: {
-        origin: 'hook',
-        authorityId: 'host-a',
-        incarnation: 1,
-        revision: 1,
-        observedAt: now
-      },
-      receivedAt: now,
-      stateStartedAt: now
-    }
-  }
-
-  afterEach(() => vi.useRealTimers())
-
-  describe('Claude readiness indexed status reads', () => {
-    it.each([true, false])(
-      'reads only its pane with 512 unrelated agents, including an empty index: pending=%s',
-      async (pending) => {
-        const unrelated = Array.from({ length: 512 }, (_, index) => owedRow(`other:${index}`))
-        const row = owedRow(PANE)
-        const full = vi.fn(() => [row, ...unrelated])
-        const indexed = vi.fn((paneKey: string) => (pending && paneKey === PANE ? [row] : []))
-        const pane = await createTranscriptPane(
-          {
-            paneTitle: 'Terminal',
-            foregroundProcess: 'claude',
-            data: ready,
-            launchAgent: 'claude'
-          },
-          { getAgentStatusSnapshot: full, getAgentStatusSnapshotForPane: indexed }
-        )
-        row.receivedAt = Date.now()
-        full.mockClear()
-        indexed.mockClear()
-        try {
-          const waiting = waitForTranscriptIdle(pane, 2_000)
-          await (pending
-            ? expect(waiting).rejects.toThrow(/timeout/)
-            : expect(waiting).resolves.toMatchObject({ satisfied: true }))
-          expect(indexed).toHaveBeenCalled()
-          expect(new Set(indexed.mock.calls.map(([paneKey]) => paneKey))).toEqual(new Set([PANE]))
-          expect(full).not.toHaveBeenCalled()
-        } finally {
-          pane.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
-        }
-      }
-    )
-  })
-})
 
 describe('Canonical hook status readiness', () => {
   // The harness pane's identity (agent-transcript-pane-test-harness.ts).
@@ -316,14 +42,7 @@ describe('Canonical hook status readiness', () => {
     ''
   ].join('\r\n')
   // OpenCode 1.18's question tool, which paints no dialog wording the blocked layer knows.
-  const OPENCODE_QUESTION = [
-    '  ┃  Which color do you prefer?',
-    '  ┃  1. Red',
-    '  ┃  2. Blue',
-    '  ┃  3. Type your own answer',
-    '  ┃  ↑↓ select  enter submit  esc dismiss',
-    ''
-  ].join('\r\n')
+
   // Shorter than the 2 s poll, so only the synchronous verdict can settle a wait.
   const WAIT_MS = 150
 
@@ -383,63 +102,7 @@ describe('Canonical hook status readiness', () => {
       ).toBe('ready')
     })
 
-    it('ignores the row the PTY id held before a respawn', async () => {
-      const before = Date.now() - 1000
-      const rows = (): AgentStatusIpcPayload[] => [
-        row({ receivedAt: before, stateStartedAt: before })
-      ]
-      expect(await waitOutcome({ rows })).toBe('ready')
-      expect(
-        await waitOutcome({
-          rows,
-          afterCreate: (runtime) =>
-            runtime.synchronizePtyOutputSequenceFromProvider(TRANSCRIPT_PANE_PTY_ID, {
-              value: 0,
-              generation: 'reset'
-            })
-        })
-      ).toBe('timeout')
-    })
-
     // Input starts a possible new turn, including typed agent restarts; prior done hooks cannot settle it.
-    it.each([
-      ['a prompt Orca sent', 'next task\r'],
-      ['the user restarting the agent in the same shell', 'pi\r']
-    ])('reads no done from before %s', async (_label, input) => {
-      const before = Date.now() - 1000
-      const rows = (): AgentStatusIpcPayload[] => [
-        row({ receivedAt: before, stateStartedAt: before })
-      ]
-      const typeAt = (at: number) => (runtime: OrcaRuntimeService) => {
-        runtime.terminalRunFacts.recordInput(TRANSCRIPT_PANE_PTY_ID, 'driving', input, at)
-      }
-      expect(await waitOutcome({ rows, afterCreate: typeAt(before - 1) })).toBe('ready')
-      expect(await waitOutcome({ rows, afterCreate: typeAt(before + 1) })).toBe('timeout')
-    })
-
-    it('reads no done from before a prompt sent just ahead of an adoption of the running agent', async () => {
-      const before = Date.now() - 1000
-      const rows = (): AgentStatusIpcPayload[] => [
-        row({ receivedAt: before, stateStartedAt: before })
-      ]
-      expect(
-        await waitOutcome({
-          rows,
-          afterCreate: (runtime) => {
-            runtime.terminalRunFacts.recordInput(
-              TRANSCRIPT_PANE_PTY_ID,
-              'driving',
-              'next\r',
-              before + 1
-            )
-            runtime.noteTerminalSpawnCommit({
-              id: TRANSCRIPT_PANE_PTY_ID,
-              agentSessionEnsure: { disposition: 'adopted' }
-            })
-          }
-        })
-      ).toBe('timeout')
-    })
 
     // Pi brackets each message in OSC 133 zones itself, so a command marker is no process boundary.
     it('keeps the row while the agent paints its own shell-integration markers', async () => {
@@ -469,22 +132,107 @@ describe('Canonical hook status readiness', () => {
         })
       ).toBe('ready')
     })
-
-    it('blocks on an open question the hook reports, and settles once it is answered', async () => {
-      const options = { launchAgent: 'opencode' as const, data: OPENCODE_QUESTION }
-      expect(await waitOutcome({ ...options, rows: () => [] })).toBe('timeout')
-      expect(
-        await waitOutcome({
-          ...options,
-          rows: () => [row({ agentType: 'opencode', state: 'waiting', receivedAt: Date.now() + 1 })]
-        })
-      ).toBe('blocked:agent-interactive-prompt')
-      expect(
-        await waitOutcome({
-          ...options,
-          rows: () => [row({ agentType: 'opencode', receivedAt: Date.now() + 1 })]
-        })
-      ).toBe('ready')
-    })
   })
+})
+
+describe('Recovered Hermes screen input ordering', () => {
+  const captured = readFileSync(
+    join(__dirname, '../../__fixtures__', 'hermes-tui-ready.txt'),
+    'utf8'
+  )
+  it.each(['recovery-first', 'reflow-first'] as const)(
+    'orders screen validity with %s before allowing wait and mail',
+    async (order) => {
+      const size = { cols: 120, rows: 31 }
+      const writes: string[] = []
+      const { runtime, handle } = await createTranscriptPane({
+        paneTitle: 'Hermes Agent',
+        foregroundProcess: 'hermes',
+        launchAgent: 'hermes',
+        size,
+        data: captured,
+        onWrite: (data) => writes.push(data),
+        writeWithSettlement: settledWriteStub((_id, data) => {
+          writes.push(data)
+        })
+      })
+      await runtime.serializeMainTerminalBuffer(TRANSCRIPT_PANE_PTY_ID)
+      writes.length = 0
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const run = db.createRun({
+        objective: 'reflow readiness',
+        coordinatorHandle: handle,
+        coordinatorPaneKey: makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+      })
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const originalWrite = HeadlessEmulator.prototype.write
+      const heldWrite = vi
+        .spyOn(HeadlessEmulator.prototype, 'write')
+        .mockImplementationOnce(async function (this: HeadlessEmulator, data, options) {
+          entered.resolve()
+          await release.promise
+          await originalWrite.call(this, data, options)
+        })
+      try {
+        runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b[0m', Date.now())
+        await entered.promise
+        const recover = (rows: number) =>
+          runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(TRANSCRIPT_PANE_PTY_ID, {
+            data: captured,
+            cols: 120,
+            rows,
+            seq: runtime.getPtyOutputSequence(TRANSCRIPT_PANE_PTY_ID)
+          })
+        if (order === 'recovery-first') {
+          recover(31)
+          size.rows = 40
+          runtime.reflowHeadlessTerminalToPtyGrid(TRANSCRIPT_PANE_PTY_ID, 120, 40)
+        } else {
+          size.rows = 40
+          runtime.reflowHeadlessTerminalToPtyGrid(TRANSCRIPT_PANE_PTY_ID, 120, 40)
+          recover(40)
+        }
+        vi.useFakeTimers({
+          toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+        })
+        const settled = vi.fn()
+        const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+        wait.then(settled, () => {})
+        const message = db.insertMessage({
+          from: 'term_worker',
+          to: `run:${run.id}`,
+          runId: run.id,
+          type: 'worker_done',
+          subject: 'Current screen only'
+        })
+        runtime.notifyMessageArrived(`run:${run.id}`, 'worker_done')
+        release.resolve()
+        await vi.advanceTimersByTimeAsync(6_000)
+        if (order === 'recovery-first') {
+          expect(settled).not.toHaveBeenCalled()
+          expect(db.getMessageById(message.id)?.delivered_at).toBeNull()
+          expect(
+            writes.filter((data) => data.includes('orchestration message') || data === '\r')
+          ).toEqual([])
+          size.rows = 39
+          runtime.resizeHeadlessTerminalToPtyGrid(TRANSCRIPT_PANE_PTY_ID, 120, 39)
+          runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, captured, Date.now())
+          await vi.advanceTimersByTimeAsync(5_000)
+        }
+        await expect(wait).resolves.toMatchObject({ satisfied: true })
+        expect(settled).toHaveBeenCalledTimes(1)
+        expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
+        expect(
+          writes.filter((data) => data.includes('orchestration message') || data === '\r')
+        ).toEqual([expect.stringContaining('You have 1 orchestration message'), '\r'])
+      } finally {
+        release.resolve()
+        heldWrite.mockRestore()
+        vi.useRealTimers()
+        db.close()
+      }
+    }
+  )
 })

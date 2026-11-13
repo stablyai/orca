@@ -10,7 +10,7 @@ import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { readTerminalActionText } from '../output/terminal-action-text'
 import { terminalTitleIsPredecessor } from '../input/terminal-command-paint'
 import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
-import { terminalDeliveryRefusal } from './terminal-delivery-refusal'
+import { settlesForMidTurnInput, terminalDeliveryRefusal } from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
@@ -52,7 +52,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
           waiter,
           buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
         )
-      } else if (verdict.kind === 'ready-strong') {
+      } else if (
+        verdict.kind === 'ready-strong' ||
+        (waiter.acceptsMidTurnInput &&
+          settlesForMidTurnInput(verdict, ptyId, this.tuiIdleEvidenceSource))
+      ) {
         this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
