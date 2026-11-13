@@ -145,5 +145,14 @@ describe('listing a UNC drive-folder repo through WSL Git', () => {
       String.raw`wsl:Ubuntu::\\wsl.localhost\Ubuntu\qamnt\c\src\app\.git`
     )
     expect(peekGitCommonDir(unc, { wslDistro: 'Ubuntu' })).toBe('/qamnt/c/src/app/.git')
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: '--path-format=absolute\n../../../qamnt/c/src/app/.git\n',
+      stderr: ''
+    })
+    const nativeUnc = String.raw`\\wsl.localhost\Ubuntu\home\me\linked`
+    await expect(getCanonicalRepoKey(nativeUnc, { wslDistro: 'Ubuntu' })).resolves.toBe(
+      String.raw`wsl:Ubuntu::C:\src\app\.git`
+    )
+    expect(peekGitCommonDir(nativeUnc, { wslDistro: 'Ubuntu' })).toBe('/qamnt/c/src/app/.git')
   })
 })

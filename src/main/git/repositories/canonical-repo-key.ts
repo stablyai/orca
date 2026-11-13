@@ -61,18 +61,15 @@ export async function getCanonicalRepoKey(
       ['rev-parse', '--path-format=absolute', '--git-common-dir'],
       { cwd: repoPath, ...options }
     )
-    const commonDir = readGitCommonDir(result.stdout, repoPath)
+    const wslCwd = process.platform === 'win32' ? parseWslUncPath(repoPath) : null
+    const commonDir = readGitCommonDir(result.stdout, wslCwd?.linuxPath ?? repoPath)
     if (commonDir) {
       const toHostPath = await gitResultPathTranslator(result, repoPath, options)
       const canonicalPath = toHostPath(commonDir)
       return remember(cacheKey, {
         key: `${runtimeKey}::${canonicalPath}`,
         // Drive-path routing may change Git hosts; only unambiguous namespaces prove provenance.
-        ...(process.platform !== 'win32'
-          ? { commonDir: canonicalPath }
-          : parseWslUncPath(repoPath)
-            ? { commonDir: parseWslUncPath(canonicalPath)?.linuxPath }
-            : {})
+        ...(process.platform !== 'win32' || wslCwd ? { commonDir } : {})
       })
     }
   } catch (error) {
