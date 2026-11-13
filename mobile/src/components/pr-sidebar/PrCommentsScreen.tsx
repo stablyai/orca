@@ -289,6 +289,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
                     error={askNotice.error}
                     warning={askNotice.warning}
                     undeliveredPrompt={askNotice.undeliveredPrompt}
+                    opens={askNotice.opens}
                     errorStyle={styles.noticeError}
                   />
                 </View>

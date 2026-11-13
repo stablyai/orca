@@ -13,7 +13,8 @@ import {
   isMergeabilityPendingOutcome,
   sameAliasRequestIdentity,
   validateCandidate,
-  visibleCandidateAfterOutcome
+  visibleCandidateAfterOutcome,
+  visibleFollowUpPriority
 } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
@@ -33,7 +34,6 @@ export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) =
 export class PRRefreshQueueDrainer {
   private draining = false
   private timer: ReturnType<typeof setTimeout> | null = null
-  // Why: queued work can outlive its project; re-check on every removal path before Git runs.
   private registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
 
@@ -52,9 +52,7 @@ export class PRRefreshQueueDrainer {
   }
 
   schedule(delay = 0): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-    }
+    clearTimeout(this.timer ?? undefined)
     this.timer = setTimeout(() => {
       this.timer = null
       // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
@@ -125,7 +123,7 @@ export class PRRefreshQueueDrainer {
       candidate: followUpCandidate,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
       reason: 'visible',
-      priority,
+      priority: visibleFollowUpPriority(followUpCandidate, priority),
       dueAt,
       queuedAt: this.queue.nextOrder(),
       bypassBackgroundBudget: pendingDueAt !== null,
@@ -137,7 +135,7 @@ export class PRRefreshQueueDrainer {
 
   private ordered(): PRRefreshQueueEntry[] {
     this.watchJobs.age(this.queue.values(), Date.now())
-    return this.queue.ordered((a, b) => this.pacing.activeOrder(a, b))
+    return this.queue.ordered((a, b) => this.pacing.order(a, b))
   }
 
   private nextQueuedWakeDelay(excludedKey: string): number | null {
@@ -237,7 +235,7 @@ export class PRRefreshQueueDrainer {
             continue
           }
           if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
-            this.pacing.noteBackgroundStart()
+            this.pacing.noteBackgroundStart(next)
             this.watchJobs.noteBudgetedStart(next)
           }
           if (usesActiveRefreshPacing(next)) {

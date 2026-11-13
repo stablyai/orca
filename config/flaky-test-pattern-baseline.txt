@@ -40,7 +40,6 @@
 2 test-no-polling-loop:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
 1 test-no-polling-loop:src/main/provider-process/provider-group-orphan-guard.integration.test.ts
 1 test-no-polling-loop:src/main/provider-process/provider-process-supervisor.integration.test.ts
-1 test-no-polling-loop:src/main/providers/startup-line-typed-length.live-shell.test.ts
 1 test-no-polling-loop:src/main/pty/history/terminal-history-fish-session.node-pty.test.ts
 1 test-no-polling-loop:src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts
 1 test-no-polling-loop:src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts
@@ -175,8 +174,6 @@
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/recovery/testing/structured-agent-session-target-reconcile.test.ts
 1 test-no-real-time-wait:src/main/provider-process/provider-group-orphan-guard.integration.test.ts
 2 test-no-real-time-wait:src/main/provider-process/provider-process-supervisor.integration.test.ts
-1 test-no-real-time-wait:src/main/providers/agent-foreground-process-git-bash.win32.test.ts
-2 test-no-real-time-wait:src/main/providers/startup-line-typed-length.live-shell.test.ts
 2 test-no-real-time-wait:src/main/pty/history/terminal-history-fish-session.node-pty.test.ts
 1 test-no-real-time-wait:src/main/pty/process-retirement/node-pty-master-fd-retirement.test.ts
 1 test-no-real-time-wait:src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts
@@ -190,7 +187,7 @@
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-crash-guard.live-shell.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-shell-handoff-readiness.test.ts
 1 test-no-real-time-wait:src/main/runtime/workspaces/removal/owned-session-teardown-policy.test.ts
-3 test-no-real-time-wait:src/main/runtime/workspaces/removal/worktree-teardown-unstopped-pty.test.ts
+1 test-no-real-time-wait:src/main/runtime/workspaces/removal/worktree-teardown-unstopped-pty.test.ts
 1 test-no-real-time-wait:src/main/skills/cloud/skill-cloud-direct-upload.test.ts
 3 test-no-real-time-wait:src/main/skills/install/skill-bundle-process-termination.integration.test.ts
 2 test-no-real-time-wait:src/main/skills/runtime-upload/skill-upload-process-restart.integration.test.ts
@@ -226,8 +223,8 @@
 2 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-auth-refusal.test.ts
 2 test-no-real-time-wait:src/shared/startup-command-staging.node-pty.test.ts
 4 test-no-real-time-wait:src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts
-1 test-no-real-time-wait:src/wsl-guest/agent-hook-canonical-status.test.ts
-5 test-no-real-time-wait:src/wsl-guest/agent-hook-server.test.ts
+1 test-no-real-time-wait:src/wsl-guest/agent-hooks/status/agent-hook-canonical-status.test.ts
+5 test-no-real-time-wait:src/wsl-guest/agent-hooks/server/agent-hook-server.test.ts
 1 test-no-real-time-wait:tests/e2e/accumulated-workspace-status-fixture.ts
 1 test-no-real-time-wait:tests/e2e/agent-session-live-force-exit-resume.spec.ts
 3 test-no-real-time-wait:tests/e2e/agent-session-log-tail-stability.spec.ts
@@ -427,7 +424,7 @@
 1 test-no-wall-clock:src/main/git/command-runner/hosted-cli/runner-gh-account-binding.test.ts
 1 test-no-wall-clock:src/main/git/refs/maintenance/pack-refs-lock-ownership.test.ts
 2 test-no-wall-clock:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
-1 test-no-wall-clock:src/main/git/source-control/blob-absence-real-git.test.ts
+1 test-no-wall-clock:src/main/git/source-control/diffs/blob-absence-real-git.test.ts
 2 test-no-wall-clock:src/main/git/worktrees/catalog/worktree-created-description-real-git.test.ts
 3 test-no-wall-clock:src/main/github/pull-requests/refresh/pr-refresh-coordinator-active-visible-priority.test.ts
 8 test-no-wall-clock:src/main/github/pull-requests/refresh/pr-refresh-coordinator-alias-coalescing.test.ts
@@ -463,7 +460,6 @@
 1 test-no-wall-clock:src/main/persistence/tracking-repos/worktree-metadata-normalization.test.ts
 2 test-no-wall-clock:src/main/provider-process/provider-group-orphan-guard.integration.test.ts
 4 test-no-wall-clock:src/main/provider-process/provider-process-supervisor.integration.test.ts
-2 test-no-wall-clock:src/main/providers/startup-line-typed-length.live-shell.test.ts
 2 test-no-wall-clock:src/main/pty/history/terminal-history-fish-session.node-pty.test.ts
 1 test-no-wall-clock:src/main/pty/history/terminal-history-gc-fs-call-count.test.ts
 2 test-no-wall-clock:src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts
@@ -483,9 +479,8 @@
 1 test-no-wall-clock:src/main/runtime/rpc/methods/agent-launch/agent-launch-prestart-failure.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/methods/agent-launch/agent-launch-replay.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/federation/federation-output.test.ts
-2 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/fleet-status-observed-identity.test.ts
-1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/worker-interactive-wait.test.ts
-1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/worker-output.test.ts
+2 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/observation/fleet-status-observed-identity.test.ts
+1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/output/worker-output.test.ts
 2 test-no-wall-clock:src/main/runtime/rpc/server/remote-runtime-request-connection.integration.test.ts
 2 test-no-wall-clock:src/main/runtime/rpc/server/runtime-rpc-pairing-mode-persistence.test.ts
 6 test-no-wall-clock:src/main/runtime/rpc/server/runtime-rpc-relay-pairing.test.ts
@@ -546,10 +541,9 @@
 2 test-no-wall-clock:src/shared/startup-command-staging.node-pty.test.ts
 1 test-no-wall-clock:src/shared/startup-command-staging.test.ts
 2 test-no-wall-clock:src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts
-10 test-no-wall-clock:src/wsl-guest/agent-hook-integration.test.ts
-1 test-no-wall-clock:src/wsl-guest/agent-hook-opencode-tui-identity.test.ts
-1 test-no-wall-clock:src/wsl-guest/agent-hook-server.test.ts
-1 test-no-wall-clock:src/wsl-guest/relay-idle-process-owner.test.ts
+10 test-no-wall-clock:src/wsl-guest/agent-hooks/publication/agent-hook-integration.test.ts
+1 test-no-wall-clock:src/wsl-guest/agent-hooks/server/agent-hook-server.test.ts
+1 test-no-wall-clock:src/wsl-guest/agent-hooks/presence/relay-idle-process-owner.test.ts
 1 test-no-wall-clock:tests/e2e/cross-version-wire/cross-version-web-device-key.unit.test.ts
 2 test-no-wall-clock:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
@@ -610,9 +604,6 @@
 1 test-timeout-needs-reason:src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-shutdown.integration.test.ts
 1 test-timeout-needs-reason:src/main/orcad/native-runtime/orcad-windows-conpty-breakaway.integration.test.ts
 1 test-timeout-needs-reason:src/main/persistence/applying-settings/persistence-source-control-ai-migration.test.ts
-2 test-timeout-needs-reason:src/main/providers/agent-foreground-process-git-bash.win32.test.ts
-1 test-timeout-needs-reason:src/main/providers/local-pty/local-pty-child-process-verdict.test.ts
-2 test-timeout-needs-reason:src/main/providers/startup-line-typed-length.live-shell.test.ts
 5 test-timeout-needs-reason:src/main/pty/process-retirement/node-pty-master-fd-retirement.test.ts
 1 test-timeout-needs-reason:src/main/runtime/mobile-cloud-relay/testing/mobile-relay-e2ee.integration.test.ts
 1 test-timeout-needs-reason:src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts

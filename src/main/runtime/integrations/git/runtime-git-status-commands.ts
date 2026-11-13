@@ -19,7 +19,7 @@ import type {
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches
 } from '../../../../shared/runtime-worktree-contracts'
-import type { GitProviderStatusOptions } from '../../../providers/git-provider-status-options'
+import type { GitProviderStatusOptions } from '../../../providers/git/status-options'
 import {
   localGitOptionsForTarget,
   requireLocalRuntimeGitRoute,

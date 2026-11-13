@@ -44,7 +44,8 @@ import { listWorktreesStrict } from './worktree-listing'
 import { readRepoCommonDirFromGit, readRepoLocation } from './worktree-list-reader'
 import {
   _resetCanonicalRepoKeyCacheForTests,
-  getCanonicalRepoKey
+  getCanonicalRepoKey,
+  peekGitCommonDir
 } from '../../repositories/canonical-repo-key'
 
 const REPO_ID = 'repo-1'
@@ -134,9 +135,15 @@ describe('listing a UNC drive-folder repo through WSL Git', () => {
     await expect(getCanonicalRepoKey(cwd, { wslDistro: 'Ubuntu' })).resolves.toBe(
       String.raw`wsl:Ubuntu::C:\src\app\.git`
     )
+    expect(peekGitCommonDir(cwd, { wslDistro: 'Ubuntu' })).toBeUndefined()
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '/qamnt/c/src/app/.git\n', stderr: '' })
     await expect(
       getCanonicalRepoKey(String.raw`C:\src\app\linked`, { wslDistro: 'Ubuntu' })
     ).resolves.toBe(String.raw`wsl:Ubuntu::C:\src\app\.git`)
+    const unc = String.raw`\\wsl.localhost\Ubuntu\qamnt\c\src\app`
+    await expect(getCanonicalRepoKey(unc, { wslDistro: 'Ubuntu' })).resolves.toBe(
+      String.raw`wsl:Ubuntu::\\wsl.localhost\Ubuntu\qamnt\c\src\app\.git`
+    )
+    expect(peekGitCommonDir(unc, { wslDistro: 'Ubuntu' })).toBe('/qamnt/c/src/app/.git')
   })
 })

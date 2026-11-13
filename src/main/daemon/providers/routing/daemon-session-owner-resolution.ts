@@ -6,12 +6,9 @@ import {
   type OwnerInventory,
   type ProviderInventory
 } from './daemon-session-owner-inventory'
-import type {
-  IPtyProvider,
-  PtyProcessInfo,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
 import { spawnDaemonAttachOnly } from './daemon-session-owner-attach'
 import { probeDaemonSessionOwner } from './daemon-session-owner-liveness'

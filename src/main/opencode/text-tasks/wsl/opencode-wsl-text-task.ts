@@ -16,9 +16,9 @@ import {
 import { isWindowsDrivePath } from '../../../wsl/filesystem/wsl-drive-paths'
 import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { translateArgsForWsl } from '../../../git/command-runner/host-routing/wsl-path-translation'
-import { spawnSourceControlAgent } from '../../../text-generation/source-control-agent-launch'
-import { killSourceControlAgentProcess } from '../../../text-generation/source-control-agent-termination'
-import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../../text-generation/source-control-generation-limits'
+import { spawnSourceControlAgent } from '../../../text-generation/execution/source-control-agent-launch'
+import { killSourceControlAgentProcess } from '../../../text-generation/execution/source-control-agent-termination'
+import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../../text-generation/execution/source-control-generation-limits'
 import { waitForProcessExitUntil } from '../../../provider-process/provider-process-exit-deadline'
 import type {
   TextGenerationOperation,

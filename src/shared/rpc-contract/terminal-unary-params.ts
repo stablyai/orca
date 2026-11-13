@@ -117,6 +117,11 @@ export const TerminalResolvePane = z.object({
   worktreeId: OptionalString
 })
 
+export const TerminalAgentId = z.object({
+  paneKey: requiredString('Missing pane key'),
+  worktreeId: requiredString('Missing worktree ID')
+})
+
 export const TerminalRecoverPane = z.object({
   paneKey: requiredString('Missing pane key'),
   worktreeId: requiredString('Missing worktree ID'),

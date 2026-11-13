@@ -28,6 +28,13 @@ import {
   quoteWslDrivePathForShell,
   wslAutomountRootShellSetup
 } from '../../../wsl/filesystem/wsl-drive-paths'
+import { OFFLINE_GIT_ENV } from '../git-environment/git-process-env'
+
+/** Git settings direct WSL reads pass on the command line, so they need no login shell to reach the distro. */
+export const WSL_DIRECT_GIT_FORWARDED_ENV: readonly string[] = [
+  'GIT_OPTIONAL_LOCKS',
+  ...Object.keys(OFFLINE_GIT_ENV)
+]
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
@@ -171,7 +178,6 @@ export function resolveCommand(
   const shellCmd = `${coldDrivePaths && command !== 'git' ? wslAutomountRootShellSetup(options.cwdFailureExitCode) : ''}${enterCwd}${invocation}`
 
   if (command === 'git' && options.wslGitReadEnvironment && !coldDrivePaths) {
-    const optionalLocks = options.env?.GIT_OPTIONAL_LOCKS
     return withWslProcessGroupTermination(
       {
         binary: 'wsl.exe',
@@ -186,7 +192,9 @@ export function resolveCommand(
           ...(options.env?.GIT_EDITOR !== undefined
             ? [`GIT_EDITOR=${options.env.GIT_EDITOR}`]
             : []),
-          ...(optionalLocks !== undefined ? [`GIT_OPTIONAL_LOCKS=${optionalLocks}`] : []),
+          ...WSL_DIRECT_GIT_FORWARDED_ENV.flatMap((key) =>
+            options.env?.[key] !== undefined ? [`${key}=${options.env[key]}`] : []
+          ),
           options.wslGitReadEnvironment.gitPath,
           ...(linuxCwd ? ['-C', linuxCwd] : []),
           ...translatedArgs

@@ -179,6 +179,7 @@
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
+  --shadow-notice: var(--notice-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -550,6 +551,52 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+/* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
+   App themes replace the surface, secondary and muted colors with readable hex (notice-surface-tokens.ts). */
+:root {
+  --notice-muted: var(--muted);
+  --notice-muted-foreground: var(--muted-foreground);
+  --notice-secondary-edge: transparent;
+  --notice-surface: var(--popover);
+  --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
+  --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+}
+
+.dark {
+  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --notice-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
+  --notice-shadow:
+    0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
+   and every remapped foreground keeps its surface (outline buttons paint text-foreground on bg-background). */
+[data-sonner-toaster],
+.notification-card-stack {
+  --popover: var(--notice-surface);
+  --card: var(--notice-surface);
+  --background: var(--notice-surface);
+  --foreground: var(--popover-foreground);
+  --card-foreground: var(--popover-foreground);
+  --muted: var(--notice-muted);
+  --muted-foreground: var(--notice-muted-foreground);
+  --secondary: var(--notice-secondary);
+  --secondary-foreground: var(--popover-foreground);
+}
+
+/* Why inset outline: an edge for themes that leave secondary buttons unfilled, without moving layout. */
+:is([data-sonner-toaster], .notification-card-stack)
+  :is(
+    [data-slot='button'][data-variant='secondary'],
+    [data-sonner-toast] [data-button][data-cancel]
+  ) {
+  outline: 1px solid var(--notice-secondary-edge);
+  outline-offset: -1px;
+}
+
 [data-sonner-toaster] {
   font-family: var(--font-sans);
   /* Why: above the floating workspace (z-45 panel, z-46 launcher), which parks in the toasts' corner. */
@@ -572,7 +619,7 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: var(--shadow-floating);
+  box-shadow: var(--notice-shadow);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -657,28 +704,21 @@ body[data-modal-overlay-open]
   pointer-events: auto;
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
   /* Override Sonner’s dark defaults so the close icon contrasts in both themes. */
   color: var(--popover-foreground);
   background: var(--popover);
-  border-color: rgb(0 0 0 / 0.14);
+  border-color: var(--notice-border);
 }
 
-[data-sonner-toaster][data-sonner-theme='dark']
+[data-sonner-toaster][data-sonner-theme]
   [data-sonner-toast][data-styled='true']
-  [data-close-button] {
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  [data-close-button]:hover {
   color: var(--accent-foreground);
   background: var(--accent);
+  border-color: var(--notice-border);
 }
 
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */
@@ -2169,6 +2209,38 @@ html.native-shell .app-layout {
 
   100% {
     opacity: 0;
+  }
+}
+
+/* Search and deep-link target: a tint out to the enclosing card's edges that fades.
+   An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
+   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
+.settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 100vmax var(--settings-target-tint),
+    calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-target-highlight {
+    animation: settings-target-highlight-fade 3s ease-out forwards;
+  }
+}
+
+@keyframes settings-target-highlight-fade {
+  60% {
+    box-shadow:
+      inset 0 0 0 100vmax var(--settings-target-tint),
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 100vmax transparent,
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
+      var(--settings-target-bleed-right, 0px) 0 0 transparent;
   }
 }
 

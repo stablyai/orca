@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { detectConflictOperation } from '../../source-control/git-conflict-operation'
+import { detectConflictOperation } from '../../source-control/mutations/git-conflict-operation'
 import type {
   GitCommitAction,
   GitCommitActionResult

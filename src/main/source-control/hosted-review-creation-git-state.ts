@@ -12,9 +12,9 @@ import { gitOptionalLocksDisabledEnv } from '../git/command-runner/git-environme
 import {
   parsePorcelainV1Records,
   type PorcelainV1Record
-} from '../git/source-control/porcelain-v1-records'
+} from '../git/source-control/status/porcelain-v1-records'
 import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
-import { getUpstreamStatus } from '../git/source-control/upstream'
+import { getUpstreamStatus } from '../git/source-control/upstream/upstream'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import type { ExecutionHostId } from '../../shared/execution-host'

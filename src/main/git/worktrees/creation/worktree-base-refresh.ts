@@ -117,9 +117,11 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
     listWorktrees: async (repoPath) => {
-      const result = await gitExecFileAsync(
-        ['worktree', 'list', '--porcelain'],
-        execOptions(repoPath)
+      const result = await withRepositoryGitCause(
+        repoPath,
+        options,
+        { family: 'catalog', reason: 'creation-base-refresh', cache: 'uncached' },
+        () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
       )
       const toHostPath = await gitResultPathTranslator(result, repoPath, options)
       return parseWorktreeList(result.stdout).map((row) => ({ ...row, path: toHostPath(row.path) }))
@@ -136,3 +138,4 @@ function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | unde
     })
   ]).finally(() => clearTimeout(timer))
 }
+import { withRepositoryGitCause } from '../../repository-git-cause'
