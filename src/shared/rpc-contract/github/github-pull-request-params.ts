@@ -82,3 +82,43 @@ export const ReviewThread = RepoSelector.extend({
   threadId: requiredString('Missing thread ID'),
   resolve: z.boolean()
 })
+
+const PRDetailRecoveryIdentityParams = z.object({
+  sourceEpoch: requiredString('Missing source epoch'),
+  repoId: requiredString('Missing repo id'),
+  repoPath: z.string(),
+  worktreeId: requiredString('Missing worktree id'),
+  branch: requiredString('Missing branch'),
+  currentHeadOid: z.string().nullable(),
+  executionHostId: z.string().nullable(),
+  provider: z.literal('github'),
+  linkedPRNumber: z.number().int().positive().nullable(),
+  fallbackPRNumber: z.number().int().positive().nullable(),
+  fallbackPRSource: z.enum(['explicit', 'pr-cache', 'hosted-review']).nullable(),
+  selectionRevision: z.string()
+})
+
+export const PRDetailRecoveryStart = z.object({
+  clientEpoch: z.object({
+    // Bounded before the host allocates anything for it.
+    scope: z.string().min(1, 'Missing epoch scope').max(128),
+    counter: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+  }),
+  identity: PRDetailRecoveryIdentityParams,
+  cacheKey: z.string()
+})
+
+export const PRDetailRecoveryWait = z.object({
+  ticketId: requiredString('Missing ticket id'),
+  afterRevision: z.number().int().nonnegative()
+})
+
+export const PRDetailRecoveryCommit = z.object({
+  ticketId: requiredString('Missing ticket id'),
+  prepareToken: requiredString('Missing prepare token'),
+  publicationGrantId: requiredString('Missing publication grant')
+})
+
+export const PRDetailRecoveryCancel = z.object({
+  ticketId: requiredString('Missing ticket id')
+})

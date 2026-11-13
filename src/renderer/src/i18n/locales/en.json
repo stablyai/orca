@@ -14381,7 +14381,6 @@
             "495b2f8c4b": "Started the agent, but could not resolve or reply on the selected comments.",
             "review": {
               "auto_retry": "Orca will retry at {{time}}.",
-              "open_review": "Open Review",
               "retry": "Retry"
             },
             "sync": {
@@ -15015,10 +15014,6 @@
                   "network": "Orca also could not check {{reviewLabel}} status because this environment could not reach {{provider}}.",
                   "untyped": "Orca also could not confirm whether this branch already has a {{reviewLabel}}."
                 },
-                "positive": {
-                  "title": "{{reviewLabelCap}} details unavailable",
-                  "body": "Orca has saved {{reviewLabel}} information for this branch but could not confirm its current status."
-                },
                 "no_review": {
                   "title": "No {{reviewLabel}} found",
                   "body": "Create a {{reviewLabel}} to start checks and review."
@@ -15112,10 +15107,6 @@
                 "needs_push": {
                   "title": "Branch has unpushed commits",
                   "body": "Push the latest commits before creating a {{reviewLabel}}."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} already exists",
-                  "body": "Orca found an existing {{reviewLabel}} for this branch."
                 },
                 "detached": {
                   "title": "No current branch",
@@ -22938,6 +22929,25 @@
       "title": "Pull request unlinked",
       "description": "PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.",
       "relink": "Link PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "Couldn't load details",
+        "queued": "Waiting to load details",
+        "rateGate": "{{provider}} limit reached. Loads at {{time}}.",
+        "loading": "Loading details…",
+        "timeout": "{{provider}} didn't respond",
+        "unusable": "Details can't be shown here",
+        "notLoaded": "Details not loaded",
+        "retryGate": "{{provider}} limit reached. Retry at {{time}}."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} found",
+      "open": "Open {{shortLabel}}",
+      "openAria": "Open {{shortLabel}} #{{number}} on {{provider}}",
+      "openAriaNoNumber": "Open {{shortLabel}} on {{provider}}",
+      "pushToUpdate": "Push to update {{shortLabel}} #{{number}}.",
+      "pushToUpdateNoNumber": "Push to update this {{shortLabel}}."
     }
   },
   "sourceControl": {

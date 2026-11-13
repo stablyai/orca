@@ -25,6 +25,13 @@ import type {
 } from '../../../shared/github/pull-requests/pull-request-types'
 import type { GetRateLimitResult } from '../../../shared/github/api/rate-limit-types'
 import type { GitHubRepoSelectorArgs } from './github-work-item-api'
+import type {
+  PRDetailRecoveryCancelArgs,
+  PRDetailRecoveryCommitArgs,
+  PRDetailRecoverySnapshot,
+  PRDetailRecoveryStartArgs,
+  PRDetailRecoveryWaitArgs
+} from '../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
 
 export type GithubPullRequestApi = {
   viewer: () => Promise<GitHubViewer | null>
@@ -63,6 +70,17 @@ export type GithubPullRequestApi = {
     generation: number
   }) => Promise<boolean>
   onPRRefreshEvent: (callback: (event: GitHubPRRefreshEvent) => void) => () => void
+  /** Absent on web and older preloads: their panels keep manual-only detail recovery. */
+  startPRDetailRecovery?: (args: PRDetailRecoveryStartArgs) => Promise<PRDetailRecoverySnapshot>
+  waitPRDetailRecovery?: (
+    args: PRDetailRecoveryWaitArgs
+  ) => Promise<PRDetailRecoverySnapshot | null>
+  commitPRDetailRecovery?: (
+    args: PRDetailRecoveryCommitArgs
+  ) => Promise<PRDetailRecoverySnapshot | null>
+  cancelPRDetailRecovery?: (
+    args: PRDetailRecoveryCancelArgs
+  ) => Promise<PRDetailRecoverySnapshot | null>
   prFileContents: (
     args: GitHubRepoSelectorArgs & {
       prNumber: number

@@ -12841,7 +12841,6 @@
             "495b2f8c4b": "Agent を開始しましたが、選択したコメントの解決または返信ができませんでした。",
             "review": {
               "auto_retry": "Orca は {{time}} に再試行します。",
-              "open_review": "レビューを開く",
               "retry": "再試行"
             },
             "sync": {
@@ -13454,10 +13453,6 @@
                   "network": "Orca はこの環境から {{provider}} に接続できないため、{{reviewLabel}} ステータスを確認できませんでした。",
                   "untyped": "Orca はこのブランチに {{reviewLabel}} が既に存在するかどうかを確認できませんでした。"
                 },
-                "positive": {
-                  "title": "{{reviewLabelCap}} の詳細が利用できません",
-                  "body": "Orca はこのブランチの {{reviewLabel}} 情報を保存しましたが、現在のステータスを確認できませんでした。"
-                },
                 "no_review": {
                   "title": "{{reviewLabel}} が見つかりません",
                   "body": "{{reviewLabel}} を作成して、チェックとレビューを開始します。"
@@ -13551,10 +13546,6 @@
                 "needs_push": {
                   "title": "ブランチに未プッシュのコミットがあります",
                   "body": "{{reviewLabel}} を作成する前に、最新のコミットをプッシュしてください。"
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} は既に存在します",
-                  "body": "Orca はこのブランチの既存の {{reviewLabel}} を見つけました。"
                 },
                 "detached": {
                   "title": "現在のブランチがありません",
@@ -20916,6 +20907,25 @@
       "title": "PR のリンクが解除されました",
       "description": "このワークスペースでは PR #{{number}} が非表示になっています。再度リンクしてチェックを復元し、詳細を確認します。",
       "relink": "リンク PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "詳細を読み込めませんでした",
+        "queued": "詳細の読み込みを待機中",
+        "rateGate": "{{provider}} の制限に達しました。{{time}} に読み込みます。",
+        "loading": "詳細を読み込み中…",
+        "timeout": "{{provider}} から応答がありません",
+        "unusable": "ここでは詳細を表示できません",
+        "notLoaded": "詳細は未読み込みです",
+        "retryGate": "{{provider}} の制限に達しました。{{time}} に再試行してください。"
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} が見つかりました",
+      "open": "{{shortLabel}} を開く",
+      "openAria": "{{provider}} で {{shortLabel}} #{{number}} を開く",
+      "openAriaNoNumber": "{{provider}} で {{shortLabel}} を開く",
+      "pushToUpdate": "プッシュして {{shortLabel}} #{{number}} を更新します。",
+      "pushToUpdateNoNumber": "プッシュしてこの {{shortLabel}} を更新します。"
     }
   },
   "sourceControl": {

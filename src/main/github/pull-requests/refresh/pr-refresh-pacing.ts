@@ -98,9 +98,17 @@ export class PRRefreshPacing {
 
   noteActiveStart(entry: PRRefreshQueueEntry): void {
     const now = Date.now()
+    // Scopes are ordered by their last start, so cleanup stops at the first live burst.
+    for (const [expired, starts] of this.activeStartsByScope) {
+      if (now - (starts.at(-1) ?? 0) < ACTIVE_BURST_WINDOW_MS) {
+        break
+      }
+      this.activeStartsByScope.delete(expired)
+    }
     const scope = this.activeBurstScope(entry)
     const activeStarts = this.pruneActiveStarts(scope, now)
     activeStarts.push(now)
+    this.activeStartsByScope.delete(scope)
     this.activeStartsByScope.set(scope, activeStarts)
   }
 
@@ -117,7 +125,7 @@ export class PRRefreshPacing {
     const runtimeScope = entry.candidate.connectionId
       ? `ssh:${entry.candidate.connectionId}`
       : `local:${entry.candidate.localGitOptions?.wslDistro ?? 'host'}`
-    return `${entry.windowId ?? 'global'}::${runtimeScope}`
+    return `${entry.pacingScope ?? entry.windowId ?? 'global'}::${runtimeScope}`
   }
 
   private pruneActiveStarts(scope: string, now: number): number[] {

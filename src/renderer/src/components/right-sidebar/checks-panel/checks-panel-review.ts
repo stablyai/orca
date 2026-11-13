@@ -16,7 +16,8 @@ export type ChecksPanelReviewSelectionInput = {
   linkedGiteaPR: number | null
 }
 
-export function selectChecksPanelReview({
+/** The GitHub PR the panel may render, request details for and open; null when another rule wins. */
+export function selectUsableGitHubPR({
   hostedReview,
   pr,
   linkedPR,
@@ -25,24 +26,33 @@ export function selectChecksPanelReview({
   linkedBitbucketPR,
   linkedAzureDevOpsPR,
   linkedGiteaPR
-}: ChecksPanelReviewSelectionInput): ChecksPanelReview | null {
-  const gitLabHostedReview = hostedReview?.provider === 'gitlab' ? hostedReview : null
-  if (gitLabHostedReview) {
-    return gitLabHostedReview
+}: ChecksPanelReviewSelectionInput): PRInfo | null {
+  if (hostedReview?.provider === 'gitlab') {
+    return null
   }
   const hasNonGitHubLinkedReview =
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||
     linkedAzureDevOpsPR !== null ||
     linkedGiteaPR !== null
-  if (hasNonGitHubLinkedReview) {
+  if (hasNonGitHubLinkedReview || !pr) {
     return null
   }
-  if (pr && linkedPR !== null && pr.number !== linkedPR) {
+  if (linkedPR !== null && pr.number !== linkedPR) {
     return null
   }
-  if (pr && isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, pr.number)) {
+  if (isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, pr.number)) {
     return null
   }
+  return pr
+}
+
+export function selectChecksPanelReview(
+  input: ChecksPanelReviewSelectionInput
+): ChecksPanelReview | null {
+  if (input.hostedReview?.provider === 'gitlab') {
+    return input.hostedReview
+  }
+  const pr = selectUsableGitHubPR(input)
   return pr ? gitHubPRToChecksPanelReview(pr) : null
 }

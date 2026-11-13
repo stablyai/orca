@@ -91,26 +91,6 @@ export function safetyBlockerState(
   t: Translate = translate
 ): ChecksPanelReviewState {
   const { reviewLabel } = input
-  if (reason === 'existing_review') {
-    // Same family as positive evidence — offer trusted Open Review, never Create.
-    return {
-      renderReview: false,
-      title: t(
-        'auto.components.right.sidebar.checks.panel.review.existing.title',
-        '{{reviewLabelCap}} already exists',
-        { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
-      ),
-      description: t(
-        'auto.components.right.sidebar.checks.panel.review.existing.body',
-        'Orca found an existing {{reviewLabel}} for this branch.',
-        { reviewLabel }
-      ),
-      composerMode: 'hidden',
-      workflowAction: null,
-      recovery: input.openReviewUrl ? ['open_review'] : [],
-      openReviewUrl: input.openReviewUrl
-    }
-  }
   const copy = SAFETY_COPY[reason as keyof typeof SAFETY_COPY] ?? SAFETY_COPY.unsupported_provider
   const vars = { reviewLabel, reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
   return {
@@ -179,6 +159,27 @@ export function branchBlockerState(
   ]
   const openReviewUrl = canOpenReview ? input.openReviewUrl : undefined
   const vars = { reviewLabel, provider: providerName }
+  // A known review is updated by pushing, not created; name it instead of the create guidance.
+  const positiveBody =
+    input.reviewLookup === 'positive_unresolved' &&
+    (reason === 'needs_push' || reason === 'no_upstream')
+      ? input.reviewNumber != null
+        ? t(
+            'checksPanel.positiveReview.pushToUpdate',
+            'Push to update {{shortLabel}} #{{number}}.',
+            {
+              shortLabel: input.reviewShortLabel,
+              number: input.reviewNumber
+            }
+          )
+        : t(
+            'checksPanel.positiveReview.pushToUpdateNoNumber',
+            'Push to update this {{shortLabel}}.',
+            {
+              shortLabel: input.reviewShortLabel
+            }
+          )
+      : null
 
   if (reason === 'needs_push') {
     const blocked =
@@ -191,12 +192,15 @@ export function branchBlockerState(
         'auto.components.right.sidebar.checks.panel.review.needs_push.title',
         'Branch has unpushed commits'
       ),
-      description: t(
-        'auto.components.right.sidebar.checks.panel.review.needs_push.body',
-        'Push the latest commits before creating a {{reviewLabel}}.',
-        { reviewLabel }
-      ),
-      detail,
+      description:
+        positiveBody ??
+        t(
+          'auto.components.right.sidebar.checks.panel.review.needs_push.body',
+          'Push the latest commits before creating a {{reviewLabel}}.',
+          { reviewLabel }
+        ),
+      // The push-to-update body already names the review; keep Retry without repeating it.
+      detail: positiveBody ? undefined : detail,
       composerMode: blocked ? 'hidden' : 'needs_push_open',
       workflowAction: blocked ? null : 'push_and_create',
       recovery: lookupRecovery,
@@ -209,8 +213,8 @@ export function branchBlockerState(
   return {
     renderReview: false,
     title: t(copy.title.key, copy.title.fallback, vars),
-    description: t(copy.body.key, copy.body.fallback, vars),
-    detail,
+    description: positiveBody ?? t(copy.body.key, copy.body.fallback, vars),
+    detail: positiveBody ? undefined : detail,
     composerMode: 'hidden',
     workflowAction: copy.workflow,
     recovery: lookupRecovery,

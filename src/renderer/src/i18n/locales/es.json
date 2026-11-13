@@ -13143,7 +13143,6 @@
             "495b2f8c4b": "Agente iniciado, pero no se pudieron resolver ni responder los comentarios seleccionados.",
             "review": {
               "auto_retry": "Orca reintentará a las {{time}}.",
-              "open_review": "Abrir revisión",
               "retry": "Reintentar"
             },
             "sync": {
@@ -13791,10 +13790,6 @@
                   "network": "Orca tampoco pudo verificar el estado de {{reviewLabel}} porque este entorno no pudo conectar con {{provider}}.",
                   "untyped": "Orca tampoco pudo confirmar si esta rama ya tiene una solicitud de revisión ({{reviewLabel}})."
                 },
-                "positive": {
-                  "title": "Detalles de {{reviewLabelCap}} no disponibles",
-                  "body": "Orca ha guardado información de {{reviewLabel}} para esta rama pero no pudo confirmar su estado actual."
-                },
                 "no_review": {
                   "title": "No se encontró ninguna solicitud de revisión ({{reviewLabel}})",
                   "body": "Crea una solicitud de revisión ({{reviewLabel}}) para iniciar las verificaciones y la revisión."
@@ -13888,10 +13883,6 @@
                 "needs_push": {
                   "title": "La rama tiene commits sin enviar",
                   "body": "Envía los últimos commits antes de crear una solicitud de revisión ({{reviewLabel}})."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} ya existe",
-                  "body": "Orca encontró una solicitud de revisión existente ({{reviewLabel}}) para esta rama."
                 },
                 "detached": {
                   "title": "Sin rama actual",
@@ -21991,6 +21982,25 @@
       "title": "Pull request desvinculada",
       "description": "La PR #{{number}} está oculta para este espacio de trabajo. Vuelve a vincularla para restaurar las verificaciones y los detalles de revisión.",
       "relink": "Vincular PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "No se pudieron cargar los detalles",
+        "queued": "Esperando para cargar los detalles",
+        "rateGate": "Se alcanzó el límite de {{provider}}. Se cargará a las {{time}}.",
+        "loading": "Cargando detalles…",
+        "timeout": "{{provider}} no respondió",
+        "unusable": "Los detalles no se pueden mostrar aquí",
+        "notLoaded": "Detalles no cargados",
+        "retryGate": "Se alcanzó el límite de {{provider}}. Reintenta a las {{time}}."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} encontrada",
+      "open": "Abrir {{shortLabel}}",
+      "openAria": "Abrir {{shortLabel}} #{{number}} en {{provider}}",
+      "openAriaNoNumber": "Abrir {{shortLabel}} en {{provider}}",
+      "pushToUpdate": "Haz push para actualizar {{shortLabel}} #{{number}}.",
+      "pushToUpdateNoNumber": "Haz push para actualizar esta {{shortLabel}}."
     }
   },
   "sourceControl": {

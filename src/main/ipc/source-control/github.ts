@@ -6,6 +6,7 @@ import { registerGitHubIssueMutationHandlers } from './github-issue-mutation-han
 import { registerGitHubPRMutationHandlers } from './github-pr-mutation-handlers'
 import { registerGitHubPRReadHandlers } from './github-pr-read-handlers'
 import { registerGitHubPRRefreshHandlers } from './github-pr-refresh-handlers'
+import { registerGitHubPRDetailRecoveryHandlers } from './github-pr-detail-recovery-handlers'
 import { registerGitHubPRReviewHandlers } from './github-pr-review-handlers'
 import { registerGitHubProjectViewHandlers } from './github-project-view-handlers'
 import { registerGitHubWorkItemHandlers } from './github-work-item-handlers'
@@ -16,6 +17,7 @@ export function registerGitHubHandlers(
   runtime: Pick<OrcaRuntimeService, 'notifyPullRequestChangedForRemoteClients'>
 ): void {
   registerGitHubPRRefreshHandlers(store, stats, runtime)
+  registerGitHubPRDetailRecoveryHandlers(store)
   registerGitHubWorkItemHandlers(store)
   registerGitHubPRReadHandlers(store)
   registerGitHubPRReviewHandlers(store)
