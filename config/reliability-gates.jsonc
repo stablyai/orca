@@ -8855,32 +8855,32 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/construction/orca-runtime.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/protocol-backpressure.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/dispatcher.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer-backpressure.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/transport/wire/protocol-backpressure.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/transport/publication/dispatcher.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer.test.ts src/wsl-guest/transport/writer/dispatcher-client-writer.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer-backpressure.test.ts src/wsl-guest/transport/writer/dispatcher-client-writer.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer-backpressure.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/wsl-relay/wsl-hook-relay-sentinel.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/runtime/construction/orca-runtime.test.ts",
-        "src/wsl-guest/protocol-backpressure.test.ts",
-        "src/wsl-guest/dispatcher.test.ts",
+        "src/wsl-guest/transport/wire/protocol-backpressure.test.ts",
+        "src/wsl-guest/transport/publication/dispatcher.test.ts",
         "src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts",
         "src/main/ssh/protocol/ssh-channel-multiplexer.test.ts",
         "src/main/ssh/protocol/ssh-channel-multiplexer-backpressure.test.ts",
-        "src/wsl-guest/dispatcher-client-writer.test.ts",
+        "src/wsl-guest/transport/writer/dispatcher-client-writer.test.ts",
         "src/main/agent-hooks/wsl-relay/wsl-hook-relay-sentinel.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/wsl-guest/dispatcher.test.ts",
+          "file": "src/wsl-guest/transport/publication/dispatcher.test.ts",
           "assertions": [
             "a saturated legacy primary remains required backpressure and is never detached as an additional subscriber"
           ]
         },
         {
-          "file": "src/wsl-guest/protocol-backpressure.test.ts",
+          "file": "src/wsl-guest/transport/wire/protocol-backpressure.test.ts",
           "assertions": [
             "relay decoder accepts one maximum frame plus 1 MiB partial input and rejects one extra byte",
             "a throwing continuation clears retained input, releases one pause epoch, and publishes one typed ownership error"
@@ -8903,7 +8903,7 @@
           ]
         },
         {
-          "file": "src/wsl-guest/dispatcher-client-writer.test.ts",
+          "file": "src/wsl-guest/transport/writer/dispatcher-client-writer.test.ts",
           "assertions": [
             "encoded producer frames stay below high-water-minus-reserve capacity",
             "one fixed-size filesystem compatibility frame is admitted only on an empty sink",
@@ -8925,7 +8925,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/protocol-backpressure.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 2.24,
-          "summary": "Sixteen deterministic SSH relay/session/source/decoder files passed 192 tests, including exit-sealed private recovery, retained stale-transfer cancellation authority, exact private-frame proof watermarks, one retirement record across 10,000 same-PTY token rotations, stale-owner fallback, and scheduler rejection isolation; no live topology was exercised."
+          "summary": "Sixteen deterministic SSH relay/session/source/decoder files passed 192 tests, including exit-sealed private recovery, retained stale-transfer cancellation authority, exact private-frame proof watermarks, one retirement record across 10,000 same-PTY token rotations, stale-owner fallback, and scheduler rejection isolation; no live topology was exercised.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/transport/wire/protocol-backpressure.test.ts --reporter=dot"
         }
       ],
       "runtimeBudget": {
