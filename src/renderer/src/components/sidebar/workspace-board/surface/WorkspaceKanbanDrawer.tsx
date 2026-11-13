@@ -73,6 +73,10 @@ function WorkspaceKanbanDrawerContent({
   const setSyncTaskStatusFromWorkspaceBoard = useAppStore(
     (s) => s.setSyncTaskStatusFromWorkspaceBoard
   )
+  const syncWorkspaceStatusFromAgentTurns = useAppStore((s) => s.syncWorkspaceStatusFromAgentTurns)
+  const setSyncWorkspaceStatusFromAgentTurns = useAppStore(
+    (s) => s.setSyncWorkspaceStatusFromAgentTurns
+  )
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
   const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -269,6 +273,8 @@ function WorkspaceKanbanDrawerContent({
         workspaceStatuses: localWorkspaceStatuses,
         syncTaskStatusFromWorkspaceBoard,
         onSyncTaskStatusFromWorkspaceBoardChange: setSyncTaskStatusFromWorkspaceBoard,
+        syncWorkspaceStatusFromAgentTurns,
+        onSyncWorkspaceStatusFromAgentTurnsChange: setSyncWorkspaceStatusFromAgentTurns,
         onRenameStatus: handleRenameStatus,
         onChangeStatusColor: handleChangeStatusColor,
         onChangeStatusIcon: handleChangeStatusIcon,

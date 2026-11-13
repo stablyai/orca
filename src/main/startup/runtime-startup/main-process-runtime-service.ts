@@ -22,6 +22,7 @@ import { codexAiVaultSessionResumePreparation } from '../../codex/history/resume
 import { prepareCodexPinnedLaunchHome } from '../agent-accounts/codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { agentHookRuntimeDeps } from '../../agent-hooks/runtime/agent-hook-runtime-deps'
+import { subscribeWorkspaceStatusToAgentTurns } from '../../agent-hooks/agent-turn-workspace-status-subscription'
 import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import { resolveTuiAgentLaunchEnv } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
@@ -182,6 +183,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
+  subscribeWorkspaceStatusToAgentTurns(store, runtime)
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
   // Main records pane resume state from accepted status.

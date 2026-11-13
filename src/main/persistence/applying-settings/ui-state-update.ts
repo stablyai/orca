@@ -148,6 +148,10 @@ export function updatePersistedUI(
       sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
         ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
         : operations.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+    syncWorkspaceStatusFromAgentTurns:
+      sanitizedUpdates.syncWorkspaceStatusFromAgentTurns !== undefined
+        ? sanitizedUpdates.syncWorkspaceStatusFromAgentTurns === true
+        : operations.state.ui?.syncWorkspaceStatusFromAgentTurns === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(
       sanitizedUpdates.usagePercentageDisplay ?? operations.state.ui?.usagePercentageDisplay
     ),

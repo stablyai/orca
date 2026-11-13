@@ -244,6 +244,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       set({ syncTaskStatusFromWorkspaceBoard: enabled })
     },
 
+    syncWorkspaceStatusFromAgentTurns: false,
+    setSyncWorkspaceStatusFromAgentTurns: (enabled) => {
+      window.api.ui.set({ syncWorkspaceStatusFromAgentTurns: enabled }).catch(console.error)
+      set({ syncWorkspaceStatusFromAgentTurns: enabled })
+    },
+
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     toggleStatusBarItem: (item) =>
       set((s) => {

@@ -118,6 +118,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'workspaceBoardOpacity',
   'workspaceBoardColumnWidth',
   'syncTaskStatusFromWorkspaceBoard',
+  'syncWorkspaceStatusFromAgentTurns',
   'statusBarItems',
   'statusBarVisible',
   'usagePercentageDisplay',
