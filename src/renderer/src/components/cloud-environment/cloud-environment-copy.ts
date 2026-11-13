@@ -223,6 +223,11 @@ export function buildErrorCopy(error: string | null, t: Translate = translate): 
         'cloudEnvironment.error.recordFailedPlain',
         'Orca couldn’t record the installed environment.'
       )
+    case 'secret_in_image':
+      return t(
+        'cloudEnvironment.error.secretLeftOnDisk',
+        'The install script left a secret on disk, so the environment wasn’t saved. Remove it before the script ends, then save again.'
+      )
     case 'timeout':
       return t('cloudEnvironment.error.timeout', 'The build ran past its time limit.')
     case 'snapshot_failed':
