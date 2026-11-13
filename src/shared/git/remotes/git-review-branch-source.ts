@@ -85,7 +85,8 @@ export async function readGitReviewBranchSources(
       }
     }
   }
-  const normalizeRemote = (remote: string): string => remoteIdentities.get(remote) ?? remote
+  const normalizeRemote = (remote: string): string =>
+    remote === '.' ? remote : (remoteIdentities.get(remote) ?? remote)
   const expandedUrls = new Map<string, string[]>()
   const urlsFor = (remote: string): string[] => {
     const cached = expandedUrls.get(remote)
@@ -129,7 +130,8 @@ export async function readGitReviewBranchSources(
       }
       const branchName = destinations.values().next().value ?? branch
       let pushBranchName: string | null =
-        destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing')
+        localTracking ||
+        (destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing'))
           ? null
           : branchName
       const fetchRemote =
@@ -141,9 +143,9 @@ export async function readGitReviewBranchSources(
             : undefined)
       if (
         specs.length === 0 &&
-        (get('push.default') ?? 'simple') === 'simple' &&
-        !get(`branch.${branch}.merge`) &&
-        remote === fetchRemote &&
+        (!trackedRemote || !get(`branch.${branch}.merge`)) &&
+        (((get('push.default') ?? 'simple') === 'simple' && remote === fetchRemote) ||
+          get('push.default') === 'upstream') &&
         !/^(true|yes|on|1)$/i.test(get('push.autosetupremote') ?? '')
       ) {
         pushBranchName = null

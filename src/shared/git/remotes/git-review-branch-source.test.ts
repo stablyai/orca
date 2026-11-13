@@ -40,6 +40,7 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
     expect((await snapshot()).get('dot')).toEqual({
       remoteName: 'origin',
       branchName: 'dot',
+      pushBranchName: null,
       urls: ['https://gitlab.com/team/repo.git']
     })
     await git(['config', 'remote.origin.push', 'HEAD'])

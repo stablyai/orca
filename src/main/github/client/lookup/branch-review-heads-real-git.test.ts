@@ -133,6 +133,83 @@ const cases: PushCase[] = [
     pushSucceeds: true,
     noUpstream: true,
     remoteName: 'origin'
+  },
+  {
+    name: 'local tracking stays local in current mode',
+    config: [
+      ['branch.feature.remote', '.'],
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['push.default', 'current']
+    ],
+    destination: null,
+    pushSucceeds: true,
+    noUpstream: true
+  },
+  {
+    name: 'local tracking rejects a mismatched simple upstream',
+    config: [
+      ['branch.feature.remote', '.'],
+      ['branch.feature.merge', 'refs/heads/other'],
+      ['push.default', 'simple']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'merge ref without tracking remote is not a simple upstream',
+    config: [
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['push.default', 'simple']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'merge ref without tracking remote is not an upstream-mode upstream',
+    config: [
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['push.default', 'upstream']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'explicit fork publishing overrides local tracking',
+    config: [
+      ['branch.feature.remote', '.'],
+      ['branch.feature.merge', 'refs/heads/other'],
+      ['branch.feature.pushRemote', 'fork'],
+      ['push.default', 'simple']
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true
+  },
+  {
+    name: 'explicit fork publishing works with an orphan merge ref',
+    config: [
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['branch.feature.pushRemote', 'fork'],
+      ['push.default', 'simple']
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true
+  },
+  {
+    name: 'local tracking is not an origin fetch-URL alias',
+    config: [
+      ['remote.origin.url', '.'],
+      ['branch.feature.remote', '.'],
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['push.default', 'current']
+    ],
+    destination: null,
+    pushSucceeds: true,
+    noUpstream: true
   }
 ]
 it.for(cases)(
