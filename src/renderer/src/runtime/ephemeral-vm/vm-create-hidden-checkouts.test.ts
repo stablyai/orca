@@ -156,3 +156,68 @@ describe('Orca Cloud sandboxes', () => {
     expect(withoutHiddenVmWorktrees(rows, none)).toBe(rows)
   })
 })
+
+describe("a paired cloud host's base clone (EP-6)", () => {
+  const paired = 'runtime:paired-teammate'
+  const base = {
+    repoId: 'r',
+    path: '/vercel/sandbox/project',
+    isMainWorktree: true,
+    hostId: paired
+  }
+  const workspace = {
+    repoId: 'r',
+    path: '/home/vercel/ws/Hello-World/endpass-n44',
+    isMainWorktree: false,
+    hostId: paired
+  }
+  const local = { repoId: 'r', path: '/Users/me/repo', isMainWorktree: true, hostId: 'local' }
+  const localLinked = { repoId: 'r', path: '/Users/me/wt', isMainWorktree: false, hostId: 'local' }
+  const scope = withOrcaCloudHosts(readHiddenVmCheckouts(), {
+    primaryHostIds: new Set(),
+    pairedHostIds: new Set([paired]),
+    hiddenHostIds: new Set()
+  })
+
+  it('hides the base clone when the same host and repo lists a linked worktree', () => {
+    expect(withoutHiddenVmWorktrees([base, workspace], scope)).toEqual([workspace])
+    expect(withoutHiddenVmWorktreesByRepo({ r: [base, workspace] }, scope)).toEqual({
+      r: [workspace]
+    })
+  })
+
+  it('keeps a GitHub-only paired workspace, whose only row is its primary checkout', () => {
+    const rows = [base]
+    expect(withoutHiddenVmWorktrees(rows, scope)).toBe(rows)
+  })
+
+  it("leaves this computer's primary checkout alone, even beside a local linked worktree", () => {
+    const rows = [local, localLinked, base]
+    expect(withoutHiddenVmWorktrees(rows, scope)).toBe(rows)
+    expect(withoutHiddenVmWorktrees([local, localLinked, base, workspace], scope)).toEqual([
+      local,
+      localLinked,
+      workspace
+    ])
+  })
+
+  it('keeps the base clone when the linked worktree belongs to another repo on that host', () => {
+    const otherRepo = { ...workspace, repoId: 'other' }
+    expect(withoutHiddenVmWorktrees([base, otherRepo], scope)).toEqual([base, otherRepo])
+  })
+
+  it('applies to paired-server rows keyed by host-qualified identity', () => {
+    const strip = <T extends { hostId: string }>({ hostId: _hostId, ...row }: T) => row
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter reads only repoId, path, isMainWorktree and the keys.
+    const domains = {
+      ...EMPTY_SIDEBAR_FEED_DOMAINS,
+      pairedServerRows: new Map([
+        [composeWorktreeHostIdentity(paired, 'r::/vercel/sandbox/project'), strip(base)],
+        [composeWorktreeHostIdentity(paired, `r::${workspace.path}`), strip(workspace)]
+      ])
+    } as unknown as SidebarFeedDomains
+    expect([...withoutHiddenVmCheckouts(domains, scope).pairedServerRows.values()]).toEqual([
+      strip(workspace)
+    ])
+  })
+})

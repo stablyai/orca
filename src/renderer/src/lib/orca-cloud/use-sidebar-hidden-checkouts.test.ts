@@ -84,6 +84,8 @@ describe('a paired-from-birth cloud workspace (PAIRED-NO-ROW)', () => {
     const hosts = parseOrcaCloudHostScopeKey(selectOrcaCloudHostScopeKey(state))
     expect(hosts.hiddenHostIds.has('runtime:gh')).toBe(false)
     expect(hosts.primaryHostIds.has('runtime:gh')).toBe(false)
+    // EP-6: paired-scoped, so its base clone hides only beside a linked worktree.
+    expect(hosts.pairedHostIds.has('runtime:gh')).toBe(true)
     // The owned sandboxes are still scoped by team exactly as before.
     expect([...hosts.hiddenHostIds]).toEqual(['runtime:b', 'runtime:unfiled'])
     // Its project survives the sidebar's repo scoping.
@@ -115,6 +117,7 @@ describe('paired workspaces scoped by account (PAIRED-ACCOUNT-FILTER)', () => {
     const hosts = hostsFor('team-one', paired('org:team-one'))
     expect(hosts.hiddenHostIds.has('runtime:gh')).toBe(false)
     expect(hosts.primaryHostIds.has('runtime:gh')).toBe(false)
+    expect(hosts.pairedHostIds.has('runtime:gh')).toBe(true)
   })
 
   it("after a team switch, the other team's paired workspace is hidden like its owned rows", () => {

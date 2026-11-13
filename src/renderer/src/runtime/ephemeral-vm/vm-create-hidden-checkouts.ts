@@ -21,6 +21,8 @@ type CheckoutRow = {
 export type HiddenVmCheckouts = PendingVmCheckoutIndex & {
   /** Active-team Orca Cloud hosts: their primary checkout (the sandbox's clone) never lists. */
   readonly primaryHostIds?: ReadonlySet<string>
+  /** Paired Orca Cloud hosts: their primary checkout hides only beside a linked worktree of its repo. */
+  readonly pairedHostIds?: ReadonlySet<string>
   /** Orca Cloud hosts of another team, or of no team we can resolve: every row hides. */
   readonly hiddenHostIds?: ReadonlySet<string>
 }
@@ -33,28 +35,69 @@ export type HiddenVmCheckouts = PendingVmCheckoutIndex & {
  */
 export function withOrcaCloudHosts(
   checkouts: HiddenVmCheckouts,
-  hosts: { primaryHostIds: ReadonlySet<string>; hiddenHostIds: ReadonlySet<string> }
+  hosts: {
+    primaryHostIds: ReadonlySet<string>
+    pairedHostIds?: ReadonlySet<string>
+    hiddenHostIds: ReadonlySet<string>
+  }
 ): HiddenVmCheckouts {
-  return hosts.primaryHostIds.size === 0 && hosts.hiddenHostIds.size === 0
+  const pairedHostIds = hosts.pairedHostIds ?? new Set<string>()
+  return hosts.primaryHostIds.size === 0 &&
+    pairedHostIds.size === 0 &&
+    hosts.hiddenHostIds.size === 0
     ? checkouts
-    : { ...checkouts, primaryHostIds: hosts.primaryHostIds, hiddenHostIds: hosts.hiddenHostIds }
+    : {
+        ...checkouts,
+        primaryHostIds: hosts.primaryHostIds,
+        pairedHostIds,
+        hiddenHostIds: hosts.hiddenHostIds
+      }
+}
+
+function isHostScoped(checkouts: HiddenVmCheckouts): boolean {
+  return Boolean(
+    checkouts.primaryHostIds?.size || checkouts.pairedHostIds?.size || checkouts.hiddenHostIds?.size
+  )
 }
 
 function hidesNothing(checkouts: HiddenVmCheckouts): boolean {
-  return (
-    checkouts.keys.size === 0 && !checkouts.primaryHostIds?.size && !checkouts.hiddenHostIds?.size
-  )
+  return checkouts.keys.size === 0 && !isHostScoped(checkouts)
+}
+
+function hostRepoKey(hostId: string, repoId: string): string {
+  return `${hostId}\0${repoId}`
+}
+
+/** Paired host+repo pairs that list a linked worktree, whose primary (the base clone) then hides. */
+function pairedLinkedHostRepos(
+  checkouts: HiddenVmCheckouts,
+  rows: Iterable<{ row: CheckoutRow; hostId: string | undefined }>
+): ReadonlySet<string> {
+  const linked = new Set<string>()
+  if (!checkouts.pairedHostIds?.size) {
+    return linked
+  }
+  for (const { row, hostId } of rows) {
+    if (hostId && row.isMainWorktree !== true && checkouts.pairedHostIds.has(hostId)) {
+      linked.add(hostRepoKey(hostId, row.repoId))
+    }
+  }
+  return linked
 }
 
 function isHiddenCheckout(
   checkouts: HiddenVmCheckouts,
   row: CheckoutRow,
-  hostId: string | undefined = row.hostId
+  hostId: string | undefined = row.hostId,
+  pairedLinked: ReadonlySet<string> = new Set()
 ): boolean {
   if (hostId && checkouts.hiddenHostIds?.has(hostId)) {
     return true
   }
   if (row.isMainWorktree === true && hostId && checkouts.primaryHostIds?.has(hostId)) {
+    return true
+  }
+  if (row.isMainWorktree === true && hostId && pairedLinked.has(hostRepoKey(hostId, row.repoId))) {
     return true
   }
   return checkouts.keys.size > 0 && isPendingVmCheckout(checkouts, row)
@@ -186,7 +229,13 @@ export function withoutHiddenVmWorktrees<W extends CheckoutRow>(
   if (hidesNothing(checkouts)) {
     return worktrees
   }
-  const kept = worktrees.filter((worktree) => !isHiddenCheckout(checkouts, worktree))
+  const pairedLinked = pairedLinkedHostRepos(
+    checkouts,
+    worktrees.map((row) => ({ row, hostId: row.hostId }))
+  )
+  const kept = worktrees.filter(
+    (worktree) => !isHiddenCheckout(checkouts, worktree, worktree.hostId, pairedLinked)
+  )
   return kept.length === worktrees.length ? worktrees : kept
 }
 
@@ -198,7 +247,7 @@ export function withoutHiddenVmWorktreesByRepo<W extends CheckoutRow>(
   if (hidesNothing(checkouts)) {
     return worktreesByRepo
   }
-  const hostScoped = Boolean(checkouts.primaryHostIds?.size || checkouts.hiddenHostIds?.size)
+  const hostScoped = isHostScoped(checkouts)
   let next: Record<string, W[]> | null = null
   // Host-scoped rows can sit under any repo; pending checkouts only under theirs.
   const repoIds = hostScoped ? Object.keys(worktreesByRepo) : checkouts.repoIds
@@ -221,10 +270,15 @@ function withoutHiddenRows<K extends string, V extends CheckoutRow>(
   checkouts: HiddenVmCheckouts
 ): ReadonlyMap<K, V> {
   let kept: Map<K, V> | null = null
-  for (const [key, row] of rows) {
-    // Paired-server rows carry their host only in the host-qualified key.
-    const hostId = row.hostId ?? getExecutionHostIdFromWorktreeHostIdentity(key)
-    if (isHiddenCheckout(checkouts, row, hostId)) {
+  // Paired-server rows carry their host only in the host-qualified key.
+  const hosted = [...rows].map(([key, row]) => ({
+    key,
+    row,
+    hostId: row.hostId ?? getExecutionHostIdFromWorktreeHostIdentity(key)
+  }))
+  const pairedLinked = pairedLinkedHostRepos(checkouts, hosted)
+  for (const { key, row, hostId } of hosted) {
+    if (isHiddenCheckout(checkouts, row, hostId, pairedLinked)) {
       kept ??= new Map(rows)
       kept.delete(key)
     }

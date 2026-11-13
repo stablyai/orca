@@ -25,12 +25,12 @@ type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
  * otherwise (another team's, or one whose team is not known yet). Newline-joined so the selector
  * compares by value.
  *
- * A PAIRED server (`orcaCloudPaired`, PAIRED-NO-ROW) of the active account is left out: its owner is
- * never in `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), and its
- * primary checkout IS the workspace's row, so either treatment would hide a workspace this desktop
- * just paired with, a GitHub-only create included. A paired server stamped with ANOTHER account
- * (PAIRED-ACCOUNT-FILTER) is `-host`, like another team's owned sandbox; one saved before pairings
- * were stamped stays visible until the prune stamps it from the active team's list.
+ * A PAIRED server (`orcaCloudPaired`, PAIRED-NO-ROW) of the active account is `~host`: its owner is
+ * never in `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), and on a
+ * GitHub-only create its primary checkout IS the workspace's row. So its primary hides only beside a
+ * linked worktree of the same project (EP-6: a teammate's shared workspace listed "master" too). A
+ * paired server stamped with ANOTHER account (PAIRED-ACCOUNT-FILTER) is `-host`, like another team's
+ * owned sandbox; one saved before pairings were stamped is `~host` until the prune stamps it.
  */
 export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
   const active = orcaCloudAccountId(state.orcaProfileAuthStatus?.cloud)
@@ -46,7 +46,7 @@ export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
       const hostId = toRuntimeExecutionHostId(environment.id)
       if (environment.orcaCloudPaired === true) {
         const account = environment.orcaCloudPairedAccountId
-        return account && account !== active ? [`-${hostId}`] : []
+        return [`${account && account !== active ? '-' : '~'}${hostId}`]
       }
       const inTeam = active !== null && owners[environment.id] === active
       return [`${inTeam ? '+' : '-'}${hostId}`]
@@ -56,14 +56,21 @@ export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
 
 export function parseOrcaCloudHostScopeKey(key: string): {
   primaryHostIds: ReadonlySet<string>
+  pairedHostIds: ReadonlySet<string>
   hiddenHostIds: ReadonlySet<string>
 } {
   const primaryHostIds = new Set<string>()
+  const pairedHostIds = new Set<string>()
   const hiddenHostIds = new Set<string>()
   for (const entry of key ? key.split('\n') : []) {
-    ;(entry.startsWith('+') ? primaryHostIds : hiddenHostIds).add(entry.slice(1))
+    const set = entry.startsWith('+')
+      ? primaryHostIds
+      : entry.startsWith('~')
+        ? pairedHostIds
+        : hiddenHostIds
+    set.add(entry.slice(1))
   }
-  return { primaryHostIds, hiddenHostIds }
+  return { primaryHostIds, pairedHostIds, hiddenHostIds }
 }
 
 /**
