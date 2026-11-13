@@ -1,4 +1,4 @@
-import * as helperScope from '../../rpc/methods/orchestration/worker/helper-start-scope'
+import * as helperScope from '../../rpc/methods/orchestration/worker/start/admission/helper-start-scope'
 import * as custodyHistory from '../db/pane-key-match'
 import { crewQueryPlans, meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 import * as followUpPlan from '../db/dispatch-context/worker-follow-up-plan'
