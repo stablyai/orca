@@ -30,11 +30,11 @@ export class RelayOriginPool {
   private readonly basisOrigins = this.retirement.basis
   private assignment: RelayAssignment | null = null
   private deferredAssignment: RelayAssignment | null = null
+  private failedCellUrl: string | null = null
   private relayJwt: string | null = null
   private readonly rotation: RelayControlRotation
   private rotationPromise: Promise<void> | null = null
   private readonly drainRetry: RelayRetrySchedule
-  private failedCellUrl: string | null = null
   private closed = false
 
   constructor(private readonly options: RelayOriginPoolOptions) {
