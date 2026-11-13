@@ -381,7 +381,8 @@ final class Provider {
     /// to that window: raising reorders the window list, so a --window-index could name another window afterwards.
     private func recoverRequestedWindow(params: [String: JSONValue]) throws -> [String: JSONValue] {
         let app = try resolveApp(try requiredString(params, "app"))
-        let cached = try cachedSnapshot(params: params)
+        // Why: the window-index cache keys are not per app, so another app's snapshot can sit under the same index.
+        let cached = try cachedSnapshot(params: params).flatMap { $0.app.pid == app.pid ? $0 : nil }
         // Why: a stale index fails after the raise, which would take over the user's screen for nothing.
         try requireCachedElements(cached: cached, requestedIndexes: try requestedElementIndexes(params))
         let windows = windowInventory(app: app, appElement: AXUIElementCreateApplication(app.pid)).windows
@@ -391,9 +392,13 @@ final class Provider {
         // Why: the cached snapshot is the window the agent's element indexes were read from, even if the index now names another.
         let windowId = try requestedWindowId(params) ?? cached?.windowId ?? byIndex
         let target = windowId.flatMap { id in windows.first { $0.candidate.windowId == id } }
+        if let requested = try requestedWindowId(params), target == nil {
+            throw ProviderError.coded("window_not_found", "window \(Int(requested)) of \(app.name) is closed or cannot be read, so nothing was raised; run list-windows and pick a listed window")
+        }
         recoverWindow(app, windowId: windowId, windowBounds: target?.candidate.bounds ?? cached?.windowBounds, fallback: target?.element)
-        guard let windowId, hasRequestedWindowSelector(params) else { return params }
-        // Why: the id wins over the index when both are set, and the index still keys the snapshot cache.
+        guard let windowId else { return params }
+        // Why: the raise reorders windows and focus, so later reads must not pick the target again; the id wins over
+        // the index when both are set, and the index still keys the snapshot cache.
         var pinned = params
         pinned["windowId"] = .number(Double(windowId))
         return pinned
