@@ -48,12 +48,12 @@ it('keeps separated literal bullet items out of code blocks without reclassifyin
       variant="document"
       preserveBulletIndentation
       content={
-        '• Parent\n\n    • **Child**\n\n        • [Grandchild][child]\n\nCode sample:\n\n    • literal code\n\n• Another parent\n\n```text\n    • fenced code\n```\n\n• Code example\n\n    const value = 1\n\n> [child]: https://example.com'
+        '• Parent\n  details\n\n    • **Child**\n\n        • [Grandchild][child]\n\nCode sample:\n\n    • literal code\n\n• Another parent\n\n```text\n    • fenced code\n```\n\n• Code example\n\n    const value = 1\n\n> [child]: https://example.com'
       }
     />
   )
   expect([...container.querySelectorAll('p')].map((paragraph) => paragraph.textContent)).toEqual([
-    '• Parent',
+    '• Parent\ndetails',
     '    • Child',
     '        • Grandchild',
     'Code sample:',

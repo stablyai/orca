@@ -21,8 +21,7 @@ function restoreSeparatedBulletItems(
       : []
     if (node.type === 'paragraph') {
       followsBulletList =
-        (container.type === 'listItem' && index === 0) ||
-        (lines.length > 0 && lines.every(({ text }) => /^ *•[ \t]/.test(text)))
+        (container.type === 'listItem' && index === 0) || /^ *•[ \t]/.test(lines[0]?.text ?? '')
       continue
     }
     if (
