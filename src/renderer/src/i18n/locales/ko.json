@@ -37,6 +37,14 @@
     "refreshingDetails": "검사 세부 정보 새로 고치는 중…"
   },
   "settings": {
+    "general": {
+      "tabBarOrder": {
+        "title": "탭 표시줄 순서",
+        "description": "입력하거나 키보드로 전환하면 고정되지 않은 탭이 앞으로 이동합니다. 클릭하면 순서가 유지됩니다. 드래그한 순서는 다음 상호작용까지 유지됩니다.",
+        "manual": "수동",
+        "mru": "최근 사용순"
+      }
+    },
     "chat": {
       "permissionsAgentsLink": "설정 → 에이전트",
       "permissionsTitle": "새 채팅의 권한",

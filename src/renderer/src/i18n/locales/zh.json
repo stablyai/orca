@@ -37,6 +37,14 @@
     "refreshingDetails": "正在刷新检查详情…"
   },
   "settings": {
+    "general": {
+      "tabBarOrder": {
+        "title": "标签栏顺序",
+        "description": "输入或通过键盘切换时，将未固定的标签移到最前。点击不会改变顺序。拖动后的顺序会保留到下次交互。",
+        "manual": "手动",
+        "mru": "最近使用"
+      }
+    },
     "chat": {
       "permissionsAgentsLink": "设置 → 智能体",
       "permissionsTitle": "新聊天的权限",

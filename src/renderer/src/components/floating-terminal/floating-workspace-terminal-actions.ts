@@ -34,7 +34,8 @@ type FloatingWorkspaceTabSwitchStore = Pick<
   | 'setActiveTab'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
->
+> &
+  Partial<Pick<AppState, 'recordTabInteraction'>>
 
 const FLOATING_WORKSPACE_PANEL_SELECTOR = '[data-floating-terminal-panel]'
 
@@ -142,6 +143,7 @@ export function activateFloatingWorkspaceCyclableTab(
 ): void {
   if (next.tabId) {
     store.activateTab(next.tabId)
+    store.recordTabInteraction?.(next.tabId, { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
   }
 
   if (next.type === 'terminal') {

@@ -1203,6 +1203,12 @@
       "claudeWorkspace": "Claude workspace"
     },
     "general": {
+      "tabBarOrder": {
+        "title": "Tab bar order",
+        "description": "Move unpinned tabs to the front when typing or switching with the keyboard. Clicking keeps tabs in place. Dragged tabs stay until the next interaction.",
+        "manual": "Manual",
+        "mru": "Most recently used"
+      },
       "openInMenu": {
         "keyword": {
           "windsurf": "windsurf",

@@ -161,6 +161,7 @@ export function useNativeChatPtyComposerSend(args: {
         agent: args.agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
+      useAppStore.getState().recordTabInteraction?.(args.terminalTabId)
       args.onSubmitted?.()
       if (!retry) {
         args.setDraft('')

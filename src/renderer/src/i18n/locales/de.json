@@ -932,6 +932,12 @@
       }
     },
     "general": {
+      "tabBarOrder": {
+        "title": "Reihenfolge der Tableiste",
+        "description": "Nicht angeheftete Tabs rücken beim Tippen oder Wechseln per Tastatur nach vorne. Klicken ändert die Reihenfolge nicht. Die Reihenfolge nach dem Ziehen bleibt bis zur nächsten Interaktion bestehen.",
+        "manual": "Manuell",
+        "mru": "Zuletzt verwendet"
+      },
       "openInMenu": {
         "keyword": {
           "windsurf": "windsurf",

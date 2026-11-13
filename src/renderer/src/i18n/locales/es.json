@@ -37,6 +37,14 @@
     "refreshingDetails": "Actualizando los detalles de la comprobación…"
   },
   "settings": {
+    "general": {
+      "tabBarOrder": {
+        "title": "Orden de la barra de pestañas",
+        "description": "Mueve las pestañas no fijadas al principio al escribir o cambiar con el teclado. Los clics no cambian el orden. El orden por arrastre se mantiene hasta la siguiente interacción.",
+        "manual": "Manual",
+        "mru": "Usadas más recientemente"
+      }
+    },
     "chat": {
       "permissionsAgentsLink": "Configuración → Agentes",
       "permissionsTitle": "Permisos para chats nuevos",

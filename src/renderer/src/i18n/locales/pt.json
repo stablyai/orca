@@ -1938,6 +1938,12 @@
       "710343e374": "Comando do formatador"
     },
     "general": {
+      "tabBarOrder": {
+        "title": "Ordem da barra de abas",
+        "description": "Mova abas não fixadas para o início ao digitar ou alternar pelo teclado. Cliques mantêm as abas no lugar. A ordem definida por arraste dura até a próxima interação.",
+        "manual": "Manual",
+        "mru": "Usadas mais recentemente"
+      },
       "openInMenu": {
         "keyword": {
           "windsurf": "windsurf",

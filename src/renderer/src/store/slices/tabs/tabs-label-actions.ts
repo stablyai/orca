@@ -165,6 +165,9 @@ export function createTabsLabelActions(
       const changes: { worktreeId: string; from: string[]; to: string[] }[] = []
       set((state) => {
         for (const [worktreeId, groups] of Object.entries(state.groupsByWorktree)) {
+          if (opts?.worktreeId !== undefined && opts.worktreeId !== worktreeId) {
+            continue
+          }
           const group = groups.find((candidate) => candidate.id === groupId)
           if (!group) {
             continue
@@ -178,19 +181,13 @@ export function createTabsLabelActions(
           }
           reordered = true
           changes.push({ worktreeId, from: group.tabOrder, to: nextTabOrder })
-          const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
+          const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
           return {
             groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
               [worktreeId, updateGroup(groups, { ...group, tabOrder: nextTabOrder })]
             ]),
             unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
-              [
-                worktreeId,
-                (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
-                  const sortOrder = orderMap.get(tab.id)
-                  return sortOrder === undefined ? tab : { ...tab, sortOrder }
-                })
-              ]
+              [worktreeId, applyTabOrderSortValues(tabs, nextTabOrder)]
             ])
           }
         }

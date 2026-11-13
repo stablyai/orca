@@ -79,6 +79,9 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
     }
     store.setActiveTabType('editor', worktreeId)
   }
+  if (next.tabId) {
+    store.recordTabInteraction?.(next.tabId, { worktreeId: worktreeId ?? undefined })
+  }
   activateCycledTabOnOwner(worktreeId, next)
 }
 

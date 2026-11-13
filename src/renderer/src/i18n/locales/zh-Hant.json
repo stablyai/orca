@@ -501,6 +501,14 @@
     "refreshingDetails": "正在重新整理檢查詳情…"
   },
   "settings": {
+    "general": {
+      "tabBarOrder": {
+        "title": "分頁列順序",
+        "description": "輸入或透過鍵盤切換時，將未釘選的分頁移到最前。點擊不會改變順序。拖曳後的順序會保留到下次互動。",
+        "manual": "手動",
+        "mru": "最近使用"
+      }
+    },
     "chat": {
       "permissionsAgentsLink": "設定 → 代理程式",
       "permissionsTitle": "新聊天的權限",

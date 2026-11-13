@@ -61,6 +61,7 @@ export function activateTabNumberShortcut(index: number): boolean {
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)
   store.activateTab(target.id)
+  store.recordTabInteraction(target.id, { worktreeId })
 
   if (target.contentType === 'terminal') {
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
