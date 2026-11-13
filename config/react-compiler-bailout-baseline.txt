@@ -250,6 +250,7 @@
 2 src/renderer/src/components/native-chat/session/terminal/read/use-native-chat-live-session.ts
 3 src/renderer/src/components/native-chat/session/terminal/read/use-native-chat-retained-session.ts
 1 src/renderer/src/components/native-chat/tools/lines/NativeChatToolOutput.tsx
+1 src/renderer/src/components/native-chat/tools/runs/use-native-chat-tool-run-window.ts
 1 src/renderer/src/components/native-chat/usage/NativeChatAccountUsageCard.tsx
 2 src/renderer/src/components/native-chat/usage/use-native-chat-account-usage.ts
 1 src/renderer/src/components/native-chat/viewport/find/use-native-chat-find.ts
