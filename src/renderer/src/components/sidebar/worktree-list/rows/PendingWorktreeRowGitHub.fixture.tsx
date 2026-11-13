@@ -41,10 +41,16 @@ const rows = {
     error: 'Orca Cloud workspaces need a plan with cloud hours.',
     errorCode: 'cloudPlanRequired',
     provisioningLog: '[orca-cloud] provisioning\nOrca Cloud: included_hours_exhausted'
+  }),
+  // A real failure stays red; the refusal above is amber (REFUSED-CREATE-ROW-STICKY).
+  cloneFailed: creation('cloneFailed', {
+    status: 'error',
+    error: 'fetch failed',
+    provisioningLog: '[orca-cloud] provisioning\n[orca-cloud] plan-clone'
   })
 }
 
-/** The sidebar's top while three GitHub-only creates are in flight: building, opening, refused. */
+/** The sidebar's top with GitHub-only creates: building, opening, refused (amber), failed (red). */
 export const githubOnlyPendingRows = defineFixture({
   width: 320,
   store: {

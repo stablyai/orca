@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, Loader2, X } from 'lucide-react'
+import { AlertTriangle, Loader2, RotateCw, X } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { HostGlyph } from '@/components/host-row-icon'
 import { cn } from '@/lib/class-names'
@@ -12,9 +12,10 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { vmBuildFailureSummary } from '@/components/worktree-creation/vm-build-failure-toast'
 import {
   classifyVmBuildFailure,
-  isBillingFailure
+  isAccountGate
 } from '@/components/worktree-creation/vm-build-failure'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 
 function statusLabel(
   entry: PendingWorktreeCreation,
@@ -71,11 +72,15 @@ export function PendingWorktreeRow({
 
   const isError = entry.status === 'error'
   const isOrcaCloud = entry.request.ephemeralVmRecipe?.provider === 'orca-cloud'
-  // A billing refusal is a precondition, not an error: muted text; the glyph carries the state.
+  // A billing or limit refusal is a precondition you can fix, not an error: muted text and an amber
+  // glyph (glossary: red only for real failures, such as a clone or a sandbox failing to start).
   const refused =
     isError &&
     isOrcaCloud &&
-    isBillingFailure(classifyVmBuildFailure({ entry, error: entry.error ?? null, cloud: true }))
+    isAccountGate(classifyVmBuildFailure({ entry, error: entry.error ?? null, cloud: true }))
+  const name = entry.request.displayName || entry.request.name
+  const iconButton =
+    'mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100'
   return (
     <div
       className={cn(
@@ -99,7 +104,12 @@ export function PendingWorktreeRow({
         <span className="flex size-4 shrink-0 items-center justify-center">
           {isOrcaCloud ? (
             // The row becomes the cloud card: same glyph from the start, state on the badge.
-            <HostGlyph kind="orca-cloud" size={12} state={isError ? 'failed' : 'starting'} />
+            <HostGlyph
+              kind="orca-cloud"
+              size={12}
+              // The amber tone the glyph uses for an attention state, not red.
+              state={refused ? 'unresponsive' : isError ? 'failed' : 'starting'}
+            />
           ) : isError ? (
             <AlertTriangle className="size-3.5 text-destructive" />
           ) : (
@@ -108,7 +118,7 @@ export function PendingWorktreeRow({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-sidebar-foreground">
-            {entry.request.displayName || entry.request.name}
+            {name}
           </span>
           <span
             className={cn(
@@ -120,16 +130,39 @@ export function PendingWorktreeRow({
           </span>
         </span>
       </button>
+      {isError ? (
+        // REFUSED-CREATE-ROW-STICKY: a failed create keeps its prompt; Retry runs it again from here.
+        <button
+          type="button"
+          title={t('auto.components.sidebar.PendingWorktreeRow.retry', 'Retry')}
+          aria-label={t('auto.components.sidebar.PendingWorktreeRow.retryLabel', 'Retry {{name}}', {
+            name
+          })}
+          data-pending-retry={creationId}
+          onClick={() => retryBackgroundWorktreeCreation(creationId)}
+          className={cn(iconButton, 'opacity-100')}
+        >
+          <RotateCw className="size-3.5" />
+        </button>
+      ) : null}
       <button
         type="button"
-        title={t('auto.components.sidebar.PendingWorktreeRow.188f6922a0', 'Cancel')}
-        aria-label={t(
-          'auto.components.sidebar.PendingWorktreeRow.af21e953d1',
-          'Cancel worktree creation'
-        )}
+        title={
+          isError
+            ? t('auto.components.sidebar.PendingWorktreeRow.dismiss', 'Dismiss')
+            : t('auto.components.sidebar.PendingWorktreeRow.188f6922a0', 'Cancel')
+        }
+        aria-label={
+          isError
+            ? t('auto.components.sidebar.PendingWorktreeRow.dismissLabel', 'Dismiss {{name}}', {
+                name
+              })
+            : t('auto.components.sidebar.PendingWorktreeRow.af21e953d1', 'Cancel worktree creation')
+        }
+        data-pending-dismiss={creationId}
         onClick={() => useAppStore.getState().removePendingWorktreeCreation(creationId)}
         className={cn(
-          'mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100',
+          iconButton,
           isError ? 'opacity-100' : 'can-hover:opacity-0 group-hover:opacity-100'
         )}
       >

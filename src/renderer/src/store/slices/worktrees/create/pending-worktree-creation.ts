@@ -16,17 +16,42 @@ import {
   beginOrcaCloudCancelCleanup,
   isOrcaCloudCreateRequest
 } from '@/lib/orca-cloud-cancel-cleanup'
+import {
+  classifyVmBuildFailure,
+  isAccountGate
+} from '@/components/worktree-creation/vm-build-failure'
+
+/**
+ * REFUSED-CREATE-ROW-STICKY: an Orca Cloud create refused before anything started (an account
+ * limit such as running sandboxes, a plan, sign-in). Its row keeps the prompt with Retry and
+ * Dismiss until the person starts another create, which replaces it. A slot freeing up alone
+ * never clears it: that would lose the prompt.
+ */
+export function isStaleRefusedCreation(entry: PendingWorktreeCreation): boolean {
+  return (
+    entry.status === 'error' &&
+    isOrcaCloudCreateRequest(entry.request) &&
+    isAccountGate(classifyVmBuildFailure({ entry, error: entry.error ?? null, cloud: true }))
+  )
+}
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
-  _get: WorktreeSliceGet
+  get: WorktreeSliceGet
 ): WorktreeSlice['beginPendingWorktreeCreation'] {
   return (entry) => {
+    // A new create replaces any stale refused row (nothing started there, so nothing to clean up).
+    const stale = Object.values(get().pendingWorktreeCreations).filter(
+      (other) => other.creationId !== entry.creationId && isStaleRefusedCreation(other)
+    )
     const logged = { ...entry, phaseLog: [{ phase: entry.phase, at: entry.startedAt }] }
     set((s) => ({
       pendingWorktreeCreations: { ...s.pendingWorktreeCreations, [entry.creationId]: logged },
       activePendingCreationId: entry.creationId
     }))
+    for (const refused of stale) {
+      get().removePendingWorktreeCreation(refused.creationId, { cleanupVm: false })
+    }
   }
 }
 

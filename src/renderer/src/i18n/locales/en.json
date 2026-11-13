@@ -7403,7 +7403,11 @@
           "af21e953d1": "Cancel worktree creation",
           "188f6922a0": "Cancel",
           "creatingWorkspace": "Creating workspace…",
-          "creationFailed": "Creation failed"
+          "creationFailed": "Creation failed",
+          "retry": "Retry",
+          "retryLabel": "Retry {{name}}",
+          "dismiss": "Dismiss",
+          "dismissLabel": "Dismiss {{name}}"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancel",
