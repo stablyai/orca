@@ -89,7 +89,7 @@ it('loads owner-host settings and inserts/copies the real-repo example without o
   fireEvent.click(screen.getByRole('button', { name: 'Use this example' }))
   await waitFor(() => expect(updateProjectGroup).toHaveBeenCalled())
   const script =
-    '# Repo IDs are local to this machine; review them before sharing this script.\n# API server\norca worktree create --repo \'id:api\' --name "$ORCA_WORKSPACE_NAME" --json\n# Website\norca worktree create --repo \'id:web\' --name "$ORCA_WORKSPACE_NAME" --json'
+    '# Repo IDs are local to this machine; review them before sharing this script.\n# API server\n"${ORCA_CLI_COMMAND:-orca}" worktree create --repo \'id:api\' --name "$ORCA_WORKSPACE_NAME" --json\n# Website\n"${ORCA_CLI_COMMAND:-orca}" worktree create --repo \'id:web\' --name "$ORCA_WORKSPACE_NAME" --json'
   expect(updateProjectGroup).toHaveBeenLastCalledWith(
     'services',
     { hookSettings: { ...saved, scripts: { setup: script, archive: 'echo keep archive' } } },
@@ -168,4 +168,68 @@ it('shows setup-only shared configuration through the group Advanced disclosure'
     }
     view.unmount()
   }
+})
+
+it('preserves saved scripts while authoritative group inspection is pending', async () => {
+  const group = createProjectGroup({
+    name: 'Loading',
+    parentPath: '/loading',
+    createdFrom: 'folder-scan',
+    tabOrder: 0
+  })
+  let inspect!: (value: Awaited<ReturnType<typeof checkRuntimeGroupHooks>>) => void
+  vi.mocked(checkRuntimeGroupHooks).mockReturnValue(
+    new Promise((resolve) => {
+      inspect = resolve
+    })
+  )
+  const updateProjectGroup = vi.fn(async (..._args: unknown[]) => true)
+  useAppStore.setState({
+    settingsSearchQuery: '',
+    projectGroups: [group],
+    repos: [],
+    updateProjectGroup
+  })
+  const view = render(
+    <TooltipProvider>
+      <ProjectGroupHooksSection group={group} />
+    </TooltipProvider>
+  )
+  const example = within(view.container).getByRole('button', { name: 'Use this example' })
+  fireEvent.click(example)
+  view.unmount()
+  expect(updateProjectGroup).not.toHaveBeenCalled()
+  const saved = {
+    mode: 'auto' as const,
+    scripts: { setup: 'echo saved', archive: 'echo preserve' },
+    setupRunPolicy: 'ask' as const,
+    setupAgentStartupPolicy: 'wait-for-setup' as const,
+    commandSourcePolicy: 'local-only' as const
+  }
+  const second = render(
+    <TooltipProvider>
+      <ProjectGroupHooksSection group={group} />
+    </TooltipProvider>
+  )
+  inspect({
+    status: 'ok',
+    hasHooks: false,
+    hooks: null,
+    hookSettings: saved,
+    mayNeedUpdate: false,
+    setupRunPolicy: 'ask',
+    setupConfig: null
+  })
+  await waitFor(() => expect(within(second.container).getByDisplayValue('echo saved')).toBeTruthy())
+  fireEvent.click(within(second.container).getByRole('button', { name: 'Use this example' }))
+  await waitFor(() => expect(updateProjectGroup).toHaveBeenCalled())
+  expect(updateProjectGroup.mock.calls[0]?.[1]).toEqual({
+    hookSettings: {
+      ...saved,
+      scripts: {
+        setup: '# Repo IDs are local to this machine; review them before sharing this script.',
+        archive: 'echo preserve'
+      }
+    }
+  })
 })

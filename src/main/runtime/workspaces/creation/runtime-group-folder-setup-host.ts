@@ -4,6 +4,7 @@ import {
   groupFolderCreationIsUserAct,
   type RuntimeGroupFolderCreateInput
 } from './runtime-group-folder-setup'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -12,6 +13,11 @@ import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local
 import { wslUserAct } from '../startup/workspace-create-activation'
 import { buildWorktreeStartupForAgent } from '../startup/runtime-worktree-agent-startup'
 import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
+import { createLaunchedAgentWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
+import {
+  deliverStartupFollowupPrompt,
+  pasteWorktreeStartupDraftWhenReady
+} from '../startup/runtime-worktree-startup-readiness'
 import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
 
 export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
@@ -58,6 +64,17 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
         })
     })
   }
+  private assertGroupStartupInputTarget(target: RuntimeTerminalCreate, ptyId: string): void {
+    const live = this.getLivePtyForHandle(target.handle)?.pty
+    if (
+      !target.ptyId ||
+      target.ptyId !== ptyId ||
+      live?.ptyId !== target.ptyId ||
+      (target.incarnationId && live.incarnationId !== target.incarnationId)
+    ) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
   protected localWorktreeTerminalPorts(
     args: { navigation?: RuntimeNavigationTarget; wslUserAct?: true },
     activate: RuntimeLocalWorktreeTerminalPorts['activate'],
@@ -70,9 +87,38 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
         worktree
           ? this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree)
           : this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
-      pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-      sendFollowup: (handle, followup, terminal) =>
-        void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
+      pasteDraft: (handle, draft, target) => {
+        if (!target) {
+          this.pasteStartupDraftWhenReady(handle, draft)
+          return
+        }
+        const guard = createLaunchedAgentWriteGuard(this, draft.agent, {
+          unprovableHost: 'write-unless-shell'
+        })
+        pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft, {
+          beforeWrite: async (ptyId) => {
+            await guard.beforeWrite(ptyId)
+            this.assertGroupStartupInputTarget(target, ptyId)
+          },
+          dispose: guard.dispose
+        })
+      },
+      sendFollowup: (handle, followup, terminal, guardTarget) => {
+        if (!guardTarget) {
+          void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
+          return
+        }
+        void deliverStartupFollowupPrompt(
+          this,
+          this.getWorktreeStartupReadinessHost(),
+          handle,
+          followup,
+          {
+            terminalCreation: terminal,
+            beforeWrite: (ptyId) => this.assertGroupStartupInputTarget(terminal, ptyId)
+          }
+        )
+      },
       provision: (options) =>
         this.provisionManagedWorktreeTerminals({ ...options, ...wslUserAct(args) }, worktree),
       activate

@@ -1,3 +1,5 @@
+import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
+import type { FolderWorkspaceCreateInput } from '../../../../../../shared/folder-workspaces/folder-workspace-create'
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 import type { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
@@ -52,4 +54,37 @@ export function buildFolderWorkspaceStartupPayload({
         }
       }
     : undefined
+}
+
+export function buildFolderWorkspaceHostStartupPayload({
+  startupPlan,
+  quickAgent,
+  agentArgs,
+  sessionOptions,
+  launchSource
+}: Pick<SubmitFolderWorkspaceCreateParams, 'quickAgent' | 'agentArgs' | 'sessionOptions'> & {
+  startupPlan: NonNullable<ReturnType<typeof buildAgentStartupPlan>>
+  launchSource: NonNullable<SubmitFolderWorkspaceCreateParams['launchSource']>
+}): Partial<FolderWorkspaceCreateInput> {
+  return {
+    startupCommand: startupPlan.launchCommand,
+    startupEnv: startupPlan.env,
+    startupLaunchConfig: startupPlan.launchConfig,
+    startupCommandDelivery: startupPlan.startupCommandDelivery,
+    startupAgent: quickAgent ?? undefined,
+    ...(startupPlan.draftPrompt
+      ? { startupPrompt: startupPlan.draftPrompt, startupPromptDelivery: 'draft' as const }
+      : startupPlan.followupPrompt
+        ? {
+            startupPrompt: startupPlan.followupPrompt,
+            startupPromptDelivery: 'auto-submit' as const
+          }
+        : {}),
+    startupAgentArgs: agentArgs,
+    startupSessionOptions: sessionOptions,
+    startupLaunchPreferences: quickAgent
+      ? toAgentLaunchPreferences(sessionOptions, quickAgent)
+      : undefined,
+    launchSource
+  }
 }

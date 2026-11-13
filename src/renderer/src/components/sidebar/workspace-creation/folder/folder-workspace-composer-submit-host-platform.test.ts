@@ -1,15 +1,30 @@
 // @vitest-environment happy-dom
+// oxlint-disable-next-line typescript/triple-slash-reference -- The cross-process composition imports main runtime types whose build constants are ambient globals, not a module.
+/// <reference path="../../../../../../types/build-constants.d.ts" />
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-composer-submit-fixtures'
 
-const mocks = vi.hoisted(() => ({ activateAndRevealFolderWorkspace: vi.fn() }))
+const mocks = vi.hoisted(() => ({ activateAndRevealFolderWorkspace: vi.fn(), seedDraft: vi.fn() }))
 
 vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
 })
 
+vi.mock(
+  '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    seedNativeChatLaunchDraftForAgentTab: mocks.seedDraft
+  })
+)
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
+
+import { getDefaultSettings } from '../../../../../../shared/constants'
+import { FolderWorkspaceCreate } from '../../../../../../shared/rpc-contract/folder-workspace-params'
+import { FolderWorkspaceCreateArgs } from '../../../../../../main/ipc/repos/repo-ipc-arg-schemas'
+import { prepareGroupFolderCreation } from '../../../../../../main/runtime/workspaces/creation/runtime-group-folder-setup'
 import { useAppStore } from '@/store/index'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
 import { getFolderWorkspaceAgentLaunchFact } from './folder-workspace-agent-startup'
@@ -176,4 +191,156 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
     ).rejects.toThrow('has not reported its operating system')
     expect(createFolderWorkspace).not.toHaveBeenCalled()
   })
+})
+
+it.each([
+  { agent: 'codex', delivery: 'draft' },
+  { agent: 'claude', delivery: null },
+  { agent: 'autohand', delivery: 'auto-submit' }
+] as const)(
+  'preserves the actual paired $agent delivery through schemas and the host starter ($delivery)',
+  async ({ agent, delivery }) => {
+    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'setup-tab' })
+    mocks.seedDraft.mockClear()
+    const projectGroup = { ...makeProjectGroup(), executionHostId: 'runtime:paired' as const }
+    useAppStore.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'paired',
+          {
+            checkedAt: 1,
+            status: {
+              runtimeId: 'rt',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              hostPlatform: 'linux'
+            }
+          }
+        ]
+      ])
+    })
+    const pasteDraft = vi.fn()
+    const sendFollowup = vi.fn()
+    const buildStartup = vi.fn()
+    const createFolderWorkspace = vi.fn(
+      async (input: Parameters<typeof FolderWorkspaceCreate.parse>[0]) => {
+        const parsed = FolderWorkspaceCreateArgs.parse(FolderWorkspaceCreate.parse(input))
+        expect(parsed.startupCommand).toContain(`custom-${agent} --color never`)
+        expect(parsed.startupPromptDelivery).toBe(delivery ?? undefined)
+        if (delivery === 'draft') {
+          expect(parsed.startupPrompt).toContain('https://linear.app/team/issue/STA-1')
+        } else if (delivery === 'auto-submit') {
+          expect(parsed.startupPrompt).toBe('Inspect regular task')
+        } else {
+          expect(parsed.startupPrompt).toBeUndefined()
+        }
+        return prepareGroupFolderCreation({
+          input: parsed,
+          group: { ...projectGroup, executionHostId: undefined },
+          workspace: makeFolderWorkspace(),
+          settings: getDefaultSettings('/tmp'),
+          buildStartup,
+          wait: async () => ({ exitCode: 0 }),
+          ports: {
+            canSpawn: true,
+            createTerminal: async () => ({
+              handle: 'agent',
+              tabId: 'returned-agent-tab',
+              ptyId: 'agent-pty',
+              worktreeId: 'folder:folder-workspace-1',
+              title: 'Codex'
+            }),
+            pasteDraft,
+            sendFollowup,
+            provision: async () => ({ setupSpawned: false, setupTerminalHandle: null }),
+            activate: vi.fn()
+          }
+        })
+      }
+    )
+    await submitFolderWorkspaceCreate({
+      projectGroup,
+      setupSupported: true,
+      setupApproval: { setupDecision: 'skip' },
+      runtimeEnvironmentId: 'paired',
+      name: 'Linked task',
+      lastAutoName: '',
+      linkedWorkItem:
+        delivery === 'auto-submit'
+          ? null
+          : {
+              provider: 'linear',
+              type: 'issue',
+              number: 1,
+              title: 'Inspect task',
+              url: 'https://linear.app/team/issue/STA-1'
+            },
+      note: delivery === 'auto-submit' ? 'Inspect regular task' : '',
+      autoRenameBranchFromWork: false,
+      quickAgent: agent,
+      agentCmdOverrides: { [agent]: `custom-${agent} --color never` },
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+    expect(buildStartup).not.toHaveBeenCalled()
+    if (delivery === 'draft') {
+      expect(pasteDraft).toHaveBeenCalledOnce()
+      expect(pasteDraft.mock.calls[0]?.[1]).toMatchObject({
+        agent: 'codex',
+        content: expect.stringContaining('https://linear.app/team/issue/STA-1')
+      })
+      expect(sendFollowup).not.toHaveBeenCalled()
+    } else if (delivery === 'auto-submit') {
+      expect(pasteDraft).not.toHaveBeenCalled()
+      expect(sendFollowup).toHaveBeenCalledExactlyOnceWith(
+        'agent',
+        { agent: 'autohand', prompt: 'Inspect regular task' },
+        expect.objectContaining({ tabId: 'returned-agent-tab' }),
+        true
+      )
+    } else {
+      expect(pasteDraft).not.toHaveBeenCalled()
+      expect(sendFollowup).not.toHaveBeenCalled()
+    }
+    if (delivery !== 'auto-submit') {
+      expect(mocks.seedDraft).toHaveBeenCalledExactlyOnceWith({
+        tabId: 'returned-agent-tab',
+        agent,
+        text: expect.stringContaining('https://linear.app/team/issue/STA-1')
+      })
+    } else {
+      expect(mocks.seedDraft).not.toHaveBeenCalled()
+    }
+  }
+)
+
+it('rejects incomplete explicit delivery on IPC and RPC but preserves old captured-command forms', () => {
+  for (const schema of [FolderWorkspaceCreate, FolderWorkspaceCreateArgs]) {
+    expect(
+      schema.safeParse({
+        projectGroupId: 'group',
+        startupCommand: 'codex',
+        startupAgent: 'codex',
+        startupPromptDelivery: 'draft'
+      }).success
+    ).toBe(false)
+    expect(
+      schema.safeParse({
+        projectGroupId: 'group',
+        startupAgent: 'codex',
+        startupPrompt: 'task',
+        startupPromptDelivery: 'draft'
+      }).success
+    ).toBe(false)
+    expect(
+      schema.safeParse({
+        projectGroupId: 'group',
+        startupCommand: 'codex',
+        startupPrompt: 'legacy'
+      }).success
+    ).toBe(true)
+  }
 })

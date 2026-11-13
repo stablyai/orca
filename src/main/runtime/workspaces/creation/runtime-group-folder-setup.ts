@@ -1,3 +1,5 @@
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import { SETUP_AGENT_WAIT_TIMEOUT_SECONDS } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import type {
   FolderWorkspaceCreateInput,
@@ -110,6 +112,22 @@ export async function prepareGroupFolderCreation(args: {
   if (result.agentLaunchOutcome?.status === 'failed') {
     return result
   }
+  const pendingDraft =
+    input.startupCommand &&
+    input.startupAgent &&
+    input.startupPrompt &&
+    input.startupPromptDelivery === 'draft'
+      ? { agent: input.startupAgent, content: input.startupPrompt }
+      : undefined
+  const pendingFollowup =
+    input.startupCommand &&
+    input.startupAgent &&
+    input.startupPrompt &&
+    input.startupPromptDelivery === 'auto-submit'
+      ? { agent: input.startupAgent, prompt: input.startupPrompt }
+      : undefined
+  const deferInput = required && Boolean(pendingDraft || pendingFollowup)
+  const captured: { terminal?: RuntimeTerminalCreate } = {}
   const request = {
     ...input,
     ...(input.startupCommand
@@ -124,7 +142,11 @@ export async function prepareGroupFolderCreation(args: {
       : {}),
     startupLaunchSource: input.launchSource,
     awaitTerminalProvisioning: true,
-    observeSetupCompletion: input.agentLaunchMode === 'structured',
+    observeSetupCompletion: input.agentLaunchMode === 'structured' || deferInput,
+    onStartupTerminalCreated: (terminal: RuntimeTerminalCreate) => {
+      captured.terminal = terminal
+      input.onStartupTerminalCreated?.(terminal)
+    },
     setupOnly: input.agentLaunchMode === 'structured'
   }
   const built = await resolveWorktreeCreateAgentStartup(request, args.buildStartup)
@@ -134,12 +156,37 @@ export async function prepareGroupFolderCreation(args: {
     worktree: folderWorkspaceToWorktree(workspace),
     setup: prepared?.setup,
     startup: request.startup ?? built?.startup,
-    startupFollowup: built?.followup,
+    startupFollowup: deferInput ? undefined : (pendingFollowup ?? built?.followup),
+    draftPaste: deferInput ? undefined : pendingDraft,
+    observeSequencedSetupCompletion: deferInput,
+    ...(pendingDraft || pendingFollowup ? { guardStartupInput: true as const } : {}),
     startupLaunchRuntime: built?.launchRuntime,
     createdWithAgent: input.createdWithAgent,
     promisedAgentChat: input.agentLaunchMode === 'structured',
     ports: args.ports
   })
+  if (deferInput && started.didSpawnStartup && captured.terminal) {
+    const terminal = captured.terminal
+    // The host owns pending input after create returns; RPC disconnect is not cancellation.
+    void groupSetupAgentOutcome({
+      required: true,
+      prepared: Boolean(prepared?.setup),
+      terminalHandle: started.setupTerminalHandle,
+      wait: args.wait,
+      timeoutMs: SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
+    })
+      .then((outcome) => {
+        if (outcome.status !== 'successful') {
+          return
+        }
+        if (pendingDraft) {
+          args.ports.pasteDraft(terminal.handle, pendingDraft, terminal)
+        } else if (pendingFollowup) {
+          args.ports.sendFollowup(terminal.handle, pendingFollowup, terminal, true)
+        }
+      })
+      .catch((error) => console.warn('[hooks] group startup input was not delivered:', error))
+  }
   // Host-owned provisioning is never retried by renderer activation.
   result.setup = undefined
   result.warning = started.warning ?? result.warning

@@ -1,10 +1,12 @@
 import { showFolderWorkspaceSetupOutcome } from './folder-workspace-setup-feedback'
-import { buildFolderWorkspaceStartupPayload } from './folder-workspace-startup-payload'
+import {
+  buildFolderWorkspaceStartupPayload,
+  buildFolderWorkspaceHostStartupPayload
+} from './folder-workspace-startup-payload'
 import { reviewSetupTrustMismatch } from '@/store/slices/worktrees/create/created-worktree-setup-trust'
 import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-hook-owner'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
@@ -187,18 +189,13 @@ export async function submitFolderWorkspaceCreate({
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
     ...(hostStartsTerminal && startupPlan
       ? {
-          startupCommand: startupPlan.launchCommand,
-          startupEnv: startupPlan.env,
-          startupLaunchConfig: startupPlan.launchConfig,
-          startupCommandDelivery: startupPlan.startupCommandDelivery,
-          startupAgent: quickAgent ?? undefined,
-          startupPrompt: launchDraftPrompt ?? note,
-          startupAgentArgs: agentArgs,
-          startupSessionOptions: sessionOptions,
-          startupLaunchPreferences: quickAgent
-            ? toAgentLaunchPreferences(sessionOptions, quickAgent)
-            : undefined,
-          launchSource
+          ...buildFolderWorkspaceHostStartupPayload({
+            startupPlan,
+            quickAgent,
+            agentArgs,
+            sessionOptions,
+            launchSource
+          })
         }
       : {}),
     projectGroupId: projectGroup.id,
@@ -266,19 +263,22 @@ export async function submitFolderWorkspaceCreate({
       revealWorkspace()
     }
     const activation = activationHolder.value
+    const draftTabId = hostStartsTerminal
+      ? result.startupTerminal?.tabId
+      : activation !== false
+        ? activation.primaryTabId
+        : undefined
     if (
       !launchFailed &&
-      !hostStartsTerminal &&
       !structuredLaunch &&
       quickAgent &&
       startupPlan &&
       launchDraftPrompt &&
-      activation !== false &&
-      activation.primaryTabId
+      draftTabId
     ) {
       // TUI prefill needs a separate chat-composer copy to remain visible after switching views.
       seedNativeChatLaunchDraftForAgentTab({
-        tabId: activation.primaryTabId,
+        tabId: draftTabId,
         agent: quickAgent,
         text: launchDraftPrompt
       })

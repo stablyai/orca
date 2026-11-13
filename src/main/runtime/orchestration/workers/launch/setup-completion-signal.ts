@@ -8,19 +8,22 @@ import {
 const SETUP_COMPLETION_PREFIX = '__ORCA_SETUP_COMPLETE__:'
 const SETUP_COMPLETION_CARRY_LENGTH = SETUP_COMPLETION_PREFIX.length + 96
 const WINDOWS_SETUP_RUNNER_ENV = 'ORCA_SETUP_RUNNER_PATH'
+const OBSERVED_SETUP_COMMAND_ENV = 'ORCA_OBSERVED_SETUP_COMMAND'
 
 export function buildObservedSetupCommand(
   runnerScriptPath: string,
   platform: SetupRunnerCommandPlatform,
   completionToken: string,
   // Preserve runner shell selection so WSL drive paths stay /mnt/c rather than Git Bash /c.
-  shell?: SetupRunnerShell
+  shell?: SetupRunnerShell,
+  sequencedCommand?: string
 ): { command: string; env?: Record<string, string> } {
   const resolution = resolveSetupRunnerCommand(runnerScriptPath, platform, shell)
-  if (resolution.shell === 'windows') {
+  if (resolution.shell === 'windows' && !(sequencedCommand && shell?.family === 'posix')) {
     const script = [
-      `$runner = $env:${WINDOWS_SETUP_RUNNER_ENV}`,
-      '& $runner',
+      ...(sequencedCommand
+        ? [`& ([scriptblock]::Create($env:${OBSERVED_SETUP_COMMAND_ENV}))`]
+        : [`$runner = $env:${WINDOWS_SETUP_RUNNER_ENV}`, '& $runner']),
       '$succeeded = $?',
       '$status = $LASTEXITCODE',
       'if ($null -eq $status) { $status = if ($succeeded) { 0 } else { 1 } }',
@@ -32,13 +35,15 @@ export function buildObservedSetupCommand(
         script,
         'utf16le'
       ).toString('base64')}`,
-      env: { [WINDOWS_SETUP_RUNNER_ENV]: resolution.runnerScriptPathForShell }
+      env: sequencedCommand
+        ? { [OBSERVED_SETUP_COMMAND_ENV]: sequencedCommand }
+        : { [WINDOWS_SETUP_RUNNER_ENV]: resolution.runnerScriptPathForShell }
     }
   }
 
   // Why no `( … )`: this is typed into the user's line editor, where autopair widgets corrupt it (#18059).
   const script = [
-    resolution.command,
+    sequencedCommand ?? resolution.command,
     'status=$?',
     `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'

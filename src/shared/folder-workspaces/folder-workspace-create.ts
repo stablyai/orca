@@ -21,6 +21,7 @@ export type FolderWorkspaceCreateInput = {
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   startupAgent?: TuiAgent
   startupPrompt?: string
+  startupPromptDelivery?: 'draft' | 'auto-submit'
   startupAgentArgs?: string | null
   startupSessionOptions?: Record<string, string>
   startupLaunchPreferences?: AgentLaunchPreferences

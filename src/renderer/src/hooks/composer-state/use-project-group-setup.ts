@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { GroupHookCheckResult } from '../../../../shared/project-group-hooks'
 import type { SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
@@ -10,12 +10,23 @@ import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-set
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { useAppStore } from '@/store'
+import { toast } from 'sonner'
+import { useTranslate } from '@/i18n/use-translate'
 import { buildSetupAgentStartupHookSettings } from './setup-policy-decisions'
 
 export function useProjectGroupSetup(group: ProjectGroup | null | undefined) {
+  const t = useTranslate()
   const owner = group ? projectGroupHookOwner(group) : null
   const support = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY)
   const context = owner?.id ?? null
+  const selectedContext = useRef(context)
+  useEffect(() => {
+    selectedContext.current = context
+    return () => {
+      selectedContext.current = null
+    }
+  }, [context])
+  const policySaves = useRef(new Map<string, Promise<boolean>>())
   const [inspection, setInspection] = useState<{
     context: string
     result: GroupHookCheckResult
@@ -78,9 +89,25 @@ export function useProjectGroupSetup(group: ProjectGroup | null | undefined) {
     },
     decision,
     setDecision,
+    waitForStartupPolicySave: async (): Promise<boolean> => {
+      if (!context || selectedContext.current !== context) {
+        return false
+      }
+      let pending = policySaves.current.get(context)
+      while (pending) {
+        if (!(await pending) || selectedContext.current !== context) {
+          return false
+        }
+        if (policySaves.current.get(context) === pending) {
+          break
+        }
+        pending = policySaves.current.get(context)
+      }
+      return selectedContext.current === context
+    },
     startupPolicy: inspectedGroup?.hookSettings?.setupAgentStartupPolicy ?? 'start-immediately',
     setStartupPolicy: (policy: SetupAgentStartupPolicy) => {
-      if (group && hostId) {
+      if (group && hostId && context && ready) {
         const hookSettings = buildSetupAgentStartupHookSettings(
           inspectedGroup?.hookSettings,
           policy
@@ -90,7 +117,44 @@ export function useProjectGroupSetup(group: ProjectGroup | null | undefined) {
             ? { ...current, result: { ...current.result, hookSettings } }
             : current
         )
-        void useAppStore.getState().updateProjectGroup(group.id, { hookSettings }, { hostId })
+        const previous = policySaves.current.get(context)
+        const promise: Promise<boolean> = Promise.resolve(previous)
+          .then(async () => {
+            const saved = await useAppStore
+              .getState()
+              .updateProjectGroup(group.id, { hookSettings }, { hostId })
+              .catch(() => false)
+            if (!saved) {
+              const latest = await checkRuntimeGroupHooks(hostId, group.id, {
+                background: true
+              }).catch(() => null)
+              if (
+                policySaves.current.get(context) === promise &&
+                selectedContext.current === context
+              ) {
+                setInspection((current) =>
+                  current?.context === context && current.result.hookSettings === hookSettings
+                    ? latest && !latest.unavailable
+                      ? { context, result: latest }
+                      : null
+                    : current
+                )
+              }
+              toast.error(
+                t(
+                  'auto.hooks.useComposerState.setupAgentStartupPolicySaveFailed',
+                  'Failed to save setup startup behavior.'
+                )
+              )
+            }
+            return saved
+          })
+          .finally(() => {
+            if (policySaves.current.get(context) === promise) {
+              policySaves.current.delete(context)
+            }
+          })
+        policySaves.current.set(context, promise)
       }
     }
   }

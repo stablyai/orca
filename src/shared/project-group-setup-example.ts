@@ -8,12 +8,13 @@ export function projectGroupSetupExample(
   const windows = platform === 'win32'
   const comment = windows ? 'REM' : '#'
   const shell = windows ? 'cmd' : 'posix'
+  const command = windows ? 'orca' : '"${ORCA_CLI_COMMAND:-orca}"'
   const workspaceName = windows ? '"%ORCA_WORKSPACE_NAME%"' : '"$ORCA_WORKSPACE_NAME"'
   return [
     `${comment} Repo IDs are local to this machine; review them before sharing this script.`,
     ...repos.flatMap((repo) => [
       `${comment} ${repo.displayName.replace(windows ? /[^\p{L}\p{N} ._/-]/gu : /[\r\n]/g, ' ')}`,
-      `orca worktree create --repo ${quoteStartupArg(`id:${repo.id}`, shell)} --name ${workspaceName} --json`
+      `${command} worktree create --repo ${quoteStartupArg(`id:${repo.id}`, shell)} --name ${workspaceName} --json`
     ])
   ].join('\n')
 }

@@ -106,6 +106,7 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   clock?: ReadinessClock
   /** Aborting ends the readiness wait and refuses the paste; text already handed over stays so. */
   signal?: AbortSignal
+  beforeWrite?: (ptyId: string) => void
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
     return false
@@ -137,7 +138,10 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       inputKind: 'launch',
       // A fresh launch's composer was just seen ready; a reused pane's state is only inferred.
       composerReady: args.freshLaunch,
-      beforeWrite: guard.beforeWrite,
+      beforeWrite: async (ptyId) => {
+        await guard.beforeWrite(ptyId)
+        args.beforeWrite?.(ptyId)
+      },
       // Both fields enable queued acceptance; without requestId a slow first turn throws despite written input.
       acceptQueued: true,
       requestId: randomUUID(),

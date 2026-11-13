@@ -7,6 +7,7 @@ export async function groupSetupAgentOutcome(args: {
   terminalHandle?: string | null
   wait: (handle: string, signal: AbortSignal) => Promise<{ exitCode: number | null }>
   signal?: AbortSignal
+  timeoutMs?: number
 }): Promise<FolderWorkspaceAgentLaunchOutcome> {
   if (!args.required) {
     return { status: 'not-required' }
@@ -32,7 +33,10 @@ export async function groupSetupAgentOutcome(args: {
       resolve(outcome)
     }
     const cancel = (): void => finish({ status: 'failed', reason: 'cancelled' })
-    const deadline = setTimeout(() => finish({ status: 'failed', reason: 'timeout' }), 60_000)
+    const deadline = setTimeout(
+      () => finish({ status: 'failed', reason: 'timeout' }),
+      args.timeoutMs ?? 60_000
+    )
     if (args.signal?.aborted) {
       cancel()
       return

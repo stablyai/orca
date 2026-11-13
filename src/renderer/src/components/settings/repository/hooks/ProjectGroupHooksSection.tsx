@@ -58,20 +58,25 @@ export function ProjectGroupHooksSection({
     ? projectGroupSetupExample(getFolderSourceRepos(repos, groups, group), platform)
     : undefined
   return (
-    <RepositoryHooksSection
-      repo={owner}
-      showArchive={false}
-      yamlHooks={inspection?.hooks ?? null}
-      hasHooksFile={inspection?.hasHooks ?? false}
-      hooksInspectionReady={inspection !== null && !inspection.unavailable}
-      mayNeedUpdate={inspection?.mayNeedUpdate ?? false}
-      copiedTemplate={false}
-      onCopyTemplate={() => void window.api.ui.writeClipboardText(GROUP_SETUP_HOOKS_TEMPLATE)}
-      setupExample={example}
-      onUpdateHookSettings={(hookSettings) => {
-        setInspection((current) => (current ? { ...current, hookSettings } : current))
-        void useAppStore.getState().updateProjectGroup(group.id, { hookSettings }, { hostId })
-      }}
-    />
+    <fieldset disabled={!inspection || Boolean(inspection.unavailable)} className="min-w-0">
+      <RepositoryHooksSection
+        repo={owner}
+        showArchive={false}
+        yamlHooks={inspection?.hooks ?? null}
+        hasHooksFile={inspection?.hasHooks ?? false}
+        hooksInspectionReady={inspection !== null && !inspection.unavailable}
+        mayNeedUpdate={inspection?.mayNeedUpdate ?? false}
+        copiedTemplate={false}
+        onCopyTemplate={() => void window.api.ui.writeClipboardText(GROUP_SETUP_HOOKS_TEMPLATE)}
+        setupExample={example}
+        onUpdateHookSettings={(hookSettings) => {
+          if (!inspection || inspection.unavailable) {
+            return
+          }
+          setInspection((current) => (current ? { ...current, hookSettings } : current))
+          void useAppStore.getState().updateProjectGroup(group.id, { hookSettings }, { hostId })
+        }}
+      />
+    </fieldset>
   )
 }

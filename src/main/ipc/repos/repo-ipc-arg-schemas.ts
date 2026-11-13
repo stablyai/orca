@@ -7,7 +7,10 @@ import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
-import { FolderWorkspaceHookCreateShape } from '../../../shared/rpc-contract/folder-workspace-params'
+import {
+  FolderWorkspaceHookCreateShape,
+  assertFolderWorkspaceStartupDelivery
+} from '../../../shared/rpc-contract/folder-workspace-params'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -161,6 +164,7 @@ export const FolderWorkspaceCreateArgs = z
     pendingFirstAgentMessageRename: z.boolean().optional()
   })
   .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
+  .superRefine(assertFolderWorkspaceStartupDelivery)
 
 export const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),
