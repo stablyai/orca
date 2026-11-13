@@ -5433,7 +5433,6 @@
       "src/renderer/src/hooks/editor-external-watch-selected-host.test.ts": 1988,
       "src/renderer/src/hooks/editor-runtime-file-watch.test.ts": 58,
       "src/renderer/src/hooks/ipc-events/agent-status-pane-routing-index-retention.test.ts": 4878,
-      "src/renderer/src/hooks/ipc-events/agent-status-pending-retry-gate.test.ts": 466,
       "src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts": 2247,
       "src/renderer/src/hooks/ipc-events/browser-request-ipc-bridge.owner.test.ts": 623,
       "src/renderer/src/hooks/ipc-events/browser-request-ipc-bridge.split.test.ts": 699,
