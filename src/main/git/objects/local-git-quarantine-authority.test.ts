@@ -54,6 +54,7 @@ import {
 import { resetWslLinkedWorktreeGitRoutingForTests } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import { createLocalGitObjectQuarantine } from './local-git-object-quarantine'
 import { localBranchHasNoUnmergedChanges } from '../refs/resolution/local-branch-merge-proof'
+import { mergedReviewHeadIsEquivalent } from '../../source-control/merged-review-head-equivalence'
 import {
   __resetPRConflictSummaryCachesForTests,
   getPRConflictSummary,
@@ -205,13 +206,28 @@ it('propagates cancellation without an unquarantined retry', async () => {
   expect(fixture.remove).toHaveBeenCalledWith(scratch, { recursive: true, force: true })
 })
 
-it.each(['branch proof', 'conflict preview'])(
+it.each(['branch proof', 'conflict preview', 'review equivalence'])(
   'forwards quarantine authority through the actual %s caller',
   async (caller) => {
     getLocalGitCapabilityCache({ cwd }).rememberSupported('merge-tree-write-tree')
     fixture.capture.mockImplementation(async (_binary, args: string[], options) => {
       options.onChildTerminated?.()
       const command = args.join(' ')
+      if (caller === 'review equivalence') {
+        return {
+          stdout: command.includes('--git-common-dir')
+            ? '/old/c/repo/.git\n'
+            : command.includes('refs/remotes/')
+              ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+              : command.includes('merge-base')
+                ? 'cccccccccccccccccccccccccccccccccccccccc'
+                : !command.includes('merge-tree') &&
+                    command.includes('cccccccccccccccccccccccccccccccccccccccc')
+                  ? 'dddddddddddddddddddddddddddddddddddddddd'
+                  : 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          stderr: ''
+        }
+      }
       return {
         stdout: command.includes('--git-common-dir')
           ? '/old/c/repo/.git\n'
@@ -233,6 +249,16 @@ it.each(['branch proof', 'conflict preview'])(
           branchName: 'feature',
           targetRefs: ['HEAD'],
           refreshRemoteTargets: false
+        })
+      ).resolves.toBe(true)
+    } else if (caller === 'review equivalence') {
+      await expect(
+        mergedReviewHeadIsEquivalent({
+          repoPath: cwd,
+          localGitOptions: {},
+          reviewHeadOid: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+          baseBranchName: 'main',
+          headOid: 'ffffffffffffffffffffffffffffffffffffffff'
         })
       ).resolves.toBe(true)
     } else {

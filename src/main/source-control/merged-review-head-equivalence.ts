@@ -1,6 +1,7 @@
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../git/command-runner/git-exec-file'
 import { gitOptionsForWorktree } from '../git/command-runner/git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../git/objects/local-git-object-quarantine'
+import type { GitExecutionContext } from '../git/command-runner/host-routing/wsl-git-path-preparation'
 import { withLocalGitCapabilityCacheForExecution } from '../git/command-runner/host-routing/git-capability-state'
 import { isUnsupportedMergeTreeWriteTreeError } from '../../shared/git/branches/git-merge-tree-capability'
 import { MergedReviewMembershipMemo } from './merged-review-membership-memo'
@@ -118,10 +119,14 @@ async function proveEquivalence(
         capabilities.runWithFallback(
           'merge-tree-write-tree',
           async () => {
-            const run = (env: NodeJS.ProcessEnv | undefined) =>
+            const run = (
+              env: NodeJS.ProcessEnv | undefined,
+              quarantineCanStart?: (context?: GitExecutionContext) => boolean
+            ) =>
               gitExecFileAsync(['merge-tree', '--write-tree', base, reviewHead], {
                 ...gitOptions,
-                ...(env ? { env } : {})
+                ...(env ? { env } : {}),
+                canStart: quarantineCanStart
               })
             try {
               // Quarantine the throwaway merged tree; probe support before older Git sees a quarantine.
