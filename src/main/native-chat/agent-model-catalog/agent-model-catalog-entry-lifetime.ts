@@ -1,4 +1,7 @@
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import type { AgentModelCatalogFailures } from './agent-model-catalog-failures'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
 import type { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
@@ -9,7 +12,6 @@ import {
   type AgentModelCatalogSuccess,
   type AgentModelCatalogSource
 } from './agent-model-catalog-entry'
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 
 export function agentModelCatalogEntryIsStale(
   entry: AgentModelCatalogEntry,
