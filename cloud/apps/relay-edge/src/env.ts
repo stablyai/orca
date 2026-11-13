@@ -2,6 +2,7 @@ import type { HostRelay } from './host-relay'
 import type { SpliceRelay } from './splice-relay'
 import { INGRESS_SECRET_MIN_LENGTH } from '../../../packages/relay-contract/src/ingress-header'
 import { parseCidr, type Cidr } from './ingress'
+import { metric } from './metrics'
 
 export interface Env {
   HOST_RELAY: DurableObjectNamespace<HostRelay>
@@ -48,9 +49,11 @@ export interface Env {
   ERASE_SIGNING_KEY?: string
   ERASE_ISSUER?: string
   // Secret(s) shared with the ingress proxies (secret binding; comma-separated while rotating,
-  // current first). Unset: ingress headers are ignored and every request is treated as direct.
+  // current first). Unset or malformed (see ingressConfig): ingress headers are ignored and every
+  // request is treated as direct.
   INGRESS_SECRETS?: string
-  // Token-mode ingress (a cloud load balancer; see ingress.ts). All three or none. INGRESS_TOKENS is
+  // Token-mode ingress (a cloud load balancer; see ingress.ts). All three or none; a partial or
+  // malformed setup switches token mode off and reports why, it never fails requests. INGRESS_TOKENS is
   // a secret (comma-separated while rotating); the origins (comma-separated, exact https origins)
   // and the load balancer's egress CIDRs (comma-separated, from scripts/ingress-source-cidrs.ts)
   // are plain vars. Unset: `v1s` headers are ignored.
@@ -75,8 +78,11 @@ export type EdgeConfig = {
   orphanGraceMs: number
   sweepIntervalMs: number
   leftRetentionMs: number
+  // Empty when that mode is off (unset, or switched off by a problem below).
   ingressSecrets: string[]
   ingressToken: { tokens: string[]; origins: string[]; sourceCidrs: Cidr[] }
+  // Why an ingress mode is off despite being configured (labels only, never values).
+  ingressProblems: string[]
 }
 
 const configs = new WeakMap<object, EdgeConfig>()
@@ -105,9 +111,7 @@ export function edgeConfig(env: Env): EdgeConfig {
   if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) throw new Error('relay_edge_config_jwks')
   if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) throw new Error('relay_edge_config_issuer')
   if (!env.RELAY_JWT_AUDIENCE) throw new Error('relay_edge_config_audience')
-  const ingressSecrets = env.INGRESS_SECRETS ? env.INGRESS_SECRETS.split(',').map((s) => s.trim()) : []
-  if (ingressSecrets.some((s) => s.length < INGRESS_SECRET_MIN_LENGTH)) throw new Error('relay_edge_config_ingress')
-  const ingressToken = ingressTokenConfig(env)
+  const ingress = ingressConfig(env)
   const config: EdgeConfig = {
     backend,
     cellId: env.EDGE_CELL_ID || 'edge',
@@ -116,31 +120,47 @@ export function edgeConfig(env: Env): EdgeConfig {
     orphanGraceMs: positiveInt('orphan_grace', env.ORPHAN_GRACE_MS),
     sweepIntervalMs: positiveInt('sweep_interval', env.SWEEP_INTERVAL_MS ?? String(24 * 60 * 60 * 1000)),
     leftRetentionMs: positiveInt('left_retention', env.LEFT_RETENTION_MS ?? String(30 * 24 * 60 * 60 * 1000)),
-    ingressSecrets,
-    ingressToken
+    ...ingress
   }
   // Shipped desktops close a control that is silent for 75 s; a ping must arrive well inside it.
   if (config.pingIntervalMs >= config.silenceTimeoutMs) throw new Error('relay_edge_config_ping_interval')
   configs.set(env, config)
+  if (config.ingressProblems.length > 0) {
+    // Never thrown: this runs on every request and in every object's alarms. A secret landing
+    // before its vars (or one bad range) switches that ingress mode off, loudly, and nothing else.
+    console.error(JSON.stringify({ event: 'relay_edge_ingress_config_invalid', problems: config.ingressProblems }))
+    for (const problem of config.ingressProblems) metric(env, 'ingress_config_invalid', 1, problem)
+  }
   return config
 }
 
 const list = (value: string | undefined) => (value ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+// Narrower than this is a typo, not a load balancer's egress set.
+const MIN_PREFIX = { v4: 8, v6: 16 }
+const TOKEN_OFF: EdgeConfig['ingressToken'] = { tokens: [], origins: [], sourceCidrs: [] }
 
-// Token mode is all or nothing: a partial setup fails every request rather than trusting less.
-function ingressTokenConfig(env: Env): EdgeConfig['ingressToken'] {
+// Each mode is all or nothing: a partial or malformed setup turns that mode off (requests are then
+// treated as direct) and reports why; it never throws.
+function ingressConfig(env: Env): Pick<EdgeConfig, 'ingressSecrets' | 'ingressToken' | 'ingressProblems'> {
+  const problems: string[] = []
+  let ingressSecrets = list(env.INGRESS_SECRETS)
+  if (ingressSecrets.some((s) => s.length < INGRESS_SECRET_MIN_LENGTH)) {
+    problems.push('secret_too_short')
+    ingressSecrets = []
+  }
   const tokens = list(env.INGRESS_TOKENS)
   const origins = list(env.INGRESS_ORIGINS)
   const cidrs = list(env.INGRESS_SOURCE_CIDRS)
-  if (tokens.length + origins.length + cidrs.length === 0) return { tokens: [], origins: [], sourceCidrs: [] }
+  if (tokens.length + origins.length + cidrs.length === 0) return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems }
   const sourceCidrs = cidrs.map(parseCidr)
   const originOk = (o: string) => URL.canParse(o) && new URL(o).protocol === 'https:' && new URL(o).origin === o
-  if (
-    tokens.length === 0 || origins.length === 0 || cidrs.length === 0 ||
-    tokens.some((t) => t.length < INGRESS_SECRET_MIN_LENGTH || /\s/.test(t)) ||
-    !origins.every(originOk) || sourceCidrs.some((c) => c === null)
-  ) {
-    throw new Error('relay_edge_config_ingress_token')
-  }
-  return { tokens, origins, sourceCidrs: sourceCidrs as Cidr[] }
+  const tokenProblems = [
+    tokens.length === 0 || origins.length === 0 || cidrs.length === 0 ? 'token_mode_partial' : '',
+    tokens.some((t) => t.length < INGRESS_SECRET_MIN_LENGTH || /\s/.test(t)) ? 'token_too_short' : '',
+    origins.every(originOk) ? '' : 'origin_invalid',
+    sourceCidrs.some((c) => c === null) ? 'cidr_invalid' : '',
+    sourceCidrs.some((c) => c !== null && c.bits < (c.v6 ? MIN_PREFIX.v6 : MIN_PREFIX.v4)) ? 'cidr_too_broad' : ''
+  ].filter(Boolean)
+  if (tokenProblems.length > 0) return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems.concat(tokenProblems) }
+  return { ingressSecrets, ingressToken: { tokens, origins, sourceCidrs: sourceCidrs as Cidr[] }, ingressProblems: problems }
 }

@@ -8,7 +8,7 @@ import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
 import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
-import { readIngress, type Ingress } from './ingress'
+import { fromTokenSource, readIngress, type Ingress } from './ingress'
 import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
@@ -94,6 +94,12 @@ export default {
     // A trusted ingress hop (ingress.ts) stands in for the Worker's own URL and the caller's address;
     // anything else, including a header that fails to verify, is treated as absent.
     const ingress = await readIngress(edgeConfig(env), request)
+    if (!ingress && fromTokenSource(edgeConfig(env), request)) {
+      // From a front door's egress ranges but not trusted (missing or wrong token, origin or client
+      // address): refused, never keyed on the shared egress address as if it were a direct client.
+      metric(env, 'ingress_rejected', 1, '', [], '', requestPlace(request))
+      return reject(403)
+    }
     if (!ingress && request.headers.has(INGRESS_HEADER)) metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request))
     const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
     if (admin) return handleAdmin(env, request, admin[1] as AdminOp)

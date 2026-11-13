@@ -22,6 +22,10 @@ export type MetricEvent =
   | 'not_on_edge'
   // A request carried an ingress header that failed to verify (wrong secret, skew, malformed).
   | 'ingress_refused'
+  // A request from a token-mode front door's egress ranges that failed the trust rule: answered 403.
+  | 'ingress_rejected'
+  // An ingress mode is configured but malformed, so it is off: label names the problem (per isolate).
+  | 'ingress_config_invalid'
 
 // blobs: [event, label, version, reason, place]; doubles: [value, ...extra]. place is the
 // client's ingress '<continent>/<colo>/<country>' (e.g. 'AS/HKG/HK'; country appended so prefix

@@ -20,6 +20,7 @@ const FRONT = `https://localhost:${FRONT_PORT}`
 const TOKEN = randomBytes(32).toString('base64url')
 const ADMIN_KEY = randomBytes(36).toString('base64url')
 const ADMIN_ISSUER = 'https://director.test.invalid'
+const LB_EGRESS = '192.0.2.10'
 
 if (!process.env.G1_LOCAL_DIR) {
   const dir = mkdtempSync(join(tmpdir(), 'relay-g1-local-'))
@@ -40,9 +41,12 @@ if (!process.env.G1_LOCAL_DIR) {
 // What the load balancer adds. Client copies of these names are overwritten, as the LB does.
 function lbHeaders(raw: string[], clientIp: string): [string, string][] {
   const out: [string, string][] = []
-  for (let i = 0; i < raw.length; i += 2) if (!/^(host|x-orca-.*)$/i.test(raw[i]!)) out.push([raw[i]!, raw[i + 1]!])
+  for (let i = 0; i < raw.length; i += 2) if (!/^(host|x-orca-.*|cf-connecting-ip)$/i.test(raw[i]!)) out.push([raw[i]!, raw[i + 1]!])
   return out.concat([
     ['host', `127.0.0.1:${EDGE_PORT}`],
+    // Local dev has no Cloudflare in front: the emulated egress address, which wrangler dev passes
+    // through, stands in for the load balancer's egress range. Direct callers keep 127.0.0.1.
+    ['cf-connecting-ip', LB_EGRESS],
     ['x-orca-ingress', `v1s cn ${FRONT} ${TOKEN}`],
     ['x-orca-client-ip', clientIp.replace(/^::ffff:/, '')],
     ['x-orca-client-country', 'CN']
@@ -88,8 +92,8 @@ async function run(): Promise<void> {
       `RELAY_JWKS='${jwksOf(keys)}'`,
       `INGRESS_TOKENS=${TOKEN}`,
       `INGRESS_ORIGINS=${FRONT}`,
-      // Local dev: the hop that reaches the Worker is this machine.
-      'INGRESS_SOURCE_CIDRS=127.0.0.1/32,::1/128',
+      // The emulated load balancer's egress (documentation range); direct calls come from 127.0.0.1.
+      'INGRESS_SOURCE_CIDRS=192.0.2.0/24',
       'PING_INTERVAL_MS=3000',
       'SILENCE_TIMEOUT_MS=9000',
       'ORPHAN_GRACE_MS=4000'

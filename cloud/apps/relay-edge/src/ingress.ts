@@ -6,8 +6,10 @@
 //    INGRESS_TOKENS, the origin is one of INGRESS_ORIGINS, AND cf-connecting-ip (the hop that
 //    reached Cloudflare) is inside INGRESS_SOURCE_CIDRS, the load balancer's published egress
 //    ranges, pinned in config (scripts/ingress-source-cidrs.ts refreshes and checks them).
+//    Those ranges are shared by every customer's load balancers: the token is the discriminator.
+//    A request from those ranges that fails the rule is refused (403, ingress_rejected) rather
+//    than treated as direct, which would key pre-auth limits on the shared egress address.
 import { INGRESS_HEADER, verifyIngressHeader, type IngressClaim } from '../../../packages/relay-contract/src/ingress-header'
-import { timingSafeEqualStr } from './bytes'
 import type { EdgeConfig } from './env'
 
 export type Ingress = IngressClaim & { country?: string }
@@ -24,13 +26,41 @@ export async function readIngress(config: EdgeConfig, request: Request): Promise
   if (tokens.length === 0 || parts.length !== 4) return null
   const [, name, origin, token] = parts as [string, string, string, string]
   if (!/^[a-z0-9-]{1,32}$/.test(name) || !origins.includes(origin)) return null
-  if (!tokens.some((t) => timingSafeEqualStr(t, token))) return null
-  if (!inCidrs(request.headers.get('cf-connecting-ip') ?? '', sourceCidrs)) return null
+  if (!fromTokenSource(config, request)) return null
+  if (!(await tokenMatches(tokens, token))) return null
   // Expanded by the load balancer; a missing value (empty) is refused rather than keyed on its egress.
   const clientIp = request.headers.get('x-orca-client-ip')?.trim() ?? ''
   if (!parseIp(clientIp)) return null
   const country = request.headers.get('x-orca-client-country')?.trim().toUpperCase() ?? ''
   return { name, origin, clientIp, ...(COUNTRY.test(country) ? { country } : {}) }
+}
+
+// The hop that reached Cloudflare is inside the token-mode front door's egress ranges. Those ranges
+// are shared by every customer's load balancers, so this alone proves nothing; the token does.
+export function fromTokenSource(config: EdgeConfig, request: Request): boolean {
+  const { sourceCidrs } = config.ingressToken
+  return sourceCidrs.length > 0 && inCidrs(request.headers.get('cf-connecting-ip') ?? '', sourceCidrs)
+}
+
+// Compares SHA-256 digests, so neither the length nor the content of a token leaks through timing.
+// crypto.subtle.timingSafeEqual is the Workers runtime's; the loop is the same check elsewhere.
+async function tokenMatches(tokens: readonly string[], presented: string): Promise<boolean> {
+  const digest = async (text: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
+  const mine = await digest(presented)
+  const subtle = crypto.subtle as SubtleCrypto & { timingSafeEqual?: (a: ArrayBufferView, b: ArrayBufferView) => boolean }
+  let match = false
+  for (const token of tokens) {
+    const theirs = await digest(token)
+    let equal: boolean
+    if (subtle.timingSafeEqual) equal = subtle.timingSafeEqual(mine, theirs)
+    else {
+      let diff = 0
+      for (let i = 0; i < mine.length; i++) diff |= mine[i]! ^ theirs[i]!
+      equal = diff === 0
+    }
+    match ||= equal
+  }
+  return match
 }
 
 // IPv4 or IPv6 text → family and 32/128-bit value; null for anything else.
