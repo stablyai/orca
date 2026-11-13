@@ -2113,9 +2113,6 @@
         "unreadableSkillSource": "Ein Skill-Ordner hat nicht geantwortet, daher ist dieser Status möglicherweise unvollständig."
       },
       "useMacosTccPromptNotice": {
-        "title": "Werden Meldungen wie „Orca would like to access…“ angezeigt?",
-        "description": "Berechtigungsabfragen von macOS können erscheinen, wenn ein in Orca ausgeführter Agent oder ein Terminalwerkzeug auf geschützte Dateien zugreift. In den Einstellungen „Full Disk Access“ gewähren, um diese Abfragen zu reduzieren.",
-        "openSettings": "Einstellungen öffnen",
         "dismiss": "Nicht mehr anzeigen"
       },
       "useMacTccAttributionSeveredNotice": {

@@ -2082,9 +2082,6 @@
         "unreadableSkillSource": "Bir beceri klasörü yanıt vermediği için durum bilgisi eksik olabilir."
       },
       "useMacosTccPromptNotice": {
-        "title": "“Orca şuna erişmek istiyor…” uyarıları mı görüyorsunuz?",
-        "description": "Orca'da çalışan bir ajan veya terminal aracı korumalı dosyalara erişmeye çalıştığında macOS'tan izin mesajları görünebilir. Bu uyarıları azaltmak için Ayarlar'dan Tam Disk Erişimi verin.",
-        "openSettings": "Ayarları Aç",
         "dismiss": "Bir daha gösterme"
       },
       "useMacTccAttributionSeveredNotice": {

@@ -2528,9 +2528,6 @@
         "unreadableSkillSource": "Uma pasta de skill não respondeu, então este status pode estar incompleto."
       },
       "useMacosTccPromptNotice": {
-        "title": "Está vendo avisos de “O Orca gostaria de acessar…”?",
-        "description": "Mensagens de permissão do macOS podem aparecer quando um agente ou ferramenta de terminal em execução no Orca tenta acessar arquivos protegidos. Conceda Acesso Total ao Disco em Configurações para reduzir esses avisos.",
-        "openSettings": "Abrir Configurações",
         "dismiss": "Não mostrar novamente"
       },
       "useMacTccAttributionSeveredNotice": {
