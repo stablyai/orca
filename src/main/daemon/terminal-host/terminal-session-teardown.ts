@@ -38,7 +38,7 @@ export class TerminalSessionTeardown {
   }
 
   // Exact identity: the operation for this ID must be this Session's, not a successor's.
-  isTracked(sessionId: string, session: object): boolean {
+  isTracked(sessionId: string, session: Session): boolean {
     return this.operations.get(sessionId)?.session === session
   }
 

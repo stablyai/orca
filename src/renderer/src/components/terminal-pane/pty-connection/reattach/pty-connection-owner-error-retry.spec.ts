@@ -219,7 +219,7 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
       expect(transport.connect.mock.calls[1]?.[0].sessionId).toBeUndefined()
       expect(createdTransportOptions).toHaveLength(1)
       expect(deps.onPtyErrorRef.current).toHaveBeenCalledTimes(1)
-      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId[LEAF_2]).toBe(
+      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId?.[LEAF_2]).toBe(
         'fresh-pty'
       )
       sendTerminalInputThroughPane(pane, 'typed')
