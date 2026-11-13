@@ -8042,8 +8042,6 @@
             "df205a675e": "Интенсивность оттенка",
             "ba1d9a0607": "Оттенок боковой панели"
           },
-          "interfaceDefaultFont": "Шрифт по умолчанию",
-          "terminalDefaultFont": "Шрифт по умолчанию",
           "interfaceTitle": "Интерфейс",
           "terminalTitle": "Терминал",
           "windowSidebarSummary": "Боковая панель, строка состояния и проводник файлов",

@@ -7709,8 +7709,6 @@
             "df205a675e": "Stärke der Farbtönung",
             "ba1d9a0607": "Farbtönung der Seitenleiste"
           },
-          "interfaceDefaultFont": "Standardschriftart",
-          "terminalDefaultFont": "Standardschriftart",
           "interfaceTitle": "Oberfläche",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Seitenleiste, Statusleiste und Datei-Explorer",

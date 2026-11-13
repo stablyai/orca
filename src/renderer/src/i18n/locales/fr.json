@@ -7592,8 +7592,6 @@
             "df205a675e": "Intensité de la teinte",
             "ba1d9a0607": "Teinte de la barre latérale"
           },
-          "interfaceDefaultFont": "Police par défaut",
-          "terminalDefaultFont": "Police par défaut",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barre latérale, barre d'état et explorateur de fichiers",

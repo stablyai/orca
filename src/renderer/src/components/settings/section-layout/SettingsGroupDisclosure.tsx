@@ -5,25 +5,20 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../store/index'
 import { normalizeSettingsSearchQuery } from '../search/settings-search'
 import { useTranslate } from '@/i18n/use-translate'
+import { SETTINGS_GROUP_NESTED_INSET_CLASS } from './SettingsGroup'
 
-type AppearanceAdvancedDisclosureProps = {
+type SettingsGroupDisclosureProps = {
   label?: string
   forceOpen?: boolean
-  showTopBorder?: boolean
-  className?: string
-  contentClassName?: string
   children: React.ReactNode
 }
 
-/** Search force-opens advanced controls so matches remain reachable. */
-export function AppearanceAdvancedDisclosure({
+/** Collapsible rows inside a SettingsGroup card, one fixed step in from the card's rows. Search force-opens it so matches remain reachable. */
+export function SettingsGroupDisclosure({
   label,
   forceOpen = false,
-  showTopBorder = true,
-  className,
-  contentClassName,
   children
-}: AppearanceAdvancedDisclosureProps): React.JSX.Element {
+}: SettingsGroupDisclosureProps): React.JSX.Element {
   const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
@@ -32,14 +27,14 @@ export function AppearanceAdvancedDisclosure({
   const expanded = open || forced
 
   return (
-    <div className={cn('mt-3 pt-2', showTopBorder && 'border-t border-border/50', className)}>
+    <div data-settings-group-disclosure="" className="border-t border-border">
       <button
         type="button"
         aria-expanded={expanded}
         onClick={() => setOpen((prev) => !prev)}
         // Search matches and unsaved edits must remain reachable.
         disabled={forced}
-        className="flex w-full items-center gap-2 py-1 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default"
+        className="flex min-h-11 w-full items-center gap-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default"
       >
         <ChevronRight
           className={cn(
@@ -49,7 +44,7 @@ export function AppearanceAdvancedDisclosure({
         />
         {label ?? t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
       </button>
-      {expanded ? <div className={cn('pt-1', contentClassName)}>{children}</div> : null}
+      {expanded ? <div className={SETTINGS_GROUP_NESTED_INSET_CLASS}>{children}</div> : null}
     </div>
   )
 }

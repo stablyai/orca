@@ -385,7 +385,8 @@ export function ComputerUsePane(): React.JSX.Element {
       ) : null}
 
       <SettingsGroup>
-        <div className="py-4">
+        {/* The inline panel adds pt-1.5 of its own; this evens the top inset with the bottom. */}
+        <div className="pb-4 pt-2.5">
           <ComputerUseSkillSetupPanel />
         </div>
       </SettingsGroup>

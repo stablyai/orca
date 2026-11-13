@@ -5825,8 +5825,6 @@
             "df205a675e": "Intensidade da Tonalidade",
             "ba1d9a0607": "Tonalidade da Barra Lateral"
           },
-          "interfaceDefaultFont": "Fonte padrão",
-          "terminalDefaultFont": "Fonte padrão",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barra lateral, barra de status e explorador de arquivos",
