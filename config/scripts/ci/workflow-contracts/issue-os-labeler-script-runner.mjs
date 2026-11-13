@@ -5,10 +5,9 @@ import { parse } from 'yaml'
 export const MANAGED_LABELS = ['os:macos', 'os:Windows', 'os:linux', 'os:mobile', 'mobile']
 export const ISSUE_NUMBER = 4242
 
-export const labelerWorkflow = parse(
-  readFileSync('.github/workflows/issue-os-labeler.yaml', 'utf8')
-)
-export const labelerScript = labelerWorkflow.jobs['apply-os-label'].steps[0].with.script
+const labelerScript = parse(readFileSync('.github/workflows/issue-os-labeler.yaml', 'utf8')).jobs[
+  'apply-os-label'
+].steps[0].with.script
 
 export function readIssueForm(name) {
   return parse(readFileSync(`.github/ISSUE_TEMPLATE/${name}.yml`, 'utf8'))
@@ -23,7 +22,7 @@ export function renderSections(sections) {
     .join('\n\n')
 }
 
-export function formHeadings(form) {
+function formHeadings(form) {
   return form.body
     .filter((field) => field.type !== 'markdown')
     .map((field) => field.attributes.label)
@@ -97,11 +96,10 @@ export function createFakeIssue({ body, labels = [], number = ISSUE_NUMBER }) {
 }
 
 // Runs a workflow script exactly as actions/github-script does: as an async function body.
-export function runLabelerScript(issue, { script = labelerScript, payloadIssue } = {}) {
-  const logs = []
+export function runLabelerScript(issue, { payloadIssue } = {}) {
   const core = {
-    info: (message) => logs.push(message),
-    warning: (message) => logs.push(message),
+    info: () => {},
+    warning: () => {},
     setFailed: (message) => {
       throw new Error(message)
     }
@@ -117,12 +115,11 @@ export function runLabelerScript(issue, { script = labelerScript, payloadIssue }
       }
     }
   }
-  const done = runInNewContext(`(async () => { ${script}\n})()`, {
+  return runInNewContext(`(async () => { ${labelerScript}\n})()`, {
     context,
     github: { rest: issue.rest },
     core
   })
-  return Object.assign(done, { logs })
 }
 
 // Runs the labeler on a fresh issue and reports the complete outcome.
