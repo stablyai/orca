@@ -68,6 +68,12 @@ export function beginOrcaCloudPkceFlow(
     authorizeParams?: Record<string, string>
     /** Keep the browser's callback request open until the caller calls finishBrowser. */
     holdBrowser?: boolean
+    /**
+     * COPY-LINK-FIRST-CLICK: false starts the same flow without opening the browser (the person
+     * copied the link to paste into a private window). The listener and its timeout are unchanged,
+     * so an unused link ends like an unanswered click.
+     */
+    openBrowser?: boolean
   } = {}
 ): Promise<OrcaCloudAuthorizationCode> {
   const codeVerifier = createCodeVerifier()
@@ -209,9 +215,12 @@ export function beginOrcaCloudPkceFlow(
       const devUrlFile = app.isPackaged
         ? ''
         : (process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE?.trim() ?? '')
-      const open = devUrlFile
-        ? appendFile(devUrlFile, `${authorizeUrl.toString()}\n`, { mode: 0o600 })
-        : shell.openExternal(authorizeUrl.toString())
+      const open =
+        options.openBrowser === false
+          ? Promise.resolve()
+          : devUrlFile
+            ? appendFile(devUrlFile, `${authorizeUrl.toString()}\n`, { mode: 0o600 })
+            : shell.openExternal(authorizeUrl.toString())
       void open.catch((error) => {
         rejectFlow(
           error instanceof Error ? error : new Error('orca_cloud_auth_browser_open_failed')
@@ -219,4 +228,29 @@ export function beginOrcaCloudPkceFlow(
       })
     })
   })
+}
+
+/** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+export type ConnectCurrentArgs = { openBrowser?: boolean }
+
+/** The renderer's connect args: only an explicit `openBrowser: false` suppresses the browser. */
+export function connectCurrentArgsFromUnknown(args: unknown): ConnectCurrentArgs {
+  const openBrowser =
+    typeof args === 'object' && args !== null
+      ? Object.getOwnPropertyDescriptor(args, 'openBrowser')?.value
+      : undefined
+  return openBrowser === false ? { openBrowser: false } : {}
+}
+
+/**
+ * The PKCE options a sign-in passes: cloud setup's parameters and held tab, or a plain sign-in that
+ * may skip the browser (COPY-LINK-FIRST-CLICK; setup asks for that on its own `connect` args).
+ */
+export function pkceSignInOptions(
+  setup: ({ authorizeParams?: Record<string, string> } & ConnectCurrentArgs) | undefined
+): { openBrowser: boolean; authorizeParams?: Record<string, string>; holdBrowser?: boolean } {
+  return {
+    openBrowser: setup?.openBrowser !== false,
+    ...(setup?.authorizeParams ? { authorizeParams: setup.authorizeParams, holdBrowser: true } : {})
+  }
 }

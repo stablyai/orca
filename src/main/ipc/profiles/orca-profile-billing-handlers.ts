@@ -111,7 +111,8 @@ const CloudSetupStart = z
   .object({
     repo: z.string().url().startsWith('https://github.com/').max(300).optional(),
     needs: z.array(z.enum(CLOUD_SETUP_NEEDS)).max(3),
-    chooseTeam: z.boolean().optional()
+    chooseTeam: z.boolean().optional(),
+    openBrowser: z.boolean().optional()
   })
   .strict()
 

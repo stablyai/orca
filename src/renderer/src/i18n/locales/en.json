@@ -29488,6 +29488,7 @@
     "copyLink": "Copy link",
     "moreOptions": "More link options",
     "copyLinkFailed": "Couldn’t copy the link.",
-    "linkCopied": "Link copied"
+    "linkCopied": "Link copied",
+    "signInLinkHint": "Open it in any browser on this computer."
   }
 }
