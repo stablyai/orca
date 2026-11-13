@@ -29732,7 +29732,9 @@
     "following": "Following",
     "unfollow": "Unfollow",
     "follow": "Follow",
-    "unfollowNamed": "Unfollow {{title}}"
+    "unfollowNamed": "Unfollow {{title}}",
+    "followFailed": "Couldn’t follow this workspace",
+    "unfollowFailed": "Couldn’t unfollow this workspace"
   },
   "sidebarTeam": {
     "title": "Team",

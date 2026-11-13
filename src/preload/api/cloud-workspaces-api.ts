@@ -1,5 +1,6 @@
 import type {
   CloudWorkspace,
+  CloudWorkspaceFollow,
   CloudWorkspaceGrant,
   CloudOrgSlug,
   CloudWorkspaceLinkTarget,
@@ -37,6 +38,8 @@ export type CloudWorkspacesApi = {
   list: (query: CloudWorkspaceListQuery) => Promise<CloudWorkspaceListResult>
   get: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspace>>
   patch: (id: string, patch: CloudWorkspacePatch) => Promise<CloudWorkspacesResult<CloudWorkspace>>
+  /** Follow or unfollow a team workspace (PARITY-FOLLOW): the caller's state and its followers. */
+  follow: (id: string, follow: boolean) => Promise<CloudWorkspacesResult<CloudWorkspaceFollow>>
   /** Resolves either link form; a slug link for another org fails with reason `other_org` and its `orgId`. */
   resolveLink: (
     target: CloudWorkspaceLinkTarget,

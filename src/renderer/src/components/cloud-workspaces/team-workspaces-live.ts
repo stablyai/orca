@@ -87,6 +87,32 @@ export function useTeamWorkspacesLive(account: string | null): readonly CloudWor
   )
 }
 
+/** A local edit (a follow) shown at once, until the next read confirms it. */
+export function patchTeamWorkspaceLive(id: string, patch: Partial<CloudWorkspace>): void {
+  if (snapshot) {
+    publish({
+      ...snapshot,
+      workspaces: snapshot.workspaces.map((w) => (w.id === id ? { ...w, ...patch } : w))
+    })
+  }
+}
+
+/**
+ * Follow or unfollow (PARITY-FOLLOW). The live list updates from the server's answer; a refusal
+ * leaves it as it was and resolves false (the caller says so).
+ */
+export async function setCloudWorkspaceFollow(id: string, follow: boolean): Promise<boolean> {
+  const result = await window.api.cloudWorkspaces.follow(id, follow).catch(() => null)
+  if (!result?.ok) {
+    return false
+  }
+  patchTeamWorkspaceLive(id, {
+    following: result.value.following,
+    followers: result.value.followers
+  })
+  return true
+}
+
 /** Test and fixture seam: what the shared read last returned. */
 export function setTeamWorkspacesLiveForTests(
   account: string | null,
