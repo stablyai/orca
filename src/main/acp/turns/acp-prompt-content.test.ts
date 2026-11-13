@@ -74,12 +74,14 @@ describe('ACP prompt content', () => {
     writeFileSync(join(root, "it's.txt"), 'c')
     writeFileSync(join(root, 'report!'), 'd')
     writeFileSync(join(root, 'report'), 'e')
+    // OpenCode 2 fails the whole turn for a linked file over 20 MiB.
+    writeFileSync(join(root, 'big.log'), Buffer.alloc(20 * 1024 * 1024 + 1))
     mkdirSync(join(dir, 'outside'))
     writeFileSync(join(dir, 'outside', 'c.txt'), 'secret')
     // A junction needs no privilege on Windows.
     symlinkSync(join(dir, 'outside'), join(root, 'escape'), 'junction')
     const text =
-      'Read @a.txt. and @"my dir/b.txt" @it\'s.txt, see:@report! not @../outside/c.txt @escape/c.txt @missing.txt'
+      'Read @a.txt. and @"my dir/b.txt" @it\'s.txt, see:@report! not @../outside/c.txt @escape/c.txt @missing.txt @big.log'
     const real = realpathSync(root)
 
     expect(await acpPromptBlocks(message({ type: 'text', text }), true, root)).toEqual([
