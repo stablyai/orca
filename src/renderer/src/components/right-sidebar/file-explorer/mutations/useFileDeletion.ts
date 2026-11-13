@@ -263,24 +263,30 @@ export function useFileDeletion({
           needsConfirmation: roots.some(needsRemoteDeleteConfirmation),
           confirmBatch: () =>
             confirm({
+              title: translate('common.delete', 'Delete'),
               // Count selected children even when ancestor roots subsume their deletes.
-              title: hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.deleteItems',
-                    'Delete {{count}} items?',
-                    { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
-                    'Permanently delete {{count}} items?',
-                    { count: nodes.length, defaultValue_one: 'Permanently delete {{count}} item?' }
-                  ),
-              description: !hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
-                    'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
-                  )
-                : mixedBatchDeleteDescription(isWindows),
+              description: [
+                hasLocalDelete
+                  ? translate(
+                      'auto.components.right.sidebar.useFileDeletion.deleteItems',
+                      'Delete {{count}} items?',
+                      { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
+                      'Permanently delete {{count}} items?',
+                      {
+                        count: nodes.length,
+                        defaultValue_one: 'Permanently delete {{count}} item?'
+                      }
+                    ),
+                !hasLocalDelete
+                  ? translate(
+                      'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
+                      'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
+                    )
+                  : mixedBatchDeleteDescription(isWindows)
+              ].join('\n'),
               confirmLabel: translate(
                 'auto.components.right.sidebar.useFileDeletion.92276aceb7',
                 'Delete'

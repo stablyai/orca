@@ -1,4 +1,8 @@
-import type { AutomationRun, AutomationRunStatus } from './automation-run'
+import {
+  getAutomationRunLastRunAt,
+  type AutomationRun,
+  type AutomationRunStatus
+} from './automation-run'
 import type { SetupTrustMismatch } from '../../worktree/create-types'
 
 export type AutomationUsageSummary = {
@@ -65,9 +69,7 @@ export function summarizeAutomationRunUsage(
     totalTokens,
     estimatedCostUsd: hasKnownCost ? estimatedCostUsd : null,
     lastRunStatus: latest?.status ?? null,
-    lastRunAt: latest
-      ? (latest.dispatchedAt ?? latest.startedAt ?? latest.createdAt ?? null)
-      : null,
+    lastRunAt: latest ? getAutomationRunLastRunAt(latest) : null,
     ...(latest?.setupSkippedReason === 'setup-changed'
       ? {
           lastRunSetupSkipped: true,

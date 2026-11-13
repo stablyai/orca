@@ -9,8 +9,8 @@ import type {
 } from '../../shared/crash-reporting'
 import type { RendererHeapStatistics } from '../../shared/renderer-heap-statistics'
 import type { RendererProcessMemory } from '../../shared/renderer-process-memory'
-import { readRendererHeapStatistics } from '../renderer-heap-statistics-reader'
-import { readRendererProcessMemory } from '../renderer-process-memory-reader'
+import { readRendererHeapStatistics } from '../renderer/diagnostics/renderer-heap-statistics-reader'
+import { readRendererProcessMemory } from '../renderer/diagnostics/renderer-process-memory-reader'
 import type { PreloadApi } from '../api-types'
 
 export const crashReportsApi = {

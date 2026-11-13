@@ -15,13 +15,13 @@ const {
 } = await vi.hoisted(async () => await import('./runtime-local-worktree-create-test-harness'))
 
 vi.mock('../../../text-generation/commit-message-text-generation', () => ({
-  resolveTextGenerationParams: () => ({
+  resolveCommitMessageSettings: () => ({
     ok: true,
     params: { agentId: 'claude', model: 'fixture' }
   }),
   generateBranchNameFromContext: async () => ({ success: true, slug: 'fix-auth' })
 }))
-vi.mock('../../../text-generation/commit-message-agent-environment', () => ({
+vi.mock('../../../text-generation/execution/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: async () => ({ ok: true })
 }))
 

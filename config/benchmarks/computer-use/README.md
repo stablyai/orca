@@ -62,11 +62,11 @@ Tasks cover explicit text targeting with another field logically focused, Unicod
 entry plus submit, select-all replacement plus submit, and color choice plus one
 click. Interference probes remain separate from task latency comparisons.
 
-Explicit-target typing is a native capability probe. Orca's public CLI/RPC currently
-accepts typing at the focused field and does not expose an element target for text.
-Failure of this probe identifies a capability to consider adding; it does not prove
-a violation of the current public typing contract. Click-then-type tasks exercise
-the existing sequence, although this benchmark still bypasses public transports.
+Explicit-target typing is a native capability probe. Orca's public CLI/RPC accepts
+an element target for text (`type-text --element-index`) on providers that report
+`actions.typeTextElement` (macOS and Linux); Windows types only at the focused
+field. Click-then-type tasks send no element with the text, like `type-text`
+without the index, although this benchmark still bypasses public transports.
 
 The Linux Electron job also records restoration stages in `focus-probe/results.json`.
 It records the AT-SPI focus acknowledgment, selected ACTIVE state, manual legacy PID

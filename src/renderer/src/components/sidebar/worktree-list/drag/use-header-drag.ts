@@ -24,7 +24,6 @@ import { useRepoHeaderDrag } from './project-header-drag'
 import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
 import { useProjectGroupHeaderDrag } from './project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
-import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
 import {
   getRootProjectHeaderCountByOccurrenceKey,
   getSidebarRootProjectHeaderKeys
@@ -68,8 +67,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void
   onHostDragActiveChange: (active: boolean) => void
-  suppressMeasurementAdjustmentUntilRef: React.MutableRefObject<number>
-  directScrollInputUntilRef: React.MutableRefObject<number>
+  onScrollIntent: () => void
 }) {
   const {
     rows,
@@ -83,8 +81,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     scrollRef,
     onReorderHostSections,
     onHostDragActiveChange,
-    suppressMeasurementAdjustmentUntilRef,
-    directScrollInputUntilRef
+    onScrollIntent
   } = args
   const reorderRepos = useAppStore((s) => s.reorderRepos)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
@@ -124,18 +121,12 @@ export function useWorktreeSidebarHeaderDrag(args: {
     return byGroupId
   }, [projectGroups])
 
-  // Suppress anchor correction after manual header moves so it cannot chase the reordered row.
-  const suppressScrollCorrectionForHeaderCommit = useCallback(() => {
-    const suppressUntil = window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
-    suppressMeasurementAdjustmentUntilRef.current = suppressUntil
-    directScrollInputUntilRef.current = suppressUntil
-  }, [directScrollInputUntilRef, suppressMeasurementAdjustmentUntilRef])
   const commitRepoReorder = useCallback(
     (orderedIds: string[]) => {
-      suppressScrollCorrectionForHeaderCommit()
+      onScrollIntent()
       reorderRepos(orderedIds)
     },
-    [reorderRepos, suppressScrollCorrectionForHeaderCommit]
+    [reorderRepos, onScrollIntent]
   )
   const orderedHostIds = useMemo(
     () =>
@@ -196,12 +187,12 @@ export function useWorktreeSidebarHeaderDrag(args: {
       if (!Number.isFinite(tabOrder)) {
         return
       }
-      suppressScrollCorrectionForHeaderCommit()
+      onScrollIntent()
       // Why: manual order persists on the group's own host; the focused host may not hold this row.
       const ownerHostId = projectGroupOwnerHostIdByGroupId.get(groupId)
       void updateProjectGroup(groupId, { tabOrder }, { hostId: ownerHostId ?? undefined })
     },
-    [projectGroupOwnerHostIdByGroupId, suppressScrollCorrectionForHeaderCommit, updateProjectGroup]
+    [projectGroupOwnerHostIdByGroupId, onScrollIntent, updateProjectGroup]
   )
   const commitRootProjectOrder = useCallback(
     (visibleKeys: readonly string[], draggedKey: string, dropIndex: number) => {
@@ -211,7 +202,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
           visibleKeys,
           draggedKey,
           dropIndex,
-          onCommit: suppressScrollCorrectionForHeaderCommit
+          onCommit: onScrollIntent
         })
       void save()
         .catch(() => false)
@@ -226,7 +217,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
           }
         })
     },
-    [suppressScrollCorrectionForHeaderCommit]
+    [onScrollIntent]
   )
   // Drag applies only in manual order; still construct the controller inert for stable hook order.
   const repoDrag = useRepoHeaderDrag({

@@ -2,7 +2,7 @@ import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/wo
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { settledWriteStub } from '../../../providers/settled-pty-write-stub'
+import { settledWriteStub } from '../../../providers/testing/settled-pty-write-stub'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { makeStore } from '../server/runtime-rpc-worktree-store-fixtures'
 import { AGENT_PROMPT_TEST_WORKTREE_PATH } from '../../terminal/input/agent-prompt-submission-runtime-test-fixture'

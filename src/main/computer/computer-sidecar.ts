@@ -3,6 +3,7 @@ import { currentComputerProvider, shutdownComputerProviders } from './computer-p
 import { RuntimeClientError } from './runtime-client-error'
 import { ComputerTreeBaselines } from './computer-snapshot-tree-diff'
 import type { ComputerProviderCapabilities } from '../../shared/computer-use-runtime-types'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
 
 type SidecarRequest = {
   id: number
@@ -77,6 +78,12 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
       return treeBaselines.apply(params, await provider.action('drag', params))
     }
     case 'typeText': {
+      if (params.elementIndex !== undefined) {
+        const unsupported = computerTypeTextTargetUnsupportedMessage(await provider.capabilities())
+        if (unsupported) {
+          throw new RuntimeClientError('unsupported_capability', unsupported)
+        }
+      }
       return treeBaselines.apply(params, await provider.action('typeText', params))
     }
     case 'pressKey': {

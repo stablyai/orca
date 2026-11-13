@@ -3,9 +3,13 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
 import {
   getRevealBoundsVisibility,
   getRevealTargetBounds,
-  revealElementInScrollContainer
+  revealElementInScrollContainer,
+  type SidebarRevealScroll
 } from './worktree-sidebar-reveal'
 import { getMountedWorktreeOptions, getWorktreeOptionId } from '../rows/option-dom'
+import { getRenderRowOptionId } from './active-descendant-option'
+import type { RenderRow } from '../listing/render-row'
+import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui/ui-slice-contract-core'
 
 // Pinned duplicates render twice; an on-screen copy beats jumping to its off-screen twin (#24852).
 export function findOnScreenWorktreeOption(
@@ -35,12 +39,29 @@ export function findOnScreenWorktreeOption(
   return fullyVisible ?? partlyVisible
 }
 
+export function getPreferredMountedWorktreeOptionId(
+  container: HTMLElement,
+  targetRow: RenderRow,
+  request: PendingSidebarWorktreeReveal
+): string | undefined {
+  if (request.rowKey) {
+    return getWorktreeOptionId(request.rowKey)
+  }
+  const { worktreeId, executionHostId } = request
+  const targetOptionId = getRenderRowOptionId(targetRow, worktreeId, executionHostId)
+  return (
+    findOnScreenWorktreeOption(container, worktreeId, executionHostId, targetOptionId)?.id ??
+    targetOptionId
+  )
+}
+
 export function revealMountedWorktreeElement(
   container: HTMLElement,
   worktreeId: string,
   behavior: ScrollBehavior,
   optionId?: string,
-  onScrollIssued?: (targetTop: number) => void
+  onScrollIssued?: (targetTop: number) => void,
+  scrollTo?: SidebarRevealScroll
 ): HTMLElement | null {
   const element = optionId
     ? document.getElementById(optionId)
@@ -48,7 +69,7 @@ export function revealMountedWorktreeElement(
   if (!element || !container.contains(element)) {
     return null
   }
-  return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
+  return revealElementInScrollContainer(container, element, behavior, onScrollIssued, scrollTo)
     ? element
     : null
 }
@@ -57,13 +78,14 @@ export function revealMountedSidebarRowElement(
   container: HTMLElement,
   rowKey: string,
   behavior: ScrollBehavior,
-  onScrollIssued?: (targetTop: number) => void
+  onScrollIssued?: (targetTop: number) => void,
+  scrollTo?: SidebarRevealScroll
 ): HTMLElement | null {
   const element = document.getElementById(getWorktreeOptionId(rowKey))
   if (!element || !container.contains(element)) {
     return null
   }
-  return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
+  return revealElementInScrollContainer(container, element, behavior, onScrollIssued, scrollTo)
     ? element
     : null
 }

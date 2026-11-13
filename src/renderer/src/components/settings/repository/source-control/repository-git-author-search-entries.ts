@@ -3,6 +3,7 @@ import type { SettingsSearchEntry } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { searchKeywordTranslator } from '../../search/settings-search-keywords'
+import { REPOSITORY_SOURCE_CONTROL_AI_CARD_ID } from '../repository-settings-targets'
 
 export function getRepositoryGitAuthorSearchEntries(
   repo: Repo,
@@ -11,6 +12,7 @@ export function getRepositoryGitAuthorSearchEntries(
   const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
+      targetSectionId: REPOSITORY_SOURCE_CONTROL_AI_CARD_ID,
       title: t('auto.components.settings.repository.search.6259586017', 'Git AI author'),
       description: t(
         'auto.components.settings.repository.search.6cc5c65e64',
