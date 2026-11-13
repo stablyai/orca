@@ -63,6 +63,21 @@ export const cloudPlanRequiredTrialUsedUp = cloudFailure(
   { plan: null, status: 'trial', reason: 'trial_used_up' }
 )
 
+export const cloudPlanRequiredTrialUsedUpMember = defineFixture({
+  ...cloudPlanRequiredTrialUsedUp,
+  setup: () => {
+    seedFixtureRepo()
+    stubBillingRole(false, { plan: null, status: 'trial', reason: 'trial_used_up' })
+  }
+})
+
+export const cloudPlanRequiredTrialUnavailable = cloudFailure(
+  'cloudPlanRequired',
+  'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+  '',
+  { plan: null, status: 'none', reason: 'trial_unavailable' }
+)
+
 export const cloudConcurrencyLimit = cloudFailure(
   'cloudConcurrencyLimit',
   'You already have as many Orca Cloud workspaces running as your plan allows.',

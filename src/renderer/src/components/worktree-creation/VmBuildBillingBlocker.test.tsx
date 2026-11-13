@@ -159,18 +159,22 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
   })
 
   it.each([
-    ['subscription_inactive', 'Your team’s plan has ended.'],
-    ['trial_used_up', 'Your team’s trial is used up.'],
-    ['no_subscription', 'Your team doesn’t have a plan yet.'],
-    ['trial_unavailable', 'Your team doesn’t have a plan yet.'],
-    [null, 'Your team needs a plan to use Orca Cloud.']
-  ] as const)('no plan (%s): only a plan that existed has "ended" (EP-11)', (reason, body) => {
-    renderBlocker('plan', { reason })
-    expect(screen.getByText(body)).toBeTruthy()
-    if (reason !== 'subscription_inactive') {
-      expect(screen.queryByText('Your team’s plan has ended.')).toBeNull()
+    ['subscription_inactive', true, 'Your team’s plan has ended.'],
+    ['trial_used_up', true, 'Your trial is used up.'],
+    ['trial_used_up', false, 'Your team’s trial is used up.'],
+    ['no_subscription', true, 'Your team doesn’t have a plan yet.'],
+    ['trial_unavailable', true, 'This account or team already used its trial.'],
+    [null, true, 'Your team needs a plan to use Orca Cloud.']
+  ] as const)(
+    'no plan (%s, admin=%s): only a plan that existed has "ended" (EP-11)',
+    (reason, admin, body) => {
+      renderBlocker('plan', { reason, canManageBilling: admin })
+      expect(screen.getByText(body)).toBeTruthy()
+      if (reason !== 'subscription_inactive') {
+        expect(screen.queryByText('Your team’s plan has ended.')).toBeNull()
+      }
     }
-  })
+  )
 
   it.each([
     ['hoursUsed', 'Ask an owner or admin to add hours.'],

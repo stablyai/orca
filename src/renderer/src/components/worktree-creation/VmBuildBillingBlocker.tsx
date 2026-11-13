@@ -22,18 +22,28 @@ export type BillingBlockerPhase =
   /** A fix in the browser (portal): re-check on return, or with Check again. */
   | { kind: 'browser'; checking: boolean; stillBlocked: boolean }
 
-/** Why there is no plan, in billing's words: only a plan that existed has "ended". */
-function planBlockBody(reason: string | null | undefined, t: Translate): string {
+/** Why there is no plan, in billing's words: only a plan that existed has "ended" (EP-11). */
+function planBlockBody(
+  reason: string | null | undefined,
+  t: Translate,
+  canManageBilling: boolean | undefined
+): string {
   switch (reason) {
     case 'subscription_inactive':
       return t('worktreeCreation.billingBlock.plan.body2', 'Your team’s plan has ended.')
     case 'trial_used_up':
+      // Glossary (Trial used up): the person who can choose a plan reads "Your trial"; members
+      // read their team's. An unknown role gets the team form.
+      return canManageBilling === true
+        ? t('worktreeCreation.billingBlock.plan.bodyTrialUsedUpAdmin', 'Your trial is used up.')
+        : t('worktreeCreation.billingBlock.plan.bodyTrialUsedUp', 'Your team’s trial is used up.')
+    case 'trial_unavailable':
+      // Glossary: not eligible for a trial (one was already used); the title carries the action.
       return t(
-        'worktreeCreation.billingBlock.plan.bodyTrialUsedUp',
-        'Your team’s trial is used up.'
+        'worktreeCreation.billingBlock.plan.bodyTrialUnavailable',
+        'This account or team already used its trial.'
       )
     case 'no_subscription':
-    case 'trial_unavailable':
       return t(
         'worktreeCreation.billingBlock.plan.bodyNoPlan',
         'Your team doesn’t have a plan yet.'
@@ -51,13 +61,15 @@ export function blockerCopy(
   kind: BillingBlockKind,
   t: Translate,
   /** Billing's refusal reason: says whether a plan ended, a trial ran out, or there never was one (EP-11). */
-  reason?: string | null
+  reason?: string | null,
+  /** Owners/admins read "Your trial…"; members their team's (glossary). */
+  canManageBilling?: boolean
 ): { title: string; body: string; ask: string } {
   switch (kind) {
     case 'plan':
       return {
         title: t('worktreeCreation.billingBlock.plan.title', 'Choose a plan'),
-        body: planBlockBody(reason, t),
+        body: planBlockBody(reason, t, canManageBilling),
         ask: t('worktreeCreation.billingBlock.plan.ask', 'Ask an owner or admin to choose a plan.')
       }
     case 'hoursUsed':
@@ -131,7 +143,7 @@ export function VmBuildBillingBlockerView({
 }: VmBuildBillingBlockerViewProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
-  const copy = blockerCopy(kind, t, reason)
+  const copy = blockerCopy(kind, t, reason, canManageBilling)
   const capId = React.useId()
   const [cap, setCap] = React.useState(String(suggestedCapDollars))
   const headingRef = React.useRef<HTMLHeadingElement>(null)
