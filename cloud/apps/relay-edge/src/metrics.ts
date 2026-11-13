@@ -22,7 +22,8 @@ export type MetricEvent =
   | 'not_on_edge'
 
 // blobs: [event, label, version, reason, place]; doubles: [value, ...extra]. place is the
-// client's ingress '<continent>/<colo>' (e.g. 'AS/HKG'), '' where no client is involved. One index per event for sampling.
+// client's ingress '<continent>/<colo>/<country>' (e.g. 'AS/HKG/HK'; country appended so prefix
+// filters on continent/colo keep working), '' where no client is involved. One index per event for sampling.
 // Heartbeat events fire per host every ping interval; keep 1 in 10 (multiply counts by 10).
 const HEARTBEAT_SAMPLE = 0.1
 
@@ -41,6 +42,6 @@ export function metric(env: Env, event: MetricEvent, value = 1, label = '', extr
 
 // From the Worker's request (cf is absent in local dev).
 export function requestPlace(request: Request): string {
-  const cf = (request as Request & { cf?: { colo?: string; continent?: string } }).cf
-  return cf ? `${cf.continent ?? '?'}/${cf.colo ?? '?'}` : 'local'
+  const cf = (request as Request & { cf?: { colo?: string; continent?: string; country?: string } }).cf
+  return cf ? `${cf.continent ?? '?'}/${cf.colo ?? '?'}/${cf.country ?? '?'}` : 'local'
 }

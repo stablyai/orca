@@ -62,7 +62,7 @@ type ControlAttachment = {
   lastPongAt?: number
   lastPingAt?: number
   leaseExpiresAt?: number
-  // Client ingress '<continent>/<colo>', for metrics.
+  // Client ingress '<continent>/<colo>/<country>', for metrics.
   place?: string
 }
 type Attachment = ControlAttachment

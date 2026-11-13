@@ -3,9 +3,11 @@
 // rows whose host is no longer in the cohort and asks the edge to drain them; the desktop then
 // re-asks /v1/assign, and that ask exports its data and places it on a cell (app.ts). Each pass also
 // retries fences that did not land after a host left (edge-relay-fence.ts).
+import { RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayDatabase, SqlRow } from './database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, mayBeOnEdge, type EdgeRelayConfig } from './edge-relay.js'
+import { EDGE_CONTROL_DEFAULTS, edgeRegionalRollout } from './edge-relay-control.js'
 import { forEachBounded, retryPendingFences } from './edge-relay-fence.js'
 
 type Identity = { userId: string; relayHostId: string }
@@ -116,18 +118,23 @@ export class EdgeEvacuation {
   private async leavingHosts(): Promise<Identity[]> {
     const leaving: Identity[] = []
     this.pass ??= this.newPass()
+    const regional = edgeRegionalRollout(this.config.control?.() ?? EDGE_CONTROL_DEFAULTS)
     for (let pages = 0; pages < 2 && this.pass !== undefined; pages += 1) {
       const pass: Pass = this.pass
-      const rows = await this.readPage(pass)
+      const rows = await this.readPage(pass, regional)
       let filled = false
       for (const row of rows) {
         const identity = { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') }
         pass.cursor = identity
-        // Region scope is the assign path's call alone: it decides with the region the desktop
-        // asks for, which the stored preference can miss or lag. Judging it here too drained
-        // hosts that the next ask put straight back (a drain every few minutes). A host that asks
-        // for a region outside the scope leaves on that ask.
-        if (inEdgeCohort(this.config, identity.relayHostId, 'any', identity.userId)) { continue }
+        // Region scope is the assign path's call: it decides with the region the desktop asks for.
+        // Without regional shares the sweep judges 'any' (the cell path's stored preference can
+        // lag: judging it drained hosts that the next ask put straight back). With them, a host
+        // is judged by the effective share of the region its last edge ask recorded
+        // (relay_edge_host_regions), so a regional abort or shrink drains just that region; a
+        // host with no record is judged 'any'. Country exclusion needs the ask's address, so an
+        // excluded host leaves on its next ask.
+        const region = regional ? recordedRegion(row) : 'any'
+        if (inEdgeCohort(this.config, identity.relayHostId, region, identity.userId)) { continue }
         if (!mayBeOnEdge(this.config, identity.relayHostId, identity.userId)) {
           // leaveCeilingPermille is set below a rollout this host was moved under: its asks skip
           // the leave read, so it would be re-placed without its devices. Raise the ceiling.
@@ -153,12 +160,19 @@ export class EdgeEvacuation {
     return leaving
   }
 
-  // Keys after the cursor; once wrapped, only up to the pass's origin.
-  private async readPage(pass: Pass) {
+  // Keys after the cursor; once wrapped, only up to the pass's origin. `regional`: with the region
+  // the host's last edge ask recorded (primary key join; none: NULL).
+  private async readPage(pass: Pass, regional: boolean) {
     const { cursor, origin, wrapped } = pass
     return await this.database.query(
-      `SELECT a.user_id, a.relay_host_id
-       FROM relay_assignments a
+      `SELECT a.user_id, a.relay_host_id${regional ? ', r.region' : ''}
+       FROM relay_assignments a${
+         regional
+           ? `
+       LEFT JOIN relay_edge_host_regions r
+         ON r.user_id = a.user_id AND r.relay_host_id = a.relay_host_id`
+           : ''
+       }
        WHERE a.cell_id = ? AND (a.user_id > ? OR (a.user_id = ? AND a.relay_host_id > ?))
          ${wrapped ? 'AND (a.user_id < ? OR (a.user_id = ? AND a.relay_host_id <= ?))' : ''}
        ORDER BY a.user_id, a.relay_host_id
@@ -207,6 +221,11 @@ export class EdgeEvacuation {
     }, delay)
     this.timer.unref?.()
   }
+}
+
+function recordedRegion(row: SqlRow): RelayRegion | 'any' {
+  const recorded = RelayRegionSchema.safeParse(row.region)
+  return recorded.success ? recorded.data : 'any'
 }
 
 function drainKey(identity: Identity): string {

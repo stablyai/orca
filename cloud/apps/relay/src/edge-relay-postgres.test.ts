@@ -9,7 +9,8 @@ import {
   EdgeMoveBusyError,
   EdgeMoveDeferredError
 } from './edge-relay.js'
-import type { EdgeAssignBody, EdgeDeviceRow } from './edge-admin-client.js'
+import { EdgeAdminUnavailableError, type EdgeAssignBody, type EdgeDeviceRow } from './edge-admin-client.js'
+import type { EdgeControlFlags } from './edge-relay-control.js'
 import { EDGE_FENCE_RETRY_BASE_MS, retryPendingFences } from './edge-relay-fence.js'
 import { EdgeEvacuation } from './edge-relay-evacuation.js'
 
@@ -38,6 +39,7 @@ describePostgres('relay edge on PostgreSQL', () => {
     await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, ['edge-pg-user'])
     await database.query(`DELETE FROM relay_devices WHERE user_id = ?`, ['edge-pg-user'])
     await database.query(`DELETE FROM relay_edge_fence_pending WHERE user_id = ?`, ['edge-pg-user'])
+    await database.query(`DELETE FROM relay_edge_host_regions WHERE user_id = ?`, ['edge-pg-user'])
     // Leave the shared selector as other files expect it: without this file's cells.
     await database.transaction(async (transaction) => {
       const selector = (
@@ -270,5 +272,70 @@ describePostgres('relay edge on PostgreSQL', () => {
     expect(drained.filter((id) => id.startsWith('edgepgdown'))).toEqual(downHosts.map((host) => host.relayHostId))
     expect(await edge.leaveEdge(downHosts[0]!)).toBe(true)
     expect(await database.query(`SELECT 1 FROM relay_devices WHERE relay_host_id = ?`, [downHosts[0]!.relayHostId])).toEqual([])
+  })
+
+  it('records the region of an edge move in its transaction, and the sweep drains an aborted region by it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { 'asia-east2': 1000 } }
+    const config = { ...edgeConfig, control: () => flags }
+    const drained: string[] = []
+    let pushes = 0
+    const admin = {
+      assign: async (body: EdgeAssignBody) => {
+        pushes += 1
+        // The third push fails: that move, and its region record, roll back.
+        if (pushes === 3) {
+          throw new EdgeAdminUnavailableError('status_503')
+        }
+        return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
+      },
+      exportHost: async (): Promise<never> => {
+        throw new Error('unexpected export')
+      },
+      drain: async (relayHostId: string) => {
+        drained.push(relayHostId)
+        return { outcome: 'idle' as const }
+      }
+    }
+    let now = Date.now()
+    const edge = new EdgeAssignments(database, config, () => now, admin)
+    await edge.ensureEdgeCell()
+    const [asia, us, failed] = ['edgepgregion0001', 'edgepgregion0002', 'edgepgregion0003'].map((relayHostId) => ({
+      userId: 'edge-pg-user',
+      relayHostId
+    }))
+    await edge.moveToEdge(asia!, 0, 'asia-east2')
+    await edge.moveToEdge(us!, 0, 'us-central1')
+    await expect(edge.moveToEdge(failed!, 0, 'asia-east2')).rejects.toBeInstanceOf(EdgeMoveDeferredError)
+    const recordedAt = async (host: { relayHostId: string }) =>
+      Number(
+        (
+          await database.query(`SELECT recorded_at FROM relay_edge_host_regions WHERE user_id = ? AND relay_host_id = ?`, [
+            'edge-pg-user',
+            host.relayHostId
+          ])
+        )[0]?.recorded_at
+      )
+    // A kept host with the same region writes nothing; a changed region is rewritten.
+    const first = await recordedAt(us!)
+    now += 5_000
+    await edge.moveToEdge(us!, 0, 'us-central1')
+    expect(await recordedAt(us!)).toBe(first)
+    await edge.moveToEdge(us!, 0, 'asia-east2')
+    expect(await recordedAt(us!)).toBe(now)
+    await edge.moveToEdge(us!, 0, 'us-central1')
+    const recorded = await database.query(
+      `SELECT relay_host_id, region FROM relay_edge_host_regions
+       WHERE user_id = ? AND relay_host_id LIKE 'edgepgregion%' ORDER BY relay_host_id`,
+      ['edge-pg-user']
+    )
+    expect(recorded).toEqual([
+      { relay_host_id: asia!.relayHostId, region: 'asia-east2' },
+      { relay_host_id: us!.relayHostId, region: 'us-central1' }
+    ])
+    // Abort Asia: only its recorded host drains; us-central1 keeps the global share (100%).
+    flags.regionRolloutPermille = { 'asia-east2': 0 }
+    await new EdgeEvacuation(database, config, admin, EDGE_CELL_ID, Date.now, () => 0).sweep()
+    expect(drained.filter((id) => id.startsWith('edgepgregion'))).toEqual([asia!.relayHostId])
   })
 })

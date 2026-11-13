@@ -15,6 +15,7 @@ import {
   RELAY_READINESS_SQL_GRACE_MS
 } from './relay-readiness.js'
 import type { EdgeRelayConfig } from './edge-relay.js'
+import { loadIpCountryTable } from './ip-country.js'
 
 export const RELAY_MAX_CELL_CAPACITY_REQUESTS = 100_000
 export const RELAY_DATABASE_POOL_MAX = 10
@@ -179,6 +180,9 @@ const EnvSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.coerce.number().int().min(0).optional()
   ),
+  // Path of an IP → country table baked into the image (ip-country.ts); unset: every ask's
+  // country is unknown, so no country exclusion of director/edge.json removes anyone.
+  ORCA_RELAY_IP_COUNTRY_DB: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
   DATABASE_URL: z.string().optional(),
   ORCA_RELAY_DATA_DIR: z.string().default('./data/relay')
 })
@@ -498,6 +502,10 @@ function parseEdgeConfig(
     allowUsers: userIdList(parsed.ORCA_RELAY_EDGE_ALLOW_USERS),
     denyHosts: hostIdList(parsed.ORCA_RELAY_EDGE_DENY_HOSTS, 'ORCA_RELAY_EDGE_DENY_HOSTS'),
     regions: new Set(regions),
+    // Loaded at boot; an unreadable table fails the boot rather than serving every ask as unknown.
+    ...(parsed.ORCA_RELAY_IP_COUNTRY_DB === undefined
+      ? {}
+      : { ipCountry: loadIpCountryTable(parsed.ORCA_RELAY_IP_COUNTRY_DB) }),
     ...(parsed.ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS === undefined
       ? {}
       : { exportSkipAfterMs: parsed.ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS })

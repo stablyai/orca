@@ -62,6 +62,7 @@ import {
   mayBeOnEdge,
   type EdgeAssignments
 } from './edge-relay.js'
+import { requestCountry } from './ip-country.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
   RelayDrainReturnAdmission
@@ -494,10 +495,15 @@ export function createRelayApp(
     // Relay edge: a host in the cohort is moved (or kept) there before any other lane, since the
     // sticky and reserve lanes would read the edge row as not live and re-place the host.
     const edge = operations.edgeAssignments
+    // From the IP table only; the address itself is never kept or logged.
+    const country = edge ? requestCountry(edge.config.ipCountry, context.req.header('x-forwarded-for')) : null
+    if (edge?.config.ipCountry) {
+      edge.regionCountries.record(requestedRegion, country)
+    }
     const toEdge =
       edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&
-      inEdgeCohort(edge.config, claims.relayHostId, requestedRegion, claims.sub)
+      inEdgeCohort(edge.config, claims.relayHostId, requestedRegion, claims.sub, country)
     if (edge?.pushes && !toEdge && mayBeOnEdge(edge.config, claims.relayHostId, claims.sub)) {
       // Any lane below may re-place a host whose row is on the edge; its devices come back first.
       // Hosts that were never in a cohort skip this row read (most asks; the pool is small).
