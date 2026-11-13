@@ -215,7 +215,6 @@ it('reads, subscribes and answers everything without starting an agent', async (
   const [status] = await call('agentSession.handoffStatus', { sessionId: SESSION })
   const [held] = await call('agentSession.hold', { sessionId: SESSION, holderId: 'pane' })
 
-  expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
   expect(history).toMatchObject({ ok: true, result: { ok: true } })
   // The opening snapshot follows subscribe's reply on the still-open stream.
   await vi.waitFor(() =>
@@ -223,6 +222,7 @@ it('reads, subscribes and answers everything without starting an agent', async (
       result: { type: 'snapshot', commands: null }
     })
   )
+  expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
   expect(options).toMatchObject({
     ok: true,
     result: { current: { model: 'gpt-saved', effort: 'high' } }
