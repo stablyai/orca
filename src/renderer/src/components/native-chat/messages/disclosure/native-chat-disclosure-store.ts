@@ -1,12 +1,13 @@
 // Keep disclosures outside windowed rows so scrolling cannot erase reader choices; standalone rows fall back to local state.
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 
-/** Where the reader left an opened run's own scroll box: a row and offset, its pixel top while that row is unmeasured, or the end. */
+/** A reader's place in an opened run's box: a row, and how far into that row its top edge sits. */
+export type NativeChatRunPosition = { key: string; offset: number }
+
+/** Where the reader left an opened run's own scroll box: a row and offset, or the end. */
 export type NativeChatRunScroll = {
-  anchor: VirtualizedScrollAnchor
-  top: number
+  position: NativeChatRunPosition | null
   followsEnd: boolean
   /** Measured heights of details opened in rows the window no longer draws, so the box keeps their room. */
   detailHeights: ReadonlyMap<string, number>

@@ -11,11 +11,6 @@ import {
 } from 'react'
 import { cn } from '@/lib/class-names'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import {
-  useVirtualizedScrollAnchor,
-  VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
-  type VirtualizedScrollAnchor
-} from '@/hooks/useVirtualizedScrollAnchor'
 import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
 import {
   distanceFromBottom,
@@ -31,10 +26,13 @@ import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 import { ROW_KEY_ATTRIBUTE, useNativeChatToolRunPins } from './use-native-chat-tool-run-pins'
 import {
   useNativeChatToolRunWindow,
-  type NativeChatToolRunDrawnRow,
-  type NativeChatToolRunVirtualizer
+  type NativeChatToolRunDrawnRow
 } from './use-native-chat-tool-run-window'
 import { useNativeChatToolRunDetailRoom } from './use-native-chat-tool-run-detail-room'
+import {
+  claimNativeChatToolRunReveal,
+  useNativeChatToolRunReaderPosition
+} from './use-native-chat-tool-run-reader-position'
 
 /** Scroll inside the run, then return its box for transcript alignment; member offsets omit internal scroll. */
 export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement {
@@ -43,29 +41,10 @@ export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement 
     return member
   }
   scroller.scrollTop += member.getBoundingClientRect().top - scroller.getBoundingClientRect().top
-  // The revealed card is now the reader's place: a pending restore or follow must not move it again.
-  scroller.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+  // The revealed card is now the reader's place: a pending landing or follow must not move it again.
+  claimNativeChatToolRunReveal(scroller)
   return scroller
 }
-
-/** The reader's row from the window's own offsets, which cover rows not drawn yet: reads no drawn row. */
-function anchorAtScrollOffset(
-  virtualizer: NativeChatToolRunVirtualizer,
-  rows: readonly NativeChatToolRunRow[],
-  scrollTop = virtualizer.scrollOffset ?? 0
-): VirtualizedScrollAnchor {
-  const item = virtualizer.getVirtualItemForOffset(scrollTop)
-  const row = item && rows[item.index]
-  if (!item || !row) {
-    return null
-  }
-  const fallbackKeys = rows.slice(item.index + 1, item.index + 11).map((next) => next.key)
-  return { key: row.key, offset: Math.max(0, scrollTop - item.start), fallbackKeys, scrollTop }
-}
-
-const rowElementKey = (element: HTMLDivElement): string | null =>
-  element.getAttribute(ROW_KEY_ATTRIBUTE)
-const rowKey = (row: NativeChatToolRunRow): string => row.key
 
 /** A drawn row re-renders only when its own row or renderer changes, not on every window move. */
 const WindowRow = memo(function WindowRow({
@@ -138,17 +117,11 @@ export function NativeChatToolRunMembers({
   const [remembered] = useState(() =>
     memoryKey === undefined ? undefined : runScroll?.get(memoryKey)
   )
-  const restoresRow = remembered !== undefined && !remembered.followsEnd
+  const returningTo =
+    remembered && !remembered.followsEnd ? (remembered.position ?? undefined) : undefined
   const followsEndRef = useRef(remembered?.followsEnd ?? startsAtEnd)
-  // A copy: the restore helpers update the anchor they are given in place.
-  const anchorRef = useRef<VirtualizedScrollAnchor>(
-    restoresRow && remembered.anchor ? { ...remembered.anchor } : null
-  )
-  const scrollOffsetRef = useRef(restoresRow ? remembered.top : 0)
-  // Drawn until the reader moves, so the restore lands on the real row rather than an estimate.
-  const [heldRowKey, setHeldRowKey] = useState(() =>
-    restoresRow ? remembered.anchor?.key : undefined
-  )
+  // Drawn while a landing is pending, so it lands on the real row rather than an estimate.
+  const [heldRowKey, setHeldRowKey] = useState(returningTo?.key)
   const [marks] = useState(createProgrammaticScrollMarks)
   const [fades, setFades] = useState({ top: false, bottom: false })
   // The row whose real measurement says new work has landed: the last one that draws something
@@ -185,6 +158,8 @@ export function NativeChatToolRunMembers({
   const followRef = useRef<{ observedTail: boolean } | null>(null)
   // A real tail measurement wakes the follow pass even when it changed no size.
   const [tailObservations, setTailObservations] = useState(0)
+  // The reader-position owner exists after the window; a measured landing row reaches it through here.
+  const onRowMeasuredRef = useRef<(key: string) => void>(() => {})
   const onMeasure = useCallback(
     (element: HTMLDivElement) => {
       const key = element.getAttribute(ROW_KEY_ATTRIBUTE)
@@ -192,6 +167,7 @@ export function NativeChatToolRunMembers({
         return
       }
       detailRoom.record(key, element)
+      onRowMeasuredRef.current(key)
       const follow = followRef.current
       // Only a laid-out tail counts: a callback can carry a cached or zero size.
       if (
@@ -216,47 +192,6 @@ export function NativeChatToolRunMembers({
     onMeasure
   })
 
-  // Recording scans the drawn rows, so it waits while every row or a wide selection is drawn.
-  // A hidden box's reset offset is not the reader's: nothing records there either.
-  const recordsOnScroll = isVisible && !drawsEveryRow && !pins.spansSelection
-  // Set while a shown run records none of the reader's moves: a later restore must start from where they are now.
-  const anchorStaleRef = useRef(false)
-  useLayoutEffect(() => {
-    if (!isVisibleRef.current) {
-      return
-    }
-    if (!recordsOnScroll) {
-      anchorStaleRef.current = true
-    } else if (anchorStaleRef.current) {
-      anchorStaleRef.current = false
-      anchorRef.current = anchorAtScrollOffset(virtualizer, rows)
-      scrollOffsetRef.current = virtualizer.scrollOffset ?? 0
-    }
-  }, [isVisible, recordsOnScroll, rows, virtualizer])
-
-  // A following reader belongs to the end, not to a row; a hidden pane has no rows to land on.
-  const shouldSkipRestore = useCallback(() => followsEndRef.current || !isVisibleRef.current, [])
-  useVirtualizedScrollAnchor({
-    anchorRef,
-    getItemElementKey: rowElementKey,
-    getRowKey: rowKey,
-    itemElementSelector: `[${ROW_KEY_ATTRIBUTE}]`,
-    programmaticScrollMarks: marks,
-    rowIndexByKey,
-    rows,
-    scrollElementRef: scrollerRef,
-    scrollOffsetRef,
-    shouldSkipRestore,
-    recordAnchorOnScroll: recordsOnScroll,
-    // A hidden box's reset offset would replace the row its hiding kept.
-    recordAnchorOnCleanup: isVisible,
-    // Restore only when rows arrive or the pane shows again: measurement churn is the virtualizer's
-    // own, and a reveal or the reader's scrolling must not be pulled back to an older row.
-    restoreSignal: `${rows.length}:${isVisible}`,
-    totalSize,
-    virtualizer
-  })
-
   const pinToEnd = useCallback(() => {
     const scroller = scrollerRef.current
     if (scroller && scroller.scrollTop < scroller.scrollHeight - scroller.clientHeight - 1) {
@@ -265,30 +200,38 @@ export function NativeChatToolRunMembers({
     }
   }, [marks])
 
-  // A hidden pane resets its box: the row anchor alone (not its old pixel offset) brings the reader
-  // back on show, and a following reader goes back to the end.
+  const onRevealed = useCallback(() => {
+    followRef.current = null
+    followsEndRef.current = false
+  }, [])
+  const reader = useNativeChatToolRunReaderPosition({
+    scrollerRef,
+    virtualizer,
+    rows,
+    rowIndexByKey,
+    isVisible,
+    followsEndRef,
+    marks,
+    totalSize,
+    initial: returningTo,
+    setHeldRowKey,
+    onRevealed
+  })
+
+  useLayoutEffect(() => {
+    onRowMeasuredRef.current = reader.onRowMeasured
+  }, [reader])
+
+  // A following reader whose pane shows again goes back to the end.
   const wasVisibleRef = useRef(isVisible)
   useLayoutEffect(() => {
-    if (wasVisibleRef.current === isVisible) {
-      return
-    }
-    wasVisibleRef.current = isVisible
-    if (!isVisible) {
-      const anchor = anchorStaleRef.current
-        ? anchorAtScrollOffset(virtualizer, rows)
-        : anchorRef.current
-      anchorStaleRef.current = false
-      if (anchor) {
-        anchorRef.current = {
-          key: anchor.key,
-          offset: anchor.offset,
-          fallbackKeys: anchor.fallbackKeys
-        }
+    if (wasVisibleRef.current !== isVisible) {
+      wasVisibleRef.current = isVisible
+      if (isVisible && followsEndRef.current) {
+        followRef.current = { observedTail: false }
       }
-    } else if (followsEndRef.current) {
-      followRef.current = { observedTail: false }
     }
-  }, [isVisible, rows, virtualizer])
+  }, [isVisible])
 
   // Before paint: new work starts a follow only if the reader was at the end before it. Each visible
   // pass re-pins; once the tail is really measured (now, on a later measurement, or when a hidden pane
@@ -333,38 +276,22 @@ export function NativeChatToolRunMembers({
     return () => window.cancelAnimationFrame(frame)
   }, [followKey, isVisible, pinToEnd, tailObservations, totalSize, virtualizer])
 
-  // A reveal (each request, through the card's own write) takes the box from any follow.
-  useLayoutEffect(() => {
-    const scroller = scrollerRef.current
-    if (!scroller) {
-      return
-    }
-    const onRevealed = (): void => {
-      followRef.current = null
-      followsEndRef.current = false
-    }
-    scroller.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, onRevealed)
-    return () => scroller.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, onRevealed)
-  }, [])
-
   const remember = useCallback(() => {
     const scroller = scrollerRef.current
     if (!scroller || !runScroll || memoryKey === undefined) {
       return
     }
-    const anchor = anchorRef.current
     setWithLRU(
       runScroll,
       memoryKey,
       {
-        anchor: anchor ? { ...anchor } : null,
-        top: scroller.scrollTop,
+        position: reader.current(),
         followsEnd: followsEndRef.current,
         detailHeights: detailRoom.snapshot()
       },
       MAX_NATIVE_CHAT_DISCLOSURES
     )
-  }, [detailRoom, memoryKey, runScroll])
+  }, [detailRoom, memoryKey, reader, runScroll])
 
   const readPosition = useCallback(() => {
     const scroller = scrollerRef.current
@@ -386,19 +313,16 @@ export function NativeChatToolRunMembers({
     (event: React.UIEvent<HTMLDivElement>) => {
       const scroller = event.currentTarget
       const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
-      if (!marks.consume(event.nativeEvent, scroller.scrollTop, maxScroll)) {
-        // The reader moved: any follow in flight and any held restore row yield to them.
+      const byReader = !marks.consume(event.nativeEvent, scroller.scrollTop, maxScroll)
+      if (byReader && isVisibleRef.current) {
+        // The reader moved: any follow in flight yields to them.
         followRef.current = null
-        setHeldRowKey(undefined)
-        // Before the window redraws for this scroll, which can run a pending restore: a jump past
-        // the drawn rows must not send the reader back to the row it left.
-        if (!drawsEveryRow && isVisibleRef.current) {
-          anchorRef.current = anchorAtScrollOffset(virtualizer, rows, scroller.scrollTop)
-        }
       }
+      // Registered on the box before the window's own listener, so this runs before the redraw it causes.
+      reader.onScrolled(scroller.scrollTop, byReader)
       readPosition()
     },
-    [drawsEveryRow, marks, readPosition, rows, virtualizer]
+    [marks, readPosition, reader]
   )
 
   useEffect(() => {
@@ -415,7 +339,7 @@ export function NativeChatToolRunMembers({
     return () => observer.disconnect()
   }, [readPosition])
 
-  // Declared after the anchor hook, so its cleanup has already recorded the leaving anchor.
+  // The owned place is saved as the run leaves; nothing is read from a box that may already be hidden.
   useLayoutEffect(() => remember, [remember])
 
   const { retainInteractedRow } = pins

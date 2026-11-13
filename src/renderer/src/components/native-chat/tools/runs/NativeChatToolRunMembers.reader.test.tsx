@@ -276,6 +276,9 @@ describe('NativeChatToolRun opened-run reader', () => {
 
     rerender(<Transcript blocks={calls(1_000)} mounted={false} />)
     rerender(<Transcript blocks={calls(1_010)} />)
+    // Evicted again before that return lands: the place it was landing on is what it keeps.
+    rerender(<Transcript blocks={calls(1_010)} mounted={false} />)
+    rerender(<Transcript blocks={calls(1_020)} />)
     await settle()
 
     const after = topRow(container)
@@ -371,6 +374,17 @@ describe('NativeChatToolRun opened-run reader', () => {
     rerender(<Transcript blocks={blocks} revealedDiff={{ ...reveal, requestId: 1 }} />)
     await settle()
     expect(topRow(container).key).toBe('edit:apply_patch:400')
+
+    // A reveal made in the same render that shows the pane again wins over the place it kept while hidden.
+    await scrollBox(container, 2_000)
+    pane.hidden = true
+    rerender(
+      <Transcript blocks={blocks} visible={false} revealedDiff={{ ...reveal, requestId: 1 }} />
+    )
+    pane.hidden = false
+    rerender(<Transcript blocks={blocks} revealedDiff={{ ...reveal, requestId: 2 }} />)
+    await settle()
+    expect(topRow(container).key).toBe('edit:apply_patch:400')
   })
 
   it('stops following when the reader scrolls before new work has settled', async () => {
@@ -453,6 +467,10 @@ describe('NativeChatToolRun opened-run reader', () => {
     rerender(<Transcript blocks={calls(1_000)} find />)
     await settle()
     expect(topRow(container)).toEqual(before)
+
+    // The landing finished without any size change: later growth elsewhere leaves the reader in place.
+    await growRow(container, 'call:call-900', 300)
+    expect(topRow(container)).toEqual(before)
   })
 
   it('keeps a reader who jumps past the drawn rows of a live run where they jumped', async () => {
@@ -480,19 +498,85 @@ describe('NativeChatToolRun opened-run reader', () => {
     expect(box.scrollTop).toBe(683)
   })
 
-  it("keeps the reader's row through a hidden pane that reports a scroll of its own", async () => {
-    const { container, rerender } = render(<Transcript blocks={calls(1_000)} />)
+  for (const mode of ['small run shown again', 'long run with Find'] as const) {
+    it(`lets a reader scroll away from a followed live run without a jump (${mode})`, async () => {
+      layout.rowPx = 26
+      const find = mode === 'long run with Find'
+      const first = find ? 200 : 30
+      const { container, rerender } = render(<Transcript blocks={calls(first)} live find={find} />)
+      await settle()
+      if (!find) {
+        pane.hidden = true
+        rerender(<Transcript blocks={calls(first)} live visible={false} />)
+        pane.hidden = false
+        rerender(<Transcript blocks={calls(first)} live />)
+        await settle()
+      }
+      for (let count = first + 1; count <= first + 15; count++) {
+        rerender(<Transcript blocks={calls(count)} live find={find} />)
+        await settle()
+      }
+      const box = membersBox(container)
+      const away = box.scrollHeight - BOX_HEIGHT_PX - 120
+      await scrollBox(container, away)
+      expect(box.scrollTop).toBe(away)
+      rerender(<Transcript blocks={calls(first + 16)} live find={find} />)
+      await settle()
+      expect(box.scrollTop).toBe(away)
+    })
+  }
+
+  for (const hiddenAfterMs of [100, 160]) {
+    it(`keeps the reader's row through a hidden pane that reports a scroll of its own (hidden ${hiddenAfterMs}ms after a scroll)`, async () => {
+      const { container, rerender } = render(<Transcript blocks={calls(1_000)} />)
+      await settle()
+      await scrollBox(container, 9_013)
+      const before = topRow(container)
+
+      // Hidden shortly after one more scroll, before anything deferred from it could settle.
+      await act(async () => {
+        fireEvent.scroll(membersBox(container))
+        vi.advanceTimersByTime(hiddenAfterMs)
+      })
+      pane.hidden = true
+      rerender(<Transcript blocks={calls(1_000)} visible={false} />)
+      // A hidden box loses its offset and may report that as a scroll; the transcript then unmounts the run.
+      await scrollBox(container, 0)
+      rerender(<Transcript blocks={calls(1_000)} visible={false} mounted={false} />)
+      pane.hidden = false
+      rerender(<Transcript blocks={calls(1_000)} />)
+      await settle()
+      expect(topRow(container)).toEqual(before)
+    })
+  }
+
+  it('keeps a parked reader on its row through Find, the window threshold and a selection', async () => {
+    const { container, rerender } = render(<Transcript blocks={calls(49)} />)
     await settle()
-    await scrollBox(container, 9_013)
+    await scrollBox(container, 613)
     const before = topRow(container)
 
-    // A hidden box loses its offset and may report that as a scroll; the transcript then unmounts the run.
-    pane.hidden = true
-    rerender(<Transcript blocks={calls(1_000)} visible={false} />)
-    await scrollBox(container, 0)
-    rerender(<Transcript blocks={calls(1_000)} visible={false} mounted={false} />)
-    pane.hidden = false
-    rerender(<Transcript blocks={calls(1_000)} />)
+    rerender(<Transcript blocks={calls(50)} />)
+    await settle()
+    expect(topRow(container)).toEqual(before)
+    rerender(<Transcript blocks={calls(50)} find />)
+    await settle()
+    expect(topRow(container)).toEqual(before)
+    rerender(<Transcript blocks={calls(50)} />)
+    await settle()
+    expect(topRow(container)).toEqual(before)
+
+    const box = membersBox(container)
+    await act(async () => {
+      document.getSelection()?.selectAllChildren(box)
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    await settle()
+    expect(topRow(container)).toEqual(before)
+    await act(async () => {
+      document.getSelection()?.removeAllRanges()
+      document.dispatchEvent(new Event('selectionchange'))
+    })
     await settle()
     expect(topRow(container)).toEqual(before)
   })
