@@ -167,7 +167,10 @@ export async function readStructuredAgentSessionOptions(
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
-    fastMode: selected.current.fastMode ?? options.current.fastMode,
+    // A running model's Fast says nothing about another selected model, which keeps its own default.
+    fastMode:
+      selected.current.fastMode ??
+      (model === options.current.model ? options.current.fastMode : undefined),
     // The saved tier as the shared speed rule runs it under the saved model.
     ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
       ? {

@@ -189,6 +189,31 @@ describe('a Claude chat on the model id an older host lists by alias', () => {
 })
 
 describe('what a send carries', () => {
+  it("shows the picked Cursor model's own Fast, not the running model's", () => {
+    const seed = structuredAgentSessionSeedCatalog('cursor')
+    const row = (id: string, defaultFastMode: boolean) => ({
+      id,
+      label: id,
+      isDefault: false,
+      efforts: [],
+      supportsFastMode: true,
+      defaultFastMode
+    })
+    const running = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('cursor', seed),
+      seed,
+      {
+        models: [row('composer-2.5', true), row('claude-opus-4-8', false)],
+        fastModeSupport: { supported: true },
+        current: { model: 'composer-2.5', fastMode: true, confirmed: ['model', 'fastMode'] }
+      }
+    )
+    const picked = commitStructuredAgentSessionOption(running, 'model', 'claude-opus-4-8')
+    expect(
+      structuredAgentSessionOptionSnapshot(picked).find((option) => option.id === 'fastMode')?.kind
+    ).toMatchObject({ type: 'boolean', currentValue: false })
+  })
+
   it("shows and keeps a Cursor model's own Fast default until the person picks Fast", () => {
     const seed = structuredAgentSessionSeedCatalog('cursor')
     const composer = {

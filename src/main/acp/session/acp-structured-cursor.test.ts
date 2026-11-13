@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -317,6 +317,11 @@ it("drops Cursor's new-file markers from an edit's diff", () => {
 })
 
 it("pins Cursor's own config folder, following XDG_CONFIG_HOME as Cursor does", async () => {
+  vi.stubEnv('XDG_CONFIG_HOME', undefined)
+  vi.stubEnv('CURSOR_CONFIG_DIR', undefined)
+  onTestFinished(() => {
+    vi.unstubAllEnvs()
+  })
   const stateDirectory = '/state'
   expect(
     await CURSOR.account.resolve({ launchEnv: { HOME: '/home/ada' }, stateDirectory })

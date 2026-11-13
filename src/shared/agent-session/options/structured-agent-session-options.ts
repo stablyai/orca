@@ -263,6 +263,11 @@ export function commitStructuredAgentSessionOption(
   }
   // Keep other picks after a model change; the host reconciles independent values.
   state.record.values[id] = { value: decoded, source: 'dispatched' }
+  // A reported Fast was the old model's; the new one runs its own default until picked.
+  const staleFast = id === 'model' && state.record.values.fastMode?.source === 'reported'
+  if (staleFast && !unpickedFastModeIsOff(state.record.agent)) {
+    delete state.record.values.fastMode
+  }
   return {
     ...state,
     acceptedInputSources:
