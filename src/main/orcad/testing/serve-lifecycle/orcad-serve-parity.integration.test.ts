@@ -151,7 +151,10 @@ describe.skipIf(skip)('orca serve on orcad', () => {
         env,
         timeoutMs: 60_000
       })
-      expect(result.code, result.stderr).toBe(0)
+      expect(
+        result.code,
+        JSON.stringify({ args, stdout: result.stdout, stderr: result.stderr })
+      ).toBe(0)
       const response = JSON.parse(result.stdout)
       expect(response.ok).toBe(true)
       return response.result
