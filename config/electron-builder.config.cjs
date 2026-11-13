@@ -680,9 +680,9 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
-    // shared-mime-info already maps md/markdown: advertise handler only, leaving mimeapps.list defaults intact.
-    // Omit mdx because Ubuntu 24.04 maps it to application/x-genesis-32x-rom; claiming it would need a glob override.
-    mimeTypes: ['text/markdown', 'text/csv', 'text/tab-separated-values'],
+    // No document MIME types: a handler for a type nobody else registers (text/markdown on stock GNOME) becomes the
+    // double-click default, since GLib picks the first registered handler before the parent type's default (#33916).
+    // Same call as the Windows installer; Open With > Show All Applications still lists Orca. The orca: scheme comes from `protocols`.
     // Avoid GNOME Orca’s orca package and /usr/bin/orca names.
     executableName: 'orca-ide',
     // Use icns to generate hicolor sizes; some Linux docks ignore a lone 1024px PNG.
