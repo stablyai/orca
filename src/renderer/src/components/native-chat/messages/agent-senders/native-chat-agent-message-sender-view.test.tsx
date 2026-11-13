@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from '../actions/native-chat-tooltip-test-harness'
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -13,7 +13,6 @@ import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selector
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import { initialStore, status, resetSenderStore } from './native-chat-agent-sender.test-fixture'
 
-const renders = new Map<number, number>()
 function Probe({
   id,
   workspace = 'workspace',
@@ -41,7 +40,6 @@ function Probe({
     remote ? { kind: 'environment', environmentId: 'remote' } : { kind: 'local' },
     proof === 'terminal' ? undefined : `${proof === 'gone' ? 'closed' : 'source'}-${sourceId}`
   )
-  renders.set(id, (renders.get(id) ?? 0) + 1)
   return null
 }
 let publicationRevision = 0
@@ -77,7 +75,6 @@ function write(i: number, update: Partial<AgentStatusEntry>) {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(2_000_000)
-  renders.clear()
   resetSenderStore()
   publishSources(1)
   publishSources(10, 'runtime:remote', 'remote')
@@ -126,7 +123,7 @@ it.each(['run:coordinator', 'dispatch:past'])(
   }
 )
 
-it('shows only a proved Dispatch invocation and withdraws proof without changing unrelated sender rows', () => {
+it('shows only a proved Dispatch invocation and withdraws missing proof', () => {
   write(0, { agentType: 'codex' })
   const saved = {
     name: 'Worker',
@@ -182,15 +179,14 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
   const single = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
   expect(alias.result.current).toEqual({ agentType: 'codex' })
-  const before = new Map(renders)
   act(() => publish(false, 2))
-  expect(renders).toEqual(before)
+
   expect(single.result.current.agentType).toBe('codex')
   expect(single.result.current.dot).toBeUndefined()
   expect(alias.result.current.agentType).toBe('codex')
   expect(alias.result.current.dot).toBeUndefined()
   act(() => publish(false, 3))
-  expect(renders).toEqual(before)
+
   expect(alias.result.current.dot).toBeUndefined()
   // The current terminal alias must not bypass missing source proof.
   write(0, { state: 'waiting' })

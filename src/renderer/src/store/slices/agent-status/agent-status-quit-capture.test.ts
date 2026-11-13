@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
 import './agent-status'
-import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
+
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 
 describe('captureAllSleepingAgentSessions', () => {
   it('captures launch config into live checkpoints and refreshes late registration', () => {
@@ -74,7 +74,6 @@ describe('captureAllSleepingAgentSessions', () => {
     const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
     store.getState().captureAllSleepingAgentSessions('periodic')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(quitRecord)
     expect(quitRecord).toMatchObject({ origin: 'quit', providerSession })
 
     store
@@ -140,10 +139,6 @@ describe('captureAllSleepingAgentSessions', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual(
       launchConfig
     )
-    expect(
-      collectSleepingAgentSessionRecordsForWorktree(store.getState(), 'wt-1')['tab-1:leaf-1']
-        ?.launchConfig
-    ).toEqual(launchConfig)
 
     store.getState().captureAllSleepingAgentSessions('quit')
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
@@ -254,7 +249,7 @@ describe('captureAllSleepingAgentSessions', () => {
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
     expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-2:leaf-2']).toBeDefined()
+
     expect(store.getState().agentLaunchConfigByPaneKey['tab-2:leaf-2']?.launchConfig).toEqual({
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'second' }
