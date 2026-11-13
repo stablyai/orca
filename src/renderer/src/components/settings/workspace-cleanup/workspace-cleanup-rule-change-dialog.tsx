@@ -16,7 +16,9 @@ import {
 import { WorkspaceCleanupWorkspaceLine } from './workspace-cleanup-workspace-line'
 import { WorkspaceCleanupReasonChip } from './workspace-cleanup-reason-chip'
 
-export type WorkspaceCleanupEnableRuleRequest = {
+export type WorkspaceCleanupRuleChangeRequest = {
+  /** `change`: a setting other than a rule switch, such as the inactive days, widened what is deleted. */
+  kind: 'enable' | 'change'
   ruleTitle: string
   rows: WorkspaceCleanupPreviewRow[]
 }
@@ -25,13 +27,13 @@ function rowKey(row: WorkspaceCleanupPreviewRow): string {
   return `${row.executionHostId ?? ''}:${row.worktreeId}`
 }
 
-/** Shown before a delete rule turns on while it matches workspaces; Keep pins a workspace so it is never removed. */
-export function WorkspaceCleanupEnableRuleDialog({
+/** Shown before a rule change that would delete workspaces right now; Keep pins a workspace so it is never removed. */
+export function WorkspaceCleanupRuleChangeDialog({
   request,
   onCancel,
   onConfirm
 }: {
-  request: WorkspaceCleanupEnableRuleRequest | null
+  request: WorkspaceCleanupRuleChangeRequest | null
   onCancel: () => void
   onConfirm: (keep: WorkspaceCleanupPreviewRow[]) => Promise<void>
 }): React.JSX.Element {
@@ -44,6 +46,7 @@ export function WorkspaceCleanupEnableRuleDialog({
     setKept(new Set())
   }
   const rows = request?.rows ?? []
+  const enabling = request?.kind !== 'change'
   const deleted = rows.filter((row) => !kept.has(rowKey(row)))
   const deletedBytes = deleted.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0)
 
@@ -67,20 +70,34 @@ export function WorkspaceCleanupEnableRuleDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {t('components.settings.workspaceCleanup.enable.title', 'Turn on {{rule}}?', {
-              rule: request?.ruleTitle ?? ''
-            })}
+            {enabling
+              ? t('components.settings.workspaceCleanup.enable.title', 'Turn on {{rule}}?', {
+                  rule: request?.ruleTitle ?? ''
+                })
+              : t('components.settings.workspaceCleanup.change.title', 'Change {{rule}}?', {
+                  rule: request?.ruleTitle ?? ''
+                })}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              'components.settings.workspaceCleanup.enable.description',
-              "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
-              {
-                count: rows.length,
-                defaultValue_one:
-                  "1 workspace matches right now. It'll be deleted a few seconds after you turn this on."
-              }
-            )}
+            {enabling
+              ? t(
+                  'components.settings.workspaceCleanup.enable.description',
+                  "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
+                  {
+                    count: rows.length,
+                    defaultValue_one:
+                      "1 workspace matches right now. It'll be deleted a few seconds after you turn this on."
+                  }
+                )
+              : t(
+                  'components.settings.workspaceCleanup.change.description',
+                  "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it.",
+                  {
+                    count: rows.length,
+                    defaultValue_one:
+                      "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it."
+                  }
+                )}
           </DialogDescription>
         </DialogHeader>
         <div
@@ -139,7 +156,9 @@ export function WorkspaceCleanupEnableRuleDialog({
             {t('components.settings.workspaceCleanup.enable.cancel', 'Cancel')}
           </Button>
           <Button onClick={confirm} disabled={confirming}>
-            {t('components.settings.workspaceCleanup.enable.turnOn', 'Turn on')}
+            {enabling
+              ? t('components.settings.workspaceCleanup.enable.turnOn', 'Turn on')
+              : t('components.settings.workspaceCleanup.change.apply', 'Apply')}
           </Button>
         </DialogFooter>
       </DialogContent>

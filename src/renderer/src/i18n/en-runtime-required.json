@@ -2113,10 +2113,15 @@
     },
     "settings": {
       "workspaceCleanup": {
+        "change": {
+          "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
+          "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
+        },
         "enable": {
           "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
           "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on."
         },
+        "previewFailed": "Couldn't check which workspaces this rule matches.",
         "rules": {
           "inactiveDescription": "No activity for {{count}} days.",
           "inactiveDescription_one": "No activity for 1 day.",

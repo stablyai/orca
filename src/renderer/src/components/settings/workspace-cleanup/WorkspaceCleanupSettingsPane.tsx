@@ -35,9 +35,9 @@ import {
   type WorkspaceCleanupRuleKey
 } from './workspace-cleanup-rule-keys'
 import {
-  WorkspaceCleanupEnableRuleDialog,
-  type WorkspaceCleanupEnableRuleRequest
-} from './workspace-cleanup-enable-rule-dialog'
+  WorkspaceCleanupRuleChangeDialog,
+  type WorkspaceCleanupRuleChangeRequest
+} from './workspace-cleanup-rule-change-dialog'
 import { WorkspaceCleanupActivityList } from './workspace-cleanup-activity-list'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
 
@@ -48,6 +48,23 @@ function removalsFor(
   const reason = WORKSPACE_CLEANUP_RULE_REASON[key]
   return preview.rows.filter(
     (row) => row.evaluation.action !== 'keep' && row.evaluation.reason === reason
+  )
+}
+
+function previewRowKey(row: WorkspaceCleanupPreviewRow): string {
+  return `${row.executionHostId ?? ''}:${row.worktreeId}`
+}
+
+/** Workspaces `next` would remove now that `current` would not. */
+function newRemovals(
+  next: WorkspaceCleanupPreview,
+  current: WorkspaceCleanupPreview | null
+): WorkspaceCleanupPreviewRow[] {
+  const removedNow = new Set(
+    (current?.rows ?? []).filter((row) => row.evaluation.action !== 'keep').map(previewRowKey)
+  )
+  return next.rows.filter(
+    (row) => row.evaluation.action !== 'keep' && !removedNow.has(previewRowKey(row))
   )
 }
 
@@ -65,7 +82,7 @@ function summarizeMatches(
   return matches
 }
 
-type PendingEnable = WorkspaceCleanupEnableRuleRequest & { nextRules: WorkspaceCleanupRules }
+type PendingChange = WorkspaceCleanupRuleChangeRequest & { nextRules: WorkspaceCleanupRules }
 
 export function WorkspaceCleanupSettingsPane({
   hostScope,
@@ -86,7 +103,9 @@ export function WorkspaceCleanupSettingsPane({
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
   const [pendingRule, setPendingRule] = useState<WorkspaceCleanupRuleKey | null>(null)
-  const [pendingEnable, setPendingEnable] = useState<PendingEnable | null>(null)
+  const [pendingChange, setPendingChange] = useState<PendingChange | null>(null)
+  // Remounts the rows after a cancelled change so an edited field shows the saved value again.
+  const [cancelledChanges, setCancelledChanges] = useState(0)
   const search = getWorkspaceCleanupSettingsSearchParts()
 
   if (!hostScope.available) {
@@ -107,35 +126,50 @@ export function WorkspaceCleanupSettingsPane({
   }
   const currentRules = rules
 
+  // The runner acts within seconds of a rule change, so a change that would delete more asks first.
+  const applyRules = async (
+    nextRules: WorkspaceCleanupRules,
+    request: Omit<WorkspaceCleanupRuleChangeRequest, 'rows'>,
+    pendingKey: WorkspaceCleanupRuleKey | null = null
+  ): Promise<void> => {
+    if (!hasEnabledWorkspaceCleanupRule(nextRules)) {
+      await update(nextRules)
+      return
+    }
+    setPendingRule(pendingKey)
+    const previews = await Promise.all([
+      previewRules(nextRules),
+      hasEnabledWorkspaceCleanupRule(currentRules) ? previewRules(currentRules) : null
+    ]).catch((error: unknown) => {
+      toast.error(
+        t(
+          'components.settings.workspaceCleanup.previewFailed',
+          "Couldn't check which workspaces this change matches."
+        ),
+        { description: errorMessage(error) }
+      )
+      return null
+    })
+    const rows = previews ? newRemovals(previews[0], previews[1]) : []
+    if (previews && rows.length === 0) {
+      await update(nextRules)
+    } else if (previews) {
+      setPendingChange({ ...request, rows, nextRules })
+    }
+    setPendingRule(null)
+  }
+
   const toggleRule = async (key: WorkspaceCleanupRuleKey): Promise<void> => {
     const nextRules = toggleWorkspaceCleanupRule(currentRules, key)
     if (!nextRules[key].enabled) {
       await update(nextRules)
       return
     }
-    setPendingRule(key)
-    // A rule that would delete something now asks first, since the runner acts within seconds.
-    const preview = await previewRules(nextRules).catch((error: unknown) => {
-      toast.error(
-        t(
-          'components.settings.workspaceCleanup.previewFailed',
-          "Couldn't check which workspaces this rule matches."
-        ),
-        { description: errorMessage(error) }
-      )
-      return null
-    })
-    const rows = preview ? removalsFor(preview, key) : []
-    if (preview && rows.length === 0) {
-      await update(nextRules)
-    } else if (preview) {
-      setPendingEnable({ ruleTitle: search[key].title, rows, nextRules })
-    }
-    setPendingRule(null)
+    await applyRules(nextRules, { kind: 'enable', ruleTitle: search[key].title }, key)
   }
 
-  const confirmEnable = async (keep: WorkspaceCleanupPreviewRow[]): Promise<void> => {
-    if (!pendingEnable) {
+  const confirmChange = async (keep: WorkspaceCleanupPreviewRow[]): Promise<void> => {
+    if (!pendingChange) {
       return
     }
     // Pinned workspaces are always kept, so Keep is a pin rather than a second keep list.
@@ -160,8 +194,8 @@ export function WorkspaceCleanupSettingsPane({
         return
       }
     }
-    if (await update(pendingEnable.nextRules)) {
-      setPendingEnable(null)
+    if (await update(pendingChange.nextRules)) {
+      setPendingChange(null)
     }
   }
 
@@ -190,11 +224,14 @@ export function WorkspaceCleanupSettingsPane({
         <div className="space-y-3">
           <SettingsGroup title={t('components.settings.workspaceCleanup.rules.title', 'Rules')}>
             <WorkspaceCleanupRuleRows
+              key={cancelledChanges}
               rules={currentRules}
               matches={matches}
               pendingRule={pendingRule}
               onToggle={(key) => void toggleRule(key)}
-              onChange={(next) => void update(next)}
+              onChange={(next) =>
+                void applyRules(next, { kind: 'change', ruleTitle: search.inactive.title })
+              }
             />
           </SettingsGroup>
           {hasQuery ? null : (
@@ -221,11 +258,16 @@ export function WorkspaceCleanupSettingsPane({
               description={search.keepIgnoredFiles.description}
               checked={currentRules.keepWhen === 'any-local-files'}
               onChange={() =>
-                void update({
-                  ...currentRules,
-                  keepWhen:
-                    currentRules.keepWhen === 'any-local-files' ? 'uncommitted' : 'any-local-files'
-                })
+                void applyRules(
+                  {
+                    ...currentRules,
+                    keepWhen:
+                      currentRules.keepWhen === 'any-local-files'
+                        ? 'uncommitted'
+                        : 'any-local-files'
+                  },
+                  { kind: 'change', ruleTitle: search.keepIgnoredFiles.title }
+                )
               }
             />
           </SearchableSetting>
@@ -256,10 +298,13 @@ export function WorkspaceCleanupSettingsPane({
           ) : null}
         </SettingsGroup>
       ) : null}
-      <WorkspaceCleanupEnableRuleDialog
-        request={pendingEnable}
-        onCancel={() => setPendingEnable(null)}
-        onConfirm={confirmEnable}
+      <WorkspaceCleanupRuleChangeDialog
+        request={pendingChange}
+        onCancel={() => {
+          setPendingChange(null)
+          setCancelledChanges((count) => count + 1)
+        }}
+        onConfirm={confirmChange}
       />
     </>
   )

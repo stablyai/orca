@@ -22204,7 +22204,6 @@
           "deleteDescription": "Delete removes the workspace and its folder.",
           "archive": "Archive",
           "delete": "Delete",
-          "matchesNone": "Matches nothing right now.",
           "matchesCount": "Matches {{count}} workspaces now",
           "hideMatches": "Hide",
           "showMatches": "Show",
@@ -22329,6 +22328,12 @@
           "turnOnHint": "Turn on a rule to use this.",
           "justNow": "just now",
           "inUnderAMinute": "in under a minute"
+        },
+        "change": {
+          "title": "Change {{rule}}?",
+          "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
+          "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it.",
+          "apply": "Apply"
         }
       }
     },
