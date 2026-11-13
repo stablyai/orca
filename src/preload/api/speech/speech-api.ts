@@ -1,3 +1,4 @@
+import type { NativeChatEdgeSpeechRequest } from '../../../shared/native-chat/native-chat-speech'
 import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
 import type { DictationCleanupResult } from '../../../shared/dictation-cleanup'
 import type {
@@ -37,6 +38,9 @@ export type SpeechApi = {
   /** Resolves true when this chunk filled a cloud session's upload cap. */
   feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<boolean>
   stopDictation: (sessionId?: string) => Promise<void>
+  /** Desktop only. The paired web client keeps the system voice in the page. */
+  synthesize?: (request: NativeChatEdgeSpeechRequest) => Promise<{ audioBase64: string }>
+  cancelSynthesis?: () => Promise<void>
   /** Drops the session's audio and any text it hasn't returned yet, without transcribing the rest. */
   cancelDictation: (sessionId: string) => Promise<void>
   /** Absent in the paired web client: its host cleans up inside `speech.dictation.finish`. */

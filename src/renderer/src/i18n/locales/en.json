@@ -20976,6 +20976,10 @@
         "copied": "Copied",
         "copy": "Copy message"
       },
+      "speakMessage": {
+        "stop": "Stop speaking",
+        "speak": "Speak message"
+      },
       "scrollMessageToTop": "Scroll this message to top",
       "loadingEarlier": "Loading…",
       "loadEarlier": "Load earlier messages",
@@ -21992,7 +21996,32 @@
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
         "turnDiffsSearchChangedFiles": "changed files",
-        "turnDiffsSearchEdits": "edits"
+        "turnDiffsSearchEdits": "edits",
+        "speechTitle": "Speech",
+        "speechEnabledTitle": "Speak replies",
+        "speechEnabledCopy": "Show a Speak button on a finished agent reply.",
+        "speechSearchReadAloud": "read aloud",
+        "speechSearchTts": "text to speech",
+        "speechEngineTitle": "Voice engine",
+        "speechEngineCopy": "Neural voices need the internet and send the reply text to Microsoft's speech service. They speak English words inside Russian.",
+        "speechSearchNeural": "neural",
+        "speechSearchSvetlana": "Svetlana",
+        "speechSearchDmitry": "Dmitry",
+        "speechEngineSystem": "System",
+        "speechEngineNeural": "Neural",
+        "speechVoiceTitle": "Voice",
+        "speechVoiceSvetlana": "Svetlana",
+        "speechVoiceDmitry": "Dmitry",
+        "speechRateTitle": "Speaking speed",
+        "speechRateCopy": "How fast a reply is read.",
+        "speechRateSlower": "Slower",
+        "speechRateNormal": "Normal",
+        "speechRateFaster": "Faster",
+        "speechSearchSlower": "slower",
+        "speechSearchFaster": "faster",
+        "speechAutoTitle": "Speak new replies",
+        "speechAutoCopy": "Read an agent reply when that turn finishes.",
+        "speechSearchAuto": "automatic"
       },
       "voice": {
         "dictationLanguage": {
