@@ -76,7 +76,7 @@ export function useNativeChatLiveTranscript({
       if (sourceChanged) {
         limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
         transcriptLifecycleControl.reset()
-        setRead({ phase: 'loading' })
+        setRead({ sourceKey, phase: 'loading' })
         replaceList(appendMergerRef.current, [])
         setAppended([])
         setHasMore(false)
@@ -85,7 +85,7 @@ export function useNativeChatLiveTranscript({
     }
     transcriptLifecycleControl.reset()
     if (!sessionId) {
-      setRead({ phase: 'ready', messages: [] })
+      setRead({ sourceKey, phase: 'ready', messages: [] })
       replaceList(appendMergerRef.current, [])
       setAppended([])
       setHasMore(false)
@@ -104,7 +104,7 @@ export function useNativeChatLiveTranscript({
     if (sourceChanged) {
       limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
     }
-    setRead({ phase: 'loading' })
+    setRead({ sourceKey, phase: 'loading' })
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
@@ -132,17 +132,21 @@ export function useNativeChatLiveTranscript({
                 return
               }
             }
-            setRead({ phase: 'error', error: result.error })
+            setRead({ sourceKey, phase: 'error', error: result.error })
             return
           }
           const messages = boundNativeChatWindow(result?.messages ?? [], limitRef.current)
           transcriptLifecycleControl.replace(result?.lifecycle)
-          setRead({ phase: 'ready', messages })
+          setRead({ sourceKey, phase: 'ready', messages })
           setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
         })
         .catch((err: unknown) => {
           if (!cancelled && latestEnabled.current && !frameArrived) {
-            setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
+            setRead({
+              sourceKey,
+              phase: 'error',
+              error: err instanceof Error ? err.message : String(err)
+            })
           }
         })
     }
@@ -171,7 +175,7 @@ export function useNativeChatLiveTranscript({
           setLoadingEarlier(false)
           if ('error' in frame && frame.error) {
             // Error frames carry no transcript; leave the independent seed eligible to repair the pane.
-            setRead({ phase: 'error', error: frame.error })
+            setRead({ sourceKey, phase: 'error', error: frame.error })
             return
           }
           if (frame.type === 'snapshot' && frame.pending === true) {
@@ -179,7 +183,7 @@ export function useNativeChatLiveTranscript({
             transcriptPending = true
             // The host resolve poll owns recovery; stop duplicate renderer filesystem probes.
             retryTimer.cancel()
-            setRead({ phase: 'awaiting' })
+            setRead({ sourceKey, phase: 'awaiting' })
             return
           }
           frameArrived = true
@@ -187,7 +191,7 @@ export function useNativeChatLiveTranscript({
           const messages = boundNativeChatWindow(frame.messages, limitRef.current)
           replaceList(appendMergerRef.current, messages)
           setAppended([])
-          setRead({ phase: 'ready', messages: appendMergerRef.current.list })
+          setRead({ sourceKey, phase: 'ready', messages: appendMergerRef.current.list })
           setHasMore(frame.hasMore || messages !== frame.messages)
           return
         }
@@ -202,5 +206,24 @@ export function useNativeChatLiveTranscript({
       retryTimer.cancel()
       closeStream()
     }
-  }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
+  }, [
+    agent,
+    enabled,
+    sessionId,
+    sourceKey,
+    transcriptPath,
+    transport,
+    transcriptLifecycleControl,
+    limitRef,
+    latestEnabled,
+    latestPaneKey,
+    retainedSourceKeyRef,
+    appendMergerRef,
+    transcriptEpochRef,
+    setOlderHistoryGeneration,
+    setLoadingEarlier,
+    setRead,
+    setAppended,
+    setHasMore
+  ])
 }

@@ -35,7 +35,7 @@ export function useNativeChatLiveSession(
     () => getNativeChatSessionTransport(runtimeEnvironmentId ?? null),
     [runtimeEnvironmentId]
   )
-  const [read, setRead] = useState<ReadState>({ phase: 'loading' })
+  const [read, setRead] = useState<ReadState>({ phase: 'loading', sourceKey: null })
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [olderHistoryGeneration, setOlderHistoryGeneration] = useState(0)
@@ -75,7 +75,7 @@ export function useNativeChatLiveSession(
     transcriptPath ?? null
   ])
   const retainedSourceKeyRef = useRef(sourceKey)
-  const sourceMatches = retainedSourceKeyRef.current === sourceKey
+  const sourceMatches = read.sourceKey === sourceKey
 
   useNativeChatLiveTranscript({
     agent,
@@ -100,6 +100,7 @@ export function useNativeChatLiveSession(
 
   const loadEarlier = useNativeChatOlderHistory({
     agent,
+    sourceKey,
     sessionId,
     transcriptPath,
     transport,

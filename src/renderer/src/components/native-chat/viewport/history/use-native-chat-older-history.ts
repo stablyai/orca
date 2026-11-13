@@ -13,6 +13,7 @@ const USER_PAGING = { wakeWslDistro: true } as const
 
 export function useNativeChatOlderHistory({
   agent,
+  sourceKey,
   sessionId,
   transcriptPath,
   transport,
@@ -29,6 +30,7 @@ export function useNativeChatOlderHistory({
   setHasMore
 }: {
   agent: AgentType
+  sourceKey: string
   sessionId: string | null
   transcriptPath?: string | null
   transport: NativeChatSessionTransport
@@ -57,11 +59,17 @@ export function useNativeChatOlderHistory({
     if (!hasMore) {
       return Promise.resolve('exhausted')
     }
-    if (!latestEnabled.current || !sessionId || read.phase !== 'ready') {
+    if (
+      !latestEnabled.current ||
+      !sessionId ||
+      read.phase !== 'ready' ||
+      read.sourceKey !== sourceKey
+    ) {
       return Promise.resolve('unchanged')
     }
     const nextLimit = nextNativeChatLimit(limitRef.current)
     const requestEpoch = transcriptEpochRef.current
+    const requestSourceKey = sourceKey
     const lifecycleRevision = transcriptLifecycleControl.revision()
     const loadedCount = read.messages.length
     setLoadingEarlier(true)
@@ -81,7 +89,7 @@ export function useNativeChatOlderHistory({
         }
         limitRef.current = nextLimit
         // Replace the ordered base tail to prepend history; preserve separate live appends.
-        setRead({ phase: 'ready', messages: result.messages })
+        setRead({ phase: 'ready', messages: result.messages, sourceKey: requestSourceKey })
         transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
         const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
         setHasMore(more)
@@ -102,6 +110,7 @@ export function useNativeChatOlderHistory({
     return promise
   }, [
     agent,
+    sourceKey,
     sessionId,
     transcriptPath,
     transport,
