@@ -13665,6 +13665,8 @@
             "aaf1451654": "建立草稿 {{value0}}",
             "26511c22b4": "建立中...",
             "d7ae61269b": "已在分支上提交",
+            "branchSectionMerged": "已合併",
+            "branchSectionReviewMerged": "{{review}} 已合併",
             "48a003c1b1": "已暫存的變更",
             "d4ef4bafc5": "變更",
             "9339382454": "全部取消暫存",

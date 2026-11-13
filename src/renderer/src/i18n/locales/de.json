@@ -13845,6 +13845,8 @@
             "aaf1451654": "{{value0}} als Entwurf erstellen",
             "26511c22b4": "Wird erstellt…",
             "d7ae61269b": "Auf Branch committet",
+            "branchSectionMerged": "Gemergt",
+            "branchSectionReviewMerged": "{{review}} ist gemergt",
             "48a003c1b1": "Vorgemerkte Änderungen",
             "d4ef4bafc5": "Änderungen",
             "9339382454": "Alle Vormerkungen aufheben",

@@ -10,6 +10,7 @@ export function SectionHeader({
   count,
   countTitle,
   conflictCount = 0,
+  status,
   isCollapsed,
   onToggle,
   actions
@@ -19,6 +20,8 @@ export function SectionHeader({
   /** Spells out what the count measures — e.g. files changed against a compare base. */
   countTitle?: string
   conflictCount?: number
+  /** Inline status after the count; part of the toggle's accessible name. */
+  status?: React.ReactNode
   isCollapsed: boolean
   onToggle: () => void
   actions?: React.ReactNode
@@ -44,7 +47,12 @@ export function SectionHeader({
           <ChevronDown
             className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
           />
-          <span className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground">
+          <span
+            className={cn(
+              'min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground',
+              status && '@container'
+            )}
+          >
             <span className="flex min-w-0 items-center gap-1">
               <span className="min-w-0 truncate" title={label}>
                 {label}
@@ -53,6 +61,7 @@ export function SectionHeader({
               <span className="shrink-0 text-[11px] font-medium tabular-nums" title={countTitle}>
                 {count}
               </span>
+              {status}
             </span>
             {conflictCount > 0 && (
               <span className="block truncate text-[11px] font-medium text-destructive/80">

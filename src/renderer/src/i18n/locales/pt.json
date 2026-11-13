@@ -10150,6 +10150,8 @@
             "aaf1451654": "Criar {{value0}} em rascunho",
             "26511c22b4": "Criando...",
             "d7ae61269b": "Commitado na Branch",
+            "branchSectionMerged": "Mergeado",
+            "branchSectionReviewMerged": "{{review}} foi mergeado",
             "48a003c1b1": "Alterações no Stage",
             "d4ef4bafc5": "Alterações",
             "9339382454": "Remover tudo do stage",
