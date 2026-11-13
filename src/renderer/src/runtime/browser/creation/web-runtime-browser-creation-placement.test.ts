@@ -79,6 +79,10 @@ describe('paired browser creation placement', () => {
       [
         {
           id: 'host-floating',
+          browserWorkspaceId: `host-workspace-${pageId}`,
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
           type: 'browser',
           title: 'Floating page',
           browserPageId: pageId,
