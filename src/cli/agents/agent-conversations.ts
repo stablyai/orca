@@ -115,7 +115,7 @@ function address(row: { orcaSessionId: string | null }): string {
 
 function formatAgentRow(row: AgentConversationRow): string {
   return [
-    `${row.workspace} · ${row.agent ?? 'agent'} ${row.kind} · ${row.state}`,
+    `${row.repo ? `${row.repo} › ` : ''}${row.workspace} · ${row.agent ?? 'agent'} ${row.kind} · ${row.state}`,
     `  id: ${address(row)}`,
     ...(row.title ? [`  title: ${row.title}`] : []),
     ...(row.lastAssistantMessage
@@ -139,7 +139,7 @@ function formatAgentList(result: WithAnnotatedHostScope<AgentListResult>): strin
 function formatAgentShow(result: AgentShowResult): string {
   const id = `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`
   if (result.places.length === 0) {
-    return `Agent ${id} (${result.kind}) isn't open in any workspace right now. Read what it said with \`orca agent read ${id}\`.`
+    return `Agent ${id} (${result.kind}) isn't open in any workspace right now.`
   }
   return result.places.map(formatAgentRow).join('\n\n')
 }

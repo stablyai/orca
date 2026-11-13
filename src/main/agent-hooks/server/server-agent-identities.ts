@@ -214,8 +214,9 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       return undefined
     }
     const { key } = linked
-    // Sleeping records carry no WSL distro, so on Windows one cannot name its guest's path.
-    if (!key || process.platform === 'win32') {
+    // Sleeping records carry no WSL distro, so one names a WSL agent's key only while its hooks
+    // still say so; a native Windows agent's record matches its full key like any other.
+    if (!key || (process.platform === 'win32' && key.wslDistro !== '')) {
       return null
     }
     for (const record of Object.values(readSleeping())) {

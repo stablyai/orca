@@ -33,7 +33,13 @@ export async function resolveAgentConversation(
   runtime: { ensureStructuredAgentSessionHost(): Promise<unknown> },
   input: string
 ): Promise<ResolvedAgentConversation> {
-  const text = input.trim()
+  // Orca mints `<agent>_<uuid>` with underscores; a hyphenated UUID spells the same ID.
+  const text = input
+    .trim()
+    .replace(
+      /_([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i,
+      '_$1_$2_$3_$4_$5'
+    )
   if (isTerminalHandle(text)) {
     throw new AgentConversationRefusal(
       CODES.terminalHandle,

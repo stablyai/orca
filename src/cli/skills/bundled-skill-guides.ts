@@ -302,7 +302,7 @@ const ORCA_CLI_MARKDOWN = [
   "",
   "- `ORCA agent list --json` lists the agents open in this host's workspaces, with `orcaSessionId`, `kind` (chat or terminal), state, workspace and last reply. A terminal agent has no ID until it first reports to Orca. Agents on other hosts are not listed; the output names those hosts and the `--environment` to use.",
   "- `ORCA agent show <id> --json` shows where one agent is open (none if closed, two if resumed in two panes).",
-  "- `ORCA agent read <id> --json` reads what the agent said: a chat's history or a terminal agent's transcript, never its screen. It needs no running agent and never starts one. Pass the returned `cursor` with `--cursor` to read only newer entries. A terminal agent is readable while Orca knows its transcript (open, or asleep in a workspace).",
+  "- `ORCA agent read <id> --json` reads what the agent said: a chat's history or a terminal agent's transcript, never its screen. It needs no running agent and never starts one. Pass the returned `cursor` with `--cursor` to read only newer entries. A terminal agent is readable while Orca knows its transcript (open, or asleep in a workspace; on Windows, a WSL agent only once it wakes).",
   "",
   "A chat keeps its ID across `/clear`; a terminal agent gets a new one. A provider's own conversation id or a `term_…` handle is refused with the ID to use. To message an agent, use `terminal send` or `orchestration send` as below.",
   "",

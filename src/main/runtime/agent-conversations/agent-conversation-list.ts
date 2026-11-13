@@ -35,6 +35,9 @@ export function projectAgentConversationList(
         state: row.state,
         worktreeId: worktree.worktreeId,
         workspace: worktree.displayName,
+        ...(worktree.repo && worktree.workspaceKind !== 'folder-workspace'
+          ? { repo: worktree.repo }
+          : {}),
         ...(worktree.hostId ? { hostId: worktree.hostId } : {}),
         paneKey: row.paneKey,
         title: row.conversationName ?? row.displayName ?? row.taskTitle,

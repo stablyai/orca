@@ -59,5 +59,12 @@ describe('resolveAgentConversation', () => {
       kind: 'terminal',
       orcaSessionId: TERMINAL
     })
+    // The same ID with its UUID hyphenated, as a UUID is usually written.
+    await expect(
+      resolveAgentConversation(
+        runtime,
+        'orca_session_id:claude_5688af50-12a0-4b0b-9a4a-098d87fe1e68'
+      )
+    ).resolves.toEqual({ kind: 'terminal', orcaSessionId: TERMINAL })
   })
 })

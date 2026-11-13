@@ -119,3 +119,34 @@ it.skipIf(process.platform === 'win32')(
     expect(partitionReads).toBe(2)
   }
 )
+
+it('reads a native Windows agent asleep by its record, never a WSL agent by a distro-less one', async () => {
+  const platform = process.platform
+  const server = await started()
+  server.ingestRemote(hook('session-n', 'C:\\Users\\u\\.claude\\projects\\p\\n.jsonl'), null)
+  await answered()
+  const native = server.getStatusSnapshot()[0]?.orcaSessionId
+  server.ingestRemote(hook('session-w', '/home/u/.claude/projects/p/w.jsonl'), WSL)
+  await answered()
+  const wsl = server.getStatusSnapshot()[0]?.orcaSessionId
+  server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
+  // Sleeping records carry no distro: both look native.
+  const asleep = (id: string, path: string) => ({
+    agent: 'claude' as const,
+    providerSession: { key: 'session_id' as const, id, transcriptPath: path },
+    connectionId: null
+  })
+  const records = () => ({
+    n: asleep('session-n', 'C:\\Users\\u\\.claude\\projects\\p\\n.jsonl'),
+    w: asleep('session-w', '/home/u/.claude/projects/p/w.jsonl')
+  })
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  try {
+    expect(await server.terminalAgentTranscriptSource(native!, records)).toMatchObject({
+      key: { wslDistro: '', providerSessionId: 'session-n' }
+    })
+    expect(await server.terminalAgentTranscriptSource(wsl!, records)).toBeNull()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  }
+})

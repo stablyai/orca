@@ -13,6 +13,8 @@ export type AgentConversationRow = {
   state: AgentStatusState
   worktreeId: string
   workspace: string
+  /** The workspace's project, so two workspaces on one branch name tell apart. */
+  repo?: string
   hostId?: string
   paneKey: string
   title: string | null
