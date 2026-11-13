@@ -49,14 +49,6 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   /** Whether delivery has work for this terminal: a pointer reservation to recover, or unread, undelivered mail no waiter or held batch claims. */
   hasDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
-    const owed = this.readDeliverableMail(terminal)
-    if (!owed) {
-      this.deps.pointerDelivery.completeRecovery(terminal.ptyId)
-    }
-    return owed
-  }
-
-  private readDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
     try {
       const db = this.deps.getDb()
       if (!db) {
@@ -66,7 +58,8 @@ export class OrchestrationMailboxNotificationCoordinator<
         return true
       }
       const owned = this.deps.mailboxOwner.resolveAll(terminal, { routeDirectMail: false })
-      return [...new Set([...owned, terminal.handle])].some((mailboxHandle) => {
+      const handles = [...new Set([...owned, terminal.handle])]
+      const owed = handles.some((mailboxHandle) => {
         const waiters = this.deps.getMessageWaiters(mailboxHandle)
         return (
           // Mirrors deliver(): an unfiltered waiter preempts recovery too.
@@ -81,6 +74,10 @@ export class OrchestrationMailboxNotificationCoordinator<
             }).messages.length > 0)
         )
       })
+      if (!owed && db.getMailboxesWithPointerWork(handles).size === 0) {
+        this.deps.pointerDelivery.completeRecovery(terminal.ptyId)
+      }
+      return owed
     } catch {
       // A closed or unavailable database cannot own a live delivery retry.
       return false

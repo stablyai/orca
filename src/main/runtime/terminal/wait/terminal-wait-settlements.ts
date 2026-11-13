@@ -77,7 +77,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       readinessDelay: (terminal) => {
         if (
           !isMailboxTerminalTakingInput(terminal) &&
-          this.orchestrationMailboxPointerDelivery.stagedPointerText(terminal.ptyId) === undefined
+          !(
+            terminal.lastAgentStatusObservedLive &&
+            terminal.lastAgentStatus === null &&
+            this.orchestrationMailboxPointerDelivery.stagedPointerText(terminal.ptyId) !== undefined
+          )
         ) {
           return null
         }

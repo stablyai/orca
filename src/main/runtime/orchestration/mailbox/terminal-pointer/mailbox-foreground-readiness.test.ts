@@ -193,10 +193,14 @@ describe('mail-local foreground recovery readiness', () => {
   it.each([
     { kind: 'ordinary', recovering: false, receiptFirst: false },
     { kind: 'recovered', recovering: true, receiptFirst: false },
-    { kind: 'receipt-first', recovering: true, receiptFirst: true }
+    { kind: 'receipt-first', recovering: true, receiptFirst: true },
+    { kind: 'child-expiry', recovering: true, receiptFirst: false },
+    { kind: 'owed-read-error', recovering: true, receiptFirst: false },
+    { kind: 'stale-in-band', recovering: true, receiptFirst: false },
+    { kind: 'permission-edge', recovering: false, receiptFirst: false }
   ])(
     'keeps a late dialog off the foreground retry schedule ($kind)',
-    async ({ recovering, receiptFirst }) => {
+    async ({ kind, recovering, receiptFirst }) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-mail-late-dialog-')
       const row: AgentStatusIpcPayload = {
@@ -246,6 +250,13 @@ describe('mail-local foreground recovery readiness', () => {
         await runtime.listTerminals()
         runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${COMPOSER}`, Date.now())
         await vi.advanceTimersByTimeAsync(31 * 60 * 1000)
+        if (kind === 'child-expiry') {
+          runtime.onPtyData(
+            PTY_ID,
+            '\x1b]7501;state=working:app=claude-code\x07\x1b]7501;state=working:id=child\x07\x1b]7501;state=done:app=claude-code\x07\x1b]0;✳ Claude Code\x07',
+            Date.now()
+          )
+        }
         const run = createBoundRun(db, 'Dialog after pointer write')
         const message = insertDirectRunMessage(db, run.id, 'Wait before Enter')
         write.mockImplementation((_ptyId, data) => {
@@ -253,6 +264,9 @@ describe('mail-local foreground recovery readiness', () => {
             if (!recovering) {
               row.state = 'waiting'
               row.receivedAt = Date.now()
+            }
+            if (kind === 'permission-edge') {
+              runtime.onPtyData(PTY_ID, '\x1b]0;Claude permission\x07', Date.now())
             }
             runtime.onPtyData(
               PTY_ID,
@@ -284,16 +298,42 @@ describe('mail-local foreground recovery readiness', () => {
           delivered_at: null,
           pointer_enter_pending: 2
         })
+        if (kind === 'stale-in-band') {
+          runtime.onPtyData(
+            PTY_ID,
+            '\x1b]7501;state=idle:app=claude-code\x07',
+            originalRow.receivedAt
+          )
+          await vi.advanceTimersByTimeAsync(1000)
+          expect(write).toHaveBeenCalledTimes(1)
+        }
+        if (kind === 'owed-read-error') {
+          const read = vi.spyOn(db, 'getMessageById').mockImplementationOnce(() => {
+            throw new Error('temporarily unavailable')
+          })
+          await runtime.readTerminalMailHold(`run:${run.id}`)
+          await vi.advanceTimersByTimeAsync(0)
+          expect(read).toHaveBeenCalled()
+          read.mockRestore()
+        }
+        const attempts = vi.spyOn(runtime, 'deliverPendingMessagesForPty')
         const deferredInspections = inspections
-        await vi.advanceTimersByTimeAsync(65000)
-        expect(inspections).toBe(deferredInspections)
+        await vi.advanceTimersByTimeAsync(kind === 'child-expiry' ? 21 * 60 * 1000 : 65000)
+        if (kind === 'permission-edge') {
+          expect(runtime.mailTerminal?.lastAgentStatus).toBe('permission')
+          expect(attempts).not.toHaveBeenCalled()
+        }
         expect(write).toHaveBeenCalledTimes(1)
+        expect(inspections).toBe(deferredInspections)
         if (recovering) {
           expect(row).toEqual(originalRow)
           expect(runtime.mailTerminal?.lastAgentStatus).toBe('idle')
         } else {
           row.state = 'done'
           row.receivedAt = Date.now()
+        }
+        if (kind === 'permission-edge') {
+          runtime.onPtyData(PTY_ID, '\x1b]0;✳ Claude Code\x07', Date.now())
         }
         runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
         await vi.advanceTimersByTimeAsync(10000)

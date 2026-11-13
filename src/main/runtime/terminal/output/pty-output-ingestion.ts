@@ -68,10 +68,10 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     leaf: Pick<RuntimeSyncedLeaf, 'tabId' | 'leafId' | 'paneRuntimeId'>
   ): string
   protected abstract getOrCreatePtyTitleTrackerEntry(ptyId: string): RuntimePtyTitleTrackerEntry
-  protected abstract emitTerminalAgentStatusEvents(
+  protected abstract emitLiveTerminalAgentStatusEvents(
     ptyId: string,
-    chunk: Pick<ProcessedAgentStatusChunk, 'payloads'> & Partial<ProcessedAgentStatusChunk>,
-    provenance?: { origin: 'process'; yieldsToHookSince: number }
+    chunk: ProcessedAgentStatusChunk,
+    at: number
   ): void
   protected abstract restoreAgentPromptLifecycleByteOrder(
     ptyId: string,
@@ -296,7 +296,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       titleTrackerEntry.applyingChunk = false
       try {
         // Cross-channel order is status, titles, bell; publish agentStatus:set before pty:sideEffect.
-        this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
+        this.emitLiveTerminalAgentStatusEvents(ptyId, agentStatusChunk, at)
         const lastPayloadTitleOffset =
           agentStatusChunk.lastPayloadCleanOffset === null
             ? null

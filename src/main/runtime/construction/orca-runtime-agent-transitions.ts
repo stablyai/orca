@@ -197,6 +197,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
               evidenceObservedAt: row.evidenceObservedAt,
               restoredUnconfirmed: row.restoredUnconfirmed
             })
+            ? (row.evidenceObservedAt ?? row.receivedAt)
+            : undefined
         )
       }
     })

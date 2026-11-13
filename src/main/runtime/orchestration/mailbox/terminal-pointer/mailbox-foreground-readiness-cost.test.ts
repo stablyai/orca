@@ -126,6 +126,8 @@ it.each([2, 20])(
       await vi.advanceTimersByTimeAsync(60000)
       const count = attempts.mock.calls.length
       expect(count).toBeGreaterThan(0)
+      // One terminal decision every two seconds, plus the scheduling edge.
+      expect(count).toBeLessThanOrEqual(60000 / 2000 + 1)
       expect(screens.mock.calls.length).toBeLessThanOrEqual(count)
       expect(inspections - priorInspections).toBe(0)
       // One reservation and its owner at wake and rearm; no mailbox inventory per attempt.

@@ -68,6 +68,8 @@ describe('terminal-owned foreground work', () => {
     let concurrent = 0
     let peak = 0
     let shell = true
+    let retainInspections = true
+    const releaseInspections: (() => void)[] = []
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -79,7 +81,9 @@ describe('terminal-owned foreground work', () => {
         inspections++
         concurrent++
         peak = Math.max(peak, concurrent)
-        await Promise.resolve()
+        if (retainInspections) {
+          await new Promise<void>((resolve) => releaseInspections.push(resolve))
+        }
         concurrent--
         return {
           foregroundProcess: shell ? 'zsh' : 'codex',
@@ -177,6 +181,7 @@ describe('terminal-owned foreground work', () => {
       runtime.onPtyData(owner.ptyId, '\x1b]0;Codex working\x07', 2)
     }
     await vi.advanceTimersByTimeAsync(10)
+    expect(concurrent).toBe(Math.min(held, 4))
     const pending = { ...work.counts }
     for (let i = 0; i < 10; i++) {
       for (const owner of owners.slice(0, held)) {
@@ -188,6 +193,10 @@ describe('terminal-owned foreground work', () => {
       statements: work.counts.statements - pending.statements,
       owners: work.counts.owners - pending.owners,
       messages: work.counts.messages - pending.messages
+    }
+    retainInspections = false
+    for (const release of releaseInspections) {
+      release()
     }
     await vi.advanceTimersByTimeAsync(1000)
     const initial = { ...work.counts }
@@ -243,6 +252,7 @@ describe('terminal-owned foreground work', () => {
     vi.useFakeTimers()
     const n = await workload(2, 1, 0)
     const tenN = await workload(20, 1, 0)
+    expect(tenN.peak).toBe(4)
     for (const sample of [n, tenN]) {
       expect(sample.automatic).toBeGreaterThanOrEqual(10 * sample.held)
       expect(sample.automatic).toBeLessThanOrEqual(12 * sample.held)
