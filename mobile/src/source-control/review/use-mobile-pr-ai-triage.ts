@@ -31,6 +31,12 @@ export type PrAiTriageLaunchNotice = {
 
 type StoredLaunchNotice = PrAiTriageLaunchNotice | { kind: 'waitingForDesktop' | 'launchFailed' }
 
+type StoredNoticeEntry = {
+  client: RpcClient | null
+  worktreeId: string
+  notice: StoredLaunchNotice
+}
+
 const NO_LAUNCH_NOTICE: PrAiTriageLaunchNotice = {
   success: null,
   error: null,
@@ -62,7 +68,7 @@ export function useMobilePrAiTriage(input: Input) {
   } = input
   const [busyKey, setBusyKey] = useState<PrAiTriageKey | null>(null)
   // Scope feedback by button so launches cannot display another action’s prompt-copy state.
-  const [notices, setNotices] = useState<Partial<Record<PrAiTriageKey, StoredLaunchNotice>>>({})
+  const [notices, setNotices] = useState<Partial<Record<PrAiTriageKey, StoredNoticeEntry>>>({})
   // Lock synchronously because async busy state cannot stop same-frame double-tap launches.
   const inFlightRef = useRef(false)
   const availability: MobileAgentLaunchAvailability = resolveMobileAgentLaunchAvailability({
@@ -71,29 +77,42 @@ export function useMobilePrAiTriage(input: Input) {
     statusReadable: hostStatusReadable
   })
 
-  const setNotice = useCallback((key: PrAiTriageKey, notice: StoredLaunchNotice) => {
-    setNotices((current) => ({ ...current, [key]: notice }))
-  }, [])
+  const recordNotice = useCallback(
+    (
+      key: PrAiTriageKey,
+      notice: StoredLaunchNotice,
+      targetWorktreeId: string,
+      targetClient: RpcClient | null
+    ) => {
+      setNotices((current) => ({
+        ...current,
+        [key]: { client: targetClient, worktreeId: targetWorktreeId, notice }
+      }))
+    },
+    []
+  )
 
   const launch = useCallback(
     async (key: PrAiTriageKey, buildPrompt: () => string | Promise<string>): Promise<boolean> => {
       if (inFlightRef.current || busyKey !== null) {
         return false
       }
-      if (!client || connState !== 'connected') {
-        setNotice(key, { kind: 'waitingForDesktop' })
+      const targetWorktreeId = worktreeId
+      const targetClient = client
+      if (!targetClient || connState !== 'connected') {
+        recordNotice(key, { kind: 'waitingForDesktop' }, targetWorktreeId, targetClient)
         triggerError()
         return false
       }
       inFlightRef.current = true
       setBusyKey(key)
-      setNotice(key, NO_LAUNCH_NOTICE)
+      recordNotice(key, NO_LAUNCH_NOTICE, targetWorktreeId, targetClient)
       try {
         const prompt = await buildPrompt()
         const result = await launchAgentWithPrompt({
-          client,
+          client: targetClient,
           hostCapabilities,
-          worktreeId,
+          worktreeId: targetWorktreeId,
           prompt,
           ...TRIAGE_LAUNCH[key]
         })
@@ -103,21 +122,28 @@ export function useMobilePrAiTriage(input: Input) {
         } else {
           triggerError()
         }
-        setNotice(key, {
-          success: notice.success,
-          error: notice.error,
-          warning: notice.warning,
-          undeliveredPrompt: notice.undeliveredPrompt,
-          opens: notice.opens
-        })
+        recordNotice(
+          key,
+          {
+            success: notice.success,
+            error: notice.error,
+            warning: notice.warning,
+            undeliveredPrompt: notice.undeliveredPrompt,
+            opens: notice.opens
+          },
+          targetWorktreeId,
+          targetClient
+        )
         return notice.succeeded
       } catch (err) {
         triggerError()
-        setNotice(
+        recordNotice(
           key,
           err instanceof Error
             ? { ...NO_LAUNCH_NOTICE, error: err.message }
-            : { kind: 'launchFailed' }
+            : { kind: 'launchFailed' },
+          targetWorktreeId,
+          targetClient
         )
         return false
       } finally {
@@ -125,13 +151,18 @@ export function useMobilePrAiTriage(input: Input) {
         setBusyKey(null)
       }
     },
-    [busyKey, client, connState, hostCapabilities, setNotice, workspaceLabel, worktreeId]
+    [busyKey, client, connState, hostCapabilities, recordNotice, workspaceLabel, worktreeId]
   )
 
   return {
     availability,
     noticeFor: (key: PrAiTriageKey): PrAiTriageLaunchNotice => {
-      const notice = notices[key] ?? NO_LAUNCH_NOTICE
+      // ponytail: single notice entry retained per action key; map by workspace if history needed across rapid flips
+      const entry = notices[key]
+      if (!entry || entry.worktreeId !== worktreeId || entry.client !== client) {
+        return NO_LAUNCH_NOTICE
+      }
+      const { notice } = entry
       if (!('kind' in notice)) {
         return notice
       }
