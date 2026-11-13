@@ -23,6 +23,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/host/electron-http-client.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
+  // Filesystem failure injection needs Node's syncBuiltinESMExports to update named imports.
+  'src/main/daemon/providers/adapter/testing/daemon-pty-adapter-host-history.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/ws-inbound-message-queue.test.ts',
