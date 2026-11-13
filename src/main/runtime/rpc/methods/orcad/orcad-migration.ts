@@ -3,7 +3,7 @@ import {
   OrcadMigrationCatalogParams,
   OrcadMigrationCatalogReferenceParams,
   OrcadMigrationCommitCatalogParams
-} from '../../../../../shared/rpc-contract/orcad-migration-params'
+} from '../../../../../shared/rpc-contract/host-management/orcad-migration-params'
 import { parseOrcadMigrationManifest } from '../../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../../../../../shared/orcad-migration/orcad-migration-scrollback'
 import { OrcadMigrationBlobChunkRequestSchema } from '../../../../../shared/orcad-migration/orcad-migration-blob-transfer'

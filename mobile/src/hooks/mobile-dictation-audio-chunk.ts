@@ -5,7 +5,7 @@ import {
 } from './mobile-dictation-pending-audio-budget'
 import { bytesToBase64 } from './mobile-dictation-session-state'
 import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
-import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech/speech-params'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
 import { waitForRpcClientReconnected } from '../transport/rpc/rpc-client-reconnect-wait'
