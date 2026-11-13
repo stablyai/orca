@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
+import type { InstalledBundleChange } from '../../shared/installed-bundle-change'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
@@ -48,6 +49,8 @@ export const appApi = {
       () => ipcRenderer.invoke('app:relaunch'),
       awaitBeforeUnloadCheckpoint
     ),
+  readInstalledBundleChange: (): Promise<InstalledBundleChange> =>
+    ipcRenderer.invoke('app:readInstalledBundleChange'),
   restart: (): Promise<void> =>
     prepareAndInvokeAppRestart(
       window,

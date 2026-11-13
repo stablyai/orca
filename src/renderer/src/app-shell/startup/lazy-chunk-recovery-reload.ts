@@ -1,3 +1,5 @@
+import type { CrashReportBreadcrumbData } from '../../../../shared/crash-reporting'
+import type { InstalledBundleChange } from '../../../../shared/installed-bundle-change'
 import { prepareRendererForAppRestart } from '../../../../shared/renderer-restart-preparation'
 import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../../shared/renderer-shutdown-events'
 import {
@@ -16,6 +18,15 @@ export type LazyChunkRecoveryReloadOutcome =
   | 'never-landed'
   /** The host rejected the reload request before navigation could begin. */
   | 'request-failed'
+  /** The bundle on disk is a different build, so the app is relaunching instead of reloading. */
+  | 'relaunch-requested'
+
+/** Host facilities the recovery consults; defaults read the preload bridge and tolerate older hosts. */
+export type LazyChunkRecoveryHost = {
+  awaitCheckpoint: () => Promise<void>
+  readInstalledBundleChange: () => Promise<InstalledBundleChange | null>
+  relaunch: () => Promise<void>
+}
 
 // Paired-web hosts may veto navigation without emitting the Electron signal.
 const RELOAD_SETTLE_GRACE_MS = 10_000
@@ -23,6 +34,27 @@ const RELOAD_SETTLE_GRACE_MS = 10_000
 type RefusedNavigationWait = {
   outcome: Promise<'unload-vetoed' | 'never-landed'>
   cancel: () => void
+}
+
+/** Inline best-effort breadcrumbs keep low-level recovery free of renderer/webview imports for SSR and unit tests. */
+export function recordLazyChunkBreadcrumb(name: string, data: CrashReportBreadcrumbData): void {
+  try {
+    const api = (window as Window & { api?: Window['api'] }).api
+    api?.crashReports.recordBreadcrumb({ name, data })
+  } catch {
+    // Crash evidence is best-effort and must never mask the original failure.
+  }
+}
+
+function preloadHost(): LazyChunkRecoveryHost {
+  const api = typeof window === 'undefined' ? undefined : window.api?.app
+  return {
+    // Hosts without a preload bridge stage durably in-process; nothing to join.
+    awaitCheckpoint: () => api?.awaitBeforeUnloadCheckpoint?.() ?? Promise.resolve(),
+    readInstalledBundleChange: async () => (await api?.readInstalledBundleChange?.()) ?? null,
+    relaunch: () =>
+      api?.relaunch?.() ?? Promise.reject(new Error('This host cannot relaunch the app.'))
+  }
 }
 
 function waitForRefusedNavigation(win: Window): RefusedNavigationWait {
@@ -47,13 +79,35 @@ function waitForRefusedNavigation(win: Window): RefusedNavigationWait {
   return { outcome, cancel }
 }
 
-/** Resolves only if the navigation is refused; a landed reload destroys this document. */
+/** Resolves only if the navigation is refused; a landed reload or relaunch destroys this document. */
 export async function requestLazyChunkRecoveryReload(
   win: Window,
-  // Hosts without a preload bridge stage durably in-process; nothing to join.
-  awaitCheckpoint: () => Promise<void> = () =>
-    window.api?.app?.awaitBeforeUnloadCheckpoint?.() ?? Promise.resolve()
+  host: Partial<LazyChunkRecoveryHost> = {}
 ): Promise<LazyChunkRecoveryReloadOutcome> {
+  const { awaitCheckpoint, readInstalledBundleChange, relaunch } = { ...preloadHost(), ...host }
+
+  // A replaced bundle (package manager, Homebrew, the manual-install card) cannot be reloaded into:
+  // the new index.html would run a different build against this main process. Only a relaunch fits.
+  let bundle: InstalledBundleChange | null = null
+  try {
+    bundle = await readInstalledBundleChange()
+  } catch {
+    // An unanswered probe keeps the reload path, which is what older hosts always did.
+  }
+  if (bundle?.changed) {
+    recordLazyChunkBreadcrumb('lazy_chunk_relaunch', {
+      runningVersion: bundle.runningVersion,
+      installedVersion: bundle.installedVersion
+    })
+    try {
+      // The preload relaunch runs restart preparation itself, so unsaved editors are backed up first.
+      await relaunch()
+      return 'relaunch-requested'
+    } catch {
+      return 'checkpoint-refused'
+    }
+  }
+
   try {
     await prepareRendererForAppRestart(win, {
       startedEventName: ORCA_APP_RESTART_STARTED_EVENT,

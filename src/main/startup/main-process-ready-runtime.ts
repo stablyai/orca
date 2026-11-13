@@ -40,6 +40,14 @@ import {
 import { loadWorktreeRemovalRecordsForStore } from './workspace-startup/worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
+import {
+  captureInstalledBundleIdentity,
+  readInstalledBundleChange
+} from './installed-bundle/installed-bundle-identity'
+import { createInstalledBundleReplacedWatch } from './installed-bundle/installed-bundle-replaced-prompt'
+import { showMessageBoxOnMainWindow } from './main-window/main-window-actions'
+import { restartApp } from '../ipc/app'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/artifact-slots/orcad-artifact-cache-retention'
@@ -59,6 +67,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   if (!store) {
     throw new Error('Store must be initialized before ready services')
   }
+  // Stamp the archive before any package manager can replace it under this process.
+  await captureInstalledBundleIdentity()
   // Renderers fork from zygotes that exist already, so this must land before the first window.
   await refuseRealtimeSchedulingUnderZeroRtTime()
   // Load interrupted deletion records before listings so first paint shows Deleting.
@@ -131,6 +141,21 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
   runAfterFirstWindowShown(() => {
     app.on('browser-window-focus', startSpeechModelWarmup(store))
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Offer a restart once the bundle on disk stops matching this process, before a lazy chunk fails.
+  runAfterFirstWindowShown(() => {
+    const watch = createInstalledBundleReplacedWatch({
+      readChange: readInstalledBundleChange,
+      isQuitting: () => state.isQuitting,
+      showMessageBox: showMessageBoxOnMainWindow,
+      restart: () => void restartApp('installed-bundle-replaced'),
+      recordBreadcrumb: (change) =>
+        recordDurableCrashBreadcrumb('installed_bundle_replaced', {
+          runningVersion: change.runningVersion,
+          installedVersion: change.installedVersion
+        })
+    })
+    app.on('browser-window-focus', watch.onAppFocused)
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     startClaudeCodeThemeSync({

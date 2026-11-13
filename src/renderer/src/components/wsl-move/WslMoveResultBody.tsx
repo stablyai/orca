@@ -35,6 +35,7 @@ function reloadFailure(reload: WslMoveReloadState, t: Translate = translate): st
   switch (reload) {
     case 'idle':
     case 'reloading':
+    case 'relaunch-requested':
       return null
     case 'checkpoint-refused':
       return t(

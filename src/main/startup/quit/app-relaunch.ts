@@ -7,6 +7,7 @@ import { getWindowsAdministratorRelaunchOptions } from '../../windows/windows-ad
 export type AppRelaunchReason =
   | 'admin-restart'
   | 'gpu-fallback'
+  | 'installed-bundle-replaced'
   | 'profile-switch'
   | 'profile-transfer'
   | 'renderer-request'

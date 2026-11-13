@@ -15,6 +15,7 @@ import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
+import type { InstalledBundleChange } from '../../shared/installed-bundle-change'
 
 export type AppApi = {
   getSystemLanguageDetection?: (
@@ -35,6 +36,8 @@ export type AppApi = {
   setWindowMaterialSuppressed: (suppressed: boolean) => Promise<void>
   /** Uses app.exit(0), bypassing normal quit handling. */
   relaunch: () => Promise<void>
+  /** Whether a package manager or installer replaced the app bundle under this process; optional for older hosts. */
+  readInstalledBundleChange?: () => Promise<InstalledBundleChange>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */
   restart: () => Promise<void>
   /** Main classifies teardown before Electron emits process-gone events. */
