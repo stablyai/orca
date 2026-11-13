@@ -40,15 +40,12 @@ describe('checkAgentCliVersion', () => {
 
   it('propagates owner cancellation instead of certifying a missing CLI', async () => {
     const owner = new AbortController()
-    runProcess.mockImplementation(async ({ signal }) => {
-      await new Promise<void>((resolve) =>
-        signal.addEventListener('abort', () => resolve(), { once: true })
-      )
-      return { code: null, signal: 'SIGTERM', stdout: '', stderr: '', timedOut: false }
-    })
+    const closed = Promise.withResolvers<unknown>()
+    runProcess.mockReturnValue(closed.promise)
     const read = checkAgentCliVersion({ ...INPUT, operation: { signal: owner.signal } }, [])
     const observed = expect(read).rejects.toThrow('superseded')
     owner.abort(new Error('superseded'))
+    closed.resolve({ code: null, signal: 'SIGTERM', stdout: '', stderr: '', timedOut: false })
     await observed
   })
 

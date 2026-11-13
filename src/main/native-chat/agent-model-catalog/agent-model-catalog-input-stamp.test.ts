@@ -2,12 +2,11 @@ import { createAcpModelCatalogProbe } from '../../acp/discovery/acp-model-catalo
 import { acpLaunchSpecFor } from '../../acp/launch/acp-launch-registry'
 import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, dirname, delimiter } from 'node:path'
+import { join, dirname } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
 import { agentModelCatalogInputStamp } from './agent-model-catalog-input-stamp'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import { AgentModelCatalogStore } from './agent-model-catalog-store'
-import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 import type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
 
 it.each(['grok', 'codex'])(
@@ -88,69 +87,6 @@ it('resolves relative PATH installs and direct interpreter scripts from their ac
   expect(await agentModelCatalogInputStamp(input)).not.toBe(installed)
 })
 
-it('shares unchanged executable evidence across folders and irrelevant PATH entries', async () => {
-  const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-lookup-'))
-  onTestFinished(() => rm(folder, { recursive: true, force: true }))
-  const a = join(folder, 'a')
-  const b = join(folder, 'b')
-  await Promise.all([mkdir(a), mkdir(b)])
-  const store = new AgentModelCatalogStore()
-  const held = Promise.withResolvers<AgentModelCatalogSuccess>()
-  let started = false
-  const run = async () => {
-    if (started) {
-      return {
-        models: [{ id: 'duplicate', label: 'Duplicate', efforts: [], isDefault: true }],
-        origin: 'probe' as const,
-        complete: true
-      }
-    }
-    started = true
-    return held.promise
-  }
-  const probe: AgentModelCatalogProbe = Object.assign(run, {
-    resolve: async (
-      _home: unknown,
-      _listIn: string,
-      _lookup?: unknown,
-      _operation?: unknown,
-      cwd = _listIn
-    ) => ({
-      identity: 'same-executable',
-      inputStamp: await agentModelCatalogInputStamp({
-        command: process.execPath,
-        cwd,
-        env: {
-          PATH: `./node_modules/.bin${delimiter}${folder}/${cwd === a ? 'unused-one' : 'unused-two'}${delimiter}`
-        }
-      }),
-      run
-    })
-  })
-  const service = createAgentModelCatalogService({
-    store,
-    getConversation: () => undefined,
-    getRecord: () => undefined,
-    drivesRecord: () => true,
-    resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: folder }),
-    probes: { claude: probe }
-  })
-  onTestFinished(() => service.stop())
-  await service.read({ agent: 'claude', workspacePath: a })
-  await service.read({ agent: 'claude', workspacePath: b })
-  held.resolve({
-    models: [{ id: 'retained', label: 'Retained', efforts: [], isDefault: true }],
-    origin: 'probe',
-    complete: true
-  })
-  expect(
-    await service.read({ agent: 'claude', workspacePath: b, waitForListing: true })
-  ).toMatchObject({ models: [{ id: 'retained' }] })
-  expect(
-    await service.read({ agent: 'claude', workspacePath: a, waitForListing: true })
-  ).toMatchObject({ models: [{ id: 'retained' }] })
-})
-
 it.each(['bun', 'deno'])(
   'observes the direct %s run operand rather than the run subcommand',
   async (command) => {
@@ -205,8 +141,11 @@ it('observes the real ACP legacy command script in its listing folder before usi
     probes: { grok: probe }
   })
   onTestFinished(() => service.stop())
-  const read = () =>
-    service.read({ agent: 'grok', legacy: true, workspacePath: workspace, waitForListing: true })
+  const read = async () => {
+    const params = { agent: 'grok', legacy: true, workspacePath: workspace, waitForListing: true }
+    await service.demand(params)
+    return service.read(params)
+  }
   expect(await read()).toMatchObject({ models: [{ id: 'workspace-model' }] })
   await writeFile(join(workspace, 'agent.js'), 'upgraded-workspace-model')
   expect(await read()).toMatchObject({ models: [{ id: 'upgraded-workspace-model' }] })

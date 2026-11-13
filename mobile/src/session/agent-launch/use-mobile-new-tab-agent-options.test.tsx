@@ -127,11 +127,6 @@ describe('useMobileNewTabAgentOptions', () => {
     const drawer = mountDrawer(queryClient)
     const answered = createClient({ agents: () => claude })
     await drawer.render({ client: answered, open: true, executionHost: 'runtime:vm-a' })
-    expect(
-      answered.sendRequest.mock.calls
-        .filter(([method]) => method === 'preflight.refreshAgents')
-        .map(([, params]) => params)
-    ).toEqual([expect.not.objectContaining({ userInitiated: true })])
     await drawer.render({ client: answered, open: false, executionHost: 'runtime:vm-a' })
 
     await drawer.render({
@@ -143,5 +138,20 @@ describe('useMobileNewTabAgentOptions', () => {
     expect(drawer.state()).toBe('loading')
     expect(drawer.options()).toEqual([])
     drawer.unmount()
+  })
+  it('keeps a stale-sheet automatic refresh distinct from an explicit user refresh', async () => {
+    const client = createClient({ agents: () => claude })
+    const first = mountDrawer(queryClient)
+    await first.render({ client, open: true })
+    first.unmount()
+    vi.setSystemTime(1_000_001)
+    const reopened = mountDrawer(queryClient)
+    await reopened.render({ client, open: true })
+    expect(
+      client.sendRequest.mock.calls
+        .filter(([method]) => method === 'preflight.refreshAgents')
+        .map(([, params]) => params)
+    ).toEqual([expect.not.objectContaining({ userInitiated: true })])
+    reopened.unmount()
   })
 })

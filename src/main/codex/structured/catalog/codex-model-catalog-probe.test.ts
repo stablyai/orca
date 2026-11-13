@@ -1,3 +1,12 @@
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath
+} from '../../configuration/homes/codex-home-paths'
+import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
+import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
 import {
@@ -13,7 +22,10 @@ const MODEL_ROW = {
   isDefault: true
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
 
 describe('codex model catalog probe', () => {
   it.each([
@@ -131,4 +143,60 @@ describe('codex model catalog probe', () => {
       { id: 'gpt-live', isDefault: true }
     ])
   }, 10_000)
+})
+
+it('observes the shared source config while ignoring mirror writes, and observes a self-contained home itself', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-codex-input-source-'))
+  vi.stubEnv('HOME', folder)
+  vi.stubEnv('USERPROFILE', folder)
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(folder, 'user-data'))
+  const source = getSystemCodexHomePath()
+  const mirror = resolveOrcaManagedCodexHomePath()
+  const own = join(folder, 'account')
+  expect(source.startsWith(folder)).toBe(true)
+  await Promise.all([source, mirror, own].map((path) => mkdir(path, { recursive: true })))
+  for (const path of [source, mirror, own]) {
+    await writeFile(join(path, 'config.toml'), 'model="original"')
+  }
+  let model = 'original'
+  let account = mirror
+  const probe = createCodexModelCatalogProbe({
+    resolveEnvironment: async () => ({}),
+    resolveCommand: () => ({ command: process.execPath, prefixArgs: [] }),
+    runSession: async (_invocation, body) =>
+      body({
+        request: async (method) =>
+          method === 'model/list'
+            ? { data: [{ ...MODEL_ROW, model }], nextCursor: null }
+            : method === 'config/read'
+              ? { config: {} }
+              : {},
+        notify: () => {}
+      })
+  })
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getConversation: () => undefined,
+    getRecord: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: account }),
+    probes: { codex: probe }
+  })
+  try {
+    const read = () => service.read({ agent: 'codex', workspacePath: folder, waitForListing: true })
+    expect(await read()).toMatchObject({ models: [{ id: 'original' }] })
+    model = 'changed'
+    await writeFile(join(mirror, 'config.toml'), 'model="mirrored-probe-write"')
+    expect(await read()).toMatchObject({ models: [{ id: 'original' }] })
+    await writeFile(join(source, 'config.toml'), 'model="source-changed"')
+    expect(await read()).toMatchObject({ models: [{ id: 'changed' }] })
+    account = own
+    expect(await read()).toMatchObject({ models: [{ id: 'changed' }] })
+    model = 'own-changed'
+    await writeFile(join(own, 'config.toml'), 'model="own-changed"')
+    expect(await read()).toMatchObject({ models: [{ id: 'own-changed' }] })
+  } finally {
+    await service.stop()
+    await rm(folder, { recursive: true, force: true })
+  }
 })
