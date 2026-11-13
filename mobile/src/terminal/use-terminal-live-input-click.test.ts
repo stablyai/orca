@@ -173,7 +173,7 @@ describe('terminal live input around a click', () => {
       handlers.handleLiveInputChange({
         nativeEvent: { text: 'x', isComposing: false, inputType: 'insertText' }
       })
-      await vi.waitFor(() => expect(sent.join('')).toBe('x' + CLICK + 'x'))
+      await vi.waitFor(() => expect(sent.join('')).toBe(`x${CLICK}x`))
       expect(captures.at(-1)).toBe('x')
     } finally {
       unmount()
