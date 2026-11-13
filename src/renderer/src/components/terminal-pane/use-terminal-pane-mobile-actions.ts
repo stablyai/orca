@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/mobile-fit-overrides'
 import { getAllDrivers } from '@/lib/pane-manager/mobile-driver-state'
@@ -6,9 +6,11 @@ import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import {
   armPrimarySelectionNativePasteSuppression,
+  consumePrimarySelectionNativePasteSuppression,
   isPrimarySelectionEnabled,
   readPrimarySelectionText
 } from '@/lib/primary-selection'
+import { isTerminalMiddleClickActivation } from './terminal-link-activation'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
@@ -35,6 +37,8 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     tabId,
     worktreeId
   } = controller
+  const pendingMiddlePasteRef = useRef<AbortController | null>(null)
+  useEffect(() => () => pendingMiddlePasteRef.current?.abort(), [])
   const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
     const ptyIds = new Set(getMobileFitOverridePtyIds())
     for (const [ptyId, driver] of getAllDrivers()) {
@@ -110,26 +114,8 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     },
     [terminalShouldHandleMiddleClick, managerRef]
   )
-  const handlePrimarySelectionMiddleMouseDown = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>): void => {
-      if (event.button !== 1 || !isPrimarySelectionEnabled()) {
-        return
-      }
-      const targetPane = findTerminalPaneForMiddleClick(event.target)
-      if (!targetPane) {
-        return
-      }
-      // Always arm suppression for Chromium’s mouseup paste; forward tracking-mode reports unless the selection modifier makes Orca the sole paste owner.
-      event.preventDefault()
-      armPrimarySelectionNativePasteSuppression()
-      if (
-        targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
-        !terminalForcesSelectionForClick(event)
-      ) {
-        return
-      }
-      const clickedPane = targetPane
-      event.stopPropagation()
+  const pastePrimarySelection = useCallback(
+    (clickedPane: ManagedPane): void => {
       clickedPane.terminal.focus()
       void readPrimarySelectionText().then(async (text) => {
         if (!text) {
@@ -168,7 +154,59 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
       })
     },
-    [findTerminalPaneForMiddleClick, tabId, managerRef, paneTransportsRef, setTerminalError]
+    [tabId, managerRef, paneTransportsRef, setTerminalError]
+  )
+  const handlePrimarySelectionMiddleMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>): void => {
+      if (event.button !== 1 || !isPrimarySelectionEnabled()) {
+        return
+      }
+      const targetPane = findTerminalPaneForMiddleClick(event.target)
+      if (!targetPane) {
+        return
+      }
+      // Always arm suppression for Chromium’s mouseup paste; forward tracking-mode reports unless the selection modifier makes Orca the sole paste owner.
+      event.preventDefault()
+      armPrimarySelectionNativePasteSuppression()
+      if (
+        targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
+        !terminalForcesSelectionForClick(event)
+      ) {
+        return
+      }
+      if (
+        settingsRef.current?.terminalUrlMiddleClickBehavior !== 'none' &&
+        isTerminalMiddleClickActivation(event)
+      ) {
+        // Why: link handlers resolve on mouseup (file links async) and preventDefault when they claim the click.
+        const ownerWindow = targetPane.container.ownerDocument.defaultView ?? window
+        // Why: a press whose mouseup never arrived (window blur) must not paste on the next click.
+        pendingMiddlePasteRef.current?.abort()
+        const pending = new AbortController()
+        pendingMiddlePasteRef.current = pending
+        ownerWindow.addEventListener(
+          'mouseup',
+          (mouseUp) => {
+            if (mouseUp.button !== 1) {
+              return
+            }
+            pending.abort()
+            if (mouseUp.defaultPrevented) {
+              // Why: the link's preventDefault blocked Chromium's native paste, so nothing will consume the arm.
+              consumePrimarySelectionNativePasteSuppression()
+            } else {
+              pastePrimarySelection(targetPane)
+            }
+          },
+          { signal: pending.signal }
+        )
+        ownerWindow.addEventListener('blur', () => pending.abort(), { signal: pending.signal })
+        return
+      }
+      event.stopPropagation()
+      pastePrimarySelection(targetPane)
+    },
+    [findTerminalPaneForMiddleClick, pastePrimarySelection, settingsRef]
   )
   const handlePrimarySelectionAuxClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>): void => {

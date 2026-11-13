@@ -52,7 +52,9 @@ export function handleTerminalWebLinkClick(
       actionDestinations: deps.actionDestinations
     })
     // Use logical hit testing because WebLinksAddon knows only a physical row of wrapped URLs.
-    event.preventDefault()
+    if (handled) {
+      event.preventDefault()
+    }
   } else {
     handled = handleOscLink(url, event, deps)
   }

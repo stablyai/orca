@@ -7,9 +7,11 @@ const activeSuppressions = new Set<ReturnType<typeof installTerminalLinkPtyMouse
 
 function createSuppression(
   deferPlain = true,
-  shouldContinueDeferring: (event: MouseEvent) => boolean = () => true
+  shouldContinueDeferring: (event: MouseEvent) => boolean = () => true,
+  onLink = true
 ): {
   element: HTMLDivElement
+  terminal: Terminal
   suppression: ReturnType<typeof installTerminalLinkPtyMouseSuppression>
 } {
   const element = document.createElement('div')
@@ -20,12 +22,12 @@ function createSuppression(
   } as unknown as Terminal
   const suppression = installTerminalLinkPtyMouseSuppression(
     terminal,
-    () => true,
+    () => onLink,
     () => deferPlain,
     shouldContinueDeferring
   )
   activeSuppressions.add(suppression)
-  return { element, suppression }
+  return { element, terminal, suppression }
 }
 
 function mouseEvent(
@@ -67,6 +69,33 @@ describe('terminal link PTY mouse suppression', () => {
     await settleGesture(element)
 
     expect(forwarded).toEqual([])
+  })
+
+  it('lets a middle-click link action claim the gesture while keeping the child out', () => {
+    const { element, terminal, suppression } = createSuppression()
+
+    element.dispatchEvent(mouseEvent('mousedown', { button: 1 }))
+
+    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
+    expect(suppression.claimAction()).toBe(true)
+  })
+
+  it('leaves a middle-click off a link to the child', () => {
+    const { element, terminal, suppression } = createSuppression(true, () => true, false)
+
+    element.dispatchEvent(mouseEvent('mousedown', { button: 1 }))
+
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    expect(suppression.claimAction()).toBe(false)
+  })
+
+  it('does not open a middle-click claim window when deferral is declined', () => {
+    const { element, terminal, suppression } = createSuppression(false)
+
+    element.dispatchEvent(mouseEvent('mousedown', { button: 1 }))
+
+    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
+    expect(suppression.claimAction()).toBe(false)
   })
 
   it('flushes deferred mouse input when the completed gesture stays child-owned', async () => {

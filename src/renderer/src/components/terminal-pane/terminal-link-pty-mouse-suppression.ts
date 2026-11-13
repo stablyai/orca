@@ -93,6 +93,12 @@ export function installTerminalLinkPtyMouseSuppression(
     terminal.options.mouseEventsRequireAlt = true
     ownerDocument?.addEventListener('mouseup', queueRestore)
     ownerWindow?.addEventListener('blur', restore)
+    // Why: claimAction needs an open window; suppression already keeps reports from the child.
+    if (isTerminalMiddleClickActivation(event) && shouldDeferPlainMouseEvent(event)) {
+      finishDeferredInput()
+      deferredPtyInput = []
+      addDeferredListeners()
+    }
   }
   const handleDeferredMouseEvent = (): void => {
     if (deferredPtyInput !== null) {

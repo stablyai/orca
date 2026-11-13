@@ -6,17 +6,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneContextController } from './use-terminal-pane-context-actions'
 
-const { armPrimarySelectionNativePasteSuppressionMock, isPrimarySelectionEnabledMock } = vi.hoisted(
-  () => ({
-    armPrimarySelectionNativePasteSuppressionMock: vi.fn(),
-    isPrimarySelectionEnabledMock: vi.fn(() => true)
-  })
-)
+const {
+  armPrimarySelectionNativePasteSuppressionMock,
+  consumePrimarySelectionNativePasteSuppressionMock,
+  isPrimarySelectionEnabledMock,
+  readPrimarySelectionTextMock
+} = vi.hoisted(() => ({
+  armPrimarySelectionNativePasteSuppressionMock: vi.fn(),
+  consumePrimarySelectionNativePasteSuppressionMock: vi.fn(),
+  isPrimarySelectionEnabledMock: vi.fn(() => true),
+  readPrimarySelectionTextMock: vi.fn().mockResolvedValue('')
+}))
 
 vi.mock('@/lib/primary-selection', () => ({
   armPrimarySelectionNativePasteSuppression: armPrimarySelectionNativePasteSuppressionMock,
+  consumePrimarySelectionNativePasteSuppression: consumePrimarySelectionNativePasteSuppressionMock,
   isPrimarySelectionEnabled: isPrimarySelectionEnabledMock,
-  readPrimarySelectionText: vi.fn().mockResolvedValue('')
+  readPrimarySelectionText: readPrimarySelectionTextMock
 }))
 
 vi.mock('@/lib/pane-manager/mobile-fit-overrides', () => ({ getMobileFitOverridePtyIds: () => [] }))
@@ -57,7 +63,10 @@ function buildTrackedPane(mouseTrackingMode: 'none' | 'sgr'): ManagedPane {
   } as unknown as ManagedPane
 }
 
-function buildController(pane: ManagedPane): TerminalPaneContextController {
+function buildController(
+  pane: ManagedPane,
+  settings?: { terminalUrlMiddleClickBehavior: 'open' | 'actions' | 'none' }
+): TerminalPaneContextController {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only stub; the hook only reads getPanes/getActivePane off PaneManager.
   const manager = {
     getPanes: () => [pane],
@@ -71,7 +80,7 @@ function buildController(pane: ManagedPane): TerminalPaneContextController {
     paneTransportsRef: { current: new Map() },
     refreshMobileOverlays: vi.fn(),
     setTerminalError: vi.fn(),
-    settingsRef: { current: undefined },
+    settingsRef: { current: settings },
     tabId: 'tab-1',
     worktreeId: 'wt-1'
   } as unknown as TerminalPaneContextController
@@ -103,6 +112,8 @@ function fireMiddleMouseDown(
 describe('issue 21762: middle-click native-paste suppression in mouse-tracking TUIs', () => {
   beforeEach(() => {
     armPrimarySelectionNativePasteSuppressionMock.mockClear()
+    readPrimarySelectionTextMock.mockClear()
+    consumePrimarySelectionNativePasteSuppressionMock.mockClear()
     isPrimarySelectionEnabledMock.mockReturnValue(true)
   })
 
@@ -125,9 +136,13 @@ describe('issue 21762: middle-click native-paste suppression in mouse-tracking T
     expect(pane.terminal.focus).not.toHaveBeenCalled()
   })
 
-  it('stops propagation and focuses the pane when mouse tracking is disabled', () => {
+  it('stops propagation and focuses the pane when mouse tracking and middle-click links are disabled', () => {
     const pane = buildTrackedPane('none')
-    const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+    const { result } = renderHook(() =>
+      useTerminalPaneMobileActions(
+        buildController(pane, { terminalUrlMiddleClickBehavior: 'none' })
+      )
+    )
 
     const outcome = fireMiddleMouseDown(
       result.current.handlePrimarySelectionMiddleMouseDown,
@@ -137,6 +152,50 @@ describe('issue 21762: middle-click native-paste suppression in mouse-tracking T
     expect(armPrimarySelectionNativePasteSuppressionMock).toHaveBeenCalled()
     expect(outcome.propagationStopped).toBe(true)
     expect(pane.terminal.focus).toHaveBeenCalled()
+  })
+
+  // Link handlers resolve on mouseup and preventDefault when they claim the click (#42059).
+  it('defers paste to mouseup so a terminal link can claim the middle-click', () => {
+    const pane = buildTrackedPane('none')
+    const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+
+    const linkClick = fireMiddleMouseDown(
+      result.current.handlePrimarySelectionMiddleMouseDown,
+      pane.container
+    )
+    const claimed = new MouseEvent('mouseup', { button: 1, cancelable: true })
+    claimed.preventDefault()
+    window.dispatchEvent(claimed)
+
+    expect(linkClick.propagationStopped).toBe(false)
+    expect(readPrimarySelectionTextMock).not.toHaveBeenCalled()
+    // The claim blocks Chromium's native paste, so the armed suppression must not linger for a keyboard paste.
+    expect(consumePrimarySelectionNativePasteSuppressionMock).toHaveBeenCalledTimes(1)
+
+    fireMiddleMouseDown(result.current.handlePrimarySelectionMiddleMouseDown, pane.container)
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 0, cancelable: true }))
+    expect(readPrimarySelectionTextMock).not.toHaveBeenCalled()
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 1, cancelable: true }))
+
+    expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.focus).toHaveBeenCalled()
+  })
+
+  it('drops a deferred paste whose mouseup never arrived', () => {
+    const pane = buildTrackedPane('none')
+    const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+
+    fireMiddleMouseDown(result.current.handlePrimarySelectionMiddleMouseDown, pane.container)
+    fireMiddleMouseDown(result.current.handlePrimarySelectionMiddleMouseDown, pane.container)
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 1, cancelable: true }))
+
+    expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
+
+    fireMiddleMouseDown(result.current.handlePrimarySelectionMiddleMouseDown, pane.container)
+    window.dispatchEvent(new Event('blur'))
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 1, cancelable: true }))
+
+    expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
   })
 
   // Shift forces xterm selection and withholds mouse reports; suppression plus early return would paste nothing.
