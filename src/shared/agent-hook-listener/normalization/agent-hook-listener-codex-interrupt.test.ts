@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import { normalizeHookPayload } from './normalize-hook-payload'
-import '../providers/codex-state'
+import '../providers/codex/codex-state'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
 // Payload shape from codex-rs/hooks/schema/generated/interrupt.command.input.schema.json.

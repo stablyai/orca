@@ -13,7 +13,7 @@ import type {
   CodexAccountSelectionTarget,
   NormalizedCodexAccountSelectionTarget
 } from '../../../shared/codex-selection-lane'
-import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type {
   ProviderRateLimits,
   RateLimitState,

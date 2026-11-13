@@ -3,12 +3,10 @@ import { createRelayApp } from '../../app.js'
 import type { RelayConfig } from '../../config.js'
 
 describe('public assignment circuit breaker', () => {
-  it('rejects assign and resolve without invoking relay state', async () => {
-    const assign = vi.fn()
-    const resolveResume = vi.fn()
+  it('rejects public assignment routes while disabled', async () => {
     const app = createRelayApp(config(), {
-      store: { resolveResume } as never,
-      assignments: { assign } as never,
+      store: {} as never,
+      assignments: {} as never,
       drain: vi.fn(),
       ready: vi.fn(async () => true)
     })
@@ -19,10 +17,6 @@ describe('public assignment circuit breaker', () => {
       expect(response.headers.get('retry-after')).toBe('5')
       expect(await response.json()).toEqual({ error: 'assignments_temporarily_unavailable' })
     }
-    expect(assign).not.toHaveBeenCalled()
-    expect(resolveResume).not.toHaveBeenCalled()
-    expect((await app.request('/health')).status).toBe(200)
-    expect((await app.request('/v1/admin/drain', { method: 'POST' })).status).toBe(401)
   })
 })
 

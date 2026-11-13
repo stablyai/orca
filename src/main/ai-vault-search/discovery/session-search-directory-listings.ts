@@ -1,4 +1,4 @@
-import { wslGatedReaddir } from '../../native-chat/wsl-transcript-fs-access'
+import { wslGatedReaddir } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 
 export type SessionSearchDirectoryListing =
   | { listed: true; names: ReadonlySet<string> }

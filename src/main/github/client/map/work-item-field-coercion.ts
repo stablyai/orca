@@ -1,8 +1,8 @@
 import type {
   PRMergeableState,
   PRReviewDecision
-} from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+} from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 // The renderer supplies repoId after IPC; main knows only the repository path.
 export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>

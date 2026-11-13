@@ -11,7 +11,6 @@ import { registerPtyConnectionHibernationActivityTests } from '../input/pty-conn
 import { registerPtyConnectionHiddenSleepingResumeTests } from '../lifecycle/pty-connection-hidden-sleeping-resume.spec'
 import { registerPtyConnectionSessionLivenessTests } from '../lifecycle/pty-connection-session-liveness.spec'
 import { registerPtyConnectionOwnerErrorRetryTests } from '../reattach/pty-connection-owner-error-retry.spec'
-import { registerPtyConnectionTerminalInputSessionListingTests } from '../input/pty-connection-terminal-input-session-listing.spec'
 import { registerPtyConnectionSleepingResumeBannerTests } from '../spawn/pty-connection-sleeping-resume-banner.spec'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -42,6 +41,5 @@ describe('pty-connection-hidden-sleeping-resume', registerPtyConnectionHiddenSle
 describe('pty-connection-session-liveness', () => {
   registerPtyConnectionSessionLivenessTests()
   registerPtyConnectionOwnerErrorRetryTests()
-  registerPtyConnectionTerminalInputSessionListingTests()
 })
 describe('pty-connection-sleeping-resume-banner', registerPtyConnectionSleepingResumeBannerTests)

@@ -5,7 +5,7 @@ import {
   agentTokenUsageSchema,
   type AgentTokenUsage
 } from '../../../../shared/telemetry-agent-token-usage-schema'
-import { isTelemetryEnabled, track } from '../../../telemetry/client'
+import type { UsageTelemetryHost } from '../../usage-store-host'
 import { UsageCacheSnapshotWriter } from '../../cache/usage-cache-snapshot-writer'
 import type { AgentTokenSession } from './agent-token-usage'
 
@@ -26,7 +26,8 @@ export class AgentTokenUsageReporter {
   constructor(
     private readonly file: string,
     private readonly provider: AgentTokenUsage['provider'],
-    private readonly getSessionIds: (providerSessionIds: readonly string[]) => Promise<string[]>
+    private readonly getSessionIds: (providerSessionIds: readonly string[]) => Promise<string[]>,
+    private readonly telemetry: UsageTelemetryHost
   ) {
     this.writer = new UsageCacheSnapshotWriter('[agent-token-usage]', () => file)
   }
@@ -43,7 +44,7 @@ export class AgentTokenUsageReporter {
   }
 
   private async publish(sessions: AgentTokenSession[]): Promise<void> {
-    if (!isTelemetryEnabled()) {
+    if (!(await this.telemetry.isEnabled())) {
       return
     }
     const rows = sessions.flatMap(({ providerSessionId, ...counts }) => {
@@ -51,7 +52,7 @@ export class AgentTokenUsageReporter {
       return parsed.success ? [{ providerSessionId, counts: parsed.data }] : []
     })
     const ids = await this.getSessionIds(rows.map((row) => row.providerSessionId))
-    if (!isTelemetryEnabled()) {
+    if (!(await this.telemetry.isEnabled())) {
       return
     }
     const previous = this.snapshots ?? (await this.load())
@@ -91,7 +92,7 @@ export class AgentTokenUsageReporter {
       if (this.acceptedRevisions.get(snapshot.analytics_session_id) === snapshot.revision) {
         continue
       }
-      if (!track('agent_token_usage', snapshot)) {
+      if (!(await this.telemetry.capture(snapshot))) {
         break
       }
       // Queue acceptance only deduplicates this process; restart must retry undelivered snapshots.

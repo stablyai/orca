@@ -1,10 +1,10 @@
 import React from 'react'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { PRAssigneesPanel } from '@/components/github/PRAssigneesPanel'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'

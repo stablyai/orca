@@ -21,7 +21,11 @@ import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
 } from '../legacy-remote-home/federation-ack-checkpoints'
-import { syncFederatedDispatch } from '../legacy-remote-home/federation-sync'
+import {
+  federatedSyncMovedMail,
+  syncFederatedDispatch,
+  type FederatedSyncResult
+} from '../legacy-remote-home/federation-sync'
 import { FederationAcknowledgmentRecovery } from '../legacy-remote-home/federation-acknowledgment-recovery'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
@@ -42,7 +46,10 @@ export class RuntimeOrchestrationFederation {
       this.runtime.getOrchestrationDb().getFederatedDispatch(dispatchId)
         ?.to_home_acknowledged_sequence ?? null
   })
-  private readonly syncs = new Map<string, { db: OrchestrationDb; promise: Promise<void> }>()
+  private readonly syncs = new Map<
+    string,
+    { db: OrchestrationDb; promise: Promise<FederatedSyncResult> }
+  >()
   private readonly warnings = new Set<string>()
   private relayGeneration = 0
   private stopVerifiedWatch: (() => void) | null = null
@@ -172,7 +179,7 @@ export class RuntimeOrchestrationFederation {
     await Promise.allSettled(dispatches.map((dispatch) => this.syncDispatch(dispatch.dispatch_id)))
   }
 
-  syncDispatch(dispatchId: string): Promise<void> {
+  syncDispatch(dispatchId: string): Promise<FederatedSyncResult> {
     const db = this.runtime.getOrchestrationDb()
     const current = this.syncs.get(dispatchId)
     if (current?.db === db) {
@@ -182,11 +189,12 @@ export class RuntimeOrchestrationFederation {
     const isCurrent = (): boolean =>
       generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
     const sync = syncFederatedDispatch(this.runtime, dispatchId, isCurrent)
-      .then(() => {
+      .then((result) => {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
-          this.relays.noteSynced(dispatchId)
+          this.relays.noteSynced(dispatchId, federatedSyncMovedMail(result))
         }
+        return result
       })
       .catch((error: unknown) => {
         if (this.syncs.get(dispatchId)?.promise === sync && !this.warnings.has(dispatchId)) {
@@ -221,7 +229,8 @@ export class RuntimeOrchestrationFederation {
     await this.syncDispatch(dispatchId)
   }
 
-  ensureRelay(runId?: string): void {
+  /** keepAwake: a coordinator still waiting re-arms; it holds the base cadence without forcing a sync or cutting a failure backoff. */
+  ensureRelay(runId?: string, options?: { keepAwake?: boolean }): void {
     if (!this.transport) {
       return
     }
@@ -230,7 +239,11 @@ export class RuntimeOrchestrationFederation {
         this.relays.resetEnvironment(environmentId)
       ) ?? null
     for (const dispatch of this.runtime.getOrchestrationDb().listActiveFederatedDispatches(runId)) {
-      this.relays.arm(dispatch.dispatch_id, dispatch.environment_id)
+      if (options?.keepAwake) {
+        this.relays.keepAwake(dispatch.dispatch_id, dispatch.environment_id)
+      } else {
+        this.relays.arm(dispatch.dispatch_id, dispatch.environment_id)
+      }
     }
     this.acknowledgmentRecovery.ensure()
   }
@@ -241,7 +254,7 @@ export class RuntimeOrchestrationFederation {
       return 'ended'
     }
     return this.syncDispatch(dispatchId).then(
-      (): FederationRelayTickOutcome => 'synced',
+      (result): FederationRelayTickOutcome => (federatedSyncMovedMail(result) ? 'moved' : 'idle'),
       (): FederationRelayTickOutcome => {
         if (!this.isEnvironmentRemoved(dispatchId)) {
           return 'failed'

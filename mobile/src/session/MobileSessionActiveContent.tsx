@@ -22,7 +22,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from '../terminal/session/use-mobile-session-keyboard-lift'
-import { useOpenUrlInOrca } from '../browser/use-open-url-in-orca'
+import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../host-catalog/use-host-profile'
@@ -32,7 +32,7 @@ import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
-import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
+import { loadMarkdownPreviewImage } from '../files/markdown/mobile-markdown-image-source'
 
 export function MobileSessionActiveContent({
   controller

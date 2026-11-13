@@ -53,9 +53,16 @@ const {
   assertRemoteUrlReadableMock: vi.fn()
 }))
 
-vi.mock('../github/gh-utils', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', () => ({
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+
+vi.mock('../github/execution/github-operation-slots', () => ({
   acquire: vi.fn(async () => {}),
   release: vi.fn()
 }))
@@ -65,7 +72,7 @@ vi.mock('../gitlab/requests/glab-request-admission', () => ({
   release: vi.fn()
 }))
 
-vi.mock('../git/command-runner/glab-exec-file', () => ({
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', () => ({
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 
@@ -73,21 +80,21 @@ vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
   glabRepoExecOptions: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/command-runner/git-process-env', async (importOriginal) => ({
+vi.mock('../git/command-runner/git-environment/git-process-env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
-
-vi.mock('../git/repo', () => ({}))
+vi.mock('../git/source-control/upstream/upstream', () => ({
+  getUpstreamStatus: getUpstreamStatusMock
+}))
 
 vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock
 }))
 
-vi.mock('../git/exact-ref-probe', () => ({
+vi.mock('../git/refs/resolution/exact-ref-probe', () => ({
   probeAnyExactRef: probeAnyExactRefMock
 }))
 
@@ -119,15 +126,15 @@ vi.mock('../github/client/lookup/pr-for-branch-outcome', () => ({
   getPRForBranchOutcome: getPRForBranchOutcomeMock
 }))
 
-vi.mock('../github/client', () => ({
-  getRepoSlug: getRepoSlugMock,
-  getRepoUpstream: getRepoUpstreamMock,
-  getPRForBranchOutcome: getPRForBranchOutcomeMock,
-  getGitHubPRLookupRateLimitBlock: vi.fn(async () => null),
+vi.mock('../github/client/lookup/pr-lookup-rate-limit', () => ({
+  getGitHubPRLookupRateLimitBlock: vi.fn(async () => null)
+}))
+
+vi.mock('../github/client/create/create-github-pull-request', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock
 }))
 
-vi.mock('../github/github-enterprise-repository', () => ({
+vi.mock('../github/repositories/github-enterprise-repository', () => ({
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 

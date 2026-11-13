@@ -70,12 +70,12 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
     async writeBytes(uri, bytes) {
       const file = new File(uri)
       file.create({ intermediates: true, overwrite: true })
-      file.write(bytes)
+      file.writeSync(bytes)
     },
     async writeText(uri, text) {
       const file = new File(uri)
       file.create({ intermediates: true, overwrite: true })
-      file.write(text)
+      file.writeSync(text)
     },
     async readText(uri) {
       const file = new File(uri)
@@ -114,7 +114,7 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
       const target = new File(toUri)
       // iOS copies only into an existing directory.
       target.parentDirectory.create({ intermediates: true, idempotent: true })
-      new File(fromUri).copy(target)
+      new File(fromUri).copySync(target)
     },
     async delete(uri) {
       const directory = new Directory(uri)
@@ -133,7 +133,7 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
       if (Platform.OS === 'android' && Number(Platform.Version) < 26) {
         const to = new Directory(toUri)
         try {
-          from.copy(to)
+          from.copySync(to)
         } catch (error) {
           // Readers trust a generation by its manifest, so a failed copy must leave no partial tree.
           if (to.exists) {
@@ -144,10 +144,10 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
         from.delete()
         return
       }
-      from.move(new Directory(toUri))
+      from.moveSync(new Directory(toUri))
     },
     async moveFile(fromUri, toUri) {
-      new File(fromUri).move(new File(toUri))
+      new File(fromUri).moveSync(new File(toUri))
     }
   }
 }

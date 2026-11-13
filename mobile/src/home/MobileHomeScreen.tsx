@@ -26,7 +26,7 @@ import { resolveHomeHostConnectionState } from '../transport/hosts/home-host-aut
 import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
 import { loadHostCatalog } from '../host-catalog/host-store'
 import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
-import { useOpenMobileHostEdit } from '../host-screen/use-open-mobile-host-edit'
+import { useOpenMobileHostEdit } from '../host-screen/identity/use-open-mobile-host-edit'
 import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 import { useMobileHomeData } from './use-mobile-home-data'

@@ -1,8 +1,8 @@
-import { ipcRenderer } from 'electron'
-import { createUsageProviderApi } from '../usage-provider-api'
+import { backendUsageTransport } from '../usage/backend-port-client'
+import { createUsageProviderApi } from '../usage/usage-provider-api'
 import type { PreloadApi } from '../api-types'
 
 export const openCodeUsageApi = createUsageProviderApi(
-  ipcRenderer,
+  backendUsageTransport,
   'openCodeUsage'
 ) satisfies PreloadApi['openCodeUsage']

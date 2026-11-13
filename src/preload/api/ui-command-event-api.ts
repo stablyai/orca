@@ -21,11 +21,11 @@ import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/termi
 import type {
   TerminalPaneMoveToNewTabReply,
   TerminalPaneMoveToNewTabRequest
-} from '../../shared/workspace-layout/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
-} from '../../shared/workspace-layout/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
   AgentPaneActivityReply,
   AgentPaneActivityRequest
@@ -35,7 +35,7 @@ import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
 } from '../../shared/project-move-pause'
-import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -60,11 +60,11 @@ import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
-import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
+import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
-} from '../../shared/workspace-layout/terminal-tab-close'
+} from '../../shared/workspace-layout/terminal-surfaces/terminal-tab-close'
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
@@ -117,7 +117,6 @@ export type UiCommandEventApi = {
   onOpenQuickOpen: (callback: () => void) => () => void
   onToggleQuickCommandsMenu: (callback: () => void) => () => void
   onOpenNewWorkspace: (callback: () => void) => () => void
-  onDeleteCurrentWorkspace: (callback: () => void) => () => void
   onOpenWorkspaceBoard: (callback: () => void) => () => void
   onOpenTasks: (callback: () => void) => () => void
   onToggleAgentDashboard: (callback: () => void) => () => void

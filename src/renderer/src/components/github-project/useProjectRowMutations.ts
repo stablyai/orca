@@ -6,7 +6,7 @@ import type {
   GitHubIssueType,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 
 export function useProjectRowMutations(currentCacheKey: string | null) {
   const patchProjectIssueOrPr = useAppStore((state) => state.patchProjectIssueOrPr)

@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react'
-import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import {
   pluginCapabilityReachable,
