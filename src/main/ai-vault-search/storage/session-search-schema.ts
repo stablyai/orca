@@ -48,10 +48,13 @@ CREATE TABLE IF NOT EXISTS files(
   -- current covers the recorded stat; due needs a whole read; failed did not commit.
   state TEXT NOT NULL DEFAULT 'current',
   fail_count INTEGER NOT NULL DEFAULT 0,
-  -- Retry held-out failures only after the source stat — this file's or the sidecar's — changes.
+  -- Retry held-out failures after the source stat — this file's or the sidecar's — moves, or after
+  -- failed_at_ms ages out; a restored permission leaves both stats frozen.
   failed_mtime_ms REAL,
   failed_sidecar_mtime_ms REAL,
   failed_sidecar_size_bytes INTEGER,
+  -- When the last failed read happened; a stat that never moves still gets a slow retry.
+  failed_at_ms REAL,
   -- SHA-256 of bytes [0, byte_offset); lets a reread after restart append instead of replace.
   prefix_hash TEXT,
   -- Stat of the sidecar that supplied messages, so an append there is not missed when the
@@ -116,7 +119,9 @@ const SESSION_SEARCH_ADDED_COLUMNS = [
   ['sidecar_size_bytes', 'INTEGER'],
   // Stat the last failed read observed; a sidecar-only change must release a held-out metadata row.
   ['failed_sidecar_mtime_ms', 'REAL'],
-  ['failed_sidecar_size_bytes', 'INTEGER']
+  ['failed_sidecar_size_bytes', 'INTEGER'],
+  // When the last failed read happened; a source whose stat never moves still gets a slow retry.
+  ['failed_at_ms', 'REAL']
 ] as const
 
 /** Older indexes lack the columns; check under the write lock so concurrent openers add them once. */

@@ -7,7 +7,7 @@ export type SessionSearchFileIdentity = { dev: number; ino: number } | null
 /** Everything a failed read observed, so a held-out file is retried when any part of its source moves. */
 export type SessionSearchFailureStat = {
   mtimeMs: number
-  /** Null when the read saw no sidecar or could not stat it; a later stat then proves a change. */
+  /** Null when the read saw no sidecar or could not stat it; a later stat proves a change, unknown does not. */
   sidecarMtimeMs: number | null
   sidecarSizeBytes: number | null
 }

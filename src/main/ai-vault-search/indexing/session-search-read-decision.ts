@@ -9,6 +9,9 @@ import type { SessionSearchFileRow } from '../storage/session-search-store-types
 // Allow transient rewrite failures before holding out a file at an unchanged mtime.
 export const SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT = 3
 
+// Retry a stat-frozen holdout at this interval; permissions can return without any stat moving.
+export const SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS = 60_000
+
 /** any forces a read; whole also discards the session-list resume point to recover missing spans. */
 export type SessionSearchReadDecision = 'skip' | SessionParseReadRequirement
 
@@ -24,6 +27,8 @@ export function sessionSearchReadDecision(args: {
   cursor: SessionSearchIndexedFile | null
   /** Oldest transcript mtime to index; null means all history. */
   cutoffMs: number | null
+  /** Clock for the failure backoff; the system clock when absent. */
+  nowMs?: number
 }): SessionSearchReadDecision {
   const { candidate, row, cursor, cutoffMs } = args
   const file = candidate.file
@@ -34,7 +39,7 @@ export function sessionSearchReadDecision(args: {
   if (!row) {
     return 'any'
   }
-  if (heldOut(row, file)) {
+  if (heldOut(row, file, args.nowMs)) {
     return 'skip'
   }
   if (row.state === 'due') {
@@ -80,26 +85,39 @@ function sidecarStatMatches(
 }
 
 /**
- * A held-out file is retried when its own stat or the sidecar stat its last read saw has moved.
- * Stamping only the metadata mtime would silence an agent whose metadata never changes again while
- * its transcript keeps growing, and a null sidecar stamp (a pre-column row, or a read that saw no
- * sidecar) must miss once so a sidecar append cannot stay invisible forever.
+ * A held-out file is retried when its own stat or the sidecar stat its last read saw has moved, or
+ * once the failure backoff expires: a restored permission leaves both stats frozen.
  */
-function heldOut(row: SessionSearchFileRow, file: SessionFileCandidate['file']): boolean {
-  return (
-    row.state === 'failed' &&
-    row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
-    row.failedMtimeMs === file.mtimeMs &&
-    failedSidecarMatches(row, file.sidecar)
-  )
+function heldOut(
+  row: SessionSearchFileRow,
+  file: SessionFileCandidate['file'],
+  nowMs = Date.now()
+): boolean {
+  if (
+    row.state !== 'failed' ||
+    row.failCount < SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT ||
+    row.failedMtimeMs !== file.mtimeMs ||
+    !failedSidecarMatches(row, file.sidecar)
+  ) {
+    return false
+  }
+  // Rows that failed before the clock column was added read back as null and miss once; that retry
+  // stamps the clock, so the backoff bounds how often such a file is reread.
+  return row.failedAtMs !== null && nowMs - row.failedAtMs < SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS
 }
 
+/**
+ * Compare the sidecar stat recorded by the last failed read with this scan's observation. An unknown
+ * sidecar proves nothing either way, so it must not defeat the holdout and re-read every scan; only
+ * the backoff releases it. A current row with an unknown sidecar still rereads via
+ * {@link sidecarStatMatches}, which is where an unprovable change gets noticed.
+ */
 function failedSidecarMatches(
   row: SessionSearchFileRow,
   sidecar: SessionFileCandidate['file']['sidecar']
 ): boolean {
   if (sidecar === 'unknown') {
-    return false
+    return true
   }
   if (sidecar === undefined || sidecar === 'none') {
     return row.failedSidecarMtimeMs === null && row.failedSidecarSizeBytes === null

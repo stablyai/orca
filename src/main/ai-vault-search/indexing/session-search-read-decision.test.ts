@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type { SessionSearchIndexedFile } from '../storage/session-search-file-cursor'
 import {
+  SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS,
   SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT,
   sessionSearchReadDecision
 } from './session-search-read-decision'
@@ -38,18 +39,47 @@ function row(overrides: Partial<SessionSearchFileRow> = {}): SessionSearchFileRo
     failedMtimeMs: null,
     failedSidecarMtimeMs: null,
     failedSidecarSizeBytes: null,
+    failedAtMs: null,
     ...overrides
   }
 }
 
 const cursor: SessionSearchIndexedFile = { byteOffset: 100, mtimeMs: MTIME, sizeBytes: 100 }
 
-function decide(file: Partial<SessionFileCandidate['file']>, indexed: SessionSearchFileRow) {
+function decide(
+  file: Partial<SessionFileCandidate['file']>,
+  indexed: SessionSearchFileRow,
+  nowMs?: number
+) {
   return sessionSearchReadDecision({
     candidate: candidate(file),
     row: indexed,
     cursor,
-    cutoffMs: null
+    cutoffMs: null,
+    nowMs
+  })
+}
+
+function heldOutRow(failedAtMs: number | null): SessionSearchFileRow {
+  return row({
+    state: 'failed',
+    failCount: SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT,
+    sidecarMtimeMs: SIDECAR.mtimeMs,
+    sidecarSizeBytes: SIDECAR.sizeBytes,
+    failedMtimeMs: MTIME,
+    failedSidecarMtimeMs: SIDECAR.mtimeMs,
+    failedSidecarSizeBytes: SIDECAR.sizeBytes,
+    failedAtMs
+  })
+}
+
+/** A failure that never saw a sidecar stat, which is what a failed `unknown` read records. */
+function unstampedSidecarRow(failedAtMs: number | null): SessionSearchFileRow {
+  return row({
+    state: 'failed',
+    failCount: SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT,
+    failedMtimeMs: MTIME,
+    failedAtMs
   })
 }
 
@@ -82,42 +112,41 @@ it('rereads when a stored sidecar disappears or cannot be statted', () => {
 })
 
 it('holds a failed file out while neither its own stat nor its sidecar moved', () => {
-  const failed = row({
-    state: 'failed',
-    failCount: SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT,
-    sidecarMtimeMs: SIDECAR.mtimeMs,
-    sidecarSizeBytes: SIDECAR.sizeBytes,
-    failedMtimeMs: MTIME,
-    failedSidecarMtimeMs: SIDECAR.mtimeMs,
-    failedSidecarSizeBytes: SIDECAR.sizeBytes
-  })
-  expect(decide({ sidecar: SIDECAR }, failed)).toBe('skip')
+  expect(decide({ sidecar: SIDECAR }, heldOutRow(MTIME), MTIME + 1_000)).toBe('skip')
 })
 
 it('retries a held-out file after its transcript grew past an unchanged meta.json', () => {
   // The failure stamp is the whole point: a row whose sidecar grew since the failed read must be
   // reread even though Ante rewrote nothing in the metadata file this row keys on.
-  const failed = row({
-    state: 'failed',
-    failCount: SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT,
-    sidecarMtimeMs: SIDECAR.mtimeMs,
-    sidecarSizeBytes: SIDECAR.sizeBytes,
-    failedMtimeMs: MTIME,
-    failedSidecarMtimeMs: SIDECAR.mtimeMs,
-    failedSidecarSizeBytes: SIDECAR.sizeBytes
-  })
-  expect(decide({ sidecar: { ...SIDECAR, sizeBytes: 9000 } }, failed)).toBe('any')
+  expect(decide({ sidecar: { ...SIDECAR, sizeBytes: 9000 } }, heldOutRow(MTIME))).toBe('any')
 })
 
-it('retries a held-out file when its sidecar stat is unknown', () => {
-  const failed = row({
-    state: 'failed',
-    failCount: SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT,
-    failedMtimeMs: MTIME,
-    failedSidecarMtimeMs: null,
-    failedSidecarSizeBytes: null
-  })
-  expect(decide({ sidecar: 'unknown' }, failed)).toBe('any')
+it('holds a failed file whose sidecar is now unknown until its retry interval elapses', () => {
+  // The failed read saw a sidecar, but an unstatable sidecar proves nothing changed either, so only
+  // the backoff releases it; proving a change is left to the reread the backoff triggers.
+  const failedAt = MTIME + 60_000
+  expect(decide({ sidecar: 'unknown' }, heldOutRow(failedAt), failedAt + 1_000)).toBe('skip')
+  expect(
+    decide(
+      { sidecar: 'unknown' },
+      heldOutRow(failedAt),
+      failedAt + SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS
+    )
+  ).toBe('any')
+})
+
+it('holds a failed file whose sidecar was already unknown until its retry interval elapses', () => {
+  const failedAt = MTIME + 60_000
+  expect(decide({ sidecar: 'unknown' }, unstampedSidecarRow(failedAt), failedAt + 1_000)).toBe(
+    'skip'
+  )
+  expect(
+    decide(
+      { sidecar: 'unknown' },
+      unstampedSidecarRow(failedAt),
+      failedAt + SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS
+    )
+  ).toBe('any')
 })
 
 it('retries a held-out file whose sidecar stat was never stamped', () => {
@@ -130,4 +159,21 @@ it('retries a held-out file whose sidecar stat was never stamped', () => {
     failedMtimeMs: MTIME
   })
   expect(decide({ sidecar: SIDECAR }, failed)).toBe('any')
+})
+
+it('keeps a stat-frozen file held out until its retry interval elapses', () => {
+  const failedAt = MTIME
+  expect(decide({ sidecar: SIDECAR }, heldOutRow(failedAt), failedAt + 1_000)).toBe('skip')
+  expect(
+    decide(
+      { sidecar: SIDECAR },
+      heldOutRow(failedAt),
+      failedAt + SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS
+    )
+  ).toBe('any')
+})
+
+it('retries a file that failed before the retry clock was recorded', () => {
+  // Rows written before failed_at_ms existed read back as null; the retry stamps the clock again.
+  expect(decide({ sidecar: SIDECAR }, heldOutRow(null), MTIME + 10 * 60_000)).toBe('any')
 })

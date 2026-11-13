@@ -191,6 +191,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           failedMtimeMs: null,
           failedSidecarMtimeMs: null,
           failedSidecarSizeBytes: null,
+          failedAtMs: null,
           byteOffset: outcome.byteOffset,
           prefixHash: outcome.prefixHash ?? null,
           agent: old?.agent ?? candidate.agent,

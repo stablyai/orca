@@ -4,7 +4,10 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
-import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './session-search-read-decision'
+import {
+  SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS,
+  SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT
+} from './session-search-read-decision'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import {
@@ -72,6 +75,16 @@ it.skipIf(!CAN_DENY_READ)(
     await runIndexPass([await anteCandidate(metadataPath, transcriptPath)])
     expect(matches('secondantemessage')).toEqual({ n: 0 })
 
+    // Nothing in either stat moved, so only the persisted failure clock can release the holdout.
+    const failedAt = store.files()[0].failedAtMs
+    expect(failedAt).toBeTypeOf('number')
+    await runIndexPass(
+      [await anteCandidate(metadataPath, transcriptPath)],
+      (failedAt ?? 0) + SESSION_SEARCH_FAILED_RETRY_BACKOFF_MS + 1
+    )
+    expect(matches('secondantemessage')).toEqual({ n: 1 })
+    expect(store.files()[0].state).toBe('current')
+
     // The metadata stat is frozen, so only the transcript can release the holdout.
     await appendFile(transcriptPath, anteEventLine('user', 'thirdantemessage', 2))
     await runIndexPass([await anteCandidate(metadataPath, transcriptPath)])
@@ -82,9 +95,10 @@ it.skipIf(!CAN_DENY_READ)(
 )
 
 /** Run the search pass the indexer runs, so the read decision and failure stamp are as shipped. */
-async function runIndexPass(candidates: SessionFileCandidate[]): Promise<void> {
+async function runIndexPass(candidates: SessionFileCandidate[], nowMs?: number): Promise<void> {
   await runSessionSearchIndexPass(store, candidates, {
-    rows: new Map(store.files().map((fileRow) => [fileRow.path, fileRow]))
+    rows: new Map(store.files().map((fileRow) => [fileRow.path, fileRow])),
+    nowMs
   })
   expect(errors).toEqual([])
 }

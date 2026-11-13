@@ -48,7 +48,7 @@ function rows(path?: string): SessionSearchSnapshotRow[] {
     .prepare(`SELECT f.path, CAST(f.dev AS REAL) AS dev, CAST(f.ino AS REAL) AS ino,
     f.mtime_ms, f.size_bytes, f.sidecar_mtime_ms, f.sidecar_size_bytes,
     f.state, f.fail_count, f.failed_mtime_ms, f.failed_sidecar_mtime_ms, f.failed_sidecar_size_bytes,
-    f.byte_offset, f.prefix_hash,
+    f.failed_at_ms, f.byte_offset, f.prefix_hash,
     s.agent, s.content_hash, s.content_hash_count FROM files f LEFT JOIN sessions s ON s.id=f.session_row_id
     ${path === undefined ? '' : 'WHERE f.path = ?'}`)
     .all(...(path === undefined ? [] : [path]))
@@ -69,6 +69,7 @@ function rows(path?: string): SessionSearchSnapshotRow[] {
         row.failed_sidecar_mtime_ms === null ? null : Number(row.failed_sidecar_mtime_ms),
       failedSidecarSizeBytes:
         row.failed_sidecar_size_bytes === null ? null : Number(row.failed_sidecar_size_bytes),
+      failedAtMs: row.failed_at_ms === null ? null : Number(row.failed_at_ms),
       byteOffset: row.byte_offset === -1 ? null : Number(row.byte_offset),
       prefixHash: typeof row.prefix_hash === 'string' ? row.prefix_hash : null,
       agent: typeof row.agent === 'string' ? row.agent : null,

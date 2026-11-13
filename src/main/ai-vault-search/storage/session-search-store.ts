@@ -207,7 +207,8 @@ export class SessionSearchStore {
                   sidecar_mtime_ms AS sidecarMtimeMs, sidecar_size_bytes AS sidecarSizeBytes,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs,
                   failed_sidecar_mtime_ms AS failedSidecarMtimeMs,
-                  failed_sidecar_size_bytes AS failedSidecarSizeBytes
+                  failed_sidecar_size_bytes AS failedSidecarSizeBytes,
+                  failed_at_ms AS failedAtMs
            FROM files`
         )
         .all()
@@ -222,32 +223,36 @@ export class SessionSearchStore {
     try {
       if (state === 'failed') {
         // Persist initial failures too, or unreadable new files retry forever. The sidecar stamp
-        // belongs here because an unchanged metadata file cannot release a held-out sidecar append.
+        // belongs here because an unchanged metadata file cannot release a held-out sidecar append,
+        // and the clock because a source whose stat never moves can still become readable.
         this.db
           .prepare(
             `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms,
-                               failed_sidecar_mtime_ms, failed_sidecar_size_bytes)
-             VALUES (?, 0, ?, 'failed', 1, ?, ?, ?)
+                               failed_sidecar_mtime_ms, failed_sidecar_size_bytes, failed_at_ms)
+             VALUES (?, 0, ?, 'failed', 1, ?, ?, ?, ?)
              ON CONFLICT(path) DO UPDATE SET
                state = 'failed',
                fail_count = files.fail_count + 1,
                failed_mtime_ms = excluded.failed_mtime_ms,
                failed_sidecar_mtime_ms = excluded.failed_sidecar_mtime_ms,
-               failed_sidecar_size_bytes = excluded.failed_sidecar_size_bytes`
+               failed_sidecar_size_bytes = excluded.failed_sidecar_size_bytes,
+               failed_at_ms = excluded.failed_at_ms`
           )
           .run(
             path,
             failure?.mtimeMs ?? 0,
             failure?.mtimeMs ?? null,
             failure?.sidecarMtimeMs ?? null,
-            failure?.sidecarSizeBytes ?? null
+            failure?.sidecarSizeBytes ?? null,
+            Date.now()
           )
         return
       }
       this.db
         .prepare(
           `UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL,
-           failed_sidecar_mtime_ms = NULL, failed_sidecar_size_bytes = NULL WHERE path = ?`
+           failed_sidecar_mtime_ms = NULL, failed_sidecar_size_bytes = NULL,
+           failed_at_ms = NULL WHERE path = ?`
         )
         .run(state, path)
     } catch (error) {
