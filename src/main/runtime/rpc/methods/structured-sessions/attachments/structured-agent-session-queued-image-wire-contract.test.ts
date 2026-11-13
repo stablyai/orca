@@ -237,15 +237,15 @@ it('catches up a queue insertion between the old-reader initial page and its sid
   await rig.workingSend()
   const j = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const pageReady = Promise.withResolvers<void>()
-  const resume = Promise.withResolvers<void>()
-  const hydrate = historyPages.readAgentSessionHydrationPage
+  const hydrate = historyPages.readAgentSessionHydrationFrame
+  // The initial frame reads its page and side controls in the chat's lane, so the send waits for
+  // the lane and lands after both, before or after the frame is emitted.
   const reading = vi
-    .spyOn(historyPages, 'readAgentSessionHydrationPage')
+    .spyOn(historyPages, 'readAgentSessionHydrationFrame')
     .mockImplementationOnce(async (...args) => {
-      const page = await hydrate(...args)
+      const frame = await hydrate(...args)
       pageReady.resolve()
-      await resume.promise
-      return page
+      return frame
     })
   try {
     const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
@@ -268,7 +268,6 @@ it('catches up a queue insertion between the old-reader initial page and its sid
     const queue = await rig.host.collaboratorsForTests().subscribers.readQueuePublication(SESSION)
     expect(work?.working()).toBe(true)
     expect(queue).toMatchObject({ queuedMessages: [{ messageId: id }], nextQueuedMessageId: null })
-    resume.resolve()
     await eventually(() =>
       expect(streamState(frames).items).toContainEqual(
         expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
@@ -290,7 +289,6 @@ it('catches up a queue insertion between the old-reader initial page and its sid
       ])
     )
   } finally {
-    resume.resolve()
     reading.mockRestore()
   }
 })

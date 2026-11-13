@@ -61,29 +61,34 @@ const byPosition = <T extends Card>(cards: readonly T[]): T[] =>
   [...cards].sort((a, b) => a.position - b.position)
 
 /** This build's chat and its live cards; a withdrawn card is no longer listed. */
-const view = async (journal: AgentSessionJournal, now: () => number) => ({
-  snapshot: await readTestJournalSnapshot(journal),
-  cards: byPosition(await journal.queuedMessages.list()),
-  publishedCards: (
-    await readQueuePublication(
-      journal,
-      structuredQueueSendGate(
-        {
-          store: {
-            getConversation: () => null,
-            getRecord: () => null,
-            replacedRuntime: () => undefined
-          },
-          sessions: new Map([
-            [journal.identity.sessionId, { journal, child: null, operationalRevision: 0 }]
-          ])
+const view = async (journal: AgentSessionJournal, now: () => number) => {
+  const publication = await readQueuePublication(
+    journal,
+    structuredQueueSendGate(
+      {
+        store: {
+          getConversation: () => null,
+          getRecord: () => null,
+          replacedRuntime: () => undefined
         },
-        journal.identity.sessionId,
-        now
-      )
+        sessions: new Map([
+          [journal.identity.sessionId, { journal, child: null, operationalRevision: 0 }]
+        ])
+      },
+      journal.identity.sessionId,
+      now
     )
-  ).queuedMessages
-})
+  )
+  // Nothing moves authority here, so a superseded read is a failure, not an empty queue.
+  if (!publication) {
+    throw new Error('the queue publication read was superseded')
+  }
+  return {
+    snapshot: await readTestJournalSnapshot(journal),
+    cards: byPosition(await journal.queuedMessages.list()),
+    publishedCards: publication.queuedMessages
+  }
+}
 
 /** A release's chat and its live cards, as that release reads them. */
 const releasedView = (journal: ReleasedJournal) => ({
