@@ -3,10 +3,9 @@
 // (repository preselected), and once access shows up starts the create again on its own. Someone
 // who can't install (GitHub turns their install into a request for an owner) is told who to ask.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { openOrcaGitHubAppInstall } from '@/lib/orca-cloud/cloud-setup-notice-actions'
 import { fetchOrcaCloudRepoAccess } from '@/lib/orca-cloud/use-orca-cloud-repo-access'
+import { useOwnerRequestCopy } from '@/lib/orca-cloud/owner-request'
 
 /**
  * `checking`: asking GitHub. `missing`: the App doesn't reach it (Give Orca access). `waiting`:
@@ -17,8 +16,6 @@ export type CloneAccessPhase = 'checking' | 'missing' | 'waiting' | 'requested' 
 
 /** Re-check delays while focused after Give Orca access (as REPO-ACCESS-REFRESH backs off). */
 export const CLONE_ACCESS_POLL_DELAYS_MS = [4_000, 4_000, 8_000, 15_000, 30_000] as const
-/** How long "Copied" stays on the request button. */
-export const COPIED_MS = 1_500
 /** Stop waiting after this long: the button comes back. */
 export const CLONE_ACCESS_WAIT_MS = 3 * 60_000
 
@@ -150,36 +147,7 @@ export function useCloneAccessHandoff({
     })
   }, [repoUrl])
 
-  const [copied, setCopied] = useState(false)
-  const copiedTimer = useRef<number | undefined>(undefined)
-  useEffect(() => () => window.clearTimeout(copiedTimer.current), [])
-  const copyRequest = useCallback(() => {
-    void copyOwnerRequest(repoName, repoUrl).then((ok) => {
-      if (ok) {
-        setCopied(true)
-        window.clearTimeout(copiedTimer.current)
-        copiedTimer.current = window.setTimeout(() => setCopied(false), COPIED_MS)
-      }
-    })
-  }, [repoName, repoUrl])
+  const { copy: copyRequest, copied } = useOwnerRequestCopy(repoUrl, 'start')
 
   return { phase, giveAccess, copyRequest, copied }
-}
-
-/** A message for an owner of the repository's org, with the install link that preselects it. */
-export async function copyOwnerRequest(repoName: string, repoUrl: string | null): Promise<boolean> {
-  // The repo-access answer carries GitHub's install page with this repository preselected.
-  const link = repoUrl ? ((await fetchOrcaCloudRepoAccess(repoUrl))?.installUrl ?? null) : null
-  const message = translate(
-    'worktreeCreation.cloneAccess.requestMessage',
-    'Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.',
-    { repo: repoName }
-  )
-  try {
-    await window.api.ui.writeClipboardText(link ? `${message}\n${link}` : message)
-    return true
-  } catch {
-    toast.error(translate('worktreeCreation.cloneAccess.requestCopyFailed', 'Couldn’t copy it.'))
-    return false
-  }
 }

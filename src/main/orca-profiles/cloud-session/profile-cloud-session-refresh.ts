@@ -17,6 +17,10 @@ import {
 } from './profile-cloud-refresh-replay-guard'
 import { emitOrcaCloudSessionInvalidated } from './profile-cloud-session-invalidation'
 import {
+  reconnectReasonFromRefusal,
+  rememberReconnectReason
+} from './profile-cloud-reconnect-reason'
+import {
   commitCloudSessionRotation,
   readCloudSession,
   signOutRevokedCloudSession,
@@ -62,6 +66,14 @@ function isRefreshTokenRejected(error: unknown): boolean {
     error instanceof OrcaCloudRequestError &&
     error.statusCode === 401 &&
     error.errorCode === 'invalid_refresh_token'
+  )
+}
+
+// Kept before the session is cleared, so the status the renderer re-reads already says why.
+function rememberRefusalReason(profileId: string, error: unknown): void {
+  rememberReconnectReason(
+    profileId,
+    reconnectReasonFromRefusal(error instanceof OrcaCloudRequestError ? error.reason : undefined)
   )
 }
 
@@ -218,6 +230,7 @@ export async function readFreshOrcaCloudSession(
     }
   } catch (error) {
     if (isRefreshTokenRejected(error)) {
+      rememberRefusalReason(active.profile.id, error)
       warnIfPossibleRefreshReplay(active.profile.id, userDataPath, session.session)
       clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session.session)
       return { status: 'reconnect-required' }
@@ -239,6 +252,7 @@ export async function forceRefreshOrcaCloudSession(
     }
   } catch (error) {
     if (isRefreshTokenRejected(error)) {
+      rememberRefusalReason(active.profile.id, error)
       warnIfPossibleRefreshReplay(active.profile.id, userDataPath, session)
       clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session)
       return { status: 'reconnect-required' }

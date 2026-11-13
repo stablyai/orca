@@ -13,14 +13,22 @@ import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgr
 import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import { AccountMfaRow } from './AccountMfaRow'
 import { GitHubIdentityRow } from './GitHubIdentityRow'
+import type { OrcaProfileReconnectReason } from '../../../../../../shared/orca-profile-reconnect-reason'
 
-function accountStatusCopy(
+export function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
   email: string | undefined,
-  t: Translate = translate
+  t: Translate = translate,
+  reconnectReason?: OrcaProfileReconnectReason
 ): string {
   if (state === 'connected') {
     return email ?? t('auto.components.settings.orcaAccount.connected', 'Connected')
+  }
+  if (state === 'reconnect-required' && reconnectReason === 'sso-required') {
+    return t(
+      'auto.components.settings.orcaAccount.ssoRequired',
+      'Your team now requires single sign-on. Sign in again and choose Sign in with SSO.'
+    )
   }
   if (state === 'reconnect-required') {
     return t(
@@ -110,7 +118,12 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
               ) : null}
             </div>
             <p className="truncate text-xs text-muted-foreground">
-              {accountStatusCopy(authStatus?.state, authStatus?.cloud?.email, t)}
+              {accountStatusCopy(
+                authStatus?.state,
+                authStatus?.cloud?.email,
+                t,
+                authStatus?.reconnectReason
+              )}
             </p>
           </div>
           {connected ? (

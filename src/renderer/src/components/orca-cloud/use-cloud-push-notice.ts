@@ -1,24 +1,19 @@
 // The "can't push" notice's state: what installing can do for this person (cloud-push-access), the
 // re-checks after Install, Copy request's brief "Copied", and Check again where the App already
 // reaches the repository.
+import { useOwnerRequestCopy } from '@/lib/orca-cloud/owner-request'
 import { useEffect, useRef, useState } from 'react'
 import {
   openOrcaGitHubAppInstall,
   recheckCloudPushAccess
 } from '@/lib/orca-cloud/cloud-setup-notice-actions'
-import {
-  copyOwnerPushRequest,
-  fetchCloudPushAccess,
-  type CloudPushAccess
-} from '@/lib/orca-cloud/cloud-push-access'
+import { fetchCloudPushAccess, type CloudPushAccess } from '@/lib/orca-cloud/cloud-push-access'
 
 // After Install: GitHub's webhook usually lands within seconds, then the owner may take a while.
 const FAST_POLL_MS = 2_000
 const FAST_POLL_WINDOW_MS = 3 * 60_000
 const SLOW_POLL_MS = 10_000
 const GIVE_UP_MS = 30 * 60_000
-/** How long "Copied" stays on the request button. */
-export const COPIED_MS = 1_500
 
 export type CloudPushNoticeState = {
   access: CloudPushAccess
@@ -137,9 +132,7 @@ export function useCloudPushNotice(
 ): CloudPushNoticeState {
   const access = usePushAccess(repoUrl, hasPush)
   const push = usePushRecheck(environmentId, hasPush)
-  const [copied, setCopied] = useState(false)
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => clearTimeout(copiedTimer.current), [])
+  const request = useOwnerRequestCopy(repoUrl, 'push')
   const [rechecking, setRechecking] = useState(false)
   const recheckBusy = useRef(false)
   return {
@@ -150,19 +143,8 @@ export function useCloudPushNotice(
         push.startInstall(repoUrl)
       }
     },
-    copyRequest: () => {
-      if (!repoUrl) {
-        return
-      }
-      void copyOwnerPushRequest(repoUrl).then((ok) => {
-        if (ok) {
-          setCopied(true)
-          clearTimeout(copiedTimer.current)
-          copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS)
-        }
-      })
-    },
-    copied,
+    copyRequest: request.copy,
+    copied: request.copied,
     recheck: () => {
       if (!environmentId || recheckBusy.current) {
         return

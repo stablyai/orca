@@ -1591,7 +1591,29 @@
           "cancelScheduledOn": "Plan set to end on {{date}}",
           "seatsChangedDetail": "Seats changed from {{from}} to {{to}}",
           "spendCapChanged2": "Changed the monthly spend cap",
-          "spendCapChangedTo": "Changed the monthly spend cap to {{amount}}"
+          "spendCapChangedTo": "Changed the monthly spend cap to {{amount}}",
+          "ssoSetupLink": "Created a single sign-on setup link",
+          "ssoConfigured": "Set up single sign-on",
+          "ssoConfiguredNamed": "Set up single sign-on with {{name}}",
+          "ssoWentLive": "Turned on single sign-on",
+          "ssoWentLiveNamed": "Turned on single sign-on with {{name}}",
+          "ssoRemoved": "Removed single sign-on",
+          "ssoSignInRefused": "Tried to sign in without single sign-on",
+          "ssoSessionsEnded": "Ended sign-ins made before single sign-on was turned on",
+          "ssoDomainAdded": "Added an email domain",
+          "ssoDomainAddedNamed": "Added email domain {{name}}",
+          "ssoDomainVerified": "Verified an email domain",
+          "ssoDomainVerifiedNamed": "Verified email domain {{name}}",
+          "ssoDomainRemoved": "Removed an email domain",
+          "ssoDomainRemovedNamed": "Removed email domain {{name}}",
+          "ssoDomainRecordMissing": "Found an email domain’s DNS record missing",
+          "ssoDomainRecordMissingNamed": "Found the DNS record for {{name}} missing",
+          "scimEnabled": "Turned on directory sync",
+          "scimDisabled": "Turned off directory sync",
+          "scimKeyCreated": "Created a directory sync key",
+          "scimKeyRevoked": "Revoked a directory sync key",
+          "scimGroupChanged": "Changed a directory group",
+          "scimGroupMembershipChanged": "Changed who is in a directory group"
         },
         "interval": {
           "month": "monthly",
@@ -1702,6 +1724,35 @@
         "lastChange": "Last change received",
         "lastChangeSummary": "{{what}} · {{when}}"
       }
+    },
+    "teamWorkspaces": {
+      "search": "Search workspaces",
+      "searchPlaceholder": "Search name, repository, person, W-number…",
+      "filterBy": "Filter by person",
+      "byAnyone": "By anyone",
+      "byPerson": "By {{name}}",
+      "filterIn": "Filter by repository",
+      "inAnyRepo": "In any repository",
+      "inRepo": "In {{repo}}",
+      "emptyTeam": "No one on your team has a cloud workspace yet.",
+      "emptyFiltered": "No workspaces match these filters.",
+      "colName": "Workspace",
+      "colNumber": "No.",
+      "colCreatedBy": "Created by",
+      "colState": "State",
+      "colLastActive": "Last active",
+      "colAccess": "Access",
+      "colActions": "Actions",
+      "shared": "Shared",
+      "shownOf_one": "{{shown}} of {{count}} workspace",
+      "shownOf_other": "{{shown}} of {{count}} workspaces",
+      "title": "Cloud workspaces",
+      "searchDescription": "Every cloud workspace on your team, to open, sleep or archive.",
+      "keywordCloud": "cloud workspaces",
+      "keywordTeam": "team workspaces",
+      "keywordSandboxes": "sandboxes",
+      "keywordArchive": "archive",
+      "description": "Every cloud workspace on your team. Only owners and admins can see this page."
     }
   },
   "menu": {
@@ -14190,7 +14241,8 @@
             "connect": "Connect GitHub",
             "title": "GitHub",
             "disconnectError": "Couldn't disconnect GitHub."
-          }
+          },
+          "ssoRequired": "Your team now requires single sign-on. Sign in again and choose Sign in with SSO."
         },
         "automations": {
           "showButtonDescription": "Show the Automations shortcut in the sidebar.",
@@ -21038,7 +21090,8 @@
         "4b7d2e8f1a": "Connect Orca Mobile to this desktop across cellular or any Wi-Fi.",
         "9a4c6b2d7e": "Skill sharing",
         "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
-        "c5b3e8a17d": "Sign in to Orca"
+        "c5b3e8a17d": "Sign in to Orca",
+        "ssoRequired": "Your team now requires single sign-on. Sign in again and choose Sign in with SSO."
       },
       "NativeChatResumeOutcomeRow": {
         "openChat": "Open chat",
@@ -21454,7 +21507,9 @@
           "seatRulesShort": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal.",
           "inviteSeatRule": "Each invite uses a seat once accepted.",
           "enterpriseRowTitle": "Single sign-on, directory sync and the audit log",
-          "openEnterpriseSettings": "Open Enterprise settings"
+          "openEnterpriseSettings": "Open Enterprise settings",
+          "managedByIdp": "Managed by your identity provider",
+          "managedByIdpNote": "Managed by your identity provider. Add or remove people and change roles there."
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -28603,16 +28658,19 @@
       "diskVeryLowMeaning": "Installs and builds may fail. Delete caches or build output you don’t need.",
       "diskLowMeaning": "Large dependency installs may run out of space.",
       "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
-      "copied": "Copied",
-      "copyRequest": "Copy request for an owner",
       "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
       "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
-      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
-      "pushRequestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
-      "pushRequestCopyFailed": "Couldn’t copy it."
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet."
     },
     "toast": {
       "dismiss": "Dismiss"
+    },
+    "ownerRequest": {
+      "messagePush": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
+      "messageStart": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
+      "copyFailed": "Couldn’t copy it.",
+      "copied": "Copied",
+      "copy": "Copy request for an owner"
     }
   },
   "runActions": {
@@ -29622,12 +29680,8 @@
       "askOwnerBody": "Ask an owner of {{owner}} to give Orca access. Orca tries again once they do. The sandbox was deleted.",
       "body": "The Orca GitHub App on {{owner}} doesn’t include this repository. Give Orca access, and Orca tries again. The sandbox was deleted.",
       "chooseAnother": "Choose another repository",
-      "copyRequest": "Copy request for an owner",
       "waiting": "Waiting for GitHub…",
-      "giveAccess": "Give Orca access",
-      "requestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
-      "requestCopyFailed": "Couldn’t copy it.",
-      "copied": "Copied"
+      "giveAccess": "Give Orca access"
     }
   },
   "renderer": {
@@ -29664,5 +29718,34 @@
     "copyLinkFailed": "Couldn’t copy the link.",
     "linkCopied": "Link copied",
     "signInLinkHint": "Open it in any browser on this computer."
+  },
+  "cloudFollow": {
+    "role": {
+      "creator": "Created this workspace",
+      "follower": "Following"
+    },
+    "state": {
+      "typing": "Typing now",
+      "viewing": "Here now"
+    },
+    "stackLabel": "People on this workspace",
+    "following": "Following",
+    "unfollow": "Unfollow",
+    "follow": "Follow",
+    "unfollowNamed": "Unfollow {{title}}"
+  },
+  "sidebarTeam": {
+    "title": "Team",
+    "typingIn": "Typing in {{workspace}}",
+    "viewing": "In {{workspace}}",
+    "theirWorkspaces": "{{name}}’s workspaces",
+    "showAll": "Show all {{count}}"
+  },
+  "sidebarFollowing": {
+    "asleep": "Asleep",
+    "waking": "Waking",
+    "archived": "Archived",
+    "title": "Following",
+    "hereNow": "{{count}} here now"
   }
 }

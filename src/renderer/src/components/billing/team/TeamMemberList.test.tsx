@@ -154,3 +154,36 @@ it('shows no MFA badge for a member who has not signed in yet', () => {
   )!
   expect(pending.textContent).toBe('')
 })
+
+it('a team its identity provider manages: no role or remove controls, and the row says why', () => {
+  const managed = teamRows({ ...roster, directoryManaged: true }, 'u-neil')
+  expect(managed.map((row) => [row.key, row.manageable])).toEqual([
+    ['member:u-neil', false],
+    ['member:u-grace', false]
+  ])
+  const { container } = render(
+    <TeamMemberList
+      rows={managed}
+      viewerRole="owner"
+      rowStates={{}}
+      canLeave
+      now={Date.UTC(2026, 10, 18)}
+      onChangeRole={noop}
+      onMakeOwner={noop}
+      onRemove={noop}
+      onResend={noop}
+      onRevoke={noop}
+      onLeave={noop}
+    />
+  )
+  const grace = container.querySelector('[data-team-row="member:u-grace"]')!
+  // The role is text, not a select, and names the identity provider as its owner.
+  expect(grace.querySelector('[role="combobox"]')).toBeNull()
+  expect(grace.querySelector('[title="Managed by your identity provider"]')?.textContent).toBe(
+    'Member'
+  )
+  // Without the flag the owner can still manage the same member.
+  expect(teamRows(roster, 'u-neil').find((row) => row.key === 'member:u-grace')?.manageable).toBe(
+    true
+  )
+})

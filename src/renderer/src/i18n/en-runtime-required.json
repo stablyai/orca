@@ -2810,6 +2810,10 @@
         "permissionDenied": "Permission denied",
         "permissionDeniedPublickey": "Permission denied (publickey)"
       }
+    },
+    "teamWorkspaces": {
+      "shownOf_one": "{{shown}} of {{count}} workspace",
+      "shownOf_other": "{{shown}} of {{count}} workspaces"
     }
   },
   "sidebar": {

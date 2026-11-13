@@ -2,6 +2,7 @@ import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
 import { readCloudSession } from '../cloud-session/profile-cloud-session-owner'
+import { getReconnectReason } from '../cloud-session/profile-cloud-reconnect-reason'
 
 export function getOrcaProfileAuthStatusFromProfile(
   active: ActiveOrcaProfileState,
@@ -48,12 +49,14 @@ export function getOrcaProfileAuthStatusFromProfile(
     }
   }
 
+  const reconnectReason = getReconnectReason(active.profile.id)
   return {
     activeProfileId: active.profile.id,
     configured,
     state: 'reconnect-required',
     persistence: 'none',
     cloud,
+    ...(reconnectReason ? { reconnectReason } : {}),
     credentialError:
       session.status === 'decrypt-failed' || session.status === 'unreadable'
         ? session.error
