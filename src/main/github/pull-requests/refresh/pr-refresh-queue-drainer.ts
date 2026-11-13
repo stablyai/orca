@@ -5,6 +5,7 @@ import {
 } from '../../client/lookup/pr-for-branch-outcome'
 import {
   hostedReviewOptionArgs,
+  freshQueuedPROutcome,
   isBackground,
   isBudgetedBackground,
   validateCandidate
@@ -21,7 +22,6 @@ import {
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
 import { HostedPRReadJobs } from './hosted-pr-read-jobs'
-import { cachedPRBranchOutcome } from '../../client/lookup/pr-read-identity'
 import { PRRefreshQueueScheduler } from './pr-refresh-queue-scheduler'
 
 export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
@@ -130,19 +130,14 @@ export class PRRefreshQueueDrainer {
           this.watchJobs.skipped(next)
           continue
         }
-        if (!next.hosted && !next.watch && (next.reason === 'visible' || next.reason === 'swr')) {
+        if (
+          !next.hosted &&
+          !next.watch &&
+          !next.bypassBackgroundBudget &&
+          (next.reason === 'visible' || next.reason === 'swr')
+        ) {
           const candidate = next.candidate
-          const fresh = this.hostedJobs.freshOutcome(
-            cachedPRBranchOutcome(
-              candidate.repoPath,
-              candidate.branch,
-              candidate.linkedPRNumber ?? null,
-              candidate.connectionId ?? null,
-              candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-              hostedReviewOptionArgs(candidate, next.reason)[0] ?? {}
-            ),
-            candidate.isSelected === true
-          )
+          const fresh = freshQueuedPROutcome(candidate, next.reason)
           if (fresh) {
             this.events.broadcast({ aliases, reason: next.reason, outcome: fresh })
             this.scheduleVisibleFollowUp(
