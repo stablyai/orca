@@ -1,5 +1,8 @@
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
-import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import {
+  openCodeComposerHoldsDraft,
+  readOpenCodeComposerTypedText
+} from '../../../../shared/terminal/input/opencode-composer'
 import {
   readTerminalComposerTypedText,
   type TerminalCursorContext
@@ -23,7 +26,11 @@ export function mailboxDeliveryRefusal(
   recognizedAgent: boolean,
   stagedText?: string
 ) {
+  const ownPointer = terminalComposerTextOwnsPointer(readComposerText(), stagedText)
   const admissionSource = source
+  if (recovering && ownPointer) {
+    source = { ...source, quiescenceMs: 0 }
+  }
   const screen = recovering ? source.readScreenLines(pty.ptyId) : null
   if (recovering) {
     // An execution identity cannot renew an old hook's readiness or a tail's composer.
@@ -55,7 +62,7 @@ export function mailboxDeliveryRefusal(
                 () => {
                   const text = readComposerText()
                   return (
-                    text === stagedText ||
+                    terminalComposerTextOwnsPointer(text, stagedText) ||
                     (text === '' &&
                       (pty.lastAgentStatus === null ||
                         agentStatusTakesTypedInput(pty.lastAgentStatus)))
@@ -117,4 +124,37 @@ export function mailboxComposerHoldsDraft(
   return agent === 'opencode' || agent === 'opencode2'
     ? openCodeComposerHoldsDraft(context)
     : !!readTerminalComposerTypedText(context)
+}
+
+export function readAgentTerminalComposerTypedText(
+  agent: string | null,
+  context: TerminalCursorContext | null | undefined
+): string | null {
+  if (context && (agent === 'opencode' || agent === 'opencode2')) {
+    return readOpenCodeComposerTypedText(context)
+  }
+  return readTerminalComposerTypedText(context)
+}
+
+/** Agents paint hard-wrapped rows themselves, including breaks inside a word. */
+export function terminalComposerTextOwnsPointer(
+  shown: string | null | undefined,
+  pointer: string | undefined
+): boolean {
+  if (!shown || !pointer) {
+    return false
+  }
+  const expected = pointer.replace(/\s+/g, ' ').trim()
+  let offset = 0
+  for (const line of shown.split('\n')) {
+    const row = line.trim().replace(/\s+/g, ' ')
+    if (!expected.startsWith(row, offset)) {
+      return false
+    }
+    offset += row.length
+    if (expected[offset] === ' ') {
+      offset++
+    }
+  }
+  return offset === expected.length
 }

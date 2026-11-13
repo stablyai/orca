@@ -238,7 +238,6 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
             data
           )
           state.outputSequence = outputSequence
-          this.orchestrationMailboxPointerDelivery.observeOutput(ptyId)
           return
         }
         const escapeTail = state.rendererSeedEscapeTail
@@ -288,7 +287,6 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         }
       }
       state.outputSequence = outputSequence
-      this.orchestrationMailboxPointerDelivery.observeOutput(ptyId)
     })
     state.writeChain = completion.catch(() => {})
   }

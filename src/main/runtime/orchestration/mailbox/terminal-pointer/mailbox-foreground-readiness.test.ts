@@ -75,11 +75,15 @@ describe('mail-local foreground recovery readiness', () => {
         write,
         writeWithSettlement: (ptyId, data) => {
           write(ptyId, data)
-          return data === '\r' &&
+          if (
+            data === '\r' &&
             repair === 'refused' &&
             write.mock.calls.filter(([, text]) => text === '\r').length === 1
-            ? { outcome: 'refused', reason: 'provider_refused_write' }
-            : { outcome: 'accepted' }
+          ) {
+            unknown = true
+            return { outcome: 'refused', reason: 'provider_refused_write' }
+          }
+          return { outcome: 'accepted' }
         },
         kill: vi.fn(),
         getSize: () => ({ cols: 100, rows: 30 }),
@@ -199,6 +203,9 @@ describe('mail-local foreground recovery readiness', () => {
             pointer_enter_pending: 2
           })
         }
+        if (repair === 'refused') {
+          unknown = false
+        }
         if (repair === 'unruled') {
           await vi.advanceTimersByTimeAsync(65000)
           expect(write).toHaveBeenCalledTimes(1)
@@ -207,14 +214,27 @@ describe('mail-local foreground recovery readiness', () => {
             delivered_at: null,
             pointer_enter_pending: 2
           })
-          runtime.onPtyData(PTY_ID, '\x1b]0;grok working\x07', Date.now())
+          db.markAsReadAndDelivered([message.id])
+          await vi.advanceTimersByTimeAsync(65000)
+          expect(write).toHaveBeenCalledTimes(1)
+          return
+        }
+        if (repair === 'emptied') {
+          await vi.advanceTimersByTimeAsync(65000)
+          expect(write).toHaveBeenCalledTimes(1)
+          expect(db.getMessageById(message.id)).toMatchObject({
+            read: 0,
+            delivered_at: null,
+            pointer_enter_pending: 2
+          })
+          db.markAsReadAndDelivered([message.id])
+          await vi.advanceTimersByTimeAsync(65000)
+          expect(write).toHaveBeenCalledTimes(1)
+          return
         }
         await vi.advanceTimersByTimeAsync(65000)
         expect(write.mock.calls.map(([, data]) => data)).toEqual([
           expect.stringContaining('You have 1 orchestration message'),
-          ...(repair === 'emptied' || repair === 'unruled'
-            ? [expect.stringContaining('You have 1 orchestration message')]
-            : []),
           ...(repair === 'refused' ? ['\r'] : []),
           '\r'
         ])
@@ -225,9 +245,7 @@ describe('mail-local foreground recovery readiness', () => {
         })
         const attempts = vi.spyOn(runtime, 'deliverPendingMessagesForPty')
         await vi.advanceTimersByTimeAsync(65000)
-        expect(write).toHaveBeenCalledTimes(
-          ['emptied', 'unruled', 'refused'].includes(repair ?? '') ? 3 : 2
-        )
+        expect(write).toHaveBeenCalledTimes(repair === 'refused' ? 3 : 2)
         expect(attempts).not.toHaveBeenCalled()
       } finally {
         finishSnapshot({ data: '', cols: 100, rows: 30 })
@@ -671,11 +689,10 @@ describe('mail-local foreground recovery readiness', () => {
           runtime.requestMailDecision(PTY_ID)
         }
         if (kind === 'owed-read-error') {
-          const read = vi.spyOn(db, 'getMessageById').mockImplementationOnce(() => {
+          const read = vi.spyOn(db, 'areUnreadMessages').mockImplementationOnce(() => {
             throw new Error('temporarily unavailable')
           })
-          await runtime.readTerminalMailHold(`run:${run.id}`)
-          await vi.advanceTimersByTimeAsync(0)
+          await vi.advanceTimersByTimeAsync(65000)
           expect(read).toHaveBeenCalled()
           read.mockRestore()
         }
@@ -703,7 +720,7 @@ describe('mail-local foreground recovery readiness', () => {
           recovering ? pointerComposer(write.mock.calls[0][1]) : COMPOSER,
           Date.now()
         )
-        await vi.advanceTimersByTimeAsync(10000)
+        await vi.advanceTimersByTimeAsync(recovering ? 65000 : 10000)
         expect(write.mock.calls.map(([, data]) => data)).toEqual([
           expect.stringContaining('You have 1 orchestration message'),
           '\r'

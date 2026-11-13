@@ -182,7 +182,7 @@ it.each([
         `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ ${write.mock.calls[0][1].trim()}\r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[2;3H`,
         Date.now()
       )
-      await vi.advanceTimersByTimeAsync(10000)
+      await vi.advanceTimersByTimeAsync(65000)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
         expect.stringContaining('You have 1 orchestration message'),
         '\r'

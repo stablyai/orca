@@ -9,11 +9,14 @@ import type { AgentStatus } from '../../../../shared/agent-status/title/agent-ti
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
-import { mailboxDeliveryRefusal, mailboxComposerHoldsDraft } from './terminal-delivery-refusal'
+import {
+  mailboxDeliveryRefusal,
+  mailboxComposerHoldsDraft,
+  terminalComposerTextOwnsPointer
+} from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
-import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import {
   MailboxDeliveryRecheck,
   type MailboxDeliveryDecision
@@ -252,7 +255,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     )
   }
 
-  private mailDeliveryAgent(ptyId: string) {
+  protected mailDeliveryAgent(ptyId: string) {
     const agent = this.getPaneTerminalAgent(ptyId)
     if (agent) {
       return agent
@@ -275,11 +278,9 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
     const context = state?.emulator.getCursorLineContext()
-    const ownPointer =
-      stagedText !== undefined && readTerminalComposerTypedText(context) === stagedText
     const draft =
       !!context &&
-      !ownPointer &&
+      !terminalComposerTextOwnsPointer(this.readMailboxComposerText(ptyId), stagedText) &&
       mailboxComposerHoldsDraft(this.getPaneTerminalAgent(ptyId), context)
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null

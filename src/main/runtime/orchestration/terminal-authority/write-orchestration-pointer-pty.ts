@@ -1,4 +1,4 @@
-import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
+import { readAgentTerminalComposerTypedText } from '../../terminal/wait/terminal-delivery-refusal'
 import type { MailboxForeground } from '../../terminal/wait/launched-agent-foreground'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -24,6 +24,15 @@ import { startedMainTerminalSurfaces } from '../../terminal/surface/main-termina
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
 
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
+  protected abstract mailDeliveryAgent(ptyId: string): string | null | undefined
+
+  protected readMailboxComposerText(ptyId: string): string | null {
+    return readAgentTerminalComposerTypedText(
+      this.mailDeliveryAgent(ptyId) ?? null,
+      this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()
+    )
+  }
+
   protected abstract issueHandle(
     leaf: RuntimeLeafRecord,
     context?: TerminalIdentityReadContext
@@ -38,12 +47,6 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       data,
       controller: this.ptyController
     })
-  }
-
-  protected readMailboxComposerText(ptyId: string): string | null {
-    return readTerminalComposerTypedText(
-      this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()
-    )
   }
 
   /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */

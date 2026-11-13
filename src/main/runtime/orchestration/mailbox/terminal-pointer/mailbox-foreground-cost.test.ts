@@ -230,7 +230,8 @@ describe('terminal-owned foreground work', () => {
     shell = false
     await vi.advanceTimersByTimeAsync(62000)
     expect(write).toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(20000 * mailboxes)
+    // Each mailbox needs its 500 ms paste delay plus at most 2 s of screen quiescence.
+    await vi.advanceTimersByTimeAsync(1000 + 2500 * mailboxes)
     expect(
       messages.every(
         (id) =>

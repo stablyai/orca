@@ -1,4 +1,3 @@
-import { recoveryFlightDecision } from './mailbox-recovery-flight'
 import { resumeDeferredMailboxPointer } from './mailbox-pointer-submit'
 import { MailboxForegroundDelivery } from './mailbox-foreground-delivery'
 import type {
@@ -178,10 +177,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   hasPendingFlightMail(terminal: OrchestrationMailboxTerminal): boolean {
-    return hasPendingMailboxPointerFlight(
-      this.deps,
-      terminal,
-      this.state.flightForPty(terminal.ptyId)
+    return (
+      this.hasRecoveryFlight(terminal.ptyId) ||
+      hasPendingMailboxPointerFlight(this.deps, terminal, this.state.flightForPty(terminal.ptyId))
     )
   }
 
@@ -195,13 +193,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   hasRecoveryFlight(ptyId: string): boolean {
-    return recoveryFlightDecision(this.state, ptyId, this.state.flightForPty(ptyId)) !== 'ordinary'
-  }
-
-  observeOutput(ptyId: string): void {
-    if (this.hasRecoveryFlight(ptyId)) {
-      this.deps.onDeliveryDecision(ptyId, { reset: true })
-    }
+    const flight = this.state.flightForPty(ptyId)
+    return (
+      !!flight?.processIncarnation &&
+      this.state.foreground.screenRecovery(ptyId) === flight.processIncarnation
+    )
   }
 
   isDeliveryInFlight(ptyId: string): boolean {
@@ -225,7 +221,6 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   observeTerminal(ptyId: string, status?: string): void {
-    this.observeOutput(ptyId)
     if (this.state.foreground.observeTerminal(ptyId, status)) {
       this.deps.onDeliveryDecision(ptyId, { reset: true })
       queueMicrotask(() => this.deps.redriveTerminal(ptyId))
@@ -303,7 +298,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   private settle(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): void {
     const parked = this.state.settleFlight(ptyId, flight)
-    this.deps.onDeliveryDecision(ptyId, { settled: true })
+    this.deps.onDeliveryDecision(ptyId, { settled: true, foreground: false })
     const current = this.deps.getTerminal(ptyId)
     for (const [mailboxHandle, reservedTypes] of parked ?? []) {
       if (current) {

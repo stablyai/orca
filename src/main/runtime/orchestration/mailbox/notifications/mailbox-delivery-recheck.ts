@@ -34,13 +34,11 @@ export class MailboxDeliveryRecheck {
     }
     if (decision.foreground === false || decision.reset) {
       this.delays.delete(ptyId)
-      this.clearTimer(ptyId)
     }
     if (decision.foreground === false) {
       this.foregroundPending.delete(ptyId)
     }
     if (this.read.inFlight(ptyId)) {
-      this.clearTimer(ptyId)
       return
     }
     if (this.timers.has(ptyId) || this.decisions.has(ptyId)) {
