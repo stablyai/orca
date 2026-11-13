@@ -310,7 +310,7 @@ it.each([10, 100])(
   async (count) => {
     vi.useFakeTimers()
     vi.spyOn(process, 'kill').mockReturnValue(true)
-    const handles = Array.from({ length: count }, pendingChild)
+    const handles = Array.from({ length: count }, () => pendingChild())
     const closes = handles.map(({ child }) => {
       const close = vi.fn()
       child.on('close', close)
