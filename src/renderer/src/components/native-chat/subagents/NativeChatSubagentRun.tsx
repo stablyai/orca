@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { useNow } from '@/hooks/use-now'
 import {
@@ -21,7 +21,7 @@ import type {
   NativeChatSubagentState
 } from '../../../../../shared/native-chat/native-chat-types'
 import { formatNativeChatDuration } from '../../../../../shared/native-chat/transcript/native-chat-turn-status'
-import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
+import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
 import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
 import { sayNativeChatSessionOptionTranslated as sayOption } from '../session/options/controls/native-chat-session-option-labels-text'
 
@@ -64,7 +64,7 @@ export function StatusDot({
 }
 
 /** Leaf so the shared 1s clock re-renders only the digits, never the roster. */
-function SubagentElapsed({
+export function SubagentElapsed({
   startedAt,
   settledAt,
   counting
@@ -78,23 +78,21 @@ function SubagentElapsed({
   return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
 }
 
-/** Each child entry controls its section; the transcript inserts its rows after the entry. */
+/** Each entry opens its subagent's own view. */
 export function NativeChatSubagentEntries({
   agents,
-  sections,
-  onSetSectionOpen,
+  onOpen,
   className
 }: {
   agents: readonly NativeChatSubagentEntry[]
-  sections?: ReadonlyMap<string, boolean>
-  onSetSectionOpen?: (agentId: string, open: boolean) => void
+  onOpen?: (agentId: string) => void
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ul className={cn('space-y-0.5', className)}>
       {agents.map((agent) => {
         const state = normalizeSubagentState(agent.state)
-        const sectionOpen = sections?.get(agent.id)
         const detail = subagentEntryDetail(agent)
         const runsOn = subagentEntryRunsOn(agent, sayOption)
         const entry = (
@@ -129,27 +127,23 @@ export function NativeChatSubagentEntries({
           </span>
         )
         return (
-          // Named so a reveal from the agents strip can bring this entry into view.
           <li key={agent.id} data-native-chat-subagent-entry={agent.id}>
             <SubagentEntryPreview agent={agent} state={state} detail={detail} runsOn={runsOn}>
-              {sectionOpen === undefined ? (
+              {onOpen === undefined ? (
                 <div className="flex items-start gap-1.5 py-0.5">{entry}</div>
               ) : (
                 <button
                   type="button"
-                  onClick={() => onSetSectionOpen?.(agent.id, !sectionOpen)}
-                  aria-expanded={sectionOpen}
+                  onClick={() => onOpen(agent.id)}
                   className="group/subagent-entry flex w-full items-start gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   {entry}
+                  <span className="sr-only">
+                    {t('components.native-chat.subagents.open', 'Open subagent')}
+                  </span>
                   <ChevronRight
                     aria-hidden
-                    className={cn(
-                      'mt-1 size-3.5 shrink-0 text-chat-foreground-faint transition-all motion-reduce:transition-none',
-                      sectionOpen
-                        ? 'rotate-90 opacity-100'
-                        : 'opacity-0 group-hover/subagent-entry:opacity-100'
-                    )}
+                    className="mt-1 size-3.5 shrink-0 text-chat-foreground-faint opacity-0 transition-opacity group-hover/subagent-entry:opacity-100 motion-reduce:transition-none"
                   />
                 </button>
               )}
@@ -215,25 +209,22 @@ function SubagentEntryPreview({
 /** Trust journal child states: children outlive their spawning turn, and only host/provider settlement proves lost contact. */
 export function NativeChatSubagentRun({
   block,
-  open: heldOpen,
-  onSetOpen,
-  sections,
-  onSetSectionOpen
+  disclosureId,
+  onOpenSubagent
 }: {
   block: NativeChatSubagentGroupBlock
-  /** Whether the entries show, when the transcript holds that past this row's lifetime. */
-  open?: boolean
-  onSetOpen?: (open: boolean) => void
-  /** The children whose rows open under their entries, and whether each is open. */
-  sections?: ReadonlyMap<string, boolean>
-  onSetSectionOpen?: (agentId: string, open: boolean) => void
+  /** Remembers the reader's open/closed choice past this row's lifetime. */
+  disclosureId?: string
+  onOpenSubagent?: (agentId: string) => void
 }): React.JSX.Element | null {
-  const [localOpen, setLocalOpen] = useState(false)
-  const open = heldOpen ?? localOpen
-  const setOpen = onSetOpen ?? setLocalOpen
   const agents = block.agents
   // Not memoized: its words follow the reader's language, which can change under the same roster.
   const header = nativeChatSubagentGroupHeader(agents, say)
+  // The list shows while any child works, until the reader says otherwise.
+  const { open, setOpen } = useNativeChatDisclosure(
+    disclosureId === undefined ? undefined : `subagent-roster:${disclosureId}:${block.groupId}`,
+    header.working
+  )
   if (header.total === 0) {
     return null
   }
@@ -277,12 +268,7 @@ export function NativeChatSubagentRun({
         />
       </button>
       {open ? (
-        <NativeChatSubagentEntries
-          agents={sections ? nativeChatSubagentEntryRuns(agents, sections)[0]! : agents}
-          sections={sections}
-          onSetSectionOpen={onSetSectionOpen}
-          className="mt-1"
-        />
+        <NativeChatSubagentEntries agents={agents} onOpen={onOpenSubagent} className="mt-1" />
       ) : null}
     </div>
   )

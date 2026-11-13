@@ -46,7 +46,7 @@ const block: NativeChatSubagentGroupBlock = {
 function Roster() {
   return (
     <div className="native-chat-appearance p-4 pt-36">
-      <NativeChatSubagentRun block={block} open onSetOpen={() => {}} />
+      <NativeChatSubagentRun block={block} onOpenSubagent={() => {}} />
     </div>
   )
 }
