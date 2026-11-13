@@ -137,7 +137,7 @@ export function NewCloudWorkspaceScreen() {
         return
       }
       setStartedAt(null)
-      setError(createErrorMessage(failure, t, role))
+      setError(createErrorMessage(failure, t, role, repoUrl))
       return
     }
     // The sandbox exists from here on: nothing below may report "couldn't create" or create again.

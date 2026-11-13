@@ -1,50 +1,14 @@
 import { Text, View } from 'react-native'
-import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { CloudPhaseSteps } from './CloudPhaseSteps'
 import { CloudStatusDot } from './CloudStatusDot'
 import { CloudWakeSlowNote } from './CloudWakeSlowNote'
 import type { CloudWorkspace } from './cloud-control-plane-client'
-import { cloudSandboxHours, cloudStatusLabel } from './cloud-workspace-display'
+import { cloudSpendLine, cloudStatusLabel } from './cloud-workspace-display'
 import { statusSentence } from './cloud-workspace-copy'
 import { cloudWorkspaceScreenStyles as styles } from './cloud-workspace-screen-styles'
 import type { CloudWorkspaceRun } from './use-cloud-workspace-run'
-
-/** Usage once, honestly: sandbox hours so far (what the plan meters), and whether it is using them
- *  now. No per-workspace dollars: included hours are not charged. */
-function spendLine(
-  workspace: CloudWorkspace,
-  usage: { totalMs: number } | null,
-  awake: boolean,
-  t: Translate
-): string | null {
-  const ms = usage ? usage.totalMs : workspace.sandboxMs
-  if (ms === null) {
-    return null
-  }
-  const { value, label } = cloudSandboxHours(ms)
-  if (!awake) {
-    return t(
-      'cloud.usage.asleep',
-      '{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.',
-      {
-        count: value,
-        hours: label,
-        defaultValue_one: '{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.'
-      }
-    )
-  }
-  return t(
-    'cloud.usage.running',
-    '{{hours}} sandbox hours so far. Uses sandbox hours while running.',
-    {
-      count: value,
-      hours: label,
-      defaultValue_one: '{{hours}} sandbox hour so far. Uses sandbox hours while running.'
-    }
-  )
-}
 
 export function CloudStatusCard(props: {
   workspace: CloudWorkspace
@@ -61,7 +25,7 @@ export function CloudStatusCard(props: {
   // Up but unreachable from this phone: a filled amber dot, as a desktop that can't connect.
   const notConnected = run.kind === 'error' && workspace.status === 'running'
   const awake = active || workspace.status === 'running' || workspace.status === 'creating'
-  const spend = spendLine(workspace, props.usage, awake, t)
+  const spend = cloudSpendLine(workspace, props.usage, awake, t)
   return (
     <View style={styles.statusCard}>
       <View style={styles.statusHeadline}>

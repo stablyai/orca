@@ -12,6 +12,7 @@ import type { AgentListRowHandlers } from '../../agents/MobileAgentListRows'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import { MobileHomeAppUpdateCard } from '../MobileHomeAppUpdateCard'
 import { MobileHomeCloudSection } from '../MobileHomeCloudSection'
+import { homeFeedLayout } from '../home-feed-layout'
 import { MobileHomeEmptyState } from '../MobileHomeEmptyState'
 import { MobileHomeHostList } from '../MobileHomeHostList'
 import { MobileHomeActiveAgents } from '../MobileHomeActiveAgents'
@@ -52,10 +53,15 @@ export function MobileHomeFeedTab(props: {
   }, [data.connectedHosts, data.allClients, cloudHostIds])
   const title = <MobileHomeTabHeader title={t('home.tabs.feed', 'Feed')} />
   // Keychain reads can outlast the splash; show the title instead of a blank frame.
-  if (!data.hostCatalogLoaded) {
+  const layout = homeFeedLayout({
+    hostCatalogLoaded: data.hostCatalogLoaded,
+    hostCount: data.hostCatalog.length,
+    enrollment
+  })
+  if (layout === 'loading') {
     return title
   }
-  if (data.hostCatalog.length === 0) {
+  if (layout === 'pair-desktop') {
     return (
       <MobileHomeEmptyState
         contentMaxWidth={contentMaxWidth}

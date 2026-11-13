@@ -333,17 +333,20 @@ export function CloudWorkspaceScreen({
             />
           ) : null}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading} accessibilityRole="header">
-              {t('cloud.prompt.heading', 'Ask an agent')}
-            </Text>
-            <CloudPromptComposer
-              awake={awake}
-              waking={active || workspace.status === 'waking'}
-              disabled={unavailable}
-              onSend={send}
-            />
-          </View>
+          {/* Archived is read-only here: nothing can wake it from the phone, so no prompt box. */}
+          {workspace.status === 'archived' ? null : (
+            <View style={styles.section}>
+              <Text style={styles.sectionHeading} accessibilityRole="header">
+                {t('cloud.prompt.heading', 'Ask an agent')}
+              </Text>
+              <CloudPromptComposer
+                awake={awake}
+                waking={active || workspace.status === 'waking'}
+                disabled={unavailable}
+                onSend={send}
+              />
+            </View>
+          )}
           <CloudPromptQueueSection queue={queue} awake={awake} onRetry={() => void start('send')} />
 
           <View style={styles.section}>
