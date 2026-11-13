@@ -12,9 +12,40 @@ import type {
 import { openCloudWorkspacePicker } from '../../cloud-workspaces/cloud-workspace-picker-store'
 import { TeamDeleteDialogView } from './TeamDeleteDialog'
 import type { TeamDeleteCheck } from './TeamDeleteSection'
-import { teamDeleteFailure, type TeamDeleteDialogError } from './team-delete-copy'
+import {
+  teamDeleteFailure,
+  teamDeletePlanEndedText,
+  type TeamDeleteDialogError
+} from './team-delete-copy'
 
 const RATE_LIMIT_WAIT_MS = 60_000
+
+/**
+ * EP-10: teams whose plan this window already ended in a delete that then failed. A retry's own
+ * failure comes back as an ordinary code, but the plan is still gone: keep saying so.
+ */
+const planEndedTeams = new Set<string>()
+
+/** Tests only. */
+export function resetTeamDeletePlanEndedForTests(): void {
+  planEndedTeams.clear()
+}
+
+/** Every failure after the plan already ended says so, whatever the retry's own cause. */
+export function teamDeleteFailureAfterCancel(
+  orgId: string,
+  result: OrcaProfileOrgDeleteResult,
+  failure: TeamDeleteDialogError | null,
+  t: Parameters<typeof teamDeleteFailure>[1]
+): TeamDeleteDialogError | null {
+  if (result.status === 'failed-after-cancel') {
+    planEndedTeams.add(orgId)
+  }
+  if (!failure || failure.kind === 'mismatch' || !planEndedTeams.has(orgId)) {
+    return failure
+  }
+  return { kind: 'planEnded', text: teamDeletePlanEndedText(t) }
+}
 
 /** The card's state from the pre-check; null hides the card (not an owner, or no route yet). */
 export function teamDeleteCheckFrom(
@@ -22,7 +53,11 @@ export function teamDeleteCheckFrom(
 ): TeamDeleteCheck | null {
   switch (result.status) {
     case 'ok':
-      return { state: 'ready', blockers: result.blockers }
+      return {
+        state: 'ready',
+        blockers: result.blockers,
+        ...(result.cancelsSubscription ? { cancelsSubscription: result.cancelsSubscription } : {})
+      }
     case 'unsupported':
     case 'forbidden':
     case 'unconfigured':
@@ -145,6 +180,7 @@ export function useTeamDelete({
       .then(async (result) => {
         setSubmitting(false)
         if (result.status === 'deleted') {
+          planEndedTeams.delete(orgId)
           close()
           toast.success(
             t('auto.components.billing.team.delete.deletedToast2', '{{value0}} was deleted', {
@@ -161,7 +197,7 @@ export function useTeamDelete({
           setWaiting(true)
           waitTimer.current = window.setTimeout(() => setWaiting(false), RATE_LIMIT_WAIT_MS)
         }
-        setError(teamDeleteFailure(result, t))
+        setError(teamDeleteFailureAfterCancel(orgId, result, teamDeleteFailure(result, t), t))
       })
   }
 
@@ -181,6 +217,9 @@ export function useTeamDelete({
           submitting={submitting}
           error={error}
           waiting={waiting}
+          {...(check?.state === 'ready' && check.cancelsSubscription
+            ? { cancelsSubscription: check.cancelsSubscription }
+            : {})}
           onTypedChange={(value) => {
             setTyped(value)
             if (error?.kind === 'mismatch') {

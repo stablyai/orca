@@ -26,8 +26,19 @@ type OrcaOrgDeleteCommonStatus =
   | 'rate-limited'
   | 'unavailable'
 
+/**
+ * EP-10: the team's plan is already set to end (cancel at period end). Deleting the team ends it
+ * now; the rest of the period isn't refunded. `periodEnd` is when it would have ended (ISO 8601).
+ */
+export type OrcaOrgDeleteCancelsSubscription = { periodEnd: string }
+
 export type OrcaProfileOrgDeleteCheckResult =
-  | { status: 'ok'; deletable: boolean; blockers: OrcaOrgDeleteBlocker[] }
+  | {
+      status: 'ok'
+      deletable: boolean
+      blockers: OrcaOrgDeleteBlocker[]
+      cancelsSubscription?: OrcaOrgDeleteCancelsSubscription
+    }
   | { status: OrcaOrgDeleteCommonStatus }
   | { status: 'failed'; error: string }
 
@@ -37,10 +48,28 @@ export type OrcaProfileOrgDeleteResult =
   | { status: 'blocked'; blockers: OrcaOrgDeleteBlocker[] }
   /** 400 confirm_mismatch. */
   | { status: 'confirm-mismatch' }
+  /**
+   * EP-10: the plan was already ended (that can't be undone), then the rest of the delete failed.
+   * The team still exists, without a plan; deleting again is safe. `cause` is auth's original code.
+   */
+  | { status: 'failed-after-cancel'; cause: string }
   | { status: OrcaOrgDeleteCommonStatus }
   | { status: 'failed'; error: string }
 
 export const ORCA_ORG_DELETE_CONFIRM_MAX_LENGTH = 256
+
+/** EP-10: the desktop understands `cancelsSubscription` and `delete_failed_after_cancel`. */
+export const ORCA_ORG_DELETE_SUPPORTS = 'cancel_on_delete'
+
+/** A valid `cancelsSubscription` from auth, or undefined (anything malformed is ignored). */
+export function normalizeOrgDeleteCancelsSubscription(
+  value: unknown
+): OrcaOrgDeleteCancelsSubscription | undefined {
+  if (!isPlainRecord(value) || typeof value.periodEnd !== 'string') {
+    return undefined
+  }
+  return Number.isNaN(Date.parse(value.periodEnd)) ? undefined : { periodEnd: value.periodEnd }
+}
 
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

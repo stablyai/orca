@@ -51,6 +51,11 @@ export function teamDeleteBlockerLines(
 export type TeamDeleteDialogError =
   /** Shown under the name field. */
   | { kind: 'mismatch'; text: string }
+  /**
+   * EP-10: the plan already ended (can't be undone) but the team wasn't deleted. Every later failure
+   * for this team says so too; [Delete team] becomes "Try deleting again".
+   */
+  | { kind: 'planEnded'; text: string }
   /** Shown above the buttons; `blockers` repeats the card's lines (with their actions). */
   | { kind: 'blocked'; blockers: OrcaOrgDeleteBlocker[] }
   | { kind: 'message'; text: string }
@@ -67,6 +72,8 @@ export function teamDeleteFailure(
       return result.blockers.length > 0
         ? { kind: 'blocked', blockers: result.blockers }
         : { kind: 'message', text: genericFailure(t) }
+    case 'failed-after-cancel':
+      return { kind: 'planEnded', text: teamDeletePlanEndedText(t) }
     case 'confirm-mismatch':
       return {
         kind: 'mismatch',
@@ -106,6 +113,32 @@ export function teamDeleteFailure(
     case 'failed':
       return { kind: 'message', text: genericFailure(t) }
   }
+}
+
+/** EP-10: the team wasn't deleted, but its plan has already ended (design-squad words it). */
+export function teamDeletePlanEndedText(t: Translate): string {
+  return t(
+    'auto.components.billing.team.delete.planEnded',
+    'Your team wasn’t deleted, but its plan has already ended, with no refund for the rest of the period.'
+  )
+}
+
+/** EP-10: before deleting a team whose plan is set to end on `periodEnd`. */
+export function teamDeleteCancelsPlanText(
+  periodEnd: string,
+  t: Translate,
+  locale?: string
+): string {
+  const date = new Date(periodEnd).toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+  return t(
+    'auto.components.billing.team.delete.cancelsPlan',
+    'Your plan is set to end on {{date}}. Deleting the team ends it now, with no refund for the rest of the period.',
+    { date }
+  )
 }
 
 function genericFailure(t: Translate): string {

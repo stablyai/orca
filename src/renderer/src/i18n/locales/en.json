@@ -21516,7 +21516,10 @@
             "rateLimited": "Too many attempts. Wait a minute, then try again.",
             "forbidden": "Only owners can delete the team.",
             "failed": "Couldn’t delete the team. Try again.",
-            "deletedToast2": "{{value0}} was deleted"
+            "deletedToast2": "{{value0}} was deleted",
+            "retry": "Try deleting again",
+            "planEnded": "Your team wasn’t deleted, but its plan has already ended, with no refund for the rest of the period.",
+            "cancelsPlan": "Your plan is set to end on {{date}}. Deleting the team ends it now, with no refund for the rest of the period."
           },
           "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team.",
           "perSeat": "Per seat",
