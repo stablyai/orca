@@ -6,12 +6,12 @@ vi.mock('sonner', () => ({ toast: { error: (...args: unknown[]) => toastError(..
 import { billingCheckoutLink, billingPortalLink } from './billing-link'
 
 function stubApi(api: Record<string, unknown>): void {
-  ;(globalThis as { window?: unknown }).window = { api: { orcaProfiles: api } }
+  vi.stubGlobal('window', { api: { orcaProfiles: api } })
 }
 
 afterEach(() => {
   toastError.mockReset()
-  delete (globalThis as { window?: unknown }).window
+  vi.unstubAllGlobals()
 })
 
 describe('billing "Copy link"', () => {

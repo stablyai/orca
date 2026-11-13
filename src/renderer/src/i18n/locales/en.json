@@ -23880,7 +23880,6 @@
         "switchTeam": "Switch team",
         "switchFirst": "Switch to {{team}} first",
         "switchTeamFirst": "Switch to a team first",
-        "linkCopied": "Setup link copied. Open it in the browser you use for Orca.",
         "error": {
           "timedOut": "Setup didn’t finish in your browser. Your prompt is still here.",
           "checkoutCanceled": "Checkout canceled. Nothing was charged.",
@@ -27364,7 +27363,6 @@
     "pasteBody": "Sign in on the page, then paste the code it shows.",
     "deviceBody": "Open the page and enter this code.",
     "openPage": "Open sign-in page",
-    "copyLink": "Copy link",
     "copyCode": "Copy code",
     "openPageShort": "Open page",
     "sending": "Starting {{agent}} and sending",
@@ -28970,7 +28968,6 @@
       "title": "Checking your Orca Cloud account…"
     },
     "continueInBrowser": "Continue in browser",
-    "copyLink": "Copy link",
     "done": {
       "lead": "Starting your cloud workspace…",
       "title": "All set",

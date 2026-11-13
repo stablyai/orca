@@ -29,7 +29,9 @@ function register(url: string) {
   const connectGitHubUser = vi.fn(async () => ({ authorizeUrl: url }))
   registerHostedAccountHandlers(
     {
-      config: async () => null as never,
+      config: async () => {
+        throw new Error('unused')
+      },
       connectGitHub,
       githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
       githubRepositories: async () => ({ repositories: [], nextCursor: null }),
