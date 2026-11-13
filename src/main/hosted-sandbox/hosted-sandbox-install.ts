@@ -1,3 +1,4 @@
+import { installDevTokenClaimsProbe } from './dev-token-claims-probe'
 import { cloudDevSigningAllowed, withCloudBuildDefaults } from '../cloud-build-defaults'
 import {
   findCloudRuntimeBySandboxId,
@@ -132,6 +133,7 @@ export function installHostedSandbox(
   // A cloud list refresh or a not-found status read asks for the prune now (LC-2).
   setCloudGonePruneRunner(() => accountBackfill.run({ force: true }))
   installLocalCommands(userDataPath)
+  installDevTokenClaimsProbe(() => config.getAccessToken(), app.isPackaged)
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
     getAccessToken: config.getAccessToken

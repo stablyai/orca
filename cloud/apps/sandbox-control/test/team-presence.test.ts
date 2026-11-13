@@ -189,9 +189,33 @@ describe('member-removed token', () => {
     expect((await h.call('POST', '/v1/internal/org-members/removed', { bearer: MR, body })).status).toBe(200)
     expect((await h.call('GET', '/v1/internal/status', { bearer: MR })).status).toBe(404)
     expect((await h.call('POST', '/v1/internal/members/removed', { bearer: MR, body })).status).toBe(404)
+    expect((await h.call('GET', '/v1/internal/members/role-changed', { bearer: MR })).status).toBe(404)
     // The operator token still works on the route; a short token is never accepted.
     expect((await h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body })).status).toBe(200)
     const weak = await createHarness({ OPERATOR_TOKEN: 'o'.repeat(40), MEMBER_REMOVED_TOKEN: 'short' })
     expect((await weak.call('POST', '/v1/internal/org-members/removed', { bearer: 'short', body })).status).toBe(404)
+  })
+
+  it('also authorizes the role-changed push, which marks older tokens stale', async () => {
+    const MR = 'm'.repeat(40)
+    const h = await createHarness({ OPERATOR_TOKEN: 'o'.repeat(40), MEMBER_REMOVED_TOKEN: MR })
+    // An admin's desktop token from before a demotion made by their identity provider (SCIM).
+    const stale = await h.token('ada', 'acme', 'sandbox', { orgRole: 'admin' })
+    const { secret } = (await h.call('POST', '/v1/api-keys', { bearer: stale, body: { name: 'audit', scopes: ['audit:read', 'workspaces:read'] } })).body
+    h.advance(60_000)
+    const changed = await h.call('POST', '/v1/internal/members/role-changed', {
+      bearer: MR,
+      body: { accountId: 'org:acme', userId: 'ada', role: 'member', changedAt: h.now() }
+    })
+    expect(changed.status).toBe(200)
+    expect(changed.body).toEqual({ updated: 1 })
+    // Their admin-only scopes are gone, and the older token cannot write the admin role back.
+    expect((await h.call('GET', '/v1/audit', { bearer: secret })).status).toBe(403)
+    await h.call('GET', '/v1/me', { bearer: stale })
+    expect((await h.call('GET', '/v1/audit', { bearer: secret })).status).toBe(403)
+    // A malformed body is refused, and a short token is never accepted.
+    expect((await h.call('POST', '/v1/internal/members/role-changed', { bearer: MR, body: { accountId: 'org:acme', userId: 'ada', role: 'root' } })).status).toBe(400)
+    const weak = await createHarness({ OPERATOR_TOKEN: 'o'.repeat(40), MEMBER_REMOVED_TOKEN: 'short' })
+    expect((await weak.call('POST', '/v1/internal/members/role-changed', { bearer: 'short', body: { accountId: 'org:acme', userId: 'ada', role: 'member' } })).status).toBe(404)
   })
 })

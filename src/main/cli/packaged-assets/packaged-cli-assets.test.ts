@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -80,7 +80,11 @@ node -e 'console.log(JSON.stringify({
           orcaNodeReplExternalModule: string | null
         }
 
-        expect(payload.argv).toEqual([cliPath, '--help', 'two words'])
+        // The macOS launcher resolves its own path and the Linux one does not; with the test temp root
+        // under the /tmp symlink (-> /private/tmp) the two spellings differ, so compare real paths.
+        const [launched, ...forwarded] = payload.argv
+        expect(await realpath(launched ?? '')).toBe(await realpath(cliPath))
+        expect(forwarded).toEqual(['--help', 'two words'])
         expect(payload.runAsNode).toBe('1')
         // Hide node options from Electron's bootstrap but preserve them for the CLI.
         expect(payload.nodeOptions).toBeNull()

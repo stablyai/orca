@@ -11,9 +11,11 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
   getWorktreeOnHostFromState: (_state: unknown, id: string) => rows.get(id)
 }))
+const refreshStatus = vi.hoisted(() => vi.fn(async () => undefined))
 vi.mock('./orca-cloud-workspace-store', () => ({
-  getCloudWorkspaceSnapshot: () => ({ ids: owned }),
-  useIsCloudWorkspace: () => false
+  getCloudWorkspaceSnapshot: () => ({ ids: owned, paired: {}, status: {} }),
+  useIsCloudWorkspace: () => false,
+  refreshCloudWorkspaceStatus: refreshStatus
 }))
 
 import { isPairedCloudSleepTarget, sleepPairedCloudSandboxes } from './paired-cloud-sleep'
@@ -47,6 +49,8 @@ describe('PAIRED-SLEEP', () => {
     await expect(sleepPairedCloudSandboxes(['wt-paired'])).resolves.toEqual([])
     expect(sleep).toHaveBeenCalledWith('sbx_paired')
     expect(isPairedCloudSleepTarget('wt-paired')).toBe(true)
+    // Its row re-reads status at once, so it says Asleep (not Active) and an open wakes it.
+    expect(refreshStatus).toHaveBeenCalledWith('wt-paired')
   })
 
   it('a refused sleep is reported: the sandbox is still running (cloud toast, Try again)', async () => {

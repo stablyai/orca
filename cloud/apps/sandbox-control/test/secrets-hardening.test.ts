@@ -120,7 +120,7 @@ describe('SEC-6b: last-4 hints only for people who can write the scope', () => {
 })
 
 describe('SEC-6c: secret-handling code logs only through the redacting sink', () => {
-  const FILES = ['secrets.ts', 'session-env.ts', 'env-refresh.ts', 'egress-proxy.ts', 'secret-egress.ts', 'secrets-crypto.ts']
+  const FILES = ['secrets.ts', 'session-env.ts', 'env-refresh.ts', 'egress-proxy.ts', 'secret-egress.ts', 'secrets-crypto.ts', 'secret-events.ts']
 
   it('the secret-handling modules never call console directly', () => {
     for (const file of FILES) {

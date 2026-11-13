@@ -49,6 +49,13 @@ describe("plans dialog from billing's catalog", () => {
     expect(props.onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
   })
 
+  it('gives checkout and Contact sales a "Copy link" chevron for the same order', () => {
+    const checkoutLink = vi.fn(async () => 'https://checkout.stripe.com/c/pay/cs_1')
+    render(<PlansView {...view({ checkoutLink })} />)
+    // One chevron on the checkout button, one on Contact sales.
+    expect(screen.getAllByRole('button', { name: 'More link options' })).toHaveLength(2)
+  })
+
   it('offers only the intervals Stripe prices: no toggle with one', () => {
     render(<PlansView {...view({ catalog: monthlyOnlyCatalogResult })} />)
     expect(screen.queryByRole('radiogroup')).toBeNull()

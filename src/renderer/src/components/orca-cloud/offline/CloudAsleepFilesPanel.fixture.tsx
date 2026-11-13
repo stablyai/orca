@@ -1,6 +1,11 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { CloudOfflineSnapshot } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import { CloudAsleepFilesPanel } from './CloudAsleepFilesPanel'
+import {
+  markSleepCopyFailed,
+  markSleepCopySaving,
+  resetWorktreeSleepViewForTests
+} from '@/lib/worktree-sleep-view'
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -70,6 +75,36 @@ export const noSnapshot = defineFixture({
   render: () => (
     <Frame>
       <CloudAsleepFilesPanel workspaceId="ws" />
+    </Frame>
+  )
+})
+
+/** SLEEP-IN-PROGRESS: Sleep just pressed, its copy still saving. Never "Files aren't available" yet. */
+export const savingCopy = defineFixture({
+  width: 380,
+  setup: () => {
+    serve(null)
+    resetWorktreeSleepViewForTests()
+    markSleepCopySaving('ws-saving')
+  },
+  render: () => (
+    <Frame>
+      <CloudAsleepFilesPanel workspaceId="ws-saving" />
+    </Frame>
+  )
+})
+
+/** SLEEP-IN-PROGRESS: no copy arrived in time. Says so; Wake. */
+export const copySaveFailed = defineFixture({
+  width: 380,
+  setup: () => {
+    serve(null)
+    resetWorktreeSleepViewForTests()
+    markSleepCopyFailed('ws-failed')
+  },
+  render: () => (
+    <Frame>
+      <CloudAsleepFilesPanel workspaceId="ws-failed" />
     </Frame>
   )
 })

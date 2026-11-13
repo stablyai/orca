@@ -88,7 +88,7 @@ describe('inviteSeatImpact without prices', () => {
         newInvites: 2,
         now: 0
       })
-    ).toEqual({ kind: 'adds-seats-unpriced', addedSeats: 2 })
+    ).toEqual({ kind: 'adds-seats-unpriced', addedSeats: 2, freeSeats: 0 })
   })
 })
 

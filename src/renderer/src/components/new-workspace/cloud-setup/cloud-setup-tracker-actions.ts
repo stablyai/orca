@@ -1,9 +1,10 @@
 // What the tracker's buttons do: a fresh one-time setup link (the first one was spent by the
-// browser that opened it), copied or opened. Without a session (rows derived from billing), Reopen
-// re-runs today's setup action and there is no link to copy.
+// browser that opened it), opened, or copied from Reopen browser's "Copy link". Without a session
+// (rows derived from billing), Reopen re-runs today's setup action and there is no link to copy.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getCloudSetupLinkProvider } from '@/lib/orca-cloud/cloud-setup-session-seam'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 
 async function freshLink(sessionId: string): Promise<string | null> {
   const provider = getCloudSetupLinkProvider()
@@ -26,26 +27,24 @@ function linkUnavailable(): void {
   )
 }
 
-export function canCopyCloudSetupLink(sessionId: string | null): boolean {
+function canCopyCloudSetupLink(sessionId: string | null): boolean {
   return sessionId !== null && getCloudSetupLinkProvider() !== null
 }
 
-export async function copyCloudSetupLink(sessionId: string): Promise<void> {
-  const url = await freshLink(sessionId)
-  if (!url) {
-    linkUnavailable()
-    return
+/**
+ * "Copy link" beside Reopen browser: a fresh one-time link to the same session, minted the way
+ * Reopen mints it. Null when there is no session to link to (Reopen then re-runs today's action).
+ */
+export function cloudSetupLinkSource(sessionId: string | null): ExternalLinkSource | null {
+  if (!sessionId || !canCopyCloudSetupLink(sessionId)) {
+    return null
   }
-  try {
-    await window.api.ui.writeClipboardText(url)
-    toast.success(
-      translate(
-        'components.newWorkspace.cloudSetup.linkCopied',
-        'Setup link copied. Open it in the browser you use for Orca.'
-      )
-    )
-  } catch {
-    linkUnavailable()
+  return async () => {
+    const url = await freshLink(sessionId)
+    if (!url) {
+      linkUnavailable()
+    }
+    return url
   }
 }
 

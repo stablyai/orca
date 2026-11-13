@@ -9,7 +9,10 @@ import {
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
 import { orcaCloudSandboxIdFor } from '../hosted-sandbox/orca-cloud-sandbox-id'
-import { claudeStateFile, readClaudeFolderLogin } from '../claude-accounts/sign-in/claude-account-folder'
+import {
+  claudeStateFile,
+  readClaudeFolderLogin
+} from '../claude-accounts/sign-in/claude-account-folder'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 import { createAgentCredentialsClient } from './agent-credentials-client'
@@ -40,6 +43,7 @@ const CHANNELS = [
   'orcaCloudAgents:start',
   'orcaCloudAgents:cancel',
   'orcaCloudAgents:reopen',
+  'orcaCloudAgents:signInLink',
   'orcaCloudAgents:usePaste',
   'orcaCloudAgents:pasteClaudeToken',
   'orcaCloudAgents:acknowledge',
@@ -137,6 +141,10 @@ export function registerOrcaCloudAgentsHandlers(userDataPath: string): void {
     const request = AgentRequest.safeParse(raw)
     return request.success ? service.reopen(request.data.agent) : false
   })
+  ipcMain.handle('orcaCloudAgents:signInLink', (_event, raw: unknown) => {
+    const request = AgentRequest.safeParse(raw)
+    return request.success ? service.signInLink(request.data.agent) : null
+  })
   ipcMain.handle('orcaCloudAgents:usePaste', () => service.usePaste())
   ipcMain.handle('orcaCloudAgents:submitClaudeCode', (_event, raw: unknown) => {
     const request = CodeRequest.safeParse(raw)
@@ -171,6 +179,14 @@ export function registerOrcaCloudAgentsHandlers(userDataPath: string): void {
     }
     const workspaceId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
     return workspaceId ? service.workspaceSources(workspaceId) : notFound
+  })
+  // FAIL-CLOSED (#568): the renderer's catalog flag can lag a fresh pairing; main's own records
+  // (runtime store + pairing bindings) answer whether an agent launch here is on Orca Cloud.
+  ipcMain.handle('orcaCloudAgents:isCloudEnvironment', (_event, raw: unknown) => {
+    const request = WorkspaceRequest.safeParse(raw)
+    return request.success
+      ? orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId) !== null
+      : false
   })
   ipcMain.handle('orcaCloudAgents:setWorkspaceSource', (_event, raw: unknown) => {
     const request = WorkspaceSourceRequest.safeParse(raw)

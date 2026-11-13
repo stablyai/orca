@@ -9,8 +9,7 @@ import {
   getCloudWorkspaceSnapshot,
   isCloudWorkspaceArchived,
   noteCloudWakeProgress,
-  refreshCloudWorkspaceStatus,
-  refreshCloudWorkspaceStatusIfStale
+  refreshCloudWorkspaceStatus
 } from './orca-cloud-workspace-store'
 
 function notPairedMessage(): string {
@@ -18,6 +17,42 @@ function notPairedMessage(): string {
     'auto.lib.orcaCloud.pairedWake.notPaired',
     'This workspace is no longer linked to this computer. Open it again from Cloud workspaces on Home.'
   )
+}
+
+// Paired rows this desktop put to sleep (their status read may not have caught up yet).
+const sleptHere = new Set<string>()
+
+/** Paired Sleep succeeded here: its status is re-read now, and an open wakes it even before that. */
+export function notePairedCloudSlept(workspaceId: string): void {
+  sleptHere.add(workspaceId)
+  void refreshCloudWorkspaceStatus(workspaceId)
+}
+
+/** How often, and for how long, an explicit wake re-reads status until the VM runs. */
+export const PAIRED_WAKE_POLL_MS = 1_500
+export const PAIRED_WAKE_MAX_WAIT_MS = 120_000
+
+function wakeStalledMessage(): string {
+  return translate(
+    'orcaCloudWorkspace.overlay.stalled',
+    'Orca Cloud stopped responding while waking.'
+  )
+}
+
+/** Re-reads status until it says running (true) or the wait runs out (false). Bounded: it stops. */
+async function waitUntilRunning(workspaceId: string): Promise<boolean> {
+  const deadline = Date.now() + PAIRED_WAKE_MAX_WAIT_MS
+  for (;;) {
+    await refreshCloudWorkspaceStatus(workspaceId)
+    const entry = getCloudWorkspaceSnapshot().status[workspaceId]
+    if (!entry?.error && entry?.status?.state === 'ready') {
+      return true
+    }
+    if (Date.now() + PAIRED_WAKE_POLL_MS > deadline) {
+      return false
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, PAIRED_WAKE_POLL_MS))
+  }
 }
 
 export type PairedWakeResult = { ok: true } | { ok: false; message: string; reason?: string }
@@ -49,7 +84,7 @@ export async function wakePairedCloudWorkspace(
   const startedAt = Date.now()
   const source = options.source ?? 'open'
   const report = (
-    phase: 'waking' | 'ready' | 'failed',
+    phase: 'waking' | 'connecting' | 'ready' | 'failed',
     failure?: { message: string; reason?: string }
   ): void => {
     if (!options.quiet) {
@@ -74,11 +109,21 @@ export async function wakePairedCloudWorkspace(
     reason: undefined
   }))
   if (result.ok) {
-    report('ready')
+    sleptHere.delete(workspaceId)
+    // The control plane accepts the wake before the VM runs (it takes seconds more): "ready" only
+    // once its status says so, or the overlay never outlasts its show delay (PAIRED-WAKING-OVERLAY).
+    report('connecting')
+    if (options.quiet) {
+      await refreshCloudWorkspaceStatus(workspaceId)
+    } else if (await waitUntilRunning(workspaceId)) {
+      report('ready')
+    } else {
+      report('failed', { message: wakeStalledMessage() })
+    }
   } else {
     report('failed', { message: result.error, ...(result.reason ? { reason: result.reason } : {}) })
+    await refreshCloudWorkspaceStatus(workspaceId)
   }
-  await refreshCloudWorkspaceStatus(workspaceId)
   return result.ok
     ? { ok: true }
     : { ok: false, message: result.error, ...(result.reason ? { reason: result.reason } : {}) }
@@ -91,9 +136,14 @@ export async function wakePairedCloudWorkspace(
 export async function wakePairedCloudWorkspaceIfAsleep(
   workspaceId: string
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  await refreshCloudWorkspaceStatusIfStale(workspaceId, 30_000)
-  const state = getCloudWorkspaceSnapshot().status[workspaceId]?.status?.state
-  if (state !== 'sleeping' || isCloudWorkspaceArchived(workspaceId)) {
+  // Always a fresh read: a cached "ready" from before its Sleep (up to a poll old) made the first
+  // open after Sleep skip the wake and sit in the dropped-connection retry (n38 GATE).
+  await refreshCloudWorkspaceStatus(workspaceId)
+  const entry = getCloudWorkspaceSnapshot().status[workspaceId]
+  const state = entry?.error ? null : entry?.status?.state
+  // Slept from here and the read failed: it is asleep as far as anyone knows, so wake it.
+  const asleep = state === 'sleeping' || (state == null && sleptHere.has(workspaceId))
+  if (!asleep || isCloudWorkspaceArchived(workspaceId)) {
     return { ok: true }
   }
   const result = await wakePairedCloudWorkspace(workspaceId, { source: 'open' })

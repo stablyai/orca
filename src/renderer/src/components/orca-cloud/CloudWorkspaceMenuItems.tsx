@@ -30,6 +30,8 @@ import {
   type CloudWorkspace
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
+import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isPairedCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
 import { useCloudWorkspaceRecord } from './use-cloud-workspace-record'
 
@@ -47,7 +49,8 @@ export function CloudWorkspaceMenuItems({
   worktreeId: string
   hostId?: string | null
 }): React.JSX.Element | null {
-  const view = useCloudWorkspaceView(worktreeId)
+  // PAIRED-ARCHIVE: a paired row gets the same lifecycle rows (each action decides for itself).
+  const view = useCloudWorkspaceView(worktreeId, { pairedRows: true })
   if (!view.isCloud) {
     return null
   }
@@ -68,6 +71,8 @@ function CloudMenuRows({
   const { workspace, reload } = useCloudWorkspaceRecord(worktreeId, hostId)
   const confirm = useContext(ConfirmationDialogContext)
   const busy = view.pending !== undefined
+  // Mirroring syncs this desktop's own cloud workspaces; a paired one has no synced copy here.
+  const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, worktreeId))
   const archived = view.state === 'archived'
   const groups = cloudWorkspaceActionGroups({
     surface: 'sidebar',
@@ -84,19 +89,19 @@ function CloudMenuRows({
     groups.some((group) => group.actions.includes(action))
   return (
     <>
-      {has('restart') ? (
+      {has('restart') && actions.onRestart ? (
         <DropdownMenuItem disabled={busy} onSelect={actions.onRestart}>
           <RotateCw className="size-3.5" />
           {t('orcaCloudWorkspace.restart', 'Restart')}
         </DropdownMenuItem>
       ) : null}
-      {isCloudSyncAvailable() && view.state !== 'archived' ? (
+      {isCloudSyncAvailable() && view.state !== 'archived' && !paired ? (
         <DropdownMenuItem onSelect={() => requestCloudSyncFocus(worktreeId)}>
           <HardDriveDownload className="size-3.5" />
           {t('orcaCloudSync.menuItem', 'Mirror to this computer…')}
         </DropdownMenuItem>
       ) : null}
-      {has('archive') ? (
+      {has('archive') && actions.onArchive ? (
         <ArchiveSnapshotTooltip side="left">
           <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
             <Archive className="size-3.5" />
@@ -104,7 +109,7 @@ function CloudMenuRows({
           </DropdownMenuItem>
         </ArchiveSnapshotTooltip>
       ) : null}
-      {has('unarchive') ? (
+      {has('unarchive') && actions.onUnarchive ? (
         <DropdownMenuItem disabled={busy} onSelect={actions.onUnarchive}>
           <ArchiveRestore className="size-3.5" />
           {t('orcaCloudWorkspace.unarchive', 'Unarchive')}

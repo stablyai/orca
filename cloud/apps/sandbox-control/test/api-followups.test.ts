@@ -6,6 +6,8 @@ const OP = 'o'.repeat(40)
 async function harness() {
   const pending: Promise<unknown>[] = []
   const h = await createHarness({ PUBLIC_API_URL: 'https://api.test', OPERATOR_TOKEN: OP }, { waitUntil: (p) => void pending.push(p) })
+  // These teams are on Enterprise, so reading the audit log turns on the role and scope alone.
+  h.billing.features = { auditLog: true }
   return { ...h, settle: () => Promise.all(pending.splice(0)) }
 }
 

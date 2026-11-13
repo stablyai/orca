@@ -44,7 +44,7 @@ export function WorkspaceHostGlyph({
   badgeRingClassName?: string
   className?: string
 }): React.JSX.Element | null {
-  const cloud = useCloudWorkspaceView(worktreeId)
+  const cloud = useCloudWorkspaceView(worktreeId, { pairedRows: true })
   const vmDot = useAppStore((state) =>
     state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId]
       ? vmStateToDot(selectEphemeralVmWorkspaceState(state, worktreeId))

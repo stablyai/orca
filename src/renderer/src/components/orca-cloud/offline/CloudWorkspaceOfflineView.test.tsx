@@ -41,9 +41,9 @@ function view(over: Partial<CloudOfflineViewProps> = {}) {
 describe('the asleep view kept on screen after Sleep', () => {
   afterEach(cleanup)
 
-  it('says "Going to sleep…" while the sleep runs, then "Asleep · As of just now"', () => {
+  it('says "Going to sleep · Saving a read-only copy…" while the sleep runs, then "Asleep · As of just now"', () => {
     const { container, rerender, props } = view({ goingToSleep: true, viewOnly: true })
-    expect(container.textContent).toContain('Going to sleep…')
+    expect(container.textContent).toContain('Going to sleep · Saving a read-only copy…')
     expect(container.textContent).not.toContain('Asleep ·')
     rerender(<CloudWorkspaceOfflineView {...props} goingToSleep={false} />)
     expect(container.textContent).toContain('Asleep · As of just now')
@@ -68,8 +68,9 @@ describe('the asleep view kept on screen after Sleep', () => {
       viewOnly: true,
       onKeepAwake
     })
+    expect(container.textContent).toContain('Saving a read-only copy…')
     expect(container.textContent).toContain(
-      'Saving a read-only copy of chats, terminals and changes…'
+      'Terminals, chats and changes will be readable here in a moment.'
     )
     expect(queryByRole('button', { name: 'Wake to continue' })).toBeNull()
     fireEvent.click(getByRole('button', { name: 'Keep awake' }))
@@ -81,12 +82,11 @@ describe('the asleep view kept on screen after Sleep', () => {
     expect(container.textContent).not.toContain('Saving a read-only copy')
   })
 
-  it('with an earlier copy on screen, the header note says the new copy is being saved', () => {
-    // The copy shown is from before (local), while the sleep saves a new one.
+  it('with an earlier copy, shows the saving state (not that older copy) until the new one is in', () => {
+    // The copy from before is not the one going to sleep; the saving state replaces it meanwhile.
     const { container, rerender, props } = view({ goingToSleep: true, viewOnly: true })
-    expect(container.textContent).toContain(
-      'Saving a read-only copy of chats, terminals and changes…'
-    )
+    expect(container.textContent).toContain('Saving a read-only copy…')
+    expect(container.textContent).not.toContain('Fix the build')
     expect(container.textContent).not.toContain('Read-only copy saved when it went to sleep.')
     rerender(<CloudWorkspaceOfflineView {...props} goingToSleep={false} />)
     expect(container.textContent).not.toContain('Saving a read-only copy')
@@ -97,6 +97,43 @@ describe('the asleep view kept on screen after Sleep', () => {
     const { getByRole, queryByRole, props } = view({ goingToSleep: true, viewOnly: true })
     expect(queryByRole('button', { name: 'Keep awake' })).toBeNull()
     fireEvent.click(getByRole('button', { name: 'Wake to continue' }))
+    expect(props.onWake).toHaveBeenCalledTimes(1)
+  })
+
+  it('SLEEP-IN-PROGRESS: never shows "nothing was saved" lines while the copy is still being saved', () => {
+    // The sleep call returned (no goingToSleep) but the copy has not been read back yet.
+    const { container, rerender, props } = view({
+      snapshot: { ...snapshot, capturedAt: null, chats: [], terminals: [], git: null },
+      viewOnly: true,
+      copySave: 'saving'
+    })
+    expect(container.querySelector('[data-cloud-sleep-copy="saving"]')).not.toBeNull()
+    expect(container.textContent).toContain('Going to sleep · Saving a read-only copy…')
+    // Not asleep yet as far as the view knows: no "Wake to continue" beside the spinner.
+    expect(container.textContent).not.toContain('Wake to continue')
+    expect(container.textContent).not.toContain('No terminal output was saved.')
+    expect(container.textContent).not.toContain('No source control state was saved.')
+    expect(container.textContent).not.toContain('Orca keeps a copy')
+    // Saved: the copy (here, its real "no terminal output" line) shows as usual.
+    rerender(<CloudWorkspaceOfflineView {...props} snapshot={snapshot} copySave={null} />)
+    expect(container.querySelector('[data-cloud-sleep-copy]')).toBeNull()
+    expect(container.textContent).toContain('Read-only copy saved when it went to sleep.')
+  })
+
+  it('SLEEP-IN-PROGRESS: says so when the copy never arrived; the header Wake is the only Wake', () => {
+    const { container, getAllByRole, props } = view({
+      snapshot: { ...snapshot, capturedAt: null, chats: [] },
+      viewOnly: true,
+      copySave: 'failed'
+    })
+    expect(container.textContent).toContain(
+      'Couldn’t save a read-only copy. Your files are safe in the workspace.'
+    )
+    expect(container.textContent).not.toContain('Orca keeps a copy')
+    expect(container.textContent).toContain('Asleep · no read-only copy')
+    const wakes = getAllByRole('button', { name: /Wake/ })
+    expect(wakes.map((button) => button.textContent)).toEqual(['Wake to continue'])
+    fireEvent.click(wakes[0]!)
     expect(props.onWake).toHaveBeenCalledTimes(1)
   })
 })

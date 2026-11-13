@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
+import type {
+  OrcaBillingCheckoutArgs,
+  OrcaBillingOpenResult
+} from '../../../../../shared/orca-billing'
+import { billingCheckoutLink } from '../billing-link'
 import { getBillingGeneration, recordBillingStatusIfCurrent } from '../billing-summary-store'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
@@ -28,6 +32,21 @@ export type CheckoutFlow = {
   /** Restarts the watch window after a timeout. */
   keepWaiting: () => void
   reset: () => void
+  /** "Copy link" on the checkout button: mints this order's Checkout URL and starts the watch. */
+  copyLink: (order: CheckoutOrder) => Promise<string | null>
+  /** "Copy link" on Reopen: a fresh Checkout URL for the same order. */
+  copyReopenLink: () => Promise<string | null>
+}
+
+/** Joins an open setup session, so Checkout returns to its next step (T2 Compare plans). */
+function checkoutArgsFor(order: CheckoutOrder): OrcaBillingCheckoutArgs {
+  const setupSessionId = activeCloudSetupSessionId()
+  return {
+    plan: order.planId,
+    interval: order.interval,
+    seats: order.seats,
+    ...(setupSessionId ? { setupSessionId } : {})
+  }
 }
 
 /**
@@ -46,15 +65,8 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
   const start = useCallback((order: CheckoutOrder) => {
     const id = ++runId.current
     setPhase({ kind: 'opening', order })
-    // Joins an open setup session, so Checkout returns to its next step (T2 Compare plans).
-    const setupSessionId = activeCloudSetupSessionId()
     void window.api.orcaProfiles
-      .billingOpenCheckout({
-        plan: order.planId,
-        interval: order.interval,
-        seats: order.seats,
-        ...(setupSessionId ? { setupSessionId } : {})
-      })
+      .billingOpenCheckout(checkoutArgsFor(order))
       .catch((error: unknown): OrcaBillingOpenResult => ({
         status: 'failed',
         error: String(error)
@@ -73,6 +85,17 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
           setPhase(nextPhaseAfterOpen(order, result, Date.now()))
         }
       })
+  }, [])
+
+  // "Copy link": the same Checkout session, minted but not opened. Paying from the pasted link
+  // (another browser profile) is watched exactly like an opened Checkout.
+  const copyLink = useCallback(async (order: CheckoutOrder): Promise<string | null> => {
+    const url = await billingCheckoutLink(checkoutArgsFor(order))
+    if (url) {
+      ++runId.current
+      setPhase(nextPhaseAfterOpen(order, { status: 'opened' }, Date.now()))
+    }
+    return url
   }, [])
 
   const reset = useCallback(() => {
@@ -183,5 +206,10 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
     }
   }, [order])
 
-  return { phase, start, reopen, keepWaiting, reset }
+  const copyReopenLink = useCallback(
+    (): Promise<string | null> => (order ? copyLink(order) : Promise.resolve(null)),
+    [order, copyLink]
+  )
+
+  return { phase, start, reopen, keepWaiting, reset, copyLink, copyReopenLink }
 }

@@ -18,12 +18,12 @@ import { useCloudStartSteps } from '@/components/new-workspace/run-on/use-cloud-
 import { useSwitchTeamSteps } from '@/components/new-workspace/cloud-setup/use-cloud-setup-tracker'
 import { parseCloudSetupError } from '@/components/new-workspace/cloud-setup/cloud-setup-errors'
 import {
-  canCopyCloudSetupLink,
-  copyCloudSetupLink,
+  cloudSetupLinkSource,
   reopenCloudSetup
 } from '@/components/new-workspace/cloud-setup/cloud-setup-tracker-actions'
 import { getCloudSetupStarter } from '@/lib/orca-cloud/cloud-setup-session-seam'
 import type { CloudSetupPageRequest } from '@/lib/orca-cloud/cloud-setup-page-store'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { reportCloudSetupProgress } from '@/lib/orca-cloud/cloud-setup-telemetry'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
@@ -101,8 +101,11 @@ export type CloudSetupFlow = CloudSetupPageModel & {
   checkAgain: () => void
   /** Where "Contact us" goes when Orca Cloud isn't turned on for the team; null hides it. */
   contactUrl: string | null
-  copyLink: (() => void) | null
   reopenBrowser: () => void
+  /** "Copy link" beside Reopen browser: a fresh one-time setup link; null without a session. */
+  reopenLink: ExternalLinkSource | null
+  /** "Copy link" beside the GitHub step's button: the same install page, minted without opening. */
+  installGitHubLink: ExternalLinkSource | null
 }
 
 export function useCloudSetupFlow(
@@ -129,7 +132,8 @@ export function useCloudSetupFlow(
   const {
     steps: rowSteps,
     session,
-    openInstall
+    openInstall,
+    installLink
   } = useCloudStartSteps({
     availability,
     access,
@@ -293,10 +297,8 @@ export function useCloudSetupFlow(
     installGitHub,
     checkAgain,
     contactUrl,
-    copyLink:
-      sessionId && canCopyCloudSetupLink(sessionId)
-        ? () => void copyCloudSetupLink(sessionId)
-        : null,
-    reopenBrowser: () => void reopenCloudSetup(sessionId, continueInBrowser)
+    reopenBrowser: () => void reopenCloudSetup(sessionId, continueInBrowser),
+    reopenLink: cloudSetupLinkSource(sessionId),
+    installGitHubLink: installLink
   }
 }

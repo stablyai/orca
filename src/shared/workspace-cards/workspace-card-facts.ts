@@ -54,6 +54,10 @@ export type WorkspaceCardFacts = {
     /** The host label the list shows beside cards from another host, if any. */
     contextLabel: string | null
     runtimeDisconnected: boolean
+    /** An Orca Cloud workspace (owned or paired): its cloud mark already names the host. */
+    cloud: boolean
+    /** Line 2 names the host's state ("Asleep", "Waking…", "Couldn't start"). */
+    stateWord: boolean
   }
   git: {
     /** `merge`, `rebase`, `cherry-pick`, `revert` or `unknown` while one is in progress. */

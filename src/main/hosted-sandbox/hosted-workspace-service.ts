@@ -13,10 +13,7 @@ import {
   type CloudWakeSource,
   type CloudWorkspaceTarget
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
-import type {
-  HostedArchivePullRequest,
-  HostedSandboxReadyResponse
-} from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import type { HostedSandboxReadyResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
 import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
@@ -27,7 +24,16 @@ import { wakeBillingDenial } from './hosted-environment-provider'
 import { noteWakeTimeline } from './cloud-wake-timeline'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import { getCloudSyncService } from '../cloud-sync/cloud-sync-ipc'
-import { findCloudSandbox, registerCloudArchiveInfoHandler } from './cloud-workspace-target'
+import {
+  archivePairedOrNotCloud,
+  unarchivePairedOrNotCloud,
+  type CloudArchiveArgs
+} from './cloud-workspace-paired-archive'
+import {
+  findCloudSandbox,
+  registerCloudArchiveInfoHandler,
+  restartPairedOrNotCloud
+} from './cloud-workspace-target'
 import {
   NOT_CLOUD,
   createOomTracker,
@@ -208,10 +214,10 @@ export function installHostedWorkspaceService(deps: {
     }
   })
 
-  ipcMain.handle(CH.restart, async (_event, args: { workspaceId: string }) => {
+  ipcMain.handle(CH.restart, async (_event, args: CloudWorkspaceTarget) => {
     const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
     if (!found) {
-      return NOT_CLOUD
+      return restartPairedOrNotCloud(deps, args, (event) => service.emitWakeProgress(event))
     }
     const startedAt = Date.now()
     service.emitWakeProgress({
@@ -264,38 +270,32 @@ export function installHostedWorkspaceService(deps: {
     }
   })
 
-  ipcMain.handle(
-    CH.archive,
-    async (_event, args: { workspaceId: string; pullRequests?: HostedArchivePullRequest[] }) => {
-      const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
-      if (!found) {
-        return NOT_CLOUD
-      }
-      try {
-        const checkouts = (await readCachedCheckouts(args.workspaceId)) ?? undefined
-        await deps.client.archive(found.sandboxId, {
-          ...(args.pullRequests?.length ? { pullRequests: args.pullRequests.slice(0, 50) } : {}),
-          ...(checkouts?.length ? { checkouts: checkouts.slice(0, 20) } : {})
-        })
-        updateEphemeralVmRuntimeStatus(deps.userDataPath, found.runtime.id, { status: 'suspended' })
-        failQueuedCloudPrompts(
-          [args.workspaceId],
-          'The workspace was archived before this was sent.'
-        )
-        // The archive toast said so: the copy synced to this computer goes now, not on the next check.
-        void getCloudSyncService()?.noteArchived(args.workspaceId)
-        deps.syncSessions()
-        return { ok: true, value: null }
-      } catch (error) {
-        return failure(error)
-      }
-    }
-  )
-
-  ipcMain.handle(CH.unarchive, async (_event, args: { workspaceId: string }) => {
+  ipcMain.handle(CH.archive, async (_event, args: CloudArchiveArgs) => {
     const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
     if (!found) {
-      return NOT_CLOUD
+      return archivePairedOrNotCloud(deps, args)
+    }
+    try {
+      const checkouts = (await readCachedCheckouts(args.workspaceId)) ?? undefined
+      await deps.client.archive(found.sandboxId, {
+        ...(args.pullRequests?.length ? { pullRequests: args.pullRequests.slice(0, 50) } : {}),
+        ...(checkouts?.length ? { checkouts: checkouts.slice(0, 20) } : {})
+      })
+      updateEphemeralVmRuntimeStatus(deps.userDataPath, found.runtime.id, { status: 'suspended' })
+      failQueuedCloudPrompts([args.workspaceId], 'The workspace was archived before this was sent.')
+      // The archive toast said so: the copy synced to this computer goes now, not on the next check.
+      void getCloudSyncService()?.noteArchived(args.workspaceId)
+      deps.syncSessions()
+      return { ok: true, value: null }
+    } catch (error) {
+      return failure(error)
+    }
+  })
+
+  ipcMain.handle(CH.unarchive, async (_event, args: CloudWorkspaceTarget) => {
+    const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
+    if (!found) {
+      return unarchivePairedOrNotCloud(deps, args, (event) => service.emitWakeProgress(event))
     }
     const startedAt = Date.now()
     service.emitWakeProgress({

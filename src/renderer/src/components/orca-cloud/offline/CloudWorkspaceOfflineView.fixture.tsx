@@ -251,7 +251,7 @@ export const withCloudSnapshot = defineFixture({
     )
 })
 
-/** Sleep chosen with an earlier copy on screen: the header note says the new copy is saving. */
+/** Sleep chosen with an earlier copy: the saving state shows until the new copy is in. */
 export const goingToSleepWithEarlierCopy = defineFixture({
   width: 900,
   render: () =>
@@ -264,6 +264,46 @@ export const goingToSleepWithEarlierCopy = defineFixture({
         goingToSleep
         viewOnly
         onKeepAwake={noop}
+        onWake={noop}
+        onQueue={yes}
+        onCancel={noop}
+        onEdit={yes}
+      />
+    )
+})
+
+/** SLEEP-IN-PROGRESS: the sleep returned but its copy isn't read back yet. Never "nothing saved". */
+export const savingCopyAfterSleep = defineFixture({
+  width: 900,
+  render: () =>
+    frame(
+      <CloudWorkspaceOfflineView
+        snapshot={{ ...snapshot, capturedAt: null, terminals: [], chats: [], git: null }}
+        queued={[]}
+        workspaceName="fix-auth-redirect"
+        now={NOW}
+        viewOnly
+        copySave="saving"
+        onWake={noop}
+        onQueue={yes}
+        onCancel={noop}
+        onEdit={yes}
+      />
+    )
+})
+
+/** SLEEP-IN-PROGRESS: no copy arrived in time. Says so; Wake is the one action. */
+export const copySaveFailed = defineFixture({
+  width: 900,
+  render: () =>
+    frame(
+      <CloudWorkspaceOfflineView
+        snapshot={{ ...snapshot, capturedAt: null, terminals: [], chats: [], git: null }}
+        queued={[]}
+        workspaceName="fix-auth-redirect"
+        now={NOW}
+        viewOnly
+        copySave="failed"
         onWake={noop}
         onQueue={yes}
         onCancel={noop}

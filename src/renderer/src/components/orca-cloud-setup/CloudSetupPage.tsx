@@ -3,8 +3,11 @@
 // steps are ticks in the stepper. Browser hops only for sign-in, Stripe and GitHub. When every
 // step is done, the saved prompt starts by itself.
 import React from 'react'
-import { ArrowLeft, Check, Copy, ExternalLink, LoaderCircle, X } from 'lucide-react'
+import { ArrowLeft, Check, ExternalLink, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
+import { CloudSetupBrowserButton } from './CloudSetupBrowserButton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -140,16 +143,16 @@ function BrowserWaiting({ flow }: { flow: CloudSetupFlow }): React.JSX.Element {
         {t('cloudSetupPage.waitingBrowser', 'Waiting for your browser…')}
       </span>
       <span className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={flow.reopenBrowser}>
+        {/* "Copy link" under the chevron: a fresh one-time link for another browser or profile. */}
+        <OpenExternalSplitButton
+          variant="outline"
+          size="sm"
+          link={flow.reopenLink}
+          onClick={flow.reopenBrowser}
+        >
           {t('cloudSetupPage.reopenBrowser', 'Reopen browser')}
           <ExternalLink aria-hidden />
-        </Button>
-        {flow.copyLink ? (
-          <Button type="button" variant="ghost" size="sm" onClick={flow.copyLink}>
-            <Copy aria-hidden />
-            {t('cloudSetupPage.copyLink', 'Copy link')}
-          </Button>
-        ) : null}
+        </OpenExternalSplitButton>
         {flow.signingIn ? (
           <Button type="button" variant="ghost" size="sm" onClick={flow.cancelSignIn}>
             {t('cloudSetupPage.cancelSignIn', 'Cancel')}
@@ -169,12 +172,12 @@ function StepActions({
   onStart?: (() => void) | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const browser = (label: string, onClick: () => void): React.JSX.Element => (
-    <Button type="button" onClick={onClick} disabled={flow.busy}>
-      {flow.busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-      {label}
-      <ExternalLink aria-hidden />
-    </Button>
+  const browser = (
+    label: string,
+    onClick: () => void,
+    link?: ExternalLinkSource | null
+  ): React.JSX.Element => (
+    <CloudSetupBrowserButton label={label} busy={flow.busy} onClick={onClick} link={link} />
   )
   const inBrowserAction =
     flow.action === 'sign-in' ||
@@ -209,7 +212,7 @@ function StepActions({
         </Button>
       )
     case 'github-install':
-      return browser(continueLabel, flow.installGitHub)
+      return browser(continueLabel, flow.installGitHub, flow.installGitHubLink)
     case 'start-trial':
       return (
         <Button type="button" onClick={flow.startTrial} disabled={flow.busy}>
@@ -407,6 +410,7 @@ export function CloudSetupPage({
           <CloudSetupErrorNotice
             error={flow.error}
             canManageBilling={flow.canManageBilling}
+            reopenLink={flow.reopenLink}
             onAction={(action) =>
               action === 'reopen-browser' ? flow.reopenBrowser() : flow.continueInBrowser()
             }

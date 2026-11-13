@@ -94,6 +94,15 @@ export function canShowWorkspaceDeleteQuickAction(args: {
   deleteModifierPressed: boolean
   isDeleting: boolean
   isMainWorktree: boolean
+  /**
+   * An Orca Cloud workspace's own checkout, owned or paired (OPTION-TRASH-CLOUD). It is the cloud
+   * workspace, not a repo's primary: the delete funnel destroys the sandbox after the cloud confirm.
+   */
+  cloudPrimary?: boolean
 }): boolean {
-  return args.deleteModifierPressed && !args.isDeleting && !args.isMainWorktree
+  return (
+    args.deleteModifierPressed &&
+    !args.isDeleting &&
+    (!args.isMainWorktree || args.cloudPrimary === true)
+  )
 }

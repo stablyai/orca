@@ -75,13 +75,13 @@ export type OrcaCloudWorkspaceApi = {
    */
   getStatus: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
-  restart: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
+  restart: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
-  archive: (args: {
-    workspaceId: string
-    pullRequests?: HostedArchivePullRequest[]
-  }) => Promise<CloudWorkspaceResult<null>>
-  unarchive: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
+  archive: (
+    args: CloudWorkspaceTarget & { pullRequests?: HostedArchivePullRequest[] }
+  ) => Promise<CloudWorkspaceResult<null>>
+  /** A paired one also names its server (PAIRED-ARCHIVE), as for status and restart. */
+  unarchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   getArchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
   /** Workspace ids of every Orca Cloud workspace this desktop knows (the sidebar dot / hover card). */
   listCloudWorkspaceIds: () => Promise<string[]>
@@ -95,10 +95,17 @@ export type OrcaCloudWorkspaceApi = {
     repoUrl?: string
     setupSessionId?: string
   }) => Promise<CloudWorkspaceResult<null>>
+  /** "Copy link" for connectGitHub: the same single-use GitHub install page, minted but not opened. */
+  gitHubInstallLink: (args?: {
+    repoUrl?: string
+    setupSessionId?: string
+  }) => Promise<CloudWorkspaceResult<string>>
   /** Whether the signed-in person connected their own GitHub (cloud commit attribution). */
   getGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
   /** Opens GitHub's OAuth page in the browser so the person connects their own GitHub identity. */
   connectGitHubUser: () => Promise<CloudWorkspaceResult<null>>
+  /** "Copy link" for connectGitHubUser: the same GitHub OAuth page, minted but not opened. */
+  gitHubUserConnectLink: () => Promise<CloudWorkspaceResult<string>>
   /** Forgets the person's GitHub identity; cloud commits use Orca Cloud's name again. */
   disconnectGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
   /** Can Orca Cloud clone this https GitHub repository for the signed-in account (cloud-start N2)? */
@@ -139,8 +146,10 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   listCloudWorkspaceIds: 'orcaCloudWorkspace:listIds',
   getConfig: 'orcaCloudWorkspace:getConfig',
   connectGitHub: 'orcaCloudWorkspace:connectGitHub',
+  gitHubInstallLink: 'orcaCloudWorkspace:gitHubInstallLink',
   getGitHubUser: 'orcaCloudWorkspace:getGitHubUser',
   connectGitHubUser: 'orcaCloudWorkspace:connectGitHubUser',
+  gitHubUserConnectLink: 'orcaCloudWorkspace:gitHubUserConnectLink',
   disconnectGitHubUser: 'orcaCloudWorkspace:disconnectGitHubUser',
   getRepoAccess: 'orcaCloudWorkspace:getRepoAccess',
   listGitHubRepositories: 'orcaCloudWorkspace:listGitHubRepositories',

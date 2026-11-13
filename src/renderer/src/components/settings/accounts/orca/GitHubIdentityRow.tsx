@@ -1,6 +1,9 @@
 import { useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
+import { gitHubUserConnectLinkSource } from '@/lib/orca-cloud/github-link-sources'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import {
   useConfirmationDialog,
@@ -28,6 +31,8 @@ export type GitHubIdentityRowViewProps = {
   state: GitHubIdentityState
   disconnecting?: boolean
   onConnect: () => void
+  /** "Copy link" beside Connect: GitHub's OAuth page, minted without opening it. */
+  connectLink?: ExternalLinkSource
   onCancel: () => void
   onDisconnect: () => void
   onRetryDisconnect: () => void
@@ -38,11 +43,23 @@ export function GitHubIdentityRowView({
   state,
   disconnecting = false,
   onConnect,
+  connectLink,
   onCancel,
   onDisconnect,
   onRetryDisconnect
 }: GitHubIdentityRowViewProps): React.JSX.Element | null {
   const t = useTranslate()
+  // Connect opens GitHub in the browser; with a link source its chevron copies that page instead.
+  const connectButton = (label: string): React.JSX.Element =>
+    connectLink ? (
+      <OpenExternalSplitButton variant="outline" size="sm" link={connectLink} onClick={onConnect}>
+        {label}
+      </OpenExternalSplitButton>
+    ) : (
+      <Button type="button" variant="outline" size="sm" onClick={onConnect}>
+        {label}
+      </Button>
+    )
   if (state.kind === 'unknown') {
     return null
   }
@@ -111,20 +128,14 @@ export function GitHubIdentityRowView({
     )
   } else if (state.kind === 'error') {
     detail = t('auto.components.settings.orcaAccount.github.error', "Couldn't connect GitHub.")
-    action = (
-      <Button type="button" variant="outline" size="sm" onClick={onConnect}>
-        {t('auto.components.settings.orcaAccount.github.tryAgain', 'Try again')}
-      </Button>
-    )
+    action = connectButton(t('auto.components.settings.orcaAccount.github.tryAgain', 'Try again'))
   } else {
     detail = t(
       'auto.components.settings.orcaAccount.github.description',
       "Connect your GitHub so commits and pushes in cloud workspaces show your name. Until then they use Orca Cloud's."
     )
-    action = (
-      <Button type="button" variant="outline" size="sm" onClick={onConnect}>
-        {t('auto.components.settings.orcaAccount.github.connect', 'Connect GitHub')}
-      </Button>
+    action = connectButton(
+      t('auto.components.settings.orcaAccount.github.connect', 'Connect GitHub')
     )
   }
   return (
@@ -145,6 +156,8 @@ export function GitHubIdentityRowView({
   )
 }
 
+const CONNECT_LINK = gitHubUserConnectLinkSource()
+
 /**
  * "GitHub" under the signed-in identity: connect the person's own GitHub for cloud commits.
  * Mount it only while signed in to Orca Cloud.
@@ -162,6 +175,7 @@ export function GitHubIdentityRow(): React.JSX.Element | null {
       state={identity.state}
       disconnecting={identity.disconnecting}
       onConnect={() => void identity.connect()}
+      connectLink={CONNECT_LINK}
       onCancel={identity.cancel}
       onDisconnect={() => void identity.disconnect()}
       onRetryDisconnect={() => void identity.retryDisconnect()}

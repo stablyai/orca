@@ -7,6 +7,8 @@ import type {
 } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 
 const ASLEEP_POLL_MS = 15_000
+/** While its read-only copy is being saved: read it back promptly (SLEEP-IN-PROGRESS). */
+const SAVING_POLL_MS = 2_500
 
 function readBoth(api: CloudWorkspaceOfflineApi, workspaceId: string) {
   return Promise.all([api.getSnapshot({ workspaceId }), api.listQueuedPrompts({ workspaceId })])
@@ -19,7 +21,8 @@ function readBoth(api: CloudWorkspaceOfflineApi, workspaceId: string) {
  */
 export function useCloudOfflineData(
   workspaceId: string,
-  enabled: boolean
+  enabled: boolean,
+  options: { saving?: boolean } = {}
 ): {
   snapshot: CloudOfflineSnapshot | null
   queued: CloudQueuedPrompt[]
@@ -29,6 +32,7 @@ export function useCloudOfflineData(
   const [queued, setQueued] = useState<CloudQueuedPrompt[]>([])
   const current = useRef(workspaceId)
   current.current = workspaceId
+  const saving = options.saving === true
 
   const refresh = useCallback(async () => {
     const api = window.api?.orcaCloudOffline
@@ -63,14 +67,14 @@ export function useCloudOfflineData(
     })
     const stop = installWindowVisibilityInterval({
       run: () => void refresh(),
-      intervalMs: ASLEEP_POLL_MS,
-      slowWhileUnfocused: true
+      intervalMs: saving ? SAVING_POLL_MS : ASLEEP_POLL_MS,
+      slowWhileUnfocused: !saving
     })
     return () => {
       offQueue?.()
       stop()
     }
-  }, [enabled, workspaceId, refresh])
+  }, [enabled, workspaceId, refresh, saving])
 
   return { snapshot: enabled ? snapshot : null, queued, refresh }
 }
