@@ -7,7 +7,9 @@ const DARK_BUILT_INS = {
   '--popover': '#171717',
   '--popover-foreground': '#f0f0f0',
   '--muted': '#262626',
-  '--muted-foreground': '#acacac'
+  '--muted-foreground': '#acacac',
+  '--accent': '#404040',
+  '--accent-foreground': '#f0f0f0'
 }
 const probe = (value: string): Rgba | null => (value.startsWith('#') ? hexToRgb(value) : null)
 
@@ -66,18 +68,37 @@ function expectReadable(themeTokens: Record<string, string>): void {
     expect(wcagContrast(panel, muted)).toBeGreaterThanOrEqual(4.5)
     expect(wcagContrast(panel, text)).toBeGreaterThanOrEqual(4.5)
   }
+  // Hover fills (bg-accent, ghost dark:hover:bg-accent/50) paint accent-foreground or, for ghost
+  // buttons with hover:text-foreground, popover text. Without notice tokens, main.css paints the
+  // palette's --accent and --accent-foreground.
+  const accent = notice['--notice-accent'] ?? palette['--accent']
+  const accentText = notice['--notice-accent-foreground'] ?? palette['--accent-foreground']
+  for (const alpha of [0.5, 1]) {
+    const hover = composite(accent, surface, alpha)
+    expect(wcagContrast(hover, accentText)).toBeGreaterThanOrEqual(4.5)
+    expect(wcagContrast(hover, text)).toBeGreaterThanOrEqual(4.5)
+  }
+  // Dark outline buttons fill with dark:bg-input/30, /50 on hover, under popover text.
+  const input = notice['--notice-input'] ?? palette['--input']
+  if (input?.startsWith('#')) {
+    for (const alpha of [0.3, 0.5]) {
+      expect(wcagContrast(composite(input, surface, alpha), text)).toBeGreaterThanOrEqual(4.5)
+    }
+  }
 }
 
 describe('noticeSurfaceTokens', () => {
   // Popovers the theme validator accepts that once painted notice text under 4.5:1: #5a5a5a
   // through Chromium's color-mix rounding and an over-lifted 80% description, #383838 through hex
-  // rounding, white-on-dark-base through dark muted panels, the rest unlifted.
+  // rounding, white-on-dark-base through dark muted panels, hover and outline fills, the rest
+  // unlifted.
   it.each<Record<string, string>>([
     { '--popover': '#5a5a5a' },
     { '--popover': '#383838' },
     { '--popover': '#444444' },
     { '--popover': '#303030', '--popover-foreground': '#a0a0a0' },
-    { '--popover': '#ffffff', '--popover-foreground': '#111111' }
+    { '--popover': '#ffffff', '--popover-foreground': '#111111' },
+    { '--popover': '#ffffff', '--popover-foreground': '#747474', '--input': '#262626' }
   ])('keeps notice text 4.5:1 for an accepted %o', (themeTokens) => {
     expectReadable(themeTokens)
   })
