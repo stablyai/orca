@@ -4,6 +4,7 @@ import type {
   PairingProvisionRelayParams
 } from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
+import { pairedCredentialLifetime } from './pairing/paired-credential-lifetime'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
@@ -171,10 +172,11 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       return
     }
     // Recheck device/credential revision per request so revocation refuses immediately, before socket close.
+    const registry = this.deviceRegistry
     const device = authenticatedSocket
-      ? this.deviceRegistry?.resolveAuthenticatedPrincipal(authenticatedSocket.device)
-      : this.deviceRegistry?.validateToken(token ?? '')
-    if (!device) {
+      ? registry?.resolveAuthenticatedPrincipal(authenticatedSocket.device)
+      : registry?.validateToken(token ?? '')
+    if (!device || !registry) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
@@ -258,6 +260,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         authenticatedCallerFingerprint: principal.callerFingerprint,
         connectionId,
         clientId: principal.clientId,
+        authenticatedCredential: pairedCredentialLifetime(registry, principal, token),
         pairedDeviceId: device.deviceId,
         pairedDeviceParentId: device.parentDeviceId,
         // Diet only mobile payloads; retain full web/desktop replies.

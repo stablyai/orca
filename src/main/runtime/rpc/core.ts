@@ -122,6 +122,8 @@ export type RpcContext = {
   requestId?: string
   // Device-scoped handlers release owned state when that client disconnects.
   clientId?: string
+  // Credential lifetime survives reconnect; false proves final revocation, expiry or replacement.
+  authenticatedCredential?: { revision: number; isCurrent: () => boolean }
   // Key navigation by revocable device identity, never bearer token or socket id.
   pairedDeviceId?: string
   // Delegated phones use their parent desktop's workspaces.

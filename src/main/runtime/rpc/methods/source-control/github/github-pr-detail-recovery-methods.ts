@@ -18,7 +18,8 @@ function callerKey(context: RpcContext): string {
   if (!client) {
     throw new Error('caller_unidentified')
   }
-  return `rpc:${client}`
+  const revision = context.authenticatedCredential?.revision
+  return `rpc:${client}${revision === undefined ? '' : `:credential:${revision}`}`
 }
 
 export const GITHUB_PR_DETAIL_RECOVERY_METHODS = [
@@ -29,7 +30,15 @@ export const GITHUB_PR_DETAIL_RECOVERY_METHODS = [
     handler: async (params, context) => {
       const key = callerKey(context)
       const resolved = await context.runtime.resolvePRDetailRecoveryCandidate(params)
-      return startPRDetailRecovery({ callerKey: key, pacingScope: key }, params, resolved)
+      return startPRDetailRecovery(
+        {
+          callerKey: key,
+          pacingScope: key,
+          isCredentialCurrent: context.authenticatedCredential?.isCurrent
+        },
+        params,
+        resolved
+      )
     }
   }),
   defineMethod({
