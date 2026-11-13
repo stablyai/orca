@@ -36,6 +36,7 @@ export function SettingsGroup({
   const card = (
     <div
       id={id}
+      data-settings-group-card=""
       className={cn(
         // Search can filter out every row; hide the empty card but keep the header and its action.
         'overflow-hidden rounded-xl border border-border bg-card/50 shadow-xs has-[>[data-settings-group-body]:empty]:hidden',

@@ -15,9 +15,15 @@ export function parseSettingsTitleTargetId(targetId: string): string | null {
     : null
 }
 
-// Settings cards pad differently (groups, sections, shadcn cards, accordions), so measure the
-// gap from the row to its nearest card's inner edges instead of assuming one gutter.
+const SETTINGS_GROUP_CARD_SELECTOR = '[data-settings-group-card]'
+
+// Rows sit at different insets (nested rows, sub-fields), so measure the gap from the row to
+// its card's inner edges instead of assuming one gutter.
 function findEnclosingSettingsCard(element: HTMLElement): HTMLElement | null {
+  const groupCard = element.parentElement?.closest<HTMLElement>(SETTINGS_GROUP_CARD_SELECTOR)
+  if (groupCard) {
+    return groupCard
+  }
   for (let node = element.parentElement; node; node = node.parentElement) {
     const style = getComputedStyle(node)
     if (
@@ -28,6 +34,14 @@ function findEnclosingSettingsCard(element: HTMLElement): HTMLElement | null {
     }
   }
   return null
+}
+
+// An anchor on a whole section (title plus card) tints only its card, so the tint keeps the card's corners.
+export function resolveSettingsHighlightElement(target: HTMLElement): HTMLElement {
+  if (target.matches(SETTINGS_GROUP_CARD_SELECTOR) || findEnclosingSettingsCard(target)) {
+    return target
+  }
+  return target.querySelector<HTMLElement>(SETTINGS_GROUP_CARD_SELECTOR) ?? target
 }
 
 export function applySettingsTargetHighlightBleed(target: HTMLElement): void {

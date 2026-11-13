@@ -12,6 +12,7 @@ import type { SettingsDeepLinkTargetWatch } from '../navigation/settings-deep-li
 import {
   applySettingsTargetHighlightBleed,
   clearSettingsTargetHighlightBleed,
+  resolveSettingsHighlightElement,
   SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
 } from '../section-layout/settings-target-highlight'
 import {
@@ -168,21 +169,22 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     if (!target) {
       return
     }
-    // The one owner of the highlight: the same element the jump scrolled to.
-    target.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
-    applySettingsTargetHighlightBleed(target)
+    // The one owner of the highlight, on the element the jump scrolled to (or its card).
+    const highlighted = resolveSettingsHighlightElement(target)
+    highlighted.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+    applySettingsTargetHighlightBleed(highlighted)
     // A section the jump just revealed grows over ~200ms; re-scroll once if the row is still cut off.
     const settle = window.setTimeout(() => {
       const container = contentScrollRef.current
       if (container && !isFullyVisibleIn(target, container)) {
         scrollSubsectionIntoView(targetId, container)
       }
-      applySettingsTargetHighlightBleed(target)
+      applySettingsTargetHighlightBleed(highlighted)
     }, SETTINGS_REVEAL_SETTLE_MS)
     return () => {
       window.clearTimeout(settle)
-      clearSettingsTargetHighlightBleed(target)
-      target.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+      clearSettingsTargetHighlightBleed(highlighted)
+      highlighted.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     }
   }, [highlightedSettingsTarget])
 

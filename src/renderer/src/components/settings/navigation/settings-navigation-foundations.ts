@@ -145,8 +145,14 @@ function findSettingsRowByVisibleTitle(title: string, root: HTMLElement): HTMLEl
     const groupCard = element
       .closest('[data-settings-group-heading]')
       ?.closest('[data-settings-group]')
-      ?.querySelector<HTMLElement>('[data-settings-group-body]')?.parentElement
-    return groupCard ?? element.closest<HTMLElement>('[data-settings-row]') ?? element
+      ?.querySelector<HTMLElement>('[data-settings-group-card]')
+    // Free-form card content has no row; the card stands in rather than the bare label.
+    return (
+      groupCard ??
+      element.closest<HTMLElement>('[data-settings-row]') ??
+      element.closest<HTMLElement>('[data-settings-group-card]') ??
+      element
+    )
   }
   return null
 }
