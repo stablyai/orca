@@ -28676,7 +28676,8 @@
       "codeLabel": "Code from claude.ai",
       "deviceStep": "Enter this code on auth.openai.com. The sign-in is saved on {{host}}.",
       "codePlaceholder": "Paste the code"
-    }
+    },
+    "recipeEnvNarrowed": "This recipe's create script gets only the variables its <code>passEnv</code> allows."
   },
   "cloudSecretsAsk": {
     "scopeLabel": "Scope for {{name}}",
