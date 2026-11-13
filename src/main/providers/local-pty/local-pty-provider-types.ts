@@ -1,5 +1,5 @@
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { PtySpawnOptions } from '../pty-provider-contract'
+import type { PtySpawnOptions } from '../pty/provider-contract'
 
 export type LocalPtyProviderOptions = {
   /** Agent command selects overlay directories; disk-presence fallback can shadow another agent. */

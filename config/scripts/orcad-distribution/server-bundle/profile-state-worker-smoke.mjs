@@ -19,7 +19,7 @@ async function initializeFixture(directory, databasePath, profileId) {
   const fixture = join(directory, 'initialize.cjs')
   await build({
     stdin: {
-      contents: `import { openProfileStateDatabase } from './src/main/persistence/profile-state/profile-state-database';
+      contents: `import { openProfileStateDatabase } from './src/main/persistence/profile-state/database/profile-state-database';
         export function initialize(path, profileId) { openProfileStateDatabase(path, profileId).db.close() }`,
       resolveDir: resolve(import.meta.dirname, '../../../..'),
       sourcefile: 'profile-state-build-fixture.ts'

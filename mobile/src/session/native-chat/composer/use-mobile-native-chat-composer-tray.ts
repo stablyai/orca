@@ -1,5 +1,5 @@
 import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
 import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
@@ -28,7 +28,7 @@ export type MobileNativeChatSteerHead = {
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
-  composerInputRef?: RefObject<TextInput | null>
+  composerInputRef?: RefObject<TextInputInstance | null>
   steerHead?: MobileNativeChatSteerHead
 }
 

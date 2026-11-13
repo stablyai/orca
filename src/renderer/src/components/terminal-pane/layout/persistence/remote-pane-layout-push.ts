@@ -1,12 +1,12 @@
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { terminalLayoutEqual } from '../../../../../../shared/workspace-layout/terminal-layout-equality'
+import { terminalLayoutEqual } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 import { updateWebRuntimePaneLayout } from '@/runtime/hosted-terminals/actions/web-runtime-pane-layout-update'
 import {
   requeuePendingPaneTitleRenames,
   takeUnsentPaneTitleRenames
 } from '@/runtime/web-session-tabs-sync/naming/pending-pane-title-renames'
 import '../terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export type RemotePaneLayoutPusher = {
   push: (input: { worktreeId: string; tabId: string; layout: TerminalLayoutSnapshot }) => void

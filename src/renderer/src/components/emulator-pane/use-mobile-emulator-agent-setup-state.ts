@@ -8,7 +8,7 @@ import {
 } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 // Why: Orca terminals already provide the `orca` command, so agent control only needs the skill.
 export function useMobileEmulatorAgentSetupState(enabled = true): {

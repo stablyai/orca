@@ -1,13 +1,13 @@
-import { normalizeBrowserUrl } from '../browser/browser-url'
+import { normalizeBrowserUrl } from '../browser/pane-view/browser-url'
 import { translate } from '../i18n/mobile-i18n'
 import { captureMobileFileMutationOwnership } from '../files/mobile-file-mutation-ownership'
 import {
   browserGoBack,
   browserGoForward,
   browserReload
-} from '../browser/mobile-browser-command-operations'
+} from '../browser/page-interaction/mobile-browser-command-operations'
 import { sourceFileOpenRun } from '../source-control/mobile-source-file-open-operations'
-import { sessionBrowserTabCreate } from '../browser/mobile-session-browser-operations'
+import { sessionBrowserTabCreate } from '../browser/tab-navigation/mobile-session-browser-operations'
 import { sessionMarkdownNoteCreate } from '../files/session-documents/mobile-markdown-tab-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'

@@ -363,12 +363,10 @@
       "permissionMixed": "混在",
       "permissionsAutoDescription": "<agents>対応 Agent</agents>は安全な操作を自動で承認します。",
       "permissionsMixed": "ほとんどの Agent は {{mode}} を使用します。モードを選択すると、カスタム引数を除く、マークされた例外がリセットされます。",
-      "expandAgentSettings": "Agent 設定を展開する",
       "rowPermissionsLabel": "{{agent}} 権限",
       "customPermissions": "カスタム引数",
       "otherAgentsPermissions": "その他の Agent",
       "replaceWithPermissionMode": "{{mode}} に置き換えます",
-      "collapseAgentSettings": "Agent 設定を折りたたむ",
       "customArgsTooltip": "独自の起動引数を使用します。",
       "editRowPermissions": "{{agent}} 権限: {{mode}}",
       "permissionsTitle": "権限",
@@ -2667,7 +2665,6 @@
       "Terminal": {
         "73768427cf": "閉じる",
         "f82e9f02df": "キャンセル",
-        "7958465754": "プロセスが実行中のターミナルがあります。このままウィンドウを閉じますか?",
         "2fa9c69ff3": "ウィンドウを閉じますか?",
         "cd51e28d8b": "保存",
         "0037b21794": "保存しないでください",
@@ -3299,7 +3296,6 @@
             "runningTerminalBlocker": "実行中のターミナルプロセス",
             "terminalLivenessUnknownBlocker": "ターミナルの状態不明",
             "dirtyEditorBufferBlocker": "未保存のエディターバッファ",
-            "volatileLocalContextBlocker": "揮発性のローカルコンテキスト",
             "recentVisibleContextBlocker": "最近表示したタブ",
             "liveAgentBlocker": "アクティブな Agent",
             "sshDisconnectedBlocker": "リモート利用不可",
@@ -3461,6 +3457,8 @@
             "15dd899676": "{{value0}} に追加…"
           },
           "TerminalErrorToast": {
+            "title": "ターミナルの問題",
+            "errorTitle": "ターミナルエラー",
             "e4aa243f8c": "デーモンを再起動します",
             "a7e2fd2699": "Issue を登録",
             "5c8ce20be6": "この状態が続く場合は、",
@@ -6984,14 +6982,11 @@
           "e8da2af684": "インストール可能",
           "ed3e110e61": "検出済み",
           "02e0143be5": "インストール済み",
-          "92033495ff": "自動",
           "f9f127d664": "バイナリのパスまたは名前を上書きし、この Agent の既定の起動引数や環境変数を編集します。",
           "f95b5c79b8": "インストール",
           "fe4d630c94": "ドキュメント",
-          "8dc0192e48": "無効",
           "5200dac9da": "リセット",
           "2e45ca29b6": "コマンド",
-          "d4d2a45d63": "有効",
           "1c9a9679ec": "{{value0}} の利用可否",
           "0d9e293a02": "更新",
           "c9b33eb5c0": "更新中…",
@@ -7010,10 +7005,8 @@
           "25a41a9aad": "このサーバーにインストールされている Agent を再検出",
           "remoteDetectionFailed": "インストールされている Agent を検出できませんでした。ホストへの接続を確認して、もう一度お試しください。",
           "retryDetection": "再試行",
-          "storedDefaultUndetected": "デフォルトとして保存されていますが、現在は検出されません",
           "noAgentsDetected": "Agent が検出されませんでした。プローブがインストールされている場合、プローブがタイムアウトした可能性があります。",
-          "9f30095d49": "Agent の権限",
-          "3bddd54c9e": "デフォルトの Agent"
+          "9f30095d49": "Agent の権限"
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -7040,8 +7033,6 @@
             "ba1d9a0607": "サイドバーの色合い"
           },
           "b707773a0d": "有効にすると、ウィンドウを閉じても Orca は終了せず、システムトレイで実行を続けます。",
-          "interfaceDefaultFont": "デフォルトフォント",
-          "terminalDefaultFont": "デフォルトフォント",
           "interfaceTitle": "インターフェース",
           "terminalTitle": "ターミナル",
           "windowSidebarSummary": "サイドバー、ステータスバー、ファイルエクスプローラー",
@@ -7391,10 +7382,6 @@
             "modeAriaLabel": "Agent ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
             "modePopout": "ポップアウト"
-          },
-          "browserExtensions": {
-            "copy": "ローカルブラウザプロファイル向けに 設定 › ブラウザ › 拡張機能 を追加します。",
-            "toggleLabel": "ブラウザ拡張機能を切り替え"
           }
         },
         "FloatingWorkspacePane": {
@@ -7959,16 +7946,12 @@
           "5426ecbdcb": "ローカルスクリプトは実行されません",
           "95a0411b3e": "テンプレート",
           "175daba180": "例",
-          "b20c5df6ca": "「orca.yaml」ファイルを追加して、このリポジトリの共有セットアップ、アーカイブ、または Issue 自動化のデフォルトを有効にします。テンプレートの例:",
-          "56f9a4a1d0": "`orca.yaml` を使用中",
           "623e0c9f31": "`orca.yaml` を解析できませんでした",
-          "5a67e4793d": "`orca.yaml` が見つかりません",
           "07ba35bc68": "`scripts:` の下のインデントを確認してください。フックキーは2スペース、コマンド行は4スペースにします。",
           "787ca433ef": "サポートされているキーのみを定義してください: `scripts`、`setup`、`archive`、`issueCommand`。",
           "ecc73d9125": "下の動作するテンプレートと比較し、必要に応じてその形式をコピーしてください。",
           "0cc712b823": "コア構成ファイルはリポジトリルートに存在しますが、Orca はサポートされているフック定義をまだ解析できませんでした。",
           "aba825233f": "このファイルには、このバージョンの Orca が認識しない構成キーが含まれています。 Orca を更新するか、ファイルにタイプミスがないか確認する必要がある場合があります。",
-          "ca424ff135": "共有フックと Issue 自動化のデフォルトはリポジトリで定義され、それを使用するすべてのユーザーが利用できます。",
           "8bfe65fc60": "ローカルコマンドを使用する",
           "8d6c56bff8": "両方を実行します",
           "0fa21e19ec": "ワークスペースの名前。通常はブランチ名に基づきます。",
@@ -8364,8 +8347,7 @@
           "60f8a673a7": "アプリに戻る",
           "6503182299": "オンボーディングチェックリスト",
           "82db1b7de4": "オンボーディングチェックリスト、{{value0}}/{{value1}} 完了。セットアップガイドを表示。",
-          "df38d612b7": "まだ追加されたプロジェクトはありません。",
-          "3e483e256b": "一致するプロジェクト設定がありません。"
+          "df38d612b7": "まだ追加されたプロジェクトはありません。"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "状態",
@@ -9550,13 +9532,6 @@
               "inWindow": "窓内",
               "worktrees": "ワークツリー",
               "eaf17a7214": "Agent ダッシュボード"
-            },
-            "browserExtensions": {
-              "title": "ブラウザ拡張機能",
-              "description": "パスワードマネージャーなどの Chrome 拡張機能を Orca のブラウザタブで実行します。",
-              "extension": "拡張機能",
-              "chrome": "クローム",
-              "password": "パスワードマネージャー"
             }
           }
         },
@@ -11905,7 +11880,7 @@
               "tokenHint": "リポジトリ、プロジェクト、ワークスペースのアクセストークンは、一致する Bitbucket 設定ページから作成され、PR への読み取りアクセスが必要です。",
               "basicHint": "アカウントの Atlassian API トークンを作成し、それを所有する電子メールアドレスと組み合わせます。",
               "scopesTitle": "次の Bitbucket API トークンのスコープを選択してください:",
-              "scopeUser": "アカウントの確認",
+              "scopeUser": "アカウント名の表示",
               "scopeRepository": "ビルドステータスの読み取り",
               "scopeReadPullRequest": "PR の読み取り",
               "scopeWritePullRequest": "PR の作成",
@@ -15835,7 +15810,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "リンクを削除する",
           "cdfe166f6f": "リンクを編集",
-          "bfc813e909": "リンクを開く",
           "7b0b945fdc": "リンクを貼り付けるか入力してください…",
           "copyLink": "リンクをコピー"
         },
@@ -16524,6 +16498,14 @@
                     "logins": {
                       "title": "ログイン状態を保つ",
                       "body": "既存のログイン情報を Orca に取り込んで、すぐにログイン状態を保ちます。"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 拡張機能",
+                        "body": "Chrome ウェブストアからインストールし、アドレスバーの横に固定できます。",
+                        "action": "ウェブストアを開く",
+                        "secondaryAction": "了解"
+                      }
                     }
                   },
                   "tasks": {
@@ -16911,17 +16893,17 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "折りたたむ",
-          "showMore": "さらに表示"
+          "showMore": "さらに表示",
+          "copied": "コピーしました",
+          "copyFailed": "コピーに失敗しました",
+          "copyPrompt": "プロンプトをコピー"
         },
         "AutomationDetail": {
           "host": "ホスト",
-          "a1d52c2189": "使用範囲",
-          "449fc83bf7": "トークン",
           "401f40ae79": "推定費用",
           "a7c312430d": "最後の実行",
           "2df8970cd5": "Agent",
           "e353ab9516": "事前チェック",
-          "620b22145e": "グレース",
           "15ea446b93": "セッション",
           "5405a09b1f": "実行場所",
           "2f8baf5360": "から作成",
@@ -16931,7 +16913,6 @@
           "1f6026358e": "オートメーションの削除",
           "d79452fb30": "自動化を再開する",
           "91a4155e95": "自動化を一時停止する",
-          "4b1ea02d2e": "オートメーションの編集",
           "2fb1605beb": "今すぐ実行",
           "221916d93c": "自動化を作成して、Agent の作業のスケジュール設定を開始します。",
           "b09b2384fd": "一時停止中",
@@ -16941,7 +16922,6 @@
           "noGrace": "猶予なし",
           "graceMinutes_other": "{{count}} 分",
           "graceHours_other": "{{count}} 時間",
-          "usageCoverageRuns_other": "{{known}}/{{count}} 回の実行",
           "usageUnavailable": "利用不可",
           "noRuns": "実行なし",
           "projectDefault": "プロジェクトのデフォルト",
@@ -16951,7 +16931,12 @@
           "precheckNone": "なし",
           "migrate": "移行",
           "migrateNotice": "{{host}} は新しいリモートホストにアップグレードされました。実行を続けるには、この自動化を移行してください。",
-          "needsMigration": "移行が必要"
+          "needsMigration": "移行が必要",
+          "repeats": "繰り返し",
+          "missedRunGrace": "実行漏れの猶予時間",
+          "execution": "実行",
+          "notRunYet": "未実行",
+          "usageDetail_other": "{{tokens}} トークン · {{known}}/{{count}} 回の実行を報告済み"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -18552,7 +18537,6 @@
           "browsePlugins": "プラグインを見る",
           "browseThemePlugins": "テーマプラグインを見る",
           "colorMode": "カラーモード",
-          "colorModeCaption": "ライト、ダーク、または OS に合わせる。",
           "darkLook": "ダークルック",
           "darkLooks": "ダークルック",
           "lightLook": "ライトルック",
@@ -18568,10 +18552,8 @@
           "slotLabel": "編集するルック",
           "sourceBuiltIn": "組み込み",
           "sourceCommunity": "ターミナルパレット",
-          "themes": "テーマ",
-          "themesCaption": "任意。アプリテーマやターミナルパレットでさらにカスタマイズできます。"
-        },
-        "subtitle": "ライトかダークを選び、必要ならテーマも選びましょう。どちらも設定からいつでも変更できます。"
+          "themes": "テーマ"
+        }
       },
       "integrations": {
         "capabilities": {
@@ -20085,6 +20067,7 @@
           "about": {
             "parakeetV3": "高速。ヨーロッパの {{languages}} 言語。",
             "parakeetV2": "高速。英語専用で、英語では最も正確です。",
+            "parakeetUnifiedEn": "英語のみ。話すそばから文字が表示されます。",
             "whisperTiny": "最小のダウンロード。音声入力のお試しに。",
             "whisperTurbo": "最多の約 100 言語。GPU がないと低速です。",
             "senseVoice": "高速。中国語、日本語、韓国語向け。",
@@ -20604,7 +20587,8 @@
       "remove": "削除…",
       "empty": "このプロファイルで有効な拡張機能はありません",
       "visitWebStore": "Chrome ウェブストアにアクセス",
-      "manage": "拡張機能を管理"
+      "manage": "拡張機能を管理",
+      "openWebStoreFailed": "Chrome ウェブストアを開けませんでした。"
     },
     "viewport": {
       "mobile-s": "モバイル S — 320 × 568",
@@ -21508,7 +21492,6 @@
       "cancel": "キャンセル"
     },
     "antigravity": {
-      "chatTitle": "Antigravity チャット",
       "chatSignIn": "サインイン",
       "chatChangeAccount": "アカウントを変更",
       "chatRetry": "サインインを再試行",
@@ -21526,23 +21509,13 @@
       "chatFailed": "サインインに失敗しました。もう一度お試しください。",
       "chatOtherClient": "別のクライアントでサインインが進行中です。",
       "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
-      "signIn": "このホストで agy を起動し、ブラウザのサインインを完了して、現在のアカウントを保存します。別のアカウントを追加するには、agy で /logout を使用し、再度サインインします。",
-      "docs": "サインイン手順",
       "retry": "再試行",
-      "identityUnknown": "サインインしているIDは利用できません",
-      "signedOut": "ネイティブのAGYアカウントはサインインしていません。",
       "changed": "ネイティブアカウントが変更されました。AGYを起動する前に、保存したアカウントを再度選択してください。",
-      "save": "現在のアカウントを保存",
       "refresh": "アカウントを更新する",
       "usage": "使用量を更新",
-      "working": "アカウントの更新",
       "usageReading": "セッション： {{session}} ·毎週： {{weekly}}",
       "saved": "保存されたGoogleアカウント",
-      "nativeActive": "ネイティブアカウント",
-      "selected": "選択",
-      "select": "選択",
       "remove": "削除",
-      "sessions": "選択は、このホストの新規AGYセッションに適用されます。既存のセッションでは、以前のアカウントが保持される場合があります。",
       "searchDescription": "実行ホストにネイティブのagy Googleアカウントを保存して選択します。",
       "title": "Antigravity",
       "keyword": {
@@ -21554,7 +21527,6 @@
       "authMethod": "サインイン方法",
       "personal": "Google アカウント",
       "gcpProject": "Google Cloud プロジェクト",
-      "gcpLocation": "Google Cloud ロケーション",
       "settingsIncomplete": "Antigravity アカウントの種類を選択し、Google Cloud のプロジェクトとロケーションを入力してください。",
       "settingsLoadFailed": "Orca は Antigravity のサインイン設定を読み込めませんでした。もう一度お試しください。",
       "settingsSaveFailed": "Orca は Antigravity のサインイン設定を保存できませんでした。もう一度お試しください。",
@@ -22877,11 +22849,10 @@
     "setByArguments": "引数で設定",
     "searchModels": "モデルを検索",
     "noModels": "検索に一致するモデルがありません。",
-    "legacyModels": "旧モデル",
     "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
-    "legacyModelCount": "{{total}} 個のモデル",
+    "moreModelsWithCount": "その他のモデル ({{total}})",
     "use": "使用",
     "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",

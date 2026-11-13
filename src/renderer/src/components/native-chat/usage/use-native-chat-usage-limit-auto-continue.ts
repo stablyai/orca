@@ -13,6 +13,7 @@ import {
 } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
   nativeChatUsageLimitAutoContinueKind,
+  usageLimitContinueAtForCut,
   usageLimitContinueStateForCut
 } from '../../../../../shared/native-chat/native-chat-usage-limit-auto-continue'
 import type { NativeChatUsageLimitAutoContinueState } from './NativeChatUsageLimitAutoContinue'
@@ -23,7 +24,11 @@ export function useNativeChatUsageLimitAutoContinue(
   target: RuntimeClientTarget,
   sessionId: string,
   cut: NativeChatUsageLimitCut | null
-): NativeChatUsageLimitAutoContinueState | null {
+): {
+  auto: NativeChatUsageLimitAutoContinueState | null
+  /** When the host lets Continue apply: earlier than the cut's reset once the chat moved accounts. */
+  continueAt: number | undefined
+} {
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
     AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
@@ -52,6 +57,14 @@ export function useNativeChatUsageLimitAutoContinue(
     [feed, sessionId]
   )
   const cutState = useSyncExternalStore(subscribe, readCutState)
+  const continueAt = useSyncExternalStore(subscribe, () =>
+    turnItemId === undefined
+      ? undefined
+      : usageLimitContinueAtForCut(feed.getSnapshot().get(sessionId)?.usageLimitContinue, {
+          turnItemId,
+          resetsAt
+        })
+  )
   const turnEndedAt = cut?.turnEndedAt
   // A row on screen when its cut ages out hides the automatic line; the host alone decides sends.
   // The shared minute clock only re-renders; fresh wall time decides, read on every render.
@@ -59,7 +72,10 @@ export function useNativeChatUsageLimitAutoContinue(
     invalidatedByClock,
     () =>
       turnItemId !== undefined &&
-      isNativeChatUsageLimitCutSchedulable({ turnItemId, resetsAt, turnEndedAt }, Date.now())
+      isNativeChatUsageLimitCutSchedulable(
+        { turnItemId, resetsAt: continueAt, turnEndedAt },
+        Date.now()
+      )
   )
   useNow(60_000, capability === 'supported' && cutState !== undefined && schedulable)
   const [cancelling, setCancelling] = useState(false)
@@ -89,7 +105,7 @@ export function useNativeChatUsageLimitAutoContinue(
       })
       .finally(() => setCancelling(false))
   }, [cancelling, readCutState, target, sessionId, turnItemId, resetsAt])
-  return useMemo<NativeChatUsageLimitAutoContinueState | null>(() => {
+  const auto = useMemo<NativeChatUsageLimitAutoContinueState | null>(() => {
     const kind =
       capability === 'supported'
         ? nativeChatUsageLimitAutoContinueKind(cutState, {
@@ -97,9 +113,21 @@ export function useNativeChatUsageLimitAutoContinue(
             localHost: target.kind === 'local'
           })
         : null
-    if (kind === null || resetsAt === undefined) {
+    if (kind === null || continueAt === undefined) {
       return null
     }
-    return kind === 'scheduled' ? { kind, resetsAt, cancelDisabled: cancelling, cancel } : { kind }
-  }, [capability, resetsAt, cutState, schedulable, target.kind, cancelling, cancel])
+    return kind === 'scheduled'
+      ? { kind, resetsAt: continueAt, cancelDisabled: cancelling, cancel }
+      : { kind }
+  }, [capability, continueAt, cutState, schedulable, target.kind, cancelling, cancel])
+  return useMemo(
+    () => ({
+      auto,
+      continueAt:
+        resetsAt === undefined || continueAt === undefined
+          ? resetsAt
+          : Math.min(resetsAt, continueAt)
+    }),
+    [auto, resetsAt, continueAt]
+  )
 }

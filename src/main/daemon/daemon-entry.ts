@@ -15,7 +15,7 @@ import {
 import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
-} from '../providers/macos-tcc-login-shell'
+} from '../providers/shell-launch/macos/tcc-login-shell'
 import { MacosLoginSessionDeathWatch } from './process-scopes/macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './endpoint/identity/daemon-ready-identity'
@@ -27,7 +27,7 @@ import {
 } from './pty-subprocess/daemon-native-pty-exception'
 import { startDaemonScopeDeathWatch } from './process-scopes/daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
-import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage-generation-lease'
+import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage/appimage-generation-lease'
 import { createDaemonShutdownDeadline } from './launch/daemon-shutdown-deadline'
 
 async function main(): Promise<void> {

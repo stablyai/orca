@@ -8,7 +8,7 @@ import {
 import { useRef, type SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
+import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/overlay-interaction/body-overlay-attributes'
 import {
   NOTIFICATION_CARD_STACK_BOTTOM,
   NOTIFICATION_CARD_STACK_HEIGHT_VAR
@@ -50,6 +50,14 @@ const TOASTER_OFFSET = {
   bottom: `calc(${NOTIFICATION_CARD_STACK_BOTTOM} + env(safe-area-inset-bottom, 0px) + var(${NOTIFICATION_CARD_STACK_HEIGHT_VAR}, 0px))`,
   // Why 1rem: the cards' right edge, so a toast above them lines up instead of jutting left.
   right: '1rem'
+}
+
+const TOASTER_STYLE: React.CSSProperties & Record<`--${string}`, string> = {
+  '--normal-bg': 'var(--notice-surface)',
+  '--normal-text': 'var(--popover-foreground)',
+  '--normal-border': 'var(--notice-border)',
+  '--border-radius': 'var(--radius)',
+  '--width': 'min(26rem, calc(100vw - 2rem))'
 }
 
 const Toaster = ({ ...props }: ToasterProps) => {
@@ -101,15 +109,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           error: <OctagonXIcon className="size-4" />,
           loading: <Loader2Icon className="size-4 animate-spin" />
         }}
-        style={
-          {
-            '--normal-bg': 'var(--popover)',
-            '--normal-text': 'var(--popover-foreground)',
-            '--normal-border': 'var(--border)',
-            '--border-radius': 'var(--radius)',
-            '--width': 'min(26rem, calc(100vw - 2rem))'
-          } as React.CSSProperties
-        }
+        style={TOASTER_STYLE}
         {...props}
       />
     </div>

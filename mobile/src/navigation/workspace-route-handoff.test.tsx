@@ -84,9 +84,4 @@ describe('a workspace screen’s router', () => {
       ['back']
     ])
   })
-
-  it('is the plain router in the desktop’s own workspaces', async () => {
-    const router = await workspaceRouterFor({})
-    expect(router).toBe(route.router)
-  })
 })

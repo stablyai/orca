@@ -28,10 +28,10 @@ import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import {
   resolveAgentForegroundProcessWithAvailability,
-  type AgentForegroundProcessResolution,
-  type AgentForegroundResolutionOptions
-} from '../../providers/agent-foreground-process'
-import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
+  type AgentForegroundProcessResolution
+} from '../../providers/foreground/agent-process'
+import type { AgentForegroundResolutionOptions } from '../../providers/foreground/windows/agent-process'
+import { readWindowsPtyJobProcessIds } from '../../providers/foreground/windows/pty-job-membership'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import {
   readWindowsProcessIdentityTable,
