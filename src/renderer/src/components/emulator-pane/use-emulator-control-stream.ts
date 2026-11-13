@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
@@ -56,7 +57,7 @@ export function useEmulatorControlStream(
   enabled: boolean,
   scrcpyDeviceId: string | null = null
 ): EmulatorControlStream {
-  const wsRef = useRef<WebSocket | null>(null)
+  const streamRef = useRef<{ streamId: string; open: boolean } | null>(null)
   const lastTouchRef = useRef<ServeSimTouchFrame | null>(null)
   const keyboardTimerIdsRef = useRef<Set<number>>(new Set())
   const pressedKeyboardUsagesRef = useRef<Set<number>>(new Set())
@@ -74,9 +75,9 @@ export function useEmulatorControlStream(
     keyboardTimerIdsRef.current.clear()
   }, [])
 
-  const getOpenSocket = useCallback((): WebSocket | null => {
-    const ws = wsRef.current
-    return ws?.readyState === WebSocket.OPEN ? ws : null
+  const getOpenSocket = useCallback(() => {
+    const ws = streamRef.current
+    return ws?.open ? ws : null
   }, [])
 
   const sendKeyboardFrameNow = useCallback(
@@ -86,7 +87,10 @@ export function useEmulatorControlStream(
         return false
       }
       try {
-        ws.send(encodeServeSimKeyboardFrame(frame))
+        window.api.emulator.sendControlStream({
+          streamId: ws.streamId,
+          data: encodeServeSimKeyboardFrame(frame)
+        })
         if (frame.type === 'down') {
           pressedKeyboardUsagesRef.current.add(frame.usage)
         } else {
@@ -118,7 +122,6 @@ export function useEmulatorControlStream(
     releasePressedKeyboardUsages(true)
   }, [clearKeyboardTimers, releasePressedKeyboardUsages])
 
-  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- cleanup closes the socket held in wsRef and stops reconnects.
   useEffect(() => {
     if (!enabled || !wsUrl) {
       setConnected(false)
@@ -135,43 +138,42 @@ export function useEmulatorControlStream(
       }
     }
 
-    const connect = (): void => {
-      clearReconnectTimer()
-      const ws = new WebSocket(wsUrl)
-      ws.binaryType = 'arraybuffer'
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        if (!disposed && wsRef.current === ws) {
-          releasePressedKeyboardUsages()
-          setConnected(true)
-        }
+    const onClose = (streamId: string): void => {
+      if (disposed || streamRef.current?.streamId !== streamId) {
+        return
       }
-
-      ws.onmessage = (event) => {
+      streamRef.current = null
+      lastTouchRef.current = null
+      clearKeyboardTimers()
+      setConnected(false)
+      reconnectTimerId = window.setTimeout(connect, RECONNECT_DELAY_MS)
+    }
+    const unsubscribe = window.api.emulator.onControlStreamEvent((event) => {
+      const ws = streamRef.current
+      if (disposed || ws?.streamId !== event.streamId) {
+        return
+      }
+      if (event.type === 'open') {
+        ws.open = true
+        releasePressedKeyboardUsages()
+        setConnected(true)
+      } else if (event.type === 'message') {
         const orientation = decodeServeSimOrientation(event.data)
-        if (orientation && !disposed && wsRef.current === ws) {
+        if (orientation) {
           setReportedConfig({ wsUrl, orientation })
         }
+      } else {
+        onClose(event.streamId)
+        void window.api.emulator.stopControlStream({ streamId: event.streamId }).catch(() => {})
       }
-
-      ws.onerror = () => {
-        ws.close()
-      }
-
-      ws.onclose = () => {
-        // A replaced socket can close after its successor opens; it must not reset the live one.
-        if (wsRef.current !== ws) {
-          return
-        }
-        wsRef.current = null
-        lastTouchRef.current = null
-        clearKeyboardTimers()
-        setConnected(false)
-        if (!disposed) {
-          reconnectTimerId = window.setTimeout(connect, RECONNECT_DELAY_MS)
-        }
-      }
+    })
+    const connect = (): void => {
+      clearReconnectTimer()
+      const streamId = createBrowserUuid()
+      streamRef.current = { streamId, open: false }
+      void window.api.emulator
+        .startControlStream({ wsUrl, streamId })
+        .catch(() => onClose(streamId))
     }
 
     connect()
@@ -179,19 +181,23 @@ export function useEmulatorControlStream(
     return () => {
       disposed = true
       clearReconnectTimer()
+      unsubscribe()
       // Interrupted HID input can stay pressed after disconnect, so release keys and touches first.
       cancelKeyboardFrames()
-      const ws = wsRef.current
+      const ws = streamRef.current
       const touch = lastTouchRef.current
-      if (ws?.readyState === WebSocket.OPEN && touch) {
+      if (ws?.open && touch) {
         try {
-          ws.send(encodeServeSimTouchFrame({ ...touch, type: 'end' }))
+          window.api.emulator.sendControlStream({
+            streamId: ws.streamId,
+            data: encodeServeSimTouchFrame({ ...touch, type: 'end' })
+          })
         } catch {}
       }
       lastTouchRef.current = null
       if (ws) {
-        wsRef.current = null
-        ws.close()
+        streamRef.current = null
+        void window.api.emulator.stopControlStream({ streamId: ws.streamId }).catch(() => {})
       }
       setConnected(false)
     }
@@ -214,7 +220,10 @@ export function useEmulatorControlStream(
         return false
       }
       try {
-        ws.send(encodeServeSimTouchFrame(touch))
+        window.api.emulator.sendControlStream({
+          streamId: ws.streamId,
+          data: encodeServeSimTouchFrame(touch)
+        })
         lastTouchRef.current = touch.type === 'end' ? null : touch
         return true
       } catch {

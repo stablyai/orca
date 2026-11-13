@@ -1,4 +1,14 @@
+export type EmulatorControlStreamEvent = {
+  streamId: string
+  type: 'open' | 'message' | 'error' | 'close'
+  data?: ArrayBuffer | string
+}
+
 export type EmulatorApi = {
+  startControlStream: (args: { wsUrl: string; streamId: string }) => Promise<void>
+  stopControlStream: (args: { streamId: string }) => Promise<void>
+  sendControlStream: (args: { streamId: string; data: string | Uint8Array }) => void
+  onControlStreamEvent: (callback: (event: EmulatorControlStreamEvent) => void) => () => void
   onPaneFocus: (callback: (data: { worktreeId: string }) => void) => () => void
   onAutoAttach: (
     callback: (data: {

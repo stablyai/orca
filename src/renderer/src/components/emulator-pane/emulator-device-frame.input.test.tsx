@@ -3,6 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { EmulatorControlStreamEvent } from '../../../../preload/api/emulator-api'
+import { useEmulatorControlStream } from './use-emulator-control-stream'
 
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import type { EmulatorGesturePoint } from './emulator-screen-gesture'
@@ -13,49 +15,25 @@ vi.mock('sonner', () => ({
   }
 }))
 
-class FakeWebSocket {
-  static CONNECTING = 0
-  static OPEN = 1
-  static CLOSED = 3
+const streams: { streamId: string; wsUrl: string; sent: Uint8Array[]; closed: boolean }[] = []
+const listeners = new Set<(event: EmulatorControlStreamEvent) => void>()
 
-  static instances: FakeWebSocket[] = []
-
-  binaryType: BinaryType = 'blob'
-  onclose: (() => void) | null = null
-  onerror: (() => void) | null = null
-  onopen: (() => void) | null = null
-  readyState = FakeWebSocket.CONNECTING
-  readonly sent: Uint8Array[] = []
-  readonly url: string
-
-  constructor(url: string) {
-    this.url = url
-    FakeWebSocket.instances.push(this)
-  }
-
-  open(): void {
-    this.readyState = FakeWebSocket.OPEN
-    this.onopen?.()
-  }
-
-  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
-    if (data instanceof Uint8Array) {
-      this.sent.push(data)
-      return
-    }
-    if (ArrayBuffer.isView(data)) {
-      this.sent.push(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))
-      return
-    }
-    if (data instanceof ArrayBuffer) {
-      this.sent.push(new Uint8Array(data))
+function emit(type: EmulatorControlStreamEvent['type'], data?: ArrayBuffer | string): void {
+  const streamId = streams.at(-1)?.streamId
+  if (streamId) {
+    for (const listener of listeners) {
+      listener({ streamId, type, data })
     }
   }
+}
 
-  close(): void {
-    this.readyState = FakeWebSocket.CLOSED
-    this.onclose?.()
-  }
+function ControlStatus({ enabled = true }: { enabled?: boolean }) {
+  const stream = useEmulatorControlStream('ws://127.0.0.1:3100/ws', enabled)
+  return (
+    <button onClick={() => stream.sendTouch({ type: 'begin', x: 0.25, y: 0.75 })}>
+      {`${stream.connected}:${stream.reportedOrientation}`}
+    </button>
+  )
 }
 
 let container: HTMLDivElement
@@ -65,8 +43,31 @@ beforeEach(() => {
   ;(
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true
-  vi.stubGlobal('WebSocket', FakeWebSocket as unknown as typeof WebSocket)
-  FakeWebSocket.instances = []
+  streams.length = 0
+  listeners.clear()
+  vi.stubGlobal('api', {
+    ...window.api,
+    emulator: {
+      ...window.api?.emulator,
+      startControlStream: ({ streamId, wsUrl }: { streamId: string; wsUrl: string }) => {
+        streams.push({ streamId, wsUrl, sent: [], closed: false })
+        return Promise.resolve()
+      },
+      stopControlStream: ({ streamId }: { streamId: string }) => {
+        const stream = streams.find((stream) => stream.streamId === streamId)
+        if (stream) {
+          stream.closed = true
+        }
+        return Promise.resolve()
+      },
+      sendControlStream: ({ streamId, data }: { streamId: string; data: Uint8Array }) =>
+        streams.find((stream) => stream.streamId === streamId)?.sent.push(data),
+      onControlStreamEvent: (listener: (event: EmulatorControlStreamEvent) => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      }
+    }
+  })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -131,8 +132,8 @@ function keyEvent(
 }
 
 function decodedSentMessages<T = unknown>(tag: number): T[] {
-  return FakeWebSocket.instances
-    .flatMap((ws) => ws.sent)
+  return streams
+    .flatMap((stream) => stream.sent)
     .filter((frame) => frame[0] === tag)
     .map((frame) => JSON.parse(new TextDecoder().decode(frame.subarray(1))))
 }
@@ -179,7 +180,7 @@ describe('EmulatorDeviceFrame wheel scrolling', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     renderFrame()
-    act(() => FakeWebSocket.instances[0]?.open())
+    act(() => emit('open'))
   })
 
   it('waits a frame after touch-down before moving an isolated notch, then travels its full distance', () => {
@@ -245,7 +246,7 @@ describe('EmulatorDeviceFrame wheel scrolling', () => {
       const before = decodedSentMessages<EmulatorGesturePoint>(0x03)
       expect(before.at(-1)?.type).toBe('move')
       if (mode === 'reconnect') {
-        act(() => FakeWebSocket.instances[0]?.close())
+        act(() => emit('close'))
         act(() => vi.advanceTimersByTime(750))
       } else {
         const wsUrl = mode === 'replace' ? 'ws://127.0.0.1:3101/ws' : undefined
@@ -254,7 +255,7 @@ describe('EmulatorDeviceFrame wheel scrolling', () => {
           renderFrame({ onGesture })
         }
       }
-      act(() => FakeWebSocket.instances.at(-1)?.open())
+      act(() => emit('open'))
       finishWheel()
       act(() => root.render(<div />))
       expect(decodedSentMessages<EmulatorGesturePoint>(0x03).slice(before.length)).toEqual(
@@ -281,7 +282,7 @@ describe('EmulatorDeviceFrame input', () => {
     vi.useFakeTimers()
     renderFrame()
     act(() => {
-      FakeWebSocket.instances[0]?.open()
+      emit('open')
     })
     const screen = getScreen()
 
@@ -300,5 +301,29 @@ describe('EmulatorDeviceFrame input', () => {
       { type: 'down', usage: 225 },
       { type: 'up', usage: 225 }
     ])
+    expect(streams[0]?.closed).toBe(true)
+  })
+
+  it('keeps helper orientation across reconnects and releases a disabled stream', () => {
+    vi.useFakeTimers()
+    act(() => root.render(<ControlStatus />))
+    expect(container.textContent).toBe('false:null')
+    act(() => emit('open'))
+    act(() => container.querySelector('button')?.click())
+    expect(decodedSentMessages(0x03)).toEqual([{ type: 'begin', x: 0.25, y: 0.75 }])
+    const config = new TextEncoder().encode(JSON.stringify({ orientation: 'landscape_left' }))
+    const message = new Uint8Array(config.length + 1)
+    message[0] = 130
+    message.set(config, 1)
+    act(() => emit('message', message.buffer))
+    expect(container.textContent).toBe('true:landscape_left')
+    act(() => emit('error', 'disconnected'))
+    expect(container.textContent).toBe('false:landscape_left')
+    act(() => vi.advanceTimersByTime(750))
+    act(() => emit('open'))
+    expect(container.textContent).toBe('true:landscape_left')
+    act(() => root.render(<ControlStatus enabled={false} />))
+    expect(container.textContent).toBe('false:landscape_left')
+    expect(streams.at(-1)?.closed).toBe(true)
   })
 })
