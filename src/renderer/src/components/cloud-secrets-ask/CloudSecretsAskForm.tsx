@@ -25,7 +25,7 @@ import type {
 import {
   isTeamAdmin,
   parseScope,
-  writableScopes,
+  askScopes,
   type CloudSecretsAskData
 } from './cloud-secrets-ask-model'
 
@@ -130,10 +130,11 @@ export function CloudSecretsAskForm({
   const id = React.useId()
   const headingId = `${id}-heading`
   const admin = isTeamAdmin(data.caller)
-  const scopes = writableScopes(data.caller, { repo: data.repoKey !== null, shared: true })
+  const scopes = askScopes(data)
+  const fallbackScope = scopes[0] ?? 'personal'
   const filled = data.missing.filter((name) => (state.values[name] ?? '').length > 0)
   const saving = state.phase === 'saving'
-  const canSave = filled.length > 0 && !saving
+  const canSave = filled.length > 0 && !saving && scopes.length > 0
 
   if (state.phase === 'skipped') {
     return (
@@ -275,13 +276,13 @@ export function CloudSecretsAskForm({
                   onChange={(value) => actions.onValueChange(name, value)}
                   placeholder={t('cloudSecretsAsk.valuePlaceholder', 'Value')}
                   invalid={Boolean(refusal)}
-                  disabled={saving}
+                  disabled={saving || scopes.length === 0}
                   describedBy={refusal ? errorId : undefined}
                 />
               </div>
-              {scopes.length > 1 ? (
+              {scopes.length === 0 ? null : scopes.length > 1 ? (
                 <Select
-                  value={state.scopes[name] ?? 'personal'}
+                  value={state.scopes[name] ?? fallbackScope}
                   onValueChange={(scope) => actions.onScopeChange(name, parseScope(scope))}
                   disabled={saving}
                 >
@@ -302,7 +303,7 @@ export function CloudSecretsAskForm({
                 </Select>
               ) : (
                 <span className="inline-flex h-8 items-center rounded-full border border-border px-2.5 text-xs text-muted-foreground">
-                  {cloudSecretScopeLabel('personal', t)}
+                  {cloudSecretScopeLabel(fallbackScope, t)}
                 </span>
               )}
               {refusal ? (
@@ -337,10 +338,15 @@ export function CloudSecretsAskForm({
         <p className="min-w-0 flex-1 basis-60 text-xs leading-5 text-muted-foreground">
           {admin
             ? t('cloudSecrets.editor.help', 'Write-only. You won’t see it again after saving.')
-            : t(
-                'cloudSecretsAsk.memberFooter',
-                'Saved to your personal Cloud secrets, so only your workspaces get them. To set them for the whole team, ask an owner or admin.'
-              )}
+            : data.shared
+              ? t(
+                  'cloudSecretsAsk.sharedMemberFooter',
+                  'This workspace is shared, so it doesn’t get personal secrets. Ask an owner or admin to add the missing values to this repository or the team.'
+                )
+              : t(
+                  'cloudSecretsAsk.memberFooter',
+                  'Saved to your personal Cloud secrets, so only your workspaces get them. To set them for the whole team, ask an owner or admin.'
+                )}
         </p>
         <div className="flex shrink-0 items-center gap-2">
           <Button

@@ -97,7 +97,7 @@ describe('shared workspaces (D13)', () => {
     ])
   })
 
-  it('applies only to a teammate who is not the owner', () => {
+  it('applies in every shared workspace, the owner’s too (SEC-5), and never in an unshared one', () => {
     const declared = ['NPM_TOKEN', 'SENTRY_DSN', 'DATABASE_URL']
     const base = { effective: values, envVarNames: declared, repoKey: null, asleep: false }
     expect(
@@ -106,8 +106,14 @@ describe('shared workspaces (D13)', () => {
         sharing: { shared: true, ownerName: 'Ada', isOwner: false }
       }).missing
     ).toEqual(['NPM_TOKEN'])
+    const owner = cloudPanelSectionsData({
+      ...base,
+      sharing: { shared: true, ownerName: null, isOwner: true }
+    })
+    expect(owner.withoutPersonal).toBe(true)
+    expect(owner.missing).toEqual(['NPM_TOKEN'])
     expect(
-      cloudPanelSectionsData({ ...base, sharing: { shared: true, ownerName: null, isOwner: true } })
+      cloudPanelSectionsData({ ...base, sharing: { shared: false, ownerName: null, isOwner: true } })
         .missing
     ).toEqual([])
   })

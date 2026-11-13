@@ -111,7 +111,7 @@ export function SecretRequestScopeControl({
   if (scopes.length < 2) {
     return (
       <span className="inline-flex h-8 shrink-0 items-center rounded-full border border-border px-2.5 text-xs text-muted-foreground">
-        {cloudSecretScopeLabel('personal', t)}
+        {cloudSecretScopeLabel(scopes[0] ?? 'personal', t)}
       </span>
     )
   }

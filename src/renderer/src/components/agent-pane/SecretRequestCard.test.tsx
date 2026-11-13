@@ -31,7 +31,8 @@ const BASE: SecretRequestCardModel = {
   fieldError: null,
   more: 0,
   canRestart: false,
-  collapsed: false
+  collapsed: false,
+  sharedWorkspace: false
 }
 
 afterEach(cleanup)

@@ -200,9 +200,15 @@ describe('createCloudSecretsClient', () => {
     )
     expect(await client.effective('acme/app')).toEqual(effective)
     expect(await client.refreshEnv('sbx_1')).toBe(true)
+    await client.effective('acme/app', undefined, 'shared')
+    await client.effective(undefined, undefined, 'shared')
+    await client.effective()
     expect(seen.map((request) => `${request.method} ${request.url}`)).toEqual([
       'GET https://control.test/v1/secrets/effective?repo=acme%2Fapp',
-      'POST https://control.test/v1/sandboxes/sbx_1/env/refresh'
+      'POST https://control.test/v1/sandboxes/sbx_1/env/refresh',
+      'GET https://control.test/v1/secrets/effective?repo=acme%2Fapp&workspace=shared',
+      'GET https://control.test/v1/secrets/effective?workspace=shared',
+      'GET https://control.test/v1/secrets/effective'
     ])
   })
 })

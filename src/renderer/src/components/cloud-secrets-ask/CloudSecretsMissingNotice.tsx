@@ -19,6 +19,8 @@ import {
   useCloudSecretsMissing
 } from '@/lib/orca-cloud/cloud-secrets-missing-notice-store'
 import { CloudSecretsAskForm } from './CloudSecretsAskForm'
+import { useAppStore } from '@/store'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useCloudSecretsAskLoad } from './use-cloud-secrets-ask'
 import { useCloudSecretsAskForm } from './use-cloud-secrets-ask-form'
 
@@ -96,7 +98,11 @@ function CloudSecretsAskDialogBody({
   repoKey: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const { load, reload } = useCloudSecretsAskLoad(repoKey)
+  // The workspace's runtime environment, so a shared one isn't offered Personal values (SEC-5).
+  const runtimeEnvironmentId = useAppStore((state) =>
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, workspaceId)
+  )
+  const { load, reload } = useCloudSecretsAskLoad(repoKey, runtimeEnvironmentId)
   const data = load.status === 'ready' ? load.data : null
   // Filled elsewhere since the sheet closed: the notice follows what is really missing now.
   useEffect(() => {

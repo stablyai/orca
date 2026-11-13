@@ -399,6 +399,22 @@ export const secretsMember = secretsFrame(
   secretsRow(secretsData('member', { missing: ['STRIPE_TEST_KEY', 'DATABASE_URL'] }))
 )
 export const secretsBuildOnlyTeam = secretsFrame(secretsRow(secretsData('member', { built: true })))
+/** SEC-5: the same form for a shared workspace (missing-secrets sheet): no Personal to offer. */
+export const secretsSharedMember = secretsFrame(secretsRow(secretsData('member', { shared: true })))
+export const secretsSharedRepoWriter = secretsFrame(
+  secretsRow(
+    secretsData('member', {
+      shared: true,
+      caller: {
+        userId: 'u_me',
+        orgId: 'org_acme',
+        orgRole: 'member',
+        canWrite: { personal: true, org: false, repo: true }
+      }
+    }),
+    { values: TYPED }
+  )
+)
 export const secretsPasted = secretsFrame(
   secretsRow(secretsData('admin'), {
     values: { ...TYPED, SENTRY_DSN: 'https://k@o1.ingest.sentry.io/1' },

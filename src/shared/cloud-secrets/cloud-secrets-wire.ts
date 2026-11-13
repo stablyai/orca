@@ -42,7 +42,13 @@ export type CloudSecretBatchResult = z.infer<typeof CloudSecretBatchResponseSche
 
 const OrgRole = z.enum(['owner', 'admin', 'member']).nullable()
 
+/** Which workspace the effective view answers for: a shared one gets no personal secrets (SEC-5). */
+export const CLOUD_SECRET_WORKSPACE_MODES = ['private', 'shared'] as const
+export type CloudSecretWorkspaceMode = (typeof CLOUD_SECRET_WORKSPACE_MODES)[number]
+
 export const CloudSecretsEffectiveResponseSchema = z.object({
+  /** Absent from servers before SECRETS-EFFECTIVE-SHARED (they always answer for an unshared workspace). */
+  workspace: z.enum(CLOUD_SECRET_WORKSPACE_MODES).optional(),
   caller: z.object({
     userId: z.string().max(256),
     orgId: z.string().max(256).nullable(),

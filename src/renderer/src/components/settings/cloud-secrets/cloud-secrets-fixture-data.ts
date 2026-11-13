@@ -117,6 +117,20 @@ export const FIXTURE_NAMES: Record<string, string> = { u_dana: 'Dana Reyes', u_r
 
 const never = <T>(): Promise<T> => new Promise<T>(() => {})
 
+/** What the server answers for a shared workspace: personal values never win or count (SEC-5). */
+function withoutPersonal(
+  secrets: CloudSecretsEffective['secrets']
+): CloudSecretsEffective['secrets'] {
+  return secrets.flatMap((secret) => {
+    const others = secret.shadowed.filter((entry) => entry.scope !== 'personal')
+    if (secret.scope !== 'personal') {
+      return [{ ...secret, shadowed: others }]
+    }
+    const [next, ...rest] = others
+    return next ? [{ ...secret, scope: next.scope, hint: next.hint, shadowed: rest }] : []
+  })
+}
+
 export function fixtureCloudSecretsApi(options: {
   caller?: CloudSecretsCaller
   secrets?: Partial<Record<CloudSecretScope, CloudSecretView[]>>
@@ -153,16 +167,20 @@ export function fixtureCloudSecretsApi(options: {
             deleted: [],
             errors: []
           }),
-    effective: () =>
+    effective: ({ workspace }) =>
       options.pending
         ? never()
         : ok({
             caller,
+            workspace: workspace ?? 'private',
             precedence: {
               env: ['repo', 'personal', 'org'],
               agent_key: ['org', 'repo', 'personal']
             },
-            secrets: options.effective ?? FIXTURE_EFFECTIVE_SECRETS
+            secrets:
+              workspace === 'shared'
+                ? withoutPersonal(options.effective ?? FIXTURE_EFFECTIVE_SECRETS)
+                : (options.effective ?? FIXTURE_EFFECTIVE_SECRETS)
           }),
     refreshEnv: () => ok(true),
     saveDesktopKey: ({ envName }) =>

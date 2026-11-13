@@ -28278,7 +28278,12 @@
       "value": "Value",
       "shadowed": "Overrides",
       "overrides": "Overrides {{scopes}}",
-      "description": "What a new cloud workspace gets, and which scope each value comes from."
+      "description": "What a new cloud workspace gets, and which scope each value comes from.",
+      "workspaceLabel": "Workspace",
+      "workspacePrivate": "Not shared",
+      "workspaceShared": "Shared with your team",
+      "sharedNote": "Workspaces shared with your team don’t get personal secrets, so only shared and repository values are listed.",
+      "privateNote": "Personal values apply only to workspaces you haven’t shared. Once you share one, it gets only shared and repository values."
     },
     "repo": {
       "label": "Repository",
@@ -28664,14 +28669,11 @@
       "add": "Add",
       "addMine": "Add mine",
       "missing": "Missing",
-      "askOwner": "Ask {{owner}}, an owner or an admin to add it.",
       "valueLabel": "Value for {{name}}",
       "valuePlaceholder": "Value",
       "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
       "cancel": "Cancel",
       "save": "Save",
-      "guestOwner": "In a shared workspace, Personal values come from its owner, {{owner}}, not from you.",
-      "guest": "In a shared workspace, Personal values come from its owner, not from you.",
       "empty": "No variables from Cloud secrets yet.",
       "overrides": "overrides {{scopes}}"
     },
@@ -28714,7 +28716,8 @@
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
       "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
-      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
+      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.",
+      "cloudEnvShared": "From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",
@@ -28860,7 +28863,8 @@
     "loading": "Loading secrets…",
     "nothingMissing": "Nothing is missing.",
     "dialogTitle": "Add missing secrets",
-    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds."
+    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds.",
+    "sharedMemberFooter": "This workspace is shared, so it doesn’t get personal secrets. Ask an owner or admin to add the missing values to this repository or the team."
   },
   "cloudAgents": {
     "source": {
@@ -28906,7 +28910,10 @@
     "unseenIn": "In {{workspace}}. The request waits up to 15 minutes.",
     "unseen": "Open that workspace to answer. The request waits up to 15 minutes.",
     "openWorkspace": "Open",
-    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}."
+    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.",
+    "sharedNoScope": "This workspace is shared, so it doesn’t get personal secrets.",
+    "sharedAskAdmin": "Ask an owner or admin to add {{name}} to this repository’s secrets.",
+    "sharedRepoOnly": "This workspace is shared, so it only gets repository and shared values."
   },
   "agentApiKeys": {
     "cloud": {

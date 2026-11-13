@@ -173,9 +173,21 @@ export function useCloudSecretList(
 /** Who the caller is (role gating) and which scope wins per name, optionally for one repo. */
 export function useCloudSecretsEffective(
   api: CloudSecretsApi,
-  repo: string | null
+  repo: string | null,
+  /** `true`: answer for a workspace shared with the team, which gets no personal secrets. */
+  shared = false
 ): { effective: Loadable<CloudSecretsEffective>; reload: () => void } {
-  const read = useCallback(() => api.effective(repo ? { repo } : {}), [api, repo])
-  const [effective, , reload] = useLoad<CloudSecretsEffective>(`effective:${repo ?? ''}`, read)
+  const read = useCallback(
+    () =>
+      api.effective({
+        ...(repo ? { repo } : {}),
+        ...(shared ? { workspace: 'shared' as const } : {})
+      }),
+    [api, repo, shared]
+  )
+  const [effective, , reload] = useLoad<CloudSecretsEffective>(
+    `effective:${shared ? 'shared' : 'private'}:${repo ?? ''}`,
+    read
+  )
   return { effective, reload }
 }
