@@ -1,6 +1,7 @@
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import { sendTerminalInputThroughPane } from '../test-fixtures/pty-connection-test-dom'
 import {
   LEAF_2,
   createMockTransport,
@@ -32,20 +33,24 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  function seedUnverifiableRestoredPane() {
+  function seedPaneLayout(ptyId: string | null) {
     mockStoreState = {
       ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'unverifiable-pty' }] },
-      ptyIdsByTabId: { 'tab-1': ['unverifiable-pty'] },
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
+      ptyIdsByTabId: { 'tab-1': ptyId ? [ptyId] : [] },
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_2 },
           activeLeafId: LEAF_2,
           expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_2]: 'unverifiable-pty' }
+          ptyIdsByLeafId: ptyId ? { [LEAF_2]: ptyId } : {}
         }
       }
     } as StoreState
+  }
+
+  function seedUnverifiableRestoredPane() {
+    seedPaneLayout('unverifiable-pty')
     return createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'unverifiable-pty' }
@@ -173,6 +178,48 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
       expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
         [LEAF_2]: 'unverifiable-pty'
       })
+    })
+
+    // R1: a fresh start refused before it began offers Retry, which starts the same pane fresh.
+    it('starts a refused fresh pane on Retry and delivers its input', async () => {
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      const transport = createMockTransport()
+      transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
+        opts.callbacks?.onError?.('terminal_history_unavailable')
+        return undefined
+      })
+      transportFactoryQueue.push(transport)
+      seedPaneLayout(null)
+      const deps = createDeps()
+      const pane = createPane(2)
+
+      connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(2), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+      )
+      await flushAsyncTicks()
+
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+        2,
+        'terminal_history_unavailable_before_start'
+      )
+      expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalled()
+      transport.connect.mockImplementation(async ({ callbacks }) => {
+        callbacks?.onConnect?.()
+        return { id: 'fresh-pty' }
+      })
+      // The refused start settles through several turns before it arms Retry.
+      await vi.waitFor(() => expect(transport.retryRecovery?.()).toBe(true))
+      await flushAsyncTicks()
+
+      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect.mock.calls[1]?.[0].sessionId).toBeUndefined()
+      expect(createdTransportOptions).toHaveLength(1)
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledTimes(1)
+      sendTerminalInputThroughPane(pane, 'typed')
+      expect(transport.sendInput.mock.lastCall?.[0]).toBe('typed')
     })
 
     it.each([false, true])(

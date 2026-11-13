@@ -277,6 +277,9 @@ describe('host Sleep through disk-only Wake', () => {
     const stale = relaunched.shutdown(sessionId, { keepHistory: true })
     await held
     listed._simulateExit(0)
+    // The successor's cold read starts once the listed process's exit has settled its files.
+    await waitFor(() => harness!.server.host.listSessions().length === 0, 10_000)
+    await harness!.server.host.historyJournals!.settleAll()
     await relaunched.spawn(request(sessionId))
     const successor = child()
     release.resolve()

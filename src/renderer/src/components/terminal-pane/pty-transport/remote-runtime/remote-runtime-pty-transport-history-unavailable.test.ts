@@ -75,7 +75,13 @@ describe('remote terminal whose host history is briefly unavailable', () => {
   })
 })
 
-type CreateParams = { clientMutationId?: string; reconcileExisting?: boolean }
+type CreateParams = {
+  clientMutationId?: string
+  reconcileExisting?: boolean
+  providerSession?: { id: string }
+}
+
+const RESUME = { key: 'session_id', id: 'provider-session-1' } as const
 
 // GH1346: the host may refuse a create for unavailable history after spawning its terminal.
 describe('remote terminal create refused for unavailable host history', () => {
@@ -86,43 +92,79 @@ describe('remote terminal create refused for unavailable host history', () => {
     runtimeCall.mockImplementation(
       async (request: { method: string; selector: string; params?: CreateParams }) => {
         if (request.method === 'status.get') {
-          return { ok: true, result: { capabilities } }
+          return {
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities
+            }
+          }
         }
-        if (request.method !== 'terminal.create') {
+        const ensure = request.method === 'terminal.ensureAgentSession'
+        if (request.method !== 'terminal.create' && !ensure) {
           return healthyCall?.(request)
         }
-        const mutation = request.params?.clientMutationId
-        if (!request.params?.reconcileExisting || !spawned.includes(mutation)) {
-          spawned.push(mutation)
+        // An ensure adopts its provider session's terminal; a create adopts only when reconciling.
+        const key = ensure ? request.params?.providerSession?.id : request.params?.clientMutationId
+        const existing = spawned.includes(key)
+        if (!existing || !(ensure || request.params?.reconcileExisting)) {
+          spawned.push(key)
         }
         return historyReady
-          ? { ok: true, result: { terminal: { handle: 'terminal-1' } } }
+          ? {
+              ok: true,
+              result: {
+                terminal: { handle: 'terminal-1' },
+                ...(ensure ? { disposition: existing ? 'adopted' : 'created' } : {})
+              }
+            }
           : { ok: false, error: { code: 'runtime_error', message: 'terminal_history_unavailable' } }
       }
     )
-    const creates = (): CreateParams[] =>
+    const calls = (method: string): CreateParams[] =>
       runtimeCall.mock.calls
-        .filter(([request]) => request.method === 'terminal.create')
+        .filter(([request]) => request.method === method)
         .map(([request]) => request.params)
     return {
       spawned,
-      creates,
+      creates: () => calls('terminal.create'),
+      ensures: () => calls('terminal.ensureAgentSession'),
       restoreHistory: () => {
         historyReady = true
       }
     }
   }
 
-  async function mountRefusedPane() {
+  async function mountRefusedPane(agent?: {
+    launchAgent: 'claude'
+    resumeProviderSession: typeof RESUME
+  }) {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
-      leafId: 'pane:1'
+      leafId: 'pane:1',
+      ...agent
     })
     void transport.connect({ url: '', cols: 80, rows: 24, callbacks: {} })
     await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1_000)
     return transport
+  }
+
+  async function attachAndType(transport: Awaited<ReturnType<typeof mountRefusedPane>>) {
+    expect(transport.retryRecovery?.()).toBe(true)
+    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(1))
+    const { streamId } = latestSubscribePayload()
+    callbacks?.onResponse({ ok: true, result: { type: 'subscribed', streamId } })
+    emitSnapshot(streamId, 'prompt$ ')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(transport.sendInput('typed\r', 'driving')).toBe(true)
+    await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('typed\r'))
+    expect(subscribedTerminalHandles()).toEqual(['terminal-1'])
+    expect(new Set(runtimeCall.mock.calls.map(([request]) => request.selector))).toEqual(
+      new Set(['env-1'])
+    )
   }
 
   it('reconciles that one create, then Retry attaches it and delivers input', async () => {
@@ -137,15 +179,8 @@ describe('remote terminal create refused for unavailable host history', () => {
       expect(reconciles.length).toBeGreaterThan(0)
 
       host.restoreHistory()
-      expect(transport.retryRecovery?.()).toBe(true)
-      await vi.waitFor(() => expect(subscribeFrameCount()).toBe(1))
-      const { streamId } = latestSubscribePayload()
-      callbacks?.onResponse({ ok: true, result: { type: 'subscribed', streamId } })
-      emitSnapshot(streamId, 'prompt$ ')
-      await vi.advanceTimersByTimeAsync(0)
-      expect(transport.sendInput('typed\r', 'driving')).toBe(true)
+      await attachAndType(transport)
 
-      await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('typed\r'))
       expect(host.spawned).toEqual([first.clientMutationId])
       expect(first.clientMutationId).toBeTruthy()
       for (const reconcile of host.creates().slice(1)) {
@@ -154,10 +189,37 @@ describe('remote terminal create refused for unavailable host history', () => {
           reconcileExisting: true
         })
       }
-      expect(subscribedTerminalHandles()).toEqual(['terminal-1'])
-      expect(new Set(runtimeCall.mock.calls.map(([request]) => request.selector))).toEqual(
-        new Set(['env-1'])
-      )
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-ensures an agent session with its original request, then Retry attaches it', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = installHost(['agent-session.host-authority.v1'])
+      const transport = await mountRefusedPane({
+        launchAgent: 'claude',
+        resumeProviderSession: RESUME
+      })
+
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      const [first, ...reensures] = host.ensures()
+      expect(first).toMatchObject({
+        providerSession: RESUME,
+        placement: { tabId: 'tab-1', leafId: 'pane:1' }
+      })
+      expect(reensures.length).toBeGreaterThan(0)
+
+      host.restoreHistory()
+      await attachAndType(transport)
+
+      expect(host.spawned).toEqual([RESUME.id])
+      for (const reensure of host.ensures().slice(1)) {
+        expect(reensure).toEqual(first)
+      }
+      expect(host.creates()).toEqual([])
       transport.destroy?.()
     } finally {
       vi.useRealTimers()
