@@ -31,14 +31,19 @@ const MODEL_STARTS = [
   0, 1_000, 1_078, 1_118, 1_158, 1_198, 1_238, 1_278, 1_318, 1_358, 1_398, 1_438
 ]
 
-const rows = MODEL_ROWS.map(
-  (key) => ({ kind: 'line', key, focusable: true }) as unknown as NativeChatToolRunRow
-)
+// Rows that draw something; the owner reads only their keys and whether they draw.
+const rows: NativeChatToolRunRow[] = MODEL_ROWS.map((key) => ({
+  kind: 'aside',
+  key,
+  focusable: true,
+  element: <span />
+}))
 const rowIndexByKey = new Map(MODEL_ROWS.map((key, index) => [key, index]))
 const measurementsCache = MODEL_STARTS.map((start, index) => {
   const size = (MODEL_STARTS[index + 1] ?? start + 40) - start
   return { index, start, size, end: start + size, key: MODEL_ROWS[index]!, lane: 0 }
 })
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the owner reads only measurementsCache, scrollOffset and getVirtualItemForOffset, all supplied here; a full TanStack instance is not needed to give it a fixed model.
 const staleModel = {
   measurementsCache,
   scrollOffset: 0,
