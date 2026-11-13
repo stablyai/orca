@@ -6,7 +6,7 @@ import { createNativeChatSessionOptionOwner } from '../../../../../src/shared/na
 import type { NativeChatSessionOptionBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-binding'
 import type { MutableRefObject } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import { useMobileNativeChatModelDiscovery } from '../../use-mobile-native-chat-model-discovery'
+import { useMobileNativeChatModelDiscovery } from './use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
@@ -19,14 +19,14 @@ import type {
   SessionOptionsSurface
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 import type { NativeChatSessionOptionDispatchOptions } from '../../../../../src/shared/native-chat/input/native-chat-session-option-dispatch'
 import { sendMobileNativeChatModelControl } from './mobile-native-chat-model-control'
 import { sameNativeChatSessionOptionBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-binding'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
+} from '../composer/mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,

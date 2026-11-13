@@ -8,7 +8,7 @@ import {
   buildJiraWorkspaceSource,
   type WorkspaceSourceLinkedItem
 } from '../../../../shared/new-workspace/workspace-source'
-import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/repositories/links'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import { bindJiraIssueSourceContext } from './use-jira-url-source'
 import type { RowEntry } from './smart-workspace-name-field-model'

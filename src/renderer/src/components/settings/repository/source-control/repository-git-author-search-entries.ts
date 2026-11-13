@@ -11,7 +11,7 @@ export function getRepositoryGitAuthorSearchEntries(
   const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: t('auto.components.settings.repository.search.eec3995dc6', 'Git AI Author'),
+      title: t('auto.components.settings.repository.search.6259586017', 'Git AI author'),
       description: t(
         'auto.components.settings.repository.search.6cc5c65e64',
         'Project-specific git generation overrides.'

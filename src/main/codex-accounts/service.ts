@@ -13,33 +13,25 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import type { CodexAccountSelectionTarget } from './runtime-selection'
-import { CodexAccountIdentity, type ResolvedCodexIdentity } from './codex-account-identity'
-import { CodexConfigMirror } from './codex-config-mirror'
-import { runCodexLoginSession, type CodexLoginChild } from './codex-login-session'
-import { CodexManagedHomePath } from './codex-managed-home-path'
-import { CodexManagedHomeLifecycle } from './codex-managed-home-lifecycle'
-import { CodexResetCreditCoordinator } from './codex-reset-credit-coordinator'
-import { CodexAccountSelection } from './codex-account-selection'
-import { CodexAccountRegistration } from './codex-account-registration'
+import type { CodexAccountSelectionTarget } from '../../shared/codex-selection-lane'
+import { CodexAccountIdentity } from './credentials/codex-account-identity'
+import type { CodexAuthIdentity as ResolvedCodexIdentity } from './credentials/codex-auth-identity'
+import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
+import { runCodexLoginSession, type CodexLoginChild } from './login/codex-login-session'
+import { CodexManagedHomePath } from './managed-homes/codex-managed-home-path'
+import { CodexManagedHomeLifecycle } from './managed-homes/codex-managed-home-lifecycle'
+import { CodexResetCreditCoordinator } from './reset-credits/codex-reset-credit-coordinator'
+import { CodexAccountSelection } from './account-management/codex-account-selection'
+import { CodexAccountRegistration } from './account-management/codex-account-registration'
 import type {
   CodexAccountAddTarget,
   CodexAccountReauthenticateOptions,
   CodexAccountServiceLifecycle,
   CodexResetCreditConsumeResult
-} from './codex-account-service-types'
-import { toCodexManagedAccountSummary } from './codex-account-service-types'
+} from './account-management/codex-account-service-types'
+import { toCodexManagedAccountSummary } from './account-management/codex-account-service-types'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
-export type {
-  CodexAccountAddTarget,
-  CodexAccountReauthenticateOptions,
-  CodexAccountServiceLifecycle,
-  CodexResetCreditConsumeResult,
-  CodexResetCreditConsumedResult,
-  CodexResetCreditRejectedBeforeProviderReason,
-  CodexResetCreditRejectedBeforeProviderResult
-} from './codex-account-service-types'
 
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 
@@ -261,7 +253,7 @@ export class CodexAccountService {
   }
 
   private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
-    return this.identity.resolveSystemDefault()
+    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 
   private readIdentityFromHome(

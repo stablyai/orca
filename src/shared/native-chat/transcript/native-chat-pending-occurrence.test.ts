@@ -76,4 +76,64 @@ describe('pending sends typed through an agent TUI', () => {
     expect(prunePendingSends(pending, transcript)).toEqual([])
     expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
   })
+
+  it('lets each pathless image row retire one delivered image-only send, once, oldest first', () => {
+    const send = (
+      id: string,
+      extra: Partial<NativeChatPendingSend> = {}
+    ): NativeChatPendingSend => ({
+      id,
+      text: '',
+      imagePaths: [`/tmp/orca-paste-${id}.png`],
+      sentAt: 100,
+      afterMessageId: 'working',
+      ...extra
+    })
+    const pending = [send('a', { delivery: 'rejected' }), send('b'), send('c')]
+    const imageRow = (id: string, timestamp: number): NativeChatMessage => ({
+      id,
+      role: 'user',
+      blocks: [{ type: 'image-ref', url: 'data:image/png;base64,iVBORw0K' }],
+      timestamp,
+      source: 'transcript'
+    })
+    const before = [imageRow('older-image', 50), message('working', 'assistant', 'busy', 90)]
+    expect(pendingSendsAsMessages(pending, before).map((row) => row.id)).toEqual([
+      'pending:a',
+      'pending:b',
+      'pending:c'
+    ])
+
+    const landed = [...before, imageRow('queued-image', 110)]
+    expect(pendingSendsAsMessages(pending, landed).map((row) => row.id)).toEqual([
+      'pending:a',
+      'pending:c'
+    ])
+    const committed = prunePendingSends(pending, landed)
+    expect(committed.map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
+    expect(committed[1].sourceReceipt).toEqual({ sessionId: '', id: 'queued-image' })
+    expect(pendingSendsAsMessages(committed, landed).map((row) => row.id)).toEqual([
+      'pending:a',
+      'pending:c'
+    ])
+    const replied = [...landed, message('reply', 'assistant', 'ok', 120)]
+    const remaining = prunePendingSends(pending, replied)
+    expect(remaining.map((entry) => entry.id)).toEqual(['a', 'c'])
+    expect(pendingSendsAsMessages(remaining, replied).map((row) => row.id)).toEqual([
+      'pending:a',
+      'pending:c'
+    ])
+    expect(prunePendingSends(remaining, replied).map((entry) => entry.id)).toEqual(['a', 'c'])
+    const sequential = prunePendingSends(committed, replied)
+    expect(sequential.map((entry) => entry.id)).toEqual(['a', 'c'])
+    expect(pendingSendsAsMessages(sequential, replied).map((row) => row.id)).toEqual([
+      'pending:a',
+      'pending:c'
+    ])
+    const uncertain = [send('uncertain', { writeUnconfirmedAt: 101 }), send('delivered')]
+    expect(pendingSendsAsMessages(uncertain, landed).map((row) => row.id)).toEqual([
+      'pending:uncertain'
+    ])
+    expect(prunePendingSends(uncertain, replied).map((entry) => entry.id)).toEqual(['uncertain'])
+  })
 })

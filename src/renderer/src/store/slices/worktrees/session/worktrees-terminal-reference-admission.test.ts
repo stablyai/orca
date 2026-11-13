@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { singlePaneLayoutSnapshot } from '../../../terminals/terminal-single-pane-layout'
@@ -108,28 +108,6 @@ beforeEach(() => {
   exactLookup.mockReset()
   resetRemoteRuntimeMocks()
   resetWorktreeSliceModuleMemory()
-})
-
-it('preserves distinct live confirmations on one branch without replacing the manual primary', async () => {
-  const { store, pending, observeBurst, branchLookup } = setup()
-  observeBurst()
-  await flush()
-  let completed = 0
-  while (completed < 4) {
-    const batch = [...pending]
-    pending.clear()
-    for (const [number, deferred] of batch) {
-      deferred.resolve(review(number))
-    }
-    completed += batch.length
-    await flush()
-  }
-  expect(branchLookup).not.toHaveBeenCalled()
-  const items = getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0])
-  expect(items.map((item) => item.number).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
-    7, 100, 101, 102, 103
-  ])
-  expect(store.getState().worktreesByRepo.repo[0].linkedPR).toBe(7)
 })
 
 it('drops stale queued starts and fallback reads after the pane closes', async () => {

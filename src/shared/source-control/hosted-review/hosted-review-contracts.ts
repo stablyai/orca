@@ -1,12 +1,12 @@
 import type { StackedReviewFailureReason } from './stacked-hosted-review-failure-copy'
 import type {
   CheckStatus,
-  GitHubRepositoryIdentity,
   PRConflictSummary,
   PRMergeableState,
   PRReviewDecision,
   ProviderCheckSummary
-} from '../../github/pull-request-types'
+} from '../../github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../github/repositories/repository-identity'
 
 export type HostedReviewProvider =
   | 'github'

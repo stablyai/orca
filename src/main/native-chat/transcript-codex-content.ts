@@ -1,5 +1,6 @@
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
-import { asRecord, extractString } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
 
 export function codexSummaryText(summary: unknown): string | null {
   if (!Array.isArray(summary)) {

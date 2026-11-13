@@ -5,7 +5,7 @@ import { sessionLaunchUnreadReplySchema } from '../../../transport/rpc/rpc-unint
 import * as z from 'zod'
 import { readTerminalModelControlResult } from '../../../../../src/shared/native-chat/input/native-chat-terminal-model-control'
 import '../../../agent-history/mobile-ai-vault-resume-reply-schema'
-import '../../../browser/mobile-session-browser-reply-schema'
+import '../../../browser/tab-navigation/mobile-session-browser-reply-schema'
 import '../../../files/session-documents/mobile-file-tap-reply-schema'
 
 export const nativeChatSessionOptionsWrite = bindDeferredRpcOperation(

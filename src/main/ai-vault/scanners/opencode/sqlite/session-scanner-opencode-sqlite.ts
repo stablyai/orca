@@ -6,19 +6,19 @@ import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../../session-scanner-accumulator'
-import { addPreviewMessage } from '../../../session-scanner-messages'
+} from '../../../parsing/session-scanner-accumulator'
+import { addPreviewMessage } from '../../../parsing/session-scanner-messages'
 import {
   normalizeFullFirstUserPromptText,
   shouldCaptureFullFirstUserPrompt
-} from '../../../session-scanner-first-user-prompt'
+} from '../../../prompts/session-scanner-first-user-prompt'
 import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
 import { readPartDataRow, readSessionRow } from './session-scanner-opencode-sqlite-rows'
 import {
   canCountOpenCodeMessages,
   canReadOpenCodeMessageParts
 } from './session-scanner-opencode-sqlite-schema'
-import { normalizeTitleText } from '../../../session-scanner-text-normalization'
+import { normalizeTitleText } from '../../../parsing/session-scanner-text-normalization'
 import { zcodeVisibleMessageFilter } from '../../zcode/session-scanner-zcode-visibility'
 import { zcodeTranscriptOrder } from '../../zcode/session-scanner-zcode-order'
 import type SyncDatabase from '../../../../sqlite/sync-database'

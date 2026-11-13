@@ -24,8 +24,13 @@ import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identit
 import { MobileSourceControlHeader } from '../MobileSourceControlHeader'
 import { MobileSourceControlPanel } from '../MobileSourceControlPanel'
 import { styles as sourceControlStyles } from '../mobile-source-control-styles'
+import { MobileFolderEmptyState } from './MobileFolderEmptyState'
+import { useFolderCreateFlow } from './use-folder-create-flow'
 import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
+import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
 import { useMobileFolderAttachedWorktrees } from './use-mobile-folder-attached-worktrees'
+
+const NO_CAPABILITIES: readonly string[] = []
 
 type Props = {
   hostId: string
@@ -61,8 +66,22 @@ export function MobileFolderSourceControlPanel({
   const observing = focused && !pageOpen
   const { folder, worktrees, desktopCapabilities, serverHosts, connState, loadError, refetch } =
     useMobileFolderAttachedWorktrees(hostId, folderWorktreeId, observing)
+  // In a server's scope these are the server's own; otherwise the desktop's.
+  const folderHostGates = useOptionalHostProtocolGates()
   const forceReconnect = useForceReconnect()
   const [refreshers] = useState(() => new Set<() => void>())
+  const createFlow = useFolderCreateFlow({
+    hostId,
+    folderWorktreeId,
+    executionHost: folder?.hostId?.startsWith('runtime:') ? folder.hostId : undefined,
+    desktopCapabilities,
+    members: worktrees,
+    observing,
+    refetch,
+    bottomInset: insets.bottom
+  })
+  // Rows and repositories under a create form wait; the folder's members stay live so creates still reconcile.
+  const statusObserving = observing && !createFlow.covered
   const refresh = () => {
     refetch()
     for (const refreshNow of refreshers) {
@@ -118,13 +137,17 @@ export function MobileFolderSourceControlPanel({
         title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
       />
     ) : worktrees.length === 0 ? (
-      <MobileStateView
-        icon={GitBranch}
-        title={t('sourceControl.folder.emptyTitle', 'No attached worktrees yet')}
-        message={t(
-          'sourceControl.folder.emptyCopy',
-          'Worktrees created from this workspace will show up here.'
-        )}
+      <MobileFolderEmptyState
+        hostId={hostId}
+        folder={folder}
+        desktopCapabilities={desktopCapabilities}
+        folderHostCapabilities={folderHostGates?.hostCapabilities ?? NO_CAPABILITIES}
+        observing={statusObserving}
+        refreshers={refreshers}
+        onCreate={(repo, target, client, createName) =>
+          void createFlow.onCreate(repo, target, client, createName)
+        }
+        bottomInset={insets.bottom}
       />
     ) : (
       // One card per attached worktree, as desktop shows them.
@@ -141,7 +164,7 @@ export function MobileFolderSourceControlPanel({
                 serverHosts.find((server) => server.hostId === worktree.hostId)?.relay ===
                 'update-needed'
               }
-              subscribed={observing}
+              subscribed={statusObserving}
               refreshers={refreshers}
               onOpen={open}
             />
@@ -160,6 +183,8 @@ export function MobileFolderSourceControlPanel({
       )}
       {/* Every state shares the sheet surface the cards sit on, as the phone's option sheets do. */}
       <View style={styles.body}>{body}</View>
+      {createFlow.toastElement}
+      {createFlow.composerElement}
     </View>
   )
   return (

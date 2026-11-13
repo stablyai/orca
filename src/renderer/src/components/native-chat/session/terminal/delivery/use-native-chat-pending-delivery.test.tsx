@@ -360,34 +360,45 @@ it('assigns identical legacy occurrences at the real capability fallback and nev
   expect(remounted.result.current.pending).toEqual([])
 })
 
-it('transfers spent ownership to a reachable fallback glue witness, then retires its live dependencies', () => {
-  const first = mountOwned()
-  let source = '',
-    one = '',
-    two = ''
-  act(() => {
-    source = first.result.current.record('first second', undefined, false, 'opencode')
-    first.result.current.setSourceEvidence(source, true)
-    one = first.result.current.record('first', undefined, false, 'opencode')
-    two = first.result.current.record('second', undefined, false, 'opencode')
-  })
-  const x = sourceRow('first second', 'x')
-  first.rerender({ messages: [x] })
-  act(() => {
-    first.result.current.setSourceEvidence(one, false)
-    first.result.current.setSourceEvidence(two, false)
-  })
-  const messages = [x, { ...boundary, id: 'answer' }]
-  first.rerender({ messages })
-  expect(first.result.current.pending.map((entry) => entry.id)).toEqual([one, two])
-  first.unmount()
-  const remounted = mountOwned(messages)
-  expect(remounted.result.current.pending.map((entry) => entry.id)).toEqual([one, two])
-  remounted.rerender({
-    messages: [...messages, sourceRow('first second', 'y'), { ...boundary, id: 'answer-y' }]
-  })
-  expect(remounted.result.current.pending).toEqual([])
-})
+it.each([false, true])(
+  'transfers spent ownership to reachable fallback legacy proof, image member: %s',
+  (image) => {
+    const first = mountOwned()
+    let source = '',
+      attachment = '',
+      one = '',
+      two = ''
+    act(() => {
+      source = first.result.current.record('first second', undefined, false, 'opencode')
+      first.result.current.setSourceEvidence(source, true)
+      if (image) {
+        attachment = first.result.current.record('first second', ['/tmp/image.png'], false)
+      }
+      one = first.result.current.record('first', undefined, false, 'opencode')
+      two = first.result.current.record('second', undefined, false, 'opencode')
+    })
+    const x = sourceRow('first second', 'x')
+    first.rerender({ messages: [x] })
+    act(() => {
+      first.result.current.setSourceEvidence(one, false)
+      first.result.current.setSourceEvidence(two, false)
+    })
+    const messages = [x, { ...boundary, id: 'answer' }]
+    first.rerender({ messages })
+    expect(first.result.current.pending.map((entry) => entry.id)).toEqual(
+      image ? [attachment, one, two] : [one, two]
+    )
+    first.unmount()
+    const remounted = mountOwned(messages)
+    expect(remounted.result.current.pending.map((entry) => entry.id)).toEqual(
+      image ? [attachment, one, two] : [one, two]
+    )
+    remounted.rerender({
+      messages: [...messages, sourceRow('first second', 'y'), { ...boundary, id: 'answer-y' }]
+    })
+    expect(remounted.result.current.pending).toEqual([])
+  }
+)
 
 it('releases dead fallback group dependencies and does not accumulate receipts behind an incompatible draft', () => {
   const mounted = mountOwned()

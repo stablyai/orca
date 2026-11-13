@@ -1,0 +1,6 @@
+id: claude-chat-entrypoint-callers
+valid:
+  - 'stripInheritedAgentSessionEnv(env)'
+invalid:
+  - 'withOrcaClaudeChatEntrypoint(env, platform)'
+  - "import { withOrcaClaudeChatEntrypoint as stamp } from './claude-chat-entrypoint'"

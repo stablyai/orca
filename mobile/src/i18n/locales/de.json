@@ -356,8 +356,7 @@
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
       "resume": "Fortsetzen",
-      "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen",
-      "title": "Nachrichten in der Warteschlange"
+      "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen"
     },
     "offlineQueue": {
       "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
@@ -1353,6 +1352,7 @@
       "movedTo": "Dieses Telefon hat die Transkription beendet. Weiter auf {{computer}}.",
       "movedToComputer": "Dieses Telefon hat die Transkription beendet. Weiter auf dem Computer.",
       "stoppedKept": "Diktat gestoppt. {{reason}}. Deine Aufnahme bleibt erhalten.",
+      "stoppedKeptGeneric": "Diktat gestoppt. Deine Aufnahme bleibt erhalten.",
       "stillListening": "Hört weiter zu."
     },
     "pill": {
@@ -2324,20 +2324,16 @@
       "loadFailed": "Pull Request konnte nicht geladen werden"
     },
     "queuedCardText": {
-      "showLess": "Weniger anzeigen",
       "showLessHint": "Zeigt weniger von der Nachricht an",
-      "showMore": "Mehr anzeigen",
       "showMoreHint": "Zeigt die ganze Nachricht an"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Diese Nachricht aus der Warteschlange löschen",
       "images_one": "{{count}} Bild",
       "images_other": "{{count}} Bilder",
       "moreActions": "Weitere Aktionen",
       "send": "Senden",
       "sendAgainHint": "Diese Nachricht erneut senden",
       "sendHint": "Diese Nachricht senden",
-      "showLessHint": "Zeigt weniger von der Nachricht an",
       "steer": "Steuern",
       "steerHint": "Ohne Unterbrechung des Modells übermitteln"
     },
@@ -2457,8 +2453,7 @@
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
-      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -2501,6 +2496,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Anhängen fehlgeschlagen (erneuter Verbindungsaufbau)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Der Tab konnte nicht geschlossen werden. Versuche es erneut.",
+      "closeFailedDesktopNotReady": "Der Tab konnte nicht geschlossen werden. Orca wird auf deinem Computer noch geladen. Versuche es gleich noch einmal."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",
@@ -2571,8 +2570,8 @@
       "insertFailed": "Diktat konnte nicht eingefügt werden",
       "insertFailedCopied": "Diktat konnte nicht eingefügt werden und wurde daher in die Zwischenablage kopiert",
       "inserted": "Diktat eingefügt",
-      "stoppedAfterSilence": "Nach einer Minute Stille beendet",
-      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
+      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
     },
     "useNativeChatStop": {
       "stopNotSent": "Stoppbefehl nicht gesendet",
@@ -3367,6 +3366,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} zusammenführen?",
+      "confirmGitHubSquash": "PR #{{number}} mit Squash zusammenführen?",
+      "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
+      "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
+      "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
+      "merged": "Zusammengeführt",
+      "closed": "Geschlossen",
+      "conflicts": "Konflikte",
+      "behind": "Nicht aktuell",
+      "blocked": "Blockiert",
+      "checksPending": "Prüfungen ausstehend",
+      "ableToMerge": "Zusammenführen möglich",
+      "unknown": "Unbekannt"
+    },
+    "pagination": {
+      "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
+      "loadPageFailed": "Seite {{page}} konnte nicht von GitHub geladen werden.",
+      "noMoreResults": "Keine weiteren Ergebnisse auf Seite {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Der Basis-Branch konnte nicht ermittelt werden.",
       "forkPushWarning": "Bei diesem PR ist „Allow edits from maintainers“ deaktiviert; GitHub könnte einen Push zum Fork ablehnen."

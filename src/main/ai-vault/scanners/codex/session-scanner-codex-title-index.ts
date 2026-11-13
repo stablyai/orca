@@ -6,7 +6,7 @@ import {
   InFlightPromiseDedupe,
   stableInFlightKey
 } from '../../../../shared/in-flight-promise-dedupe'
-import { wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
+import { wslGatedStat } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 
 // Thread names may arrive here after the transcript was written.
 

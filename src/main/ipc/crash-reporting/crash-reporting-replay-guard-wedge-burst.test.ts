@@ -4,7 +4,7 @@ import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot,
   recordCrashBreadcrumb
-} from '../../crash-reporting/crash-breadcrumb-store'
+} from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer-breadcrumbs'
 
 type SpanOptions = { attributes: Record<string, unknown> }

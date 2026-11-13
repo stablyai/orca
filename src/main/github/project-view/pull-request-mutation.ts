@@ -1,7 +1,9 @@
-import { githubBodyImageUrls, githubBodyMediaHeaders } from '../body-image-urls'
-import { assertPositiveInt, projectGhExecOptions, runRest, validateSlugArgs } from './internals'
-import type { GitHubProjectMutationResult } from '../../../shared/github/project-result-types'
-import type { UpdatePullRequestBySlugArgs } from '../../../shared/github/project-request-types'
+import { githubBodyImageUrls, githubBodyMediaHeaders } from '../attachments/body-image-urls'
+import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
+import { projectGhExecOptions } from './project-host-execution'
+import { runRest } from './project-rest'
+import type { GitHubProjectMutationResult } from '../../../shared/github/projects/project-result-types'
+import type { UpdatePullRequestBySlugArgs } from '../../../shared/github/projects/project-request-types'
 
 export async function updatePullRequestBySlug(
   args: UpdatePullRequestBySlugArgs

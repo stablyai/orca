@@ -1,5 +1,6 @@
 import {
   getSshTargetIdForExecutionHost,
+  getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
@@ -92,9 +93,6 @@ export function buildFeedHostOptions(
     const parsed = parseExecutionHostId(hostId)
     return parsed?.kind === 'runtime' && host ? [{ parsed, host }] : []
   })
-  const serverLabelByHostId = new Map<ExecutionHostId, string>(
-    servers.map(({ parsed, host }) => [parsed.id, host.label])
-  )
   const focused = parseExecutionHostId(view.defaultHostId)
   return buildExecutionHostRegistry({
     repos,
@@ -112,10 +110,8 @@ export function buildFeedHostOptions(
       name: host.label
     })),
     hostLabelOverrides: view.hostLabelOverrides,
-    localHostLabel: view.localHostLabel
-  }).map((host) => {
-    const label = serverLabelByHostId.get(host.id)
-    return label ? { ...host, label } : host
+    localHostLabel: view.localHostLabel,
+    localHostLabelIsDefault: true
   })
 }
 
@@ -148,6 +144,16 @@ function repoOfWorktree(
 }
 
 /** Each row's own host's registration, for lists whose repoMap keeps one registration per id. */
+/** A registered feed workspace's host (its stamp, else its registration's, else the focused host); null when its project is not registered. */
+export function feedWorktreeHostId(
+  index: Pick<SidebarFeedIndex, 'repoOf'>,
+  worktree: Worktree,
+  defaultHostId: ExecutionHostId
+): ExecutionHostId | null {
+  const repo = index.repoOf(worktree)
+  return repo ? getWorktreeExecutionHostId(worktree, repo, defaultHostId) : null
+}
+
 export function createHostScopedRepoOf(
   repos: readonly Repo[],
   repoMap: ReadonlyMap<string, Repo>

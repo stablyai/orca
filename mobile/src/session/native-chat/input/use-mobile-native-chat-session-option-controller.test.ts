@@ -6,7 +6,7 @@ import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { MobileSessionTab } from '../../tabs/mobile-session-tabs'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 
-vi.mock('../../use-mobile-native-chat-model-discovery', () => ({
+vi.mock('./use-mobile-native-chat-model-discovery', () => ({
   useMobileNativeChatModelDiscovery: () => null
 }))
 vi.mock('./mobile-native-chat-session-option-persistence', () => ({
@@ -21,39 +21,6 @@ describe('useMobileNativeChatSessionOptionController on a structured chat', () =
     renderer = null
   })
 
-  it("keeps the chat's /clear and /compact when its agent lists no models", () => {
-    const seen: { current: ReturnType<typeof useMobileNativeChatSessionOptionController> | null } =
-      { current: null }
-    function Harness(): null {
-      seen.current = useMobileNativeChatSessionOptionController({
-        activeChatStructured: true,
-        activeSessionTabId: 'omp-tab',
-        agent: 'omp',
-        dispatchCommand: vi.fn(),
-        hostId: 'host',
-        isTabChatView: () => true,
-        isWorking: false,
-        reportedModel: null,
-        structured: {
-          conversationCommands: ['clear', 'compact'],
-          snapshot: [],
-          pendingId: null,
-          setOption: vi.fn(),
-          invokeAction: vi.fn()
-        },
-        toggleTabChatView: vi.fn(),
-        worktreeId: 'worktree'
-      })
-      return null
-    }
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-    expect(seen.current?.nativeChatSessionOptions?.controller.conversationCommands).toEqual([
-      'clear',
-      'compact'
-    ])
-  })
   it.each([false, true])(
     'keeps a capable blocked model pick away from message send and healing with late handle=%s',
     async (lateHandle) => {

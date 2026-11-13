@@ -15,7 +15,7 @@ export const JIRA_ISSUE_KEY_CASING_KEYWORDS = [
 ]
 
 export function getJiraIssueKeyCasingTitle(t: Translate = translate): string {
-  return t('auto.components.settings.GitPane.jiraIssueKeyCasingTitle', 'Jira Key Casing')
+  return t('auto.components.settings.GitPane.8cdbaf4b03', 'Jira key casing')
 }
 
 export function getJiraIssueKeyCasingDescription(t: Translate = translate): string {

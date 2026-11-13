@@ -62,6 +62,9 @@ export type GitWorktreeInfo = {
   isMainWorktree: boolean
   /** Local delete failed after Git deregistration; list the leftover so Delete can retry. */
   removalError?: string
+  removing?: true
+  /** The owning host durably recorded this pending deletion. Older hosts omit it. */
+  removalRecorded?: true
 }
 
 /** Read HEAD/branch without spawning Git to refresh background head moves without structural worktrees:changed fanout. */
@@ -164,9 +167,6 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
-  /** The host is deleting this checkout in the background; Git lists it until that finishes.
-   *  Sent only to clients that advertise `worktree.background-removal.v1`. */
-  removing?: true
 } & GitWorktreeInfo
 
 /** Only CLI-created workspaces carry this; missing means not CLI-created, including older rows. */
@@ -258,6 +258,8 @@ export type DetectedWorktreeListResult = {
   failureKind?: WorktreeScanFailureKind
   /** Which catalog this listing describes; additive, older hosts omit it. */
   catalogVersion?: WorktreeCatalogVersion
+  /** The producer's workspaceMetadata position when this listing read metadata; additive, older hosts omit it. */
+  workspaceMetadata?: { epoch: string; seq: number }
   /** The repo's WSL distro is stopped or unverifiable, so rows are stored ones; additive, older hosts omit it. */
   wslDistroStopped?: { distro: string; state: 'stopped' | 'unverifiable' }
 }

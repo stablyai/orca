@@ -1,4 +1,4 @@
-import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
+import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watching/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
@@ -7,15 +7,15 @@ import type {
 } from '../../shared/native-chat/native-chat-types'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
 import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
-import {
-  subscribeNativeChatTranscript,
-  readNativeChatTranscriptTail,
-  type NativeChatTranscriptSubscription,
-  type SubscribeNativeChatTranscriptArgs
-} from '../native-chat/transcript-watch'
+import { subscribeNativeChatTranscript } from '../native-chat/transcript-watch'
+import { readNativeChatTranscriptTail } from '../native-chat/transcript-tail-reader'
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from '../native-chat/transcript-watching/transcript-watch-contract'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
+import { openNativeChatTranscript } from '../native-chat/transcript-discovery/native-chat-open-wake'
 
 export { clearNativeChatTranscriptCache }
 

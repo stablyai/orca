@@ -10,7 +10,7 @@ import type {
   NativeChatSessionOptionDispatchResult
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-dispatch'
 import type { NativeChatSessionOptionOwner } from '../../../../../src/shared/native-chat/input/native-chat-session-option-owner'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 
 type SurfaceEntry = {

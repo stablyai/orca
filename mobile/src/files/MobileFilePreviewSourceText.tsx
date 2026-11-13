@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { ScrollView, Text } from 'react-native'
+import { ScrollView, Text, type ScrollViewInstance } from 'react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
@@ -23,7 +23,7 @@ export function MobileFilePreviewSourceText({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   const revealedRef = useRef(false)
   const syntax = useMemo(
     () => buildMobileFilePreviewSyntax(relativePath, content),

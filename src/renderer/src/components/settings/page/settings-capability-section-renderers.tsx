@@ -63,12 +63,11 @@ export function renderAccountsSettingsSection(
     <SettingsSection
       id="accounts"
       grouped
-      title={t('auto.components.settings.Settings.ad6c529693', 'AI Provider Accounts')}
+      title={t('auto.components.settings.Settings.4198aae333', 'AI provider accounts')}
       description={t(
         'auto.components.settings.Settings.21f09426ea',
         'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
       )}
-      badge={t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')}
       searchEntries={navigation.getSectionSearchEntries('accounts')}
     >
       {!view.isSectionMounted('accounts') ? null : !model.settingsHostScope.available ? (
@@ -163,7 +162,7 @@ export function renderDesktopCapabilitySettingsSections(
       <SettingsSection
         id="computer-use"
         grouped
-        title={t('auto.components.settings.Settings.c9841721cb', 'Computer Use')}
+        title={t('auto.components.settings.Settings.3f3e11cb5d', 'Computer use')}
         description={t(
           'auto.components.settings.Settings.7118953f14',
           'Enable agents to control any app on your computer.'
@@ -175,15 +174,20 @@ export function renderDesktopCapabilitySettingsSections(
 
       <SettingsSection
         id="voice"
+        grouped
         title={t('auto.components.settings.Settings.5063bb47a5', 'Voice')}
         description={t(
-          'components.settings.voice.sectionDescription',
-          'Talk instead of typing in any pane. Speech is recognized on this computer unless you pick a cloud model.'
+          'components.settings.voice.pageDescription',
+          'Talk instead of typing in any pane.'
         )}
         searchEntries={navigation.getSectionSearchEntries('voice')}
       >
         {view.isSectionMounted('voice') ? (
-          <VoicePane settings={model.settings} updateSettings={model.updateSettings} />
+          <VoicePane
+            settings={model.settings}
+            updateSettings={model.updateSettings}
+            writeSourceControlAiSettings={context.interactions.writeSourceControlAiSettingsOrThrow}
+          />
         ) : null}
       </SettingsSection>
     </>

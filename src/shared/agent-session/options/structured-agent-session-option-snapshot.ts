@@ -41,6 +41,17 @@ const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
   disabledReason: 'available-after-session-start'
 }
 
+/** A session that lists no models picks one itself; display-only, so Send never captures it. */
+const AGENT_CHOSEN_MODEL: SessionOptionDescriptor = {
+  id: 'model',
+  label: 'Model',
+  category: 'model',
+  kind: { type: 'select', choices: [], placeholder: 'Auto' },
+  valueSource: 'unknown',
+  transport: 'agent-session',
+  settable: false
+}
+
 /** Name a catalog default only when the host says this launch runs it; otherwise use it solely for controls. */
 export function structuredAgentSessionShownModel(
   catalog: AgentSessionOptionCatalog,
@@ -215,8 +226,10 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     models.length === 0
       ? []
       : nativeChatSessionOptionDescriptors({
+          agent: state.record.agent,
           catalog,
           models,
+          legacyInventory: catalog.models,
           mode: 'live',
           modelLabel: 'Model',
           liveTransport: 'agent-session',
@@ -225,16 +238,18 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
           values,
           modelIsCliDefault: isCliDefault
         })
-  return snapshot.length > 0 || state.catalogSource === 'live'
-    ? withUnlistedEffort(
-        catalog,
-        controlsModelId,
-        values.effort,
-        state.verifiedModelIds,
-        snapshot,
-        state.record.agent
-      )
-    : [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+  if (snapshot.length === 0 && state.catalogSource !== 'live') {
+    return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+  }
+  const shownSnapshot = withUnlistedEffort(
+    catalog,
+    controlsModelId,
+    values.effort,
+    state.verifiedModelIds,
+    snapshot,
+    state.record.agent
+  )
+  return snapshot.length === 0 ? [AGENT_CHOSEN_MODEL, ...shownSnapshot] : shownSnapshot
 }
 
 export function structuredAgentSessionOptionSnapshot(
@@ -242,11 +257,7 @@ export function structuredAgentSessionOptionSnapshot(
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
   const options = modelOptionSnapshot(state).map((option) =>
-    state.fastModeRestricted && option.id === 'fastMode'
-      ? { ...option, settable: false }
-      : option.id === 'model' && state.reportedModel
-        ? { ...option, reportedModel: state.reportedModel }
-        : option
+    state.fastModeRestricted && option.id === 'fastMode' ? { ...option, settable: false } : option
   )
   const interaction = structuredAgentSessionInteractionDescriptor(state)
   return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]

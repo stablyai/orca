@@ -1,8 +1,9 @@
 import { useCallback, useLayoutEffect, useReducer, useRef, useState } from 'react'
-import { useWindowDimensions, type LayoutChangeEvent, type View } from 'react-native'
+import { useWindowDimensions, type LayoutChangeEvent } from 'react-native'
 import type { DetailCardAnchor, DetailCardPlacement } from './AnchoredDetailCard'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
+import type { MobileHostHandle } from '../platform/host-handle'
 
 type State = {
   serial: number
@@ -74,10 +75,10 @@ export function useAnchoredDetailCard({
   obscured: boolean
   measure: DetailCardMeasure
 }) {
-  const layerRef = useRef<View>(null)
-  const openerRef = useRef<View>(null)
-  const contentRef = useRef<View>(null)
-  const backRef = useRef<View>(null)
+  const layerRef = useRef<MobileHostHandle>(null)
+  const openerRef = useRef<MobileHostHandle>(null)
+  const contentRef = useRef<MobileHostHandle>(null)
+  const backRef = useRef<MobileHostHandle>(null)
   const boundaryRefs = useRef<unknown[]>([])
   const measureRef = useRef(measure)
   useLayoutEffect(() => {

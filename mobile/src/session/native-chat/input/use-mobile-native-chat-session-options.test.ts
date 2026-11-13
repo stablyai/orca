@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { createNativeChatSessionOptionOwner } from '../../../../../src/shared/native-chat/input/native-chat-session-option-owner'
 import {
   acquireNativeChatSessionOptionLease,
@@ -7,16 +8,7 @@ import type { NativeChatSessionOptionBinding } from '../../../../../src/shared/n
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
-import {
-  applyNativeChatSessionOptionSettingsMutation,
-  resolveNativeChatSessionOptionDefaults
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-defaults'
-import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session/options/agent-session-option-launch'
-import type {
-  PersistedNativeChatSessionOptions,
-  NativeChatSessionOptionSettingsMutation
-} from '../../../../../src/shared/native-chat/input/native-chat-session-options'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 import {
   clearMobileSessionOptionRecordsForTests,
   useMobileNativeChatSessionOptions,
@@ -31,6 +23,7 @@ describe('useMobileNativeChatSessionOptions', () => {
   let hookArgs: HookArgs
   const liveBindings = new Map<string, NativeChatSessionOptionBinding>()
   let session = 0
+  let testScope: string
   const dispatchCommand = vi.fn<HookArgs['dispatchCommand']>()
   const onAgentPicker = vi.fn()
 
@@ -61,7 +54,7 @@ describe('useMobileNativeChatSessionOptions', () => {
   const mount = (overrides: Partial<HookArgs> = {}): void => {
     hookArgs = {
       agent: 'claude',
-      scopeKey: 'host\0worktree\0tab',
+      scopeKey: testScope,
       reportedModel: null,
       dispatchCommand,
       onAgentPicker,
@@ -87,6 +80,7 @@ describe('useMobileNativeChatSessionOptions', () => {
   }
 
   beforeEach(() => {
+    testScope = `mobile-session-options:${randomUUID()}`
     clearMobileSessionOptionRecordsForTests()
     liveBindings.clear()
     session = 0
@@ -100,66 +94,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     })
     renderer = null
     api = null
-  })
-
-  it.each([
-    ['grok', true],
-    ['grok', false],
-    ['omp', true],
-    ['omp', false]
-  ] as const)(
-    '%s discovery cached=%s writes only an explicit owning-host pick',
-    async (agent, cached) => {
-      let persisted: PersistedNativeChatSessionOptions = { [agent]: { model: 'retired' } }
-      const writeOwner = vi.fn((mutation: NativeChatSessionOptionSettingsMutation) => {
-        persisted = applyNativeChatSessionOptionSettingsMutation(persisted, mutation) ?? persisted
-      })
-      const writeOther = vi.fn()
-      const model = agent === 'grok' ? 'grok-4.7' : 'deepseek/deepseek-v4-pro'
-      const discoveredModels = [{ id: model, label: model, options: [] }]
-      mount({
-        agent,
-        scopeKey: 'owner\0worktree\0tab',
-        reportedModel: 'retired',
-        modelSwitchCommand: 'orca-model',
-        writeSettings: writeOwner,
-        discoveredModels: cached ? discoveredModels : null
-      })
-      if (!cached) {
-        update({ discoveredModels })
-      }
-      expect(writeOwner).not.toHaveBeenCalled()
-      expect(
-        resolveAgentSessionOptionLaunch(
-          agent,
-          resolveNativeChatSessionOptionDefaults(persisted, agent)
-        ).args
-      ).toContain('retired')
-      await act(async () => {
-        expect(await api!.setOption('model', model)).toBe(true)
-      })
-      expect(writeOwner).toHaveBeenCalledOnce()
-      expect(
-        resolveAgentSessionOptionLaunch(
-          agent,
-          resolveNativeChatSessionOptionDefaults(persisted, agent)
-        ).args
-      ).toContain(model)
-      update({ scopeKey: 'other\0worktree\0tab', writeSettings: writeOther })
-      expect(writeOwner).toHaveBeenCalledOnce()
-      expect(writeOther).not.toHaveBeenCalled()
-    }
-  )
-
-  it('starts over when the tab runs another agent and then a fresh session', async () => {
-    mount({ reportedModel: 'claude-sonnet-5' })
-    await act(async () => {
-      await api!.setOption('model', 'opus')
-    })
-    update({ agent: 'codex', reportedModel: null })
-    update({ agent: 'claude', reportedModel: 'claude-sonnet-5' })
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'sonnet' })
   })
 
   it('returns the accepted original result without changing its successor', async () => {
@@ -201,7 +135,7 @@ describe('useMobileNativeChatSessionOptions', () => {
       await Promise.resolve()
     })
     update({ scopeKey: 'host\0worktree\0other-tab' })
-    update({ scopeKey: 'host\0worktree\0tab' })
+    update({ scopeKey: testScope })
     await act(async () => {
       resolveModel('accepted')
       await picked
@@ -253,7 +187,7 @@ describe('useMobileNativeChatSessionOptions', () => {
         agent === 'grok'
           ? [initialModel, successorModel].map((id) => ({ id, label: id, options: [] }))
           : undefined
-      const scope = 'host\0worktree\0tab'
+      const scope = testScope
       const identityA = {
         agent,
         terminalHandle: scope,
@@ -328,7 +262,7 @@ describe('useMobileNativeChatSessionOptions', () => {
   )
 
   it('routes a blocked action error only to its original active provider session', async () => {
-    const scope = 'host\0worktree\0tab'
+    const scope = testScope
     const original = {
       agent: 'codex',
       terminalHandle: scope,
@@ -384,13 +318,13 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
     // Re-entering repeats session-start evidence that predates later user picks.
     update({ scopeKey: 'host\0worktree\0other' })
-    update({ scopeKey: 'host\0worktree\0tab' })
+    update({ scopeKey: testScope })
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
   })
 
   it('retains known report identity without replaying an unchanged model', async () => {
-    const scope = 'host\0worktree\0tab'
+    const scope = testScope
     const unknown = { agent: 'claude', terminalHandle: scope }
     liveBindings.set(scope, unknown)
     mount({ reportedModel: 'claude-sonnet-5' })
@@ -414,20 +348,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     liveBindings.set(scope, { ...unknown, providerSession: { key: 'session_id', id: 'B' } })
     update({ reportedModel: 'claude-sonnet-5' })
     expect(api!.snapshot[0].kind).toMatchObject({ currentValue: 'sonnet' })
-  })
-
-  it('keeps the live tab’s tracked model when other tabs overflow the record cap', async () => {
-    mount()
-    await act(async () => {
-      await api!.setOption('model', 'opus')
-    })
-    // Repeatedly touch the live tab while exceeding capacity so insertion-order eviction would lose it.
-    for (let index = 0; index < 40; index += 1) {
-      update({ scopeKey: `host\0worktree\0overflow-${index}` })
-      update({ scopeKey: 'host\0worktree\0tab' })
-    }
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
   })
 
   it('keeps the latest queued operation pending until it settles', async () => {

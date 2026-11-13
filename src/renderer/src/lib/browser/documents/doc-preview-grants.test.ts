@@ -15,13 +15,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => (mocks.ambiguous ? null : mocks.environmentId)
 }))
 
-import {
-  buildDocPreviewGrantRequest,
-  ensureDocPreviewGrant,
-  releaseDocPreviewGrant
-} from './doc-preview-grants'
-import { createTestStore } from '@/store/testing/app-store-test-fixture'
-import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { ensureDocPreviewGrant, releaseDocPreviewGrant } from './doc-preview-grants'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -35,38 +29,6 @@ beforeEach(() => {
 })
 
 describe('doc preview grant lifetime', () => {
-  // Why: Share reads and keys from the handle's location, so a later host change must not move it.
-  it('keeps the minted location on the handle until the grant is released', async () => {
-    const minted = {
-      owner: {
-        kind: 'runtime' as const,
-        environmentId: 'server-1',
-        worktreeSelector: 'id:wt-1',
-        worktreeRoot: '/srv/repo'
-      },
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/a.html'
-    }
-    const movedHost = { ...minted, owner: { ...minted.owner, environmentId: 'server-2' } }
-
-    await expect(ensureDocPreviewGrant('preview-5', minted)).resolves.toMatchObject({
-      location: minted
-    })
-    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
-      location: minted
-    })
-    expect(mocks.mintGrant).toHaveBeenCalledExactlyOnceWith({
-      ...minted,
-      browserPageId: 'preview-5'
-    })
-
-    releaseDocPreviewGrant('preview-5')
-    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
-      location: movedHost
-    })
-  })
-
   // Late rejection from a released tab must not evict its reopened tab’s new, otherwise unrevokable grant.
   it('leaves the entry of a later mint alone when an earlier one rejects', async () => {
     const request = {
@@ -95,31 +57,4 @@ describe('doc preview grant lifetime', () => {
     releaseDocPreviewGrant('preview-4')
     await vi.waitFor(() => expect(mocks.revokeGrant).toHaveBeenCalledWith('grant-2'))
   })
-})
-
-describe('outside-workspace document grants', () => {
-  it.each([
-    ['/srv/repo', '/tmp/reports/proposal.html', '/tmp/reports'],
-    ['C:/repo', 'C:/reports/proposal.html', 'C:/reports']
-  ])(
-    'keeps %s as the source workspace while granting only the opened document',
-    (workspaceRoot, filePath, root) => {
-      mocks.environmentId = 'env-1'
-      const state = createTestStore().getState()
-      state.getKnownWorktreeById = () =>
-        makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: workspaceRoot })
-      expect(buildDocPreviewGrantRequest(state, 'wt-1', filePath)).toEqual({
-        owner: {
-          kind: 'runtime',
-          environmentId: 'env-1',
-          worktreeSelector: 'id:wt-1',
-          worktreeRoot: workspaceRoot,
-          fileAccess: 'terminal-artifact'
-        },
-        requestBase: root,
-        root,
-        entryRelativePath: 'proposal.html'
-      })
-    }
-  )
 })

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
@@ -18,6 +18,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { useMoreModelsShown } from './use-more-models-shown'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
@@ -36,7 +37,8 @@ import {
   descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
-  SessionOptionSummaryRow
+  SessionOptionSummaryRow,
+  showsSessionOptionAsSwitch
 } from './MobileNativeChatSessionOptionRows'
 import {
   SessionOptionSegments,
@@ -118,8 +120,6 @@ export function MobileNativeChatSessionOptionPickers({
   const t = useMobileTranslation()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
-  // Aliases of listed models wait behind a toggle, as compact pickers do without search.
-  const [moreModelsShown, setMoreModelsShown] = useState(false)
   useEffect(() => {
     if (open && !wasOpen.current) {
       controller.optionSurface?.demandModelCatalog?.()
@@ -136,6 +136,7 @@ export function MobileNativeChatSessionOptionPickers({
     }
   }, [open, hasControls, onNavigate])
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
+  const moreModels = useMoreModelsShown(model)
   const permission = snapshot.find(
     (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   )
@@ -253,7 +254,7 @@ export function MobileNativeChatSessionOptionPickers({
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
         onAfterClose={() => {
-          setMoreModelsShown(false)
+          moreModels.reset()
           onDrawerAfterClose?.()
         }}
       >
@@ -312,10 +313,7 @@ export function MobileNativeChatSessionOptionPickers({
                   disabled: locked(activeDescriptor),
                   onSetOption: (value) => applyOption(activeDescriptor, value),
                   onInvokeAction: () => invokeAction(activeDescriptor),
-                  moreChoices: {
-                    shown: moreModelsShown,
-                    onToggle: () => setMoreModelsShown((shown) => !shown)
-                  },
+                  moreChoices: moreModels,
                   ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
                 },
                 t
@@ -383,7 +381,7 @@ function OptionRows({
         {descriptors.flatMap((descriptor) => {
           const isPermission = descriptor === permission
           const disabled = locked(descriptor) || !descriptor.settable
-          if (descriptor.kind.type === 'boolean' && !descriptor.action) {
+          if (showsSessionOptionAsSwitch(descriptor)) {
             return descriptorRowElements(
               {
                 descriptor,

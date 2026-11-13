@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
-import { StructuredAgentArgumentsError } from '../../../native-chat/structured-agent-arguments-error'
+import { StructuredAgentArgumentsError } from '../../../native-chat/agent-launch/structured-agent-arguments-error'
 
 describe('codexStructuredLaunchArgs', () => {
   it('drops permission options and config overrides owned by Orca', () => {

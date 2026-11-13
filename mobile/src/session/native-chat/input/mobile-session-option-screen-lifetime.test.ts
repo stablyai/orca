@@ -7,7 +7,7 @@ import { useMobileSessionTabReader } from '../../use-mobile-session-tab-reader'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { clearMobileSessionOptionRecordsForTests } from './use-mobile-native-chat-session-options'
 import { readNativeChatSessionOptionCache } from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 
 const persist = vi.fn()
 vi.mock('./mobile-native-chat-session-option-persistence', () => ({
@@ -16,7 +16,7 @@ vi.mock('./mobile-native-chat-session-option-persistence', () => ({
     return Promise.resolve()
   }
 }))
-vi.mock('../../use-mobile-native-chat-model-discovery', () => ({
+vi.mock('./use-mobile-native-chat-model-discovery', () => ({
   useMobileNativeChatModelDiscovery: () => null
 }))
 const client: RpcClient = {

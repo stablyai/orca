@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard } from 'react-native'
 import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
-import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
-import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
-import { useWorktreeCreateBasePrefetch } from '../tasks/use-worktree-create-base-prefetch'
-import { useHostDescriptor } from '../transport/hosts/host-descriptor-store'
+import type { SmartModeAvailabilityInput } from '../new-workspace/source-selection/mobile-smart-source-modes'
+import {
+  deriveRepoSlug,
+  type PasteRepoCandidate
+} from '../new-workspace/source-selection/smart-source-paste-intent'
+import { useMobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
+import { useNewWorktreeRuntimeCapabilities } from '../new-workspace/creation/worktree-create-capability'
+import { useWorktreeCreateBasePrefetch } from '../new-workspace/creation/use-worktree-create-base-prefetch'
+import { useHostDescriptor } from '../host-descriptors/host-descriptor-store'
 import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,
@@ -71,14 +74,20 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     existingWorktrees,
     openExternalUrl,
     onCreated,
-    onClose
+    onClose,
+    folderLaunch
   } = props
   const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
     useNewWorkspaceRepositories({
       client: desktopClient,
       serverClients,
       hostId,
-      visible
+      visible,
+      ...(folderLaunch
+        ? {
+            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
+          }
+        : {})
     })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
@@ -126,6 +135,14 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     worktreeBranches: selectedRepoWorktreeBranches,
     onError: setError
   })
+  // The folder's name, seeded once per opening; the user's edits stand.
+  const seededFolderName = useRef(false)
+  useEffect(() => {
+    if (folderLaunch && !seededFolderName.current) {
+      seededFolderName.current = true
+      composer.setName(folderLaunch.name)
+    }
+  }, [composer, folderLaunch])
   const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
   useWorktreeCreateBasePrefetch({
     client: visible ? client : null,
@@ -179,7 +196,19 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       setNote((current) => (current === note ? '' : current))
       onCreated(worktreeId, name, warning, repoServer)
     },
-    onClose
+    onClose,
+    ...(folderLaunch
+      ? {
+          folderLaunch: {
+            ...folderLaunch.submit,
+            executionHostId: folderLaunch.executionHostId,
+            parent: {
+              parentWorkspace: folderLaunch.parentWorkspace,
+              parentWorkspaceOrigin: 'manual' as const
+            }
+          }
+        }
+      : {})
   })
 
   const sourceAvailability: SmartModeAvailabilityInput = {

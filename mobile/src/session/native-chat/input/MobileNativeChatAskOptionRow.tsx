@@ -1,13 +1,8 @@
-import { Pressable, ScrollView, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import {
-  colors,
-  concentricRadius,
-  radii,
-  spacing,
-  typography,
-  pressedStyle
-} from '../../../theme/mobile-theme'
+import { MobileNativeChatOptionThumbnail } from './MobileNativeChatOptionThumbnail'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
+import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
@@ -15,7 +10,7 @@ export function MobileNativeChatAskOptionRow({
   label,
   description,
   preview,
-  onPreviewLayout,
+  onPreview,
   selected,
   multi,
   disabled,
@@ -23,16 +18,16 @@ export function MobileNativeChatAskOptionRow({
 }: {
   label: string
   description?: string
-  /** Shown under the row while it is selected, as the agent wrote it. */
+  /** Read-only inspection is separate from choosing the option. */
   preview?: string
-  /** The preview's edges in the card's scroll content; the row renders as its direct children. */
-  onPreviewLayout?: (top: number, bottom: number) => void
+  onPreview?: () => void
   selected: boolean
   multi?: boolean
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const hasPreview = Boolean(preview && onPreview)
   const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
@@ -40,6 +35,7 @@ export function MobileNativeChatAskOptionRow({
       style={({ pressed }) => [
         styles.option,
         selected && styles.optionSelected,
+        hasPreview && styles.optionWithPreview,
         pressed && pressedStyle
       ]}
       disabled={disabled}
@@ -65,52 +61,45 @@ export function MobileNativeChatAskOptionRow({
       </View>
     </Pressable>
   )
-  // One root shape whether or not the preview shows, so selecting never remounts the row.
-  return (
-    <>
+  return hasPreview ? (
+    <View style={[styles.optionCard, selected && styles.optionSelected]}>
       {row}
-      {preview && selected ? (
-        <View
-          style={styles.preview}
-          onLayout={(event: LayoutChangeEvent) => {
-            const { y, height } = event.nativeEvent.layout
-            onPreviewLayout?.(y, y + height)
-          }}
-        >
-          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
-            {/* Mockups are drawn in columns, so they scroll sideways instead of wrapping at phone width. */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Text selectable style={styles.previewText}>
-                {preview}
-              </Text>
-            </ScrollView>
-          </ScrollView>
-        </View>
-      ) : null}
-    </>
+      <View style={styles.previewInset}>
+        <MobileNativeChatOptionThumbnail label={label} preview={preview!} onPress={onPreview!} />
+      </View>
+    </View>
+  ) : (
+    row
   )
 }
 
+const CHECK_SIZE = 18
+const CHOICE_GAP = 10
+const CHOICE_PADDING_X = spacing.md
+
+// Choices sit on the card unfilled, edged at 3:1 against it, so dark mode is no longer grey on grey.
 const styles = themedStyleSheet(() => ({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: concentricRadius(radii.surface, spacing.xs),
-    backgroundColor: colors.bgRaised,
+    gap: CHOICE_GAP,
+    paddingVertical: 10,
+    paddingHorizontal: CHOICE_PADDING_X,
+    borderRadius: ASK_CHOICE_RADIUS,
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    marginBottom: spacing.xs
+    borderColor: colors.choiceBorder,
+    marginBottom: 6
   },
   optionSelected: {
-    borderColor: colors.statusGreen
+    borderColor: colors.statusGreen,
+    backgroundColor: colors.choiceSelectedFill
   },
   check: {
-    width: 18,
-    height: 18,
+    width: CHECK_SIZE,
+    height: CHECK_SIZE,
     borderWidth: 1.5,
-    borderColor: colors.textMuted,
+    borderColor: colors.textSecondary,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -135,20 +124,25 @@ const styles = themedStyleSheet(() => ({
   },
   optionDescription: {
     color: colors.textSecondary,
-    fontSize: typography.metaSize
+    fontSize: 13,
+    lineHeight: 18
   },
-  preview: {
-    backgroundColor: colors.bgPanel,
+  optionCard: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: concentricRadius(radii.surface, spacing.xs),
-    padding: spacing.sm,
-    marginBottom: spacing.xs,
-    maxHeight: 220
+    borderColor: colors.choiceBorder,
+    borderRadius: ASK_CHOICE_RADIUS,
+    backgroundColor: 'transparent',
+    marginBottom: 6
   },
-  previewText: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize
+  // The card carries the edge and fill; the row inside it draws neither.
+  optionWithPreview: {
+    borderWidth: 0,
+    marginBottom: 0,
+    backgroundColor: 'transparent'
+  },
+  previewInset: {
+    marginLeft: CHOICE_PADDING_X + CHECK_SIZE + CHOICE_GAP,
+    marginRight: CHOICE_PADDING_X,
+    marginBottom: 10
   }
 }))

@@ -4,8 +4,6 @@ import {
   type NativeChatSourcePending
 } from './native-chat-input-content'
 import { resolveNativeChatTranscriptAgent } from '../native-chat-agent-support'
-import { agentImagePastePath } from '../../agent-image-paste-path'
-import { getAgentImageHandling } from '../../agent-image-paste'
 import { buildNativeChatPasteBytes } from '../input/native-chat-paste-bytes'
 import {
   BRACKETED_PASTE_START,
@@ -44,9 +42,11 @@ function expectedSourceInput(pending: NativeChatSourcePending): ExpectedSourceIn
   if (cached) {
     return cached
   }
+  if (pending.imagePaths?.length) {
+    return { keys: [] }
+  }
   const provider = resolveNativeChatTranscriptAgent(pending.sourceAgent)
-  const paths = pending.imagePaths ?? []
-  let body = paths.length > 0 && !pending.text.trim() ? '' : submittedText(pending.text)
+  let body = submittedText(pending.text)
   if (
     provider === 'omp' &&
     buildNativeChatPasteBytes(pending.text).startsWith(BRACKETED_PASTE_START)
@@ -57,22 +57,6 @@ function expectedSourceInput(pending: NativeChatSourcePending): ExpectedSourceIn
     body = body.replace(/\r\n?/g, '\n')
   }
   let text = body
-  let images: readonly string[] = paths
-  if (getAgentImageHandling(pending.sourceAgent) !== 'attachment') {
-    text = [
-      ...paths.map((path) => {
-        const mention = agentImagePastePath(pending.sourceAgent, path)
-        return provider === 'omp' ? ompPastedText(mention) : mention
-      }),
-      ...(body ? [body] : [])
-    ].join(' ')
-    images = []
-  } else if (provider === 'codex') {
-    text =
-      paths.map((_, index) => `[Image #${index + 1}] `).join('') +
-      (paths.length && body ? ' ' : '') +
-      body
-  }
   if (provider === 'omp') {
     text = text.trim()
   }
@@ -86,27 +70,13 @@ function expectedSourceInput(pending: NativeChatSourcePending): ExpectedSourceIn
     text = rustTrim(text)
   }
   const texts =
-    provider === 'opencode'
-      ? [false, true].map((full) =>
-          [
-            ...paths.map((path) =>
-              opencodeFrame(submittedText(agentImagePastePath(pending.sourceAgent, path)), full)
-            ),
-            ...(body
-              ? [
-                  buildNativeChatPasteBytes(pending.text).startsWith(BRACKETED_PASTE_START)
-                    ? opencodeFrame(body, full)
-                    : body
-                ]
-              : [])
-          ].join(' ')
-        )
+    provider === 'opencode' &&
+    buildNativeChatPasteBytes(pending.text).startsWith(BRACKETED_PASTE_START)
+      ? [false, true].map((full) => opencodeFrame(body, full))
       : [text]
   const expected = {
     keys: [
-      ...new Set(
-        texts.map((value) => sourceKey(provider, nativeChatInputTextDigest(value), images))
-      )
+      ...new Set(texts.map((value) => sourceKey(provider, nativeChatInputTextDigest(value), [])))
     ]
   }
   pendingKeys.set(pending, expected)

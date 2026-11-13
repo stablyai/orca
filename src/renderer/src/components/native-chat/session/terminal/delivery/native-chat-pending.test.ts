@@ -18,7 +18,7 @@ import {
 
 const scope = { paneKey: 'test', agent: 'opencode' }
 const session = 'session'
-const full = '@/tmp/a.png   one\ntwo\nthree  '
+const full = 'one\ntwo\nthree'
 const caption = '  one\ntwo\nthree  '
 function row(text: string, id: string, transcriptOrder = 1): NativeChatMessage {
   return {
@@ -48,26 +48,179 @@ function send(id: string, text: string, imagePaths?: string[]): NativeChatPendin
 }
 beforeEach(() => clearPendingSendCacheForTests())
 
+it('holds a pathless image receipt through cache remount and paging without reclaiming it', () => {
+  const pending = ['first', 'second'].map((id) => ({
+    id,
+    text: '',
+    imagePaths: [`/tmp/${id}.png`],
+    sentAt: 100,
+    afterMessageId: 'working'
+  }))
+  const working = { ...answer, id: 'working', timestamp: 90, transcriptOrder: 0 }
+  const image: NativeChatMessage = {
+    id: 'image',
+    role: 'user',
+    timestamp: 110,
+    transcriptOrder: 1,
+    source: 'transcript',
+    blocks: [{ type: 'image-ref', url: 'data:image/png;base64,iVBORw0K' }]
+  }
+  const landed = [working, image]
+  writePendingSendCache(scope, prunePendingSends(pending, landed, session))
+  const remounted = readPendingSendCache(scope)
+  expect(remounted.map((entry) => entry.id)).toEqual(['first', 'second'])
+  expect(prunePendingSends(remounted, landed, session)).toBe(remounted)
+  expect(prunePendingSends(remounted, [], session)).toBe(remounted)
+  expect(visibleNativeChatPendingSends(remounted, [], session).map((entry) => entry.id)).toEqual([
+    'second'
+  ])
+  const replied = [...landed, { ...answer, timestamp: 120 }]
+  writePendingSendCache(scope, prunePendingSends(remounted, replied, session))
+  const remaining = readPendingSendCache(scope)
+  expect(remaining.map((entry) => entry.id)).toEqual(['second'])
+  expect(
+    visibleNativeChatPendingSends(remaining, replied, session).map((entry) => entry.id)
+  ).toEqual(['second'])
+  expect(
+    prunePendingSends(
+      remaining,
+      [
+        ...replied,
+        { ...image, id: 'new-image', timestamp: 130, transcriptOrder: 10 },
+        { ...answer, id: 'later-answer', timestamp: 140, transcriptOrder: 11 }
+      ],
+      session
+    )
+  ).toEqual([])
+})
+
+it('replaces failed legacy captions without merging different source requests or image-only paths', () => {
+  const legacy = { id: 'old', text: 'look', imagePaths: ['/tmp/a.png'], sentAt: 1 }
+  appendPendingSendCache(scope, { ...legacy, delivery: 'rejected' })
+  appendPendingSendCache(scope, { ...legacy, id: 'live', text: 'neighbor' })
+  expect(
+    appendPendingSendCache(scope, { ...legacy, id: 'new', imagePaths: ['/tmp/b.png'] }).map(
+      (entry) => entry.id
+    )
+  ).toEqual(['live', 'new'])
+  writePendingSendCache(scope, [{ ...send('source', '  look  '), delivery: 'rejected' }])
+  expect(appendPendingSendCache(scope, legacy).map((entry) => entry.id)).toEqual(['source', 'old'])
+  expect(
+    appendPendingSendCache(scope, { ...legacy, id: 'raw', text: '  look  ', imagePaths: [] }).map(
+      (entry) => entry.id
+    )
+  ).toEqual(['old', 'raw'])
+  writePendingSendCache(scope, [{ ...legacy, text: '', delivery: 'rejected' }])
+  expect(
+    appendPendingSendCache(scope, {
+      ...legacy,
+      id: 'different',
+      text: '',
+      imagePaths: ['/tmp/b.png']
+    }).map((entry) => entry.id)
+  ).toEqual(['old', 'different'])
+  expect(
+    appendPendingSendCache(scope, { ...legacy, id: 'same', text: '' }).map((entry) => entry.id)
+  ).toEqual(['different', 'same'])
+})
+
+it.each([false, true])(
+  'keeps source and compound image claims in chronological order, image first: %s',
+  (imageFirst) => {
+    const source = send('source', 'a b')
+    const group = [
+      { ...send('image', 'a b', ['/tmp/a.png']), sourceAgent: undefined },
+      { ...send('a', 'a'), sourceAgent: undefined },
+      { ...send('b', 'b'), sourceAgent: undefined }
+    ]
+    const pending = imageFirst ? [...group, source] : [source, ...group]
+    const messages = [row('a b', 'x'), answer]
+    const remaining = prunePendingSends(pending, messages, session)
+    expect(remaining.map((entry) => entry.id)).toEqual(
+      imageFirst ? ['source'] : ['image', 'a', 'b']
+    )
+    writePendingSendCache(scope, remaining)
+    expect(
+      visibleNativeChatPendingSends(readPendingSendCache(scope), messages, session).map(
+        (entry) => entry.id
+      )
+    ).toEqual(imageFirst ? ['source'] : ['image', 'a', 'b'])
+    expect(
+      prunePendingSends(
+        readPendingSendCache(scope),
+        [...messages, row('a b', 'y', 10), { ...answer, id: 'later-answer', transcriptOrder: 11 }],
+        session
+      )
+    ).toEqual([])
+    expect(
+      prunePendingSends([{ ...source, text: 'a  b' }, group[0]], messages, session).map(
+        (entry) => entry.id
+      )
+    ).toEqual(['source'])
+  }
+)
+
+it.each([
+  { survivor: 'a', keepImage: false, expected: ['a'] },
+  { survivor: 'b', keepImage: false, expected: ['b'] },
+  { survivor: 'b', keepImage: true, expected: ['image', 'b'] }
+])(
+  'retains compound advance windows through partial retirement and remount: %j',
+  ({ survivor, keepImage, expected }) => {
+    const image = {
+      ...send('image', 'a b', ['/tmp/a.png']),
+      sourceAgent: undefined,
+      afterMessageId: keepImage ? null : undefined,
+      afterMessageTimestamp: keepImage ? 1600 : undefined
+    }
+    const a = {
+      ...send('a', 'a'),
+      sourceAgent: undefined,
+      afterMessageId: undefined,
+      sentAt: survivor === 'a' ? 2000 : 1000
+    }
+    const b = {
+      ...send('b', 'b'),
+      sourceAgent: undefined,
+      afterMessageId: undefined,
+      sentAt: survivor === 'b' ? 2000 : 1000
+    }
+    const x = { ...row('a b', 'x'), timestamp: 2001 }
+    const early = { ...answer, timestamp: 1500 }
+    const remaining = prunePendingSends([image, a, b], [x, early], session)
+    expect(remaining.map((entry) => entry.id)).toEqual(expected)
+    writePendingSendCache(scope, remaining)
+    const remounted = readPendingSendCache(scope)
+    expect(visibleNativeChatPendingSends(remounted, [], session)).toEqual([])
+    expect(prunePendingSends(remounted, [x, early], session).map((entry) => entry.id)).toEqual(
+      expected
+    )
+    expect(
+      prunePendingSends(remounted, [x, early, { ...answer, id: 'later', timestamp: 2002 }], session)
+    ).toEqual([])
+  }
+)
+
 it('keeps a spent overlapping source unit excluded through pruning, cache remount and paging', () => {
   appendPendingSendCache(scope, send('plain', full))
-  const pending = appendPendingSendCache(scope, send('image', caption, ['/tmp/a.png']))
+  const pending = appendPendingSendCache(scope, send('padded', caption))
   const receipt = row(full, 'shared')
   expect(
     visibleNativeChatPendingSends(pending, [receipt], session).map((entry) => entry.id)
-  ).toEqual(['image'])
+  ).toEqual(['padded'])
   writePendingSendCache(scope, prunePendingSends(pending, [receipt, answer], session))
   const remounted = readPendingSendCache(scope)
-  expect(remounted.map((entry) => entry.id)).toEqual(['image'])
+  expect(remounted.map((entry) => entry.id)).toEqual(['padded'])
   expect(prunePendingSends(remounted, [], session)).toBe(remounted)
   expect(
     visibleNativeChatPendingSends(remounted, [receipt, answer], session).map((entry) => entry.id)
-  ).toEqual(['image'])
+  ).toEqual(['padded'])
   expect(prunePendingSends(remounted, [receipt, row(full, 'new', 2), answer], session)).toEqual([])
   // An earlier unspent row first loaded later remains usable; the survivor's boundary was not advanced.
   expect(
     prunePendingSends(
       remounted,
-      [row('@/tmp/a.png one\ntwo\nthree', 'earlier', 0), receipt, answer],
+      [row('  one\ntwo\nthree  ', 'earlier', 0), receipt, answer],
       session
     )
   ).toEqual([])

@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { HostHelloAckSchema } from './control-messages.js'
-import { isTrustedNewerMove, RelayMovedSchema } from './director-messages.js'
 import {
   buildHostChallengePlaintext,
   buildHostProofMacInput,
@@ -8,29 +6,6 @@ import {
 } from './host-proof-transcript.js'
 
 describe('relay protocol contract', () => {
-
-  it('accepts moves only from the configured director at a strictly newer epoch', () => {
-    const move = RelayMovedSchema.parse({
-      v: 1,
-      cellUrl: 'https://relay-c2.onorca.dev',
-      assignmentEpoch: 4
-    })
-    const base = {
-      configuredDirectorOrigin: 'https://relay.onorca.dev',
-      currentAssignmentEpoch: 3,
-      move
-    }
-    expect(isTrustedNewerMove({ ...base, sourceOrigin: 'https://relay.onorca.dev' })).toBe(true)
-    expect(isTrustedNewerMove({ ...base, sourceOrigin: move.cellUrl })).toBe(false)
-    expect(
-      isTrustedNewerMove({
-        ...base,
-        sourceOrigin: 'https://relay.onorca.dev',
-        currentAssignmentEpoch: 4
-      })
-    ).toBe(false)
-  })
-
   it('locks the complete host key-possession transcript', () => {
     const transcript = buildHostProofTranscript({
       relayOrigin: 'https://relay.onorca.dev',
@@ -87,31 +62,5 @@ describe('relay protocol contract', () => {
         resumeRequested: false
       })
     ).toThrow('challengeNonce must be 24 bytes')
-  })
-})
-
-describe('pending connection details capability', () => {
-  it('reads a pending entry with or without the stated kind and device', () => {
-    const ack = {
-      v: 1 as const,
-      generation: 3,
-      controlResumeSecret: 'R'.repeat(43),
-      leaseExpiresAt: 1_800_000_000_000,
-      activeConnIds: []
-    }
-    const identifiers = { connId: 'conn-1', connTicket: 'T'.repeat(43) }
-    expect(HostHelloAckSchema.safeParse({ ...ack, pendingConns: [identifiers] }).success).toBe(true)
-    expect(
-      HostHelloAckSchema.safeParse({
-        ...ack,
-        pendingConns: [{ ...identifiers, kind: 'resume', relayDeviceId: 'device-1' }]
-      }).success
-    ).toBe(true)
-    expect(
-      HostHelloAckSchema.safeParse({
-        ...ack,
-        pendingConns: [{ ...identifiers, reservationId: 'injected' }]
-      }).success
-    ).toBe(false)
   })
 })

@@ -9,11 +9,8 @@ import {
   waitForAgentPromptPromise
 } from './agent-prompt-signals'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
-import { agentImagePastePath } from '../../../../shared/agent-image-paste-path'
-import { agentImagePasteWrites } from '../../../../shared/agent-image-paste'
 import {
   buildNativeChatPasteBytes,
-  buildNativeChatImagePasteBytes,
   NATIVE_CHAT_SUBMIT
 } from '../../../../shared/native-chat/input/native-chat-paste-bytes'
 import {
@@ -56,34 +53,14 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
     ) {
       return Promise.resolve(refused)
     }
-    const rawBytes =
-      Buffer.byteLength(prompt.text) +
-      (prompt.imagePaths ?? []).reduce(
-        (sum, path) => sum + Buffer.byteLength(JSON.stringify(path)) + 1,
-        0
-      )
-    if (rawBytes > TERMINAL_INPUT_MAX_BYTES || (!prompt.text && !prompt.imagePaths?.length)) {
+    const rawBytes = Buffer.byteLength(prompt.text)
+    if (rawBytes > TERMINAL_INPUT_MAX_BYTES || !prompt.text) {
       return Promise.resolve(refused)
     }
     const pty = this.ptysById.get(binding.ptyId)
     const agent = pty?.foregroundAgent ?? pty?.launchAgent ?? prompt.agent
-    const body = (prompt.imagePaths?.length ? prompt.text.trim().length : prompt.text.length)
-      ? buildNativeChatPasteBytes(prompt.text)
-      : ''
-    const frames = [
-      prompt.text,
-      AGENT_TUI_CLEAR_INPUT_MAX,
-      ...agentImagePasteWrites(
-        agent,
-        (prompt.imagePaths ?? []).map((path) =>
-          buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
-        ),
-        body.length > 0
-      )
-    ]
-    if (body) {
-      frames.push(body)
-    }
+    const body = buildNativeChatPasteBytes(prompt.text)
+    const frames = [prompt.text, AGENT_TUI_CLEAR_INPUT_MAX, body]
     const byteLength =
       rawBytes + frames.reduce((sum, frame) => sum + Buffer.byteLength(frame), 0) + 1
     const entry = this.promptInputs.admit(
@@ -112,31 +89,21 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
       const platform = this.getPtyWriteHostPlatform(binding.ptyId)
       await write(frames[1])
       const joined = agentPromptSubmitJoinsPasteFrame(agent)
-      for (let index = 2; index < frames.length; index++) {
-        const frame = frames[index]
-        const last = index === frames.length - 1
-        const gate =
-          last && !joined
-            ? this.createAgentPromptRenderGate(
-                binding.ptyId,
-                getTerminalPasteIngestMs(platform, Buffer.byteLength(frame)),
-                scheduleText
-              )
-            : null
-        try {
-          gate?.arm()
-          await write(frame + (last && joined ? NATIVE_CHAT_SUBMIT : ''))
-          if (gate) {
-            await waitForAgentPromptPromise(gate.wait(), entry.signal)
-          } else if (!last) {
-            await waitForAgentPromptDelay(
-              300 + getTerminalPasteIngestMs(platform, Buffer.byteLength(frame)),
-              entry.signal
-            )
-          }
-        } finally {
-          gate?.dispose()
+      const gate = joined
+        ? null
+        : this.createAgentPromptRenderGate(
+            binding.ptyId,
+            getTerminalPasteIngestMs(platform, Buffer.byteLength(frames[2])),
+            scheduleText
+          )
+      try {
+        gate?.arm()
+        await write(frames[2] + (joined ? NATIVE_CHAT_SUBMIT : ''))
+        if (gate) {
+          await waitForAgentPromptPromise(gate.wait(), entry.signal)
         }
+      } finally {
+        gate?.dispose()
       }
       if (!joined) {
         await waitForAgentPromptDelay(

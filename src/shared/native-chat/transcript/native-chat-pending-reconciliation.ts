@@ -4,11 +4,11 @@ import {
   nativeChatReceiptSnapshot,
   nativeChatReceiptWindow,
   nativeChatSourceReceiptKey,
+  liveNativeChatReceiptDependencies,
+  nativeChatReceiptDependencyKey,
   type NativeChatReceiptDependency
 } from './native-chat-source-receipts'
 import {
-  liveNativeChatReceiptDependencies,
-  nativeChatReceiptDependencyKey,
   nativeChatPendingWitnesses,
   pendingReceiptBit,
   type NativeChatPendingWitness
@@ -83,13 +83,17 @@ export function reconcileNativeChatPendingSends(
         members: [],
         proof: entry.receiptProof ?? 'source',
         glue: entry.receiptGlue,
+        glueMembers: new Set<number>(),
         advanced: new Set()
       }
       locked.set(key, witness)
     }
     witness.members.push(index)
+    if (entry.receiptGlue) {
+      witness.glueMembers!.add(index)
+    }
     witness.mask |= pendingReceiptBit(index, pending.length)
-    const eligible = nativeChatReceiptWindow(entry, snapshot, sessionId, witness.glue)
+    const eligible = nativeChatReceiptWindow(entry, snapshot, sessionId, entry.receiptGlue)
     if (
       witness.row.index >= 0 &&
       snapshot.rows.some(
@@ -229,7 +233,9 @@ export function commitNativeChatPendingReceipts<T extends NativeChatPendingSend>
       sourceReceipt: receipt,
       receiptMembers,
       receiptProof,
-      receiptGlue: witness?.glue ?? entry.receiptGlue,
+      receiptGlue: witness
+        ? (witness.glueMembers?.has(pending.indexOf(entry)) ?? witness.glue)
+        : entry.receiptGlue,
       receiptDependencies: applicable.length ? applicable : undefined
     }
   })

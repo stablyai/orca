@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
-import { opencodeMessages } from './transcript-opencode-part-blocks'
-import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import { decodeOmpTranscriptLine } from './transcript-line-decoders-omp'
-import { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
+import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
+import { opencodeMessages } from './transcript-history/opencode/transcript-opencode-part-blocks'
+import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
+import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 import { prepareNativeChatMessages } from '../../shared/native-chat/transcript/native-chat-message-preparation'
 import {
   prunePendingSends,
@@ -15,7 +15,6 @@ const pending: NativeChatPendingSend = {
   id: 'send',
   sourceAgent: 'codex',
   text: '  literal [Image #1]\nkeep  spaces\u0085here  ',
-  imagePaths: ['/tmp/one.png', '/tmp/two.png'],
   sentAt: 1
 }
 
@@ -83,19 +82,17 @@ function reconcile(payload: Record<string, unknown>, entry = pending) {
   return prunePendingSends([entry], prepareNativeChatMessages([user, answer], 'codex'))
 }
 
-it('settles exact submitted Codex text and ordered local images through source decoding and display preparation', () => {
-  const payload = {
-    message: '[Image #1] [Image #2]    literal [Image #1]\nkeep  spaceshere',
-    local_images: ['/tmp/one.png', '/tmp/two.png'],
-    images: []
-  }
-  expect(reconcile(payload)).toEqual([])
-  expect(reconcile({ ...payload, local_images: ['/tmp/two.png', '/tmp/one.png'] })).toEqual([
-    pending
-  ])
+it('settles exact submitted Codex text while retaining literal image markers and spacing', () => {
+  const payload = { message: 'literal [Image #1]\nkeep  spaceshere', local_images: [], images: [] }
+  const entry = { ...pending, text: 'literal [Image #1]\nkeep  spaces\u0085here' }
+  expect(reconcile(payload, entry)).toEqual([])
+  expect(reconcile({ ...payload, local_images: ['/tmp/one.png'] }, entry)).toEqual([entry])
   expect(
-    reconcile({ ...payload, message: payload.message.replace('keep  spaces', 'keep spaces') })
-  ).toEqual([pending])
+    reconcile(
+      { ...payload, message: payload.message.replace('keep  spaces', 'keep spaces') },
+      entry
+    )
+  ).toEqual([entry])
 })
 
 it('does not turn unaccounted file-backed attachments or literal-marker differences into text-only delivery', () => {
@@ -115,8 +112,7 @@ it('matches the complete submitted file-mention text without inventing attachmen
     id: 'mention',
     sourceAgent: 'omp',
     sentAt: 1,
-    text: '  caption\tline\nend  ',
-    imagePaths: ['/tmp/one image.png']
+    text: '@"/tmp/one image.png"   caption\tline\nend'
   }
   const readOmp = (extra: unknown[] = []) =>
     decodeOmpTranscriptLine(
@@ -235,7 +231,7 @@ it('does not allocate a recorded Codex response/completed pair to two sends', ()
   ).toEqual(['second'])
 })
 
-it('matches per-frame OpenCode caption trimming and C1 paste sanitization without normalizing short typed input', () => {
+it('matches OpenCode text trimming and C1 paste sanitization without normalizing short typed input', () => {
   const decode = (text: string, id = 'user') =>
     opencodeMessages(
       { id, role: 'user', timestamp: null },
@@ -251,19 +247,14 @@ it('matches per-frame OpenCode caption trimming and C1 paste sanitization withou
     blocks: []
   }
   const input: NativeChatPendingSend = {
-    id: 'image',
+    id: 'text',
     sourceAgent: 'opencode',
     text: '  alpha\n\u009b31mbeta\ngamma  ',
-    imagePaths: ['/tmp/a.png'],
     sentAt: 1
   }
-  expect(prunePendingSends([input], [decode('@/tmp/a.png alpha\nbeta\ngamma'), answer])).toEqual([])
-  expect(
-    prunePendingSends([input], [decode('@/tmp/a.png   alpha\nbeta\ngamma  '), answer])
-  ).toEqual([])
-  expect(prunePendingSends([input], [decode('@/tmp/a.png alpha beta gamma'), answer])).toEqual([
-    input
-  ])
+  expect(prunePendingSends([input], [decode('alpha\nbeta\ngamma'), answer])).toEqual([])
+  expect(prunePendingSends([input], [decode('  alpha\nbeta\ngamma  '), answer])).toEqual([])
+  expect(prunePendingSends([input], [decode('alpha beta gamma'), answer])).toEqual([input])
   const short = { ...input, id: 'short', text: `  ${'x'.repeat(160)}  `, imagePaths: [] }
   expect(prunePendingSends([short], [decode('x'.repeat(160)), answer])).toEqual([short])
   expect(prunePendingSends([short], [decode(`  ${'x'.repeat(160)}  `), answer])).toEqual([])

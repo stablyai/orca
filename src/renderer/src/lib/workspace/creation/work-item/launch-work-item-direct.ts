@@ -17,7 +17,7 @@ import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/linked-work-item-context'
+import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
@@ -30,7 +30,8 @@ import type { LaunchWorkItemDirectArgs } from '@/lib/workspace/creation/work-ite
 import * as routing from './launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/workspace/creation/work-item/launch-work-item-direct-route-preparation'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(
   args: LaunchWorkItemDirectArgs
@@ -119,7 +120,7 @@ export async function launchWorkItemDirect(
     if (unavailable) {
       return reportFailure(unavailableAgentErrorMessage())
     }
-    const requestId = newAgentLaunchRequestId()
+    const requestId = createNonSecureContextUuid()
     const draftContent = await Promise.resolve(getLaunchableWorkItemDraftContent(item))
     if (args.signal?.aborted) {
       return 'cancelled'

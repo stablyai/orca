@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildCachedPaneReplayEnvelope } from '../../../../../wsl-guest/agent-hook-cached-pane-status'
+import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { PANE } from '../server.test-fixtures'
 
@@ -18,9 +20,11 @@ afterEach(() => {
 })
 
 describe('remote Codex unlabelled roster removals', () => {
-  const childStart = (id: string, startedAt: number) => ({
+  const childStart = (id: string, startedAt: number): AgentHookEventPayload => ({
     paneKey: PANE,
+    connectionId: null,
     source: 'codex',
+    providerSession: { key: 'session_id', id: 'root' },
     hookEventName: 'SubagentStart',
     toolAgentId: id,
     payload: {
@@ -34,6 +38,7 @@ describe('remote Codex unlabelled roster removals', () => {
   const emptyPoll = (mainState: 'working' | 'done', toolAgentId?: string) => ({
     paneKey: PANE,
     source: 'codex',
+    providerSession: { key: 'session_id', id: 'root' },
     toolAgentId,
     payload: {
       agentType: 'codex',
@@ -48,11 +53,22 @@ describe('remote Codex unlabelled roster removals', () => {
     server.beginRemoteRelaySession('wsl:Ubuntu')
     server.ingestRemote(childStart(CHILD, 1), 'wsl:Ubuntu')
     server.beginRemoteRelaySession('wsl:Ubuntu')
+    const replay = buildCachedPaneReplayEnvelope({
+      event: { ...childStart(CHILD, 1), hookEventName: 'SessionStart', toolAgentId: undefined },
+      meta: { source: 'codex' }
+    })
+    server.ingestRemote(replay, 'wsl:Ubuntu')
     server.ingestRemote(emptyPoll('done'), 'wsl:Ubuntu')
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
       state: 'working',
       subagents: [expect.objectContaining({ id: CHILD })]
     })
+    server._getStateForTests().codexSubagentRosterByPaneKey.delete(PANE)
+    server.ingestRemote(replay, 'wsl:Ubuntu')
+    server.ingestRemote(emptyPoll('done'), 'wsl:Ubuntu')
+    expect(server.getStatusSnapshotForPane(PANE)[0]?.subagents?.map((child) => child.id)).toEqual([
+      CHILD
+    ])
 
     server.ingestRemote(childStart(CHILD, 1), 'wsl:Ubuntu')
     server.ingestRemote(emptyPoll('done'), 'wsl:Ubuntu')
