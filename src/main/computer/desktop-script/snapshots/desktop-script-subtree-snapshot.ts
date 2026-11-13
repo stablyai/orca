@@ -46,10 +46,14 @@ export async function readSubtreeSnapshot(
   return renderSnapshot(shown, params.noScreenshot === true)
 }
 
+// Two maximal provider walks: both providers stop at 1200 elements.
+const MAX_CACHED_SUBTREE_SNAPSHOT_ELEMENTS = 2400
+
 /**
  * Gives a subtree read the indexes the window's cached snapshot already uses: elements it showed
- * keep theirs, new ones get unused indexes. Returns what to show and what to cache, where the
- * cache keeps the earlier elements so their indexes still resolve for actions.
+ * keep theirs, new ones get never-used indexes. Returns what to show and what to cache, where the
+ * cache keeps earlier elements so their indexes still resolve for actions, except those an earlier
+ * read of this root returned and this one did not, and the least recently returned beyond the cap.
  */
 function indexSubtreeSnapshot(
   base: BridgeSnapshot,
@@ -57,20 +61,34 @@ function indexSubtreeSnapshot(
   rootElementIndex: number
 ): { shown: BridgeSnapshot; cached: BridgeSnapshot } {
   const baseElements = base.elements ?? []
-  const baseIndexByRuntimeId = new Map<string, number>()
+  const baseByRuntimeId = new Map<string, BridgeElement[]>()
+  let nextIndex = base.nextElementIndex ?? 0
   for (const element of baseElements) {
+    nextIndex = Math.max(nextIndex, element.index + 1)
     const key = runtimeIdKey(element)
-    if (key !== null && !baseIndexByRuntimeId.has(key)) {
-      baseIndexByRuntimeId.set(key, element.index)
+    const candidates = key === null ? undefined : baseByRuntimeId.get(key)
+    if (candidates) {
+      candidates.push(element)
+    } else if (key !== null) {
+      baseByRuntimeId.set(key, [element])
     }
   }
-  let nextIndex = baseElements.reduce((max, element) => Math.max(max, element.index), -1) + 1
+  const requestedRoot = baseElements.find((element) => element.index === rootElementIndex)
+  const requestedRootKey = requestedRoot ? runtimeIdKey(requestedRoot) : null
   const indexes = new Map<number, number>()
   const claimed = new Set<number>()
-  for (const element of subtree.elements ?? []) {
+  for (const [position, element] of (subtree.elements ?? []).entries()) {
     const key = runtimeIdKey(element)
-    const known = key === null ? undefined : baseIndexByRuntimeId.get(key)
-    const index = known !== undefined && !claimed.has(known) ? known : nextIndex++
+    // Why: the provider resolved the rendered root from the requested handle, so it is that element
+    // even if its name changed; Windows resolves index 0 only as the window, never by runtime id.
+    const isRequestedRoot = position === 0 && key !== null && key === requestedRootKey
+    // Why: Linux runtime ids are tree positions, so a replacement there must not take the old index.
+    const known = isRequestedRoot
+      ? requestedRoot
+      : (key === null ? undefined : baseByRuntimeId.get(key))?.find(
+          (candidate) => !claimed.has(candidate.index) && sameElementSignature(candidate, element)
+        )
+    const index = known?.index ?? nextIndex++
     claimed.add(index)
     indexes.set(element.index, index)
   }
@@ -89,9 +107,30 @@ function indexSubtreeSnapshot(
     elements: walked,
     rootElementIndex
   }
+  const baseReadRoots = base.subtreeReadRoots ?? new Map<number, number>()
+  const kept = baseElements.filter(
+    (element) =>
+      !claimed.has(element.index) && baseReadRoots.get(element.index) !== rootElementIndex
+  )
+  // The cache is ordered by when a read last returned each element, so the oldest go first.
+  const retained = kept.slice(
+    Math.max(0, kept.length + walked.length - MAX_CACHED_SUBTREE_SNAPSHOT_ELEMENTS)
+  )
+  const subtreeReadRoots = new Map<number, number>()
+  for (const element of [...retained, ...walked]) {
+    const readRoot =
+      claimed.has(element.index) && element.index !== rootElementIndex
+        ? rootElementIndex
+        : baseReadRoots.get(element.index)
+    if (readRoot !== undefined) {
+      subtreeReadRoots.set(element.index, readRoot)
+    }
+  }
   const cached: BridgeSnapshot = {
     ...shown,
-    elements: [...baseElements.filter((element) => !claimed.has(element.index)), ...walked]
+    elements: [...retained, ...walked],
+    subtreeReadRoots,
+    nextElementIndex: nextIndex
   }
   return { shown, cached }
 }
@@ -100,4 +139,17 @@ function runtimeIdKey(element: BridgeElement): string | null {
   return Array.isArray(element.runtimeId) && element.runtimeId.length > 0
     ? JSON.stringify(element.runtimeId)
     : null
+}
+
+// Mirrors the Linux resolver's same_element_signature check.
+function sameElementSignature(left: BridgeElement, right: BridgeElement): boolean {
+  const leftActions = left.actions ?? []
+  const rightActions = right.actions ?? []
+  return (
+    (left.controlType ?? '') === (right.controlType ?? '') &&
+    (left.name ?? '') === (right.name ?? '') &&
+    (left.automationId ?? '') === (right.automationId ?? '') &&
+    leftActions.length === rightActions.length &&
+    leftActions.every((action, position) => action === rightActions[position])
+  )
 }
