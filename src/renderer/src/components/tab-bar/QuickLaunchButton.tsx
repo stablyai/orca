@@ -240,10 +240,7 @@ export function ProjectedAgentMenuItems({
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (
-        <DropdownMenuItem
-          disabled
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
-        >
+        <DropdownMenuItem variant="launch" disabled className="font-normal text-muted-foreground">
           {needsServerUpdate
             ? t(
                 'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
