@@ -4,8 +4,8 @@ import type { BrowserWindow, IpcMainEvent, WebContents } from 'electron'
  * Node hosts legitimately lack these; terminal creation uses background spawn without a window (#10333), and notifications route to paired clients. */
 
 export type RuntimeDesktopSurface = {
-  /** Headless hosts retain the formatter's English defaults. */
-  translateNotification?(key: string, fallback: string): string
+  /** UI-language text for runtime code; headless hosts keep the English defaults. */
+  translate?(key: string, fallback: string): string
   /** This machine's own idle state; undefined is unknown. Absent on hosts with no desktop. */
   isAwayForMobileNotifications?(): boolean | undefined
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */
