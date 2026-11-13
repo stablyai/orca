@@ -2,7 +2,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import * as profilePaths from '../../orca-profiles/profile-storage-paths'
 import { PRWatchService } from '../../github/pr-watch/pr-watch-service'
 import * as refresh from '../../github/pull-requests/refresh/pr-refresh-coordinator'
@@ -34,6 +34,11 @@ vi.mock('./structured-agent-session-runtime', async (importOriginal) => ({
 
 let stateDirectory: string
 let runtime: OrcaRuntimeService
+let host: typeof HostRuntime
+
+beforeAll(async () => {
+  host = await vi.importActual<typeof HostRuntime>('./structured-agent-session-runtime')
+})
 
 const location = () => ({
   stateDirectory,
@@ -188,7 +193,6 @@ it('retries a failed first watch start on the maintenance pass when the chat hos
       readerPath: journalSqlReaderPath()
     })
   )
-  const host = await vi.importActual<typeof HostRuntime>('./structured-agent-session-runtime')
   try {
     await host.ensureStructuredAgentSessionHost({
       ...location(),
