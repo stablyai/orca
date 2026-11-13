@@ -5,6 +5,8 @@ import {
 import { z } from 'zod'
 import { BrowserNetworkExecutionHost } from './browser-network-execution-host'
 import {
+  BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES,
+  BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES,
   BrowserClientAutomationCommand,
   BrowserClientAutomationResult as BrowserClientHostCommandResult
 } from './browser-client-automation-protocol'
@@ -295,6 +297,19 @@ export type BrowserClientHostCommandEvent = z.infer<typeof BrowserClientHostComm
 export const BrowserClientHostCommandResultParams = BrowserClientPageCommandAuthority.extend({
   result: BrowserClientHostCommandResult
 })
+
+export const BrowserClientHostCommandResultChunkParams = BrowserClientPageCommandAuthority.extend({
+  offset: z.number().int().nonnegative().max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES),
+  contentBase64: z
+    .string()
+    .min(1)
+    .max(Math.ceil(BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+})
+
+export type BrowserClientHostCommandResultChunkParams = z.infer<
+  typeof BrowserClientHostCommandResultChunkParams
+>
 
 export const BrowserClientHostCommandResultAck = z.object({
   accepted: z.boolean()
