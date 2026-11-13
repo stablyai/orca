@@ -1,12 +1,16 @@
 // oxlint-disable-next-line typescript/triple-slash-reference -- Renderer integration tests also compile this main fixture with its ambient build constants.
 /// <reference path="../../../../types/build-constants.d.ts" />
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import { makePR } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
 import type { RpcContext } from '../../rpc/core'
 
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), account: vi.fn(), gate: vi.fn() }))
+const mocks: { resolve: Mock; account: Mock; gate: Mock } = vi.hoisted(() => ({
+  resolve: vi.fn(),
+  account: vi.fn(),
+  gate: vi.fn()
+}))
 export { mocks }
 vi.mock('../../../github/accounts/github-project-account', () => ({
   githubPRPolicyProjects: () => ({ source: null, selection: String(mocks.account()) }),
