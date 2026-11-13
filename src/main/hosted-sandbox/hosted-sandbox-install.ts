@@ -136,7 +136,8 @@ export function installHostedSandbox(
   installDevTokenClaimsProbe(() => config.getAccessToken(), app.isPackaged)
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
-    getAccessToken: config.getAccessToken
+    getAccessToken: config.getAccessToken,
+    fetch: config.fetch
   })
   const agentConfigSync = installCloudAgentConfigSync(userDataPath)
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.

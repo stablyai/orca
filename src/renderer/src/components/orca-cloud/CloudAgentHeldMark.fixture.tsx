@@ -5,14 +5,15 @@ import { holdCloudAgentLaunch } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import { setOrcaCloudAgentAccountsStateForTest } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import { CloudAgentHeldMark } from './CloudAgentHeldMark'
 
-// A cloud workspace row whose Claude waits on its pane's "Set up once" strip (N-03).
-function seed(restored = false): void {
-  setOrcaCloudAgentAccountsStateForTest({
+type Scenario = 'notSetUp' | 'restored' | 'setUp' | 'expired'
+
+function accounts(claude: 'none' | 'active' | 'revoked') {
+  return {
     load: {
       kind: 'ready',
       status: {
         credentials: {
-          claude: { state: restored ? 'active' : 'none' },
+          claude: { state: claude },
           codex: { state: 'none' },
           providerEnabled: { claude: true, codex: true }
         },
@@ -22,7 +23,14 @@ function seed(restored = false): void {
     setups: { claude: { phase: 'idle' }, codex: { phase: 'idle' } },
     keyKinds: { claude: null, codex: null },
     queue: { agents: [], index: 0 }
-  })
+  } as const
+}
+
+// A cloud workspace row whose Claude waits on its pane's strip (N-03). HELD-STALE-COVERED: the mark
+// follows the hold's reason as the account changes under it (set up here, then revoked).
+function seed(scenario: Scenario): void {
+  const restored = scenario === 'restored'
+  setOrcaCloudAgentAccountsStateForTest(accounts(restored ? 'active' : 'none'))
   useAppStore.setState({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mark reads only tab ids
     tabsByWorktree: { gudgeon: [{ id: 'web-terminal-g' }] } as never
@@ -34,6 +42,12 @@ function seed(restored = false): void {
     agent: 'claude',
     prompt: null
   })
+  if (scenario === 'setUp' || scenario === 'expired') {
+    setOrcaCloudAgentAccountsStateForTest(accounts('active'))
+  }
+  if (scenario === 'expired') {
+    setOrcaCloudAgentAccountsStateForTest(accounts('revoked'))
+  }
 }
 
 function Row(): React.JSX.Element {
@@ -46,11 +60,11 @@ function Row(): React.JSX.Element {
   )
 }
 
-const markFixture = (restored: boolean) =>
+const markFixture = (scenario: Scenario) =>
   defineFixture({
     width: 340,
     render: () => {
-      seed(restored)
+      seed(scenario)
       return (
         <div className="h-[110px] p-3">
           <Row />
@@ -66,9 +80,13 @@ const markFixture = (restored: boolean) =>
     }
   })
 
-export const sidebarRowMark = markFixture(false)
+export const sidebarRowMark = markFixture('notSetUp')
 /**
  * V3-01: a launch put back after a restart that only waits for Start: the muted play mark, never
  * the amber key (the account here is covered: no "not set up").
  */
-export const sidebarRowMarkNotStarted = markFixture(true)
+export const sidebarRowMarkNotStarted = markFixture('restored')
+/** HELD-STALE-COVERED: set up in this session, waiting for Start: muted play (not the amber key). */
+export const sidebarRowMarkSetUp = markFixture('setUp')
+/** HELD-STALE-COVERED: the sign-in was revoked under the hold: the key, "sign-in expired". */
+export const sidebarRowMarkExpired = markFixture('expired')

@@ -90,7 +90,8 @@ export function HostFixture({
                 summary={{
                   count: 42,
                   keyLike: ['AWS_SECRET_ACCESS_KEY', 'OPENAI_API_KEY'],
-                  other: ['HOME', 'PATH']
+                  other: ['HOME', 'PATH'],
+                  narrowed: false
                 }}
               />
             ) : null

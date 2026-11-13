@@ -1,5 +1,4 @@
 // Static team, workspaces and API stubs shared by the cloud workspaces component fixtures.
-import { resetCloudArchivedCountCache } from './use-cloud-archived-count'
 import type {
   CloudWorkspace,
   CloudWorkspacePresence
@@ -150,16 +149,14 @@ export function teamWorkspaces(): CloudWorkspace[] {
 
 type ListResult = Awaited<ReturnType<CloudWorkspacesApi['list']>>
 
-/** Replaces the web build's "not configured" cloud workspaces bridge with static answers. */
 /**
- * `archived` is what the Archived switch (and Home's archived count, ARCHIVE-REACH) reads with
- * `archived=only`; every other query gets `list`.
+ * Replaces the web build's "not configured" cloud workspaces bridge with static answers. `archived`
+ * is what the Archived switch reads with `archived=only`; every other query gets `list`.
  */
 export function stubCloudWorkspacesApi(
   list: () => Promise<ListResult>,
   archived: CloudWorkspace[] = []
 ): void {
-  resetCloudArchivedCountCache()
   Object.assign(window.api.cloudWorkspaces, {
     available: () => Promise.resolve(true),
     list: (query?: { archived?: string }) =>

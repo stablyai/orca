@@ -147,19 +147,87 @@ describe('teammate names', () => {
     expect(keys.map((key) => key.createdByName)).toEqual(['Ada Lovelace', null, undefined])
   })
 
-  it('reads audit actor names', async () => {
-    const entry = {
-      id: 'a1',
-      actor: { type: 'user', id: 'u_ada', userId: 'u_ada', userName: 'Ada Lovelace' },
-      action: 'api_key.create',
-      target: null,
-      createdAt: 1
+  it('reads the team audit log: filters go in the query, unknown kinds and categories still parse', async () => {
+    const event = {
+      id: 'aud_1',
+      at: 5,
+      category: 'something_new',
+      action: 'secret.updated',
+      actor: { kind: 'robot', userId: 'u_ada', name: 'Ada Lovelace', via: 'carrier_pigeon' },
+      target: { type: 'secret', id: 'STRIPE_KEY', label: 'STRIPE_KEY' },
+      detail: { scope: 'org' }
     }
     const fetchImpl = vi.fn<typeof fetch>(async () =>
-      respond(200, { entries: [entry], nextBefore: null })
+      respond(200, {
+        events: [event],
+        nextCursor: '5.aud_1',
+        actors: [event.actor],
+        categories: ['secrets']
+      })
     )
-    const page = await client(fetchImpl).listAudit()
-    expect(page.entries[0]?.actor.userName).toBe('Ada Lovelace')
+    const page = await client(fetchImpl).listAuditLog({
+      category: 'secrets',
+      actor: 'u_ada',
+      limit: 50
+    })
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe(
+      'https://cp.example.dev/v1/audit-log?category=secrets&actor=u_ada&limit=50'
+    )
+    expect(page.nextCursor).toBe('5.aud_1')
+    expect(page.events[0]).toMatchObject({
+      category: 'other',
+      actor: { kind: 'person', name: 'Ada Lovelace', via: null },
+      target: { label: 'STRIPE_KEY' }
+    })
+  })
+
+  it('tells a plan without the audit log apart from a missing role and an older control plane', async () => {
+    const answer = (status: number, body: unknown) =>
+      codeOf(client(vi.fn<typeof fetch>(async () => respond(status, body))).listAuditLog())
+    expect(await answer(403, { error: 'entitlement_denied', reason: 'audit_log' })).toBe(
+      'plan-required'
+    )
+    expect(await answer(403, { error: 'forbidden', reason: 'admin_required' })).toBe(
+      'admin-required'
+    )
+    expect(await answer(403, { error: 'insufficient_scope', reason: 'audit:read' })).toBe(
+      'forbidden'
+    )
+    expect(await answer(404, { error: 'not_found' })).toBe('not-available')
+    expect(await answer(503, { error: 'billing_unavailable' })).toBe('server')
+    const refused = await cloudApiErrorOf(
+      client(
+        vi.fn<typeof fetch>(async () =>
+          respond(403, { error: 'entitlement_denied', reason: 'audit_log' })
+        )
+      ).listAuditLog()
+    )
+    expect(refused.detail).toBe('audit_log')
+  })
+
+  it('exports the audit log as CSV text and says when the export was cut short', async () => {
+    const csv = 'time,category,action\r\n2026-11-12T00:00:00.000Z,secrets,secret.updated\r\n'
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        new Response(csv, {
+          status: 200,
+          headers: { 'content-type': 'text/csv', 'x-orca-audit-truncated': 'true' }
+        })
+    )
+    const exported = await client(fetchImpl).exportAuditLogCsv({ category: 'secrets' })
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe(
+      'https://cp.example.dev/v1/audit-log?category=secrets&format=csv'
+    )
+    expect(exported).toEqual({ csv, truncated: true })
+    expect(
+      await codeOf(
+        client(
+          vi.fn<typeof fetch>(async () =>
+            respond(403, { error: 'entitlement_denied', reason: 'audit_log' })
+          )
+        ).exportAuditLogCsv()
+      )
+    ).toBe('plan-required')
   })
 })
 

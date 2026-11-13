@@ -40,6 +40,8 @@ export type CloudWakeProgressEvent = {
   workspaceId: string
   phase: 'waking' | 'connecting' | 'ready' | 'failed'
   source: CloudWakeSource
+  /** Failed because this computer's pairing to it is gone: the card offers "Open cloud workspace…". */
+  notPaired?: true
   /** Epoch ms the wake began (the overlay's elapsed timer). */
   startedAt: number
   at: number
@@ -95,11 +97,6 @@ export type OrcaCloudWorkspaceApi = {
     repoUrl?: string
     setupSessionId?: string
   }) => Promise<CloudWorkspaceResult<null>>
-  /** "Copy link" for connectGitHub: the same single-use GitHub install page, minted but not opened. */
-  gitHubInstallLink: (args?: {
-    repoUrl?: string
-    setupSessionId?: string
-  }) => Promise<CloudWorkspaceResult<string>>
   /** Whether the signed-in person connected their own GitHub (cloud commit attribution). */
   getGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
   /** Opens GitHub's OAuth page in the browser so the person connects their own GitHub identity. */
@@ -146,7 +143,6 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   listCloudWorkspaceIds: 'orcaCloudWorkspace:listIds',
   getConfig: 'orcaCloudWorkspace:getConfig',
   connectGitHub: 'orcaCloudWorkspace:connectGitHub',
-  gitHubInstallLink: 'orcaCloudWorkspace:gitHubInstallLink',
   getGitHubUser: 'orcaCloudWorkspace:getGitHubUser',
   connectGitHubUser: 'orcaCloudWorkspace:connectGitHubUser',
   gitHubUserConnectLink: 'orcaCloudWorkspace:gitHubUserConnectLink',

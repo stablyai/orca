@@ -1,8 +1,8 @@
-// Cloud-start surfaces outside the composer (spec v2): the Landing trial card (E2), the empty Cloud
-// workspaces button (E3), the build sheet's hours chip (A7, O4) and the trial-used-up notice (T4).
+// Cloud-start surfaces outside the composer (spec v2): the Landing trial card (E2), the empty "Open
+// cloud workspace…" list's button (E3), the build sheet's hours chip (A7, O4) and the trial-used-up notice (T4).
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { LandingCloudCard } from '../../landing/LandingCloudCard'
-import { EmptyState } from '../../cloud-workspaces/CloudWorkspacesStates'
+import { PickerEmptyState } from '../../cloud-workspaces/CloudWorkspacesStates'
 import { OrcaCloudHoursChip } from './OrcaCloudHoursChip'
 import { OrcaCloudTrialUsedUpNotice } from './OrcaCloudTrialUsedUpNotice'
 
@@ -28,11 +28,11 @@ export const e2LandingTrialCard = defineFixture({
     </div>
   )
 })
-/** E3: Cloud workspaces empty (Mine) with a real button. */
+/** E3: "Open cloud workspace…" with none at all, with a real button. */
 export const e3CloudHomeEmpty = defineFixture({
   width: 560,
   setup,
-  render: () => <EmptyState scope="mine" archived={false} filtered={false} />
+  render: () => <PickerEmptyState reason={{ kind: 'none' }} onCreate={() => {}} />
 })
 /** A7: the build sheet header chip while a trial start spins up. */
 export const a7BuildSheetChip = defineFixture({

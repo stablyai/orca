@@ -24,13 +24,11 @@ const ACTIONS: RowActions = {
   sleep: () => {},
   remove: () => {}
 }
-const SECTIONS = ['Payments', 'Platform']
 const MEMBERS = [...DIRECTORY.entries()].map(([userId, m]) => ({ userId, name: m.name }))
 
-// Shared with the team, a section, and two teammates in it: every menu entry is present.
+// Shared with the team and two teammates in it: every menu entry is present.
 const MENU_ROW = workspace({
   title: 'Checkout retries',
-  section: 'Payments',
   presence: [presence('user_grace', 'typing'), presence('user_linus')]
 })
 
@@ -50,10 +48,8 @@ function Row({
         directory={DIRECTORY}
         selfId={SELF_ID}
         canAdmin
-        sections={SECTIONS}
         members={MEMBERS}
         opening={opening}
-        highlighted={false}
         now={FIXTURE_NOW}
         actions={actions}
       />
@@ -147,16 +143,6 @@ export const menuChatFocused = defineFixture({
     openMenu(frame)
     await waitFor(() => document.querySelector('[data-slot="dropdown-menu-content"]'))
   }
-})
-
-export const moveToSection = defineFixture({
-  width: WIDTH,
-  render: () => (
-    <div className="h-[420px]">
-      <Row />
-    </div>
-  ),
-  interact: (frame) => openSubmenu(frame, 'Move to section')
 })
 
 export const reassignOwner = defineFixture({

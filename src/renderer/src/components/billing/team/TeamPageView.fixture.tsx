@@ -89,8 +89,7 @@ const base: TeamPageViewProps = {
   onSeePlans: noop,
   onManageBilling: noop,
   onCreateWorkspace: noop,
-  onDismissArrival: noop,
-  onContactSales: noop
+  onDismissArrival: noop
 }
 
 function Page(props: Partial<TeamPageViewProps>): React.JSX.Element {
@@ -127,6 +126,37 @@ export const memberReadOnly = defineFixture({
       billing={{ status: 'ok', entitlement: { ...noPlan, canManageBilling: false } }}
     />
   )
+})
+
+// What the server sends an owner or admin: every member carries an MFA status.
+const rosterWithMfa: OrcaOrgMembersRoster = {
+  ...roster,
+  members: [
+    { ...roster.members[0]!, mfa: 'on' },
+    { ...roster.members[1]!, mfa: 'off' },
+    { ...roster.members[2]!, mfa: 'pending', mfaDeadline: NOW + 6 * DAY },
+    { ...roster.members[3]!, mfa: 'off' }
+  ]
+}
+
+export const ownerSeesMfaColumn = defineFixture({
+  width,
+  render: () => <Page roster={{ status: 'ok', roster: rosterWithMfa }} />
+})
+
+export const adminSeesMfaColumn = defineFixture({
+  width,
+  render: () => (
+    <Page
+      viewerUserId="u-ada"
+      roster={{ status: 'ok', roster: { ...rosterWithMfa, viewerRole: 'admin' } }}
+    />
+  )
+})
+
+export const mfaColumnNarrow = defineFixture({
+  width: 640,
+  render: () => <Page roster={{ status: 'ok', roster: rosterWithMfa }} />
 })
 
 export const rowBusyAndError = defineFixture({
@@ -245,32 +275,11 @@ async function typeInvites(text: string): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 100))
 }
 
-/** Will add seats: 4 paid, 4 members and 2 pending, so both new invites add a seat. */
+/** Pasted list: the chips, one invalid entry, and the seat rule (no counts or prices). */
 export const invitePasted = defineFixture({
   width,
   render: () => <Page billing={{ status: 'ok', entitlement: { ...team, seats: 4 } }} />,
   interact: () => typeInvites('jordan@acme.dev, kim@acme.dev, not-an-email ')
-})
-
-/** Seats free: 8 paid, 6 taken (members plus pending), so one invite adds nothing. */
-export const inviteSeatsFree = defineFixture({
-  width,
-  render: () => <Page billing={{ status: 'ok', entitlement: { ...team, seats: 8 } }} />,
-  interact: () => typeInvites('jordan@acme.dev ')
-})
-
-/** Billing unknown (disabled in this build, or it failed): the rule without counts or prices. */
-export const inviteBillingUnknown = defineFixture({
-  width,
-  render: () => <Page billing={{ status: 'unconfigured' }} />,
-  interact: () => typeInvites('jordan@acme.dev, kim@acme.dev ')
-})
-
-/** Billing sent no price: seats are still counted, no price is shown. */
-export const inviteNoPrice = defineFixture({
-  width,
-  render: () => <Page billing={{ status: 'ok', entitlement: { ...team, offers: null } }} />,
-  interact: () => typeInvites('jordan@acme.dev, kim@acme.dev ')
 })
 
 /** Short roster so the Enterprise row sits inside the frame. */

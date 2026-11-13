@@ -14,8 +14,6 @@ import {
 } from '../../../../shared/orca-billing'
 import { openPlansPage } from './plans/plans-page-store'
 import { PaymentIssueNotice } from './PaymentIssueNotice'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
-import { billingPortalLink } from './billing-link'
 import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-billing-copy'
 import { PlanStatusBadge } from './PlanStatusBadge'
@@ -280,24 +278,20 @@ export function PlanBillingView({
       <div className="flex flex-wrap gap-2">
         {hasPlan || onTrial ? null : (
           <Button type="button" size="sm" onClick={onSeePlans}>
-            {t('auto.components.billing.upgrade.cta', 'See plans')}
+            {t('auto.components.billing.comparePlans', 'Compare plans')}
           </Button>
         )}
         {hasPlan && entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (
-          <OpenExternalSplitButton
+          <Button
+            type="button"
             variant="outline"
             size="sm"
             aria-disabled={busy || undefined}
-            link={billingPortalLink}
-            onClick={() => {
-              if (!busy) {
-                onPortal()
-              }
-            }}
+            onClick={busy ? undefined : onPortal}
           >
             {t('auto.components.billing.manageBilling', 'Manage billing')}
             <ExternalLink />
-          </OpenExternalSplitButton>
+          </Button>
         ) : null}
         {hasPlan ? (
           // Members have no other action here, so it gets the button's chrome (and its alignment).

@@ -29,6 +29,11 @@ export function cloudApiErrorCopy(
         'auto.components.settings.cloudApi.error.adminRequired',
         'Only a team owner or admin can do this.'
       )
+    case 'plan-required':
+      return t(
+        'auto.components.settings.cloudApi.error.planRequired',
+        'Your team’s plan doesn’t include this.'
+      )
     case 'forbidden':
       return t(
         'auto.components.settings.cloudApi.error.forbidden',

@@ -119,6 +119,7 @@ import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
+import { SecretsKmsError } from './secrets-kms'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { ACCOUNT_PROVIDERS, accountProvider, isSharedWorkspace } from './account-providers'
 import { handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
@@ -156,7 +157,7 @@ import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
 import { audit, auditSession } from './api/audit'
-import { AuditIngestError, AuditIngestSchema, ingestAuditEvents } from './api/audit-ingest'
+import { ALL_EVENT_FAMILIES, AUTH_EVENT_FAMILIES, AuditIngestError, AuditIngestSchema, BILLING_EVENT_FAMILIES, ingestAuditEvents } from './api/audit-ingest'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSlept, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
@@ -880,7 +881,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
     provider,
     entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
     github: deps.github ?? githubMinter(env),
-    secrets: await secretsDeps(env),
+    ...(await secretsState(env)),
     memberIdentity: await memberIdentityFor(env, deps),
     now: deps.now ?? Date.now,
     sleep: deps.sleep,
@@ -1113,17 +1114,22 @@ export function secretsEgressMode(env: Pick<Env, 'SECRETS_EGRESS_PLACEHOLDERS' |
   return { egressPlaceholders, egressPlaceholdersOff: off }
 }
 
-async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
+async function secretsState(env: Env): Promise<Pick<LifecycleDeps, 'secrets' | 'secretsUnavailable'>> {
   const keyring = keyringFor(env)
   if (!keyring) {
-    return undefined
+    return {}
   }
   try {
-    return { keyring: await keyring, ...secretsEgressMode(env), accountProviders: providerEnabled(env) }
-  } catch {
+    return { secrets: { keyring: await keyring, ...secretsEgressMode(env), accountProviders: providerEnabled(env) } }
+  } catch (error) {
+    if (error instanceof SecretsKmsError) {
+      // KMS holds the keys and is not handing them over. Routes that need no secrets keep working;
+      // a session start and the secrets routes answer 503 (keyringFor logged the reason).
+      return { secretsUnavailable: error.reason }
+    }
     // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
     console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
-    return undefined
+    return {}
   }
 }
 
@@ -1255,7 +1261,9 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       const memberPush =
         request.method === 'POST' && (url.pathname === '/v1/internal/org-members/removed' || url.pathname === '/v1/internal/members/role-changed')
       const authOnly = (memberPush || teamDelete !== null || auditIngest) && (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
-      if (!authOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
+      // Billing's bearer (CONTROL_PLANE_TOKEN) reaches this one route, for billing events only.
+      const billingOnly = !authOnly && auditIngest && (await isOperator(request, env.CONTROL_PLANE_TOKEN))
+      if (!authOnly && !billingOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
       }
       if (auditIngest) {
@@ -1265,7 +1273,8 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
           return fail('invalid_request', 400)
         }
         try {
-          return json(await ingestAuditEvents(env.SANDBOX_DB, body.data, (deps.now ?? Date.now)()))
+          const families = authOnly ? AUTH_EVENT_FAMILIES : billingOnly ? BILLING_EVENT_FAMILIES : ALL_EVENT_FAMILIES
+          return json(await ingestAuditEvents(env.SANDBOX_DB, body.data, (deps.now ?? Date.now)(), families))
         } catch (error) {
           if (error instanceof AuditIngestError) {
             return fail('invalid_request', 400, error.message)
@@ -1552,7 +1561,10 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
         return fail('unauthorized', 401, 'stale_token')
       }
-      const secrets = await secretsDeps(env)
+      const { secrets, secretsUnavailable } = await secretsState(env)
+      if (secretsUnavailable) {
+        return secretsUnavailableResponse()
+      }
       if (!secrets) {
         return fail('not_configured', 503)
       }
@@ -2315,6 +2327,13 @@ async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
   }
 }
 
+/** The KMS-held secret keys cannot be fetched right now (SECRETS_KEK_SOURCE=kms). Retryable. */
+function secretsUnavailableResponse(): Response {
+  const response = fail('secrets_unavailable', 503)
+  response.headers.set('retry-after', '30')
+  return response
+}
+
 function errorResponse(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return fail('invalid_json', 400)
@@ -2353,6 +2372,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)
+  }
+  if (error instanceof SecretsKmsError) {
+    return secretsUnavailableResponse()
   }
   // Provider and VM failures are summarized; their bodies never reach the desktop.
   if (error instanceof ProviderError || error instanceof VmCommandError) {

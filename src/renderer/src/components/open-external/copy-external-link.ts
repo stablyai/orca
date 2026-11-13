@@ -21,7 +21,9 @@ export function requireLink(url: string | null): string {
 export type CopyExternalLinkResult = 'copied' | 'no-link' | 'failed'
 
 export async function copyExternalLink(
-  source: ExternalLinkSource
+  source: ExternalLinkSource,
+  /** A limit worth saying once it's copied (only loopback sign-in links: "on this computer"). */
+  hint?: string
 ): Promise<CopyExternalLinkResult> {
   let url: string | null
   try {
@@ -43,6 +45,11 @@ export async function copyExternalLink(
     toast.error(translate('openExternal.copyLinkFailed', 'Couldn’t copy the link.'))
     return 'failed'
   }
-  toast.success(translate('openExternal.linkCopied', 'Link copied'))
+  const copied = translate('openExternal.linkCopied', 'Link copied')
+  if (hint) {
+    toast.success(copied, { description: hint })
+  } else {
+    toast.success(copied)
+  }
   return 'copied'
 }

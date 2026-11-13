@@ -84,27 +84,76 @@ export const CloudApiSettingsSchema = z.object({
 })
 export type CloudApiSettings = z.infer<typeof CloudApiSettingsSchema>
 
-export const CloudApiAuditEntrySchema = z.object({
-  id: Id,
-  actor: z.object({
-    type: z.string().max(64),
-    id: z.string().max(128),
-    userId: z.string().max(128).nullable(),
-    userName: PersonName
-  }),
-  action: z.string().max(128),
-  target: z.object({ type: z.string().max(64), id: z.string().max(128).nullable() }).nullable(),
-  // Free-form per action (e.g. a key's name); only short strings are ever shown.
-  detail: z.record(z.string(), z.unknown()).nullable().optional(),
-  createdAt: Millis
-})
-export type CloudApiAuditEntry = z.infer<typeof CloudApiAuditEntrySchema>
+// The team audit log (GET /v1/audit-log): every recorded change in one feed. Owners and admins of
+// a team whose plan includes it. Unknown categories, actor kinds and actions from a newer control
+// plane still parse; the renderer words what it knows and shows the rest by its machine name.
+export const CLOUD_AUDIT_CATEGORIES = [
+  'members',
+  'security',
+  'api_keys',
+  'apps',
+  'workspaces',
+  'secrets',
+  'routines',
+  'settings',
+  'billing',
+  'other'
+] as const
+export type CloudAuditCategory = (typeof CLOUD_AUDIT_CATEGORIES)[number]
 
-export const CloudApiAuditPageSchema = z.object({
-  entries: z.array(CloudApiAuditEntrySchema).max(500),
-  nextBefore: Millis.nullable()
+export const CloudAuditActorSchema = z.object({
+  kind: z.enum(['person', 'former_member', 'system']).catch('person'),
+  userId: z.string().max(128).nullable(),
+  name: PersonName,
+  via: z.enum(['api_key', 'mcp', 'agent', 'routine']).nullable().catch(null)
 })
-export type CloudApiAuditPage = z.infer<typeof CloudApiAuditPageSchema>
+export type CloudAuditActor = z.infer<typeof CloudAuditActorSchema>
+
+export const CloudAuditEventSchema = z.object({
+  id: Id,
+  at: Millis,
+  category: z.enum(CLOUD_AUDIT_CATEGORIES).catch('other'),
+  action: z.string().max(128),
+  actor: CloudAuditActorSchema,
+  target: z
+    .object({
+      type: z.string().max(64),
+      id: z.string().max(256).nullable(),
+      label: z.string().max(256).nullable().optional()
+    })
+    .nullable(),
+  // Free-form per action; only short strings and numbers are ever shown. Never a secret value.
+  detail: z.record(z.string(), z.unknown()).nullable().optional()
+})
+export type CloudAuditEvent = z.infer<typeof CloudAuditEventSchema>
+
+export const CloudAuditLogPageSchema = z.object({
+  events: z.array(CloudAuditEventSchema).max(500),
+  nextCursor: z.string().max(128).nullable(),
+  /** Everyone who appears in the log, for the person filter; sent with the first page only. */
+  actors: z.array(CloudAuditActorSchema).max(500).optional()
+})
+export type CloudAuditLogPage = z.infer<typeof CloudAuditLogPageSchema>
+
+export const CloudAuditLogQuerySchema = z
+  .object({
+    category: z.enum(CLOUD_AUDIT_CATEGORIES).optional(),
+    /** A user id, or `system`. */
+    actor: z
+      .string()
+      .regex(/^[A-Za-z0-9_.:-]{1,128}$/)
+      .optional(),
+    cursor: z
+      .string()
+      .regex(/^\d{1,16}\.[A-Za-z0-9_-]{1,80}$/)
+      .optional(),
+    limit: z.number().int().min(1).max(200).optional()
+  })
+  .strict()
+export type CloudAuditLogQuery = z.infer<typeof CloudAuditLogQuerySchema>
+
+/** A CSV export: the text, and whether more events exist past the export's cap. */
+export type CloudAuditLogExport = { csv: string; truncated: boolean }
 
 export const CloudApiProjectSchema = z.object({
   id: Id,
@@ -148,6 +197,8 @@ export const CLOUD_API_ERROR_CODES = [
   'signed-out',
   /** Signed in, but this action needs an org owner/admin. */
   'admin-required',
+  /** The team's plan does not include this (detail: the entitlement, e.g. `audit_log`). */
+  'plan-required',
   /** The key or token lacks a scope. */
   'forbidden',
   'not-found',

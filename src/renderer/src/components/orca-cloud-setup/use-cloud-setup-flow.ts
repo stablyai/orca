@@ -2,6 +2,7 @@
 // rows from billing, the GitHub repository check and the agent accounts (useCloudStartSteps), the
 // one-trip setup session (#255) with its deep-link return (#257), B2's team switch, and the
 // tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
+import { mintFirstClickLink } from '@/components/orca-sign-in-link'
 import { usePlanCatalog } from '@/components/billing/plans/use-plan-catalog'
 import { cloudContactUrl } from './cloud-contact-url'
 import { recheckCloudCapability } from './cloud-capability-recheck'
@@ -96,6 +97,8 @@ export type CloudSetupFlow = CloudSetupPageModel & {
   canManageBilling: boolean
   teamAction: React.ReactNode | null
   continueInBrowser: () => void
+  /** "Copy link" on the first "Continue in browser": the same trip, started without the browser. */
+  continueLink: ExternalLinkSource
   startTrial: () => void
   fixBilling: () => void
   installGitHub: () => void
@@ -103,10 +106,11 @@ export type CloudSetupFlow = CloudSetupPageModel & {
   /** Where "Contact us" goes when Orca Cloud isn't turned on for the team; null hides it. */
   contactUrl: string | null
   reopenBrowser: () => void
-  /** "Copy link" beside Reopen browser: a fresh one-time setup link; null without a session. */
+  /**
+   * "Copy link" beside Reopen browser on the sign-in step: a fresh one-time setup link. Null on
+   * other steps (plan, billing, GitHub App install) and without a session.
+   */
   reopenLink: ExternalLinkSource | null
-  /** "Copy link" beside the GitHub step's button: the same install page, minted without opening. */
-  installGitHubLink: ExternalLinkSource | null
 }
 
 export function useCloudSetupFlow(
@@ -133,8 +137,7 @@ export function useCloudSetupFlow(
   const {
     steps: rowSteps,
     session,
-    openInstall,
-    installLink
+    openInstall
   } = useCloudStartSteps({
     availability,
     access,
@@ -191,51 +194,67 @@ export function useCloudSetupFlow(
   const signingIn = busy && startedSignIn && signInPending
 
   // One browser trip for everything still open from here (sign-in, team, trial or Checkout, GitHub).
-  const continueInBrowser = useCallback(() => {
-    const needs = sessionNeedsFrom(stepsRef.current)
-    if (needs.length > 0 && needs.every((need) => need === 'github')) {
-      markInBrowser()
-      void openInstall()
-      return
-    }
-    const start = getCloudSetupStarter()
-    if (!start) {
-      markInBrowser()
-      fallback()
-      return
-    }
-    // Each click is a new run. An older run that ends late (its sign-in was replaced or cancelled)
-    // must not touch the page or open anything.
-    const run = ++runRef.current
-    const isCurrent = (): boolean => run === runRef.current
-    setBusy(true)
-    setBrowserStep(null)
-    setStartedSignIn(cloudSetupPageModel(stepsRef.current).current?.id === 'account')
-    void start({ repoId: request.repoId, needs })
-      .then((opened) => {
-        if (!isCurrent() || (opened && 'cancelled' in opened)) {
-          // Cancelled, timed out or replaced: back to the step's own button; nothing reopens.
+  // COPY-LINK-FIRST-CLICK: `openBrowser: false` makes the same trip without the browser and hands
+  // its link to `onUrl` (signed in: the session's; signed out: the sign-in publishes its own).
+  const runBrowserTrip = useCallback(
+    (copy?: { onUrl: (url: string | null) => void }) => {
+      const needs = sessionNeedsFrom(stepsRef.current)
+      if (needs.length > 0 && needs.every((need) => need === 'github')) {
+        if (copy) {
+          copy.onUrl(null)
           return
         }
         markInBrowser()
-        if (opened) {
-          setSessionId(opened.sessionId)
-        } else {
-          fallback()
-        }
-      })
-      .catch(() => {
-        if (isCurrent()) {
-          fallback()
-        }
-      })
-      .finally(() => {
-        if (isCurrent()) {
-          setBusy(false)
-          setStartedSignIn(false)
-        }
-      })
-  }, [fallback, markInBrowser, openInstall, request.repoId])
+        void openInstall()
+        return
+      }
+      const start = getCloudSetupStarter()
+      if (!start) {
+        copy?.onUrl(null)
+        markInBrowser()
+        fallback()
+        return
+      }
+      // Each click is a new run. An older run that ends late (its sign-in was replaced or cancelled)
+      // must not touch the page or open anything.
+      const run = ++runRef.current
+      const isCurrent = (): boolean => run === runRef.current
+      setBusy(true)
+      setBrowserStep(null)
+      setStartedSignIn(cloudSetupPageModel(stepsRef.current).current?.id === 'account')
+      void start({ repoId: request.repoId, needs, ...(copy ? { openBrowser: false } : {}) })
+        .then((opened) => {
+          if (!isCurrent() || (opened && 'cancelled' in opened)) {
+            // Cancelled, timed out or replaced: back to the step's own button; nothing reopens.
+            return
+          }
+          markInBrowser()
+          if (opened) {
+            copy?.onUrl(opened.url ?? null)
+            setSessionId(opened.sessionId)
+          } else {
+            fallback()
+          }
+        })
+        .catch(() => {
+          if (isCurrent()) {
+            fallback()
+          }
+        })
+        .finally(() => {
+          if (isCurrent()) {
+            setBusy(false)
+            setStartedSignIn(false)
+          }
+        })
+    },
+    [fallback, markInBrowser, openInstall, request.repoId]
+  )
+  const continueInBrowser = useCallback(() => runBrowserTrip(), [runBrowserTrip])
+  const continueLink = useCallback(
+    () => mintFirstClickLink((deliver) => runBrowserTrip({ onUrl: deliver })),
+    [runBrowserTrip]
+  )
 
   const cancelSignIn = useCallback(() => {
     void window.api.orcaProfiles.cancelSignIn().catch(() => {})
@@ -307,13 +326,14 @@ export function useCloudSetupFlow(
     canManageBilling: access.state === 'no-plan' ? access.canManageBilling : true,
     teamAction: switchTeam?.action ?? null,
     continueInBrowser,
+    continueLink,
     startTrial,
     fixBilling,
     installGitHub,
     checkAgain,
     contactUrl,
     reopenBrowser: () => void reopenCloudSetup(sessionId, continueInBrowser),
-    reopenLink: cloudSetupLinkSource(sessionId),
-    installGitHubLink: installLink
+    // Copy link is for sign-in pages only (pasted into an incognito window or another profile).
+    reopenLink: signingIn || model.action === 'sign-in' ? cloudSetupLinkSource(sessionId) : null
   }
 }

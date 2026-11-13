@@ -153,8 +153,18 @@ export async function startCloudSetup(
   try {
     const signedIn = await create()
     if (signedIn.status === 'ok') {
+      const opened = {
+        status: 'opened' as const,
+        sessionId: signedIn.value.id,
+        expiresAt: signedIn.value.expiresAt
+      }
+      // Copy link: the same session, its link returned instead of opened. It expires on the
+      // server at `expiresAt`, like a session whose opened tab was never used.
+      if (args.openBrowser === false) {
+        return { ...opened, url: signedIn.value.url }
+      }
       await openInBrowser(signedIn.value.url)
-      return { status: 'opened', sessionId: signedIn.value.id, expiresAt: signedIn.value.expiresAt }
+      return opened
     }
     if (signedIn.status === 'unconfigured') {
       return { status: 'unconfigured' }
@@ -180,7 +190,10 @@ export async function startCloudSetup(
           outcome.error = error
         }
         return outcome.created?.url ?? null
-      }
+      },
+      // Copy link while signed out: the sign-in (which then carries on into setup in the same
+      // tab) starts without the browser; its link is the sign-in progress link.
+      openBrowser: args.openBrowser !== false
     })
     if (connected.status === 'cancelled' || connected.status === 'timed-out') {
       return { status: 'cancelled' }

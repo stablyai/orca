@@ -125,3 +125,26 @@ describe('paired workspaces scoped by account (PAIRED-ACCOUNT-FILTER)', () => {
     expect(hostsFor('team-two', paired()).hiddenHostIds.has('runtime:gh')).toBe(false)
   })
 })
+
+describe('GH-CREATE-NO-ROW hand-off', () => {
+  it('hides the server a GitHub-only create is pairing to until its pending row hands off', () => {
+    const pairing = (pairingHostId?: string) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only these fields.
+      ({
+        runtimeEnvironments: [{ id: 'p', name: 'web (cloud)', orcaCloudPaired: true }],
+        orcaProfileAuthStatus: { cloud: { userId: 'u1' } },
+        pendingWorktreeCreations: {
+          gh: {
+            creationId: 'gh',
+            request: { githubSource: { fullName: 'acme/web' } },
+            ...(pairingHostId ? { pairingHostId } : {})
+          }
+        }
+      }) as unknown as Pick<AppState, 'runtimeEnvironments'>
+    const hidden = (state: Pick<AppState, 'runtimeEnvironments'>) => [
+      ...parseOrcaCloudHostScopeKey(selectOrcaCloudHostScopeKey(state)).hiddenHostIds
+    ]
+    expect(hidden(pairing())).toEqual([])
+    expect(hidden(pairing('runtime:p'))).toEqual(['runtime:p'])
+  })
+})

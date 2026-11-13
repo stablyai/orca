@@ -13,10 +13,21 @@ export type CloudSetupStartArgs = {
   needs: CloudSetupNeed[]
   /** Ask which team even when the profile already has an active one. */
   chooseTeam?: boolean
+  /**
+   * COPY-LINK-FIRST-CLICK: false starts the same setup without opening the browser; a signed-in
+   * start then returns the session's link (`url`) to copy instead.
+   */
+  openBrowser?: boolean
 }
 
 export type CloudSetupStartResult =
-  | { status: 'opened'; sessionId: string; expiresAt: number }
+  | {
+      status: 'opened'
+      sessionId: string
+      expiresAt: number
+      /** Only for `openBrowser: false`: the link the browser would have opened. */
+      url?: string
+    }
   | { status: 'unconfigured' }
   | { status: 'signed-out' }
   | { status: 'cancelled' }
