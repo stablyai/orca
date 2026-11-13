@@ -72,7 +72,9 @@ function plainText(raw: string): string {
 // Orca's pty is 1000 columns, so it shouldn't wrap; if it ever does, the continuation is the very next
 // line and holds only token characters, while the line after the whole token is blank. Join those, so a
 // wrapped token is never captured cut short.
-const WRAPPED_TOKEN = /(sk-ant-oat01-[A-Za-z0-9_-]+)[ \t]*\n[ \t]*([A-Za-z0-9_-]+)[ \t]*(?=\n|$)/g
+// A line that starts a new copy of the token (a repaint) is never a continuation.
+const WRAPPED_TOKEN =
+  /(sk-ant-oat01-[A-Za-z0-9_-]+)[ \t]*\n[ \t]*(?!sk-ant-)([A-Za-z0-9_-]+)[ \t]*(?=\n|$)/g
 
 function joinWrappedToken(plain: string): string {
   let joined = plain

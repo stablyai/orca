@@ -66,7 +66,7 @@ describe('findSetupToken on real output (Claude Code 2.1.323)', () => {
   })
 
   it('a banner before and trailing lines after never extend or replace the token', () => {
-    const banner = crlf(`${ESC}[?25l${ESC}[2K${ESC}[1G` + dim('Welcome to Claude Code'), '')
+    const banner = crlf(`${ESC}[?25l${ESC}[2K${ESC}[1G${dim('Welcome to Claude Code')}`, '')
     const after = crlf('', `${ESC}[?25h`, 'Press Enter to continue')
     expect(findSetupToken(`${banner}${successBlock([TOKEN])}${after}`, false)).toBe(TOKEN)
   })
@@ -75,7 +75,7 @@ describe('findSetupToken on real output (Claude Code 2.1.323)', () => {
 describe('findAuthorizeUrl on real output (Claude Code 2.1.323)', () => {
   it('finds the link inside its OSC 8 hyperlink, with CRLF around it', () => {
     const screen = crlf(
-      dim("Browser didn't open? Use the url below to sign in ") + 'claude.ai',
+      `${dim("Browser didn't open? Use the url below to sign in ")}claude.ai`,
       osc8(AUTHORIZE, dim(AUTHORIZE)),
       '',
       'Paste code here if prompted > '
