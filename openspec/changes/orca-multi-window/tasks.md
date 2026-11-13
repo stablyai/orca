@@ -1,29 +1,27 @@
-# Tasks: Implementação de Multi-Window & Tab Tear-Off no Orca
+# Tasks: Implementação de Workspace Popout Window no Orca
 
-## Wave 1: Fundação Segura (Default-Off Guard & Registry)
-- [ ] 1.1 Declarar a flag experimental `experimentalMultiWindow` (default `false`) no schema de configurações do Orca (`src/shared/settings.ts`) e no painel experimental (`ExperimentalPane.tsx`).
-- [ ] 1.2 Implementar `src/main/window/main-window-registry.ts` com suporte a `anchor` e `satellite` windows e ciclo de vida seguro.
-- [ ] 1.3 Refatorar `src/main/ipc/ui.ts` para broadcastar `ui:stateChanged` a todas as janelas do `liveMainWindows()`, eliminando o gargalo de ID único.
-- [ ] 1.4 Escrever testes unitários em Vitest para `main-window-registry.test.ts`.
+## Wave 1: Fundação do Workspace Popout Window (Shell & Segurança)
+- [ ] 1.1 Declarar flag de configuração `experimentalWorkspacePopout` (default `false`) no schema global (`src/shared/settings.ts`) e no painel experimental (`ExperimentalPane.tsx`).
+- [ ] 1.2 Implementar `src/main/window/workspace-popout-window.ts` com gerenciamento de bounds salvos (`resolveRestoredBounds`) e partição isolada (`orca-workspace-popout`).
+- [ ] 1.3 Criar arquivos de entrada do renderer: `src/renderer/workspace-popout.html` e `src/renderer/src/workspace-popout.tsx`.
+- [ ] 1.4 Registrar canais IPC em `src/main/ipc/workspace-popout.ts` para abertura, fechamento e notificação de estado.
+- [ ] 1.5 Escrever testes unitários em Vitest para `workspace-popout-window.test.ts`.
 
-## Wave 2: Consumer Handover de PTY & Janela Satélite
-- [ ] 2.1 Implementar `src/main/window/secondary-main-window.ts` com cálculo de bounds cascateados e papel de janela satélite (`?orcaWindowRole=satellite`).
-- [ ] 2.2 Implementar `src/main/ipc/pty/delivery/pty-owner-routing.ts` com suporte a troca de consumidor (Consumer Handover) e replay do buffer de terminal.
-- [ ] 2.3 Implementar filtro de exclusividade no canal `pty:resize` para impedir concorrência de resoluções de tela.
-- [ ] 2.4 Integrar `withPtyOwnerTracking` ao `src/main/ipc/pty-host-bindings.ts`.
-- [ ] 2.5 Adicionar `File > New Window` (`Mod+Shift+N`) no menu nativo (`app-menu-file.ts`), habilitado apenas sob `experimentalMultiWindow`.
-- [ ] 2.6 Bloquear autosave destrutivo no `use-app-session-persistence.ts` para janelas satélites.
-- [ ] 2.7 Executar e validar suite de testes de PTY (`pnpm exec vitest run src/main/ipc/pty.test.ts`).
+## Wave 2: Interatividade do Terminal & Consumer Handover
+- [ ] 2.1 Conectar a visualização do terminal popout ao subsistema `terminalPreview` (`src/main/ipc/terminal-preview.ts`).
+- [ ] 2.2 Integrar `openStandaloneTerminal` com full input capture (`useAppMenuPaste`, `preview-terminal-shortcuts`).
+- [ ] 2.3 Garantir exclusividade de redimensionamento (`FitAddon` suspenso na Janela Principal enquanto a aba estiver destacada) para evitar tempestades de `SIGWINCH`.
+- [ ] 2.4 Validar o handshake do buffer de replay com suporte a flags do Kitty Keyboard (`preview-terminal-snapshot-replay.ts`).
+- [ ] 2.5 Testar digitação interativa (Vim, Htop, Claude Code prompts `y/n`).
 
-## Wave 3: Composite Runtime Graph (Visibilidade CLI, Mobile & Skills)
-- [ ] 3.1 Atualizar `OrcaRuntimeService` (`src/main/runtime/orca-runtime.ts`) para compor grafos de múltiplas janelas em `windowGraphs: Map<number, WindowGraph>`.
-- [ ] 3.2 Implementar função `getCompositeGraph` unindo tabs e leaves de todas as janelas ativas.
-- [ ] 3.3 Atualizar `src/main/ipc/runtime.ts` para aceitar slices de grafo das janelas satélites sem exceção de autoridade.
-- [ ] 3.4 Validar que `orca worktree ps` e a API WebSocket do Mobile listam agentes rodando na janela satélite.
-- [ ] 3.5 Ajustar a suite de testes `src/main/runtime/orca-runtime-tests/window-authority.spec.ts` para cobrir o modelo composite.
+## Wave 3: Blindagem de Hardware e SO (Pass 3 Shields)
+- [ ] 3.1 Registrar listener `screen.on('display-removed')` e `screen.on('display-metrics-changed')` para auto-repatriação caso o cabo HDMI/Thunderbolt seja desplugado.
+- [ ] 3.2 Conectar `powerMonitor.on('resume')` na popout window para reidratação e recálculo de escala xterm após sleep/wake do macOS.
+- [ ] 3.3 Adicionar listener `webContents.on('render-process-gone')` para proteção contra crash de GPU/OOM com recarregamento gracioso.
+- [ ] 3.4 Validar integridade contínua do `OrcaRuntimeService` (garantindo que `orca worktree ps` e Mobile continuam listando os agentes).
 
-## Wave 4: Tear-Off & Dock-Back na Interface (UI/UX)
-- [ ] 4.1 Criar canal IPC `window:detachWorkspace` e `window:dockWorkspace` no processo Main.
-- [ ] 4.2 Adicionar opção no menu de contexto das abas do workspace no frontend: *"Mover para Nova Janela"*.
-- [ ] 4.3 Adicionar botão de reacoplamento na janela satélite: *"Reacoplar à Janela Principal"*.
-- [ ] 4.4 Testar o fluxo de transição com um agente ativo executando comandos longos (ex: build ou geração de código) garantindo zero interrupção de processo.
+## Wave 4: UI/UX de Destaque (Tear-Off) e Reacoplamento (Dock-Back)
+- [ ] 4.1 Adicionar botão de Pop-out na barra de abas (`TerminalTitlebarTabs`) e opção *"Mover para Nova Janela"* no menu de contexto.
+- [ ] 4.2 Adicionar botão *"Reacoplar à Janela Principal"* no topo da Popout Window.
+- [ ] 4.3 Configurar atalho de teclado global do aplicativo (`Mod+Shift+P` / `Cmd+Shift+P` no macOS) para destacar o workspace ativo.
+- [ ] 4.4 Realizar teste de estresse de longa duração com múltiplos agentes compilando em paralelo em ambos os monitores.

@@ -1,40 +1,33 @@
-# Spec: Multi-Window & Tab Tear-Off (Anchor-Satellite Model)
+# Spec: Workspace Popout Window (Homologado em 4 Passes)
 
 ## Requisitos Funcionais & Critérios de Aceite
 
-### REQ-MW-01: Flag Experimental de Segurança (`experimentalMultiWindow`)
-* **Descrição:** A funcionalidade DEVE vir desativada por padrão em `experimentalMultiWindow: false`.
-* **Critério de Aceite:** Quando desativada, a interface e os menus permanecem rigorosamente idênticos ao Orca estável. Nenhuma funcionalidade de multi-janela é disparada acidentalmente.
+### REQ-WPO-01: Flag de Segurança Experimental
+* **Descrição:** A funcionalidade DEVE vir condicionada à configuração `experimentalWorkspacePopout` (padrão `false`), mantendo o comportamento estável para os usuários normais.
+* **Critério de Aceite:** Quando desativada, os botões e opções de popout permanecem ocultos e nenhuma janela secundária é instanciada.
 
-### REQ-MW-02: Modelo Anchor-Satellite no Registro de Janelas
-* **Descrição:** O `MainWindowRegistry` DEVE distinguir a Janela Âncora (`anchor`) de Janelas Satélites (`satellite`).
+### REQ-WPO-02: Janela Satélite Leve no Monitor Secundário
+* **Descrição:** O sistema DEVE instanciar uma `BrowserWindow` leve dedicada (`workspace-popout-window.ts`) com dimensões salvas e validadas por `rectHasVisibleAreaOnAnyDisplay`.
+* **Critério de Aceite:** A janela abre no monitor onde foi posicionada anteriormente e consome menos de 80MB de RAM.
+
+### REQ-WPO-03: Zero Kill de Processos de Agentes
+* **Descrição:** Abrir ou fechar a janela popout NÃO DEVE interromper, reiniciar ou matar os processos dos agentes (Claude Code, Codex, Antigravity) nem seus PTYs.
+* **Critério de Aceite:** O PID do processo do agente no sistema operacional permanece inalterado durante todo o ciclo de vida de destaque e reacoplamento.
+
+### REQ-WPO-04: Streaming de Terminal Interativo e Teclas de Controle
+* **Descrição:** O terminal na janela popout DEVE suportar streaming contínuo sem deadlock de buffer e captura total de teclas interativas.
 * **Critério de Aceite:**
-  * Fechar uma janela satélite não fecha o aplicativo nem derruba os agentes que nela estavam.
-  * O app só encerra quando a última janela aberta for fechada pelo usuário.
+  * Comandos interativos (`Ctrl+C`, `Ctrl+D`, setas, Vim, Htop e prompts `y/n`) respondem imediatamente.
+  * Atalhos do macOS (`Cmd+C`, `Cmd+V`, `Cmd+A`) operam com segurança via bracketed paste mode.
 
-### REQ-MW-03: Consumer Handover de Terminal sem Interrupção de Agentes
-* **Descrição:** Mover uma aba com um agente em execução (Claude Code, Codex, Antigravity) de uma janela para outra DEVE transferir a visualização mantendo o PID do processo vivo.
-* **Critério de Aceite:**
-  * O processo do agente no sistema operacional não recebe `SIGTERM` nem reinicia.
-  * O histórico do terminal (scrollback) é reconstituído na nova tela sem perda de linhas.
+### REQ-WPO-05: Integridade do Runtime Graph (CLI e Mobile)
+* **Descrição:** A Janela 1 DEVE permanecer como autoridade única do grafo no `OrcaRuntimeService`.
+* **Critério de Aceite:** `orca worktree ps` e o aplicativo Orca Mobile continuam listando e interagindo com todos os agentes, independentemente de estarem exibidos na tela principal ou na janela secundária.
 
-### REQ-MW-04: Exclusividade de Redimensionamento do PTY
-* **Descrição:** Apenas a janela onde o terminal está visível e focado pode emitir `pty:resize`.
-* **Critério de Aceite:** Janelas com larguras de tela diferentes não corrompem o wrapping de linhas do terminal xterm.
+### REQ-WPO-06: Blindagem Contra Desconexão de Cabos de Vídeo
+* **Descrição:** Desconectar o monitor externo em tempo de execução DEVE reposicionar a janela popout para o monitor primário.
+* **Critério de Aceite:** A janela nunca permanece em coordenadas inacessíveis fora da tela ativa.
 
-### REQ-MW-05: Grafo Composto e Visibilidade Universal (CLI & Mobile)
-* **Descrição:** O `OrcaRuntimeService` DEVE manter o registro de workspaces de todas as janelas ativas e expor a união completa.
-* **Critério de Aceite:**
-  * `orca worktree ps` lista os agentes em execução tanto na Janela 1 quanto na Janela 2.
-  * Conexões pareadas do Orca Mobile continuam recebendo status dos agentes da janela secundária.
-  * Skills carregam e interagem normalmente com os agentes em ambas as janelas.
-
-### REQ-MW-06: Ações de Tear-Off e Dock-Back na Interface
-* **Descrição:** O usuário DEVE poder destacar abas e reacoplá-las de volta com 1 clique.
-* **Critério de Aceite:**
-  * Right-click na aba exibe a opção *"Mover para Nova Janela"*.
-  * Na janela satélite, um botão *"Reacoplar à Janela Principal"* devolve a aba à janela âncora e fecha o satélite suavemente.
-
-### REQ-MW-07: Proteção Antissobrescrita de Persistência no Disco
-* **Descrição:** Janelas satélites NÃO DEVEM sobrescrever o arquivo `session.json` com estados parciais ou vazios.
-* **Critério de Aceite:** Ao reiniciar o Orca, todos os workspaces abertos são preservados no disco sem regressão.
+### REQ-WPO-07: Reacoplamento Suave (Dock-Back)
+* **Descrição:** O desenvolvedor DEVE poder reacoplar a janela com 1 clique ou via atalho de teclado (`Cmd+W` / botão de retorno).
+* **Critério de Aceite:** A aba reaparece na janela principal, o foco é transferido e o `FitAddon` é reativado sem duplicação de listeners.
