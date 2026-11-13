@@ -1,6 +1,13 @@
-import { useEffect, useId, useRef } from 'react'
+import { useCallback, useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../../../shared/modifier-double-tap-detector'
+import { useAppStore } from '@/store'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -34,6 +41,60 @@ type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
   previewClassName?: string
 }
 
+/** Reveal the displayed agent's worktree with its configured shortcut, including modifier double taps. */
+function useAgentTerminalRevealShortcut(reveal: () => void): void {
+  useEffect(() => {
+    const doubleTapDetector = new ModifierDoubleTapDetector()
+    const detectDoubleTap = (event: KeyboardEvent, type: 'keyDown' | 'keyUp') =>
+      doubleTapDetector.process(
+        toModifierDoubleTapEvent({
+          type,
+          code: event.code,
+          key: event.key,
+          shift: event.shiftKey,
+          control: event.ctrlKey,
+          alt: event.altKey,
+          meta: event.metaKey,
+          isAutoRepeat: event.repeat
+        }),
+        Date.now()
+      )
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      const detected = detectDoubleTap(event, 'keyDown')
+      if (event.defaultPrevented || event.isComposing || event.repeat) {
+        return
+      }
+      const { keybindings, settings } = useAppStore.getState()
+      if (
+        !keybindingMatchesAction(
+          'dashboard.openWorktree',
+          detected ? { doubleTapModifier: detected.modifier } : event,
+          getShortcutPlatform(),
+          keybindings,
+          {
+            context: 'terminal',
+            terminalShortcutPolicy: settings?.terminalShortcutPolicy
+          }
+        )
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      reveal()
+    }
+    const handleKeyUp = (event: KeyboardEvent): void => {
+      detectDoubleTap(event, 'keyUp')
+    }
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keyup', handleKeyUp, true)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keyup', handleKeyUp, true)
+    }
+  }, [reveal])
+}
+
 function AgentTerminalFrame({
   card,
   title,
@@ -43,7 +104,7 @@ function AgentTerminalFrame({
   onBrowserForeground
 }: AgentTerminalFrameProps): React.JSX.Element {
   const t = useTranslate()
-  const reveal = (): void => {
+  const reveal = useCallback(() => {
     onReveal({
       repoId: card.repoId,
       worktreeId: card.worktreeId,
@@ -52,7 +113,8 @@ function AgentTerminalFrame({
       leafId: card.leafId
     })
     onOpenChange(false)
-  }
+  }, [card, onOpenChange, onReveal])
+  useAgentTerminalRevealShortcut(reveal)
 
   return (
     <>
