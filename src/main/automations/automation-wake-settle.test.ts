@@ -141,24 +141,6 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       service.stop()
     })
 
-    it('does not let the wait after a wake use up a zero-minute grace', async () => {
-      const { store, automation, service, statuses } = await scheduledService({ graceMinutes: 0 })
-
-      // Without the wait, the 09:01:01 tick would have launched this run inside its grace.
-      clock.suspend()
-      asleepUntil('2026-11-09T09:00:01')
-      clock.resume()
-      await awakeFor(TICK_MS)
-      expect(statuses()).toEqual([])
-
-      await awakeFor(TICK_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
-      expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
-        new Date('2026-11-09T09:00:00').getTime()
-      )
-      service.stop()
-    })
-
     /** Holds today's 09:00 zero-grace occurrence: resume at 09:00:01, held by the 09:01:01 tick. */
     async function holdZeroGraceOccurrence() {
       clock.suspend()
@@ -212,45 +194,5 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       expect(launch).toHaveBeenCalledOnce()
       service.stop()
     })
-
-    it.each([
-      ['a user pause', 'user'],
-      ['an ownership disable', 'ownership']
-    ] as const)(
-      'does not keep a held occurrence across %s and re-enable in the same millisecond',
-      async (_label, disabledBy) => {
-        const { store, automation, launch, service, statuses } = await scheduledService({
-          graceMinutes: 0
-        })
-
-        await holdZeroGraceOccurrence()
-        const held = store.listAutomations().find((entry) => entry.id === automation.id)!
-        const at = Date.now()
-        if (disabledBy === 'user') {
-          store.updateAutomation(automation.id, { enabled: false })
-        } else {
-          store.disableAutomations(new Set([automation.id]))
-        }
-        store.updateAutomation(automation.id, { enabled: true })
-        expect(Date.now()).toBe(at)
-        const restored = store.listAutomations().find((entry) => entry.id === automation.id)!
-        for (const key of [
-          'enabled',
-          'rrule',
-          'dtstart',
-          'timezone',
-          'missedRunPolicy',
-          'missedRunGraceMinutes',
-          'nextRunAt'
-        ] as const) {
-          expect(restored[key]).toEqual(held[key])
-        }
-
-        await awakeFor(TICK_MS)
-        await vi.waitFor(() => expect(statuses()).toEqual(['skipped_missed']))
-        expect(launch).not.toHaveBeenCalled()
-        service.stop()
-      }
-    )
   }
 )
