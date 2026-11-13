@@ -1,4 +1,8 @@
-import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  clearPaneCacheState,
+  clearPaneProcessCacheState,
+  clearPaneStatusCacheState
+} from '../../../shared/agent-hook-listener/listener-state'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
 import type {
@@ -8,7 +12,13 @@ import type {
 } from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
-  retirePaneAuthority(paneKey: string, retirementId?: string): void {
+  protected revokeProcessAuthority(
+    paneKey: string,
+    retirementId?: string
+  ): {
+    paneKeys: Set<string>
+    authorityChanged: boolean
+  } {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const previousFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
     const paneKeys = new Set([paneKey, ownerPaneKey])
@@ -40,6 +50,47 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.isClosedAgentStatusTabForPaneKey(ownerPaneKey) ? undefined : retirementId
     )
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
+    for (const key of paneKeys) {
+      this.markPaneClosedForAgentStatus(key)
+      this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
+      this.currentAuthorityObservations.delete(key)
+      this.observations.forget(key)
+    }
+    if (aliasChanged) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+    return { paneKeys, authorityChanged }
+  }
+
+  protected clearPaneProcessState(paneKey: string): void {
+    this.clearAssistantMessageRetry(paneKey)
+    this.clearTranscriptPoll(paneKey)
+    clearPaneProcessCacheState(this.state, paneKey)
+    this.activeHookTurnCompletedAtByPaneKey.delete(paneKey)
+    this.runtimeObservedStatusPaneKeys.delete(paneKey)
+    this.currentAuthorityObservations.delete(paneKey)
+    this.promptSentDedupeByPaneKey.delete(paneKey)
+    this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
+    this.evidenceObservedAtByPaneKey.delete(paneKey)
+    this.programStatusFacets.delete(paneKey)
+    this.hookSilenceRechecks.cancel(paneKey)
+    this.programStatusFacetRepublishes.cancel(paneKey)
+  }
+
+  protected clearRevokedPaneState(paneKey: string): void {
+    const hadStatus = this.state.lastStatusByPaneKey.has(paneKey)
+    this.clearTmuxInnerSubjects(paneKey)
+    this.clearPaneProcessState(paneKey)
+    clearPaneStatusCacheState(this.state, paneKey)
+    if (hadStatus) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+      this.emitPaneStatusCleared({ paneKey })
+    }
+  }
+
+  retirePaneAuthority(paneKey: string, retirementId?: string): void {
+    const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey, retirementId)
     const retiredRows = [...paneKeys].flatMap((key) => {
       const row = this.state.lastStatusByPaneKey.get(key) as
         | EnrichedAgentHookEventPayload
@@ -49,19 +100,8 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     const hadStatus = retiredRows.length > 0
     for (const key of paneKeys) {
       this.clearTmuxInnerSubjects(key)
-      this.markPaneClosedForAgentStatus(key)
-      this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
-      this.clearAssistantMessageRetry(key)
-      this.clearTranscriptPoll(key)
-      clearPaneCacheState(this.state, key)
-      this.activeHookTurnCompletedAtByPaneKey.delete(key)
-      this.runtimeObservedStatusPaneKeys.delete(key)
-      this.currentAuthorityObservations.delete(key)
-      this.promptSentDedupeByPaneKey.delete(key)
-      this.observations.forget(key)
-    }
-    if (aliasChanged) {
-      this.notifyPaneKeyAliasPersistenceListener()
+      this.clearPaneProcessState(key)
+      clearPaneStatusCacheState(this.state, key)
     }
     for (const row of retiredRows) {
       this.commitStatusRowMutation(row, undefined)

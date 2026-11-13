@@ -105,7 +105,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     attestAgentHookCompatibilityAuthority: (candidate) =>
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
-      agentHookServer.retirePaneAuthority(paneKey),
+      agentHookServer.retireProcessAuthority(paneKey),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>

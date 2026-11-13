@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import { isValidPaneKey } from './server-status-identity'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import {
@@ -90,12 +88,10 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         hostTurnRevision: _hostTurnRevision,
         // Full replies serve this runtime's run records only.
         acceptedReply: _acceptedReply,
-        launchToken,
+        launchToken: _launchToken,
         ...persistedPayload
       } = enrichedPayload
-      const launchTokenHash = launchToken?.trim()
-        ? createHash('sha256').update(launchToken.trim()).digest('hex')
-        : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      const launchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
       const { claudeTaskWakeupPending: _pendingWakeup, ...persistedStatus } =
         persistedPayload.payload
       entries[paneKey] = {
@@ -103,7 +99,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         payload: persistedStatus,
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
-      const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
+      const commitment = this.toAuthorityEvidence(persistedPayload, launchTokenHash)
       if (commitment && !conflictedCommitments.has(paneKey)) {
         const existing = authorityCommitments[paneKey]
         if (existing && !authorityCommitmentsMatch(existing, commitment)) {

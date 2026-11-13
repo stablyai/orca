@@ -5,7 +5,6 @@ import {
   clearPaneCacheState,
   deleteLegacyAgentStatus
 } from '../../../shared/agent-hook-listener/listener-state'
-import { paneHasStateClaims } from '../../../shared/agent-hook-listener/pane-state-claims'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
@@ -18,6 +17,12 @@ import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 import { recordAgentExit } from './agent-exit-evidence'
+
+export type EndedProcessReconciliationOptions = {
+  endedPresence?: AgentProcessPresence
+  /** Keep resume identity when the pane survives the agent. */
+  preserveResumeIdentity?: boolean
+}
 
 export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
   /** Resume identity survives teardown without claiming live work. */
@@ -59,10 +64,6 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitStatusDropped(deleted.paneKey)
-  }
-
-  dropPersistedStatusEntry(identity: AgentStatusCacheIdentity): boolean {
-    return this.dropPersistedStatusEntries([identity]).length > 0
   }
 
   /** Persist and notify once for the evicted batch. */
@@ -110,18 +111,17 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
   }
 
   /** Reconcile dead panes whose restored PTYs may never rebuild the spawn-time ptyPaneKey mapping. */
-  reconcileEndedProcessForPaneKeys(
+  protected reconcileEndedProcess(
     paneKeys: Iterable<string>,
-    options?: {
-      endedPresence?: AgentProcessPresence
-      /** Keep resume identity when the pane survives the agent. */
-      preserveResumeIdentity?: boolean
-    }
-  ): number {
+    options: EndedProcessReconciliationOptions | undefined,
+    clearPane: (paneKey: string) => void
+  ): { cleared: number; untouched: string[] } {
+    const untouched: string[] = []
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
       if (this.preservesStoppingDone(resolvedPaneKey)) {
+        untouched.push(resolvedPaneKey)
         continue
       }
       if (options?.endedPresence) {
@@ -136,6 +136,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         this.scheduleStatusPersist()
       }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
+        untouched.push(resolvedPaneKey)
         continue
       }
       const resumeRow = options?.preserveResumeIdentity
@@ -152,7 +153,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
-      this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
+      clearPane(resolvedPaneKey)
       if (retained) {
         admitLegacyAgentStatus(
           this.state,
@@ -166,12 +167,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       this.commitStatusRowMutation(previous, retained)
       cleared += 1
     }
-    return cleared
-  }
-
-  /** Include latches that can revive work even when the visible row is done. */
-  protected hasLiveClaimsForPaneKey(paneKey: string): boolean {
-    return Boolean(this.getTmuxSelectedStatus(paneKey)) || paneHasStateClaims(this.state, paneKey)
+    return { cleared, untouched }
   }
 
   dropStatusEntriesForRemovedWorktree(worktreeId: string, host?: ExecutionHostScope): void {
