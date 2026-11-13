@@ -57,7 +57,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  for (const key of ['tab:s1', 'tab:s2', 'tab:s3', 'tab:s4', 'tab:s5']) {
+  for (const key of ['tab:s1', 'tab:s2', 'tab:s3', 'tab:s4', 'tab:s5', 'tab:s6']) {
     releaseCloudAgentHold(key, 'cancel')
   }
 })
@@ -132,5 +132,26 @@ describe('HELD-STALE-COVERED', () => {
     await expect(startCloudAgentHold('tab:s5')).resolves.toBe('held')
     expect(readCloudAgentHold('tab:s5')).not.toBeNull()
     expect(hold.outcome()).toBe('pending')
+  })
+
+  it('in-session expired -> sign-in removed -> set up again: waits for Start, never auto-starts (PC-3b)', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    let outcome = 'pending'
+    void holdCloudAgentLaunch({ paneKey: 'tab:s6', agent: 'claude', prompt: null }).then((o) => {
+      outcome = o
+    })
+    await vi.waitFor(() =>
+      expect(readCloudAgentHold('tab:s6')).toMatchObject({ reason: 'accountExpired' })
+    )
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    await settle()
+    expect(readCloudAgentHold('tab:s6')).toMatchObject({ reason: 'notSetUp' })
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    await settle()
+    expect(readCloudAgentHold('tab:s6')).toMatchObject({
+      reason: 'awaitingStart',
+      awaiting: 'setUp'
+    })
+    expect(outcome).toBe('pending')
   })
 })

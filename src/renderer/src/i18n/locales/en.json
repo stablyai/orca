@@ -28253,6 +28253,7 @@
       "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
       "expired": "{{agent}} sign-in expired",
       "notStarted": "{{agent}} hasn’t started. Open the workspace to start it.",
+      "setUpNotStarted": "{{agent}} is set up. Open the workspace to start it.",
       "notStartedRow": "{{agent}} hasn’t started"
     },
     "chatSignIn": {

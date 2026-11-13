@@ -315,7 +315,14 @@ function redecide(entry: Entry, accounts: OrcaCloudAgentAccountsState): void {
   const now = cloudAgentHoldReason(entry.agent, accounts)
   if (now !== null) {
     if (now !== entry.reason) {
-      holds.set(entry.paneKey, { ...entry, reason: now, awaiting: undefined })
+      // A removed sign-in becomes the one-time setup, which never starts unasked (PC-3b), even
+      // for a hold placed on an expired sign-in in this session.
+      holds.set(entry.paneKey, {
+        ...entry,
+        reason: now,
+        awaiting: undefined,
+        askFirst: entry.askFirst || now === 'notSetUp'
+      })
       notify()
     }
     return
@@ -366,7 +373,12 @@ export async function startCloudAgentHold(paneKey: string): Promise<'started' | 
   const coverage = orcaCloudAgentCoverageFromAccounts(entry.agent, accounts)?.kind
   if (now !== null || (coverage !== 'account' && coverage !== 'key')) {
     if (now !== null && now !== entry.reason) {
-      holds.set(paneKey, { ...entry, reason: now, awaiting: undefined })
+      holds.set(paneKey, {
+        ...entry,
+        reason: now,
+        awaiting: undefined,
+        askFirst: entry.askFirst || now === 'notSetUp'
+      })
       notify()
     }
     return 'held'

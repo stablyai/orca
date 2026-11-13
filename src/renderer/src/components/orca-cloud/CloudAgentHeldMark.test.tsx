@@ -100,6 +100,9 @@ describe('sidebar mark for a held cloud agent (N-03)', () => {
     await act(async () => setOrcaCloudAgentAccountsStateForTest(accountsNotSetUp('active')))
     expect(getByRole('img').getAttribute('data-cloud-agent-held')).toBe('awaitingStart')
     expect(getByRole('img').getAttribute('class')).toContain('text-muted-foreground')
+    expect(getByRole('img').getAttribute('aria-label')).toBe(
+      'Claude is set up. Open the workspace to start it.'
+    )
     await act(async () => setOrcaCloudAgentAccountsStateForTest(accountsNotSetUp('revoked')))
     expect(getByRole('img').getAttribute('data-cloud-agent-held')).toBe('accountExpired')
     expect(getByRole('img').getAttribute('aria-label')).toBe('Claude sign-in expired')
