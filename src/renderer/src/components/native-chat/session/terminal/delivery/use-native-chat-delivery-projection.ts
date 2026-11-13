@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { pendingSendsAsMessages } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import type { NativeChatLaunchPrompt } from '../../../drafts/native-chat-launch-prompt'
 import type { useNativeChatRetainedSession } from '../read/use-native-chat-retained-session'
 import { launchPromptAsMessage } from './native-chat-pending'
@@ -30,4 +31,21 @@ export function useNativeChatDeliveryProjection(
       : { ...sessionWithLaunchPrompt, messages }
   }, [sessionWithLaunchPrompt, commandMarkers])
   return { launchPromptMessage, sessionAfterCommandBoundaries }
+}
+
+export function useNativeChatPendingProjection(
+  pending: Parameters<typeof pendingSendsAsMessages>[0],
+  messages: Parameters<typeof pendingSendsAsMessages>[1],
+  sendWorkingEpoch: Parameters<typeof pendingSendsAsMessages>[2],
+  sessionId: ReturnType<typeof useNativeChatRetainedSession>['sessionId']
+) {
+  const pendingMessages = useMemo(
+    () => pendingSendsAsMessages(pending, messages, sendWorkingEpoch, sessionId ?? ''),
+    [pending, messages, sendWorkingEpoch, sessionId]
+  )
+  const messagesWithPending = useMemo(
+    () => (pendingMessages.length === 0 ? messages : [...messages, ...pendingMessages]),
+    [messages, pendingMessages]
+  )
+  return { pendingMessages, messagesWithPending }
 }

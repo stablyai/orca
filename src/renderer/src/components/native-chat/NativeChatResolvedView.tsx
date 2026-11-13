@@ -1,4 +1,7 @@
-import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
+import {
+  useNativeChatDeliveryProjection,
+  useNativeChatPendingProjection
+} from './session/terminal/delivery/use-native-chat-delivery-projection'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/class-names'
@@ -31,7 +34,6 @@ import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/nati
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
 import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend
@@ -209,22 +211,11 @@ export function NativeChatResolvedView({
     surfaceReady: shownPromptCard !== null
   })
 
-  const pendingMessages = useMemo(
-    () =>
-      pendingSendsAsMessages(
-        pending,
-        sessionAfterCommandBoundaries.messages,
-        sendWorkingEpoch,
-        session.sessionId ?? ''
-      ),
-    [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch, session.sessionId]
-  )
-  const messagesWithPending = useMemo(
-    () =>
-      pendingMessages.length === 0
-        ? sessionAfterCommandBoundaries.messages
-        : [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
-    [sessionAfterCommandBoundaries.messages, pendingMessages]
+  const { pendingMessages, messagesWithPending } = useNativeChatPendingProjection(
+    pending,
+    sessionAfterCommandBoundaries.messages,
+    sendWorkingEpoch,
+    session.sessionId
   )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
