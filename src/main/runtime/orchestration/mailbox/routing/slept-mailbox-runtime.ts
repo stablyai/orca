@@ -1,4 +1,4 @@
-import { refreshSleepingMailOwners } from './sleeping-mail-owner-mailboxes'
+import { refreshSleepingMailOwners, mailWakeAddresses } from './sleeping-mail-owner-mailboxes'
 import { sessionCrewChanges, type CrewInvalidation } from '../../crew/crew-changes'
 import { replaceMailWakeRecord } from '../../../session-lifecycle/projection/retained-mail-wake-attempt'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
@@ -93,13 +93,15 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   private readonly custodyRecords = this.sleepingRecordIndex.custody
   private readonly changedSleepingPanes = this.sleepingRecordIndex.changed
 
-  private refreshSleepingRecords(host: string): boolean {
+  private refreshSleepingRecords(host: string): Set<string> {
     const changed = this.sleepingRecordIndex.refresh(
       host,
       this.store?.getWorkspaceSession?.(host)?.sleepingAgentSessionsByPaneKey ?? {},
       (pane) => this.sleptMailboxWake.refreshPane(pane)
     )
-    this.mailWakeInvocations.retain(this.sleepingRecordIndex.launchTokens())
+    if (changed.size) {
+      this.mailWakeInvocations.retain(this.sleepingRecordIndex.launchTokens())
+    }
     return changed
   }
 
@@ -122,24 +124,26 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
     const changed = (facets: CrewInvalidation) => {
       if (facets.has('traffic') || facets.has('topology') || facets.has('records')) {
-        this.publishSleepingMail(
-          facets.mailGlobal ? undefined : (facets.trafficAddresses ?? []),
-          facets.mailboxOwners
-        )
+        this.publishSleepingMail(mailWakeAddresses(facets), facets.mailboxOwners)
       }
     }
     this.crewChanges.subscribe(changed)
     sessionCrewChanges.subscribe(changed)
     this.store?.onWorkspaceSessionWritten?.((hostId) => {
-      const hosts =
-        hostId === null ? (this.store?.getWorkspaceSessionHostIds?.() ?? ['local']) : [hostId]
-      for (const host of hosts) {
+      for (const host of this.sleepingRecordIndex.affectedHosts(
+        hostId,
+        this.store?.getWorkspaceSessionHostIds?.() ?? ['local']
+      )) {
         const changed = this.refreshSleepingRecords(host)
-        this.watchMailWakeInvocations()
-        if (changed) {
-          queueMicrotask(() => this.publishSleepingMail([]))
-        } else {
-          this.publishSleepingMail([])
+        for (const pane of changed) {
+          this.watchMailWakeInvocations(pane)
+        }
+        if (changed.size) {
+          queueMicrotask(() =>
+            this.publishSleepingMail(
+              [...changed].flatMap((pane) => this.sleptMailboxWake.mailboxesForPane(pane))
+            )
+          )
         }
       }
     })
@@ -209,7 +213,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
 
   protected requestSleptMailboxWake(mailbox: string, reservedTypes?: ReadonlySet<string>): void {
     this.watchSleepingMail()
-    this.sleptMailboxWake.request(mailbox, reservedTypes)
+    if (this.sleepingRecords.size || this.sleptMailboxWake.hasTrackedMail) {
+      this.sleptMailboxWake.request(mailbox, reservedTypes)
+    }
   }
 
   retrySleptMailboxWakes(paneKey?: string): void {
@@ -256,17 +262,19 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         let affected = new Set(this.changedSleepingPanes)
         const addresses = new Set(this.sleepingMailAddresses)
         this.changedSleepingPanes.clear()
-        if (global && (this.sleepingRecords.size || this.sleptMailboxWake.hasTrackedMail)) {
+        const interested = this.sleepingRecords.size || this.sleptMailboxWake.hasTrackedMail
+        if (global && interested) {
           this.sleptMailboxWake.reconcile()
           for (const pane of this.custodyRecords.keys()) {
             affected.add(pane)
           }
-        } else {
+        } else if (interested) {
           affected = refreshSleepingMailOwners(
             this.sleptMailboxWake,
             this._orchestrationDb,
             affected,
-            addresses
+            addresses,
+            this.sleepingRecords.size > 0
           )
         }
         this.globalSleepingMailInvalidation = false

@@ -45,19 +45,6 @@ export function withoutMailWake(record: SleepingAgentSessionRecord): SleepingAge
   return rest
 }
 
-export function mailWakeEligibility(records: readonly SleepingAgentSessionRecord[]): string {
-  return JSON.stringify(
-    records
-      .filter((record) => mailWakeObligation(record))
-      .map((record) => [
-        record.paneKey,
-        record.mailWake?.capturedAt ?? record.capturedAt,
-        mailWakeObligation(record)
-      ])
-      .sort()
-  )
-}
-
 export function undispatchedMailWakeRecord(
   record: SleepingAgentSessionRecord
 ): SleepingAgentSessionRecord | null {

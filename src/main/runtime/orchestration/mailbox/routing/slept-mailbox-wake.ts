@@ -152,9 +152,11 @@ export class SleptMailboxWake {
 
   discover(paneKey: string): readonly string[] {
     const db = this.deps.db()
-    return db && mailWakeObligation(this.deps.record(paneKey))
-      ? sleepingMailOwnerMailboxes(db, paneKey)
-      : []
+    return db && this.hasObligation(paneKey) ? sleepingMailOwnerMailboxes(db, paneKey) : []
+  }
+
+  hasObligation(paneKey: string): boolean {
+    return !!mailWakeObligation(this.deps.record(paneKey))
   }
 
   mailboxesForPane(paneKey: string): readonly string[] {
