@@ -2977,6 +2977,8 @@
       "attachedImage": "Attached image",
       "removeImage": "Remove image",
       "uploadingFile": "Uploading {{name}}",
+      "uploadProgress": "{{percent}}%",
+      "keepOrcaOpen": "Keep Orca open until the file is sent",
       "removeFile": "Remove {{name}}"
     },
     "useImageUpload": {

@@ -32,7 +32,7 @@ export function MobileQueuedMessageComposer({
   const inputs = useMobileNativeChatDraftInputs(editor.scopeKey)
   const files = useMobileNativeChatFileAttachments({
     client: editor.client,
-    sessionId: editor.sessionId,
+    target: editor.sessionId ? { kind: 'structured', sessionId: editor.sessionId } : null,
     scopeKey: editor.scopeKey,
     enabled: !editor.saving,
     showToast: (message) => context?.onError(message)

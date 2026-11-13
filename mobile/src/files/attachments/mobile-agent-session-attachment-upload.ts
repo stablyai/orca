@@ -1,10 +1,8 @@
 import * as z from 'zod'
-import {
-  agentSessionAttachmentAppends,
-  base64DecodedByteLength,
-  type AgentSessionAttachmentUploadCommitResult
-} from '../../../../src/shared/agent-session/agent-session-attachments'
+import type { AgentSessionAttachmentUploadCommitResult } from '../../../../src/shared/agent-session/agent-session-attachments'
+import type { PickedMobileFile } from '../../platform/media-picker-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { interpretUploadReply, uploadFileInChunks } from './mobile-chunked-file-upload'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 
 const uploadSlotSchema = z.looseObject({ uploadId: z.string() })
@@ -57,28 +55,42 @@ const attachmentUploadAbort = bindDeferredRpcOperation(
 
 type MobileAgentSessionAttachmentRpcSender = Parameters<typeof attachmentUploadStart.request>[0]
 
-export async function uploadMobileAgentSessionAttachment(
+/** Sends the file chunk by chunk as it is read; signal is checked before every append and before commit. */
+export function uploadMobileAgentSessionAttachment(
   client: MobileAgentSessionAttachmentRpcSender,
-  args: { sessionId: string; name: string; base64: string }
-): Promise<AgentSessionAttachmentUploadCommitResult> {
-  const { uploadId } = attachmentUploadStart.interpret(
-    await attachmentUploadStart.request(client, {
-      sessionId: args.sessionId,
-      name: args.name,
-      byteLength: base64DecodedByteLength(args.base64)
-    })
-  )
-  try {
-    for (const chunk of agentSessionAttachmentAppends(args.base64)) {
-      attachmentUploadAppend.interpret(
-        await attachmentUploadAppend.request(client, { uploadId, ...chunk })
-      )
-    }
-    return attachmentUploadCommit.interpret(
-      await attachmentUploadCommit.request(client, { uploadId })
-    )
-  } catch (error) {
-    await attachmentUploadAbort.request(client, { uploadId }).catch(() => {})
-    throw error
+  args: {
+    sessionId: string
+    file: PickedMobileFile
+    signal?: AbortSignal
+    onProgress?: (sentBytes: number) => void
   }
+): Promise<AgentSessionAttachmentUploadCommitResult> {
+  return uploadFileInChunks({
+    file: args.file,
+    signal: args.signal,
+    onProgress: args.onProgress,
+    start: async () => {
+      const reply = await attachmentUploadStart.request(client, {
+        sessionId: args.sessionId,
+        name: args.file.name,
+        byteLength: args.file.byteLength
+      })
+      return interpretUploadReply(() => attachmentUploadStart.interpret(reply)).uploadId
+    },
+    append: async (uploadId, offset, contentBase64) => {
+      const reply = await attachmentUploadAppend.request(client, {
+        uploadId,
+        offset,
+        contentBase64
+      })
+      interpretUploadReply(() => attachmentUploadAppend.interpret(reply))
+    },
+    commit: async (uploadId) => {
+      const reply = await attachmentUploadCommit.request(client, { uploadId })
+      return interpretUploadReply(() => attachmentUploadCommit.interpret(reply))
+    },
+    abort: async (uploadId) => {
+      await attachmentUploadAbort.request(client, { uploadId })
+    }
+  })
 }

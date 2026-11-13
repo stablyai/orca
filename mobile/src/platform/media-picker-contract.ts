@@ -1,4 +1,5 @@
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../src/shared/agent-session/agent-session-attachments'
 
 // Keep contracts/errors free of Expo imports so a page-side instanceof cannot pull native picker code into the bundle.
 
@@ -19,19 +20,29 @@ export type PickedMobileFile = {
   readonly name: string
   readonly mime: string
   readonly byteLength: number
-  // Raw base64 (no data: prefix).
-  readonly base64: string
+  // Base64 (no data: prefix) in order, each at most one upload chunk and padded only at the end, so a 200 MB file never sits in memory whole.
+  // Call it at most once, and only while the file is the one the picker last yielded: iteration ending (or the picker advancing) releases the shell's handle.
+  readonly chunks: () => AsyncIterable<string>
 }
 
 // Match the shell’s staging ceiling so native/page callers refuse the same file sizes.
 export const MOBILE_PICKED_FILE_MAX_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
 
+const megabytes = (bytes: number): number => Math.floor(bytes / (1024 * 1024))
+
+// 'update-app': an older shell staged the file only up to its own ceiling; 'limit': the current ceiling.
 export class MobileFileTooLargeError extends Error {
-  constructor(fileName: string | null) {
+  readonly reason: 'limit' | 'update-app'
+
+  constructor(fileName: string | null, maxBytes: number, reason: 'limit' | 'update-app') {
+    const base = `${fileName ?? 'That file'} is over ${megabytes(maxBytes)} MB`
     super(
-      `${fileName ?? 'That file'} is over ${Math.floor(MOBILE_PICKED_FILE_MAX_BYTES / (1024 * 1024))} MB`
+      reason === 'update-app'
+        ? `${base}. Update Orca on your phone to send files up to ${megabytes(AGENT_SESSION_ATTACHMENT_MAX_BYTES)} MB`
+        : base
     )
     this.name = 'MobileFileTooLargeError'
+    this.reason = reason
   }
 }
 

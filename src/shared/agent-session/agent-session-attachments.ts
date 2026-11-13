@@ -5,7 +5,7 @@ import type { ImportSkipReason } from '../file-import/filesystem-import-result'
 /** Host userData store name; clients recognize stored paths without a round trip. */
 export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
 
-export const AGENT_SESSION_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
+export const AGENT_SESSION_ATTACHMENT_MAX_BYTES = 200 * 1024 * 1024
 
 // Agents shrink images before their APIs see them, so these bound host memory, not API limits.
 export const AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT = 20

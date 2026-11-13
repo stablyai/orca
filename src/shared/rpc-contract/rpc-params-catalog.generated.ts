@@ -684,6 +684,11 @@ import { SendRecordedParams } from './structured-agent-session-send-recorded-par
 import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalInferCodexQuestionSkip } from './terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
+import {
+  TerminalFileUploadAppendParams,
+  TerminalFileUploadIdParams,
+  TerminalFileUploadStartParams
+} from './terminal-file-upload-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
@@ -1623,6 +1628,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
   'terminalDaemon.setLimit': TerminalLimitUpdateParams,
   'terminalDaemon.severedStatus': null,
+  'terminalFileUpload.abort': TerminalFileUploadIdParams,
+  'terminalFileUpload.append': TerminalFileUploadAppendParams,
+  'terminalFileUpload.commit': TerminalFileUploadIdParams,
+  'terminalFileUpload.start': TerminalFileUploadStartParams,
   'ui.get': null,
   'ui.getJiraQuickFilters': null,
   'ui.getJiraSavedFilters': null,

@@ -2,7 +2,6 @@ import { createWriteStream, type Stats } from 'node:fs'
 import { lstat, mkdtemp, rm, writeFile, type FileHandle } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import type { NativeFileDropCopyFailureReason } from '../../../shared/file-import/native-file-drop'
 import { readNodeFileHandleWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import type {
@@ -14,6 +13,8 @@ import { ensureOwnedTempStagingRoot } from '../../filesystem/owned-temp-staging-
 
 const COPY_DIR_PREFIX = 'orca-drop-'
 const COPY_HIGH_WATER_MARK = 1024 * 1024
+/** Most bytes main holds in memory for one drop; larger files stream through a 1 MiB window. */
+export const DRAG_TEMP_COPY_MEMORY_BUDGET_BYTES = 50 * 1024 * 1024
 
 /** A checked drag-temp file: the handle reads the dropped bytes even after the provider removes
  *  the path, and every write compares it against the snapshot taken when it was opened. */
@@ -31,7 +32,7 @@ export async function readCheckedDragTempSourceBytes(
 ): Promise<Buffer> {
   const read = await readNodeFileHandleWithinLimit(
     source.handle,
-    AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+    DRAG_TEMP_COPY_MEMORY_BUDGET_BYTES,
     {
       regularFileOnly: true,
       signal,
@@ -56,7 +57,7 @@ export async function writeCheckedDragTempSource(
   signal?: AbortSignal
 ): Promise<void> {
   // Reading bytes from the checked handle copies no xattrs, unlike cp, ditto or clonefile.
-  if (source.size <= AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
+  if (source.size <= DRAG_TEMP_COPY_MEMORY_BUDGET_BYTES) {
     const bytes = await readCheckedDragTempSourceBytes(source, signal)
     await writeFile(destPath, bytes, { flag: 'wx', mode: 0o600, signal })
     // The bytes are in memory and already proven against the source snapshot.

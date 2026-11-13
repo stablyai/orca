@@ -4,7 +4,7 @@ import {
   MobileFileTooLargeError,
   type PickedMobileFile
 } from '../../../platform/media-picker-contract'
-import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session/agent-session-attachments'
+import { MobileFileUploadRefusedError } from '../../../files/attachments/mobile-chunked-file-upload'
 
 export type PendingNativeChatFile = {
   readonly id: string
@@ -12,6 +12,34 @@ export type PendingNativeChatFile = {
   readonly mime: string
   readonly byteLength: number
   readonly path: string | null
+  /** Bytes the host has acknowledged so far; drives the transfer progress on the chip. */
+  readonly sentBytes: number
+}
+
+type StoredNativeChatFile = { readonly name: string; readonly path: string }
+
+/**
+ * The stored files a send carries, plus the text to send. A terminal agent reads files from `@path`
+ * text, while a structured chat sends them as attachments. Null while a terminal chat's file is still
+ * uploading: Send holds until the host has stored it.
+ */
+export function nativeChatSendFiles(
+  files: readonly PendingNativeChatFile[],
+  text: string,
+  structured: boolean
+): { sentFiles: (PendingNativeChatFile & { path: string })[]; text: string } | null {
+  if (!structured && files.some((file) => file.path === null)) {
+    return null
+  }
+  const sentFiles = files.filter(
+    (file): file is PendingNativeChatFile & { path: string } => file.path !== null
+  )
+  if (structured || sentFiles.length === 0) {
+    return { sentFiles, text }
+  }
+  // Claude Code opens its file suggestions on an @token under the cursor, and the Enter written after
+  // the paste would pick a suggestion instead of submitting; a closing space ends the token first.
+  return { sentFiles, text: `${nativeChatTextWithFileReferences(text, sentFiles)} ` }
 }
 
 export function nativeChatTextWithFileReferences(
@@ -29,19 +57,38 @@ function nativeChatFileAttachFailureMessage(error: unknown, fileName?: string): 
   if (error instanceof MobileFileTooLargeError) {
     return error.message
   }
-  return fileName
-    ? `Couldn't upload ${chatTextAttachmentName(fileName)}`
-    : "Couldn't attach that file"
+  if (!fileName) {
+    return "Couldn't attach that file"
+  }
+  const name = chatTextAttachmentName(fileName)
+  // The host answered: the connection held, so backgrounding was not the cause.
+  if (error instanceof MobileFileUploadRefusedError) {
+    if (error.reason === 'ssh-workspace') {
+      return "Files can't be sent to SSH workspaces yet"
+    }
+    return error.hostMessage
+      ? `Couldn't send ${name}: ${error.hostMessage}`
+      : `Couldn't send ${name}`
+  }
+  return `Couldn't send ${name}. Keep Orca open while a file is sending, then attach it again`
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
 }
 
 // Keep successfully uploaded files when a later pick/upload fails; only the failing chip is removed.
 export async function uploadPickedNativeChatFiles(args: {
   canContinue?: () => boolean
   picked: AsyncIterable<PickedMobileFile>
-  upload: (file: PickedMobileFile) => Promise<AgentSessionAttachmentUploadCommitResult>
+  upload: (
+    file: PickedMobileFile,
+    transfer: { id: string; onProgress: (sentBytes: number) => void }
+  ) => Promise<StoredNativeChatFile>
   nextId: () => string
   onPicked: (file: PendingNativeChatFile) => void
-  onStored: (id: string, stored: AgentSessionAttachmentUploadCommitResult) => void
+  onProgress?: (id: string, sentBytes: number) => void
+  onStored: (id: string, stored: StoredNativeChatFile) => void
   onFailed: (id: string) => void
   onError: (message: string) => void
 }): Promise<void> {
@@ -59,13 +106,23 @@ export async function uploadPickedNativeChatFiles(args: {
         name: file.name,
         mime: file.mime,
         byteLength: file.byteLength,
-        path: null
+        path: null,
+        sentBytes: 0
       })
       try {
-        args.onStored(id, await args.upload(file))
+        args.onStored(
+          id,
+          await args.upload(file, {
+            id,
+            onProgress: (sentBytes) => args.onProgress?.(id, sentBytes)
+          })
+        )
       } catch (error) {
         args.onFailed(id)
-        args.onError(nativeChatFileAttachFailureMessage(error, file.name))
+        // Removing the chip mid-transfer is the user's own cancel, not a failure to report.
+        if (!isAbortError(error)) {
+          args.onError(nativeChatFileAttachFailureMessage(error, file.name))
+        }
       }
       if (args.canContinue?.() === false) {
         break

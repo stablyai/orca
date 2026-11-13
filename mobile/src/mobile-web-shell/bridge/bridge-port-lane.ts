@@ -100,6 +100,7 @@ export function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
     case 'native.clipboard.read':
       return { value: 'pasteboard' }
     case 'native.media.pick':
+    case 'native.media.picklarge':
       return { items: [] }
     case 'native.media.read':
       return { base64: '', eof: true }

@@ -10,7 +10,7 @@ import {
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
 
-/** The composer's + button: the add-to-message sheet in a structured chat, else the photo library. */
+/** The composer's + button: the add-to-message sheet in a structured chat or when files can be added, else the photo library. */
 export function MobileNativeChatComposerAttachButton({
   onAttachImage,
   onAttachFiles,
@@ -32,8 +32,9 @@ export function MobileNativeChatComposerAttachButton({
 }): React.JSX.Element | null {
   const t = useMobileTranslation()
   const [attachOpen, setAttachOpen] = useState(false)
-  // A terminal-backed chat has only photos to add, so its + opens the library at once.
-  const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
+  // A terminal-backed chat with no file storage has only photos to add, so its + opens the library at once.
+  const showsMenu = structured || onAttachFiles !== undefined
+  const attachPress = showsMenu ? () => setAttachOpen(true) : onAttachImage
   if (!attachPress) {
     return null
   }
@@ -41,7 +42,7 @@ export function MobileNativeChatComposerAttachButton({
     <>
       <Pressable
         accessibilityLabel={
-          structured
+          showsMenu
             ? t('chat.composer.addToMessage', 'Add to message')
             : t('chat.composer.attachImage', 'Attach image')
         }
@@ -56,17 +57,21 @@ export function MobileNativeChatComposerAttachButton({
           <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
         )}
       </Pressable>
-      {structured ? (
+      {showsMenu ? (
         <ActionSheetModal
           visible={attachOpen}
           onClose={() => setAttachOpen(false)}
           actions={mobileNativeChatAttachActions({
             onPhotos: onAttachImage,
             onFiles: onAttachFiles,
-            onWorkspaceFile: menu.openFileMenu,
-            onSkills: () => menu.openSlashMenu('skill'),
-            onCommands: () => menu.openSlashMenu('command'),
-            skillCount: menu.skillCount
+            ...(structured
+              ? {
+                  onWorkspaceFile: menu.openFileMenu,
+                  onSkills: () => menu.openSlashMenu('skill'),
+                  onCommands: () => menu.openSlashMenu('command'),
+                  skillCount: menu.skillCount
+                }
+              : {})
           })}
         />
       ) : null}

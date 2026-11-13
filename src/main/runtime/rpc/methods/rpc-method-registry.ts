@@ -55,6 +55,7 @@ import { PLUGIN_DEV_REQUEST_METHODS } from './plugins/plugin-dev-request'
 import { PLUGIN_INSTALL_METHODS } from './plugins/plugin-install-methods'
 import { SKILL_METHODS } from './skills/skills'
 import { CLIPBOARD_METHODS } from './clipboard/clipboard'
+import { TERMINAL_FILE_UPLOAD_METHODS } from './clipboard/terminal-file-upload'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
 import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-delivery/mobile-web-bundle'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './client-events/runtime-client-capabilities'
@@ -151,6 +152,7 @@ export const ALL_RPC_METHODS = [
   ...PLUGIN_INSTALL_METHODS,
   ...SKILL_METHODS,
   ...CLIPBOARD_METHODS,
+  ...TERMINAL_FILE_UPLOAD_METHODS,
   ...HOST_CAPABILITY_METHODS,
   ...MOBILE_WEB_BUNDLE_METHODS,
   ...RUNTIME_CLIENT_CAPABILITY_METHODS,

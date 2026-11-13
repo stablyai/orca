@@ -489,3 +489,86 @@ describe('a provider uri the Android picker can answer', () => {
     warn.mockRestore()
   })
 })
+
+describe('picking one large file', () => {
+  const MIB = 1024 * 1024
+
+  function sizedFile(size: number): NativeMediaFile {
+    return { size, open: () => fakeFile(new Uint8Array()).open() }
+  }
+
+  it('picklarge stages a 150 MB file', async () => {
+    const probe = harness({ openFile: () => sizedFile(150 * MIB) })
+    const result = mediaPickResultSchema.parse(await probe.serve('native.media.picklarge', {}))
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.byteLength).toBe(157_286_400)
+  })
+
+  it('picklarge refuses a file over 200 MB and deletes what it picked', async () => {
+    const probe = harness({
+      openFile: () => sizedFile(200 * MIB + 1),
+      ownsStagedUri: () => true
+    })
+    await expect(probe.serve('native.media.picklarge', {})).rejects.toSatisfy(
+      (error) => refusalOf(error) === 'native_media_too_large'
+    )
+    expect(probe.discarded).toEqual([`${CACHE}/doc.pdf`])
+    expect(probe.registry.liveCount()).toBe(0)
+  })
+
+  it('picklarge refuses to copy a provider file over the staged ceiling into memory', async () => {
+    const provider = 'content://com.android.providers.downloads/document/7'
+    const probe = harness({
+      openFile: () => sizedFile(20 * MIB),
+      launchFiles: () =>
+        Promise.resolve({ canceled: false, assets: [{ uri: provider, mimeType: 'video/mp4' }] })
+    })
+    await expect(probe.serve('native.media.picklarge', {})).rejects.toSatisfy(
+      (error) => refusalOf(error) === 'native_media_too_large'
+    )
+    expect(probe.copied).toEqual([])
+  })
+
+  it('reads the right bytes at a 100 MB offset of a large item', async () => {
+    const offset = 100 * MIB
+    const probe = harness({ openFile: () => patternedFile(150 * MIB) })
+    const picked = mediaPickResultSchema.parse(await probe.serve('native.media.picklarge', {}))
+    const chunk = mediaReadResultSchema.parse(
+      await probe.serve('native.media.read', {
+        handle: picked.items[0]?.handle ?? '',
+        offset,
+        length: 8
+      })
+    )
+    // Byte n of the patterned file is n % 251.
+    expect([...Buffer.from(chunk.base64, 'base64')]).toEqual([91, 92, 93, 94, 95, 96, 97, 98])
+    expect(chunk.eof).toBe(false)
+  })
+})
+
+/** A file of any size whose byte n is n % 251, generated on read so no test holds it whole. */
+function patternedFile(size: number): NativeMediaFile {
+  return {
+    size,
+    open: () => {
+      let cursor = 0
+      return {
+        get offset() {
+          return cursor
+        },
+        set offset(next: number | null) {
+          cursor = next ?? 0
+        },
+        readBytesSync: (length: number) => {
+          const bytes = Uint8Array.from(
+            { length: Math.max(0, Math.min(length, size - cursor)) },
+            (_, index) => (cursor + index) % 251
+          )
+          cursor += bytes.byteLength
+          return bytes
+        },
+        close: () => {}
+      }
+    }
+  }
+}

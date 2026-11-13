@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import type { BridgeMediaItem } from '../mobile-web-shell/bridge/bridge-media-verbs'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../src/shared/agent-session/agent-session-attachments'
 import {
+  readStagedMediaChunks,
   readStagedMediaItem,
   releaseAllStagedMedia,
   releaseStagedMedia
@@ -11,6 +13,7 @@ import {
   type NativeVerbs
 } from '../mobile-web-shell/bridge/use-native-verbs'
 import {
+  MOBILE_PICKED_FILE_MAX_BYTES,
   MobileFileTooLargeError,
   type MediaPicker,
   type MobileImageSource,
@@ -69,34 +72,52 @@ async function* readPicked(
   }
 }
 
+// Shells with the large-file verb take one file up to 200 MB; older ones stage several files up to their own ceiling and refuse the rest.
 async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaItem[]> {
+  const large = verbs.canPickLargeFile
   try {
-    return await verbs.pickMedia('files', true)
+    return large ? await verbs.pickLargeFile() : await verbs.pickMedia('files', true)
   } catch (error) {
-    throw error instanceof NativeVerbError && error.reason === 'native_media_too_large'
-      ? new MobileFileTooLargeError(null)
-      : error
+    if (error instanceof NativeVerbError && error.reason === 'native_media_too_large') {
+      throw large
+        ? new MobileFileTooLargeError(null, AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'limit')
+        : new MobileFileTooLargeError(null, MOBILE_PICKED_FILE_MAX_BYTES, 'update-app')
+    }
+    throw error
   }
 }
 
+// A file's bytes are read only when its chunks are iterated, so nothing but one chunk is ever held.
+// Handle release: chunks() releases its handle when its iteration ends or is abandoned; this generator releases the previous item's handle (read or not) before advancing, and every remaining handle when the consumer stops, throws or finishes.
 async function* readPickedFiles(
   verbs: NativeVerbs,
   items: readonly BridgeMediaItem[]
 ): AsyncGenerator<PickedMobileFile> {
-  const unread = [...items]
+  const held = new Set(items)
+  const release = async (item: BridgeMediaItem): Promise<void> => {
+    if (held.delete(item)) {
+      await releaseStagedMedia(verbs, item.handle)
+    }
+  }
+  async function* streamed(item: BridgeMediaItem): AsyncGenerator<string> {
+    try {
+      yield* readStagedMediaChunks(verbs, item)
+    } finally {
+      await release(item)
+    }
+  }
   try {
     let index = 0
-    while (unread.length > 0) {
-      const item = unread[0]!
+    for (const item of items) {
       index += 1
       const name = await pickedFileName(verbs, item, index)
-      const base64 = await readStagedMediaItem(verbs, item)
-      unread.shift()
-      await releaseStagedMedia(verbs, item.handle)
-      yield { name, mime: item.mime, byteLength: item.byteLength, base64 }
+      yield { name, mime: item.mime, byteLength: item.byteLength, chunks: () => streamed(item) }
+      await release(item)
     }
   } finally {
-    await releaseAllStagedMedia(verbs, unread)
+    for (const item of held) {
+      await release(item)
+    }
   }
 }
 

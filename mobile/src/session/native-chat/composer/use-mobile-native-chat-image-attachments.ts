@@ -24,16 +24,18 @@ import {
 } from './mobile-native-chat-send'
 import {
   clearMobileNativeChatInputStale,
-  healMobileNativeChatStaleInput,
-  isMobileNativeChatInputStale,
   markMobileNativeChatInputStale
 } from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
+import { healMobileNativeChatStaleSend } from './mobile-native-chat-stale-send-heal'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import {
+  nativeChatSendFiles,
+  type PendingNativeChatFile
+} from './mobile-native-chat-file-attachment'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 
 type CurrentRef<T> = { readonly current: T }
@@ -174,12 +176,13 @@ export function useMobileNativeChatImageAttachments({
         const pendingImages = queued ? queued.images : attachments
         const sentImageIds = pendingImages.map((attachment) => attachment.id)
         // Hold Send until all selected files finish uploading.
-        const sentFiles = structuredNativeChat
-          ? (queued?.files ?? files).filter(
-              (file): file is PendingNativeChatFile & { path: string } => file.path !== null
-            )
-          : []
+        const sendFiles = nativeChatSendFiles(queued?.files ?? files, text, structuredNativeChat)
+        if (!sendFiles) {
+          return false
+        }
+        const { sentFiles, text: terminalText } = sendFiles
         const storedFiles = sentFiles.map(({ id, path }) => ({ kind: 'file' as const, id, path }))
+        const sentFileIds = sentFiles.map((file) => file.id)
         const hasAttachments = scope !== null && pendingImages.length + storedFiles.length > 0
         const destination =
           scope && hasAttachments && !queued ? mobileNativeChatDraftDestination(scope) : null
@@ -192,6 +195,9 @@ export function useMobileNativeChatImageAttachments({
                 returnMobileNativeChatDraftAttachments(destination, pendingImages, sentFiles)
             }
           : intent
+        // The @path references are wire-only: the draft, its restore and its in-flight save keep the typed text.
+        const wireIntent =
+          terminalText === text ? sendIntent : { ...sendIntent, wireText: terminalText }
         if (structuredNativeChat && hasAttachments) {
           if (!client || !enabled || connState !== 'connected') {
             onError?.()
@@ -210,39 +216,31 @@ export function useMobileNativeChatImageAttachments({
           )
           if (outcome !== 'rejected' && destination?.active) {
             removeMobileNativeChatDraftImages(destination, sentImageIds)
-            onFilesSent?.(
-              storedFiles.map((file) => file.id),
-              destination
-            )
+            onFilesSent?.(sentFileIds, destination)
           }
           return outcome !== 'rejected'
         }
         if (pendingImages.length === 0 || !hasAttachments) {
           // Heal stale paste before text-only sends; on failure retain the marker and submit no text.
-          const staleTerminal = activeHandleRef.current
-          if (staleTerminal && isMobileNativeChatInputStale(staleTerminal)) {
-            // Healing writes also need the input lease; retry once ready instead of latching every subsequent send as failed.
-            if (!client || !enabled || connState !== 'connected') {
-              onError?.()
-              onSendError('Message not sent (disconnected)')
-              return false
-            }
-            const healed = await healMobileNativeChatStaleInput({
-              client,
-              terminal: staleTerminal,
-              deviceToken: deviceTokenRef.current,
-              deadline
-            })
-            // Abort after a tab switch during clear rather than sending text to a different terminal.
-            if (!healed || activeHandleRef.current !== staleTerminal) {
-              onError?.()
-              onSendError('Message not sent')
-              return false
-            }
+          const healError = await healMobileNativeChatStaleSend({
+            client,
+            enabled,
+            connState,
+            activeHandleRef,
+            deviceToken: deviceTokenRef.current,
+            deadline
+          })
+          if (healError) {
+            onError?.()
+            onSendError(healError)
+            return false
           }
-          const outcome = await (intent
-            ? baseSend(text, undefined, deadline, undefined, sentAt, intent)
+          const outcome = await (wireIntent
+            ? baseSend(text, undefined, deadline, undefined, sentAt, wireIntent)
             : baseSend(text, undefined, deadline, undefined, sentAt))
+          if (outcome !== 'rejected' && destination?.active) {
+            onFilesSent?.(sentFileIds, destination)
+          }
           return outcome !== 'rejected'
         }
         const handle = activeHandleRef.current
@@ -260,7 +258,7 @@ export function useMobileNativeChatImageAttachments({
             agent,
             deviceToken: deviceTokenRef.current,
             imagePaths: pendingImages.map((attachment) => attachment.path),
-            followedByText: text.trim().length > 0,
+            followedByText: terminalText.trim().length > 0,
             deadline,
             onWriteStarted: () => {
               inputWriteStarted = true
@@ -293,7 +291,7 @@ export function useMobileNativeChatImageAttachments({
             textDeadline,
             undefined,
             sentAt,
-            sendIntent
+            wireIntent
           )
           if (outcome !== 'accepted') {
             // Rejected or unknown text/Enter may orphan an already-pasted path; both outcomes require healing.
@@ -302,6 +300,7 @@ export function useMobileNativeChatImageAttachments({
           if (outcome !== 'rejected' && destination?.active) {
             // Drop only chips in this send, including unknown delivery to avoid duplicate retries; preserve newly attached chips.
             removeMobileNativeChatDraftImages(destination, sentImageIds)
+            onFilesSent?.(sentFileIds, destination)
           }
           return outcome !== 'rejected'
         } catch {

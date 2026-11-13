@@ -101,7 +101,8 @@ export function useMobileNativeChatMessageSend(args: {
       intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
-      const text = draftText.trimEnd()
+      // Wire text is already trimmed, and its one trailing space after an @reference is deliberate.
+      const text = intent?.wireText ?? draftText.trimEnd()
       const handle = handleRef.current
       const origin = captureSendOrigin(text, sentAt)
       const agent = agentRef.current

@@ -10,6 +10,8 @@ import {
 import {
   mediaPickParamsSchema,
   mediaPickResultSchema,
+  mediaPickLargeParamsSchema,
+  mediaPickLargeResultSchema,
   mediaReadParamsSchema,
   mediaReadResultSchema,
   mediaReleaseParamsSchema,
@@ -31,6 +33,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.clipboard.write',
   'native.clipboard.read',
   'native.media.pick',
+  'native.media.picklarge',
   'native.media.read',
   'native.media.release',
   'native.media.name',
@@ -111,6 +114,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.media.pick': {
     params: mediaPickParamsSchema,
     result: mediaPickResultSchema
+  },
+  'native.media.picklarge': {
+    params: mediaPickLargeParamsSchema,
+    result: mediaPickLargeResultSchema
   },
   'native.media.read': {
     params: mediaReadParamsSchema,
