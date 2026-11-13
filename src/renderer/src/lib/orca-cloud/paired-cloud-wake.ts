@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type { CloudWakeSource } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { resolveCloudRowSandboxId } from './cloud-host-rows'
+import { beginWorkspaceWake } from '@/components/terminal-pane/input/wake-input-buffer'
 import {
   getCloudWorkspaceSnapshot,
   isCloudWorkspaceArchived,
@@ -92,6 +93,12 @@ export async function wakePairedCloudWorkspace(
   if (!environmentId) {
     return notPaired(workspaceId, options.quiet)
   }
+  const startedAt = Date.now()
+  if (!options.quiet) {
+    // PAIRED-WAKE-TYPE-THROUGH: hold typing from the press. Waiting for the 'waking' report (after
+    // the bindings read below) let the first keys reach the asleep server's dead connection.
+    beginWorkspaceWake(workspaceId, startedAt)
+  }
   const sandboxId = await resolveCloudRowSandboxId({
     id: workspaceId,
     hostId: toRuntimeExecutionHostId(environmentId)
@@ -99,7 +106,6 @@ export async function wakePairedCloudWorkspace(
   if (!sandboxId) {
     return notPaired(workspaceId, options.quiet)
   }
-  const startedAt = Date.now()
   const source = options.source ?? 'open'
   const report = (
     phase: 'waking' | 'connecting' | 'ready' | 'failed',
