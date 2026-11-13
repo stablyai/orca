@@ -147,7 +147,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return null
     }
     if (foreground?.foreground === 'shell' && processIncarnation) {
-      if (!this.orchestrationMailboxPointerDelivery.holdForegroundFromProbe(ptyId, foreground)) {
+      if (!this.orchestrationMailboxPointerDelivery.holdForeground(ptyId, foreground)) {
         return this.readTerminalMailHold(terminalHandle)
       }
       this.clearDeliveryRecheck(ptyId)

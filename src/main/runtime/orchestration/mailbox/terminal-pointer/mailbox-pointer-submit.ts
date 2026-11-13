@@ -84,7 +84,7 @@ export function submitOrchestrationMailboxPointer(
       if (!terminal || !sameMailbox) {
         clearAndRedrive = true
       } else if (foreground.foreground === 'shell') {
-        if (!deps.state.holdForegroundFromProbe(input.ptyId, foreground)) {
+        if (!deps.state.holdForeground(input.ptyId, foreground)) {
           submitOrchestrationMailboxPointer(deps, input)
           preserveFlight = true
           return

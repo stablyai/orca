@@ -17,10 +17,13 @@ type ForegroundObservation = {
   held: boolean
 }
 
-export type OrchestrationMailboxForegroundProbe = {
-  foreground: 'agent' | 'shell' | 'unknown'
+export type OrchestrationMailboxForegroundObservation = {
   observation: Readonly<Omit<ForegroundObservation, 'held'>>
   generation: number
+}
+
+export type OrchestrationMailboxForegroundProbe = OrchestrationMailboxForegroundObservation & {
+  foreground: 'agent' | 'shell' | 'unknown'
 }
 
 export class OrchestrationMailboxPointerState {
@@ -44,16 +47,15 @@ export class OrchestrationMailboxPointerState {
     processIncarnation: string,
     read: () => Promise<'agent' | 'shell' | 'unknown'>
   ): Promise<OrchestrationMailboxForegroundProbe> {
-    const observation = this.foregroundObservation(ptyId, processIncarnation)
+    const observation = this.captureForegroundObservation(ptyId, processIncarnation)
     const pending = this.foregroundProbes.get(ptyId)
     if (pending) {
       return pending
     }
-    const generation = observation.generation
     const probe = Promise.resolve()
       .then(read)
       .catch(() => 'unknown' as const)
-      .then((foreground) => ({ foreground, observation, generation }))
+      .then((foreground) => ({ foreground, ...observation }))
       .finally(() => {
         if (this.foregroundProbes.get(ptyId) === probe) {
           this.foregroundProbes.delete(ptyId)
@@ -63,17 +65,24 @@ export class OrchestrationMailboxPointerState {
     return probe
   }
 
-  holdForeground(ptyId: string, processIncarnation: string): void {
-    this.foregroundObservation(ptyId, processIncarnation).held = true
+  captureForegroundObservation(
+    ptyId: string,
+    processIncarnation: string
+  ): OrchestrationMailboxForegroundObservation {
+    const observation = this.foregroundObservation(ptyId, processIncarnation)
+    return { observation, generation: observation.generation }
   }
 
-  holdForegroundFromProbe(ptyId: string, probe: OrchestrationMailboxForegroundProbe): boolean {
+  holdForeground(
+    ptyId: string,
+    proof: OrchestrationMailboxForegroundObservation | undefined
+  ): boolean {
     const observation = this.foregroundObservations.get(ptyId)
     if (
-      probe.foreground !== 'shell' ||
+      !proof ||
       !observation ||
-      observation !== probe.observation ||
-      observation.generation !== probe.generation
+      observation !== proof.observation ||
+      observation.generation !== proof.generation
     ) {
       return false
     }

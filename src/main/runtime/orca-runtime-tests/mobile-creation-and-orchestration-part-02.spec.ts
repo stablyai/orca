@@ -50,7 +50,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('orca-dev orchestration check --run run_mailbox')
+        '\nYou have 1 orchestration message. Run orca-dev orchestration check --run run_mailbox.\n'
       )
       expect(write).not.toHaveBeenCalledWith(
         'pty-1',
@@ -249,7 +249,7 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => {
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('orca-dev orchestration check --run run_codex_native_title')
+        '\nYou have 1 orchestration message. Run orca-dev orchestration check --run run_codex_native_title.\n'
       )
     })
     db.close()

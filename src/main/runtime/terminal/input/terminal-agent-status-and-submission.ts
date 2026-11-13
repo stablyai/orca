@@ -101,15 +101,24 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false): void {
     const current = this.ptysById.get(ptyId)
     const incarnation = current?.incarnationId
+    const foregroundObservation =
+      this.orchestrationMailboxPointerDelivery.captureForegroundObservation(ptyId)
+    const recordExit = (): void =>
+      this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' }, foregroundObservation)
     void this.recheckHookAgentPresenceForPty(ptyId).then((verdict) => {
       if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
         return
       }
       // No identified owner keeps legacy rules; an unverifiable owned process cannot be declared exited from silence.
       if (verdict === null || verdict === 'unverifiable') {
-        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
+        this.confirmLegacyPtyAgentExit(
+          ptyId,
+          recoverCompletedHook,
+          verdict === 'unverifiable',
+          recordExit
+        )
       } else if (verdict === 'exited' && !recoverCompletedHook) {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+        recordExit()
       } else if (verdict === 'live') {
         this.restoreDisprovedAgentExit(ptyId)
       } else {
@@ -143,7 +152,8 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   private confirmLegacyPtyAgentExit(
     ptyId: string,
     recoverCompletedHook: boolean,
-    keepOnSilence: boolean
+    keepOnSilence: boolean,
+    recordExit: () => void
   ): void {
     const pty = this.ptysById.get(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
@@ -161,7 +171,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       if (keepOnSilence) {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       } else if (!recoverCompletedHook) {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+        recordExit()
       }
       return
     }
@@ -207,12 +217,10 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
         result.controller === this.ptyController &&
         result.available &&
         typeof result.process === 'string'
-      if (!keepOnSilence || answered) {
-        if (!recoverCompletedHook) {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
-        }
-      } else {
+      if (keepOnSilence && !answered) {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
+      } else if (!recoverCompletedHook) {
+        recordExit()
       }
     })
   }

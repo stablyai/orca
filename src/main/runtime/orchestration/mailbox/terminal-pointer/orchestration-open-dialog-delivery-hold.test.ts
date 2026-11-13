@@ -55,6 +55,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     const write = vi.fn((_ptyId: string, _data: string) => true)
     let foreground: 'codex' | 'zsh' = 'codex'
     let nextForegroundRead: Promise<void> | undefined
+    let nextExitNameRead: Promise<void> | undefined
     const delayNextForegroundRead = (): (() => void) => {
       let release = (): void => {}
       nextForegroundRead = new Promise((resolve) => {
@@ -74,7 +75,13 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       writeWithSettlement: settledWriteStub(write),
       kill: vi.fn(),
       getForegroundProcess: async () => 'codex',
-      confirmForegroundProcess: async () => foreground,
+      confirmForegroundProcess: async () => {
+        const sampled = foreground
+        const delayed = nextExitNameRead
+        nextExitNameRead = undefined
+        await delayed
+        return sampled
+      },
       confirmShellForeground: async () => (await sampleForeground()) === 'zsh',
       supportsForegroundObservation: () => true,
       inspectProcess: async () => {
@@ -209,6 +216,38 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       delivered_at: expect.any(String),
       pointer_enter_pending: 0
     })
+
+    write.mockClear()
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=clear\x07', 10)
+    await vi.advanceTimersByTimeAsync(0)
+    foreground = 'zsh'
+    let releaseExitName = (): void => {}
+    nextExitNameRead = new Promise((resolve) => {
+      releaseExitName = resolve
+    })
+    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell after exit\x07', 11)
+    await vi.advanceTimersByTimeAsync(300)
+    const returnedMessage = insertDirectRunMessage(db, run.id, 'Mail during exit confirmation')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    foreground = 'codex'
+    // An OSC-only return must invalidate the older exit sample without another title.
+    const releaseReturnForeground = delayNextForegroundRead()
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=codex\x07', 12)
+    await vi.advanceTimersByTimeAsync(0)
+    releaseExitName()
+    await vi.advanceTimersByTimeAsync(0)
+    releaseReturnForeground()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    expect(db.getMessageById(returnedMessage.id)).toMatchObject({
+      read: 0,
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+    expect(await sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)).toBeNull()
     db.close()
   })
 

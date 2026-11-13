@@ -158,7 +158,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
           const retryProbe =
             current?.processIncarnation === target.processIncarnation &&
             foreground.foreground === 'shell' &&
-            !this.holdForegroundFromProbe(ptyId, foreground)
+            !this.holdForeground(ptyId, foreground)
           for (const [probedMailbox, reservedTypes] of mailboxes) {
             const terminal = this.deps.getTerminal(ptyId)
             if (terminal) {
@@ -200,13 +200,13 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   readonly probeForeground = (ptyId: string, processIncarnation: string) =>
     this.state.probeForeground(ptyId, processIncarnation, () => this.deps.readForeground(ptyId))
 
-  readonly holdForegroundFromProbe = this.state.holdForegroundFromProbe.bind(this.state)
+  readonly holdForeground = this.state.holdForeground.bind(this.state)
 
-  holdForeground(ptyId: string): void {
+  captureForegroundObservation(ptyId: string) {
     const processIncarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
-    if (processIncarnation) {
-      this.state.holdForeground(ptyId, processIncarnation)
-    }
+    return processIncarnation
+      ? this.state.captureForegroundObservation(ptyId, processIncarnation)
+      : undefined
   }
 
   isForegroundHeld(ptyId: string): boolean {
