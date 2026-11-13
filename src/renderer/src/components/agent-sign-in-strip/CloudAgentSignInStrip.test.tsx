@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, render, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CloudAgentSignInStrip, type CloudStripActions } from './CloudAgentSignInStrip'
 import { stripPrimaryLink } from './CloudStripPrimaryButton'
@@ -92,5 +92,58 @@ describe('CloudAgentSignInStrip Copy link', () => {
     const linkFor = (action: { kind: string }) => (action.kind === 'reopenSetup' ? lazy : null)
     expect(stripPrimaryLink({ kind: 'reopenSetup' }, { linkFor })).toBe(lazy)
     expect(stripPrimaryLink({ kind: 'restart' }, {})).toBeNull()
+  })
+})
+
+describe('CloudAgentSignInStrip code step: cancel lives on the × (CANCEL-SIGNIN-MENU)', () => {
+  const codeStep: CloudStripModel = {
+    ...model,
+    status: 'need',
+    title: 'Enter this code on auth.openai.com',
+    detail: 'Only continue if you started this sign-in in Orca.',
+    primary: {
+      label: 'Copy code and open',
+      action: {
+        kind: 'copyAndOpen',
+        url: 'https://auth.openai.com/codex/device',
+        code: 'K7QX-M2PL'
+      }
+    },
+    code: 'K7QX-M2PL',
+    codeStep: true,
+    otherWays: true
+  }
+  const renderStrip = (cancel: () => void): HTMLElement =>
+    render(
+      <TooltipProvider>
+        <CloudAgentSignInStrip
+          model={codeStep}
+          prompt={null}
+          actions={{ ...actions, cancel }}
+          width="wide"
+        />
+      </TooltipProvider>
+    ).container
+
+  it('lists other ways only, never "Cancel sign-in", in the ⋯ menu', async () => {
+    renderStrip(noop)
+      .querySelector<HTMLButtonElement>('button[aria-label="Other ways"]')!
+      .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    const items = await waitFor(() => {
+      const found = [...document.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent)
+      expect(found.length).toBeGreaterThan(0)
+      return found
+    })
+    expect(items).toEqual(['Paste a code instead', 'Use an API key instead'])
+  })
+
+  it('still cancels the sign-in from the visible × beside the menu', () => {
+    const cancel = vi.fn()
+    const close = renderStrip(cancel).querySelector<HTMLButtonElement>(
+      'button[aria-label="Cancel sign-in (Esc)"]'
+    )
+    expect(close).not.toBeNull()
+    close!.click()
+    expect(cancel).toHaveBeenCalledTimes(1)
   })
 })

@@ -29116,7 +29116,6 @@
     "failed": "{{agent}} couldn’t finish signing in",
     "queuedPrefix": "Queued:",
     "pasteInstead": "Paste a code instead",
-    "cancelSignIn": "Cancel sign-in",
     "copyAndOpen": "Copy code and open",
     "cancelledToast": "The agent didn’t start. The shell is still open.",
     "runningExpiredDetail": "Renew to keep working. Your conversation is kept.",

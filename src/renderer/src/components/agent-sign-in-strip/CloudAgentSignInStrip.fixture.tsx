@@ -129,6 +129,29 @@ export const code = fixture({
   agent: 'codex',
   view: { step: 'device', url: 'https://auth.openai.com/codex/device', userCode: 'K7QX-M2PL' }
 })
+/** CANCEL-SIGNIN-MENU: the code step's ⋯ menu offers other ways only; the × beside it cancels. */
+export const codeMenu = defineFixture({
+  width: 940,
+  render: () => (
+    <div className="pb-24">
+      <Pane
+        reason="paused"
+        agent="codex"
+        view={{
+          step: 'device',
+          url: 'https://auth.openai.com/codex/device',
+          userCode: 'K7QX-M2PL'
+        }}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label="Other ways"]')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
 export const codePaste = fixture({
   reason: 'paused',
   view: { step: 'paste', url: 'https://claude.ai/oauth', submitting: false, refusal: null }

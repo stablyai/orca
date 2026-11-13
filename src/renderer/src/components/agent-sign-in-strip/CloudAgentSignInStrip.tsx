@@ -319,15 +319,11 @@ export function CloudAgentSignInStrip({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {/* CANCEL-SIGNIN-MENU: the code step cancels with the strip's own × (and Esc), not here. */}
               {model.codeStep ? (
-                <>
-                  <DropdownMenuItem onSelect={actions.pasteCode}>
-                    {t('agentSignInStrip.pasteInstead', 'Paste a code instead')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={actions.cancel}>
-                    {t('agentSignInStrip.cancelSignIn', 'Cancel sign-in')}
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onSelect={actions.pasteCode}>
+                  {t('agentSignInStrip.pasteInstead', 'Paste a code instead')}
+                </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem onSelect={actions.useCode}>
                   {t('agentSignInStrip.useCodeInstead', 'Use a code instead')}
