@@ -91,6 +91,7 @@ jobs:
       contents: write
     outputs:
       new_tag: ${{ steps.tag.outputs.tag }}
+      tag_artifact: ${{ steps.bundle.outputs.artifact }}
       recovered_tag: ${{ steps.version.outputs.recovered_tag }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
@@ -333,7 +334,7 @@ jobs:
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git fetch --no-tags origin "$WORKFLOW_SHA"
           git restore --source="$WORKFLOW_SHA" --worktree -- config/scripts/release/publication/publish-complete-draft-releases.mjs
 
       - name: Publish complete release-cut RC drafts from prior runs
@@ -678,17 +679,20 @@ jobs:
             fi
           fi
       - name: Bundle prepared tag
+        id: bundle
         if: steps.tag.outputs.tag != ''
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           SOURCE_SHA: ${{ needs.preflight.outputs.sha }}
-        run: git bundle create "$RUNNER_TEMP/release-tag.bundle" "refs/tags/$TAG" "^$SOURCE_SHA"
+        run: |
+          git bundle create "$RUNNER_TEMP/release-tag.bundle" "refs/tags/$TAG" "^$SOURCE_SHA"
+          echo "artifact=release-tag-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
 
       - name: Transfer Git objects only
         if: steps.tag.outputs.tag != ''
         uses: actions/upload-artifact@v7
         with:
-          name: release-tag-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.bundle.outputs.artifact }}
           path: ${{ runner.temp }}/release-tag.bundle
           if-no-files-found: error
           retention-days: 1
@@ -736,7 +740,7 @@ jobs:
       - uses: actions/download-artifact@v8
         if: ${{ !inputs.dry_run && needs.prepare.outputs.new_tag != '' }}
         with:
-          name: release-tag-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ needs.prepare.outputs.tag_artifact }}
           path: ${{ runner.temp }}/release-tag
       - name: Validate publication envelope without the release credential
         id: validate

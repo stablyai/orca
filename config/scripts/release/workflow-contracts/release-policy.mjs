@@ -59,16 +59,22 @@ export async function isCutByReleasePipeline(github, { owner, repo }, tag) {
   return new RegExp(`^release: ${escapeRegExp(tag)}(?: \\[rc-slot:[^\\]]+\\])?$`).test(subject)
 }
 
-async function isAuthorizedRelease(github, repoRef, release) {
+async function isAuthorizedRelease(github, repoRef, release, releaseCreatorId) {
   const tag = release.tag_name
   if (!STABLE_TAG.test(tag) && !isPrereleaseTag(tag)) {
     return false
   }
-  return release.author?.login === BOT_LOGIN || isCutByReleasePipeline(github, repoRef, tag)
+  return (
+    release.author?.login === BOT_LOGIN ||
+    ((STABLE_TAG.test(tag) || RC_TAG.test(tag)) &&
+      /^[0-9]+$/.test(releaseCreatorId ?? '') &&
+      String(release.author?.id) === releaseCreatorId) ||
+    isCutByReleasePipeline(github, repoRef, tag)
+  )
 }
 
 // Force highest authorized stable release to Latest; GitHub’s choice/old bot filter can select an older version.
-export async function restoreLatestStable(github, repoRef) {
+export async function restoreLatestStable(github, repoRef, releaseCreatorId) {
   const releases = await github.paginate(github.rest.repos.listReleases, {
     ...repoRef,
     per_page: 100
@@ -77,7 +83,7 @@ export async function restoreLatestStable(github, repoRef) {
     .filter((release) => !release.draft && !release.prerelease && STABLE_TAG.test(release.tag_name))
     .sort((left, right) => compareStableTags(right.tag_name, left.tag_name))
   for (const release of candidates) {
-    if (!(await isAuthorizedRelease(github, repoRef, release))) {
+    if (!(await isAuthorizedRelease(github, repoRef, release, releaseCreatorId))) {
       continue
     }
     await github.rest.repos.updateRelease({
@@ -90,14 +96,14 @@ export async function restoreLatestStable(github, repoRef) {
   return null
 }
 
-export async function enforceReleasePolicy({ github, context, core }) {
+export async function enforceReleasePolicy({ github, context, core, releaseCreatorId }) {
   const { release, action } = context.payload
   const tag = release.tag_name
   const author = release.author?.login
   const repoRef = context.repo
   const expectedPrerelease = isPrereleaseTag(tag)
 
-  if (await isAuthorizedRelease(github, repoRef, release)) {
+  if (await isAuthorizedRelease(github, repoRef, release, releaseCreatorId)) {
     if (release.prerelease !== expectedPrerelease) {
       await github.rest.repos.updateRelease({
         ...repoRef,
@@ -106,7 +112,7 @@ export async function enforceReleasePolicy({ github, context, core }) {
         make_latest: expectedPrerelease ? 'false' : 'legacy'
       })
     }
-    await restoreLatestStable(github, repoRef)
+    await restoreLatestStable(github, repoRef, releaseCreatorId)
     return
   }
 
@@ -125,7 +131,7 @@ export async function enforceReleasePolicy({ github, context, core }) {
     prerelease: true,
     make_latest: 'false'
   })
-  await restoreLatestStable(github, repoRef)
+  await restoreLatestStable(github, repoRef, releaseCreatorId)
   await github.rest.repos.deleteRelease({ ...repoRef, release_id: release.id })
   try {
     await github.rest.git.deleteRef({ ...repoRef, ref: `tags/${tag}` })

@@ -36,6 +36,12 @@ function fixture(run, version = '1.4.257') {
     const bundle = join(root, 'release.bundle')
     const destination = join(root, 'trusted')
     git(root, 'clone', '--no-local', '--depth=1', source, destination)
+    git(destination, 'config', 'user.name', 'Workflow Test')
+    git(destination, 'config', 'user.email', 'workflow@example.com')
+    writeFileSync(join(destination, 'workflow.txt'), 'trusted workflow checkout')
+    git(destination, 'add', '.')
+    git(destination, 'commit', '-m', 'trusted workflow revision')
+    git(destination, 'fetch', '--no-tags', '--depth=1', 'origin', sourceSha)
     return run({ root, source, sourceSha, bundle, destination })
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -49,17 +55,21 @@ function release(
     packageMutation = false,
     empty = false,
     lightweight = false,
-    nested = false
+    nested = false,
+    tag = 'v1.4.258'
   } = {}
 ) {
   if (!empty) {
     writeFileSync(
       join(f.source, 'package.json'),
-      JSON.stringify({ name: packageMutation ? 'another-product' : 'orca', version: '1.4.258' })
+      JSON.stringify({ name: packageMutation ? 'another-product' : 'orca', version: tag.slice(1) })
     )
   }
   if (extra) {
-    writeFileSync(join(f.source, 'unexpected.txt'), 'unexpected release bytes')
+    writeFileSync(
+      join(f.source, typeof extra === 'string' ? extra : 'unexpected.txt'),
+      'unexpected release bytes'
+    )
   }
   git(f.source, 'add', '.')
   git(f.source, 'commit', '--allow-empty', '-m', 'release')
@@ -70,11 +80,9 @@ function release(
   git(
     f.source,
     'tag',
-    ...(lightweight
-      ? ['v1.4.258']
-      : ['-a', 'v1.4.258', ...(nested ? ['inner'] : []), '-m', 'v1.4.258'])
+    ...(lightweight ? [tag] : ['-a', tag, ...(nested ? ['inner'] : []), '-m', tag])
   )
-  git(f.source, 'bundle', 'create', f.bundle, 'refs/tags/v1.4.258', `^${f.sourceSha}`)
+  git(f.source, 'bundle', 'create', f.bundle, `refs/tags/${tag}`, `^${f.sourceSha}`)
   return sha
 }
 
@@ -116,6 +124,7 @@ describe('validated release object transfer', () => {
 
   it.each([
     ['extra shipped path', { extra: true }, 'changes more than package.json'],
+    ['leading whitespace path', { extra: ' package.json' }, 'changes more than package.json'],
     ['another package property', { packageMutation: true }, 'changes more than its version'],
     ['lightweight new tag', { lightweight: true }, 'Command failed'],
     ['nested annotation', { nested: true }, 'directly annotate']
@@ -161,6 +170,38 @@ describe('validated release object transfer', () => {
           version: '1.4.259'
         })
       ).toThrow('requested version')
+    }))
+
+  it.each(['v1.4.258', 'v1.4.258-rc.1'])(
+    'preserves a leading v in the explicit request %s',
+    (tag) =>
+      fixture((f) => {
+        const sha = release(f, { tag })
+        expect(
+          validateReleaseTag({
+            cwd: f.destination,
+            sourceSha: f.sourceSha,
+            tag,
+            bundle: f.bundle,
+            version: tag
+          }).release_sha
+        ).toBe(sha)
+      })
+  )
+
+  it('ignores an unused suffix for a computed stable release', () =>
+    fixture((f) => {
+      const sha = release(f)
+      expect(
+        validateReleaseTag({
+          cwd: f.destination,
+          sourceSha: f.sourceSha,
+          tag: 'v1.4.258',
+          bundle: f.bundle,
+          kind: 'patch',
+          suffix: 'perf'
+        }).release_sha
+      ).toBe(sha)
     }))
 
   it('retains legacy lightweight remote-tag recovery without a new push', () =>

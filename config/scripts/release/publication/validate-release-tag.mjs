@@ -7,12 +7,13 @@ const TAG_PATTERN =
   /^v[0-9]+\.[0-9]+\.[0-9]+(?:-rc\.(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z]*[A-Za-z][0-9A-Za-z]*))?)?$/
 const CANDIDATE = 'refs/release-cut/candidate'
 
-function git(args, cwd) {
-  return execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
+function git(args, cwd, raw = false) {
+  const output = execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe']
-  }).trim()
+  })
+  return raw ? output : output.trim()
 }
 
 function requireTag(tag) {
@@ -54,7 +55,8 @@ export function validateReleaseTag({
     }
     const paths = git(
       ['diff-tree', '--no-commit-id', '--name-only', '-r', '-z', sourceSha, sha],
-      cwd
+      cwd,
+      true
     )
       .split('\0')
       .filter(Boolean)
@@ -86,13 +88,14 @@ export function validateReleaseTag({
     if (!annotation.startsWith(`object ${sha}\ntype commit\ntag ${tag}\n`)) {
       throw new Error('Release tag must directly annotate the version commit')
     }
-    if (version && tag !== `v${version}${suffix ? `.${suffix}` : ''}`) {
+    const explicitVersion = version.replace(/^v/, '')
+    if (version && tag !== `v${explicitVersion}${suffix ? `.${suffix}` : ''}`) {
       throw new Error('Tag does not match the requested version')
     }
     if (!version && (kind === 'rc') !== tag.includes('-rc.')) {
       throw new Error('Tag does not match the requested release kind')
     }
-    if (suffix && !tag.endsWith(`.${suffix}`)) {
+    if (!version && kind === 'rc' && suffix && !tag.endsWith(`.${suffix}`)) {
       throw new Error('Tag does not match the requested suffix')
     }
   }
