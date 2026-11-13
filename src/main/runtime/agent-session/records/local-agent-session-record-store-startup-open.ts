@@ -14,6 +14,8 @@ import {
 export type AgentSessionRecordStoreStartupOpen = {
   persisted: boolean
   opened: Promise<unknown> | null
+  /** Startup restoration settled; background journal maintenance may begin. */
+  restored?: () => void
 }
 
 export function localAgentSessionRecordStoreLocation(
@@ -35,8 +37,12 @@ export function startLocalAgentSessionRecordStoreOpen(
   if (!hasPersistedStructuredAgentSessionStore(location.stateDirectory)) {
     return { persisted: false, opened: null }
   }
-  const opened = openAgentSessionRecordStoreOnce(location)
+  const restored = Promise.withResolvers<void>()
+  const opened = openAgentSessionRecordStoreOnce({
+    ...location,
+    maintenanceAfter: restored.promise
+  })
   // Restoration reads the outcome; the open already logs and records its own refusal.
   opened.catch(() => {})
-  return { persisted: true, opened }
+  return { persisted: true, opened, restored: () => restored.resolve() }
 }

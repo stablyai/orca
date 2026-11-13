@@ -15,6 +15,7 @@ export type AgentSessionRecordStoreLocation = {
   hostId: string
   logger: StructuredAgentSessionLogger
   legacySessionTabIds: readonly string[]
+  maintenanceAfter?: Promise<void>
 } & Pick<
   Parameters<typeof openStructuredAgentSessionSqlJournalDatabase>[0],
   'writerPath' | 'readerPath'
@@ -71,7 +72,12 @@ export function openAgentSessionRecordStoreOnce(
         slot.database = opened.journalDatabase
         if (!slot.retire) {
           slot.store = opened.store
-          void opened.journalDatabase.startMaintenance()
+          // A startup opener holds maintenance until its restoration settles; pre-RPC startup does not share the disk.
+          void Promise.resolve(location.maintenanceAfter).then(() => {
+            if (!slot.retire) {
+              void opened.journalDatabase.startMaintenance()
+            }
+          })
         } else {
           opened.journalDatabase.stopMaintenance()
         }
