@@ -97,19 +97,23 @@ export class BackendSupervisor {
 
   automationClient(provider: 'claudeUsage' | 'codexUsage'): AutomationUsageClient {
     return {
-      getAutomationRunUsage: async (input) => {
-        const ready = this.ensureReady(true)
-        const control = this.control
-        await ready
-        if (!this.desiredRunning || !control || this.control !== control) {
-          throw new Error('Usage disconnected. Try again after it reconnects.')
-        }
+      getAutomationRunUsage: async (input) =>
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns its typed automation result for this provider method.
-        return (await control.call(`${provider}:getAutomationRunUsage`, input)) as Awaited<
+        (await this.callPrivileged(`${provider}:getAutomationRunUsage`, input, true)) as Awaited<
           ReturnType<AutomationUsageClient['getAutomationRunUsage']>
         >
-      }
     }
+  }
+
+  /** A main-process call into the usage service; `explicit` also retries a failed startup. */
+  async callPrivileged(method: string, params: unknown, explicit: boolean): Promise<unknown> {
+    const ready = this.ensureReady(explicit)
+    const control = this.control
+    await ready
+    if (!this.desiredRunning || !control || this.control !== control) {
+      throw new Error('Usage disconnected. Try again after it reconnects.')
+    }
+    return control.call(method, params)
   }
 
   stop(): Promise<void> {

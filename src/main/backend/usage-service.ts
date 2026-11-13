@@ -3,6 +3,7 @@ import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
+import { readToknRows, readToknTracking } from '../tokn/tokn-usage-reads'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import { stopUsageScanWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { UsageProviderKey } from '../../shared/backend-service-contract'
@@ -82,6 +83,7 @@ export function createUsageService(host: UsageStoreHost) {
     museUsage: new MuseUsageStore(host)
   }
   const all = Object.values(stores)
+  const toknStores = { claude: stores.claudeUsage, codex: stores.codexUsage }
   const handlers = new Map<string, Handler>()
   registerUsageQueries(handlers, 'claudeUsage', stores.claudeUsage)
   registerUsageQueries(handlers, 'codexUsage', stores.codexUsage)
@@ -114,6 +116,12 @@ export function createUsageService(host: UsageStoreHost) {
     }
     if (privileged && method === 'codexUsage:getAutomationRunUsage') {
       return stores.codexUsage.getAutomationRunUsage(automationSchema.parse(params))
+    }
+    if (privileged && method === 'tokn:getTracking') {
+      return readToknTracking(toknStores)
+    }
+    if (privileged && method === 'tokn:getRows') {
+      return readToknRows(toknStores)
     }
     const handler = handlers.get(method)
     if (!handler) {

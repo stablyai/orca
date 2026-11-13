@@ -1,4 +1,4 @@
-export const ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS = {
+export const LOOPBACK_CALLBACK_RESPONSE_HEADERS = {
   'cache-control': 'no-store',
   'content-security-policy':
     "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
@@ -7,14 +7,24 @@ export const ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS = {
   'x-content-type-options': 'nosniff'
 } as const
 
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
 // The standalone loopback callback mirrors renderer tokens without loading external assets.
-export const ORCA_CLOUD_CALLBACK_SUCCESS_PAGE = `<!doctype html>
+export function renderLoopbackCallbackSuccessPage(title: string): string {
+  const safeTitle = escapeHtml(title)
+  return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Signed in to Orca</title>
+    <title>${safeTitle}</title>
     <style>
       :root {
         --background: #fff;
@@ -81,8 +91,9 @@ export const ORCA_CLOUD_CALLBACK_SUCCESS_PAGE = `<!doctype html>
           <path d="m5 12 4 4L19 6"></path>
         </svg>
       </div>
-      <h1>Signed in to Orca</h1>
+      <h1>${safeTitle}</h1>
       <p>You can close this tab and return to the app.</p>
     </main>
   </body>
 </html>`
+}
