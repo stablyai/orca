@@ -21712,7 +21712,7 @@
         "soonTitle_one": "{{value0}} requires MFA in {{count}} day",
         "soonTitle_other": "{{value0}} requires MFA in {{count}} days",
         "toast": "{{value0}} requires MFA from {{value1}}.",
-        "bannerBlockedBody": "You can’t use this team’s workspaces until you set it up. Your personal account is not affected.",
+        "bannerBlockedBody": "You can’t use this team’s workspaces until you set it up. Your personal account isn’t affected.",
         "setUp": "Set up MFA",
         "blockedTitle": "Set up two-factor authentication to use {{value0}}",
         "blockedBody": "{{value0}} has required it for all members since {{value1}}. Your workspaces and files are safe, and open again as soon as you add an authenticator app.",

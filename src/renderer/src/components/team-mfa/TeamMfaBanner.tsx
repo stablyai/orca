@@ -37,23 +37,24 @@ export function TeamMfaBanner({
   const t = useTranslate()
   const locale = useIntlLocale()
   const urgency = mfaUrgency(enforceAt, now, blocked)
-  const title = urgency === 'soon'
-    ? mfaSoonTitle(teamName, enforceAt, now, t)
-    : blocked
-    ? t(
-        'auto.components.teamMfa.bannerBlockedTitle',
-        '{{value0}} requires two-factor authentication',
-        { value0: teamName }
-      )
-    : t(
-        'auto.components.teamMfa.bannerTitle',
-        '{{value0}} requires two-factor authentication. {{value1}}.',
-        { value0: teamName, value1: mfaCountdownLabel(enforceAt, now, t) }
-      )
+  const title =
+    urgency === 'soon'
+      ? mfaSoonTitle(teamName, enforceAt, now, t)
+      : blocked
+        ? t(
+            'auto.components.teamMfa.bannerBlockedTitle',
+            '{{value0}} requires two-factor authentication',
+            { value0: teamName }
+          )
+        : t(
+            'auto.components.teamMfa.bannerTitle',
+            '{{value0}} requires two-factor authentication. {{value1}}.',
+            { value0: teamName, value1: mfaCountdownLabel(enforceAt, now, t) }
+          )
   const detail = blocked
     ? t(
         'auto.components.teamMfa.bannerBlockedBody',
-        'You can’t use this team’s workspaces until you set it up. Your personal account is not affected.'
+        'You can’t use this team’s workspaces until you set it up. Your personal account isn’t affected.'
       )
     : t(
         'auto.components.teamMfa.bannerBody',

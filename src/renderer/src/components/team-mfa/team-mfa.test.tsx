@@ -50,9 +50,9 @@ describe('what the member sees', () => {
     expect(teamMfaSurface(policy())).toBe('banner')
     expect(teamMfaSurface(policy({ self: 'blocked' }))).toBe('blocked')
     // Past the deadline by the local clock, but the server still says pending: not blocked.
-    expect(
-      teamMfaSurface(policy({ policy: { enforceAt: NOW - DAY, setAt: NOW - 8 * DAY } }))
-    ).toBe('banner')
+    expect(teamMfaSurface(policy({ policy: { enforceAt: NOW - DAY, setAt: NOW - 8 * DAY } }))).toBe(
+      'banner'
+    )
   })
 
   it('is nothing with MFA on, an unknown state, or no policy', () => {
@@ -241,7 +241,7 @@ describe('banner after the deadline', () => {
     )
     expect(container.textContent).toContain('Acme requires two-factor authentication')
     expect(container.textContent).toContain('until you set it up')
-    expect(container.textContent).toContain('Your personal account is not affected')
+    expect(container.textContent).toContain('Your personal account isn’t affected')
     expect(container.textContent).not.toContain('days left')
     expect(getByRole('button', { name: 'Set up MFA' })).toBeTruthy()
   })
@@ -290,7 +290,10 @@ describe('escalation', () => {
 describe('one-time toast', () => {
   const memory = (): Pick<Storage, 'getItem' | 'setItem'> => {
     const map = new Map<string, string>()
-    return { getItem: (key) => map.get(key) ?? null, setItem: (key, value) => void map.set(key, value) }
+    return {
+      getItem: (key) => map.get(key) ?? null,
+      setItem: (key, value) => void map.set(key, value)
+    }
   }
 
   it('shows once per team and deadline, and again when the date changes', () => {

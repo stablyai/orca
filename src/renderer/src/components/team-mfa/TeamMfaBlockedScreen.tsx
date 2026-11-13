@@ -84,7 +84,13 @@ export function TeamMfaBlockedScreen({
           : null}
       </p>
       {onUsePersonal ? (
-        <Button type="button" variant="ghost" size="sm" onClick={onUsePersonal}>
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          className="text-muted-foreground underline"
+          onClick={onUsePersonal}
+        >
           {t('auto.components.teamMfa.usePersonal', 'Use my personal account for now')}
         </Button>
       ) : null}

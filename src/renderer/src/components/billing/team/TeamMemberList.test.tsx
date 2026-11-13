@@ -137,3 +137,20 @@ it('leaves the cell blank, not "off", for a member with no status', () => {
   expect(cell('member:u-neil').textContent).toBe('MFA off')
   expect(cell('member:u-grace').textContent).toBe('')
 })
+
+it('shows no MFA badge for a member who has not signed in yet', () => {
+  const { container } = renderList(
+    {
+      ...roster,
+      members: [
+        { ...roster.members[0]!, mfa: 'on' },
+        { userId: null, email: 'linus@acme.dev', role: 'member', mfa: 'off' }
+      ]
+    },
+    'u-neil'
+  )
+  const pending = container.querySelector(
+    '[data-team-row="member:linus@acme.dev"] [data-team-mfa]'
+  )!
+  expect(pending.textContent).toBe('')
+})

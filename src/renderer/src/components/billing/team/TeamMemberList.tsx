@@ -322,7 +322,11 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                   data-team-mfa={row.kind === 'member' ? (row.member.mfa ?? '') : ''}
                   className="flex w-28 shrink-0"
                 >
-                  {row.kind === 'member' && memberMfaLabel(row.member, locale, t) ? (
+                  {/* Only for members who have signed in: someone still pending has no account
+                      state yet, so "off" would mislead. */}
+                  {row.kind === 'member' &&
+                  row.status === 'active' &&
+                  memberMfaLabel(row.member, locale, t) ? (
                     <Badge variant="tag">{memberMfaLabel(row.member, locale, t)}</Badge>
                   ) : null}
                 </span>
