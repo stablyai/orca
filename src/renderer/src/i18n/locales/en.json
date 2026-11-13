@@ -1424,6 +1424,17 @@
       "cleanup": {
         "recipeDescription": "Clean up dictated text before it lands."
       }
+    },
+    "projectAgentDefaults": {
+      "title": "Agent defaults",
+      "description": "Default agent and model for new work in this project. Unset choices inherit this host’s defaults.",
+      "inherit": "Use host default",
+      "agent": "Default agent",
+      "blank": "Blank terminal",
+      "modelsFor": "Model defaults for",
+      "reset": "Reset to host defaults",
+      "saveFailed": "Could not save project defaults. Check the connection and update the project’s runtime if needed.",
+      "keywords": "agent model reasoning effort default"
     }
   },
   "menu": {

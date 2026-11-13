@@ -1,3 +1,4 @@
+import { withProjectAgentLaunchDefaults } from '../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
 import {
@@ -74,10 +75,17 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   /** Share new-chat selection between create and createSupport so client pickers show what create will run. */
-  structuredAgentSessionLaunchSeedOptions(
-    agent: StructuredAgentId
-  ): Record<string, string> | undefined {
-    return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
+  async structuredAgentSessionLaunchSeedOptions(
+    agent: StructuredAgentId,
+    worktreeSelector?: string
+  ): Promise<Record<string, string> | undefined> {
+    const repo = worktreeSelector
+      ? await this.resolveStructuredAgentSessionRepo(worktreeSelector)
+      : null
+    return structuredLaunchSeedOptions(
+      withProjectAgentLaunchDefaults(this.requireStore().getSettings(), repo),
+      agent
+    )
   }
 
   async resolveStructuredAgentSessionCreateIntent(
@@ -180,13 +188,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     await this.accounts.prepareHostAgentLaunch(input.agent)
     const settings = this.requireStore().getSettings()
     const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
-    const options = structuredLaunchSeedOptions(
-      {
-        ...settings,
-        agentLaunchChoices: input.resumeFrom ? undefined : settings.agentLaunchChoices
-      },
-      input.agent
-    )
+    const options = input.resumeFrom
+      ? structuredLaunchSeedOptions({ ...settings, agentLaunchChoices: undefined }, input.agent)
+      : await this.structuredAgentSessionLaunchSeedOptions(input.agent, input.worktree)
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
     const host = getStructuredAgentSessionHost()

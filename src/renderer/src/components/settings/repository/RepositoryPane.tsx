@@ -31,6 +31,7 @@ import { getRepositoryPaneSearchMetadata } from './repository-search'
 import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
+import { RepositoryAgentDefaultsSection } from './RepositoryAgentDefaultsSection'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
@@ -47,8 +48,9 @@ import {
 
 type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
+  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount' | 'agentLaunchDefaults'
 > & {
+  agentLaunchDefaults?: Repo['agentLaunchDefaults'] | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   ghAccount?: GhAccountBinding | null
@@ -357,6 +359,12 @@ export function RepositoryPane({
         ) : null}
       </SettingsGroup>
     ) : null,
+    <RepositoryAgentDefaultsSection
+      key={`${selectedHostId}:${repo.id}:agent-defaults`}
+      repo={repo}
+      updateRepo={updateSelectedRepo}
+      forceVisible={forceFullPaneForRepoMatch}
+    />,
     hooksSection,
     forceFullPaneForRepoMatch ||
     matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry(t)]) ? (

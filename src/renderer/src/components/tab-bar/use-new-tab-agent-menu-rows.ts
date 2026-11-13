@@ -116,7 +116,8 @@ export function useAgentMenuObservation(
     unresolvedTarget ? null : facts,
     desktopSettings,
     viewActive && (open || shown),
-    viewActive && open
+    viewActive && open,
+    workspace
   )
   useAppStateValue(
     useShallow((state) => [
