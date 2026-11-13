@@ -1,3 +1,5 @@
+import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
+import type { MailboxDeliveryDecision } from '../notifications/mailbox-delivery-recheck'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   MAILBOX_POINTER_ENTER_ATTEMPTED,
@@ -18,12 +20,16 @@ type PointerSubmitDependencies = {
   mailboxOwner: OrchestrationMailboxOwner
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
-  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
-  readForeground: (ptyId: string) => Promise<'agent' | 'shell' | 'unknown'>
+  resolveSubmitTarget: (
+    ptyId: string,
+    foreground?: MailboxForeground
+  ) => OrchestrationMailboxPointerSubmitTarget | null
+  readForeground: (ptyId: string) => Promise<MailboxForeground>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
+  onDeliveryDecision?: (ptyId: string, decision?: MailboxDeliveryDecision) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
 
@@ -41,6 +47,7 @@ export function submitOrchestrationMailboxPointer(
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
     expectedTarget: OrchestrationMailboxPointerSubmitTarget
+    foregroundFollowup?: boolean
   }
 ): void {
   let clearAndRedrive = false
@@ -63,7 +70,7 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
-      const foreground = await deps.state.probeForeground(
+      const foreground = await deps.state.foreground.probeForeground(
         input.ptyId,
         input.expectedTarget.processIncarnation,
         () => deps.readForeground(input.ptyId)
@@ -72,7 +79,7 @@ export function submitOrchestrationMailboxPointer(
         finalizeReservation = false
         return
       }
-      const target = deps.resolveSubmitTarget(input.ptyId)
+      const target = deps.resolveSubmitTarget(input.ptyId, foreground.foreground)
       const terminal =
         target?.terminal.handle === input.expectedTarget.terminal.handle &&
         target.processIncarnation === input.expectedTarget.processIncarnation
@@ -83,10 +90,19 @@ export function submitOrchestrationMailboxPointer(
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
       if (!terminal || !sameMailbox) {
         clearAndRedrive = true
-      } else if (!deps.state.applyForeground(input.ptyId, foreground, foreground.foreground)) {
-        submitOrchestrationMailboxPointer(deps, input)
+      } else if (
+        !deps.state.foreground.applyForeground(input.ptyId, foreground, foreground.foreground)
+      ) {
+        if (!input.foregroundFollowup) {
+          submitOrchestrationMailboxPointer(deps, { ...input, foregroundFollowup: true })
+        } else {
+          deps.state.deferFlightUntilIdle(input.ptyId)
+          input.flight.submitEnter = () =>
+            submitOrchestrationMailboxPointer(deps, { ...input, foregroundFollowup: false })
+          deps.onDeliveryDecision?.(input.ptyId, { foreground: true })
+        }
         preserveFlight = true
-      } else if (foreground.foreground === 'shell') {
+      } else if (deps.state.foreground.foregroundHold(input.ptyId)) {
         clearAndRedrive = true
         redriveClearedPointer = false
       } else if (

@@ -8,10 +8,14 @@ import {
   insertDirectRunMessage,
   driveToLiveIdle,
   PTY_ID,
+  PANE_KEY,
+  TERMINAL_HANDLE,
+  TAB_ID,
+  LEAF_ID,
   WORKTREE_ID,
+  LAUNCH_TOKEN,
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
-import { registerBoundPty } from '../../../orca-runtime-tests/bind-first-pane.test-fixture'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
@@ -29,71 +33,71 @@ describe('owed mailbox foreground revalidation', () => {
     }
   })
 
-  it.each(['unknown', 'consumed', 'retired'] as const)(
-    'joins a slow inspection and stops the obligation when %s',
-    async (outcome) => {
+  it.each(['posix', 'windows'] as const)(
+    'keeps a proven shell held through unavailable %s reads, then recovers on affirmative evidence',
+    async (host) => {
       vi.useFakeTimers()
-      const db = createDatabase('orca-mail-slow-foreground-')
+      const platform = process.platform
+      if (host === 'windows') {
+        Object.defineProperty(process, 'platform', { value: 'win32' })
+      }
+      const db = createDatabase('orca-mail-unknown-')
       const { runtime } = createRuntime(db)
       const write = vi.fn((_ptyId: string, _data: string) => true)
-      let shell = true
-      let pending: Promise<void> | undefined
-      let release = (): void => {}
-      const inspections: number[] = []
-      const inspect = async () => {
-        inspections.push(Date.now())
-        const delayed = pending
-        pending = undefined
-        await delayed
-        return shell
-      }
+      let mode: 'shell' | 'failed' | 'agent' = 'shell'
+      let inspections = 0
       runtime.setPtyController({
         write,
         writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => 'codex',
-        confirmShellForeground: inspect,
+        confirmShellForeground: async () => {
+          inspections++
+          return mode === 'shell'
+        },
         supportsForegroundObservation: () => true,
-        inspectProcess: async () => ({
-          foregroundProcess: shell ? 'zsh' : null,
-          hasChildProcesses: !shell,
-          foregroundObservation: (await inspect())
-            ? {
-                ptyId: PTY_ID,
-                ptyIncarnationId: 'mailbox-incarnation',
-                authorityGeneration: 'test',
-                observationEpoch: 1,
-                capturedAgeMs: 0,
-                verdict: 'observed',
-                source: 'pty-master',
-                foregroundKind: 'shell',
-                processName: 'zsh'
-              }
-            : undefined
+        inspectProcess: async () => {
+          inspections++
+          if (mode === 'failed') {
+            throw new Error('inspection unavailable')
+          }
+          return {
+            foregroundProcess: mode === 'shell' ? 'zsh' : 'codex',
+            hasChildProcesses: mode !== 'shell',
+            foregroundObservation: {
+              ptyId: PTY_ID,
+              ptyIncarnationId: 'mailbox-incarnation',
+              authorityGeneration: 'test',
+              observationEpoch: 1,
+              capturedAgeMs: 0,
+              verdict: 'observed',
+              source: 'pty-master',
+              foregroundKind: mode === 'shell' ? 'shell' : 'non-shell',
+              processName: mode === 'shell' ? 'zsh' : 'codex'
+            }
+          }
+        }
+      })
+      try {
+        const run = createBoundRun(db, 'Unknown is not a return')
+        await driveToLiveIdle(runtime)
+        const message = insertDirectRunMessage(db, run.id, 'Waiting mail')
+        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(write).not.toHaveBeenCalled()
+        mode = 'failed'
+        await vi.advanceTimersByTimeAsync(20000)
+        expect(inspections).toBeGreaterThan(1)
+        expect(write).not.toHaveBeenCalled()
+        expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
+        expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toMatchObject({
+          kind: 'not-live'
         })
-      })
-      const run = createBoundRun(db, 'Slow foreground recovery')
-      await driveToLiveIdle(runtime)
-      const message = insertDirectRunMessage(db, run.id, 'Waiting mail')
-      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(write).not.toHaveBeenCalled()
-      pending = new Promise((resolve) => {
-        release = resolve
-      })
-      const before = inspections.length
-      await vi.advanceTimersByTimeAsync(30000)
-      expect(inspections.length - before).toBe(1)
-      expect(write).not.toHaveBeenCalled()
-      if (outcome === 'consumed') {
-        db.markAsRead([message.id])
-      } else if (outcome === 'retired') {
-        runtime.onPtyExit(PTY_ID, 0)
-      }
-      shell = false
-      release()
-      await vi.advanceTimersByTimeAsync(1000)
-      if (outcome === 'unknown') {
+        if (host === 'windows') {
+          Object.defineProperty(process, 'platform', { value: platform })
+        }
+        mode = 'agent'
+        await vi.advanceTimersByTimeAsync(65000)
         expect(write.mock.calls.map(([, data]) => data)).toEqual([
           expect.stringContaining('You have 1 orchestration message'),
           '\r'
@@ -103,138 +107,274 @@ describe('owed mailbox foreground revalidation', () => {
           delivered_at: expect.any(String),
           pointer_enter_pending: 0
         })
-      } else {
-        expect(write).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(65000)
+        expect(write).toHaveBeenCalledTimes(2)
+      } finally {
+        Object.defineProperty(process, 'platform', { value: platform })
+        db.close()
       }
-      const settledCount = inspections.length
-      await vi.advanceTimersByTimeAsync(30000)
-      expect(inspections.length).toBe(settledCount)
-      db.close()
     }
   )
 
-  it.each([
-    [10, 40],
-    [100, 400]
-  ])(
-    'bounds automatic inspection chains for %i held terminals with owed mail',
-    async (count, chainBound) => {
-      vi.useFakeTimers()
-      const db = createDatabase('orca-mail-foreground-fleet-')
-      const { runtime } = createRuntime(db, { launchAgent: null })
-      const write = vi.fn((_ptyId: string, _data: string) => true)
-      const panes = Array.from({ length: count * 2 }, (_, index) => ({
-        ptyId: `fleet-${index}`,
-        tabId: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-        leafId: `20000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-        handle: `term_fleet_${index}`
-      }))
-      for (const pane of panes) {
-        registerBoundPty(runtime, pane.ptyId, WORKTREE_ID, null, {
-          tabId: pane.tabId,
-          leafId: pane.leafId,
-          incarnationId: `inc-${pane.ptyId}`
-        })
-        runtime.registerPreAllocatedHandleForPty(pane.ptyId, pane.handle)
-      }
-      runtime.syncWindowGraph(1, {
-        tabs: panes.map((pane) => ({
-          tabId: pane.tabId,
-          worktreeId: WORKTREE_ID,
-          title: 'Codex',
-          activeLeafId: pane.leafId,
-          layout: null
-        })),
-        leaves: panes.map((pane, index) => ({
-          ...pane,
-          worktreeId: WORKTREE_ID,
-          paneRuntimeId: index + 1
-        }))
-      })
-      await runtime.listTerminals()
-      for (const pane of panes) {
-        runtime.onPtyData(pane.ptyId, '\x1b]0;Codex done\x07', 1)
-        await runtime.serializeMainTerminalBuffer(pane.ptyId)
-      }
-      await vi.advanceTimersByTimeAsync(1000)
-      const starts: { ptyId: string; at: number }[] = []
-      let active = 0
-      let peak = 0
-      const foreground = runtime.readLaunchedAgentForeground.bind(runtime)
-      vi.spyOn(runtime, 'readLaunchedAgentForeground').mockImplementation(async (ptyId, agent) => {
-        if (agent !== undefined) {
-          return foreground(ptyId, agent)
+  it('converges delivery, receipt and Enter while compatible observations overlap slow inspections', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-mail-convergence-')
+    const { runtime } = createRuntime(db)
+    const write = vi.fn((_ptyId: string, _data: string) => true)
+    let inspections = 0
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'codex',
+      supportsForegroundObservation: () => true,
+      inspectProcess: async () => {
+        inspections++
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        return {
+          foregroundProcess: 'codex',
+          hasChildProcesses: true,
+          foregroundObservation: {
+            ptyId: PTY_ID,
+            ptyIncarnationId: 'mailbox-incarnation',
+            authorityGeneration: 'test',
+            observationEpoch: 1,
+            capturedAgeMs: 0,
+            verdict: 'observed',
+            source: 'pty-master',
+            foregroundKind: 'non-shell',
+            processName: 'codex'
+          }
         }
-        starts.push({ ptyId, at: Date.now() })
-        active++
-        peak = Math.max(peak, active)
-        try {
-          return await foreground(ptyId)
-        } finally {
-          active--
-        }
-      })
-      const inspect = async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        return true
       }
+    })
+    const run = createBoundRun(db, 'Converging delivery')
+    await driveToLiveIdle(runtime)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 2)
+    const message = insertDirectRunMessage(db, run.id, 'Converging mail')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    let receiptDone = false
+    const receipt = runtime.readTerminalMailHold(`run:${run.id}`).then(() => {
+      receiptDone = true
+    })
+    const spinner = setInterval(
+      () => runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', Date.now()),
+      50
+    )
+    try {
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(receiptDone).toBe(true)
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+      expect(db.getMessageById(message.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String),
+        pointer_enter_pending: 0
+      })
+      expect(inspections).toBeLessThanOrEqual(3)
+      await receipt
+    } finally {
+      clearInterval(spinner)
+      db.close()
+    }
+  })
+
+  it('requires current intended-agent evidence before a retained hook row revives null status', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-mail-hook-boundary-')
+    const row = {
+      paneKey: PANE_KEY,
+      connectionId: null,
+      agentType: 'claude' as const,
+      state: 'done' as const,
+      prompt: '',
+      receivedAt: Date.now(),
+      stateStartedAt: 1
+    }
+    const { runtime, write } = createRuntime(db, {
+      launchAgent: null,
+      getAgentStatusSnapshotForPane: () => [row],
+      getAgentStatusSnapshot: () => [row]
+    })
+    let mode: 'shell' | 'unknown' | 'other' | 'agent' = 'shell'
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => null,
+      supportsForegroundObservation: () => true,
+      inspectProcess: async () => {
+        if (mode === 'unknown') {
+          throw new Error('unavailable')
+        }
+        const name = mode === 'shell' ? 'zsh' : mode === 'other' ? 'vim' : 'claude'
+        return {
+          foregroundProcess: name,
+          hasChildProcesses: mode !== 'shell',
+          foregroundObservation: {
+            ptyId: PTY_ID,
+            ptyIncarnationId: 'mailbox-incarnation',
+            authorityGeneration: 'test',
+            observationEpoch: 1,
+            capturedAgeMs: 0,
+            verdict: 'observed',
+            source: 'pty-master',
+            foregroundKind: mode === 'shell' ? 'shell' : 'non-shell',
+            processName: name
+          }
+        }
+      }
+    })
+    await runtime.listTerminals()
+    runtime.onPtyData(PTY_ID, '\x1b]0;✳ Claude Code\x07', 1)
+    await vi.advanceTimersByTimeAsync(1000)
+    const run = createBoundRun(db, 'Hook boundary')
+    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', 2)
+    await vi.advanceTimersByTimeAsync(1000)
+    mode = 'unknown'
+    const initial = insertDirectRunMessage(db, run.id, 'Retained hook alone cannot admit')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(write).not.toHaveBeenCalled()
+    mode = 'other'
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(write).not.toHaveBeenCalled()
+    mode = 'agent'
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(db.getMessageById(initial.id)).toMatchObject({
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+    expect(write).toHaveBeenCalledTimes(2)
+    write.mockClear()
+    mode = 'shell'
+    const message = insertDirectRunMessage(db, run.id, 'Retained hook is not execution proof')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(1000)
+    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', 3)
+    await vi.advanceTimersByTimeAsync(1000)
+    mode = 'unknown'
+    await vi.advanceTimersByTimeAsync(20000)
+    expect(write).not.toHaveBeenCalled()
+    mode = 'other'
+    await vi.advanceTimersByTimeAsync(65000)
+    expect(write).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
+    mode = 'agent'
+    // Refreshing the already-retained row's lease alone does not establish a new event.
+    row.receivedAt = Date.now()
+    await vi.advanceTimersByTimeAsync(65000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    expect(db.getMessageById(message.id)).toMatchObject({
+      read: 0,
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+    db.close()
+
+    // Older hosts with no earlier shell refusal retain their original compatibility path.
+    const compatibilityDb = createDatabase('orca-mail-legacy-')
+    const compatibility = createRuntime(compatibilityDb)
+    const legacyRun = createBoundRun(compatibilityDb, 'Unknown host compatibility')
+    await driveToLiveIdle(compatibility.runtime)
+    insertDirectRunMessage(compatibilityDb, legacyRun.id, 'Ordinary unknown-host mail')
+    compatibility.runtime.notifyMessageArrived(`run:${legacyRun.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(compatibility.write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    compatibilityDb.close()
+  })
+
+  it('ends backed-off obligations on consumption, rerouting, retirement and disconnect, and recovers on reconnect', async () => {
+    vi.useFakeTimers()
+    for (const ending of ['consumed', 'rerouted', 'retired', 'disconnected'] as const) {
+      const db = createDatabase('orca-mail-obligation-lifetime-')
+      const { runtime, write } = createRuntime(db)
+      let inspections = 0
+      let shell = true
       runtime.setPtyController({
         write,
         writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
-        getForegroundProcess: async () => 'codex',
-        confirmShellForeground: inspect,
+        getForegroundProcess: async () => null,
         supportsForegroundObservation: () => true,
-        inspectProcess: async (ptyId) => {
-          await inspect()
+        inspectProcess: async () => {
+          inspections++
           return {
-            foregroundProcess: 'zsh',
-            hasChildProcesses: false,
+            foregroundProcess: shell ? 'zsh' : 'codex',
+            hasChildProcesses: !shell,
             foregroundObservation: {
-              ptyId,
-              ptyIncarnationId: `inc-${ptyId}`,
+              ptyId: PTY_ID,
+              ptyIncarnationId: 'mailbox-incarnation',
               authorityGeneration: 'test',
               observationEpoch: 1,
               capturedAgeMs: 0,
               verdict: 'observed',
               source: 'pty-master',
-              foregroundKind: 'shell',
-              processName: 'zsh'
+              foregroundKind: shell ? 'shell' : 'non-shell',
+              processName: shell ? 'zsh' : 'codex'
             }
           }
         }
       })
-      const owed = panes.slice(0, count)
-      const messages = owed.map((pane) =>
-        db.insertMessage({ from: 'term_sender', to: pane.handle, subject: 'Owed mail' })
-      )
-      for (const pane of owed) {
-        runtime.notifyMessageArrived(pane.handle, 'message')
-      }
-      await vi.advanceTimersByTimeAsync(20000)
+      await driveToLiveIdle(runtime)
+      const run = createBoundRun(db, 'Obligation lifetime')
+      const message = insertDirectRunMessage(db, run.id, 'Held mail')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(45000)
+      expect(inspections).toBeLessThanOrEqual(4)
       expect(write).not.toHaveBeenCalled()
-      // Four concurrent chains and >=5s after each completion: at most four starts per owner in 20s.
-      expect(peak).toBeLessThanOrEqual(4)
-      expect(starts.length).toBeGreaterThanOrEqual(count)
-      expect(
-        starts.length,
-        JSON.stringify(
-          starts
-            .filter((start) => start.ptyId === owed[0].ptyId)
-            .map((start) => start.at - starts[0].at)
+      if (ending === 'consumed') {
+        db.markAsRead([message.id])
+      } else if (ending === 'rerouted') {
+        db.bindRun({
+          runId: run.id,
+          coordinatorHandle: 'term_elsewhere',
+          coordinatorPaneKey: 'elsewhere:pane'
+        })
+      } else {
+        await runtime.onPtyExit(
+          PTY_ID,
+          ending === 'retired' ? 0 : -1,
+          'mailbox-incarnation',
+          ending === 'retired' ? { providerExitObserved: true } : { hostLost: true }
         )
-      ).toBeLessThanOrEqual(chainBound)
-      expect(starts.every((start) => owed.some((pane) => pane.ptyId === start.ptyId))).toBe(true)
-      expect(
-        new Set(starts.filter((start) => start.at > starts[0].at + 5000).map((start) => start.at))
-          .size
-      ).toBeGreaterThan(1)
-      db.markAsRead(messages.map((message) => message.id))
-      await vi.advanceTimersByTimeAsync(10000)
-      const retiredCount = starts.length
-      await vi.advanceTimersByTimeAsync(20000)
-      expect(starts.length).toBe(retiredCount)
+      }
+      const before = inspections
+      await vi.advanceTimersByTimeAsync(180000)
+      expect(inspections).toBe(before)
+      expect(write).not.toHaveBeenCalled()
+      if (ending === 'disconnected') {
+        shell = false
+        runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+          tabId: TAB_ID,
+          leafId: LEAF_ID,
+          incarnationId: 'mailbox-incarnation',
+          agentLaunchAuthority: { launchToken: LAUNCH_TOKEN, launchAgent: 'codex' }
+        })
+        runtime.registerPreAllocatedHandleForPty(PTY_ID, TERMINAL_HANDLE)
+        runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(write.mock.calls.map(([, data]) => data)).toEqual([
+          expect.stringContaining('You have 1 orchestration message'),
+          '\r'
+        ])
+        expect(db.getMessageById(message.id)).toMatchObject({
+          read: 0,
+          delivered_at: expect.any(String),
+          pointer_enter_pending: 0
+        })
+      }
       db.close()
     }
-  )
+  })
 })

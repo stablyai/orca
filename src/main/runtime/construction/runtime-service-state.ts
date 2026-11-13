@@ -50,10 +50,6 @@ import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-scr
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
-  protected abstract deliverPendingMessagesForPty(ptyId: string): void
-  protected abstract armDeliveryRecheck(ptyId: string): void
-  protected abstract readMailboxForeground(ptyId: string): Promise<'agent' | 'shell' | 'unknown'>
-
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -248,12 +244,16 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getDb: () => this._orchestrationDb,
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
     readForeground: (ptyId) => this.readMailboxForeground(ptyId),
-    onDeliveryDecision: (ptyId) => this.armDeliveryRecheck(ptyId),
-    isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
+    isForegroundCandidate: (terminal) => this.isMailboxForegroundCandidate(terminal),
+    needsForegroundEvaluation: (ptyId) => this.needsMailboxForegroundEvaluation(ptyId),
+    onDeliveryDecision: (ptyId, decision) => this.armDeliveryRecheck(ptyId, decision),
+    isAgentSettledForDelivery: (ptyId, foreground) =>
+      this.isAgentSettledForDelivery(ptyId, foreground),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
+    resolveSubmitTarget: (ptyId, foreground) =>
+      this.resolveOrchestrationPointerSubmitTarget(ptyId, foreground),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveTerminal: (ptyId) => this.deliverPendingMessagesForPty(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>

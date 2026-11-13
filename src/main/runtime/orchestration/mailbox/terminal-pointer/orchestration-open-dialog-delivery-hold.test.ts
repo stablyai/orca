@@ -161,7 +161,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     })
     foreground = 'codex'
     runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 8)
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(7000)
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
       expect.stringContaining('You have 1 orchestration message'),
       expect.stringContaining('You have 1 orchestration message'),
@@ -301,7 +301,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       })
       // Only the physical foreground changes: no new observation or send can release the hold.
       shell = false
-      await vi.advanceTimersByTimeAsync(7000)
+      await vi.advanceTimersByTimeAsync(12000)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
         expect.stringContaining('You have 1 orchestration message'),
         '\r'

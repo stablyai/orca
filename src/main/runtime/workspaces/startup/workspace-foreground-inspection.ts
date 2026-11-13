@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import {
   describeLaunchedAgentHost,
   readLaunchedAgentForeground,
+  readMailboxForeground,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
@@ -23,6 +24,21 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     const result = await readLaunchedAgentForeground(
       this.ptyController,
       host,
+      ptyId,
+      agent,
+      incarnation ?? undefined
+    )
+    return this.ptysById.get(ptyId) === pty && pty?.incarnationId === incarnation
+      ? result
+      : 'unknown'
+  }
+
+  async inspectMailboxForeground(ptyId: string, agent?: TuiAgent) {
+    const pty = this.ptysById.get(ptyId)
+    const incarnation = pty?.incarnationId
+    const result = await readMailboxForeground(
+      this.ptyController,
+      this.launchedAgentHost(ptyId),
       ptyId,
       agent,
       incarnation ?? undefined

@@ -126,7 +126,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
         !identityOnlyTitle &&
         this.classifyPtyTitleStatus(ptyId, rawTitle, { includeProgramActivity: false }) !== null)
     ) {
-      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId)
+      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId, agentStatus ?? undefined)
     }
     // Why before retiring the clear: the lifecycle counts a turn from the status the clear showed.
     this.recordAgentPromptLifecycleState(ptyId, agentStatus)

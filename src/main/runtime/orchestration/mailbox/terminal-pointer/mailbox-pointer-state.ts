@@ -1,4 +1,8 @@
-import { PrioritySemaphore } from '../../../../../shared/priority-semaphore'
+import { MailboxForegroundEvidence } from './mailbox-foreground-evidence'
+export type {
+  OrchestrationMailboxForegroundObservation,
+  OrchestrationMailboxForegroundProbe
+} from './mailbox-foreground-evidence'
 
 export type OrchestrationMailboxDeliveryFlight = {
   enterTimer: ReturnType<typeof setTimeout> | null
@@ -13,21 +17,6 @@ export type OrchestrationMailboxDeliveryFlight = {
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */
 type ParkedOrchestrationMailboxDeliveries = Map<string, ReadonlySet<string> | undefined>
 
-type ForegroundObservation = {
-  processIncarnation: string
-  generation: number
-  held: boolean
-}
-
-export type OrchestrationMailboxForegroundObservation = {
-  observation: Readonly<Omit<ForegroundObservation, 'held'>>
-  generation: number
-}
-
-export type OrchestrationMailboxForegroundProbe = OrchestrationMailboxForegroundObservation & {
-  foreground: 'agent' | 'shell' | 'unknown'
-}
-
 export class OrchestrationMailboxPointerState {
   private readonly flightsByPtyId = new Map<string, OrchestrationMailboxDeliveryFlight>()
   private readonly parkedDeliveriesByPtyId = new Map<string, ParkedOrchestrationMailboxDeliveries>()
@@ -38,98 +27,26 @@ export class OrchestrationMailboxPointerState {
   private readonly watermarkMailboxesByPtyId = new Map<string, Set<string>>()
   private readonly parkedTypesByMailbox = new Map<string, ReadonlySet<string> | null>()
 
-  private readonly foregroundInspections = new PrioritySemaphore(4)
-  private readonly foregroundObservations = new Map<string, ForegroundObservation>()
-  private readonly foregroundProbes = new Map<
-    string,
-    Promise<OrchestrationMailboxForegroundProbe>
-  >()
+  private readonly observedMail = new Map<string, number>()
 
-  probeForeground(
-    ptyId: string,
-    processIncarnation: string,
-    read: () => Promise<'agent' | 'shell' | 'unknown'>
-  ): Promise<OrchestrationMailboxForegroundProbe> {
-    const observation = this.captureForegroundObservation(ptyId, processIncarnation)
-    const pending = this.foregroundProbes.get(ptyId)
-    if (pending) {
-      return pending
-    }
-    const probe = Promise.resolve()
-      .then(async () => {
-        const release = await this.foregroundInspections.acquire(0)
-        try {
-          return this.foregroundObservations.get(ptyId) === observation.observation
-            ? await read()
-            : ('unknown' as const)
-        } finally {
-          release()
-        }
-      })
-      .catch(() => 'unknown' as const)
-      .then((foreground) => ({ foreground, ...observation }))
-      .finally(() => {
-        if (this.foregroundProbes.get(ptyId) === probe) {
-          this.foregroundProbes.delete(ptyId)
-        }
-      })
-    this.foregroundProbes.set(ptyId, probe)
-    return probe
-  }
-
-  captureForegroundObservation(
-    ptyId: string,
-    processIncarnation: string
-  ): OrchestrationMailboxForegroundObservation {
-    const observation = this.foregroundObservation(ptyId, processIncarnation)
-    return { observation, generation: observation.generation }
-  }
-
-  applyForeground(
-    ptyId: string,
-    proof: OrchestrationMailboxForegroundObservation | undefined,
-    foreground: 'agent' | 'shell' | 'unknown' = 'shell'
-  ): boolean {
-    const observation = this.foregroundObservations.get(ptyId)
-    if (
-      !proof ||
-      !observation ||
-      observation !== proof.observation ||
-      observation.generation !== proof.generation
-    ) {
+  noteMailSequence(ptyId: string, sequence: number): boolean {
+    const previous = this.observedMail.get(ptyId)
+    if (previous !== undefined && sequence <= previous) {
       return false
     }
-    observation.held = foreground === 'shell'
+    this.observedMail.set(ptyId, sequence)
     return true
   }
 
-  foregroundHold(ptyId: string): string | undefined {
-    const observation = this.foregroundObservations.get(ptyId)
-    return observation?.held ? observation.processIncarnation : undefined
+  readonly foreground: MailboxForegroundEvidence
+
+  constructor(onForegroundRecovery?: (ptyId: string) => void) {
+    this.foreground = new MailboxForegroundEvidence(onForegroundRecovery)
   }
 
-  observeTerminal(ptyId: string): boolean {
-    const observation = this.foregroundObservations.get(ptyId)
-    if (!observation) {
-      return false
-    }
-    observation.generation++
-    const held = observation.held
-    observation.held = false
-    return held
-  }
-
-  private foregroundObservation(ptyId: string, processIncarnation: string): ForegroundObservation {
-    let observation = this.foregroundObservations.get(ptyId)
-    if (!observation || observation.processIncarnation !== processIncarnation) {
-      observation = { processIncarnation, generation: 0, held: false }
-      this.foregroundObservations.set(ptyId, observation)
-    }
-    return observation
-  }
-
-  hasForegroundProbe(ptyId: string): boolean {
-    return this.foregroundProbes.has(ptyId)
+  hasActiveFlight(ptyId: string): boolean {
+    const flight = this.flightsByPtyId.get(ptyId)
+    return !!flight && !flight.deferredUntilIdle
   }
 
   hasFlight(ptyId: string): boolean {
@@ -285,11 +202,17 @@ export class OrchestrationMailboxPointerState {
     return parkedTypes ?? null
   }
 
-  retirePty(ptyId: string): {
+  retirePty(
+    ptyId: string,
+    preserveForeground = false
+  ): {
     flight: OrchestrationMailboxDeliveryFlight | undefined
     releasedMailboxes: string[]
   } {
-    this.foregroundObservations.delete(ptyId)
+    if (!preserveForeground) {
+      this.foreground.retirePty(ptyId)
+      this.observedMail.delete(ptyId)
+    }
     const flight = this.flightsByPtyId.get(ptyId)
     this.flightsByPtyId.delete(ptyId)
     this.parkedDeliveriesByPtyId.delete(ptyId)

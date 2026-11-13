@@ -182,7 +182,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     const detachMail = subscribe?.((row) => {
       const pty = this.getPtyRecordForPaneKey(row.paneKey)
       if (pty) {
-        this.orchestrationMailboxPointerDelivery.observeTerminal(pty.ptyId)
+        this.orchestrationMailboxPointerDelivery.observeTerminal(pty.ptyId, row.payload.state)
       }
     })
     const detachTitles = subscribe

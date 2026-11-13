@@ -77,6 +77,10 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
 }
 
 class MailboxRuntime extends OrcaRuntimeService {
+  requestMailDecision(ptyId: string): void {
+    this.armDeliveryRecheck(ptyId)
+  }
+
   get idleEvidenceSource() {
     return this.tuiIdleEvidenceSource
   }
@@ -84,7 +88,7 @@ class MailboxRuntime extends OrcaRuntimeService {
 
 export type MailboxNotificationHarness = {
   runtime: MailboxRuntime
-  write: ReturnType<typeof vi.fn>
+  write: ReturnType<typeof vi.fn<(ptyId: string, data: string) => boolean>>
 }
 
 /** Keep main-owned pane bindings in the fixture's session layout. */
@@ -117,6 +121,7 @@ export function createRuntime(
     /** A headless serve: no window, only the empty headless graph. */
     headless?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+    getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
   } = {}
@@ -126,6 +131,7 @@ export function createRuntime(
     undefined,
     {
       getAgentStatusSnapshot: options.getAgentStatusSnapshot,
+      getAgentStatusSnapshotForPane: options.getAgentStatusSnapshotForPane,
       checkHookAgentPresence: options.checkHookAgentPresence,
       attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
         paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
@@ -133,7 +139,7 @@ export function createRuntime(
           : null
     }
   )
-  const write = vi.fn(() => true)
+  const write = vi.fn((_ptyId: string, _data: string) => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,

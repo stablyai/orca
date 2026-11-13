@@ -35,14 +35,12 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
   ): OrchestrationMailboxTerminal | null {
     const paneKeys = this.getMailboxPaneKeysForPty(pty)
     const { ptyId } = pty
-    const status =
-      pty.lastAgentStatus ?? this.getFreshExplicitAgentStatusForPty(handle, ptyId)?.status ?? null
     return paneKeys.length > 0
       ? {
           ptyId,
           handle,
           paneKeys,
-          lastAgentStatus: status,
+          lastAgentStatus: pty.lastAgentStatus,
           lastAgentStatusObservedLive: pty.lastAgentStatusObservedLive
         }
       : null

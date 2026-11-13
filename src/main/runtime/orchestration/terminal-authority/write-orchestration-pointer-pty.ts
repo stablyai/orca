@@ -1,3 +1,4 @@
+import type { MailboxForeground } from '../../terminal/wait/launched-agent-foreground'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
@@ -40,11 +41,14 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
 
   /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */
   protected resolveOrchestrationPointerSubmitTarget(
-    ptyId: string
+    ptyId: string,
+    foreground?: MailboxForeground
   ): OrchestrationMailboxPointerSubmitTarget | null {
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     const processIncarnation = terminal && this.getTerminalProcessIncarnation(terminal.handle)
-    return processIncarnation ? { terminal, processIncarnation } : null
+    return processIncarnation
+      ? { terminal: this.mailboxTerminalAdmission(terminal, foreground), processIncarnation }
+      : null
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {

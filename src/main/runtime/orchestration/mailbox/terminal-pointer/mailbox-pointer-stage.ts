@@ -156,7 +156,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,
           settle: args.settle,
-          redrive: args.redrive
+          redrive: args.redrive,
+          onDeliveryDecision: args.deps.onDeliveryDecision
         },
         {
           mailboxHandle: args.mailboxHandle,

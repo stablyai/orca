@@ -1,3 +1,4 @@
+import { isEquivalentPaneKey } from '../../db/pane-key-match'
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 
@@ -62,6 +63,16 @@ export class OrchestrationMailboxOwner {
       return null
     }
     const { handle: terminalHandle, paneKeys } = terminal
+    if (requestedMailbox?.startsWith('run:')) {
+      const run = db.getRun(requestedMailbox.slice('run:'.length))
+      const paneKey = run?.coordinator_pane_key
+      return run &&
+        !run.legacy &&
+        paneKey &&
+        paneKeys.some((key) => isEquivalentPaneKey(key, paneKey))
+        ? this.resolveRunMailbox(db, terminal, run.id, requestedMailbox, options)
+        : null
+    }
     const runs = this.runsBoundToTerminal(db, terminal)
     // A coordinator of several Runs owns each one's mailbox; unnamed mail goes to its current Run.
     const run = runs.find((bound) => requestedMailbox === `run:${bound.id}`) ?? runs[0]

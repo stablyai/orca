@@ -1,3 +1,5 @@
+import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
+import type { MailboxDeliveryDecision } from '../notifications/mailbox-delivery-recheck'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMailboxDeliveryTarget } from '../routing/mailbox-delivery-target'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
@@ -24,14 +26,19 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getDb: () => OrchestrationDb | null
   getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
-  isAgentSettledForDelivery: (ptyId: string) => boolean
+  isAgentSettledForDelivery: (ptyId: string, foreground?: MailboxForeground) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
-  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
-  readForeground: (ptyId: string) => Promise<'agent' | 'shell' | 'unknown'>
+  resolveSubmitTarget: (
+    ptyId: string,
+    foreground?: MailboxForeground
+  ) => OrchestrationMailboxPointerSubmitTarget | null
+  readForeground: (ptyId: string) => Promise<MailboxForeground>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
-  onDeliveryDecision: (ptyId: string) => void
+  isForegroundCandidate?: (terminal: OrchestrationMailboxTerminal) => boolean
+  needsForegroundEvaluation?: (ptyId: string) => boolean
+  onDeliveryDecision: (ptyId: string, decision?: MailboxDeliveryDecision) => void
   redriveTerminal: (ptyId: string) => void
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
@@ -41,5 +48,7 @@ export type PointerDeliveryOptions = {
   mailboxHandle: string
   reservedTypes?: ReadonlySet<string>
   skipAbsenceProbe?: boolean
+  foreground?: MailboxForeground
+  foregroundFollowup?: boolean
   foregroundProbeIncarnation?: string
 }
