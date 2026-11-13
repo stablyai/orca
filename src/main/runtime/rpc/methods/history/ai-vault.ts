@@ -1,5 +1,5 @@
 import { copyTerminalChatForkCut } from '../../../../ai-vault/terminal-chat-fork-cut'
-import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-chat-cli-fork'
+import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { writeAiVaultSessionHandoffSnapshot } from '../../../../ai-vault/session-handoff-snapshot'
 import {
   AiVaultSearchRequestSchema,
@@ -12,9 +12,9 @@ import {
   sessionSearchServiceStatus
 } from '../../../../ai-vault-search/session-search-service-registry'
 import { defineMethod } from '../../core'
-import { conditionalAiVaultListResult } from '../../../../ai-vault/session-list-fingerprint'
-import { restampAiVaultListResult } from '../../../../ai-vault/session-list-results'
-import { copyStructuredChatConversation } from '../../../../ai-vault/structured-chat-conversation-copy'
+import { conditionalAiVaultListResult } from '../../../../ai-vault/listing/session-list-fingerprint'
+import { restampAiVaultListResult } from '../../../../ai-vault/listing/session-list-results'
+import { copyStructuredChatConversation } from '../../../../ai-vault/structured-sessions/structured-chat-conversation-copy'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { isWslUncPath } from '../../../../../shared/wsl-paths'
@@ -23,7 +23,7 @@ import {
   assertLegacyAiVaultResumeAllowed,
   projectStructuredAiVaultSessions,
   searchWithStructuredOwners
-} from '../../../../ai-vault/structured-session-ownership'
+} from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import {
   ensureStructuredAgentSessionHostUnlessRefused,
   tryEnsureStructuredAgentSessionHostForResume

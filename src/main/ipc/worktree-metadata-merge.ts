@@ -52,6 +52,8 @@ export function mergeWorktree(
     ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
     ...(git.removalError ? { removalError: git.removalError } : {}),
+    ...(git.removing ? { removing: true } : {}),
+    ...(git.removalRecorded ? { removalRecorded: true } : {}),
     // Automatic labels follow the live branch; persisted values are only authoritative when pinned.
     displayName:
       meta?.displayNameIsPinned === false

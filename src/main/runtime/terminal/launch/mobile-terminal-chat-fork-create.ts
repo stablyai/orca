@@ -8,14 +8,14 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../share
 import {
   prepareStructuredChatCliFork,
   isStructuredChatCliForkSourceCurrent
-} from '../../../ai-vault/structured-chat-cli-fork'
+} from '../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { prepareTerminalChatForkForWorkspace } from '../../../ai-vault/terminal-chat-fork-cut'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'

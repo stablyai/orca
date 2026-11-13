@@ -36,22 +36,20 @@ import { openCodeHookService, openCode2HookService } from '../opencode/status-ho
 import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
-import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
+import { getKnownWorktreeIdsForHistoryGc } from '../pty/history/history-gc-worktree-ids'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/selection/runtime-selection'
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
-import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
+import { scheduleMainWindowAutoUpdaterSetup } from '../updater/lifecycle/main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
-import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
-import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
+import { registerDroppedPathPreparation } from './file-drop/dropped-path-preparation-ipc'
+import { isPluginFramePermissionRequest } from './security/host-frame-permission-policy'
 import { installPluginDesktopFrameServices } from '../plugins/panels/desktop-actions/plugin-frame-desktop-services'
-
-export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null

@@ -8,7 +8,7 @@ import { createInterface } from 'node:readline'
 import { parentPort, workerData } from 'node:worker_threads'
 
 import { publishClaudeConversationTranscript } from './claude-conversation-transcript-publication'
-import { AgentConversationCopyError } from '../../native-chat/agent-conversation-copy-error'
+import { AgentConversationCopyError } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import {
   claudeConversationForkBoundary,
   isClaudeConversationEntry,

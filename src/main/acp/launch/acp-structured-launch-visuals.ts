@@ -2,7 +2,7 @@ import type { StructuredAgentSessionLogger } from '../../native-chat/agent-sessi
 import type {
   NativeChatVisualsLaunch,
   PrepareNativeChatVisuals
-} from '../../native-chat/native-chat-visuals-delivery'
+} from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { AcpVisualsSkillLaunch } from './acp-visuals-skill'
 

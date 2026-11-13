@@ -2,7 +2,7 @@ import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { rekeyMovedPaneOwners } from '../../../runtime/terminal/identity/moved-pane-owner-rekey'
-import { commitRelayedPaneMove } from '../../../window/terminal-pane-move-commit-fence'
+import { commitRelayedPaneMove } from '../../../window/renderer-relays/terminal-pane-move-commit-fence'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,

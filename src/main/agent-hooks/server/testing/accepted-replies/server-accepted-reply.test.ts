@@ -7,7 +7,7 @@ import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { buildBody, PANE } from '../server.test-fixtures'
 import { mainAgentDoneAt } from '../../../../../shared/agent-status/lifecycle/main-agent-status'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
-import { createRuntimeAutomationRunTerminalObserver } from '../../../../automations/runtime-terminal-run-observer'
+import { createRuntimeAutomationRunTerminalObserver } from '../../../../automations/observation/runtime-terminal-run-observer'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({

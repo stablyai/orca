@@ -1,5 +1,5 @@
 import type { ClassifiedError } from '../../../../src/shared/classified-error'
-import { getWorkItemPageErrorTypes } from '../../../../src/shared/github/work-item-page-errors'
+import { getWorkItemPageErrorTypes } from '../../../../src/shared/github/work-items/work-item-page-errors'
 import type { RuntimeHydrationModel } from '../screen-state/use-mobile-tasks-runtime-hydration'
 import {
   readJiraConnection,
@@ -12,7 +12,7 @@ import {
   getWorkItemCountedTotalPages,
   taskPageToGitHubApiPage
 } from '../../../../src/shared/work-items/work-item-pagination'
-import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../src/shared/github/work-item-ssh-error'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../src/shared/github/work-items/work-item-ssh-error'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,

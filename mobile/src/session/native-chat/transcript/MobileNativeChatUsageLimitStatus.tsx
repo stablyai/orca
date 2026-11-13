@@ -43,14 +43,19 @@ export function MobileNativeChatUsageLimitStatus({
   const { usageLimit, openAccounts } = useContext(MobileNativeChatNoticeContext)
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const resetsAt = failure?.kind === 'usageLimitReached' ? failure.usageLimit?.resetsAt : undefined
-  const resetPassed = useResetPassed(resetsAt)
   const actions =
     failure?.kind === 'usageLimitReached' &&
     notice.usageLimitTurnItemId !== undefined &&
     usageLimit?.turnItemId === notice.usageLimitTurnItemId
       ? usageLimit
       : null
-  // The line names the reset Orca waits for; Continue still keys off the cut's own reset.
+  // Continue applies at the cut's own reset, or earlier once the host says the chat moved accounts.
+  const resetPassed = useResetPassed(
+    resetsAt !== undefined && actions?.continueAt !== undefined
+      ? Math.min(resetsAt, actions.continueAt)
+      : resetsAt
+  )
+  // The line names the reset Orca waits for.
   const shownAt = actions?.autoContinue ? (actions.continueAt ?? resetsAt) : resetsAt
   const shownPassed = useResetPassed(shownAt)
   if (failure?.kind !== 'usageLimitReached') {

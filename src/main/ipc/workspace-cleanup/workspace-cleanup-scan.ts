@@ -1,6 +1,6 @@
-import type { Store } from '../../persistence/loading-store/store'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../../shared/repo-types'
@@ -47,6 +47,7 @@ import {
   hasTargetedWorkspaceCleanupScan
 } from './workspace-cleanup-scan-targets'
 import { isWorktreeMetaOwnedByRepo } from '../../workspaces/catalog/worktree-metadata-ownership'
+import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 // Overlap repo scans to avoid summing SSH listing round-trip latency.
@@ -59,7 +60,7 @@ type WorkspaceCleanupScanRepoProgress = {
 }
 
 export async function scanWorkspaceCleanup(
-  store: Store,
+  store: RuntimeStore,
   args: WorkspaceCleanupScanArgs = {},
   options: WorkspaceCleanupScanOptions = {}
 ): Promise<WorkspaceCleanupScanResult> {
@@ -70,10 +71,12 @@ export async function scanWorkspaceCleanup(
     return { scannedAt, candidates: [], errors: [] }
   }
   const allRepos = store.getRepos()
+  // Hidden source rows (an SSH host now served by its own orcad) are that server's to scan.
+  const visibleRepos = runtimeVisibleRepos(store)
   const repos =
     targetWorktreeIdsByRepo.size > 0
-      ? allRepos.filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
-      : allRepos
+      ? visibleRepos.filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
+      : visibleRepos
   const repoOwnerCountById = new Map<string, number>()
   for (const repo of allRepos) {
     repoOwnerCountById.set(repo.id, (repoOwnerCountById.get(repo.id) ?? 0) + 1)
@@ -119,7 +122,7 @@ export async function scanWorkspaceCleanup(
 
 async function scanRepoWorkspaces(
   args: {
-    store: Store
+    store: RuntimeStore
     repo: Repo
     repoOwnerCount: number
     scannedAt: number

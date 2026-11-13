@@ -9,7 +9,6 @@
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 1 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts
-2 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 2 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 1 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
 1 src/main/codex-accounts/runtime-home/wsl/runtime-home-service-wsl.ts
@@ -28,8 +27,8 @@
 1 src/main/ipc/worktree-logic.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 1 src/main/opencode/status-hooks/legacy-plugin-acl-retry.ts
-2 src/main/orcad/node-pty-precondition.ts
-1 src/main/orcad/orcad-data-root-privacy.ts
+2 src/main/orcad/native-runtime/node-pty-precondition.ts
+1 src/main/orcad/instance-lock/orcad-data-root-privacy.ts
 2 src/main/persistence/profile-state/access/profile-state-access-identity.ts
 1 src/main/persistence/profile-state/recovery/profile-state-recovery-copy.ts
 1 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
@@ -37,8 +36,8 @@
 1 src/main/pty/shell-startup/pwsh.ts
 2 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 1 src/main/runtime/integrations/skill/runtime-skill-install-authority.ts
-2 src/main/startup/cli-launch-redirect.ts
-1 src/main/startup/linux-secret-service-probe.ts
+2 src/main/startup/cli-launch/cli-launch-redirect.ts
+1 src/main/startup/linux-runtime/linux-secret-service-probe.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/workspace-hooks/worktree-runner-script.ts
 3 src/main/wsl/discovery/distro-catalog.ts

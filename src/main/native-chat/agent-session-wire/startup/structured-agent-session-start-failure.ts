@@ -8,8 +8,8 @@ import {
   providerLaunchFolderMissing
 } from '../../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../../provider-process/provider-request-timeout'
-import { argumentProblemOf } from '../../structured-agent-arguments-error'
-import { agentCliInstallationProblemOf } from '../../agent-cli-installation-error'
+import { argumentProblemOf } from '../../agent-launch/structured-agent-arguments-error'
+import { agentCliInstallationProblemOf } from '../../agent-launch/agent-cli-installation-error'
 import {
   AgentSessionAcquisitionRefusal,
   isAgentSessionPreSpawnError

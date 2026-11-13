@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { IssueInfo } from '../../../../../../shared/github/pull-request-types'
+import type { IssueInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 
 export type WorktreeTaskState = {
   Icon: LucideIcon

@@ -3,7 +3,7 @@ import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import {
   isWorkspaceCleanupHeadLanded,
@@ -12,8 +12,14 @@ import {
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { readWorkspaceCleanupMergeEvidence } from './workspace-cleanup-merge-evidence'
 import {
+  hasWorktreeAtRiskLocalFiles,
+  type WorktreeAtRiskLocalFiles
+} from '../../../shared/worktree/at-risk-local-files'
+import { readWorktreeAtRiskLocalFiles } from '../../git/worktrees/removal/worktree-at-risk-local-files'
+import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
   WorkspaceCleanupScanCancelledError,
+  throwIfWorkspaceCleanupScanAborted,
   withWorkspaceCleanupTimeout
 } from './workspace-cleanup-scan-primitives'
 import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
@@ -28,6 +34,7 @@ export type WorkspaceCleanupGitEvidence = {
   upstreamBehind: number | null
   checkedAt: number | null
   merge?: WorkspaceCleanupMergeEvidence
+  atRiskLocalFiles: WorktreeAtRiskLocalFiles | null
   blockers: WorkspaceCleanupBlocker[]
 }
 
@@ -37,6 +44,7 @@ export function createEmptyWorkspaceCleanupGitEvidence(): WorkspaceCleanupGitEvi
     upstreamAhead: null,
     upstreamBehind: null,
     checkedAt: null,
+    atRiskLocalFiles: null,
     blockers: []
   }
 }
@@ -119,13 +127,37 @@ export async function readWorkspaceCleanupGitEvidence(
     }
   }
 
+  const atRiskLocalFiles = await readCleanupAtRiskLocalFiles(worktree, repo, signal)
+  if (hasWorktreeAtRiskLocalFiles(atRiskLocalFiles)) {
+    blockers.push('ignored-files')
+  }
+
   return {
     clean,
     upstreamAhead,
     upstreamBehind,
     checkedAt,
     ...(merge ? { merge } : {}),
+    atRiskLocalFiles,
     blockers: uniqueWorkspaceCleanupGitBlockers(blockers)
+  }
+}
+
+async function readCleanupAtRiskLocalFiles(
+  worktree: Worktree,
+  repo: Repo,
+  signal?: AbortSignal
+): Promise<WorktreeAtRiskLocalFiles> {
+  try {
+    return await readWorktreeAtRiskLocalFiles({
+      worktreePath: worktree.path,
+      mainCheckoutPath: repo.path,
+      gitOptions: signal ? { signal } : {},
+      deadlineMs: WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS
+    })
+  } catch (error) {
+    throwIfWorkspaceCleanupScanAborted(signal)
+    throw error
   }
 }
 

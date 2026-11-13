@@ -154,8 +154,6 @@ export async function dispatchClaudeTurn(
       : randomUUID())
   const arm = () => {
     ++session.dispatchSequence
-    // Invalidate context reports requested before this send.
-    session.translator?.markContextActivity()
     return waitForReplay(
       session,
       acceptsResult,

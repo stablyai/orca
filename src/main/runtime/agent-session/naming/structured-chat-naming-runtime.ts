@@ -16,7 +16,7 @@ import { chatNamingFailure } from '../../../../shared/chat-naming-failure-copy'
 import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
-import type { StructuredChatNamingDeps } from '../../../native-chat/structured-chat-naming'
+import type { StructuredChatNamingDeps } from '../../../native-chat/conversation-naming/structured-chat-naming-types'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { firstStructuredChatNamingPrompt } from '../../../../shared/structured-chat-naming-eligibility'
@@ -27,7 +27,7 @@ import {
   resolveTextGenerationParams
 } from '../../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from '../../../agent-hooks/first-work/first-work-generation-target'
-import { deferredStructuredChatTitle } from '../../../native-chat/structured-chat-title-handover'
+import { deferredStructuredChatTitle } from '../../../native-chat/conversation-naming/structured-chat-title-handover'
 
 type StructuredChatNamingRuntime = {
   resolveWorkspace: (
@@ -181,8 +181,8 @@ export function structuredChatNamingDeps(
       })
       const useChatAgent = !recipe.agentId && !recipe.agentArgs?.trim()
       const log = { scope: 'conversation-name', sessionId: record.sessionId }
-      // Copilot saves every run, so a naming run would sit in the user's Copilot history.
-      if (useChatAgent && record.provider === 'copilot') {
+      // These save every CLI run, so a naming run would sit in the user's own history.
+      if (useChatAgent && (record.provider === 'copilot' || record.provider === 'kimi')) {
         return null
       }
       if (useChatAgent && (record.provider === 'grok' || record.provider === 'antigravity')) {

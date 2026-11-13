@@ -1,6 +1,6 @@
 import { deleteConfirmedListSnapshot } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 import { deleteLastConfirmedClientValue } from '@/components/task-page/github/task-page-github-confirmed-client-values'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { AppState } from '../../types'
@@ -12,7 +12,7 @@ import {
 } from '@/lib/work-items/github/github-task-observation'
 import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
 import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import {

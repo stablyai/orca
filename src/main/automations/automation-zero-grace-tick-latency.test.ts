@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import { startedAutomationService } from './automation-service-tick.test-fixture'
+import { startedAutomationService } from './testing/automation-service-tick.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
