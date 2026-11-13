@@ -54,7 +54,7 @@ export const getOrcaCloudEnterpriseSearchEntries = createLocalizedCatalog(() => 
 
 export const getOrcaCloudWorkspacesSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('settings.teamWorkspaces.title', 'Workspaces'),
+    title: translate('settings.teamWorkspaces.title', 'Cloud workspaces'),
     description: translate(
       'settings.teamWorkspaces.searchDescription',
       'Every cloud workspace on your team, to open, sleep or archive.'

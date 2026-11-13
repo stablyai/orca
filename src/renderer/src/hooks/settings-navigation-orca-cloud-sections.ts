@@ -73,10 +73,10 @@ export function buildOrcaCloudSettingsSections(
       ? [
           {
             id: 'cloud-workspaces',
-            title: t('settings.teamWorkspaces.title', 'Workspaces'),
+            title: t('settings.teamWorkspaces.title', 'Cloud workspaces'),
             description: t(
               'settings.teamWorkspaces.description',
-              'Every cloud workspace on your team: who started it, its state and last activity. Open, sleep or archive any of them.'
+              'Every cloud workspace on your team. Only owners and admins can see this page.'
             ),
             icon: Cloud,
             searchEntries: getOrcaCloudWorkspacesSearchEntries(),
