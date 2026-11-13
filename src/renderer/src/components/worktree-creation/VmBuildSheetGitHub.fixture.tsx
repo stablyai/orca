@@ -79,7 +79,7 @@ export const openFailed = fixture(
   T0 + 12_000,
   {
     error:
-      'Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.'
+      'Your cloud workspace started, but this computer couldn’t open it yet. Try again, or open it later from Open cloud workspace…'
   }
 )
 
