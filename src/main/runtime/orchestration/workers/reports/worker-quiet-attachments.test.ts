@@ -103,8 +103,8 @@ it('recovers acknowledged remote notices only for the current live process after
 })
 
 it.each([
-  [0, 3_840_000],
-  [1, 3_900_000]
+  [0, 3_900_000],
+  [1, 3_960_000]
 ])(
   'preserves a disconnected episode and budget with %i other working chats',
   (chats, reminderAt) => {
@@ -143,7 +143,9 @@ it.each([
     fixture.changes.notify(new Set(['status']))
     vi.advanceTimersByTime(840_000)
     expect(noticeTimes()).toEqual([900_000])
-    vi.advanceTimersByTime(960_000)
+    vi.advanceTimersByTime(reminderAt - Date.now() - 60_000)
+    expect(noticeTimes()).toEqual([900_000])
+    vi.advanceTimersByTime(60_000)
     expect(noticeTimes()).toEqual([900_000, reminderAt])
     fixture.panes.set(PANE, { ...pty, connected: false })
     fixture.changes.notify(new Set(['status']))

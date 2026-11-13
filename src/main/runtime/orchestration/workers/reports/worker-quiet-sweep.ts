@@ -107,7 +107,7 @@ export class WorkerQuietSweep {
       }
       let episode = this.episodes.get(row.dispatchId)
       const connected = row.connected !== false
-      if (episode && !episode.connected) {
+      if (episode && (!episode.connected || !connected)) {
         this.pauseReminder(episode, elapsed)
       }
       if (!episode || episode.turn !== row.turnStartedAt) {
