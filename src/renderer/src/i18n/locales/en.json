@@ -23920,6 +23920,8 @@
         "moreAccess": "Give Orca Cloud access to more repositories…",
         "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
         "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
+        "agentNotStarted": "{{agent}} didn’t start because the workspace was still getting ready. Start it from the workspace.",
+        "theAgent": "The agent",
         "showMore": "Show more repositories…",
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer.",
         "headingShort": "GitHub",

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('./orca-cloud-environment-id', () => ({
   isOrcaCloudEnvironmentId: () => true,
+  isOrcaCloudEnvironmentForLaunch: async () => true,
   isOrcaCloudExecutionHostId: () => true
 }))
 vi.mock('./orca-cloud-agent-accounts-store', () => ({

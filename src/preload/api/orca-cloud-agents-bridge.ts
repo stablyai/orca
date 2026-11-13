@@ -29,6 +29,8 @@ export type OrcaCloudAgentsApi = {
     agent: OrcaCloudAccountAgent
     source: AgentSource
   }) => Promise<OrcaCloudAgentsResult<AgentSourcesView>>
+  /** Main's answer (runtime store + pairing bindings): is this runtime environment Orca Cloud? */
+  isCloudEnvironment: (request: { runtimeEnvironmentId: string }) => Promise<boolean>
   /** One workspace's Sources; not_found until the sandbox exists. */
   workspaceSources: (request: {
     runtimeEnvironmentId: string
@@ -54,6 +56,8 @@ export const orcaCloudAgentsApi: OrcaCloudAgentsApi = {
   acknowledge: (request) => ipcRenderer.invoke('orcaCloudAgents:acknowledge', request),
   remove: (request) => ipcRenderer.invoke('orcaCloudAgents:remove', request),
   setDefaultSource: (request) => ipcRenderer.invoke('orcaCloudAgents:setDefaultSource', request),
+  isCloudEnvironment: (request) =>
+    ipcRenderer.invoke('orcaCloudAgents:isCloudEnvironment', request),
   workspaceSources: (request) => ipcRenderer.invoke('orcaCloudAgents:workspaceSources', request),
   setWorkspaceSource: (request) =>
     ipcRenderer.invoke('orcaCloudAgents:setWorkspaceSource', request),
