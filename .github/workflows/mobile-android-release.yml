@@ -168,7 +168,8 @@ jobs:
           debug_cert="fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
           apks=(android/app/build/outputs/apk/release/*.apk)
-          certs="$("$apksigner" verify --print-certs "${apks[0]}" | sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: //p' | sort -u)"
+          # build-tools 37 apksigner prints "V3.0 Signer:" lines for minSdk 24+ APKs; older ones print "Signer #1".
+          certs="$("$apksigner" verify --print-certs "${apks[0]}" | sed -n -E 's/^(Signer #[0-9]+|V[0-9.]+ Signer:) certificate SHA-256 digest: //p' | sort -u)"
           expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
           if [ "$certs" = "$debug_cert" ]; then
             echo "::error::The APK is signed with the public Expo debug key."
