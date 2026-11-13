@@ -145,7 +145,14 @@ else
     for ((i = 0; i < ${#tests[@]}; i += batch)); do
       chunk=("${tests[@]:i:batch}")
       echo "premerge: vitest batch $((i / batch + 1)) of $(((${#tests[@]} + batch - 1) / batch)) (${#chunk[@]} file(s))"
-      node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts "${chunk[@]}"
+      # A batch that fails in parallel is re-run ONCE with a single worker (#574: Electron extension-worker tests failed
+      # only under 150-file parallel load and pass alone). It passes only if the serial run is fully clean; a second
+      # failure fails the gate as before. Logged, so the record shows the retry.
+      if ! node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts "${chunk[@]}"; then
+        echo "premerge: batch $((i / batch + 1)) failed in parallel; re-running it once with --maxWorkers=1"
+        node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts --maxWorkers=1 "${chunk[@]}"
+        echo "premerge: batch $((i / batch + 1)) failed in parallel, passed serially"
+      fi
     done
   fi
 fi
