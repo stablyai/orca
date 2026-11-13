@@ -36,29 +36,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     await stopOrcaRuntime()
   })
 
-  test('Unicode payloads survive paste-text', async () => {
-    const app = getNotepadAppSelector()
-    const unicode = `orca unicode café Ω 漢字 ${Date.now()}`
-    await focusNotepadDocument(app)
-    const pasted = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          app,
-          '--text',
-          unicode,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(pasted.result.snapshot.treeText).toContain(unicode)
-  })
-
-  test('hotkey and paste-text can replace the document selection', async () => {
+  test('hotkey and Unicode paste-text replace the document selection', async () => {
     const app = getNotepadAppSelector()
     const first = `orca-windows-first-${Date.now()}`
     await focusNotepadDocument(app)
@@ -86,7 +64,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       '--json'
     ])
 
-    const marker = `orca-windows-replaced-${Date.now()}`
+    const marker = `orca-windows-replaced-café Ω 漢字 ${Date.now()}`
     const second = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
