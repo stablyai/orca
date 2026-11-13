@@ -67,7 +67,7 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
     expect(err).not.toContain("Username for 'https://github.com'")
     expect(err).not.toContain('could not read Username')
     expect(err).toContain(
-      "orca: Orca Cloud can't push to octocat/Hello-World. Install the Orca GitHub App on octocat, or connect your GitHub in Settings → Account."
+      "orca: Orca Cloud can't push to octocat/Hello-World. Install the Orca GitHub App on octocat, or connect GitHub in Settings → Account."
     )
   })
 
@@ -97,7 +97,7 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
   it('PUSH-CAP: a push over the egress proxy\u2019s size cap says so in plain words, once, instead of a bare 413', () => {
     const err = git(['push', 'origin', 'HEAD'], 'https://github.com/acme/app.git', { FAKE_413: '1' })
     const line =
-      'orca: This push is too large for Orca Cloud right now (about 100 MB per push). Push it in smaller parts, for example `git push origin HEAD~5:<branch>` first, then `git push` again.'
+      "orca: This push is over Orca Cloud's limit of about 100 MB per push. Push fewer commits at a time, for example git push origin HEAD~5:refs/heads/<branch>, then run git push again."
     expect(err.split('\n').filter((l) => l === line)).toHaveLength(1)
     expect(err).not.toContain('HTTP 413')
     expect(err).not.toContain('returned error: 413')
