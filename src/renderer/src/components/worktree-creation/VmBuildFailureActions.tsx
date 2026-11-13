@@ -3,6 +3,7 @@ import {
   Bot,
   ChevronDown,
   CreditCard,
+  ExternalLink,
   Github,
   Loader2,
   LifeBuoy,
@@ -62,6 +63,8 @@ type Action = {
   secondary?: boolean
   /** Opens this page in the browser: a chevron beside it offers "Copy link". */
   link?: ExternalLinkSource
+  /** A More-menu row that leaves Orca for the browser: marked like the Help menu's. */
+  external?: boolean
 }
 
 /** At most two visible actions; the rest sit in a More menu so the way forward stays obvious. */
@@ -235,7 +238,8 @@ function failureActions(
               'Contact support'
             ),
             icon: <LifeBuoy />,
-            onClick: actions.onContactSupport
+            onClick: actions.onContactSupport,
+            external: true
           },
           // A menu row can't carry the split's chevron: the same page, copied for another browser
           // (COPY-LINK-RULE, as "Copy GitHub link" under "Add a GitHub repository…").
@@ -383,6 +387,9 @@ export function FailureActionRow({
               >
                 {action.icon}
                 {action.label}
+                {action.external ? (
+                  <ExternalLink aria-hidden className="ml-auto size-3 text-muted-foreground" />
+                ) : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
