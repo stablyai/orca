@@ -1383,7 +1383,10 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleW
         }
         throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings.")
     }
-    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
+    if allowRecovery {
+        throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window even after --restore-window; ask the user to open or show one of its windows.")
+    }
+    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; it may have none open, or they may be minimized, hidden or on another Space. Ask the user to bring one on screen, or ask the user before retrying with --restore-window.")
 }
 
 private func lookupUsableWindow(
@@ -1615,9 +1618,9 @@ private func requireTargetWindowFocused(_ snapshot: Snapshot, restoreWindowReque
     }
     switch failure {
     case .targetNotFocused:
-        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; nothing was sent. Use set-value for editable elements, or ask the user before retrying with --restore-window.")
     case .targetNotFocusedAfterRestore:
-        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; --restore-window was requested but the target is still not focused; bring it forward manually or check Accessibility permissions")
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; --restore-window was requested but the target is still not focused, so nothing was sent; ask the user to bring it forward or check Accessibility permissions")
     }
 }
 
@@ -1635,7 +1638,7 @@ private func withTransportErrors<T>(_ body: () throws -> T) throws -> T {
     } catch let failure as BackgroundInputTransport.Failure {
         switch failure {
         case let .unavailable(missingSymbols):
-            throw ProviderError.coded("background_unavailable", "background input is unavailable on this macOS version (missing \(missingSymbols.joined(separator: ", "))); retry with --restore-window to bring the app forward and use foreground input")
+            throw ProviderError.coded("background_unavailable", "background input is unavailable on this macOS version (missing \(missingSymbols.joined(separator: ", "))), so nothing was sent; foreground input would bring the app forward and take over the user's pointer and keyboard. Ask the user before retrying with --restore-window.")
         case .processNotFound:
             throw ProviderError.coded("app_not_found", "the target app quit before input was delivered")
         case .eventCreationFailed:
@@ -1691,14 +1694,14 @@ private func elementAtPoint(_ point: CGPoint, pid: pid_t) -> AXUIElement? {
     return found
 }
 
-private let unidentifiedBackgroundTarget = ProviderError.coded("background_unavailable", "cannot identify the background click target; run get-app-state again or retry with --restore-window")
+private let unidentifiedBackgroundTarget = ProviderError.coded("background_unavailable", "cannot identify the background click target, so nothing was sent; run get-app-state again. If it keeps failing, a foreground click is the only route. Ask the user before retrying with --restore-window.")
 
 private func backgroundClickHit(_ element: AXUIElement, snapshot: Snapshot) throws -> BackgroundInputTransport.PointerHit {
     let recipient = pointerRecipient(of: element, targetPID: snapshot.app.pid) {
         WindowCapture.candidates(pid: snapshot.app.pid)
     }
     guard recipient == .focused(syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId)) else {
-        throw ProviderError.coded("background_unavailable", "the background click target does not identify the requested window; run get-app-state again or retry with --restore-window")
+        throw ProviderError.coded("background_unavailable", "the background click target does not identify the requested window, so nothing was sent; run get-app-state again. If it keeps failing, a foreground click is the only route. Ask the user before retrying with --restore-window.")
     }
     return BackgroundInputTransport.classifyPointerHit(element)
 }
@@ -3239,7 +3242,7 @@ private enum Input {
                     "pid \($0.ownerPID) window \($0.windowID)"
                 } ?? "no focused window"
                 let recovery = deliveredPresses == 0
-                    ? "bring the target window forward, run get-app-state again, and retry"
+                    ? "ask the user to bring the target window forward, then run get-app-state again and retry"
                     : "\(deliveredPresses) press(es) may already have been delivered; run get-app-state and verify state before retrying"
                 throw ProviderError.coded(
                     "window_not_focused",

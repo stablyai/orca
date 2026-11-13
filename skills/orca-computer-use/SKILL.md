@@ -1,12 +1,13 @@
 ---
 name: orca-computer-use
 description: >-
-  Drives the GUI of a visible local app window through `orca computer`: accessibility
-  tree, clicks, typing, menus, dialogs, and screenshots in native apps and external
-  browser windows (Chrome, Edge, Safari) or webviews. Prefer a programmatic path
-  (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task.
-  Use only when a visible window needs GUI control those cannot reach. Do not use
-  for Orca's embedded browser (`orca-cli`).
+  Drives the GUI of a local app window in the background through `orca computer`,
+  without bringing it forward or taking the user's keyboard and pointer where the
+  platform allows: accessibility tree, clicks, typing, menus, dialogs, and screenshots
+  in native apps and external browser windows (Chrome, Edge, Safari) or webviews.
+  Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever
+  it can complete the task. Use only when an app window needs GUI control those
+  cannot reach. Do not use for Orca's embedded browser (`orca-cli`).
 ---
 
 # Orca Computer Use

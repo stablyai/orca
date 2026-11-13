@@ -624,9 +624,9 @@ function Assert-OrcaKeyboardFocus([IntPtr]$WindowHandle, $Operation, $RestoreFai
     if (Test-OrcaWindowFocused $WindowHandle) { return }
     if ([bool]$Operation.restoreWindow) {
         $reason = if ($null -ne $RestoreFailure) { " ($RestoreFailure)" } else { "" }
-        throw "window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused$reason; bring it forward manually or check desktop permissions"
+        throw "window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused$reason, so nothing was sent; ask the user to bring it forward or check desktop permissions"
     }
-    throw "window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window"
+    throw "window_not_focused: keyboard input requires the target window to be focused, and focusing it would take over the user's keyboard; nothing was sent. Use set-value for editable elements, or ask the user before retrying with --restore-window."
 }
 
 # Raises the target for real mouse input, then returns its frame read after the raise (restoring moves it).
