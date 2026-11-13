@@ -1,4 +1,8 @@
-import type { ComposerModalData } from './new-workspace/composer-modal-data'
+import {
+  buildComposerRecoveryData,
+  getQuickCreateInitialPrompt,
+  type ComposerModalData
+} from './new-workspace/composer-modal-data'
 import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
@@ -114,6 +118,7 @@ function ComposerModalBody({
   )
 }
 
+/** Seeds quick creation from modal data; only Backlog carries a task prompt into the editable draft. */
 function QuickTabBody({
   modalData,
   onClose,
@@ -138,8 +143,7 @@ function QuickTabBody({
     selectAddedProjectGroup
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
-    // Quick create ignores legacy prompt-prefill payloads.
-    initialPrompt: '',
+    initialPrompt: getQuickCreateInitialPrompt(modalData),
     initialNote: modalData.recovery?.note,
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
@@ -239,22 +243,11 @@ function QuickTabBody({
         if (isSubmissionCancelled()) {
           return
         }
-        const snapshot = {
-          ...modalData,
-          prefilledName: cardProps.name,
-          initialRepoId: cardProps.repoId,
-          initialBaseBranch: cardProps.baseBranch,
-          initialWorkspaceTarget:
-            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
-              ? {
-                  projectId: cardProps.selectedProjectId,
-                  hostId: cardProps.selectedRepoExecutionHostId,
-                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
-                }
-              : modalData.initialWorkspaceTarget,
-          linkedWorkItem: cardProps.linkedWorkItem,
-          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
-        }
+        const snapshot = buildComposerRecoveryData(modalData, cardProps, {
+          ...quickAgentPick,
+          agent: quickAgent,
+          note: cardProps.note
+        })
         toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
           action: {
             label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),

@@ -58,9 +58,12 @@ type RepoBackedTaskSourceSummaryArgs = {
   selectedRepoCount?: number
 }
 
+/** Summarizes repo-backed or account-backed source scope and host availability without probing the host. */
 export function getTaskSourceContextSummary(
   args:
-    | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
+    | ({
+        provider: Extract<TaskProvider, 'github' | 'gitlab' | 'backlog'>
+      } & RepoBackedTaskSourceSummaryArgs)
     | {
         provider: Extract<TaskProvider, 'linear' | 'jira'>
         providerLabel: string
@@ -75,6 +78,7 @@ export function getTaskSourceContextSummary(
   switch (args.provider) {
     case 'github':
     case 'gitlab':
+    case 'backlog':
       return getRepoBackedTaskSourceSummary(args, t)
     case 'linear':
       return getAccountBackedTaskSourceSummary(
@@ -222,13 +226,14 @@ export function getAccountBackedTaskSourceSummary(
   }
 }
 
-function getProviderIdentityLabel(
-  identity: TaskProviderIdentity | null | undefined
-): string | null {
+/** Uses a human-readable provider identity when present, including the source checkout path for Backlog. */
+function getProviderIdentityLabel(identity: TaskProviderIdentity | null | undefined) {
   if (!identity) {
     return null
   }
   switch (identity.provider) {
+    case 'backlog':
+      return identity.projectPath
     case 'github':
       return `${identity.owner}/${identity.repo}`
     case 'gitlab':

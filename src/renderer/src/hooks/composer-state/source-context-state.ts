@@ -40,6 +40,7 @@ import {
   getGitHubLinkedWorkItemIdentity
 } from './source-selection-decisions'
 
+/** Seeds composer drafts and source identity, retaining initial Backlog context when no linked item supplies one. */
 export function useComposerSourceContextState(input: ComposerSourceContextStateInput) {
   const {
     folderSourceRepos,
@@ -165,7 +166,10 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     })
   }, [linkedWorkItem, projects, selectedRepo, selectedWorkspaceTarget])
 
-  const taskSourceContext = linkedTaskSourceContext ?? derivedGitHubTaskSourceContext
+  const taskSourceContext =
+    linkedTaskSourceContext ??
+    derivedGitHubTaskSourceContext ??
+    (initialTaskSourceContext?.provider === 'backlog' ? initialTaskSourceContext : null)
 
   const selectedRepoGitHubSourceContext = useMemo(() => {
     if (!selectedRepo || !selectedRepoIsGit) {

@@ -120,6 +120,8 @@ export async function prepareQuickComposerStartup(
     note: string
     legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
     ephemeralVm?: boolean
+    /** A task-source draft (Backlog) replaces the linked-item prompt as unsent agent input. */
+    taskDraftPrompt?: string | null
   }
 ): Promise<QuickComposerStartup & { prompt: string; draftPrompt: string | null }> {
   const preferences = input.agent
@@ -129,10 +131,9 @@ export async function prepareQuickComposerStartup(
         executionHostId: input.executionHostId ?? undefined
       })
     : undefined
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
-    input.agent ? input.linkedWorkItem : null,
-    input.note
-  )
+  const { prompt, draftPrompt } = input.taskDraftPrompt
+    ? { prompt: '', draftPrompt: input.taskDraftPrompt }
+    : resolveQuickCreateLinkedWorkItemPrompt(input.agent ? input.linkedWorkItem : null, input.note)
   const settings = input.settings
     ? {
         ...input.settings,

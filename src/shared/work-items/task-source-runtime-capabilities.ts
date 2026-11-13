@@ -7,6 +7,7 @@ import {
 } from '../jira/jira-detail-capabilities'
 import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from '../jira/jira-quick-filters'
 import { JIRA_SAVED_FILTER_RUNTIME_CAPABILITY } from '../jira/jira-saved-filter-capability'
+import { BACKLOG_TASKS_CAPABILITY } from '../backlog-capability'
 
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const
 export const GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY = 'github.canonical-details.v1' as const
@@ -19,6 +20,7 @@ export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
 
 export const TASK_SOURCE_RUNTIME_CAPABILITIES = [
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  BACKLOG_TASKS_CAPABILITY,
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY,
   GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,

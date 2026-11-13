@@ -29,12 +29,19 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type BacklogTaskProviderIdentity = {
+  provider: 'backlog'
+  projectPath: string
+}
+
 export type TaskProviderIdentity =
+  | BacklogTaskProviderIdentity
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
 
+/** Normalizes provider-matched identity fields, returning null for mismatches or missing required fields. */
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
   identity: unknown
@@ -47,6 +54,10 @@ export function normalizeTaskProviderIdentity(
     return null
   }
   switch (provider) {
+    case 'backlog': {
+      const projectPath = normalizeNonEmptyString(raw.projectPath)
+      return projectPath ? { provider, projectPath } : null
+    }
     case 'github': {
       const owner = normalizeNonEmptyString(raw.owner)
       const repo = normalizeNonEmptyString(raw.repo)
@@ -82,6 +93,7 @@ export function normalizeTaskProviderIdentity(
   }
 }
 
+/** Validates persisted identity shape without normalizing it; absent identities remain valid for older records. */
 export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: unknown): boolean {
   if (identity === undefined || identity === null) {
     return true
@@ -94,6 +106,8 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
     return false
   }
   switch (provider) {
+    case 'backlog':
+      return typeof raw.projectPath === 'string' && raw.projectPath.trim().length > 0
     case 'github':
       return (
         typeof raw.owner === 'string' &&
@@ -116,6 +130,7 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
 }
 
 const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
+  backlog: ['projectPath'],
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
@@ -142,6 +157,7 @@ export function areTaskProviderIdentitiesEqual(
   )
 }
 
+/** Returns the provider-specific cache fragment; callers must supply host and provider scoping separately. */
 export function taskProviderIdentityCachePart(
   identity: TaskProviderIdentity | null | undefined
 ): string {
@@ -149,6 +165,8 @@ export function taskProviderIdentityCachePart(
     return ''
   }
   switch (identity.provider) {
+    case 'backlog':
+      return identity.projectPath
     case 'github':
       return githubRepoIdentityKey(identity)
     case 'gitlab':

@@ -50,10 +50,10 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
         return
       }
 
-      // Why: open menus/popovers/selects own Esc; capture-phase leave would steal it from Radix.
+      // Why: open menus/popovers/selects/dialogs (e.g. the Backlog editor) own Esc; capture-phase leave would steal it from Radix.
       if (
         document.querySelector(
-          '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"], [role="menu"]'
+          '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"], [data-slot="dialog-content"], [role="menu"]'
         )
       ) {
         return

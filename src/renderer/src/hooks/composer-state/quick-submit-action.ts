@@ -12,11 +12,13 @@ import {
 } from '@/lib/workspace/creation/workspace-create-error-format'
 import { toast } from 'sonner'
 import { scheduleComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
+import { assertBacklogLaunchTarget } from '@/lib/backlog-task-source'
 
 import type { ComposerModel } from './composer-model'
 
 type QuickSubmitActionInput = Pick<
   ComposerModel,
+  | 'agentPrompt'
   | 'effectiveLinkedPR'
   | 'executeQuickCreation'
   | 'fallbackCreatureName'
@@ -46,8 +48,10 @@ type QuickSubmitActionInput = Pick<
   | 'telemetrySource'
 >
 
+/** Exposes guarded quick submission with pending-creation reuse and UI error/creating state settlement. */
 export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   const {
+    agentPrompt,
     effectiveLinkedPR,
     executeQuickCreation,
     fallbackCreatureName,
@@ -77,8 +81,17 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     telemetrySource
   } = input
 
+  /** Rejects project-group Backlog launches and checks source/setup readiness before requesting creation. */
   const submitQuick = useCallback(
     async (requestedAgent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> => {
+      if (isProjectGroupTarget && taskSourceContext?.provider === 'backlog') {
+        setCreateError(
+          formatWorkspaceCreateError(
+            new Error('Select the Backlog task’s original project before launching.')
+          )
+        )
+        return
+      }
       if (isProjectGroupTarget) {
         await submitFolderTarget(requestedAgent, options)
         return
@@ -173,10 +186,15 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
             initialRepoId: repoId,
             linkedWorkItem,
             taskSourceContext,
+            // Why: the reopened modal seeds a Backlog draft only from this field.
+            ...(taskSourceContext?.provider === 'backlog'
+              ? { backlogTaskPrompt: agentPrompt }
+              : {}),
             telemetrySource
           })
       })
       try {
+        assertBacklogLaunchTarget(taskSourceContext, selectedRepo)
         const smartGitHubSettlement = await settleComposerSubmit(
           resolvePendingSmartGitHubSubmit(),
           isSubmissionCancelled
@@ -209,6 +227,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       }
     },
     [
+      agentPrompt,
       effectiveLinkedPR,
       executeQuickCreation,
       fallbackCreatureName,
