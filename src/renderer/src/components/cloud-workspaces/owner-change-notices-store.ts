@@ -56,6 +56,38 @@ export function dismissPreviousOwnerNotice(id: string): void {
   void window.api.cloudWorkspaces.dismissOwnerNotice(id).catch(() => undefined)
 }
 
+function madeHereKey(sandboxId: string): string {
+  return `orca.ownerChange.madeHere:${sandboxId}`
+}
+
+/** TRANSFER-TOAST-OTHER-DEVICE: this device is the one that gave the workspace away. */
+export function markOwnerChangeMadeHere(
+  storage: Pick<Storage, 'setItem'> | null,
+  sandboxId: string
+): void {
+  try {
+    storage?.setItem(madeHereKey(sandboxId), '1')
+  } catch {
+    // A full quota: the "You made …" notice is not shown here either, which is the quieter miss.
+  }
+}
+
+/**
+ * TRANSFER-TOAST-OTHER-DEVICE: which of your notices this device shows. One about a change
+ * someone else made is for you wherever you are signed in. "You made X the owner" is the result
+ * of something you did, so it shows only on the device you did it on; elsewhere it would be an
+ * echo of an action nobody took there.
+ */
+export function noticesForThisDevice(
+  notices: readonly OwnerChangeNotice[],
+  selfId: string | null,
+  storage: Pick<Storage, 'getItem'> | null
+): OwnerChangeNotice[] {
+  return notices.filter(
+    (notice) => notice.actor.userId !== selfId || hasSeen(storage, madeHereKey(notice.workspace.id))
+  )
+}
+
 export type NewOwnerWorkspace = { sandboxId: string; transferredAt: number; title: string | null }
 
 function newOwnerSeenKey(sandboxId: string, transferredAt: number): string {

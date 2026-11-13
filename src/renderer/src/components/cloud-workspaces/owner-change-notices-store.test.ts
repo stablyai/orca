@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { OwnerChangeNotice } from '../../../../shared/cloud-workspaces/owner-change-wire'
 import type { CloudWorkspaceIdentity } from './cloud-workspace-identity'
 import {
   OWNER_CHANGE_NOTICE_MAX_AGE_MS,
   markNewOwnerNoticeSeen,
-  newOwnerWorkspaces
+  markOwnerChangeMadeHere,
+  newOwnerWorkspaces,
+  noticesForThisDevice
 } from './owner-change-notices-store'
 
 const DAY = 24 * 60 * 60_000
@@ -73,5 +76,37 @@ describe('newOwnerWorkspaces (OWNER-TRANSFER)', () => {
     expect(
       newOwnerWorkspaces(new Map([['sbx_a', identity({})]]), 'user_ada', NOW, broken)
     ).toHaveLength(1)
+  })
+})
+
+describe('noticesForThisDevice (TRANSFER-TOAST-OTHER-DEVICE)', () => {
+  const notice = (id: string, actor: string, sandboxId: string): OwnerChangeNotice => ({
+    id,
+    kind: 'workspace_owner_changed',
+    workspace: { id: sandboxId, name: 'Checkout retries', number: 12 },
+    actor: { userId: actor, name: null },
+    newOwner: { userId: 'user_linus', name: null },
+    at: 1
+  })
+  const BY_ADMIN = notice('otn_admin', 'user_grace', 'sbx_a')
+  const BY_ME = notice('otn_me', 'user_ada', 'sbx_b')
+
+  it('shows a change someone else made on every device', () => {
+    expect(noticesForThisDevice([BY_ADMIN], 'user_ada', memoryStorage())).toEqual([BY_ADMIN])
+  })
+
+  it('shows "You made X the owner" only on the device that made the change', () => {
+    const here = memoryStorage()
+    markOwnerChangeMadeHere(here, 'sbx_b')
+    expect(noticesForThisDevice([BY_ADMIN, BY_ME], 'user_ada', here)).toEqual([BY_ADMIN, BY_ME])
+    // Another device signed in as the same person: no echo.
+    expect(noticesForThisDevice([BY_ADMIN, BY_ME], 'user_ada', memoryStorage())).toEqual([BY_ADMIN])
+    expect(noticesForThisDevice([BY_ME], 'user_ada', null)).toEqual([])
+  })
+
+  it('a hand-off of a different workspace made here does not unhide it', () => {
+    const here = memoryStorage()
+    markOwnerChangeMadeHere(here, 'sbx_other')
+    expect(noticesForThisDevice([BY_ME], 'user_ada', here)).toEqual([])
   })
 })

@@ -11,7 +11,7 @@ import {
   resetCloudWorkspaceIdentityForTests
 } from './cloud-workspace-identity'
 import { DIRECTORY, SELF_ID, workspace } from './cloud-workspaces.test-fixture'
-import { newOwnerWorkspaces } from './owner-change-notices-store'
+import { newOwnerWorkspaces, noticesForThisDevice } from './owner-change-notices-store'
 import { useCloudWorkspaceOwnerChange } from './use-cloud-workspace-owner-change'
 
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
@@ -117,6 +117,32 @@ describe('useCloudWorkspaceOwnerChange (OWNER-TRANSFER)', () => {
         window.localStorage
       )
     ).toEqual([])
+  })
+
+  it('TRANSFER-TOAST-OTHER-DEVICE: giving away your own marks this device as the one that did it', async () => {
+    const mine = workspace({ title: 'Docs search' })
+    changeOwner.mockResolvedValue({
+      ok: true,
+      value: {
+        workspace: { ...mine, ownerUserId: 'user_linus', ownershipTransferredAt: 5 },
+        previousOwner: { userId: SELF_ID, notified: true, inApp: true, emailed: false }
+      }
+    })
+    const { result } = hook()
+    await act(async () => {
+      await result.current.run(mine, 'user_linus')
+    })
+    const selfMade = {
+      id: 'otn_self',
+      kind: 'workspace_owner_changed' as const,
+      workspace: { id: mine.id, name: 'Docs search', number: null },
+      actor: { userId: SELF_ID, name: null },
+      newOwner: { userId: 'user_linus', name: null },
+      at: 5
+    }
+    expect(noticesForThisDevice([selfMade], SELF_ID, window.localStorage)).toEqual([selfMade])
+    // The result toast adds nothing about the previous owner: that was you.
+    expect(toasts.success).toHaveBeenCalledWith('Owner changed', undefined)
   })
 
   it('keeps a refusal in the hook for the confirmation, and changes nothing', async () => {

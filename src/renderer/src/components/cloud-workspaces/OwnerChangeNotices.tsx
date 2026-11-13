@@ -16,6 +16,7 @@ import {
   dismissPreviousOwnerNotice,
   markNewOwnerNoticeSeen,
   newOwnerWorkspaces,
+  noticesForThisDevice,
   refreshPreviousOwnerNotices,
   usePreviousOwnerNotices
 } from './owner-change-notices-store'
@@ -84,7 +85,7 @@ export function OwnerChangeNotices(): null {
 
   useEffect(() => {
     const next = new Set<string>()
-    for (const notice of notices) {
+    for (const notice of noticesForThisDevice(notices, selfId, localStorageOrNull())) {
       const id = `owner-change:${notice.id}`
       next.add(id)
       const copy = previousOwnerNotice(
