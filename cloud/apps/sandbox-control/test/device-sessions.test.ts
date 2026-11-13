@@ -15,6 +15,8 @@ const OP = 'o'.repeat(40)
 async function setup() {
   vi.spyOn(console, 'log').mockImplementation(() => {})
   const h = await createHarness({ OPERATOR_TOKEN: OP })
+  // On Enterprise, so a refused audit read below is refused for the role, not the plan.
+  h.billing.features = { auditLog: true }
   const key = await deviceKey()
   const enroll = (bearer?: string, publicKeyB64 = key.publicKeyB64) =>
     h.call('POST', '/v1/device-sessions', { body: { label: 'Neil’s iPhone', platform: 'ios', publicKeyB64 }, bearer })

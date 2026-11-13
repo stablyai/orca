@@ -2,6 +2,10 @@
 // bound to a sandbox; this desktop has no runtime record for it). Same waking overlay as an owned
 // workspace; asleep, the read-only copy is the control plane's SEALED snapshot (the only copy a
 // paired workspace has), with the saving and failed states after a Sleep pressed here.
+import {
+  cloudWorkspaceAnnouncement,
+  cloudWorkspaceTitle
+} from '@/lib/orca-cloud/cloud-workspace-name-copy'
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
@@ -155,12 +159,12 @@ export function PairedCloudWorkspaceSurface({
     clearSleepCopySave(workspaceId)
     void wakePairedCloudWorkspace(workspaceId, { source: 'open' })
   }
-  const label = name || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
+  const label = cloudWorkspaceTitle(name, t)
   const announcement =
     layer === 'waking' && overlay.wake && overlay.wake.phase !== 'failed'
-      ? t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name: label })
+      ? cloudWorkspaceAnnouncement('waking', name, t)
       : layer === 'asleep' && copy.copySave !== 'saving'
-        ? t('orcaCloudWorkspace.announce.asleep', '{{name}} is asleep.', { name: label })
+        ? cloudWorkspaceAnnouncement('asleep', name, t)
         : ''
 
   return (

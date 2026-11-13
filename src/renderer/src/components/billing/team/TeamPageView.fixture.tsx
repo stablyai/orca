@@ -1,4 +1,8 @@
+import { useEffect } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useTranslate } from '@/i18n/use-translate'
 import { Dialog } from '@/components/ui/dialog'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
 import type { OrcaOrgMembersRoster } from '../../../../../shared/orca-profiles'
@@ -6,6 +10,7 @@ import { sampleTeam } from '../plan-billing-fixtures'
 import { TeamDialogContent } from './TeamDialogHost'
 import { TeamPageView, type TeamPageViewProps } from './TeamPageView'
 import { TeamDeleteSection, type TeamDeleteCheck } from './TeamDeleteSection'
+import { leaveTeamConfirmation } from './team-leave'
 
 // Fixtures render offline: a self-contained stand-in for a provider profile picture.
 const ADA_PICTURE =
@@ -256,27 +261,51 @@ export const createTeamUnsupported = defineFixture({
   )
 })
 
-/** Pasted list mid-composition: valid chips, one invalid, and the seat impact line. */
+/** Types into the invite field; the trailing separator commits the chips. */
+async function typeInvites(text: string): Promise<void> {
+  // The dialog portals to <body>, outside the fixture frame.
+  const input = document.querySelector<HTMLInputElement>('input[inputmode="email"]')
+  if (!input) {
+    return
+  }
+  input.focus()
+  // React listens for native input events.
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setValue?.call(input, text)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+
+/** Will add seats: 4 paid, 4 members and 2 pending, so both new invites add a seat. */
 export const invitePasted = defineFixture({
   width,
   render: () => <Page billing={{ status: 'ok', entitlement: { ...team, seats: 4 } }} />,
-  interact: async () => {
-    // The dialog portals to <body>, outside the fixture frame.
-    const input = document.querySelector<HTMLInputElement>('input[inputmode="email"]')
-    if (!input) {
-      return
-    }
-    input.focus()
-    // React listens for native input events; the trailing separator commits the chips.
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-    setValue?.call(input, 'jordan@acme.dev, kim@acme.dev, not-an-email ')
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
+  interact: () => typeInvites('jordan@acme.dev, kim@acme.dev, not-an-email ')
 })
 
-/** Short roster so the Enterprise SSO row and Leave sit inside the frame. */
-export const ssoAndLeave = defineFixture({
+/** Seats free: 8 paid, 6 taken (members plus pending), so one invite adds nothing. */
+export const inviteSeatsFree = defineFixture({
+  width,
+  render: () => <Page billing={{ status: 'ok', entitlement: { ...team, seats: 8 } }} />,
+  interact: () => typeInvites('jordan@acme.dev ')
+})
+
+/** Billing unknown (disabled in this build, or it failed): the rule without counts or prices. */
+export const inviteBillingUnknown = defineFixture({
+  width,
+  render: () => <Page billing={{ status: 'unconfigured' }} />,
+  interact: () => typeInvites('jordan@acme.dev, kim@acme.dev ')
+})
+
+/** Billing sent no price: seats are still counted, no price is shown. */
+export const inviteNoPrice = defineFixture({
+  width,
+  render: () => <Page billing={{ status: 'ok', entitlement: { ...team, offers: null } }} />,
+  interact: () => typeInvites('jordan@acme.dev, kim@acme.dev ')
+})
+
+/** Short roster so the Enterprise row sits inside the frame. */
+export const ssoRow = defineFixture({
   width,
   render: () => (
     <Page
@@ -292,7 +321,41 @@ export const ssoAndLeave = defineFixture({
   )
 })
 
-// TEAM-DELETE: Settings › Team (inline), owner. The danger zone sits after "Leave <team>".
+/** The only owner opens the ⋯ on their own row: Leave is off and says what to do instead. */
+export const lastOwnerLeaveBlocked = defineFixture({
+  width,
+  render: () => <Page />,
+  interact: async () => {
+    const trigger = document.querySelector<HTMLElement>(
+      '[data-team-row="member:u-neil"] button[aria-haspopup="menu"]'
+    )
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+})
+
+/** Choosing "Leave team…" from the ⋯ menu on your own row. */
+function OpenLeaveConfirm(): null {
+  const t = useTranslate()
+  const confirm = useConfirmationDialog()
+  useEffect(() => {
+    void confirm(leaveTeamConfirmation('Orca Staging Eval Team', t))
+  }, [confirm, t])
+  return null
+}
+
+export const leaveConfirm = defineFixture({
+  width: 560,
+  render: () => (
+    <div className="h-[300px]">
+      <ConfirmationDialogProvider>
+        <OpenLeaveConfirm />
+      </ConfirmationDialogProvider>
+    </div>
+  )
+})
+
+// TEAM-DELETE: Settings › Team (inline), owner. The danger zone sits in the bottom card.
 function DeletePage({ check }: { check: TeamDeleteCheck }): React.JSX.Element {
   // Settings › Team renders the page inline, not in the dialog, so the whole page shows.
   return (

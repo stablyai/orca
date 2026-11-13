@@ -42,6 +42,14 @@ export type EntitlementClient = {
   reportUsage(segment: UsageSegment): Promise<UsageAnswer>
   /** Accounts whose payment grace expired; polled by the cron. */
   listSuspensions(): Promise<string[]>
+  /** Plan features that gate a surface (never sandbox starts). Absent on older test doubles: all off. */
+  features?(accountId: string): Promise<PlanFeatures>
+}
+
+/** Boolean plan features billing resolves from the account's live grants. */
+export type PlanFeatures = {
+  /** Enterprise: owners and admins may read the team audit log. Recording never depends on it. */
+  auditLog: boolean
 }
 
 export class BillingUnavailableError extends Error {
@@ -63,6 +71,7 @@ const UsageResponse = z.looseObject({
   reason: z.string().nullable(),
   suspendRunning: z.boolean().default(false)
 })
+const FeaturesResponse = z.looseObject({ features: z.looseObject({ audit_log: z.boolean().default(false) }) })
 const SuspensionsResponse = z.looseObject({
   accounts: z.array(z.looseObject({ accountId: z.string() })).max(10_000)
 })
@@ -101,7 +110,10 @@ export function withDevAccountBypass(env: Env, client: EntitlementClient): Entit
       bypassed(segment.accountId)
         ? Promise.resolve({ canStartSandbox: true, reason: null, suspendRunning: false })
         : client.reportUsage(segment),
-    listSuspensions: () => client.listSuspensions()
+    listSuspensions: () => client.listSuspensions(),
+    // Dev test accounts skip billing, so they see every feature (their own data only).
+    features: (accountId) =>
+      bypassed(accountId) ? Promise.resolve({ auditLog: true }) : (client.features?.(accountId) ?? Promise.resolve({ auditLog: false }))
   }
 }
 
@@ -129,7 +141,8 @@ export function createEntitlementClient(
     return {
       checkStart: async () => ({ allow: true, reason: null, suspendRunning: false }),
       reportUsage: async () => ({ canStartSandbox: true, reason: null, suspendRunning: false }),
-      listSuspensions: async () => []
+      listSuspensions: async () => [],
+      features: async () => ({ auditLog: true })
     }
   }
   const base = env.BILLING_URL
@@ -163,6 +176,10 @@ export function createEntitlementClient(
     checkStart: (request) => send('POST', '/v1/internal/entitlements/check', request, StartAnswer),
     reportUsage: (segment) => send('POST', '/v1/internal/usage', segment, UsageResponse),
     listSuspensions: async () =>
-      (await send('GET', '/v1/internal/suspensions', undefined, SuspensionsResponse)).accounts.map((a) => a.accountId)
+      (await send('GET', '/v1/internal/suspensions', undefined, SuspensionsResponse)).accounts.map((a) => a.accountId),
+    features: async (accountId) => {
+      const answer = await send('POST', '/v1/internal/entitlements/features', { accountId }, FeaturesResponse)
+      return { auditLog: answer.features.audit_log }
+    }
   }
 }

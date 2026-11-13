@@ -5,7 +5,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { useCloudWorkspace, useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isArchivedCloudStatus } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
   resumeEphemeralVmWorkspace,
@@ -100,7 +101,15 @@ export function WorkspaceVmLifecycleMenuItems({
   const t = useTranslate()
   // Orca Cloud speaks the product's lifecycle verbs (sleep / wake), never "Suspend/Resume VM".
   const cloud = useIsCloudWorkspace(worktreeId)
+  // ARCHIVED-DEAD-ACTIONS: an archived cloud workspace (owned or paired) can't sleep or wake;
+  // Unarchive is its one lifecycle action, so neither Sleep nor Wake is offered here.
+  const archived = useCloudWorkspace((state) =>
+    isArchivedCloudStatus(state.status[worktreeId]?.status)
+  )
   const action = getWorkspaceVmLifecycleAction(status, waking, canSuspend)
+  if (archived) {
+    return null
+  }
   if (!action) {
     return <>{sleepItems}</>
   }

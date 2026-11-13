@@ -4577,7 +4577,8 @@
             "trialLimitBodyCount_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "teamLimitBodyNoSeatCount_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "teamLimitBodyNoSeatCount_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
-            "trialLimitTitle": "You’re at your trial’s limit of running sandboxes"
+            "trialLimitTitle": "You’re at your trial’s limit of running sandboxes",
+            "copySupportLink": "Copy support link"
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -21103,7 +21104,6 @@
           "notFound": "That member or invite no longer exists.",
           "failed": "Could not update the team. Try again.",
           "actionsFor": "Actions for {{value0}}",
-          "billing": "Billing",
           "celebrateBody2": "{{value0}} plan · {{value1}} active. Agents keep running in the cloud when you step away.",
           "celebrateTitle2": "Welcome to Orca Cloud",
           "createBody": "You’re on a personal account. A team shares one Orca Cloud plan: invite people, manage seats and billing in one place. You’ll be its owner.",
@@ -21117,13 +21117,6 @@
           "description": "Members, invites, roles, seats and your Orca Cloud plan.",
           "dismiss": "Dismiss",
           "enterEmail": "Enter a teammate’s email",
-          "inviteAddsMany3": "{{value0}} of these add a seat each when accepted: about {{value1}} each now (prorated), then {{value2}} each.",
-          "inviteAddsOne2": "When {{value0}} accepts, they add a seat: about {{value1}} prorated, then {{value2}}.",
-          "inviteAddsUnpriced": "Each accepted invite above your paid seats adds a seat, charged now and prorated.",
-          "inviteCoveredMany": "Covered: these use seats you already paid for this period.",
-          "inviteCoveredOne": "Covered: uses a seat you already paid for this period.",
-          "inviteCoveredPart": "The first {{value0}} use seats already paid.",
-          "inviteHint": "Paste a list: commas, spaces and new lines all work. Invites don’t take a seat until accepted.",
           "inviteLabel": "Invite teammates",
           "inviteNoPlan": "Invites are free. Seats are billed once your team picks a plan.",
           "invitePlaceholder2": "alex@company.com, sam@company.com",
@@ -21133,12 +21126,9 @@
           "inviteTeammates": "Invite teammates",
           "lastOwner": "Make someone else an owner before you leave.",
           "leave": "Leave team…",
-          "leaveConfirmBody": "You lose access to the team’s cloud workspaces and secrets right away. An owner or admin can invite you back.",
           "leaveConfirmTitle": "Leave {{value0}}?",
           "leaveCta": "Leave team",
           "leaveLastOwner": "You’re the only owner. Make someone else an owner first.",
-          "leaveNeedsOwner": "Make someone else an owner first",
-          "leaveTitle": "Leave {{value0}}",
           "leftToast": "You left {{value0}}",
           "loadFailed2": "Couldn’t load your team. Check your connection.",
           "loadFailedTitle": "Couldn’t load team",
@@ -21169,7 +21159,6 @@
           "roleAdminHint": "Manages members and billing",
           "roleMemberHint": "Uses Orca Cloud with the team",
           "roleOwnerHint": "Everything, including billing and other owners",
-          "seatRules": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal, and re-adding someone this period is free.",
           "seatsDropOn": "Drops to {{value0}} on {{value1}}",
           "seatsInUse": "{{value0}} in use",
           "seatsPaid": "Seats paid",
@@ -21184,12 +21173,7 @@
           "thisTeam": "this team",
           "undo": "Undo",
           "unsupported2": "This isn’t available yet. Ask an owner or admin to do it for you.",
-          "usage": "Usage & plan",
-          "youAreAdmin": "You’re an admin",
-          "youAreMember": "You’re a member",
-          "youAreOwner": "You’re an owner",
           "yourTeams": "Or open a team you’re in",
-          "ssoBody": "SAML SSO and SCIM user provisioning are part of {{value0}}.",
           "ssoTitle": "Single sign-on and provisioning",
           "createdNotSwitched": "{{value0}} was created, but Orca couldn’t switch to it.",
           "invitedCount_one": "{{count}} invited",
@@ -21211,11 +21195,8 @@
           "nowAdmin": "{{value0}} is now an admin",
           "nowMember": "{{value0}} is now a member",
           "nowOwner": "{{value0}} is now an owner",
-          "perSeatPerMonth": "{{value0}} per seat per month",
           "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
           "nameTaken": "That team name is taken. Try another.",
-          "totalPerMonth": "{{total}} per month",
-          "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
           "viewProfile": "View profile",
           "seatsOnPlanBilling": "Seats and invoices are in",
@@ -21237,7 +21218,23 @@
             "failed": "Couldn’t delete the team. Try again.",
             "deletedToast2": "{{value0}} was deleted"
           },
-          "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team."
+          "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team.",
+          "planBillingLink": "Plan & billing",
+          "perSeat": "Per seat",
+          "perSeatMonthValue": "{{value0}}/mo",
+          "seatRulesShort": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal.",
+          "openSeatsNone": "You have no open seats",
+          "openSeatsClause_one": "You have {{count}} open seat",
+          "openSeatsClause_other": "You have {{count}} open seats",
+          "inviteSeatUnknown": "Each invite uses a seat once accepted.",
+          "inviteSeatOpen": "Each invite uses a seat once accepted. {{openSeats}}.",
+          "inviteSeatCovered": "Each invite uses a seat once accepted. {{openSeats}}, so no seats will be added.",
+          "inviteSeatAddsUnpriced_one": "Each invite uses a seat once accepted. {{openSeats}}, so {{count}} more seat will be added, prorated.",
+          "inviteSeatAddsUnpriced_other": "Each invite uses a seat once accepted. {{openSeats}}, so {{count}} more seats will be added, prorated.",
+          "inviteSeatAddsYear_one": "Each invite uses a seat once accepted. {{openSeats}}, so {{count}} more seat ({{price}}/yr, prorated) will be added.",
+          "inviteSeatAddsYear_other": "Each invite uses a seat once accepted. {{openSeats}}, so {{count}} more seats ({{price}}/yr, prorated) will be added.",
+          "inviteSeatAddsMonth_one": "Each invite uses a seat once accepted. {{openSeats}}, so {{count}} more seat ({{price}}/mo, prorated) will be added.",
+          "inviteSeatAddsMonth_other": "Each invite uses a seat once accepted. {{openSeats}}, so {{count}} more seats ({{price}}/mo, prorated) will be added."
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -21274,7 +21271,6 @@
           "seatsFollow2": "Seats follow your team: new members add a seat now; removed seats drop off at renewal.",
           "loadFailedTitle": "Plans didn’t load",
           "savePercent": "Save {{value0}}%",
-          "seatsPeriod": "{{value0}} · {{value1}}",
           "was": "Was",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
           "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
@@ -21711,12 +21707,12 @@
         "grace30": "In 30 days",
         "bannerTitle": "{{value0}} requires two-factor authentication. {{value1}}.",
         "bannerBody": "Set it up by {{value0}}. After that you can’t use this team’s workspaces until you do.",
-      "bannerBlockedTitle": "{{value0}} requires two-factor authentication",
-      "soonTitleNow": "{{value0}} requires MFA now",
-      "soonTitle_one": "{{value0}} requires MFA in {{count}} day",
-      "soonTitle_other": "{{value0}} requires MFA in {{count}} days",
-      "toast": "{{value0}} requires MFA from {{value1}}.",
-      "bannerBlockedBody": "You can’t use this team’s workspaces until you set it up. Your personal account is not affected.",
+        "bannerBlockedTitle": "{{value0}} requires two-factor authentication",
+        "soonTitleNow": "{{value0}} requires MFA now",
+        "soonTitle_one": "{{value0}} requires MFA in {{count}} day",
+        "soonTitle_other": "{{value0}} requires MFA in {{count}} days",
+        "toast": "{{value0}} requires MFA from {{value1}}.",
+        "bannerBlockedBody": "You can’t use this team’s workspaces until you set it up. Your personal account is not affected.",
         "setUp": "Set up MFA",
         "blockedTitle": "Set up two-factor authentication to use {{value0}}",
         "blockedBody": "{{value0}} has required it for all members since {{value1}}. Your workspaces and files are safe, and open again as soon as you add an authenticator app.",
@@ -21745,7 +21741,7 @@
         "reminded_one": "Reminder sent to {{count}} member.",
         "reminded_other": "Reminder sent to {{count}} members.",
         "remindedNoEmail": "Reminder recorded, but email delivery is off on this server, so nothing was sent.",
-      "requiredInline": "Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces."
+        "requiredInline": "Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces."
       }
     },
     "i18n": {
@@ -27662,7 +27658,8 @@
       "vmLost": "Orca lost contact with the build sandbox.",
       "canceled": "The build was canceled.",
       "unknownPlain": "Something went wrong during the build.",
-      "saveEnvironmentFailed": "Saving the environment failed."
+      "saveEnvironmentFailed": "Saving the environment failed.",
+      "secretLeftOnDisk": "The install script left a secret on disk, so the environment wasn’t saved. Remove it before the script ends, then save again."
     },
     "failedAtStep": "Build #{{number}} failed at {{step}}.",
     "failedPlain": "Build #{{number}} failed.",
@@ -27755,7 +27752,6 @@
       "untracked": "Untracked",
       "unknown": "Changed"
     },
-    "thisWorkspaceTitle": "This workspace",
     "overlay": {
       "restarting": "Restarting…",
       "waking": "Waking…",
@@ -27772,14 +27768,20 @@
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
       "clearPendingKeys": "Discard waiting keys",
       "unarchivingNow": "Unarchiving…",
-      "billingPayment": "Your team’s last payment failed."
+      "billingPayment": "Your team’s last payment failed.",
+      "failedTitleUnnamed": "Couldn’t wake this workspace"
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
       "waking": "Waking {{name}}.",
       "archived": "{{name}} is archived.",
       "asleep": "{{name}} is asleep.",
-      "unarchivingNamed": "Unarchiving {{name}}."
+      "unarchivingNamed": "Unarchiving {{name}}.",
+      "wakingUnnamed": "Waking this workspace.",
+      "restartingUnnamed": "Restarting this workspace.",
+      "unarchivingUnnamed": "Unarchiving this workspace.",
+      "archivedUnnamed": "This workspace is archived.",
+      "asleepUnnamed": "This workspace is asleep."
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
@@ -27880,7 +27882,6 @@
     "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
     "tryAgain": "Try again",
     "sleep": "Sleep",
-    "thisWorkspace": "This workspace",
     "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
     "sleepFailedCount": "Couldn’t put {{count}} workspaces to sleep",
     "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe.",
@@ -27938,7 +27939,9 @@
     "primaryDelete": {
       "noSandbox": "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
     },
-    "opensAndWakes": "Opens and wakes when you select it."
+    "opensAndWakes": "Opens and wakes when you select it.",
+    "sleepFailedUnnamed": "Couldn’t put this workspace to sleep",
+    "cloudWorkspaceTitle": "Cloud workspace"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

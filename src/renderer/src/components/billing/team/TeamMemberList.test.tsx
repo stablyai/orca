@@ -45,6 +45,29 @@ it('marks a busy row with aria-busy and a spinner, without dimming it', () => {
   expect(idle.querySelector('.animate-spin')).toBeNull()
 })
 
+it('offers Leave from the ⋯ on your own row only', () => {
+  const { container } = render(
+    <TeamMemberList
+      rows={teamRows({ ...roster, viewerRole: 'member', canManageMembers: false }, 'u-grace')}
+      viewerRole="member"
+      rowStates={{}}
+      canLeave
+      now={Date.UTC(2026, 10, 18)}
+      onChangeRole={noop}
+      onMakeOwner={noop}
+      onRemove={noop}
+      onResend={noop}
+      onRevoke={noop}
+      onLeave={noop}
+    />
+  )
+  const self = container.querySelector('[data-team-row="member:u-grace"]')!
+  const other = container.querySelector('[data-team-row="member:u-neil"]')!
+  expect(self.querySelector('button[aria-label^="Actions for"]')).not.toBeNull()
+  // A plain member has nothing to do on someone else's row.
+  expect(other.querySelector('button[aria-label^="Actions for"]')).toBeNull()
+})
+
 function renderList(
   listRoster: OrcaOrgMembersRoster,
   viewerUserId: string

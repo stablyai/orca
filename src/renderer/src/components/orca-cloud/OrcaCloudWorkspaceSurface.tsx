@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { cloudWorkspaceAnnouncement } from '@/lib/orca-cloud/cloud-workspace-name-copy'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
@@ -224,20 +225,21 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
 
   // One persistent, initially empty live region for this surface: phase changes only. A failed
   // wake is announced by its own alert card, so not here too.
-  const label = name || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
   const announcement =
     layer === 'waking' && overlay.wake && overlay.wake.phase !== 'failed'
-      ? overlay.wake.source === 'restart'
-        ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name: label })
-        : overlay.wake.source === 'unarchive'
-          ? t('orcaCloudWorkspace.announce.unarchivingNamed', 'Unarchiving {{name}}.', {
-              name: label
-            })
-          : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name: label })
+      ? cloudWorkspaceAnnouncement(
+          overlay.wake.source === 'restart'
+            ? 'restarting'
+            : overlay.wake.source === 'unarchive'
+              ? 'unarchiving'
+              : 'waking',
+          name,
+          t
+        )
       : layer === 'archived'
-        ? t('orcaCloudWorkspace.announce.archived', '{{name}} is archived.', { name: label })
+        ? cloudWorkspaceAnnouncement('archived', name, t)
         : layer === 'asleep' && !goingToSleep
-          ? t('orcaCloudWorkspace.announce.asleep', '{{name}} is asleep.', { name: label })
+          ? cloudWorkspaceAnnouncement('asleep', name, t)
           : ''
 
   const notices: React.ReactNode[] = []

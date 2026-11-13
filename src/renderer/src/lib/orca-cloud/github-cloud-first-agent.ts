@@ -15,6 +15,13 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { isOrcaCloudEnvironmentForLaunch } from './orca-cloud-environment-id'
+import { readHeldCloudLaunches } from './cloud-held-launch-memory'
+import {
+  beginWebRuntimeInitialTerminalBootstrap,
+  endWebRuntimeInitialTerminalBootstrap,
+  isWebRuntimeInitialTerminalBootstrapInFlight,
+  markWebRuntimeInitialTerminalBootstrapAwaitingMirror
+} from '@/runtime/web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
 
 export type FirstCloudAgentRequest = {
   fullName: string
@@ -39,17 +46,29 @@ export async function launchFirstCloudAgent(request: FirstCloudAgentRequest): Pr
   const worktreeId =
     request.worktreeId ?? (request.hostId ? await waitForFirstWorktree(request.hostId) : null)
   const host = parseExecutionHostId(request.hostId)
+  const environmentId = host?.kind === 'runtime' ? host.environmentId : null
+  // PAIRED-HELD-ACTIVE: the agent's tab (or its held placeholder) is this workspace's first terminal.
+  // Without the claim, the mirror's first empty frame seeds a plain shell too, activated, which hides
+  // the held placeholder and its "Set up once" strip behind a bare prompt (n39).
+  const claimed =
+    worktreeId && environmentId
+      ? beginWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+      : false
   const confirmed =
-    !worktreeId ||
-    host?.kind !== 'runtime' ||
-    (await waitForOrcaCloudEnvironment(host.environmentId, deadline))
+    !worktreeId || !environmentId || (await waitForOrcaCloudEnvironment(environmentId, deadline))
   if (!worktreeId || !confirmed) {
+    if (claimed && worktreeId && environmentId) {
+      endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+    }
     agentNotStartedNotice(request.agent, request.fullName, request.hostId)
     return
   }
   const agent = isTuiAgent(request.agent)
     ? request.agent
     : await resolveDefaultAgentForWorktree(useAppStore.getState, worktreeId).catch(() => null)
+  if (environmentId) {
+    void settleFirstTerminal({ environmentId, worktreeId, claimed, launched: Boolean(agent) })
+  }
   if (!agent) {
     return
   }
@@ -60,6 +79,108 @@ export async function launchFirstCloudAgent(request: FirstCloudAgentRequest): Pr
     worktreeId,
     ...(prompt ? { prompt: request.prompt, promptDelivery: 'submit-after-ready' as const } : {}),
     launchSource: 'unknown'
+  })
+}
+
+/** How long the first agent's tab may take to reach this workspace's mirror. */
+const FIRST_TAB_WAIT_MS = 30_000
+
+/**
+ * The claimed bootstrap latch is released once the workspace has a tab (the seeder then sees it), or
+ * handed back to the seeder after the wait so a launch that never arrived still gets its shell. If the
+ * seeder had already claimed it, its shell may land on top: once it settles, the held placeholder is
+ * brought to the front, once, while the person is still on this workspace.
+ */
+async function settleFirstTerminal(args: {
+  environmentId: string
+  worktreeId: string
+  claimed: boolean
+  launched: boolean
+}): Promise<void> {
+  const { environmentId, worktreeId } = args
+  // Tabs the person could already be on; the seeder's late shell is never one of them.
+  const tabsAtLaunch = new Set(
+    (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+  )
+  if (args.claimed && !args.launched) {
+    endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+    return
+  }
+  const heldTab = (): string | null => {
+    const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
+    const record = readHeldCloudLaunches(environmentId).find(
+      (each) => each.worktreeId === worktreeId && tabs.some((tab) => tab.id === each.tabId)
+    )
+    return record?.tabId ?? null
+  }
+  const hasTab = (): boolean => (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).length > 0
+  const ready = await waitForStore(
+    () =>
+      args.claimed
+        ? hasTab()
+        : !isWebRuntimeInitialTerminalBootstrapInFlight(environmentId, worktreeId) &&
+          heldTab() !== null,
+    FIRST_TAB_WAIT_MS
+  )
+  if (args.claimed) {
+    if (ready) {
+      endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+    } else {
+      markWebRuntimeInitialTerminalBootstrapAwaitingMirror(environmentId, worktreeId)
+    }
+    return
+  }
+  const tab = ready ? heldTab() : null
+  if (tab && seederShellInFront(worktreeId, tab, tabsAtLaunch)) {
+    useAppStore.getState().setActiveTab(tab)
+  }
+}
+
+/**
+ * Never steals focus: only the seeder's late shell (the newest tab, made after the launch began) is
+ * replaced in front. Another workspace, or a tab the person was already on, keeps focus.
+ */
+function seederShellInFront(
+  worktreeId: string,
+  heldTabId: string,
+  tabsAtLaunch: ReadonlySet<string>
+): boolean {
+  const state = useAppStore.getState()
+  const active = state.activeTabId
+  const tabs = state.tabsByWorktree[worktreeId] ?? []
+  return (
+    state.activeWorktreeId === worktreeId &&
+    active !== null &&
+    active !== heldTabId &&
+    !tabsAtLaunch.has(active) &&
+    tabs.at(-1)?.id === active
+  )
+}
+
+function waitForStore(done: () => boolean, waitMs: number): Promise<boolean> {
+  if (done()) {
+    return Promise.resolve(true)
+  }
+  return new Promise((resolve) => {
+    let recheck: ReturnType<typeof setTimeout> | undefined
+    const finish = (value: boolean): void => {
+      unsubscribe()
+      clearTimeout(recheck)
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const check = (): void => {
+      if (done()) {
+        finish(true)
+        return
+      }
+      // The seeder's latch is not store state: it ends just after the mirror change that came
+      // with its shell, so look once more shortly after the last change.
+      clearTimeout(recheck)
+      recheck = setTimeout(() => done() && finish(true), 300)
+    }
+    const unsubscribe = useAppStore.subscribe(check)
+    const timer = setTimeout(() => finish(done()), waitMs)
   })
 }
 
