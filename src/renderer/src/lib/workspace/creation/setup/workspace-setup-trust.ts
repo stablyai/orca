@@ -5,7 +5,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import type { SetupDecision } from '../../../../../../shared/worktree/create-types'
-import type { ApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
+import type { ApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import { approvedOrcaHookContentHashes } from '../../../../../../shared/orca-hook-trust-entries'
 import { ensureHooksApproved } from '../../../../runtime/repo-hooks/ensure-hooks-confirmed'
 import { settleComposerSubmit } from '../composer-submit-cancellation'

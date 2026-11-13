@@ -3,18 +3,18 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
-import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
+import type { SidebarLineageParentIdentities } from './lineage/worktree-lineage-projection'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
-import { appendOrderedGroups, type SectionAppendContext } from './group-sections'
+import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './sections/group-keys'
+import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
 
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
   getMixedWorktreeHostContextLabels,
   getNoticeHostContextLabels
-} from './host-labels'
+} from './hosts/host-labels'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo,
@@ -25,21 +25,21 @@ import {
   type WorktreeOccurrenceSection
 } from '../worktree-occurrence-plan'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
+import type { OrderedGroupEntry, WorktreeGroupEntry } from './sections/worktree-group-entry'
 
 import {
   appendProjectGroupSections,
   getProjectGroupOccurrencePaths
-} from './project-group-sections'
-import { getSidebarLineageChildren } from './pinned-section-worktrees'
-import { emitPinnedGroup } from './pinned-group-rows'
-import { appendWorktreeRows, buildPendingCreationRow } from './row-builders'
-import { getRenderableFolderWorkspaces } from './folder-workspace-lanes'
+} from './sections/project-group-sections'
+import { getSidebarLineageChildren } from './lineage/pinned-section-worktrees'
+import { emitPinnedGroup } from './sections/pinned-group-rows'
+import { appendWorktreeRows, buildPendingCreationRow } from './sections/row-builders'
+import { getRenderableFolderWorkspaces } from './folders/folder-workspace-lanes'
 import {
   getFolderLaneSections,
   getSidebarFolderOccurrences,
   isFolderLaneSectionKey
-} from './folder-workspace-occurrences'
+} from './folders/folder-workspace-occurrences'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -50,10 +50,10 @@ import type {
   SidebarPRGroupReader,
   WorktreeGroupBy
 } from './row-types'
-import { orderMainWorktreeFirst } from './section-order'
-import { appendImportedWorktreeLines } from './imported-worktree-lines'
+import { orderMainWorktreeFirst } from './sections/section-order'
+import { appendImportedWorktreeLines } from './sections/imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
-import { buildOrderedGroups } from './worktree-grouping'
+import { buildOrderedGroups } from './sections/worktree-grouping'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }

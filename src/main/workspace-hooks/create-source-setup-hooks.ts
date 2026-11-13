@@ -3,7 +3,7 @@ import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import { parseOrcaYaml } from '../../shared/orca-yaml'
 import { scopeHooksToRepoKind } from '../../shared/folder-workspace-hooks'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-refs/base-ref'
 import type { SetupHooksCreateSource } from '../../shared/worktree/setup-hooks-create-source'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import {

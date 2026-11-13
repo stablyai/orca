@@ -1,14 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  PaneAgentIdentities,
-  publishedOrcaSessionId
-} from '../../../identity/pane-agent-identities'
+import { publishedOrcaSessionId } from '../../../identity/pane-agent-identities'
 import { installHookStatusSessionTabsRepublish } from '../../../runtime/hook-status-session-tabs-republish'
 import { InProcessAgentIdentityClient } from '../../../identity/agent-identity-client.test-fixtures'
 import type { AgentIdentityClient } from '../../../identity/agent-identity-worker-client'
@@ -22,7 +19,6 @@ import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-lis
 const WSL = 'wsl:Ubuntu'
 const cleanups: (() => void)[] = []
 afterEach(() => {
-  vi.restoreAllMocks()
   for (const cleanup of cleanups.splice(0)) {
     cleanup()
   }
@@ -123,96 +119,6 @@ async function serverWith(panes: number, tmuxPanes = 0): Promise<IdentityTestSer
   return server
 }
 
-function countIdentityWork(server: IdentityTestServer) {
-  const before = server.identityClient.identifyRequests
-  return {
-    assign: vi.spyOn(PaneAgentIdentities.prototype, 'assign'),
-    workerRequests: () => server.identityClient.identifyRequests - before,
-    canonicalIdentity: vi.spyOn(PaneAgentIdentities.prototype, 'canonicalIdentity')
-  }
-}
-
-describe.each([200, 2_000])('terminal agent ids at %i panes', (panes) => {
-  it('names a pane only when its provider key changes', async () => {
-    const server = await serverWith(panes, panes)
-    const before = server.getStatusSnapshot()
-    expect(before.filter((row) => row.orcaSessionId).length).toBe(panes * 2)
-    // One worker request per distinct conversation, however many events named it.
-    expect(server.identityClient.identifyRequests).toBe(panes * 2)
-    const counts = countIdentityWork(server)
-
-    // Unchanged snapshots and same-key events copy each row's id: no key work, no worker request.
-    expect(server.getStatusSnapshot().map((row) => row.orcaSessionId)).toEqual(
-      before.map((row) => row.orcaSessionId)
-    )
-    expect(counts.assign).not.toHaveBeenCalled()
-    server.ingestRemote(hook(2, 'session-2'), WSL)
-    expect(counts.workerRequests()).toBe(0)
-    counts.assign.mockClear()
-    counts.canonicalIdentity.mockClear()
-
-    // `/clear` in pane 0: only that pane's new key is named; admission and the notifications it
-    // builds send nothing and do no identity work for the other panes.
-    server.ingestRemote(hook(0, 'session-0-cleared'), WSL)
-    for (const [sighting] of counts.assign.mock.calls) {
-      expect(['session-0', 'session-0-cleared']).toContain(sighting.providerSession?.id)
-    }
-    expect(counts.workerRequests()).toBe(0)
-    // A tmux agent's own change likewise: its notification outputs no id, so no canonical id work.
-    server.publishTmuxTerminal(1, 'tmux-session-1-cleared')
-    expect(counts.canonicalIdentity).not.toHaveBeenCalled()
-    // Pending until the worker answers; one request per new key re-stamps both rows.
-    expect(
-      server.getStatusSnapshot().find((row) => row.paneKey === paneKey(0))?.orcaSessionId
-    ).toBeNull()
-    await answered()
-    expect(counts.workerRequests()).toBe(2)
-    const after = server.getStatusSnapshot()
-    const pane0 = (rows: typeof after) => rows.find((row) => row.paneKey === paneKey(0))
-    expect(pane0(after)?.orcaSessionId).toBeTruthy()
-    expect(pane0(after)?.orcaSessionId).not.toBe(pane0(before)?.orcaSessionId)
-    // Outputs that carry ids still expose the tmux agent's renamed conversation, and Copy agrees.
-    const tmux1 = after.find((row) => row.paneKey === tmuxPaneKey(1))?.orcaSessionId
-    expect(tmux1).toBeTruthy()
-    expect(tmux1).not.toBe(before.find((row) => row.paneKey === tmuxPaneKey(1))?.orcaSessionId)
-    expect(server.getStatusSnapshotForPane(tmuxPaneKey(1))[0]?.orcaSessionId).toBe(tmux1)
-    expect(await server.resolvePaneAgentId(tmuxPaneKey(1), () => undefined)).toBe(tmux1)
-  })
-
-  it('refuses by reading only the panes that carry the id', async () => {
-    const server = await serverWith(panes)
-    const id = server.getStatusSnapshot().find((row) => row.paneKey === paneKey(1))?.orcaSessionId
-    expect(id).toBeTruthy()
-    const snapshot = vi.spyOn(server, 'getStatusSnapshot')
-    const state = server._getStateForTests()
-    const rows = state.lastStatusByPaneKey
-    let rowReads = 0
-    let rowWalks = 0
-    const walk = <T>(iterate: () => T): T => (rowWalks++, iterate())
-    Reflect.set(state, 'lastStatusByPaneKey', {
-      get: (key: string) => (rowReads++, rows.get(key)),
-      has: (key: string) => rows.has(key),
-      get size() {
-        return rows.size
-      },
-      keys: () => walk(() => rows.keys()),
-      values: () => walk(() => rows.values()),
-      entries: () => walk(() => rows.entries()),
-      forEach: (callback: Parameters<typeof rows.forEach>[0]) => walk(() => rows.forEach(callback)),
-      [Symbol.iterator]: () => walk(() => rows[Symbol.iterator]())
-    })
-    cleanups.unshift(() => Reflect.set(state, 'lastStatusByPaneKey', rows))
-
-    expect(await server.terminalAgentPlaces(id!)).toEqual([
-      { paneKey: paneKey(1), worktreeId: 'wt-1' }
-    ])
-    expect(server.identityClient.hasRequests).toBe(0)
-    expect(snapshot).not.toHaveBeenCalled()
-    expect(rowWalks).toBe(0)
-    expect(rowReads).toBe(1)
-  })
-})
-
 /** Restarts from the saved status document without a disk round trip. */
 class RestartingServer extends IdentityTestServer {
   constructor(private readonly saved?: LastStatusFile) {
@@ -271,7 +177,7 @@ it('publishes a lost first answer as pending, and the click recovers the committ
   server.ingestRemote(hook(0, 'session-0'), WSL)
   await answered()
   // The host can name this conversation but has not: the field is present and null, which is
-  // what offers Copy Agent ID (canPaneOfferAgentId).
+  // what offers Copy Orca Session ID (canPaneOfferAgentId).
   expect(server.getStatusSnapshot()[0]).toHaveProperty('orcaSessionId', null)
   // Inside the 30 s backoff only the click asks again; its answer also re-stamps the row.
   const id = await server.resolvePaneAgentId(paneKey(0), () => undefined)

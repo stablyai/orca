@@ -85,7 +85,9 @@ vi.mock('../git/command-runner/git-environment/git-process-env', async (importOr
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream/upstream', () => ({
+  getUpstreamStatus: getUpstreamStatusMock
+}))
 
 vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

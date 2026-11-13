@@ -13,7 +13,7 @@ import {
   RepoIssueCommandRead,
   RepoSelector,
   RepoShow
-} from '../../../../../shared/rpc-contract/github-repo-target-params'
+} from '../../../../../shared/rpc-contract/github/github-repo-target-params'
 import { hostQualifiedRepoSelector } from '../../../workspaces/catalog/runtime-repo-selector'
 import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-check-wake'
 import {
@@ -33,8 +33,8 @@ import {
   RepoSetHidden,
   RepoSparsePresetSave,
   RepoUpdate
-} from '../../../../../shared/rpc-contract/repo-params'
-import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh-params'
+} from '../../../../../shared/rpc-contract/projects/repo-params'
+import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh/ssh-params'
 
 export const REPO_METHODS = [
   defineMethod({

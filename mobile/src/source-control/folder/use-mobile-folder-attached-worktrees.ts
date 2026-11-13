@@ -8,7 +8,7 @@ import {
   hostServerWorkspacesQuery,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../../host-screen/host-list-queries'
+} from '../../host-screen/catalog/host-list-queries'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { useHostQuery } from '../../query/host-query'
 import { useHostClient } from '../../transport/connection/host-client-hooks'

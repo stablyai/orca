@@ -7,7 +7,7 @@ import type { OrcadMigrationDependencyKind } from '../../../../../shared/orcad-m
 import type { PersistedState } from '../../../../../shared/persisted-state-types'
 import type { TerminalScrollbackSnapshotStorage } from '../../../../pty/scrollback/terminal-scrollback-snapshots'
 import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
-import { isEmptyRetiredNameRegistry } from '../../../../../shared/worktree/retired-name-registry'
+import { isEmptyRetiredNameRegistry } from '../../../../../shared/worktree/naming/retired-name-registry'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { toOrcadDestinationRepository } from '../../destination/orcad-destination-catalog-projection'
 import { collectOrcadMigrationRetiredWorktreeNamespaces } from '../worktrees/orcad-source-retired-worktree-names'
@@ -22,7 +22,7 @@ import {
 import { collectOrcadMigrationSourceClientState } from '../clients/orcad-source-client-state'
 import { inspectOrcadSourceWorktreeMetadata } from '../worktrees/orcad-source-worktree-metadata'
 import { compareKeys } from '../catalog/orcad-source-key-order'
-import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../../../../shared/worktree/cross-store-lineage-move-refusal'
+import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../../../../shared/worktree/lineage/cross-store-lineage-move-refusal'
 
 export const ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS = [
   'worktree-metadata',

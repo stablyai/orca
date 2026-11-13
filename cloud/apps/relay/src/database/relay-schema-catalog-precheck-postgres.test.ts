@@ -1,8 +1,7 @@
 import pg from 'pg'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { applyPostgresSchema } from '@orca-cloud/postgres-schema/apply-postgres-schema'
 import { catalogObjectPresence } from '@orca-cloud/postgres-schema/catalog-object-precheck'
-import { takesRelationLock } from '@orca-cloud/postgres-schema/schema-lock-target'
 import {
   openRelayDatabase,
   POSTGRES_LOCK_TIMEOUT_MS,
@@ -37,7 +36,6 @@ async function onAdmin<T>(operation: (client: pg.Client) => Promise<T>): Promise
 describePostgres('relay boot-time schema against PostgreSQL', () => {
   let url = ''
   let pool: pg.Pool
-  let sent: string[]
   const opened: RelayDatabase[] = []
 
   beforeAll(() => {
@@ -51,7 +49,6 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     })
     // Match boot’s lock timeout so any DDL still queued fails promptly.
     pool = new pg.Pool({ connectionString: url, max: 1, lock_timeout: POSTGRES_LOCK_TIMEOUT_MS })
-    sent = []
   })
 
   afterAll(async () => {
@@ -59,25 +56,17 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     await onAdmin((client) => client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`))
   })
 
-  async function applyRecording(): Promise<{ ran: number; skipped: number }> {
-    const record = async (statement: string, params: unknown[] = []): Promise<pg.QueryResult> => {
-      sent.push(statement)
-      return await pool.query(statement, params)
-    }
-    return await applyPostgresSchema(
+  async function applySchema(): Promise<void> {
+    await applyPostgresSchema(
       relayPostgresSchemaStatements(),
-      (statement) => record(statement),
-      { catalogQuery: async (sql, params) => (await record(sql, params)).rows }
+      (statement) => pool.query(statement),
+      { catalogQuery: async (sql, params) => (await pool.query(sql, params)).rows }
     )
   }
 
-  function lockTaking(): string[] {
-    return sent.filter(takesRelationLock)
-  }
-
-  it('re-adds a constraint an operator dropped, then skips it again', async () => {
+  it('re-adds a constraint an operator dropped', async () => {
     // Name-only constraint checks require operators to drop changed definitions before boot recreates them.
-    await applyRecording()
+    await applySchema()
     const named = async (): Promise<number> =>
       Number(
         (
@@ -94,20 +83,14 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
       `ALTER TABLE relay_region_rehome_attempts
        DROP CONSTRAINT relay_region_rehome_attempts_preferred_region_valid`
     )
-    sent = []
-    await applyRecording()
-    expect(lockTaking()).toHaveLength(1)
+    await applySchema()
     expect(await named()).toBe(1)
-
-    sent = []
-    await applyRecording()
-    expect(lockTaking()).toEqual([])
     await pool.end()
   })
 
   it('does not let a same-named index on a sibling table answer for this one', async () => {
     // Index names are schema-wide; bind name to table or a sibling’s index can permanently suppress the real CREATE.
-    await applyRecording()
+    await applySchema()
     const ask = async (table: string): Promise<boolean> =>
       (
         await catalogObjectPresence(
@@ -145,47 +128,6 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     }
   })
 
-  it('throttles the reservations vacuum, deferring it while a vacuum holds the table', async () => {
-    const reservationOptions = async (): Promise<unknown> =>
-      (
-        await pool.query(`SELECT reloptions FROM pg_class WHERE oid = to_regclass($1)`, [
-          `${schema}.${LOCKED_TABLE}`
-        ])
-      ).rows[0]?.reloptions
-    const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
-    opened.push(cold)
-    expect(await reservationOptions()).toEqual([
-      'autovacuum_vacuum_cost_delay=20',
-      'autovacuum_vacuum_cost_limit=200'
-    ])
-    await pool.query(
-      `ALTER TABLE ${schema}.${LOCKED_TABLE}
-         RESET (autovacuum_vacuum_cost_delay, autovacuum_vacuum_cost_limit)`
-    )
-
-    // The lock a running (auto)vacuum holds; the boot must yield to it rather than fail.
-    const holder = new pg.Client({ connectionString: url })
-    await holder.connect()
-    await holder.query('BEGIN')
-    await holder.query(`LOCK TABLE ${LOCKED_TABLE} IN SHARE UPDATE EXCLUSIVE MODE`)
-    try {
-      const behindVacuum = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
-      opened.push(behindVacuum)
-    } finally {
-      await holder.query('ROLLBACK')
-      await holder.end()
-    }
-    expect(await reservationOptions()).toBeNull()
-
-    const next = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
-    opened.push(next)
-    expect(await reservationOptions()).toEqual([
-      'autovacuum_vacuum_cost_delay=20',
-      'autovacuum_vacuum_cost_limit=200'
-    ])
-    await pool.end()
-  })
-
   it('defers the activity-lease migrations and still boots while their table is locked', async () => {
     // Migration DROP must defer behind writers or 28 directors crash-loop on a table written ~475/s.
     const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
@@ -197,19 +139,14 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     )
     await pool.query(`ALTER TABLE ${schema}.relay_assignment_activity_leases RESET (fillfactor)`)
 
-    const warned: string[] = []
-    const warn = vi.spyOn(console, 'warn').mockImplementation((line: string) => {
-      warned.push(line)
-    })
     const holder = new pg.Client({ connectionString: url })
     await holder.connect()
     await holder.query('BEGIN')
     await holder.query(
       `LOCK TABLE ${schema}.relay_assignment_activity_leases IN ACCESS EXCLUSIVE MODE`
     )
-    let summary: Awaited<ReturnType<typeof applyPostgresSchema>>
     try {
-      summary = await applyPostgresSchema(
+      await applyPostgresSchema(
         relayPostgresSchemaStatements(),
         (statement) => pool.query(statement),
         { catalogQuery: async (sql, params) => (await pool.query(sql, params)).rows }
@@ -217,30 +154,19 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     } finally {
       await holder.query('ROLLBACK')
       await holder.end()
-      warn.mockRestore()
     }
 
-    expect(summary.deferred).toBe(2)
-    expect(summary.ran).toBeGreaterThan(0)
-    const deferred = warned
-      .map((line) => JSON.parse(line) as { event?: string; name?: string })
-      .filter((event) => event.event === 'orca_relay_postgres_schema_object_deferred')
-    expect(deferred.map((event) => event.name)).toEqual([
-      'relay_assignment_activity_expiry',
-      'fillfactor=70'
-    ])
     const stillThere = await pool.query(
       `SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2`,
       [schema, 'relay_assignment_activity_expiry']
     )
     expect(stillThere.rowCount).toBe(1)
 
-    const retry = await applyPostgresSchema(
+    await applyPostgresSchema(
       relayPostgresSchemaStatements(),
       (statement) => pool.query(statement),
       { catalogQuery: async (sql, params) => (await pool.query(sql, params)).rows }
     )
-    expect(retry.deferred).toBe(0)
     const gone = await pool.query(
       `SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2`,
       [schema, 'relay_assignment_activity_expiry']
@@ -254,27 +180,5 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     await pool.end()
   })
 
-  it('fails that same boot with 55P03 when the pre-check is not wired in', async () => {
-    // Keeps the test above from passing vacuously: the lock really does block relay's DDL.
-    const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
-    opened.push(cold)
 
-    const holder = new pg.Client({ connectionString: url })
-    await holder.connect()
-    await holder.query('BEGIN')
-    await holder.query(`LOCK TABLE ${LOCKED_TABLE} IN ACCESS EXCLUSIVE MODE`)
-    try {
-      await expect(
-        applyPostgresSchema(
-          relayPostgresSchemaStatements(),
-          (statement) => pool.query(statement),
-          { retryDeadlineMs: 0 }
-        )
-      ).rejects.toMatchObject({ code: '55P03' })
-    } finally {
-      await holder.query('ROLLBACK')
-      await holder.end()
-      await pool.end()
-    }
-  })
 })

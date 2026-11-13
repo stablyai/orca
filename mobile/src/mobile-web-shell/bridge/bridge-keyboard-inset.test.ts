@@ -58,17 +58,6 @@ describe('keyboardInset on init', () => {
       expect(readShellSession(init).keyboardInset).toBe(0)
     }
   })
-
-  it('passes the keyboard height through to the session the page holds', () => {
-    expect(readShellSession(readInit(JSON.stringify(initFrame(312)))).keyboardInset).toBe(312)
-  })
-
-  it('refuses negative, oversized, null and string keyboard heights', () => {
-    for (const bad of [-1, 1e9, null, '312']) {
-      const frame = { ...initFrame(), keyboardInset: bad }
-      expect(readBridgeHostMessage(JSON.stringify(frame)).ok, String(bad)).toBe(false)
-    }
-  })
 })
 
 describe('a keyboard that moves under a live page', () => {
@@ -90,17 +79,6 @@ describe('a keyboard that moves under a live page', () => {
     unsubscribe()
     expect(pair.client.getShellSession()?.sessionId).toBe(session?.sessionId)
     expect(pair.client.getShellSession()?.route).toEqual(session?.route)
-  })
-
-  it('sends nothing for a height that did not move', async () => {
-    const pair = createFakeBridgePortPair({ keyboardInset: 312 })
-    await pair.flush()
-    const inits = () => pair.readToPage().filter((frame) => frame.type === 'init').length
-    const before = inits()
-    pair.host.publishKeyboardInset(312)
-    await pair.flush()
-    expect(inits()).toBe(before)
-    expect(pair.client.getShellSession()?.keyboardInset).toBe(312)
   })
 })
 

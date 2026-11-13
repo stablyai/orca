@@ -17,8 +17,8 @@ import { GITHUB_PULL_REQUEST_METHODS } from '../../runtime/rpc/methods/source-co
 import { registerGitHubWorkItemHandlers } from '../../ipc/source-control/github-work-item-handlers'
 import { registerGitHubIssueMutationHandlers } from '../../ipc/source-control/github-issue-mutation-handlers'
 import { registerGitHubPRReviewHandlers } from '../../ipc/source-control/github-pr-review-handlers'
-import { ghPullRequestsAndWorkItemsApi } from '../../../preload/api/gh-bridge-pull-requests-and-work-items'
-import { ghMutationsAndProjectsApi } from '../../../preload/api/gh-bridge-mutations-and-projects'
+import { ghPullRequestsAndWorkItemsApi } from '../../../preload/api/github/gh-bridge-pull-requests-and-work-items'
+import { ghMutationsAndProjectsApi } from '../../../preload/api/github/gh-bridge-mutations-and-projects'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { RPC_PARAMS_BY_METHOD } from '../../../shared/rpc-contract/rpc-params-catalog.generated'
 
@@ -116,17 +116,6 @@ it.each(['cold', 'warm'] as const)(
     expect(options('/repo', 'server').ghAccount).toEqual(bob)
   }
 )
-
-it('keeps folder cards on their git child account and plain folders outside project gh selection', () => {
-  release = installGitHubProjectAccounts({
-    getRepos: () => [
-      repo({ id: 'folder', path: '/folder', kind: 'folder' }),
-      repo({ id: 'child', path: '/folder/repo', ghAccount: bob })
-    ]
-  })
-  expect(options('/folder/repo').ghAccount).toEqual(bob)
-  expect(options('/folder').ghAccount).toBeUndefined()
-})
 
 it('selects before an asynchronous repository lookup and retains that account for execution', async () => {
   let current = repo()

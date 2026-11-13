@@ -17,8 +17,8 @@ import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-i
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
-import '../mobile-pr-create'
-import { mobileRepoSelectorFromWorktreeId } from '../mobile-hosted-review-service'
+import './creation/mobile-pr-create'
+import { mobileRepoSelectorFromWorktreeId } from './creation/mobile-hosted-review-service'
 import type { GitHubPrForBranchOutcome } from './github-pr-read-reply-schema'
 import {
   githubPrAssignableUsersRead,

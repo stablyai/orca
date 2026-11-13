@@ -7,7 +7,7 @@ import { defineMethod, defineStreamingMethod } from '../../core'
 import {
   ClientEventsSubscribeParams,
   ClientEventsUnsubscribeParams
-} from '../../../../../shared/rpc-contract/client-events-params'
+} from '../../../../../shared/rpc-contract/client-ui/client-events-params'
 import { BROWSER_CLIENT_HOST_REQUEST_CAPABILITY } from '../../../../../shared/browser/client-hosting/browser-client-host-request-protocol'
 import { getBrowserHostRequestRegistry } from '../../../browser-host/leases/browser-host-request-registry'
 import {

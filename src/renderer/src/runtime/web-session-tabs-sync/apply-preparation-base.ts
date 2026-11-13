@@ -1,3 +1,4 @@
+import { carryBrowserInitializationReceipt } from './browser-initialization-presentation'
 import { collectUnhydratedMirroredTabRetractions } from './mirrored-status-tab-retractions'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -68,6 +69,7 @@ export function prepareWebSessionTabsSnapshotBase(
         )
       }
     : rawSnapshot
+  carryBrowserInitializationReceipt(rawSnapshot, snapshot)
   // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
   const focusIntentHostTabId = focusIntent?.hostTabId ?? null
@@ -89,10 +91,17 @@ export function prepareWebSessionTabsSnapshotBase(
           ) ?? null)
   const expectedCurrentLocalTabId = focusIntent?.expectedCurrentLocalTabId
   const currentVisibleLocalTabId = resolveWebSessionVisibleTabId(state, worktreeId)
+  const expectedCurrentLocalLeafId = focusIntent?.expectedCurrentLocalLeafId
+  const currentVisibleLocalLeafId = currentVisibleLocalTabId
+    ? (state.terminalLayoutsByTabId[currentVisibleLocalTabId]?.activeLeafId ?? null)
+    : null
   const callerFocusIntentTab =
     matchingFocusIntentTab &&
     (expectedCurrentLocalTabId === undefined ||
-      expectedCurrentLocalTabId === currentVisibleLocalTabId)
+      expectedCurrentLocalTabId === currentVisibleLocalTabId) &&
+    (expectedCurrentLocalLeafId === undefined ||
+      currentVisibleLocalLeafId === expectedCurrentLocalLeafId ||
+      currentVisibleLocalLeafId === focusIntent?.leafId)
       ? matchingFocusIntentTab
       : null
   const followIntentTab =

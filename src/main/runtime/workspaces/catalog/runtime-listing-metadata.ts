@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { WorkspaceMetadataCursor } from '../../../../shared/worktree/workspace-metadata-set'
+import type { WorkspaceMetadataCursor } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'

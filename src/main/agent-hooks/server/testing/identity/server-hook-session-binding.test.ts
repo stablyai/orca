@@ -14,8 +14,8 @@ import {
 import { readAgentProcessPresence } from '../../../../../shared/agent-status/process/agent-process-presence'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
-import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hook-envelope-build'
-import { RelayProviderHookNormalization } from '../../../../../wsl-guest/agent-hook-provider-normalization'
+import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hooks/publication/agent-hook-envelope-build'
+import { RelayProviderHookNormalization } from '../../../../../wsl-guest/agent-hooks/status/agent-hook-provider-normalization'
 import { hookRowPaneResumeRecord } from '../../../../runtime/session-lifecycle/projection/hook-row-pane-resume-record'
 import {
   hookStatusResumeCommand,

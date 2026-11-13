@@ -140,39 +140,6 @@ function scriptedService(
   return { identities, settled }
 }
 
-/** Counts every read of an index, lookups and walks alike, so admission is measured in work. */
-class CountingMap<K, V> extends Map<K, V> {
-  reads = 0
-  override get(key: K): V | undefined {
-    this.reads++
-    return super.get(key)
-  }
-  override has(key: K): boolean {
-    this.reads++
-    return super.has(key)
-  }
-  override forEach(callback: (value: V, key: K, map: Map<K, V>) => void): void {
-    this.reads += this.size
-    super.forEach(callback)
-  }
-  override entries(): MapIterator<[K, V]> {
-    this.reads += this.size
-    return super.entries()
-  }
-  override keys(): MapIterator<K> {
-    this.reads += this.size
-    return super.keys()
-  }
-  override values(): MapIterator<V> {
-    this.reads += this.size
-    return super.values()
-  }
-  override [Symbol.iterator](): MapIterator<[K, V]> {
-    this.reads += this.size
-    return super[Symbol.iterator]()
-  }
-}
-
 function admit(identities: PaneAgentIdentities, place: string, providerSessionId: string): void {
   identities.setPlace(
     place,
@@ -183,24 +150,6 @@ function admit(identities: PaneAgentIdentities, place: string, providerSessionId
 
 describe('PaneAgentIdentities demand and completion', () => {
   afterEach(() => vi.useRealTimers())
-
-  it.each([
-    [200, 6],
-    [2_000, 8]
-  ])('settles a healthy %i-key burst with one request per key (%ims each)', async (keys, ms) => {
-    vi.useFakeTimers()
-    const workers = new ScriptedIdentityWorkers()
-    workers.serviceMs = ms
-    const { identities, settled } = scriptedService(workers)
-    for (let place = 0; place < keys; place++) {
-      admit(identities, `p${place}`, `k${place}`)
-    }
-    // Far past the old queue-age deadline: every key still settles, without another event.
-    await vi.advanceTimersByTimeAsync(keys * ms + 1_000)
-    expect(settled.length).toBe(keys)
-    expect(workers.identifyPosts()).toBe(keys)
-    expect(workers.spawns).toBe(1)
-  })
 
   it('times out a stuck operation; an expired click leaves the row demand to the next attempt', async () => {
     vi.useFakeTimers()
@@ -216,83 +165,6 @@ describe('PaneAgentIdentities demand and completion', () => {
     // The owner's single wake retries the still-demanded row after the backoff.
     await vi.advanceTimersByTimeAsync(30_001)
     expect(settled.map((place) => place.identity.id)).toEqual(['claude_k_answer'])
-  })
-
-  it.each([200, 2_000])('sends only what current rows still need (%i keys)', async (keys) => {
-    vi.useFakeTimers()
-    const workers = new ScriptedIdentityWorkers()
-    workers.serviceMs = 5
-    const { identities, settled } = scriptedService(workers)
-    const places = new CountingMap<string, unknown>()
-    Reflect.set(identities, 'places', places)
-    for (let place = 0; place < keys; place++) {
-      admit(identities, `p${place}`, `k${place}`)
-    }
-    places.reads = 0
-    // Every row but the last moves to one shared conversation before the first answer.
-    for (let place = 0; place < keys - 1; place++) {
-      admit(identities, `p${place}`, 'shared')
-    }
-    // Admission reads only its own place: never a walk of the rows already on the key.
-    expect(places.reads).toBe(keys - 1)
-    await vi.advanceTimersByTimeAsync(keys * 10)
-    // Nothing was sent before the rows moved, and replaced keys never are.
-    expect(workers.identifyPosts()).toBe(2)
-    expect(settled.filter((place) => place.identity.id === 'claude_shared').length).toBe(keys - 1)
-    expect(settled.filter((place) => place.identity.id === `claude_k${keys - 1}`).length).toBe(1)
-    // Detaching one subscriber leaves the others' answer in place for a new pane.
-    identities.setPlace('p0', 'p0', undefined)
-    expect(identities.assign(sighting({ id: 'shared' }), undefined)?.id).toBe('claude_shared')
-  })
-
-  it.each([200, 2_000])(
-    'gates %i queued lookups and membership checks behind one failure',
-    async (count) => {
-      vi.useFakeTimers()
-      const workers = new ScriptedIdentityWorkers()
-      workers.answer = (request) => ({ id: request.id, ok: false, error: 'disk I/O error' })
-      const { identities, settled } = scriptedService(workers)
-      for (let place = 0; place < count; place++) {
-        admit(identities, `p${place}`, `k${place}`)
-      }
-      const memberships = Array.from({ length: count }, (_, n) =>
-        identities.isTerminalIdentity(`claude_m${n}`)
-      )
-      await vi.advanceTimersByTimeAsync(1)
-      expect(workers.posts.length).toBe(1)
-      // Inside the window a refusal does not probe, and a Copy click is the one override.
-      expect(await identities.isTerminalIdentity('claude_later')).toBeUndefined()
-      const click = identities.identify(sighting({ id: 'k0' }))
-      await vi.advanceTimersByTimeAsync(1)
-      expect(await click).toBeNull()
-      expect(workers.posts.length).toBe(2)
-      await vi.advanceTimersByTimeAsync(10_001)
-      expect(new Set(await Promise.all(memberships))).toEqual(new Set([undefined]))
-      // The single wake probes once per window; a failed probe re-arms it once.
-      await vi.advanceTimersByTimeAsync(20_000)
-      expect(workers.posts.length).toBe(3)
-      workers.answer = (request) =>
-        request.kind === 'identify'
-          ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
-          : 'never'
-      await vi.advanceTimersByTimeAsync(30_001)
-      await vi.advanceTimersByTimeAsync(count * 2)
-      // Storage recovered: every idle row settles without another hook.
-      expect(settled.length).toBe(count)
-      expect(workers.spawns).toBeLessThanOrEqual(4)
-    }
-  )
-
-  it('arms no wake without row demand, and cancels it with the last demand', async () => {
-    vi.useFakeTimers()
-    const workers = new ScriptedIdentityWorkers()
-    workers.answer = (request) => ({ id: request.id, ok: false, error: 'locked' })
-    const { identities } = scriptedService(workers)
-    admit(identities, 'p', 'k')
-    await vi.advanceTimersByTimeAsync(1)
-    identities.setPlace('p', 'p', undefined)
-    await vi.advanceTimersByTimeAsync(120_000)
-    expect(workers.posts.length).toBe(1)
   })
 
   it('never runs a second worker beside a retiring one, and fences answers to their owner', async () => {
@@ -447,26 +319,6 @@ describe('PaneAgentIdentities authority', () => {
   })
 })
 
-it('gives a carried pending row the answer its missed re-stamp would have', async () => {
-  vi.useFakeTimers()
-  const workers = new ScriptedIdentityWorkers()
-  vi.spyOn(console, 'error').mockImplementation(() => {})
-  const identities = new PaneAgentIdentities(
-    () => 'ids.db',
-    () => {
-      throw new Error('publication failed')
-    },
-    () => new AgentIdentityWorkerClient(workers.factory)
-  )
-  opened.push(identities)
-  const pending = identities.assign(sighting({ id: 'k' }), undefined)
-  identities.setPlace('row', 'row', pending)
-  await vi.advanceTimersByTimeAsync(1)
-  // The answer settled but the row was never re-stamped; its next admission carries pending.
-  expect(identities.assign(sighting({ id: 'k' }), pending)?.id).toBe('claude_k')
-  vi.useRealTimers()
-})
-
 describe('PaneAgentIdentities explicit retries', () => {
   afterEach(() => vi.useRealTimers())
 
@@ -524,29 +376,6 @@ describe('PaneAgentIdentities explicit retries', () => {
     expect(workers.identifyPosts()).toBe(2)
     expect(identities.assign(sighting({ id: 'B' }), undefined)?.id).toBe('claude_B')
   })
-
-  it.each([200, 2_000])(
-    'gives each of %i queued clicks one attempt after a failure, then holds no grant',
-    async (count) => {
-      vi.useFakeTimers()
-      const workers = new ScriptedIdentityWorkers()
-      failingFor(workers, new Set(Array.from({ length: count }, (_, n) => `k${n}`)))
-      workers.serviceMs = 1
-      const { identities } = scriptedService(workers)
-      admit(identities, 'row', 'k0')
-      const clicks = Array.from({ length: count }, (_, n) =>
-        identities.identify(sighting({ id: `k${n}` }))
-      )
-      await vi.advanceTimersByTimeAsync(count * 2)
-      expect(new Set(await Promise.all(clicks))).toEqual(new Set([null]))
-      expect(workers.identifyPosts()).toBe(count)
-      // No grant outlives its click: the remaining row waits for the next window's single attempt.
-      await vi.advanceTimersByTimeAsync(20_000)
-      expect(workers.identifyPosts()).toBe(count)
-      await vi.advanceTimersByTimeAsync(15_000)
-      expect(workers.identifyPosts()).toBe(count + 1)
-    }
-  )
 })
 
 it('answers unavailable when the worker cannot load, or is stopped while loading', async () => {

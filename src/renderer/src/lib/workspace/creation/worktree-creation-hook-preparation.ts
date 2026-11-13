@@ -1,7 +1,7 @@
 import {
   pickApprovedSetupHashes,
   type ApprovedSetupHashes
-} from '../../../../../shared/worktree/approved-setup-hashes'
+} from '../../../../../shared/worktree/creation/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import type { SetupHooksCreateSource } from '../../../../../shared/worktree/setup-hooks-create-source'

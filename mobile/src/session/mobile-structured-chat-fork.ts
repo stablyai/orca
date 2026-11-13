@@ -1,5 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
-import { triggerError } from '../platform/haptics'
+import { triggerError } from '../platform/haptics/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {
@@ -13,7 +13,7 @@ import {
   withLaunchReply,
   withoutUnansweredLaunch
 } from './tabs/pending-session-selection'
-import { releaseTerminalCreateLock } from '../terminal/session/terminal-create-lock'
+import { releaseTerminalCreateLock } from '../terminal/session/creation/terminal-create-lock'
 import type { MobileSessionAttachmentsModel } from '../files/attachments/use-mobile-session-attachments'
 
 type ForkScope = Pick<
