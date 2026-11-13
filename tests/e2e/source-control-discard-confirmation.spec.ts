@@ -94,7 +94,9 @@ async function confirmPendingDelete(page: Page): Promise<void> {
 }
 
 async function expectDeleteDialogLayout(page: Page, fileName: string): Promise<void> {
-  const dialog = page.getByRole('dialog', { name: `Delete "${fileName}"?` })
+  const dialog = page
+    .getByRole('dialog', { name: 'Delete', exact: true })
+    .filter({ hasText: fileName })
   await expect(dialog).toBeVisible()
   await expect
     .poll(
@@ -157,9 +159,7 @@ test.describe('Source Control discard confirmation', () => {
     await deleteUntrackedFileFromRow(row)
     await confirmPendingDelete(orcaPage)
 
-    await expect(
-      orcaPage.getByRole('dialog', { name: `Delete "${seededFile.fileName}"?` })
-    ).toHaveCount(0)
+    await expect(orcaPage.getByRole('dialog', { name: 'Delete', exact: true })).toHaveCount(0)
     await expect(row).toHaveCount(0, { timeout: 10_000 })
 
     await refreshGitStatus(orcaPage)

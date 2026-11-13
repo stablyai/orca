@@ -63,7 +63,7 @@ test('Space window dialogs blur their scene and release it on close', async ({
       branches: [{ worktreeId: 'blur-preview', branchName: 'preview' }]
     })
   })
-  const dialog = spacePage.getByRole('dialog', { name: 'Review kept branches' })
+  const dialog = spacePage.getByRole('dialog', { name: 'Delete', exact: true })
   await expect(dialog).toBeVisible()
   await expect(scene).toHaveCSS('filter', 'blur(2px)')
   await expect(dialog).toHaveCSS('filter', 'none')

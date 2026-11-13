@@ -30,11 +30,8 @@ export function WorkspaceCleanupDialogHeader({
     <div className="border-b border-border px-4 py-3">
       <DialogHeader>
         <div className="flex items-center justify-between gap-4">
-          <DialogTitle className="min-w-0 text-base">
-            {t(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b2c1331844',
-              'Delete Inactive Workspaces'
-            )}
+          <DialogTitle size="compact" className="min-w-0">
+            {t('common.delete', 'Delete')}
           </DialogTitle>
           <div className="flex shrink-0 items-center gap-1">
             <WorkspaceCleanupFreshness
