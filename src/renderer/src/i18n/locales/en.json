@@ -28382,7 +28382,6 @@
       "add": "Add",
       "addMine": "Add mine",
       "missing": "Missing",
-      "askOwner": "Ask {{owner}}, an owner or an admin to add it.",
       "valueLabel": "Value for {{name}}",
       "valuePlaceholder": "Value",
       "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
