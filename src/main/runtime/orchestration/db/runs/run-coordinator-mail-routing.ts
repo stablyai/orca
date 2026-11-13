@@ -1,5 +1,6 @@
 import type Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
+import { refreshSchemaObjects } from '../schema/schema-object-refresh'
 import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-session'
 import { orcaSessionAddressSql, orcaSessionIdOfAddressSql } from '../orca-session-address-sql'
 
@@ -74,14 +75,10 @@ export function rememberRunCoordinatorHandle(
 const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')
 const NEW_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('NEW')
 
-/** Cache both coordinator addresses; rebuild triggers on open for prefix skew, after migration supplies session-id columns. */
+/** Cache both coordinator addresses; rebuild triggers on open when their SQL changed, after migration supplies session-id columns. */
 export function createRunCoordinatorAddressTriggers(db: Database.Database): void {
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    db.exec(`
-      DROP TRIGGER IF EXISTS trg_runs_remember_coordinator_insert;
-      DROP TRIGGER IF EXISTS trg_runs_remember_coordinator_update;
-      CREATE TRIGGER trg_runs_remember_coordinator_insert
+  refreshSchemaObjects(db, [
+    `CREATE TRIGGER trg_runs_remember_coordinator_insert
       AFTER INSERT ON runs
       WHEN NEW.legacy = 0
       BEGIN
@@ -90,8 +87,8 @@ export function createRunCoordinatorAddressTriggers(db: Database.Database): void
         INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
         SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}
         WHERE ${NEW_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
-      END;
-      CREATE TRIGGER trg_runs_remember_coordinator_update
+      END;`,
+    `CREATE TRIGGER trg_runs_remember_coordinator_update
       AFTER UPDATE OF coordinator_handle, coordinator_orca_session_id,
         coordinator_orca_session_id_generation ON runs
       WHEN NEW.legacy = 0
@@ -101,13 +98,8 @@ export function createRunCoordinatorAddressTriggers(db: Database.Database): void
         INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
         SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}
         WHERE ${NEW_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
-      END;
-    `)
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+      END;`
+  ])
 }
 
 // Every address the coordinator has, its handle and its session address, as the triggers above.
@@ -123,11 +115,8 @@ export function rememberCurrentRunCoordinatorHandles(this: OrchestrationDb): voi
 }
 
 export function createCoordinatorMailRoutingTrigger(this: OrchestrationDb): void {
-  this.db.exec('BEGIN IMMEDIATE')
-  try {
-    this.db.exec(`
-      DROP TRIGGER IF EXISTS trg_messages_route_coordinator_mail;
-      CREATE TRIGGER trg_messages_route_coordinator_mail
+  refreshSchemaObjects(this.db, [
+    `CREATE TRIGGER trg_messages_route_coordinator_mail
       AFTER INSERT ON messages
       WHEN NEW.read = 0 AND NEW.delivery_contract = 'current_delivery'
         AND EXISTS (
@@ -138,13 +127,8 @@ export function createCoordinatorMailRoutingTrigger(this: OrchestrationDb): void
         AND NOT ${activeDispatchOwnsAddressSql('NEW.run_id', 'NEW.to_handle')}
       BEGIN
         UPDATE messages SET to_handle = 'run:' || NEW.run_id WHERE sequence = NEW.sequence;
-      END;
-    `)
-    this.db.exec('COMMIT')
-  } catch (error) {
-    this.db.exec('ROLLBACK')
-    throw error
-  }
+      END;`
+  ])
 }
 
 export function routeAllUnreadDirectMessagesToRunMailbox(

@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { refreshSchemaObjects } from './schema-object-refresh'
 
 // Drop uniqueness so read-but-unacked batches cannot block new mail; retain the index name/predicate for downgrade probes.
 export const OUTSTANDING_MAILBOX_INDEX_SQL = `
@@ -29,23 +30,7 @@ export const DERIVED_DELIVERY_SCHEMA_SQL = `
 
 /** IF NOT EXISTS keeps an older trigger body forever, so rebuild it when the stored SQL differs. */
 export function refreshOutstandingDeliveryTrigger(db: OrchestrationDb['db']): void {
-  const stored = db
-    .prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?")
-    .get('trg_deliveries_one_outstanding')?.sql
-  if (stored === `CREATE TRIGGER ${OUTSTANDING_DELIVERY_TRIGGER}`) {
-    return
-  }
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    db.exec(
-      `DROP TRIGGER IF EXISTS trg_deliveries_one_outstanding;
-       CREATE TRIGGER ${OUTSTANDING_DELIVERY_TRIGGER};`
-    )
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  refreshSchemaObjects(db, [`CREATE TRIGGER ${OUTSTANDING_DELIVERY_TRIGGER}`])
 }
 
 export function migrateV41(this: OrchestrationDb, current: number): void {
