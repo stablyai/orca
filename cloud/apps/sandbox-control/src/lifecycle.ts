@@ -13,7 +13,7 @@ import {
   killSwitchOn,
   type GuardrailConfig
 } from './guardrails'
-import { DEFAULT_EGRESS_ALLOWLIST, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute, type EgressPreset } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
 import { ensureEntryPoints } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
@@ -153,8 +153,10 @@ export type LifecycleDeps = {
     egressAllowlist?: readonly string[]
     /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
     extraEgressHosts?: readonly string[]
-    /** PARITY-DOCKER: false (SANDBOX_DOCKER=off) makes the VM's `docker` refuse instead of starting dockerd. */
+    /** PARITY-DOCKER: false (SANDBOX_DOCKER=off) makes the VM's `docker` refuse instead of installing or starting Docker. */
     dockerEnabled?: boolean
+    /** Workspace sandbox egress (SANDBOX_EGRESS_PRESET); default DEFAULT_EGRESS_PRESET ("open"). */
+    egressPreset?: EgressPreset
     /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
     shareLinkSecret?: string
   }
@@ -252,19 +254,16 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
 }
 
 export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string, memberPlaceholders: readonly string[] = []) {
-  const git: CredentialRoute[] = gitToken
-    ? [
-        {
-          // git (libcurl) is unaffected by the transform-rule framing hang, so it is injected inline.
-          host: 'github.com',
-          header: 'authorization',
-          placeholders: [gitBasicAuthorization(githubPlaceholderToken(row))],
-          via: 'transform',
-          value: gitBasicAuthorization(gitToken)
-        }
-      ]
-    : []
   const proxyUrl = deps.config.egressProxyUrl
+  const gitPlaceholder = gitBasicAuthorization(githubPlaceholderToken(row))
+  // The workspace repo's installation token. With the egress proxy (every deployed env) it is forwarded and
+  // swapped there, so the real token never sits in Vercel's policy store; the inline transform is the
+  // no-proxy fallback only (git/libcurl is unaffected by the transform framing hang).
+  const git: CredentialRoute[] = !gitToken
+    ? []
+    : proxyUrl
+      ? [{ host: 'github.com', header: 'authorization', placeholders: [gitPlaceholder], via: 'forward', forwardURL: proxyUrl }]
+      : [{ host: 'github.com', header: 'authorization', placeholders: [gitPlaceholder], via: 'transform', value: gitBasicAuthorization(gitToken) }]
   const credentials: CredentialRoute[] = proxyUrl
     ? [
         // Members' own GitHub identities: forwarded so the proxy can pin them to the workspace repo.
@@ -316,10 +315,15 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         )
       ]
     : []
-  // Custom model-provider hosts (ANTHROPIC_BASE_URL / OPENAI_BASE_URL secrets) recorded at boot,
-  // plus operator-configured extra hosts.
+  const all = [...git, ...credentials]
+  if ((deps.config.egressPreset ?? DEFAULT_EGRESS_PRESET) === 'open') {
+    // Every host is reachable; the credential claims (and their trailing 403s) still apply.
+    return compileNetworkPolicy({ mode: 'open', credentials: all })
+  }
+  // Limited: custom model-provider hosts (ANTHROPIC_BASE_URL / OPENAI_BASE_URL secrets) recorded at
+  // boot, MCP hosts the desktop declared, plus operator-configured extra hosts.
   const allowlist = [...new Set([...(deps.config.egressAllowlist ?? DEFAULT_EGRESS_ALLOWLIST), ...(deps.config.extraEgressHosts ?? []), ...egressAllowHosts(row)])]
-  return compileNetworkPolicy({ mode: 'allowlist', allowlist, credentials: [...git, ...credentials] })
+  return compileNetworkPolicy({ mode: 'allowlist', allowlist, credentials: all })
 }
 
 export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState): SessionFields {

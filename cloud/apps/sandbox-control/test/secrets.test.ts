@@ -345,6 +345,8 @@ describe('model API key egress placeholders (phase 2)', () => {
     await put('personal', 'ANTHROPIC_API_KEY', PERSONAL_KEY, mia)
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     expect(startEnv(h).ANTHROPIC_API_KEY).toBe(PERSONAL_KEY)
-    expect([...h.vercel.boxes.values()][0]!.policy.allow['api.anthropic.com']).toEqual([])
+    // No claim rules, so no entry (and no trailing deny) under open egress: the key reaches the host as-is.
+    expect([...h.vercel.boxes.values()][0]!.policy.allow['api.anthropic.com']).toBeUndefined()
+    expect([...h.vercel.boxes.values()][0]!.policy.allow['*']).toEqual([])
   })
 })

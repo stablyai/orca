@@ -151,8 +151,8 @@ describe('secret store routes for the desktop UI', () => {
 })
 
 describe('session env: presets, managed hosts, live refresh', () => {
-  it('a gateway key reaches the VM as a ready provider config and opens the gateway host', async () => {
-    const { h, as, put, commandEnv } = await setup()
+  it('a gateway key reaches the VM as a ready provider config and opens the gateway host (limited egress)', async () => {
+    const { h, as, put, commandEnv } = await setup({ SANDBOX_EGRESS_PRESET: 'limited' })
     const mia = await as('mia')
     await put('personal', 'AI_GATEWAY_API_KEY', GATEWAY_KEY, mia)
     await put('personal', 'ANTHROPIC_MODEL', 'moonshotai/kimi-k2', mia)
@@ -166,8 +166,8 @@ describe('session env: presets, managed hosts, live refresh', () => {
     expect([...h.vercel.boxes.values()][0]!.policy.allow['ai-gateway.vercel.sh']).toEqual([])
   })
 
-  it('a custom provider host is allowlisted for that session only', async () => {
-    const { h, as, put } = await setup()
+  it('a custom provider host is allowlisted for that session only (limited egress)', async () => {
+    const { h, as, put } = await setup({ SANDBOX_EGRESS_PRESET: 'limited' })
     const mia = await as('mia')
     await put('personal', 'ANTHROPIC_BASE_URL', 'https://llm.example.com/anthropic', mia)
     await put('personal', 'ANTHROPIC_AUTH_TOKEN', CUSTOM_TOKEN, mia)
@@ -325,7 +325,7 @@ describe('staged egress placeholder rollout', () => {
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     const box = [...h.vercel.boxes.values()][0]!
     // The org keys stay routed to their real hosts; the member's host gets no credential route.
-    expect(box.policy.allow['attacker.example.com']).toEqual([])
+    expect(box.policy.allow['attacker.example.com'] ?? []).toEqual([])
     expect(box.policy.allow['api.anthropic.com']!.length).toBeGreaterThan(1)
     expect(box.policy.allow['api.openai.com']!.length).toBeGreaterThan(1)
     const row = await h.env.SANDBOX_DB.prepare('SELECT egress_secret_hosts FROM sandboxes').first<{ egress_secret_hosts: string }>()
@@ -344,8 +344,8 @@ describe('staged egress placeholder rollout', () => {
 })
 
 describe('workspace tool hosts (synced remote MCP servers)', () => {
-  it('opens declared hosts on the running sandbox now and on every later boot; refuses wildcards and private names', async () => {
-    const { h, as } = await setup()
+  it('opens declared hosts on the running sandbox now and on every later boot; refuses wildcards and private names (limited egress)', async () => {
+    const { h, as } = await setup({ SANDBOX_EGRESS_PRESET: 'limited' })
     const mia = await as('mia')
     const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     const id: string = created.body.sandbox.id
