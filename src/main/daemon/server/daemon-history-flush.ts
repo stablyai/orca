@@ -106,7 +106,7 @@ export async function flushDaemonHistory(
     },
     {
       session,
-      teardownTracked: () => host.sessionTeardown.isTracked(session),
+      teardownTracked: () => host.sessionTeardown.isTracked(sessionId, session),
       kill: (id, options) => host.kill(id, options)
     }
   )

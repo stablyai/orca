@@ -1,9 +1,9 @@
-import '../../pty-subprocess/testing/mock-descendant-sweep'
+import { descendantCapture } from '../../pty-subprocess/testing/mock-descendant-sweep'
 import { EventEmitter } from 'node:events'
 import type { Socket } from 'node:net'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from '../../providers/adapter/daemon-pty-adapter'
 import {
   createMockSubprocess,
@@ -17,6 +17,23 @@ import { HISTORY_READ_CONSUMERS } from '../../history/journal/terminal-history-r
 import type { GetSnapshotRequest } from '../../protocol/daemon-rpc-contract'
 import { requestDaemonRpc } from '../../transport/client/daemon-client-rpc-request'
 import { DaemonPendingRequests } from '../../transport/client/daemon-client-pending-requests'
+import type * as DescendantShutdownModule from '../../sessions/terminal-descendant-shutdown'
+
+// A graceful close's descendant verification can stay in flight after its root signal fails.
+const verification = vi.hoisted(() => ({ held: null as Promise<'exited'> | null }))
+vi.mock('../../sessions/terminal-descendant-shutdown', async (importOriginal) => {
+  const actual = await importOriginal<typeof DescendantShutdownModule>()
+  return {
+    ...actual,
+    terminateShutdownDescendants: (
+      ...args: Parameters<typeof actual.terminateShutdownDescendants>
+    ) => {
+      const held = verification.held
+      verification.held = null
+      return held ?? actual.terminateShutdownDescendants(...args)
+    }
+  }
+})
 
 let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 let adapter: DaemonPtyAdapter | undefined
@@ -141,6 +158,53 @@ describe('deep-history replies through the actual outer writer', () => {
     adapter!.write(spawned.id, 'still-typing')
     await waitFor(() => child().write.mock.calls.some(([data]) => data === 'still-typing'))
   }, 30_000)
+
+  // GH1267: a close whose root signal was refused still owns the process until its descendant
+  // verification settles; a Sleep then must neither join and escalate it nor take the process.
+  it.skipIf(process.platform === 'win32')(
+    'refuses a Sleep during a refused close still verifying descendants, then Sleeps',
+    async () => {
+      const { spawned, child } = await openDeepOwnership()
+      const host = harness!.server.host
+      const session = host.historyJournals!.live(spawned.id, spawned.incarnationId)!.session!
+      const held = Promise.withResolvers<'exited'>()
+      verification.held = held.promise
+      descendantCapture.snapshot = { rootPgid: null, descendants: [], capturedAtMs: 0 }
+      vi.mocked(child().kill).mockImplementationOnce(() => {
+        throw new Error('signal refused')
+      })
+      const sleep = () =>
+        flushDaemonHistory(
+          host,
+          {
+            sessionId: spawned.id,
+            intent: 'sleep',
+            expectedIncarnationId: spawned.incarnationId!,
+            immediate: true
+          },
+          new AbortController().signal
+        )
+
+      await expect(host.kill(spawned.id)).rejects.toThrow('signal refused')
+      expect(session.isTerminating).toBe(false)
+      expect(host.sessionTeardown.isTracked(spawned.id, session)).toBe(true)
+      expect(await sleep()).toMatchObject({ status: 'unavailable', reason: 'terminating' })
+      expect(child().kill).toHaveBeenCalledTimes(1)
+      expect(session.isAlive).toBe(true)
+
+      vi.mocked(child().kill).mockImplementation(() => {
+        setTimeout(() => child()._simulateExit(0), 5)
+      })
+      held.resolve('exited')
+      await host.sessionTeardown.settle(spawned.id)
+      expect(await sleep()).toMatchObject({
+        status: 'finalized',
+        incarnationId: spawned.incarnationId
+      })
+      expect(session.isAlive).toBe(false)
+    },
+    30_000
+  )
 
   // GH1279: a caller's budget is whole milliseconds at each receiver, so a fraction is not refused.
   it('serves a fractional budget at both receivers and starts nothing on an exhausted one', async () => {

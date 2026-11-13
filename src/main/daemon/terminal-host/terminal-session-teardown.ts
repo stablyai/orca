@@ -37,9 +37,9 @@ export class TerminalSessionTeardown {
     }
   }
 
-  // Identity only: any holder of the exact Session object can ask.
-  isTracked(session: object): boolean {
-    return [...this.operations.values()].some((operation) => operation.session === session)
+  // Exact identity: the operation for this ID must be this Session's, not a successor's.
+  isTracked(sessionId: string, session: object): boolean {
+    return this.operations.get(sessionId)?.session === session
   }
 
   requestImmediateAll(): Promise<void>[] {

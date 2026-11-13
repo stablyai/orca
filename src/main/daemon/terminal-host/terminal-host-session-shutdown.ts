@@ -63,13 +63,13 @@ function checkpointTerminalHostSessions(
 }
 
 async function disposeTerminalHostSessions(
-  sessions: Iterable<Session>,
-  isAlreadyTracked?: (session: Session) => boolean
+  sessions: Iterable<[string, Session]>,
+  isAlreadyTracked?: (sessionId: string, session: Session) => boolean
 ): Promise<void> {
   const results = await Promise.allSettled(
-    [...sessions].map(async (session) => {
+    [...sessions].map(async ([sessionId, session]) => {
       session.detachAllClients()
-      if (isAlreadyTracked?.(session)) {
+      if (isAlreadyTracked?.(sessionId, session)) {
         return
       }
       // Keep live native owners until physical exit; release exited handles without signalling recycled PIDs.
@@ -95,9 +95,9 @@ export async function shutdownTerminalHostSessions(
     snapshot: TerminalSnapshot,
     records: TakePendingOutputResult['records']
   ) => void,
-  isAlreadyTracked?: (session: Session) => boolean
+  isAlreadyTracked?: (sessionId: string, session: Session) => boolean
 ): Promise<void> {
   checkpointTerminalHostSessions(sessions, onFinalCheckpoint)
-  await disposeTerminalHostSessions(sessions.values(), isAlreadyTracked)
+  await disposeTerminalHostSessions(sessions.entries(), isAlreadyTracked)
   sessions.clear()
 }
