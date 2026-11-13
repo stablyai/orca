@@ -22,6 +22,7 @@ import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
+import { TeamMfaSidebarBanner } from '@/components/team-mfa/TeamMfaAppBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
@@ -193,6 +194,7 @@ function Sidebar({
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
+              <TeamMfaSidebarBanner />
               <React.Suspense
                 fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
               >

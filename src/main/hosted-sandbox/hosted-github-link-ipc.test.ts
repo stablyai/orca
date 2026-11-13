@@ -1,5 +1,6 @@
-// "Copy link" twins of Connect GitHub (App install) and Connect your GitHub (OAuth): the same page,
-// minted the same way, returned instead of opened, and still only ever a github.com page.
+// "Copy link" for Connect your GitHub (OAuth sign-in): the same page, minted the same way, returned
+// instead of opened, and still only ever a github.com page. The App install has no link channel:
+// Copy link is for sign-in pages only.
 import { afterEach, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -56,25 +57,24 @@ function register(url: string) {
   return { connectGitHub, connectGitHubUser }
 }
 
-it('registers the link channels with the window allowlist', () => {
-  expect(HOSTED_ACCOUNT_CHANNELS).toEqual(
-    expect.arrayContaining([CH.gitHubInstallLink, CH.gitHubUserConnectLink])
-  )
+it('registers the OAuth link channel, and no App-install link channel', () => {
+  expect(HOSTED_ACCOUNT_CHANNELS).toContain(CH.gitHubUserConnectLink)
+  expect(HOSTED_ACCOUNT_CHANNELS).not.toContain('orcaCloudWorkspace:gitHubInstallLink')
 })
 
-it('returns the install page minted like Connect GitHub, without opening it', async () => {
+it('Connect GitHub still opens the install page minted for the repository', async () => {
   const url = 'https://github.com/apps/x/installations/new?state=s'
   const { connectGitHub } = register(url)
   expect(
-    await handlers.get(CH.gitHubInstallLink)?.({}, { repoUrl: REPO, setupSessionId: SESSION })
-  ).toEqual({ ok: true, value: url })
+    await handlers.get(CH.connectGitHub)?.({}, { repoUrl: REPO, setupSessionId: SESSION })
+  ).toEqual({ ok: true, value: null })
   expect(connectGitHub).toHaveBeenLastCalledWith(undefined, {
     repo: REPO,
     setupSessionId: SESSION,
     repoId: 7,
     ownerId: 50
   })
-  expect(openExternal).not.toHaveBeenCalled()
+  expect(openExternal).toHaveBeenCalledWith(url)
 })
 
 it('returns the OAuth page minted like Connect your GitHub, without opening it', async () => {
@@ -84,7 +84,7 @@ it('returns the OAuth page minted like Connect your GitHub, without opening it',
   expect(openExternal).not.toHaveBeenCalled()
 })
 
-it('never hands out a page that is not on github.com', async () => {
+it('never opens or hands out a page that is not on github.com', async () => {
   for (const url of [
     'https://github.com.evil.example/install',
     'http://github.com/login/oauth/authorize',
@@ -92,7 +92,7 @@ it('never hands out a page that is not on github.com', async () => {
   ]) {
     handlers.clear()
     register(url)
-    expect(await handlers.get(CH.gitHubInstallLink)?.({}, {})).toMatchObject({
+    expect(await handlers.get(CH.connectGitHub)?.({}, {})).toMatchObject({
       ok: false,
       code: 'failed'
     })
@@ -101,4 +101,5 @@ it('never hands out a page that is not on github.com', async () => {
       code: 'failed'
     })
   }
+  expect(openExternal).not.toHaveBeenCalled()
 })

@@ -13,7 +13,7 @@
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmBuildFailureActions.tsx",
-    "line": 412,
+    "line": 372,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },

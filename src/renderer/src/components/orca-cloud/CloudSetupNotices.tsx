@@ -17,8 +17,6 @@ import {
   repoSlug,
   runCloudSetupScript
 } from '@/lib/orca-cloud/cloud-setup-notice-actions'
-import { gitHubInstallLinkSource } from '@/lib/orca-cloud/github-link-sources'
-import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { recheckCloudFetch } from '@/lib/orca-cloud/cloud-fetch-notice'
 import { runVmEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check'
 import { hideCloudToast, showCloudToast, type CloudToastView } from './cloud-toast-stack'
@@ -38,8 +36,6 @@ export type CloudSetupNoticeLine = {
     icon: React.ReactNode
     run: () => void
     pending?: boolean
-    /** Opens this page in the browser: "Copy link" beside it. */
-    link?: ExternalLinkSource
   } | null
 }
 
@@ -75,8 +71,7 @@ export function cloudSetupNoticeLine(
               <GitPullRequestArrow />
             ),
             run: handlers.install,
-            pending: handlers.installing,
-            link: gitHubInstallLinkSource({ repoUrl: record.repoUrl })
+            pending: handlers.installing
           }
         }
       }
@@ -257,8 +252,7 @@ export function cloudSetupNoticesView(
                 label: line.action.label,
                 icon: line.action.icon,
                 onClick: line.action.run,
-                ...(line.action.pending ? { pending: true } : {}),
-                ...(line.action.link ? { link: line.action.link } : {})
+                ...(line.action.pending ? { pending: true } : {})
               }
             }
           : {}),

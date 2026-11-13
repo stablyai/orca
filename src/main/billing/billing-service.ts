@@ -222,7 +222,7 @@ export async function getOrcaBillingTeamPlans(
 type CreateHostedUrl = (token: string, endpoints: BillingEndpoints) => Promise<string>
 
 /** Mints a Stripe-hosted Checkout/Portal URL for the active account without opening it. */
-export async function mintHosted(
+async function mintHosted(
   userDataPath: string,
   createUrl: CreateHostedUrl
 ): Promise<OrcaBillingLinkResult> {

@@ -20,7 +20,6 @@ export const orcaCloudWorkspaceApi = {
   listCloudWorkspaceIds: () => ipcRenderer.invoke(CH.listCloudWorkspaceIds),
   getConfig: () => ipcRenderer.invoke(CH.getConfig),
   connectGitHub: (args) => ipcRenderer.invoke(CH.connectGitHub, args),
-  gitHubInstallLink: (args) => ipcRenderer.invoke(CH.gitHubInstallLink, args),
   getGitHubUser: () => ipcRenderer.invoke(CH.getGitHubUser),
   connectGitHubUser: () => ipcRenderer.invoke(CH.connectGitHubUser),
   gitHubUserConnectLink: () => ipcRenderer.invoke(CH.gitHubUserConnectLink),

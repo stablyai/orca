@@ -199,7 +199,7 @@ function list(
         initialMode={mode}
         initialSaved={options.saved}
         onSetUpAgent={noop}
-        description="Only you get these, in every Orca Cloud workspace you start."
+        description="Only you get these, in cloud workspaces you haven’t shared. Shared workspaces don’t get them."
       />
     </Frame>
   )
