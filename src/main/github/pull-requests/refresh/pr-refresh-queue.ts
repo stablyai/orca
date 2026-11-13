@@ -8,11 +8,11 @@ import type {
 import {
   aliasFromCandidate,
   bypassesFreshnessDelay,
+  foregroundExposureDueAt,
   freshRetryAt,
   POST_PUSH_DELAY_MS,
   refreshKey,
   sameAliasRequestIdentity,
-  refreshIntervalForCandidate,
   shouldSkipFresh,
   visibleFollowUpPriority
 } from './pr-refresh-candidate-policy'
@@ -28,6 +28,7 @@ export type PRRefreshQueueEntry = {
   bypassBackgroundBudget?: boolean
   activeDelayNotified?: boolean
   followUp?: boolean
+  foreground?: boolean
   windowId?: number
   /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
   watch?: { prKey: string; headSha?: string }
@@ -144,14 +145,7 @@ export class PRRefreshQueue {
     const key = refreshKey(candidate)
     const existing = this.entries.get(key)
     const freshDueAt = shouldSkipFresh(candidate, reason) ? freshRetryAt(candidate) : null
-    const stopped = !Number.isFinite(refreshIntervalForCandidate(candidate))
-    const exposureDueAt =
-      reexposed &&
-      stopped &&
-      candidate.cachedFetchedAt != null &&
-      Date.now() - candidate.cachedFetchedAt >= REVIEW_REFRESH_COOLDOWN_MS
-        ? Date.now()
-        : null
+    const exposureDueAt = foregroundExposureDueAt(candidate, reexposed)
     const dueAt = Math.max(
       exposureDueAt ?? freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0),
       bypassesFreshnessDelay(reason) ? 0 : (this.backgroundNotBefore.get(key)?.until ?? 0)
@@ -169,6 +163,7 @@ export class PRRefreshQueue {
         dueAt,
         queuedAt: this.nextOrder(),
         followUp: reason === 'visible' && freshDueAt !== null && exposureDueAt === null,
+        foreground: exposureDueAt !== null,
         windowId
       })
       return { alias, key, dueAt, coalesced: false }
@@ -177,11 +172,12 @@ export class PRRefreshQueue {
     setLiveAlias(existing.aliases, alias)
     if (
       reason === 'visible' &&
-      !shouldSkipFresh(candidate, reason) &&
+      (exposureDueAt !== null || !shouldSkipFresh(candidate, reason)) &&
       existing.reason === 'visible'
     ) {
       existing.dueAt = Math.min(existing.dueAt, dueAt)
       existing.followUp = false
+      existing.foreground ||= exposureDueAt !== null
     }
     const shouldPromote =
       priority > existing.priority ||

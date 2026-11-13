@@ -137,7 +137,7 @@ export class PRRefreshQueueDrainer {
           (next.reason === 'visible' || next.reason === 'swr')
         ) {
           const candidate = next.candidate
-          const fresh = freshQueuedPROutcome(candidate, next.reason)
+          const fresh = freshQueuedPROutcome(candidate, next.reason, next.foreground)
           if (fresh) {
             this.events.broadcast({ aliases, reason: next.reason, outcome: fresh })
             this.scheduleVisibleFollowUp(

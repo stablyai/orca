@@ -1,5 +1,8 @@
 import { shouldAcceptMergedFallbackPR } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
-import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
+import {
+  REVIEW_REFRESH_COOLDOWN_MS,
+  reviewRefreshIntervalMs
+} from '../../../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -131,15 +134,37 @@ export function shouldSkipFresh(
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
 }
 
-export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
+export function foregroundRefreshAgeMs(candidate: GitHubPRRefreshCandidate): number {
+  const interval = refreshIntervalForCandidate(candidate)
+  return Number.isFinite(interval) ? interval : REVIEW_REFRESH_COOLDOWN_MS
+}
+
+export function foregroundExposureDueAt(
+  candidate: GitHubPRRefreshCandidate,
+  reexposed: boolean
+): number | null {
+  return reexposed &&
+    !Number.isFinite(refreshIntervalForCandidate(candidate)) &&
+    candidate.cachedFetchedAt != null &&
+    Date.now() - candidate.cachedFetchedAt >= foregroundRefreshAgeMs(candidate)
+    ? Date.now()
+    : null
+}
+
+export function freshRetryAt(
+  candidate: GitHubPRRefreshCandidate,
+  foreground = false
+): number | null {
   return candidate.cachedFetchedAt == null || hasStaleHead(candidate)
     ? null
-    : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
+    : candidate.cachedFetchedAt +
+        (foreground ? foregroundRefreshAgeMs(candidate) : refreshIntervalForCandidate(candidate))
 }
 
 export function freshQueuedPROutcome(
   candidate: GitHubPRRefreshCandidate,
-  reason: GitHubPRRefreshReason
+  reason: GitHubPRRefreshReason,
+  foreground = false
 ): PRRefreshOutcome | null {
   const cached = cachedPRBranchOutcome(
     candidate.repoPath,
@@ -153,7 +178,7 @@ export function freshQueuedPROutcome(
   if (!outcome || outcome.kind === 'upstream-error') {
     return null
   }
-  const dueAt = freshRetryAt(visibleCandidateAfterOutcome(candidate, outcome))
+  const dueAt = freshRetryAt(visibleCandidateAfterOutcome(candidate, outcome), foreground)
   return dueAt !== null && dueAt > Date.now() ? outcome : null
 }
 
