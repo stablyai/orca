@@ -20,6 +20,7 @@ import {
   EDGE_CONTROL_DEFAULTS,
   edgeAnyRegionRolloutPermille,
   edgeCountryExcluded,
+  edgeRegionalRollout,
   edgeRegionRolloutPermille,
   edgeRolloutPermille,
   type EdgeControlFlags
@@ -287,14 +288,17 @@ export class EdgeAssignments {
 
   // The host's own ask: moves its row to the edge, minting a strictly newer epoch only when the cell
   // changes (phones accept a move only with a newer epoch; re-asks must not flap the epoch).
-  // Every committed answer also records the region the cohort was judged for, so the evacuation
-  // sweep can drain a region's hosts (relay_assignment_region_preferences). Written last, under the
-  // assignment row lock (the cell path's order), so its row lock is held only to the commit.
+  // While any regional share is set, every committed answer also records the region the cohort was
+  // judged for, so the evacuation sweep can drain a region's hosts (relay_assignment_region_
+  // preferences); with none, nothing extra is written. Written last, under the assignment row lock
+  // (the cell path's order), so its row lock is held only to the commit.
   async moveToEdge(identity: Identity, mapFloor: number, region?: RelayRegion): Promise<RelayAssignment> {
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
-    const recordRegion = (transaction: RelayDatabase) =>
-      recordRegionPreference(transaction, identity, region ?? RELAY_DEFAULT_REGION, now)
+    const recordRegion = async (transaction: RelayDatabase) => {
+      if (!edgeRegionalRollout(this.config.control?.() ?? EDGE_CONTROL_DEFAULTS)) return
+      await recordRegionPreference(transaction, identity, region ?? RELAY_DEFAULT_REGION, now)
+    }
     return await this.database.transaction(async (transaction) => {
       let rows: SqlRow[]
       try {

@@ -247,6 +247,7 @@ describe('edge move records the region', () => {
     for (const database of databases.splice(0)) await database.close()
   })
   const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+  const regional: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { 'asia-east2': 0 } }
 
   async function recorded(database: RelayDatabase) {
     return (
@@ -262,7 +263,7 @@ describe('edge move records the region', () => {
     const database = await openInMemoryRelayDatabase()
     databases.push(database)
     let now = 1_000
-    const edge = new EdgeAssignments(database, config({ mode: 'on' }), () => now)
+    const edge = new EdgeAssignments(database, config(regional), () => now)
     await edge.ensureEdgeCell()
     await edge.moveToEdge(identity, 0, 'asia-east2')
     expect(await recorded(database)).toEqual([{ region: 'asia-east2', at: 1_000 }])
@@ -276,6 +277,23 @@ describe('edge move records the region', () => {
     expect(await recorded(database)).toEqual([{ region: 'asia-east2', at: 3_000 }])
   })
 
+  it('writes nothing without a regional share (dark), in every branch', async () => {
+    const database = await openInMemoryRelayDatabase()
+    databases.push(database)
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000, regionRolloutPermille: {} }
+    const edge = new EdgeAssignments(database, config(flags), () => 1_000)
+    await edge.ensureEdgeCell()
+    await edge.moveToEdge(identity, 0, 'us-central1')
+    await edge.moveToEdge(identity, 0, 'us-central1')
+    await database.query(`UPDATE relay_assignments SET cell_id = 'us-c1' WHERE user_id = ?`, [identity.userId])
+    await edge.moveToEdge(identity, 0)
+    expect(await recorded(database)).toEqual([])
+    // An empty map counts as absent; the first regional key turns recording on.
+    flags.regionRolloutPermille = { 'asia-east2': 0 }
+    await edge.moveToEdge(identity, 0, 'us-central1')
+    expect(await recorded(database)).toEqual([{ region: 'us-central1', at: 1_000 }])
+  })
+
   it('records nothing for a move that does not commit', async () => {
     const database = await openInMemoryRelayDatabase()
     databases.push(database)
@@ -284,7 +302,7 @@ describe('edge move records the region', () => {
         throw new (await import('./edge-admin-client.js')).EdgeAdminUnavailableError('status_503')
       })
     } as unknown as EdgeAdmin
-    const edge = new EdgeAssignments(database, config({ mode: 'on' }), () => 1_000, admin)
+    const edge = new EdgeAssignments(database, config(regional), () => 1_000, admin)
     await edge.ensureEdgeCell()
     await expect(edge.moveToEdge(identity, 0, 'asia-east2')).rejects.toBeInstanceOf(EdgeMoveDeferredError)
     expect(await recorded(database)).toEqual([])
@@ -341,20 +359,33 @@ describe('edge evacuation by recorded region', () => {
     expect(h.drained).toEqual([asia])
   })
 
-  it("judges 'any' for a recorded region without its own share, as before", async () => {
-    // us-central1 has no regional value: its hosts are judged at the max (asia's 1000), not drained.
+  it('judges a recorded region by its effective share: global when env-scoped, out when not', async () => {
+    // A us-central1 shrink (global 0) while Asia is at 1000: recorded us-central1 hosts drain;
+    // an unrecorded host is judged 'any' (Asia's 1000) and stays until its next ask records it.
     const h = await harness({ mode: 'on', rolloutPermille: 0, regionRolloutPermille: { 'asia-east2': 1000 } })
     await h.onEdge(hosts[20]!, 'us-central1')
     await h.onEdge(hosts[21]!)
+    await h.onEdge(hosts[22]!, 'asia-east2')
     await h.evacuation.sweep()
-    expect(h.drained).toEqual([])
+    expect(h.drained).toEqual([hosts[20]])
   })
 
-  it('without regional flags ignores recorded regions entirely', async () => {
-    const h = await harness({ mode: 'on', rolloutPermille: 1000 })
-    await h.onEdge(hosts[30]!, 'asia-east2')
+  it('drains a recorded region that is out of scope', async () => {
+    // asia-east2 recorded, but only us-central1 has a key and the env scope is us-central1.
+    const h = await harness({ mode: 'on', rolloutPermille: 1000, regionRolloutPermille: { 'us-central1': 1000 } })
+    await h.onEdge(hosts[40]!, 'asia-east2')
+    await h.onEdge(hosts[41]!, 'us-central1')
     await h.evacuation.sweep()
-    expect(h.drained).toEqual([])
+    expect(h.drained).toEqual([hosts[40]])
+  })
+
+  it('without regional flags ignores recorded regions entirely (a lagging cell-path preference)', async () => {
+    for (const flags of [{ mode: 'on', rolloutPermille: 1000 }, { mode: 'on', rolloutPermille: 1000, regionRolloutPermille: {} }] as EdgeControlFlags[]) {
+      const h = await harness(flags)
+      await h.onEdge(hosts[30]!, 'asia-east2')
+      await h.evacuation.sweep()
+      expect(h.drained).toEqual([])
+    }
   })
 })
 

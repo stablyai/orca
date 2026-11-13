@@ -141,6 +141,12 @@ export function edgeRolloutPermille(rolloutPercent: number, flags: EdgeControlFl
   return flags.rolloutPermille ?? rolloutPercent * 10
 }
 
+// Any regional share set: edge moves record their region and the sweep judges recorded regions.
+// None: neither, so a dark rollout adds no database writes.
+export function edgeRegionalRollout(flags: EdgeControlFlags): boolean {
+  return Object.keys(flags.regionRolloutPermille ?? {}).length > 0
+}
+
 // Effective rollout for hosts asking for `region`: its regional value, else the global rollout
 // when the env scope lists it, else undefined (out of scope).
 export function edgeRegionRolloutPermille(

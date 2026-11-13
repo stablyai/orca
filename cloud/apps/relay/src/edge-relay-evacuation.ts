@@ -7,6 +7,7 @@ import { RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/
 import type { RelayDatabase, SqlRow } from './database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, mayBeOnEdge, type EdgeRelayConfig } from './edge-relay.js'
+import { EDGE_CONTROL_DEFAULTS, edgeRegionalRollout } from './edge-relay-control.js'
 import { forEachBounded, retryPendingFences } from './edge-relay-fence.js'
 
 type Identity = { userId: string; relayHostId: string }
@@ -125,11 +126,12 @@ export class EdgeEvacuation {
         const identity = { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') }
         pass.cursor = identity
         // Region scope is the assign path's call: it decides with the region the desktop asks for.
-        // The sweep judges a region only for a host whose edge ask recorded it (moveToEdge) and
-        // only when that region has its own rollout (regionRolloutPermille), so a regional abort
-        // drains just that region. Otherwise 'any': judging a lagging cell-path preference here
-        // drained hosts that the next ask put straight back. Country exclusion needs the ask's
-        // address, so an excluded host leaves on its next ask.
+        // Without regional shares the sweep judges 'any': judging a lagging cell-path preference
+        // drained hosts that the next ask put straight back. With them, edge asks record their
+        // region (moveToEdge) and a host with a recorded region is judged by that region's
+        // effective share, so a regional abort or shrink drains just that region; a host with none
+        // is judged 'any'. Country exclusion needs the ask's address, so an excluded host leaves
+        // on its next ask.
         if (inEdgeCohort(this.config, identity.relayHostId, this.judgedRegion(row), identity.userId)) { continue }
         if (!mayBeOnEdge(this.config, identity.relayHostId, identity.userId)) {
           // leaveCeilingPermille is set below a rollout this host was moved under: its asks skip
@@ -157,10 +159,9 @@ export class EdgeEvacuation {
   }
 
   private judgedRegion(row: SqlRow): RelayRegion | 'any' {
+    if (!edgeRegionalRollout(this.config.control?.() ?? EDGE_CONTROL_DEFAULTS)) { return 'any' }
     const recorded = RelayRegionSchema.safeParse(row.preferred_region)
-    if (!recorded.success) { return 'any' }
-    const regional = this.config.control?.().regionRolloutPermille?.[recorded.data]
-    return regional === undefined ? 'any' : recorded.data
+    return recorded.success ? recorded.data : 'any'
   }
 
   // Keys after the cursor; once wrapped, only up to the pass's origin. With the region the host's
