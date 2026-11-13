@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
   type SharedValue
 } from 'react-native-reanimated'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import {
   BOTTOM_DRAWER_EASING,
   BOTTOM_DRAWER_HEIGHT_DURATION_MS

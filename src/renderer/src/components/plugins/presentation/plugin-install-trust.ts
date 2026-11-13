@@ -2,7 +2,7 @@ import type {
   PluginHostInstallSource,
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { splitQualifiedPluginKey } from '../../../../../shared/plugins/catalog/plugin-marketplace'
 import { pluginRepositoryOrigin } from '../../../../../shared/plugins/catalog/plugin-repository-link'

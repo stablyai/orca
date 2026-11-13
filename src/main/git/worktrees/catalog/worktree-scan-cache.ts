@@ -10,6 +10,7 @@ import { listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrue
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 import { resolveGitAdmissionTier } from '../../command-runner/admission/git-operation-executor'
+import { withRepositoryGitCause } from '../../repository-git-cause'
 
 let signalIdentities = new WeakMap<AbortSignal, number>()
 let nextSignalIdentity = 0
@@ -95,7 +96,12 @@ function shareWorktreeScan(
   if (inFlight) {
     return inFlight
   }
-  const scan = run(repoPath, options).finally(() => {
+  const scan = withRepositoryGitCause(
+    repoPath,
+    options,
+    { family: 'catalog', reason: 'worktree-scan', cache: 'miss' },
+    () => run(repoPath, options)
+  ).finally(() => {
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }

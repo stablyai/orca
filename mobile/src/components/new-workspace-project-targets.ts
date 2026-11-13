@@ -4,7 +4,7 @@ import {
   getProjectIdentityKey,
   getProjectProviderIdentity
 } from '../../../src/shared/project-host-setup-projection'
-import { getHostContextLabel } from '../../../src/shared/worktree/host-context-labels'
+import { getHostContextLabel } from '../../../src/shared/worktree/row-display/host-context-labels'
 
 type WorkspaceRepo = Pick<Repo, 'id' | 'displayName' | 'path'> &
   Partial<

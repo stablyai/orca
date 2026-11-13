@@ -17,7 +17,7 @@ import type { BackendServiceCleanup } from '../../backend/service-composition'
 import { bindOrcadStopTerminalAdmission } from '../host-lifecycle/managed-stop/orcad-stop-terminal-admission'
 import type { OrcadHandle, OrcadOptions } from '../serve-startup/orcad-start-contract'
 import { beginOrcadIdleExit } from '../host-lifecycle/idle-exit/orcad-managed-idle-exit-host'
-import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-automations'
+import { orcadSchedulersKeepHostBusy, startOrcadSchedulers } from './orcad-schedulers'
 import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
@@ -316,7 +316,7 @@ async function activateOrcadRuntime(
   worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
   // The daemon has no window to wait for; its CI-line watches start with the runtime.
   runtime.startPullRequestWatches()
-  startOrcadAutomations(runtime, profileStore, registerCleanup)
+  startOrcadSchedulers(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,
     runtimeRpc: rpc,
@@ -346,7 +346,7 @@ async function activateOrcadRuntime(
     rpc,
     agentStates: () => agentHookServer.getStatusSnapshot(),
     hasStagedMigration: () => profileStore.hasStagedOrcadMigrationCatalog(),
-    automationsBusy: () => orcadAutomationsKeepHostBusy(profileStore),
+    automationsBusy: () => orcadSchedulersKeepHostBusy(runtime, profileStore),
     emulatorsBusy: async () =>
       (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false,
     registerCleanup

@@ -8,7 +8,7 @@ import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-remova
 import {
   assertWorktreeUnlockedForRemoval,
   unregisteredFolderRefusal
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory,

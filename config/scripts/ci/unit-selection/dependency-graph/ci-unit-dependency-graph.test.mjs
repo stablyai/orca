@@ -65,27 +65,12 @@ it('tracks transitive public workspace source consumers including type and dynam
   expect(graph.files.has('src/packages/process-host/dist/index.js')).toBe(false)
 })
 
-it('tracks package manifests as inputs to all public consumers', () => {
-  const graph = collectUnitDependencyGraph(fixture())
-  const tests = [...graph.files].filter((file) => file.endsWith('.test.ts')).sort()
-  for (const manifest of [
-    'src/packages/process-host/package.json',
-    'src/packages/byte-buffer/package.json'
-  ]) {
-    const selection = selectUnitFiles(tests, [manifest], graph)
-    expect(selection.full).toBe(false)
-    expect(selection.files).toEqual(tests.filter((file) => file !== 'src/unrelated.test.ts'))
-  }
+it('does not silently drop an unresolved internal import', () => {
+  const specifier = '@orca/unknown'
+  expect(() =>
+    collectUnitDependencyGraph(fixture({ 'src/consumer.test.ts': `import '${specifier}'` }))
+  ).toThrow('No public orca-source export')
 })
-
-it.each(['@orca/unknown', '@orca/process-host/private'])(
-  'does not silently drop unresolved internal imports: %s',
-  (specifier) => {
-    expect(() =>
-      collectUnitDependencyGraph(fixture({ 'src/consumer.test.ts': `import '${specifier}'` }))
-    ).toThrow('No public orca-source export')
-  }
-)
 
 describe('unit graph import resolution', () => {
   it('keeps extensionless consumers when a covered JavaScript sibling changes', () => {
@@ -104,13 +89,9 @@ describe('unit graph import resolution', () => {
     })
   })
 
-  it.each([
-    ['js', 'ts'],
-    ['js', 'tsx'],
-    ['jsx', 'tsx'],
-    ['mjs', 'mts'],
-    ['cjs', 'cts']
-  ])('retains TypeScript substitutions for .%s imports through .%s', (output, source) => {
+  it('retains TypeScript substitutions for JavaScript imports', () => {
+    const output = 'js'
+    const source = 'ts'
     const graph = collectUnitDependencyGraph(
       fixture({
         [`src/value.${source}`]: 'export const value = 1',

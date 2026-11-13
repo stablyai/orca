@@ -152,6 +152,7 @@ export function claudeChildOperation(
   }
   const { agentId, openTool } = activityOf(parentRef)
   const input = openTool ? deriveToolInputPreview(openTool.name, openTool.input) : undefined
+  const model = claudeChildMessageModel(message)
   return [
     {
       type: 'operation',
@@ -159,9 +160,16 @@ export function claudeChildOperation(
       childId: agentId,
       operation: openTool
         ? { toolName: openTool.name, ...(input ? { input } : {}), basis: 'open', observedAt }
-        : null
+        : null,
+      ...(model ? { model } : {})
     }
   ]
+}
+
+/** Claude names the model on each assistant message; `<synthetic>` marks Claude Code's own repair text. */
+function claudeChildMessageModel(frame: Record<string, unknown>): string | undefined {
+  const model = frame.type === 'assistant' ? claudeRecord(frame.message)?.model : undefined
+  return typeof model === 'string' && model.trim() && model !== '<synthetic>' ? model : undefined
 }
 
 /** Waiting requires both a written journal card and a registry request still awaiting an answer. */

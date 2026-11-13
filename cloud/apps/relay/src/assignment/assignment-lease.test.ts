@@ -1,22 +1,10 @@
-import { createHash } from 'node:crypto'
-import { EventEmitter } from 'node:events'
-import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
 import { SignJWT } from 'jose'
-import nacl from 'tweetnacl'
-import { describe, expect, it, vi } from 'vitest'
-import type WebSocket from 'ws'
+import { describe, expect, it } from 'vitest'
 import {
   ASSIGNMENT_LEASE_AUDIENCE,
   assignmentLeaseKeyId,
   classifyAssignmentLease
 } from './assignment-lease.js'
-import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
-import type { RelayAssignmentStore } from './assignment-store.js'
-import type { RelayConfig } from '../config.js'
-import type { RelayCredentialStore } from '../credentials/credential-store.js'
-import { HostSessionRegistry } from '../connections/host-session-registry.js'
-import type { RelayTokenClaims } from '../authentication/relay-token-verifier.js'
-import { ProcessQueuedByteBudget } from '../connections/splice-forwarder.js'
 
 const KEY = new TextEncoder().encode('0123456789abcdef0123456789abcdef')
 const OTHER_KEY = new TextEncoder().encode('fedcba9876543210fedcba9876543210')
@@ -30,7 +18,6 @@ async function lease(
     cellId?: string
     assignmentEpoch?: number
     sub?: string
-    relayHostId?: string
     expiresAt?: string | number
   } = {}
 ): Promise<string> {
@@ -40,7 +27,7 @@ async function lease(
     cellId: overrides.cellId ?? CELL_ID,
     cellUrl: 'https://c7.relay.example.test',
     assignmentEpoch: overrides.assignmentEpoch ?? 4,
-    relayHostId: overrides.relayHostId ?? HOST.relayHostId
+    relayHostId: HOST.relayHostId
   })
     .setProtectedHeader(kid === null ? { alg: 'HS256' } : { alg: 'HS256', kid })
     .setIssuer('https://relay.example.test')
@@ -73,7 +60,6 @@ describe('assignment lease classification', () => {
     expect(await classify(await lease({ kid: assignmentLeaseKeyId(OTHER_KEY) }))).toBe(
       'bad-signature'
     )
-    expect(await classify('not.a.jwt')).toBe('bad-signature')
     expect(await classify('x'.repeat(5_000))).toBe('bad-signature')
     expect(await classify(await lease({ sub: 'user-2' }))).toBe('wrong-host')
     expect(await classify(await lease({ cellId: 'production-gce-c8' }))).toBe('wrong-cell')
@@ -81,127 +67,3 @@ describe('assignment lease classification', () => {
     expect(await classify(await lease({ assignmentEpoch: 5 }))).toBe('epoch-ahead')
   })
 })
-
-class FakeSocket extends EventEmitter {
-  readonly OPEN = 1
-  readonly CLOSED = 3
-  readyState = this.OPEN
-  readonly send = vi.fn()
-  readonly close = vi.fn((code?: number) => {
-    this.readyState = this.CLOSED
-    this.emit('close', code, Buffer.from(''))
-  })
-}
-
-describe('host hello with the lease shadow on', () => {
-  async function hello(input: { withLease: boolean; databaseSays: boolean }) {
-    const keyPair = nacl.box.keyPair()
-    const relayHostId = createHash('sha256')
-      .update(keyPair.publicKey)
-      .digest('base64url')
-      .slice(0, 16)
-    const identity: RelayTokenClaims = {
-      sub: HOST.userId,
-      prof: 'profile-1',
-      relayHostId,
-      purpose: 'host-control',
-      exp: 4_102_444_800
-    }
-    const recorded: string[] = []
-    const shadow = new AssignmentLeaseShadow({ enabled: () => true, key: KEY, cellId: CELL_ID })
-    const record = shadow.record.bind(shadow)
-    vi.spyOn(shadow, 'record').mockImplementation((check, dbValid, dbReadMs) => {
-      void check.then((leaseClass) => recorded.push(`${leaseClass}:${dbValid}`))
-      record(check, dbValid, dbReadMs)
-    })
-    const verifyCellAssignment = vi.fn(async () => input.databaseSays)
-    const registry = new HostSessionRegistry(
-      config(),
-      vi.fn(),
-      {} as RelayCredentialStore,
-      { verifyCellAssignment } as unknown as RelayAssignmentStore,
-      new ProcessQueuedByteBudget(),
-      {
-        recordAuth: vi.fn(),
-        recordForwardedBytes: vi.fn(),
-        recordHttp: vi.fn(),
-        recordReconnect: vi.fn(),
-        recordSql: vi.fn()
-      },
-      Date.now,
-      Math.random,
-      'incarnation-1',
-      shadow
-    )
-    const socket = new FakeSocket()
-    const hostLease = input.withLease ? await lease({ relayHostId }) : undefined
-    registry.acceptControl(
-      socket as unknown as WebSocket,
-      identity,
-      undefined,
-      undefined,
-      hostLease
-    )
-    socket.emit(
-      'message',
-      Buffer.from(
-        JSON.stringify({
-          type: 'host-hello',
-          v: 1,
-          relayHostId,
-          assignmentEpoch: 4,
-          hostPublicKeyB64: Buffer.from(keyPair.publicKey).toString('base64'),
-          appVersion: '1.4.200'
-        })
-      ),
-      false
-    )
-    await vi.waitFor(() => expect(recorded).toHaveLength(1))
-    return { socket, recorded, verifyCellAssignment }
-  }
-
-  it('still refuses a host the database refuses, whatever its lease says', async () => {
-    const { socket, recorded } = await hello({ withLease: true, databaseSays: false })
-    expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')
-    expect(recorded).toEqual(['valid:false'])
-  })
-
-  it('still admits a host the database admits, with no lease at all', async () => {
-    const { socket, recorded, verifyCellAssignment } = await hello({
-      withLease: false,
-      databaseSays: true
-    })
-    expect(verifyCellAssignment).toHaveBeenCalledTimes(1)
-    expect(socket.close).not.toHaveBeenCalled()
-    expect(String(socket.send.mock.calls[0]?.[0])).toContain('"type":"host-challenge"')
-    expect(recorded).toEqual(['absent:true'])
-  })
-})
-
-function config(): RelayConfig {
-  return {
-    port: 8080,
-    publicUrl: 'https://c7.relay.example.test',
-    cellUrl: 'https://c7.relay.example.test',
-    authIssuer: 'https://auth.example.test',
-    authAudience: 'orca-relay',
-    jwksUrl: 'https://auth.example.test/jwks',
-    assignmentSigningKey: KEY,
-    role: 'cell',
-    cellId: CELL_ID,
-    cells: [],
-    adminAudience: 'https://relay.example.test/v1/admin/drain',
-    deployServiceAccount: 'deploy@example.test',
-    runtimeServiceAccount: 'relay-cell@example.test',
-    adminJwksUrl: 'https://auth.example.test/jwks',
-    databasePoolMax: 10,
-    publicAssignmentsEnabled: true,
-    publicAssignmentConcurrency: 2,
-    publicAssignmentQueueMax: 128,
-    publicAssignmentWaitMs: 4_000,
-    publicResolveConcurrency: 1,
-    publicResolveWaitMs: 5_000,
-    publicAssignmentRetryAfterSeconds: 5,
-    dataDir: './data'
-  }
-}

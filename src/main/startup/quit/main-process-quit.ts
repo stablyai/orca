@@ -35,12 +35,13 @@ import { isQuittingForUpdate } from '../../updater/updater-service'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
-import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
+import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
 import { desktopConnectorCloud } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { isDevParentShutdownRequested } from '../configure-process'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
+import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -146,6 +147,9 @@ function installWillQuitHandler(): void {
     // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
+    if (state.runtime) {
+      getWorkspaceCleanupRunner(state.runtime)?.stop()
+    }
     // Why: plugin hosts are forked children; dispose sends shutdown and
     // escalates to SIGKILL so they cannot outlive the app. The promise joins
     // the teardown barrier below — quitting before it resolves would let
@@ -315,22 +319,6 @@ function installWillQuitHandler(): void {
         daemonDisconnectDone = true
         app.quit()
       })
-  })
-}
-
-function installWindowAllClosedHandler(): void {
-  app.on('window-all-closed', () => {
-    // Keep serve RPC alive after disposable windows close; re-trigger macOS quit after renderer buffer-capture deferral.
-    if (
-      shouldQuitWhenAllWindowsClosed({
-        platform: process.platform,
-        isQuitting: state.isQuitting,
-        isServeMode: state.isServeMode,
-        hasOpenedMainWindow: state.hasOpenedMainWindow
-      })
-    ) {
-      app.quit()
-    }
   })
 }
 

@@ -9,7 +9,7 @@ import type {
   GitStagingArea,
   GitStatusResult
 } from '../../../../../shared/git/status/git-status-types'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/removal/at-risk-local-files'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'

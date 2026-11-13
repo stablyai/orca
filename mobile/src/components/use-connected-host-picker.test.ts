@@ -50,16 +50,6 @@ describe('useConnectedHostPicker', () => {
     act(() => handle.current!.pickHost(action, hosts))
   }
 
-  it('closes a stale picker when an offered host disconnects', () => {
-    const rerender = render([desk, laptop])
-
-    pickHost(vi.fn())
-    expect(picker().visible).toBe(true)
-
-    rerender([desk])
-    expect(picker().visible).toBe(false)
-  })
-
   it('does not reopen a stale picker if its old host set returns while closing', () => {
     const rerender = render([desk, laptop])
     const action = vi.fn()

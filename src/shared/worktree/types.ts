@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
-import type { WorktreeCatalogVersion } from './catalog-version'
+import type { WorktreeCatalogVersion } from './catalog/catalog-version'
 import type { AutomationExecutionTargetType } from '../automations/automation-definition'
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'

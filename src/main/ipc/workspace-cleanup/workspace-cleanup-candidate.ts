@@ -9,6 +9,7 @@ import {
   getWorkspaceCleanupAutomationRunReasons,
   getWorkspaceCleanupInactivityReasons,
   getWorkspaceCleanupMergeReasons,
+  getWorkspaceCleanupOrchestrationWorkerReasons,
   isWorkspaceOldForCleanup,
   type WorkspaceCleanupAutomationRunLookup,
   type WorkspaceCleanupBlocker,
@@ -26,6 +27,8 @@ import {
 } from '../../../shared/workspace-cleanup/workspace-cleanup-candidate-fields'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
+import type { WorkspaceCleanupReleasedWorker } from './workspace-cleanup-orchestration-workers'
+import type { WorkspaceCleanupRepoRefs } from './workspace-cleanup-merge-evidence'
 
 export async function buildWorkspaceCleanupCandidate(args: {
   repo: Repo
@@ -36,9 +39,22 @@ export async function buildWorkspaceCleanupCandidate(args: {
   skipGit: boolean
   forceGitCheck: boolean
   findAutomationRun: WorkspaceCleanupAutomationRunLookup
+  releasedWorker?: WorkspaceCleanupReleasedWorker
   signal?: AbortSignal
+  repoRefs: WorkspaceCleanupRepoRefs
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, route, prCache, skipGit, forceGitCheck, signal } = args
+  const {
+    repo,
+    worktree,
+    scannedAt,
+    route,
+    prCache,
+    skipGit,
+    forceGitCheck,
+    releasedWorker,
+    signal,
+    repoRefs
+  } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupWorkspaceReasons(worktree, scannedAt, args.findAutomationRun)
   const repoIsFolder = isFolderRepo(repo)
@@ -64,9 +80,21 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, prCache, signal)
+    : await readWorkspaceCleanupGitEvidence(
+        worktree,
+        repo,
+        route,
+        prCache,
+        repoRefs,
+        signal,
+        releasedWorker?.coordinatorBranch
+      )
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
   appendWorkspaceCleanupItems(reasons, getWorkspaceCleanupMergeReasons(gitEvidence.merge))
+  appendWorkspaceCleanupItems(
+    reasons,
+    getWorkspaceCleanupOrchestrationWorkerReasons(releasedWorker !== undefined, gitEvidence.merge)
+  )
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
     worktreeId: worktree.id,

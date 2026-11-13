@@ -15,7 +15,7 @@ import {
 } from '../../../../../../shared/project-section-grouping'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { getHostContextLabel } from '../../../../../../shared/worktree/host-context-labels'
+import { getHostContextLabel } from '../../../../../../shared/worktree/row-display/host-context-labels'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import type { SshConnectionState } from '../../../../../../shared/ssh-types'
 

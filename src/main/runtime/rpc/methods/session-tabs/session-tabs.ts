@@ -8,7 +8,7 @@ import { defineMethod, defineStreamingMethod } from '../../core'
 import {
   CreateTerminalTab,
   WorktreeTabSelector
-} from '../../../../../shared/rpc-contract/session-tabs-schemas-params'
+} from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,

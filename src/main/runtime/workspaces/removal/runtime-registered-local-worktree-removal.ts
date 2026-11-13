@@ -7,10 +7,10 @@ import {
 } from '../../../git/worktrees/removal/windows-worktree-removal'
 import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
+import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import type { Repo } from '../../../../shared/repo-types'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
@@ -19,7 +19,8 @@ import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths
 import { runHook, getEffectiveHooks } from '../../../workspace-hooks/hooks'
 import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
 import { removeWorktreeLinkedPaths } from '../../../ipc/worktree-symlinks'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
+export { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
@@ -76,6 +77,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   requestedDeleteBranch?: boolean
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
   stopPtys: () => Promise<void>
+  /** Runs after every refusal and the teardown, before any checkout file is deleted. */
+  beforeCheckoutDelete?: (worktree: GitWorktreeInfo) => Promise<void>
   closeWatchers: (path: string) => Promise<void>
   preserveBranchHead: RuntimePreservedBranchCleanup['preserveHead']
   finishRemoval: (
@@ -179,6 +182,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     let accepted = false
     try {
       await args.stopPtys()
+      await args.beforeCheckoutDelete?.(refreshed)
       if (!markerMissing && linkedPaths.length > 0) {
         await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
       }
@@ -310,11 +314,4 @@ export async function finishRuntimeLocalWorktreeRemoval(
   } finally {
     await gate.finish(completed)
   }
-}
-
-export async function cleanupRemovedWorktreePushTarget(
-  args: RuntimeLocalWorktreeRemovalFinishArgs
-): Promise<void> {
-  const { repo, target, removedPushTarget: pushTarget, store, localOptions: options } = args
-  await cleanupUnusedWorktreePushTargetRemote(repo.path, target.id, pushTarget, store, options)
 }

@@ -3,10 +3,11 @@ import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
 } from '../../../shared/git/fetch/git-fetch-head-lock'
+import { retryGitFetchRefRace } from '../../../shared/git/fetch/git-fetch-ref-race'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
@@ -27,7 +28,11 @@ import {
 } from '../../../shared/git/commands/git-command-timeout'
 import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
 import { createAbortError } from './process-capture/abort-error'
-import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
+import {
+  readCapturedGitBuffer,
+  readCapturedGitString,
+  withCapturedErrorStdout
+} from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { trackGitRefMutation } from './git-ref-mutation-state'
@@ -75,6 +80,7 @@ async function gitExecFileAsyncUnlocked(
             cwd: options.cwd,
             wslDistro: options.wslDistro,
             tier: options.admissionTier,
+            admissionClass: options.admissionClass,
             signal: options.admissionSignal ?? options.signal
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
@@ -164,6 +170,15 @@ async function gitExecFileAsyncUnlocked(
           throw createAbortError()
         }
         return await runCapturedCommand()
+      } catch (error) {
+        return await retryGitFetchRefRace(
+          args,
+          error,
+          runCapturedCommand,
+          () => terminationState.current,
+          options.signal,
+          options.canStart
+        )
       } finally {
         const termination = terminationState.current
         if (termination) {
@@ -174,16 +189,6 @@ async function gitExecFileAsyncUnlocked(
       }
     }
   )
-}
-
-/** Callers parse stdout of non-zero exits (check-ignore exit 1), so strip the fence there too. */
-function withCapturedErrorStdout(error: unknown, command: ResolvedCommand): unknown {
-  if (command.captured && error && typeof error === 'object' && 'stdout' in error) {
-    if (typeof error.stdout === 'string') {
-      error.stdout = readCapturedGitString(error.stdout, command)
-    }
-  }
-  return error
 }
 
 export function gitExecFileAsync(

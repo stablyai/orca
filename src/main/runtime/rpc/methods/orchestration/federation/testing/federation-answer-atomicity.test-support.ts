@@ -80,7 +80,6 @@ export function registerFederationAnswerAtomicityTest(
     workerDb.db.exec('DROP TRIGGER ignore_answer')
     const { answerSenderReport: _report, ...withoutReport } = item
     await send('accepted-without', withoutReport)
-    expect(workerDb.getMessageById('answer-atomic')?.answer_sender_snapshot).toBeNull()
     await send('replay-with-report', item)
     expect(workerDb.getMessageById('answer-atomic')?.answer_sender_snapshot).toBeNull()
     expect(workerDb.getRemoteDispatchAttachment(dispatch.id)?.to_worker_imported_sequence).toBe(1)

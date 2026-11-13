@@ -18,7 +18,7 @@ import {
   getWorkspaceAttachmentOriginKey,
   mergeWorkspaceAttachmentOrigins
 } from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { findRepoForHost } from '../../../repos/repo-host-identity'

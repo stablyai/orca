@@ -18,7 +18,7 @@ import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
 import {
   isLocalOnlyWorktreeMetaId,
   worktreeMetaHostFor
-} from '../../../../shared/worktree/local-only-worktree-meta-ids'
+} from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 
 type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
   Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>
