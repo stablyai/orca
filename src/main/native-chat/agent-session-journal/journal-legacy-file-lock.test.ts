@@ -21,7 +21,7 @@ afterEach(async () => {
 it.skipIf(!process.env.CI)(
   'excludes a real SQLite process without altering source bytes, then releases on EOF',
   async () => {
-    expect(existsSync(journalLegacyFileLockPath())).toBe(true)
+    expect(existsSync(await journalLegacyFileLockPath())).toBe(true)
     const root = mkdtempSync(join(tmpdir(), 'orca-journal-file-lock-'))
     cleanups.push(() => rmSync(root, { recursive: true, force: true }))
     const filename = join(root, 'source.db')

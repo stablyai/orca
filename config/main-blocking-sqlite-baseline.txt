@@ -100,6 +100,7 @@
 10 src/main/native-chat/agent-session-journal/journal-fork-stage-page.ts
 12 src/main/native-chat/agent-session-journal/journal-fork-stages.ts
 4 src/main/native-chat/agent-session-journal/journal-fork-workspace.ts
+28 src/main/native-chat/agent-session-journal/journal-legacy-source-proof.ts
 2 src/main/native-chat/agent-session-journal/journal-open-queue-withdrawal.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-accepted-inputs.ts
 6 src/main/native-chat/agent-session-journal/journal-sql-automatic-submission-command.ts
@@ -113,6 +114,7 @@
 4 src/main/native-chat/agent-session-journal/journal-sql-history-items.ts
 24 src/main/native-chat/agent-session-journal/journal-sql-item-reads.ts
 10 src/main/native-chat/agent-session-journal/journal-sql-lifecycle-reads.ts
+4 src/main/native-chat/agent-session-journal/journal-sql-maintenance.ts
 5 src/main/native-chat/agent-session-journal/journal-sql-message-commit.ts
 12 src/main/native-chat/agent-session-journal/journal-sql-message-effects.ts
 13 src/main/native-chat/agent-session-journal/journal-sql-open-command.ts

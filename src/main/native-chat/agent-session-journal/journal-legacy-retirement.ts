@@ -16,7 +16,7 @@ import {
   JournalLegacyGraceClock,
   type Retirement
 } from './journal-legacy-retirement-state'
-import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
+import { readJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
   createJournalLegacyFileEligibility
@@ -94,7 +94,7 @@ export class JournalLegacyRetirement {
         !state ||
         state.phase !== 'grace' ||
         state.proof !== saved.receipt ||
-        !this.matches(state.proof)
+        !(await this.matches(state.proof))
       ) {
         return
       }
@@ -140,8 +140,8 @@ export class JournalLegacyRetirement {
     this.clock.persisted(state)
   }
 
-  private matches(proof: string): boolean {
-    return JSON.stringify(captureJournalLegacySourceReceipt(this.filename)) === proof
+  private async matches(proof: string): Promise<boolean> {
+    return JSON.stringify(await readJournalLegacySourceReceipt(this.filename)) === proof
   }
 
   private async prove(): Promise<void> {
@@ -181,8 +181,8 @@ export class JournalLegacyRetirement {
       return
     }
     const proof = saved.receipt
-    const observed = JSON.stringify(captureJournalLegacySourceReceipt(this.filename))
-    const descriptor = `${proof}\n${observed}\n${legacyDestinationMain(journalDomainDatabasePath(this.directory))}`
+    const observed = JSON.stringify(await readJournalLegacySourceReceipt(this.filename))
+    const descriptor = `${proof}\n${observed}\n${await legacyDestinationMain(journalDomainDatabasePath(this.directory))}`
     if (descriptor !== this.descriptor) {
       this.descriptor = descriptor
       this.retained = this.eligible = this.proven = false
@@ -212,7 +212,7 @@ export class JournalLegacyRetirement {
     if (!this.ownsProfile()) {
       return
     }
-    this.eligibility.present()
+    await this.eligibility.present()
     if (await filePresent(`${this.filename}-journal`)) {
       throw new JournalLegacyRetentionError('legacy rollback journal retained')
     }
@@ -223,7 +223,7 @@ export class JournalLegacyRetirement {
     const now = Date.now()
     if (!state) {
       await this.prove()
-      if (!this.matches(proof)) {
+      if (!(await this.matches(proof))) {
         throw new Error('legacy source changed during proof')
       }
       state = {
@@ -244,7 +244,7 @@ export class JournalLegacyRetirement {
     if (advanced.process !== state.process || advanced.completedAt !== state.completedAt) {
       this.proven = false
       await this.prove()
-      if (!this.matches(proof)) {
+      if (!(await this.matches(proof))) {
         return
       }
       await this.save(advanced, true)
@@ -258,10 +258,10 @@ export class JournalLegacyRetirement {
       return
     }
     await this.prove()
-    if (!this.ownsProfile() || !this.matches(proof)) {
+    if (!(await this.matches(proof)) || !this.ownsProfile()) {
       return
     }
-    this.eligibility.present()
+    await this.eligibility.present()
     const recycled = await this.readers.recycleSourceReaders()
     if (!recycled) {
       return
