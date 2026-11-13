@@ -150,11 +150,11 @@
       "dictationDescription": "Dyktuj tekst do aktywnego panelu na komputerze.",
       "dictationMode": "Tryb dyktowania",
       "dictationModeDescription": "Przełączanie: naciśnij raz, aby zacząć, i drugi raz, aby zakończyć. Przytrzymanie: dyktuj, dopóki trzymasz przycisk.",
+      "dictationModeWithAutoDescription": "Automatyczny: stuknij, aby zacząć i zakończyć; na komputerze przytrzymanie skrótu nagrywa, dopóki go nie puścisz. Przytrzymanie: dyktuj, dopóki trzymasz przycisk. Przełączanie: naciśnij raz, aby zacząć, i drugi raz, aby zakończyć.",
+      "autoMode": "Automatyczny",
       "speechModelHeading": "MODEL MOWY",
       "speechModel": "Model mowy",
-      "loading": "Wczytywanie ustawień głosu…",
-      "dictationModeWithAutoDescription": "Automatyczny: stuknij, aby zacząć i zakończyć; na komputerze przytrzymanie skrótu nagrywa, dopóki go nie puścisz. Przytrzymanie: dyktuj, dopóki trzymasz przycisk. Przełączanie: naciśnij raz, aby zacząć, i drugi raz, aby zakończyć.",
-      "autoMode": "Automatyczny"
+      "loading": "Wczytywanie ustawień głosu…"
     },
     "agents": {
       "permissionOwnAll": "Własne ustawienia agentów"
@@ -725,6 +725,8 @@
     "hostScreenOverlays": {
       "deleteWorktree": "Usuń worktree",
       "deleteConfirmMessage": "Usunąć „{{name}}” ({{branch}})?",
+      "deleteDestroysEnvironment": "Zostanie też usunięte środowisko „{{environment}}”, które Orca dla niego utworzyła, razem z niezatwierdzoną pracą i uruchomionymi w nim terminalami.",
+      "deleteKeepsEnvironment": "Środowisko „{{environment}}”, które Orca dla niego utworzyła, nadal działa: jego przepis nie ma kroku usuwania.",
       "sleep": "Uśpij",
       "unpin": "Odepnij",
       "pin": "Przypnij",
@@ -733,9 +735,7 @@
       "removeHost": "Usuń hosta",
       "removeHostMessage": "Usunąć „{{name}}”? Możesz później sparować go ponownie.",
       "deleteFailed": "Nie udało się usunąć „{{name}}”",
-      "deleteAnyway": "Usuń mimo to",
-      "deleteDestroysEnvironment": "Zostanie też usunięte środowisko „{{environment}}”, które Orca dla niego utworzyła, razem z niezatwierdzoną pracą i uruchomionymi w nim terminalami.",
-      "deleteKeepsEnvironment": "Środowisko „{{environment}}”, które Orca dla niego utworzyła, nadal działa: jego przepis nie ma kroku usuwania."
+      "deleteAnyway": "Usuń mimo to"
     },
     "workspaceRenameSheet": {
       "title": "Zmień nazwę przestrzeni roboczej",
@@ -842,6 +842,8 @@
   "webShell": {
     "shellStateScreen": {
       "isolationUnavailable": "WebView na tym urządzeniu jest zbyt stary, aby bezpiecznie otworzyć przestrzeń roboczą.",
+      "isolationUnavailableAndroid": "Orca wymaga Android System WebView lub Chrome w wersji 101 albo nowszej. Zaktualizuj go w Sklepie Play albo wybierz nowszy w Opcjach programisty > Implementacja WebView.",
+      "webViewInUse": "To urządzenie ma {{name}} {{version}}.",
       "downloadFailed": "Nie udało się pobrać najnowszej wersji aplikacji z tego hosta.",
       "hostProfileUnreadable": "Nie udało się odczytać danych tego hosta na urządzeniu. Spróbuj ponownie.",
       "statusUnreadable": "Nie udało się odczytać stanu tego hosta. Wróć i otwórz go ponownie.",
@@ -2148,9 +2150,7 @@
     },
     "queuedCardText": {
       "showLessHint": "Zwija wiadomość",
-      "showMoreHint": "Pokazuje całą wiadomość",
-      "showLess": "Pokaż mniej",
-      "showMore": "Pokaż więcej"
+      "showMoreHint": "Pokazuje całą wiadomość"
     },
     "queuedMessageCardRow": {
       "images_one": "{{count}} obraz",
@@ -2162,9 +2162,8 @@
       "sendHint": "Wyślij tę wiadomość",
       "steer": "Pokieruj",
       "send": "Wyślij",
-      "deleteHint": "Usuń tę wiadomość z kolejki",
       "moreActions": "Więcej akcji",
-      "showLessHint": "Zwija wiadomość"
+      "you": "Ty"
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "W wiadomości w kolejce nie można zapisać poleceń.",
@@ -2280,10 +2279,10 @@
       "renameTerminal": "Zmień nazwę terminala",
       "renameTerminalFailed": "Nie udało się zmienić nazwy terminala. {{reason}}",
       "terminalName": "Nazwa terminala",
-      "allowAutoClose": "Zezwól na automatyczne zamknięcie"
+      "allowAutoClose": "Zezwól na automatyczne zamknięcie",
+      "agents": "Agenci"
     },
     "tabStrip": {
-      "tabStatus": "{{title}}, {{status}}",
       "newTab": "Nowa karta",
       "quickCommandsUpdateRequired": "Szybkie polecenia wymagają aktualizacji Orca na komputerze",
       "checkingCapabilities": "Sprawdzanie możliwości komputera — spróbuj ponownie za chwilę"
@@ -2677,6 +2676,10 @@
       "copyFailed": "Nie udało się skopiować",
       "selectionCleared": "Usunięto zaznaczenie (tekst wypadł poza bufor)"
     },
+    "useCloseActions": {
+      "closeFailed": "Nie udało się zamknąć karty. Spróbuj ponownie.",
+      "closeFailedDesktopNotReady": "Nie udało się zamknąć karty. Orca na komputerze jeszcze się wczytuje. Spróbuj ponownie za chwilę."
+    },
     "useContentCreateActions": {
       "noteCreateFailed": "Nie udało się utworzyć notatki Markdown",
       "untitledNoteCreateFailed": "Nie udało się utworzyć notatki Markdown bez tytułu",
@@ -2792,6 +2795,10 @@
       "modelUnavailable": "{{agent}} nie mógł użyć {{detail}}. Wybierz inny model i wyślij ponownie.",
       "modelUnavailableUpdate": "{{agent}} nie mógł użyć {{detail}}. Zaktualizuj {{agent}} do wersji {{minimumVersion}} lub nowszej, aby zachować to po ponownym uruchomieniu, albo wybierz inny model i wyślij ponownie.",
       "modelNotSelected": "{{agent}} nie ma wybranego modelu. Sprawdź wybór modelu i logowanie do {{agent}}, a potem wyślij ponownie.",
+      "providerUnavailable": "{{agent}}: brak odpowiedzi, bo usługa jest przeciążona. Wybierz inny model albo odczekaj chwilę i wyślij ponownie.",
+      "providerSafetyStopped": "{{agent}}: odpowiedź zatrzymana po kontroli bezpieczeństwa. Sprawdź prośbę i wyślij ponownie.",
+      "providerResponseFailed": "{{agent}}: nie udało się dokończyć odpowiedzi. Więcej informacji znajdziesz w „Szczegółach”.",
+      "selectedModel": "wybranego modelu",
       "providerRejected": "{{agent}} nie przyjął tej wiadomości.",
       "providerRejectedQuoted": "{{agent}} nie przyjął tej wiadomości: {{detail}}.",
       "attachmentEmpty": "Obraz w tej wiadomości jest pusty, więc wiadomość nie została wysłana.",
@@ -2870,11 +2877,7 @@
       "chooseClaudeAccount": "Wybierz lub dodaj konto w ustawieniach kont Claude.",
       "chooseClaudeAccountThenRunCommand": "Wybierz lub dodaj konto w ustawieniach kont Claude, a następnie uruchom /{{command}} ponownie.",
       "chooseClaudeAccountThenSend": "Wybierz lub dodaj konto w ustawieniach kont Claude, a następnie wyślij wiadomość ponownie.",
-      "unconfirmed": "Nie udało się potwierdzić wysłania. Nie wysłano ponownie.",
-      "providerUnavailable": "{{agent}}: brak odpowiedzi, bo usługa jest przeciążona. Wybierz inny model albo odczekaj chwilę i wyślij ponownie.",
-      "providerSafetyStopped": "{{agent}}: odpowiedź zatrzymana po kontroli bezpieczeństwa. Sprawdź prośbę i wyślij ponownie.",
-      "providerResponseFailed": "{{agent}}: nie udało się dokończyć odpowiedzi. Więcej informacji znajdziesz w „Szczegółach”.",
-      "selectedModel": "wybranego modelu"
+      "unconfirmed": "Nie udało się potwierdzić wysłania. Nie wysłano ponownie."
     },
     "writeNotice": {
       "notDoneReadHistory": "Nie udało się wczytać historii tego czatu.",
@@ -3021,8 +3024,6 @@
     },
     "presentation": {
       "loadingTabs": "Wczytywanie kart",
-      "oneTab": "1 karta",
-      "tabCount": "Karty: {{tabCount}}",
       "tapToRetry": "{{status}} — dotknij, aby spróbować ponownie"
     },
     "documentReaders": {
@@ -3060,6 +3061,29 @@
       "skip": "Pomiń",
       "stop": "Zatrzymaj",
       "yes": "Tak"
+    },
+    "tabsSheet": {
+      "needsYou": "Czeka na Ciebie",
+      "working": "Pracuje",
+      "everythingElse": "Pozostałe",
+      "open": "Otwórz",
+      "closeTab": "Zamknij {{title}}"
+    },
+    "tabRows": {
+      "browser": "Przeglądarka",
+      "markdown": "Notatka Markdown",
+      "file": "Plik",
+      "chat": "Czat",
+      "terminal": "Terminal"
+    },
+    "tabBar": {
+      "oneTab": "1 karta",
+      "tabCount": "Karty: {{count}}",
+      "anotherNeedsYou": "inna karta czeka na Ciebie",
+      "actionsHint": "Pokazuje akcje dla tej karty",
+      "next": "Następna karta",
+      "previous": "Poprzednia karta",
+      "hint": "Pokazuje wszystkie karty"
     }
   },
   "chat": {
@@ -3101,7 +3125,12 @@
       "skip": "Pomiń",
       "step": "Krok {{step}}",
       "other": "Inne…",
-      "answerPlaceholder": "Wpisz odpowiedź"
+      "answerPlaceholder": "Wpisz odpowiedź",
+      "optionPreview": "Podgląd: {{option}}",
+      "previewPosition": "{{current}} z {{total}}",
+      "chosen": "Wybrano",
+      "chooseThis": "Wybierz tę opcję",
+      "viewPreview": "Zobacz"
     },
     "permission": {
       "reason": "Powód: ",
@@ -3129,10 +3158,20 @@
       "clearAll": "Wyczyść wszystko",
       "resumeSending": "Wznów wysyłanie wiadomości z kolejki",
       "resume": "Wznów",
-      "title": "Wiadomości w kolejce",
       "pausedState": "Wstrzymane",
       "queuedState": "W kolejce",
-      "editMessage": "Edytuj wiadomość"
+      "editMessage": "Edytuj wiadomość",
+      "showLess": "Pokaż mniej",
+      "moreCount_one": "{{count}} więcej",
+      "moreCount_other": "{{count}} więcej",
+      "moreCount_few": "{{count}} więcej",
+      "moreCount_many": "{{count}} więcej",
+      "deleteMessage": "Usuń wiadomość",
+      "queuedCount_one": "{{count}} wiadomość w kolejce",
+      "queuedCount_other": "{{count}} wiadomości w kolejce",
+      "queuedCount_few": "{{count}} wiadomości w kolejce",
+      "queuedCount_many": "{{count}} wiadomości w kolejce",
+      "foldNeedsAttention": "{{more}}, jedna wiadomość wymaga uwagi"
     },
     "offlineQueue": {
       "failed": "Nie udało się wysłać – dotknij Wyślij, aby ponowić",
@@ -3256,13 +3295,13 @@
       "contextCleared": "Wyczyszczono kontekst",
       "plan": "Plan",
       "permissionDenied": "{{agent}}: odmowa uprawnień. Zobacz szczegóły.",
+      "safetyReviewApproved": "{{agent}} zatwierdził tę akcję. Zobacz szczegóły.",
       "safetyReview": "{{agent}}: ostrzeżenie z kontroli bezpieczeństwa. Zobacz szczegóły.",
       "truncatedResponse": "Odpowiedź dostawcy została obcięta (pierwotny rozmiar: {{bytes}} B).",
       "modelFallback": "Claude zmienił model: {{from}} → {{to}}.",
       "forkedFrom": "Odgałęzienie z",
       "signIn": "Zaloguj się",
-      "signInHint": "Otwiera terminal na komputerze, na którym działa ten czat",
-      "safetyReviewApproved": "{{agent}} zatwierdził tę akcję. Zobacz szczegóły."
+      "signInHint": "Otwiera terminal na komputerze, na którym działa ten czat"
     },
     "ciResultLine": {
       "failingLead": "CI nie przechodzi w",
@@ -3566,6 +3605,8 @@
     },
     "agentMessage": {
       "startedWorker": "Uruchomiono wykonawcę",
+      "reopenedWorker": "Wznowiono wykonawcę",
+      "sentFollowUpToWorker": "Wysłano dalszą wiadomość do wykonawcy",
       "handedOffToAgent": "Przekazano agentowi",
       "startedAgent": "Uruchomiono agenta",
       "taskFromCoordinator": "Zadanie od koordynatora",
@@ -3580,11 +3621,11 @@
       "unsupported": "Ten host ma starszą wersję Orca. Zaktualizuj Orca na hoście i spróbuj ponownie."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} jest offline · stan z {{time}}",
       "reconnecting": "{{hostName}} łączy się ponownie…",
       "stopped": "{{hostName}} jest zatrzymany. Uruchom go na komputerze.",
       "server": "Serwer",
-      "unavailable": "{{hostName}} nie jest dostępny z telefonu. Otwórz jeden z jego projektów na komputerze.",
-      "offlineAsOf": "{{host}} jest offline · stan z {{time}}"
+      "unavailable": "{{hostName}} nie jest dostępny z telefonu. Otwórz jeden z jego projektów na komputerze."
     },
     "goal": {
       "chip": "Cel",
@@ -3656,7 +3697,12 @@
       "commitThenPullPush": "Zatwierdź, potem pobierz zmiany i wypchnij",
       "resolveConflicts": "Przed zatwierdzeniem rozwiąż konflikty",
       "stageFile": "Dodaj co najmniej jeden plik do poczekalni, aby zrobić commit",
-      "enterMessage": "Wpisz opis commita, aby zatwierdzić"
+      "enterMessage": "Wpisz opis commita, aby zatwierdzić",
+      "statusConflicts": "Konflikty",
+      "statusNothingStaged": "Brak zmian w poczekalni",
+      "statusNeedsMessage": "Wymaga opisu",
+      "statusNotPublished": "Nieopublikowano",
+      "statusNoBranch": "Brak gałęzi"
     },
     "createPrAction": {
       "createReview": "Utwórz {{titleLabel}}",
@@ -3733,7 +3779,15 @@
       "nothingToPushTo": "Brak zmian do wypchnięcia do {{upstreamName}}",
       "nothingToForcePushTo": "Brak zmian do wymuszonego wypchnięcia do {{upstreamName}}",
       "rebaseFromNamedBase": "Rebase na {{baseRef}}",
-      "rebaseWithLatestFrom": "Wykonaj rebase bieżącej gałęzi na najnowsze commity z {{baseRef}}"
+      "rebaseWithLatestFrom": "Wykonaj rebase bieżącej gałęzi na najnowsze commity z {{baseRef}}",
+      "statusUpToDate": "Aktualne",
+      "statusSetsUpstream": "Ustawia upstream",
+      "statusNotPublished": "Nieopublikowano",
+      "statusNoBranch": "Brak gałęzi",
+      "statusMayFail": "Może się nie udać",
+      "statusPublished": "Opublikowano",
+      "statusStashFirst": "Najpierw stash",
+      "statusReplaces": "Zastępuje ↓{{behind}}"
     },
     "actions": {
       "createPr": "Utwórz PR",
@@ -4120,7 +4174,10 @@
       "planAgentUnsupported": "Agent „{{agent}}” nie obsługuje opisów commitów generowanych przez AI.",
       "planModelUnavailable": "Model „{{model}}” jest niedostępny dla agenta {{label}}.",
       "planModelWithoutThinking": "Model „{{model}}” nie obsługuje ustawienia poziomu rozumowania.",
-      "planThinkingLevelInvalid": "Poziom rozumowania „{{level}}” jest nieprawidłowy dla modelu {{model}}."
+      "planThinkingLevelInvalid": "Poziom rozumowania „{{level}}” jest nieprawidłowy dla modelu {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "Szablon polecenia dla czyszczenia dyktowania jest pusty.",
+      "dictationCleanupAgentUnsupported": "Wybierz obsługiwanego agenta do czyszczenia AI w Ustawienia -> Głos -> Czyszczenie. Obsługiwani agenci: {{agents}} lub polecenie niestandardowe.",
+      "agentCannotGenerateDictationCleanup": "Agent \"{{agent}}\" nie obsługuje czyszczenia dyktowania. Obsługiwani agenci: {{agents}} lub polecenie niestandardowe."
     },
     "conflictActions": {
       "resolveFile": "{{action}}: {{path}}",
@@ -4797,6 +4854,12 @@
       "createFailed": "Nie udało się utworzyć przestrzeni roboczej"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "Scalić PR #{{number}}?",
+      "confirmGitHubSquash": "Scalić PR #{{number}} metodą squash?",
+      "confirmGitHubRebase": "Scalić PR #{{number}} metodą rebase?",
+      "confirmGitLabMerge": "Scalić merge request #{{number}}?",
+      "confirmGitLabSquash": "Scalić merge request #{{number}} metodą squash?",
+      "confirmGitLabRebase": "Scalić merge request #{{number}} metodą rebase?",
       "merged": "Scalone",
       "closed": "Zamknięte",
       "conflicts": "Konflikty",
