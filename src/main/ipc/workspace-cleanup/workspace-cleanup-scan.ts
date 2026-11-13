@@ -27,6 +27,7 @@ import {
 import {
   buildWorkspaceCleanupCandidate,
   buildWorkspaceCleanupCandidateFromError,
+  createWorkspaceCleanupAutomationRunLookup,
   isWorkspaceInactiveForCleanup
 } from './workspace-cleanup-candidate'
 import { synthesizeDisconnectedSshCleanupCandidates } from './workspace-cleanup-disconnected-ssh'
@@ -121,14 +122,6 @@ export async function scanWorkspaceCleanup(
   } finally {
     progress.flush()
   }
-}
-
-/** One run snapshot per scan; a store that keeps no automations finds no runs. */
-function createWorkspaceCleanupAutomationRunLookup(
-  store: RuntimeStore
-): WorkspaceCleanupAutomationRunLookup {
-  const runsById = new Map((store.listAutomationRuns?.() ?? []).map((run) => [run.id, run]))
-  return (runId) => runsById.get(runId)
 }
 
 async function scanRepoWorkspaces(
@@ -282,12 +275,7 @@ async function scanRepoWorkspaces(
           throw error
         }
         console.error('Workspace cleanup candidate scan failed', error)
-        return buildWorkspaceCleanupCandidateFromError(
-          repo,
-          worktreeWithActivity,
-          scannedAt,
-          findAutomationRun
-        )
+        return buildWorkspaceCleanupCandidateFromError(repo, worktreeWithActivity, scannedAt)
       })
       onCandidateScanned?.(candidate)
       return candidate

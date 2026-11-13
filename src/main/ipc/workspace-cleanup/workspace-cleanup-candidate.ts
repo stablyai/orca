@@ -25,6 +25,7 @@ import {
   shortWorkspaceCleanupBranchName
 } from '../../../shared/workspace-cleanup/workspace-cleanup-candidate-fields'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 
 export async function buildWorkspaceCleanupCandidate(args: {
   repo: Repo
@@ -110,8 +111,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
 export function buildWorkspaceCleanupCandidateFromError(
   repo: Repo,
   worktree: Worktree,
-  scannedAt: number,
-  findAutomationRun: WorkspaceCleanupAutomationRunLookup
+  scannedAt: number
 ): WorkspaceCleanupCandidate {
   return {
     worktreeId: worktree.id,
@@ -122,7 +122,7 @@ export function buildWorkspaceCleanupCandidateFromError(
     displayName: worktree.displayName ?? '',
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
-    reasons: getWorkspaceCleanupWorkspaceReasons(worktree, scannedAt, findAutomationRun),
+    reasons: getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt),
     blockers: ['git-status-error'],
     lastActivityAt: worktree.lastActivityAt,
     ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
@@ -167,6 +167,14 @@ export function getWorkspaceCleanupInactivityReasonsForWorkspace(
   scannedAt: number
 ): WorkspaceCleanupReason[] {
   return getWorkspaceCleanupInactivityReasons(workspace, scannedAt)
+}
+
+/** One run snapshot per scan; a store that keeps no automations finds no runs. */
+export function createWorkspaceCleanupAutomationRunLookup(
+  store: Pick<RuntimeStore, 'listAutomationRuns'>
+): WorkspaceCleanupAutomationRunLookup {
+  const runsById = new Map((store.listAutomationRuns?.() ?? []).map((run) => [run.id, run]))
+  return (runId) => runsById.get(runId)
 }
 
 function getWorkspaceCleanupWorkspaceReasons(
