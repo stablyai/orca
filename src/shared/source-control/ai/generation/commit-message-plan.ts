@@ -56,6 +56,8 @@ export type CommitMessagePlan = {
   /** Task-owned UTF-8 policy artifacts, materialized on the execution host. */
   taskFiles?: { name: string; content: string; argIndex?: number; interpolateDirectory?: boolean }[]
   policyProbeArgs?: string[]
+  /** Leading args owned by a command override wrapper, before this agent's own argument segment. */
+  commandPrefixArgCount?: number
   /** Human-readable label used in error prefixes (e.g. "Claude failed: ..."). */
   label: string
   /** Leading command assignments, applied on the execution host. */
@@ -278,6 +280,7 @@ export function planCommitMessageGeneration(
           }
         : {}),
       ...(input.agentId === 'antigravity' ? { policyProbeArgs: merged.prefixArgs } : {}),
+      ...(input.agentId === 'muse' ? { commandPrefixArgCount: merged.prefixArgs.length } : {}),
       ...(input.agentId === 'opencode' || input.agentId === 'opencode2'
         ? {
             openCodeTask: {

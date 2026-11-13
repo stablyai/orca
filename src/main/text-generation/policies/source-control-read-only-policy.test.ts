@@ -125,6 +125,47 @@ it('forces Muse source-control tasks read-only, dropping recipe overrides that r
   ])
 })
 
+it('applies the Muse read-only policy inside the Muse segment behind a wrapper override', async () => {
+  const wrapped = planCommitMessageGeneration(
+    {
+      agentId: 'muse',
+      model: 'default',
+      agentCommandOverride: 'mise exec muse@latest -- muse',
+      agentArgs: '--yolo'
+    },
+    'Name this chat'
+  )
+  if (!wrapped.ok) {
+    throw new Error(wrapped.error)
+  }
+  const policy = await prepareSourceControlReadOnlyPlan({
+    agentId: 'muse',
+    plan: wrapped.plan,
+    target: { kind: 'local', cwd: '/workspace' },
+    signal: new AbortController().signal,
+    spawnAgent,
+    operation: 'commit-message'
+  }).result
+  expect(wrapped.plan.binary).toBe('mise')
+  expect(policy.args).toEqual([
+    'exec',
+    'muse@latest',
+    '--',
+    'muse',
+    'exec',
+    '--no-session-log',
+    '--disable-shell',
+    '--disable-write',
+    '--disable-web-tools',
+    '--approval-mode',
+    'on-request',
+    '--approval-judge',
+    'off',
+    '--',
+    'Name this chat'
+  ])
+})
+
 it('copies an explicit Kimi profile with its prompt and identity preserved and an empty tool policy', async () => {
   const cwd = await directory()
   await writeFile(

@@ -161,9 +161,12 @@ async function antigravityPolicy(
 }
 
 function musePolicy(plan: CommitMessagePlan): CommitMessagePlan {
-  const terminator = plan.args.indexOf('--')
-  const head = terminator === -1 ? plan.args.slice(0, -1) : plan.args.slice(0, terminator)
-  const tail = terminator === -1 ? plan.args.slice(-1) : plan.args.slice(terminator)
+  // A command override wrapper owns the leading args (and possibly its own `--`); force flags only inside the Muse segment.
+  const prefix = plan.args.slice(0, plan.commandPrefixArgCount ?? 0)
+  const segment = plan.args.slice(prefix.length)
+  const terminator = segment.indexOf('--')
+  const head = terminator === -1 ? segment.slice(0, -1) : segment.slice(0, terminator)
+  const tail = terminator === -1 ? segment.slice(-1) : segment.slice(terminator)
   const args = museReadOnlyRecipeArgs(head)
   for (const flag of ['--disable-shell', '--disable-write', '--disable-web-tools']) {
     if (!args.includes(flag)) {
@@ -172,7 +175,7 @@ function musePolicy(plan: CommitMessagePlan): CommitMessagePlan {
   }
   // Muse rejects a repeated --approval-mode, so the stripped head gets exactly one forced pair.
   args.push('--approval-mode', 'on-request', '--approval-judge', 'off')
-  return { ...plan, args: [...args, ...tail] }
+  return { ...plan, args: [...prefix, ...args, ...tail] }
 }
 
 function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
